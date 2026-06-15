@@ -168,6 +168,56 @@ html[data-button-style="accent-black"] {
     --jf-btn-primary-focus-color-rgb: 0, 0, 0;
 }
 
+/* 
+ * ============================================================================
+ * Hide Unfocused Borders Customization
+ * ============================================================================
+ * Under active configuration data-hide-unfocused-borders="true", we set unfocused 
+ * border color to transparent. This keeps borders visually hidden while 
+ * retaining width properties to prevent layout shifting on focus transitions.
+ */
+html[data-hide-unfocused-borders="true"] .btn-primary:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .btn-option:not(.active):not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .select-btn:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .tab-btn:not(.active):not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .control-btn:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .pagination-btn:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .empty-state-btn:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .meta-chip:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .modal-option-btn:not(.selected):not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .modal-action-btn:not(.apply):not(:focus):not(.focused) {
+    border-color: transparent !important;
+}
+
+/* 
+ * ============================================================================
+ * Focus Border Style Customizations
+ * ============================================================================
+ * Controls the focus border highlight behavior dynamically via custom 
+ * attribute states (Follow Theme, Inverted, White, Black, or Hidden).
+ */
+html[data-focus-border-style="white"] {
+    --jf-btn-primary-focus-border: #ffffff !important;
+}
+
+html[data-focus-border-style="black"] {
+    --jf-btn-primary-focus-border: #000000 !important;
+}
+
+html[data-focus-border-style="hidden"] {
+    --jf-btn-primary-focus-border: transparent !important;
+}
+
+/* Inverted focus border style logic */
+html[data-focus-border-style="inverted"][data-button-style="theme-default"] { --jf-btn-primary-focus-border: var(--jf-accent) !important; }
+html[data-focus-border-style="inverted"][data-button-style="theme-inverted"] { --jf-btn-primary-focus-border: var(--jf-primary-btn-color) !important; }
+html[data-focus-border-style="inverted"][data-button-style="monochrome-bw"] { --jf-btn-primary-focus-border: #ffffff !important; }
+html[data-focus-border-style="inverted"][data-button-style="monochrome-wb"] { --jf-btn-primary-focus-border: #000000 !important; }
+html[data-focus-border-style="inverted"][data-button-style="white-accent"] { --jf-btn-primary-focus-border: #ffffff !important; }
+html[data-focus-border-style="inverted"][data-button-style="black-accent"] { --jf-btn-primary-focus-border: #000000 !important; }
+html[data-focus-border-style="inverted"][data-button-style="accent-white"] { --jf-btn-primary-focus-border: var(--jf-accent) !important; }
+html[data-focus-border-style="inverted"][data-button-style="accent-black"] { --jf-btn-primary-focus-border: var(--jf-accent) !important; }
+
 /* Custom UI Font Overrides */
 html[data-ui-font="system"] {
     --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;

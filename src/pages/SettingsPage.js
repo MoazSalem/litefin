@@ -434,6 +434,39 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideUnfocusedBorders">${i18n.t('HideUnfocusedBorders') || 'Hide Unfocused Borders'}</span>
+                        <span class="setting-description" data-i18n="HideUnfocusedBordersDescription">${i18n.t('HideUnfocusedBordersDescription') || 'Hide borders on buttons when they are not focused.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getHideUnfocusedBorders() ? 'active' : ''}" 
+                                id="toggle-hide-unfocused-borders" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="FocusBorderStyle">${i18n.t('FocusBorderStyle') || 'Focus Border Style'}</span>
+                        <span class="setting-description" data-i18n="FocusBorderStyleDescription">${i18n.t('FocusBorderStyleDescription') || 'Customize the border color style when buttons are focused.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'focus-border-style-select',
+            [
+                { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
+                { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
+                { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
+                { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
+                { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
+            ],
+            layoutManager.getFocusBorderStyle()
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
@@ -1113,24 +1146,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
-                        <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                'osd-button-borders-select',
-                [
-                    { value: 'auto', label: i18n.t('Auto') || 'Auto' },
-                    { value: 'light', label: i18n.t('BorderLight') || 'Light' },
-                    { value: 'dark', label: i18n.t('BorderDark') || 'Dark' },
-                    { value: 'hidden', label: i18n.t('BorderHidden') || 'Hidden' }
-                ],
-                layoutManager.getOsdButtonBorders()
-            )}
-                    </div>
-                </div>
+
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -5315,6 +5331,7 @@ class SettingsPage extends Page {
             },
             'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
             'button-style-select': { key: 'litefin:buttonStyle', type: 'local' },
+            'focus-border-style-select': { key: 'litefin:focusBorderStyle', type: 'local' },
             'card-label-style-select': { key: 'pref:cardLabelStyle', type: 'local' },
             'card-label-align-select': { key: 'pref:cardLabelAlign', type: 'local' },
             'card-label-scale-select': { key: 'pref:cardLabelScale', type: 'local' },
@@ -5414,8 +5431,7 @@ class SettingsPage extends Page {
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
-            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
-            'osd-button-borders-select': { key: 'litefin:osdButtonBorders', type: 'local' }
+            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -5442,6 +5458,9 @@ class SettingsPage extends Page {
                         } else if (id === 'button-style-select') {
                             // SPECIAL CASE: Button Style handled by LayoutManager
                             layoutManager.setButtonStyle(newValue);
+                        } else if (id === 'focus-border-style-select') {
+                            // SPECIAL CASE: Focus Border Style handled by LayoutManager
+                            layoutManager.setFocusBorderStyle(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {
@@ -5456,9 +5475,7 @@ class SettingsPage extends Page {
                         } else if (id === 'login-page-layout-select') {
                             layoutManager.setLoginPageLayout(newValue);
                             this._triggerHardReload();
-                        } else if (id === 'osd-button-borders-select') {
-                            // SPECIAL CASE: OSD Button Borders handled by LayoutManager
-                            layoutManager.setOsdButtonBorders(newValue);
+
                         } else if (id === 'card-label-style-select') {
                             storage.setItem('pref:cardLabelStyle', newValue);
                             document.documentElement.setAttribute('data-card-label-style', newValue);
@@ -5755,6 +5772,18 @@ class SettingsPage extends Page {
                 transparentCollapsedSidebarToggle.classList.toggle('active', newValue);
                 eventBus.emit('prefChanged:transparentCollapsedSidebar', newValue);
                 log.info(`Transparent Collapsed Sidebar set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Hide Unfocused Borders
+        const hideUnfocusedBordersToggle = this.$('#toggle-hide-unfocused-borders');
+        if (hideUnfocusedBordersToggle) {
+            hideUnfocusedBordersToggle.addEventListener('click', () => {
+                const currentValue = layoutManager.getHideUnfocusedBorders();
+                const newValue = !currentValue;
+                layoutManager.setHideUnfocusedBorders(newValue);
+                hideUnfocusedBordersToggle.classList.toggle('active', newValue);
+                log.info(`Hide Unfocused Borders set to: ${newValue}`);
             });
         }
 

@@ -75,8 +75,7 @@ class LayoutManager {
         // Card label text scale multiplier
         this._cardLabelScale = 1.0;
 
-        // OSD button borders mode: 'auto', 'light', 'dark', 'hidden'
-        this._osdButtonBorders = 'auto';
+
 
         // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
         this._lowVramMode = false;
@@ -98,6 +97,12 @@ class LayoutManager {
 
         // Button style options: 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb'
         this._buttonStyle = 'theme-default';
+
+        // Hide unfocused borders: true, false
+        this._hideUnfocusedBorders = false;
+
+        // Focus border style: 'follow-theme', 'inverted', 'white', 'black', 'hidden'
+        this._focusBorderStyle = 'hidden';
 
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
@@ -135,7 +140,7 @@ class LayoutManager {
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
         const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
-        const savedOsdBorders = storage.getItem('litefin:osdButtonBorders') || 'auto';
+
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
@@ -146,6 +151,8 @@ class LayoutManager {
 
         // Load user preferred button customization style
         const savedButtonStyle = storage.getItem('litefin:buttonStyle') || 'theme-default';
+        const savedHideUnfocusedBorders = storage.getItem('litefin:hideUnfocusedBorders') === 'true';
+        const savedFocusBorderStyle = storage.getItem('litefin:focusBorderStyle') || 'hidden';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -155,7 +162,7 @@ class LayoutManager {
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
         this.setCardLabelScale(savedCardLabelScale, false);
-        this.setOsdButtonBorders(savedOsdBorders, false);
+
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
         this.setSimpleLoader(savedSimpleLoader, false);
@@ -165,6 +172,8 @@ class LayoutManager {
 
         // Initial setup for the button styling scheme
         this.setButtonStyle(savedButtonStyle, false);
+        this.setHideUnfocusedBorders(savedHideUnfocusedBorders, false);
+        this.setFocusBorderStyle(savedFocusBorderStyle, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -517,9 +526,7 @@ class LayoutManager {
         return this._cardLabelScale;
     }
 
-    getOsdButtonBorders() {
-        return this._osdButtonBorders;
-    }
+
 
     /**
      * Get the active button style configuration
@@ -559,22 +566,39 @@ class LayoutManager {
         eventBus.emit('buttonStyle:changed', { style });
     }
 
-    setOsdButtonBorders(mode, save = true) {
-        if (!['auto', 'light', 'dark', 'hidden'].includes(mode)) {
-            log.warn(`Invalid OSD border mode "${mode}"`);
+    getHideUnfocusedBorders() {
+        return this._hideUnfocusedBorders;
+    }
+
+    setHideUnfocusedBorders(hide, save = true) {
+        this._hideUnfocusedBorders = hide;
+        document.documentElement.setAttribute('data-hide-unfocused-borders', hide ? 'true' : 'false');
+        if (save) {
+            storage.setItem('litefin:hideUnfocusedBorders', hide ? 'true' : 'false');
+        }
+        log.info(`Hide unfocused borders updated: ${hide}`);
+        eventBus.emit('hideUnfocusedBorders:changed', { hide });
+    }
+
+    getFocusBorderStyle() {
+        return this._focusBorderStyle;
+    }
+
+    setFocusBorderStyle(style, save = true) {
+        if (!['follow-theme', 'inverted', 'white', 'black', 'hidden'].includes(style)) {
+            log.warn(`Invalid focus border style specified: "${style}"`);
             return;
         }
-
-        this._osdButtonBorders = mode;
-        document.documentElement.setAttribute('data-osd-borders', mode);
-
+        this._focusBorderStyle = style;
+        document.documentElement.setAttribute('data-focus-border-style', style);
         if (save) {
-            storage.setItem('litefin:osdButtonBorders', mode);
+            storage.setItem('litefin:focusBorderStyle', style);
         }
-
-        log.info(`OSD button borders updated: ${mode}`);
-        eventBus.emit('osdButtonBorders:changed', { mode });
+        log.info(`Focus border style updated: ${style}`);
+        eventBus.emit('focusBorderStyle:changed', { style });
     }
+
+
 
     /**
      * Enable or disable Low VRAM Mode

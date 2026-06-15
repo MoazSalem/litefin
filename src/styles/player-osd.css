@@ -389,40 +389,12 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
  * ring around active player controls.
  */
 
-/* Auto/Default Focus Border */
-html:not([data-osd-borders]) .osd-btn:hover,
-html:not([data-osd-borders]) .osd-btn:focus,
-html:not([data-osd-borders]) .osd-btn.focused,
-html:not([data-osd-borders]) .osd-btn.magic-hover,
-html[data-osd-borders="auto"] .osd-btn:hover,
-html[data-osd-borders="auto"] .osd-btn:focus,
-html[data-osd-borders="auto"] .osd-btn.focused,
-html[data-osd-borders="auto"] .osd-btn.magic-hover {
-    border: 2px solid var(--jf-action-btn-active-border) !important;
-}
-
-/* Light Focus Border (Always White) */
-html[data-osd-borders="light"] .osd-btn:hover,
-html[data-osd-borders="light"] .osd-btn:focus,
-html[data-osd-borders="light"] .osd-btn.focused,
-html[data-osd-borders="light"] .osd-btn.magic-hover {
-    border: 2px solid rgba(255, 255, 255, 1) !important;
-}
-
-/* Dark Focus Border */
-html[data-osd-borders="dark"] .osd-btn:hover,
-html[data-osd-borders="dark"] .osd-btn:focus,
-html[data-osd-borders="dark"] .osd-btn.focused,
-html[data-osd-borders="dark"] .osd-btn.magic-hover {
-    border: 2px solid rgba(0, 0, 0, 0.5) !important;
-}
-
-/* Hidden Focus Border */
-html[data-osd-borders="hidden"] .osd-btn:hover,
-html[data-osd-borders="hidden"] .osd-btn:focus,
-html[data-osd-borders="hidden"] .osd-btn.focused,
-html[data-osd-borders="hidden"] .osd-btn.magic-hover {
-    border: none !important;
+/* Focus border style follows the global button customization setting */
+.osd-btn:hover,
+.osd-btn:focus,
+.osd-btn.focused,
+.osd-btn.magic-hover {
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
 }
 
 .osd-btn.active {
