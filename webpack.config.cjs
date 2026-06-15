@@ -84,7 +84,11 @@ function getPlugins(tier, options = {}) {
                 from: 'node_modules/@jellyfin/libass-wasm/dist/js/default.woff2',
                 to: 'assets/fonts/default.woff2',
                 noErrorOnMissing: true
-            }
+            },
+            {   from: 'node_modules/jassub/dist/wasm/jassub-worker.wasm', 
+                to: 'js/jassub-worker.wasm' },
+            {   from: 'node_modules/jassub/dist/wasm/jassub-worker-modern.wasm', 
+                to: 'js/jassub-worker-modern.wasm', noErrorOnMissing: true },
         );
     }
 
@@ -122,7 +126,10 @@ const modernConfig = {
         hints: 'warning'
     },
     // No source maps — keeps the bundle lean for production deployment
-    entry: './src/index.js',
+    entry: {
+        main: './src/index.js',
+        'jassub-worker': './node_modules/jassub/dist/worker/worker.js'
+    },
 
     output: {
         // Output directly into the user-friendly modern folder within dist
@@ -132,7 +139,10 @@ const modernConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
+        splitChunks: {
+            chunks: (chunk) => chunk.name !== 'jassub-worker',
+            maxSize: 100000
+        },
         minimizer: ['...', new CssMinimizerPlugin()]
     },
 
@@ -170,7 +180,10 @@ const debugConfig = {
     mode: 'production',
     performance: { hints: false },
     devtool: 'source-map', // Full source maps for on-TV debugging via sdb
-    entry: './src/index.js',
+    entry: {
+        main: './src/index.js',
+        'jassub-worker': './node_modules/jassub/dist/worker/worker.js'
+    },
 
     output: {
         path: path.resolve(__dirname, 'dist/debug'),
@@ -179,7 +192,10 @@ const debugConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
+        splitChunks: {
+            chunks: (chunk) => chunk.name !== 'jassub-worker',
+            maxSize: 100000
+        },
         minimizer: ['...', new CssMinimizerPlugin()]
     },
 
@@ -219,7 +235,10 @@ const normalConfig = {
         hints: 'warning'
     },
     // No source maps — production build
-    entry: './src/index.js',
+    entry: {
+        main: './src/index.js',
+        'jassub-worker': './node_modules/jassub/dist/worker/worker.js'
+    },
 
     output: {
         path: path.resolve(__dirname, 'dist/normal'),
@@ -228,7 +247,10 @@ const normalConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
+        splitChunks: {
+            chunks: (chunk) => chunk.name !== 'jassub-worker',
+            maxSize: 100000
+        },
         minimizer: ['...', new CssMinimizerPlugin()]
     },
 
@@ -236,7 +258,7 @@ const normalConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|jassub)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -286,7 +308,10 @@ const legacyConfig = {
         maxEntrypointSize: 4000000,
         hints: 'warning'
     },
-    entry: ['url-search-params-polyfill', './src/index.js'],
+    entry: {
+        main: ['url-search-params-polyfill', './src/index.js'],
+        'jassub-worker': './node_modules/jassub/dist/worker/worker.js'
+    },
 
     output: {
         path: path.resolve(__dirname, 'dist/legacy'),
@@ -295,7 +320,10 @@ const legacyConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
+        splitChunks: {
+            chunks: (chunk) => chunk.name !== 'jassub-worker',
+            maxSize: 100000
+        },
         minimizer: ['...', new CssMinimizerPlugin()]
     },
 
@@ -310,7 +338,7 @@ const legacyConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|jassub)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -387,6 +415,7 @@ const ultraLegacyConfig = {
         'url-search-params-polyfill', // URLSearchParams for Chrome 32
         './src/index.js'
     ],
+    'jassub-worker': './node_modules/jassub/dist/worker/worker.js',
 
     output: {
         path: path.resolve(__dirname, 'dist/ultra-legacy'),
@@ -395,7 +424,10 @@ const ultraLegacyConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
+        splitChunks: {
+            chunks: (chunk) => chunk.name !== 'jassub-worker',
+            maxSize: 100000
+        },
         minimizer: ['...', new CssMinimizerPlugin()]
     },
 
@@ -410,7 +442,7 @@ const ultraLegacyConfig = {
         rules: [
             {
                 test: /\.m?js$/,
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|jassub)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -587,4 +619,31 @@ const normalOblongConfig = {
 
 // Export all configs. Run a specific one with --config-name <name>.
 // e.g. npx webpack --config webpack.config.cjs --config-name debug
-module.exports = [modernConfig, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];
+const configs = [modernConfig, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];
+
+/*
+ * ============================================================================
+ * PROGRAMMATIC RESOLUTION OVERRIDES
+ * ============================================================================
+ * Jassub (WASM/WebGL subtitle engine) references a local font file './default.woff2'
+ * inside node_modules/jassub/dist/jassub.js. However, this font file is omitted
+ * from the package's NPM publication bundle, leading to Webpack build failures.
+ *
+ * We programmatically walk through all generated configurations and alias
+ * './default.woff2' to point to our local Roboto fallback font instead.
+ * ============================================================================
+ */
+configs.forEach((config) => {
+    // Ensure resolve block is initialized
+    if (!config.resolve) {
+        config.resolve = {};
+    }
+    // Ensure alias dictionary is initialized
+    if (!config.resolve.alias) {
+        config.resolve.alias = {};
+    }
+    // Set the fallback alias for the missing Jassub woff2 file
+    config.resolve.alias['./default.woff2'] = path.resolve(__dirname, 'src/assets/fonts/Roboto.woff2');
+});
+
+module.exports = configs;

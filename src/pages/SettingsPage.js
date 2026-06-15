@@ -3575,6 +3575,29 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+                
+                <!-- -------------------------------------------------------------
+                   ASS/SSA Subtitle Rendering Engine Option
+                   Allows users on newer TV models to enable Jassub (WASM/WebGL)
+                   for high-fidelity styled anime subtitles, while keeping the
+                   fallback option to libjass (DOM) for older TVs.
+                   ------------------------------------------------------------- -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssRenderer">${i18n.t('AssRenderer') || 'ASS Subtitle Renderer'}</span>
+                        <span class="setting-description" data-i18n="AssRendererDescription">${i18n.t('AssRendererDescription') || 'Choose the rendering engine for ASS/SSA subtitle styling.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'ass-renderer-select',
+                            [
+                                { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
+                                { value: 'jassub', label: 'Jassub (WebGL/WASM, Accurate Styling)' }
+                            ],
+                            PlayerSettings.get('assRenderer')
+                        )}
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">

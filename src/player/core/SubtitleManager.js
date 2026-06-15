@@ -15,6 +15,12 @@
 import { SubtitleParser } from './SubtitleParser.js';
 import ASSRenderer from './ASSRenderer.js';
 import LibassWasmRenderer from './LibassWasmRenderer.js';
+/**
+ * JassubRenderer wraps ThaUnknown's JASSUB library.
+ * It is registered as a secondary optional ASS/SSA renderer engine.
+ * Users can switch to it via Subtitle Settings on modern TV hardware.
+ */
+import JassubRenderer from './JassubRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
@@ -800,9 +806,12 @@ export default class SubtitleManager {
             let TargetRendererClass;
             if (preferredEngine === 'libass-wasm') {
                 TargetRendererClass = LibassWasmRenderer;
+            } else if (preferredEngine === 'jassub') {
+                TargetRendererClass = JassubRenderer;
             } else {
                 TargetRendererClass = ASSRenderer;
             }
+
 
             // Check if existing renderer needs to be swapped out
             if (this._assRenderer && !(this._assRenderer instanceof TargetRendererClass)) {

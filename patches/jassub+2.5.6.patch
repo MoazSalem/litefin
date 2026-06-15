@@ -1,0 +1,15 @@
+diff --git a/node_modules/jassub/dist/jassub.js b/node_modules/jassub/dist/jassub.js
+index bbdaa8d..b5dd0e8 100644
+--- a/node_modules/jassub/dist/jassub.js
++++ b/node_modules/jassub/dist/jassub.js
+@@ -53,9 +53,8 @@ export default class JASSUB {
+         this.prescaleFactor = opts.prescaleFactor ?? 1.0;
+         this.prescaleHeightLimit = opts.prescaleHeightLimit ?? 1080;
+         this.maxRenderHeight = opts.maxRenderHeight ?? 0; // 0 - no limit.
+-        // yes this is awful, but bundlers check for new Worker(new URL()) patterns, so can't use new Worker(workerUrl ?? new URL(...)) ... bruh
+         this._worker = opts.workerUrl
+-            ? new Worker(opts.workerUrl, { name: 'jassub-worker', type: 'module' })
++            ? new Worker(opts.workerUrl, { name: 'jassub-worker' })
+             : new Worker(new URL('./worker/worker.js', import.meta.url), { name: 'jassub-worker', type: 'module' });
+         const Renderer = wrap(this._worker);
+         const modern = opts.modernWasmUrl ?? new URL('./wasm/jassub-worker-modern.wasm', import.meta.url).href;

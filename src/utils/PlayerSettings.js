@@ -157,10 +157,12 @@ const DEFAULTS = {
        ASS SUBTITLE RENDERING ENGINE
        -------------------------------------------------------------------------
        Determines which engine is used to parse and render styled ASS/SSA cues:
-         'libjass'    — DOM-based native JS renderer. High performance on older,
-                        limited hardware, but doesn't support complex typesetting.
-         'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
+         'libjass'      — DOM-based native JS renderer. High performance on older,
+                         limited hardware, but doesn't support complex typesetting.
+         'libass-wasm'  — WASM-based libass port via SubtitlesOctopus. Extremely
                          accurate styling and drawing support.
+         'jassub'       — WASM/WebGL-based libass port. Extremely accurate styling
+                         and drawing support, but requires WebGL/WASM capabilities.
        ------------------------------------------------------------------------- */
     assRenderer: 'libjass',
 
