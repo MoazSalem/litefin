@@ -923,6 +923,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="IncludeCurrentEpisodeInMoreFromSeason">${i18n.t('IncludeCurrentEpisodeInMoreFromSeason') || 'Include Current Episode in More From Season'}</span>
+                        <span class="setting-description" data-i18n="IncludeCurrentEpisodeInMoreFromSeasonDescription">${i18n.t('IncludeCurrentEpisodeInMoreFromSeasonDescription') || 'Include the currently opened episode in the More from Season row.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true' ? 'active' : ''}" 
+                                 id="toggle-include-current-episode" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="SwapEpisodeTitles">${i18n.t('SwapEpisodeTitles') || 'Swap Episode Title & Subtitle'}</span>
                         <span class="setting-description" data-i18n="SwapEpisodeTitlesDescription">${i18n.t('SwapEpisodeTitlesDescription') || 'Display the episode name as the card title and the show name as the subtitle.'}</span>
                     </div>
@@ -4047,6 +4060,33 @@ class SettingsPage extends Page {
 
                 // Log action for support debugging
                 log.info(`Use Season Badges set to: ${newValue}`);
+            });
+        }
+
+        // -------------------------------------------------------------
+        // Toggle Include Current Episode in More From Season
+        // Binds the click event to toggle-include-current-episode button.
+        // Saves preference state to local storage and updates active visual class.
+        // -------------------------------------------------------------
+        // Toggle Include Current Episode in More From Season
+        // Binds the click event to toggle-include-current-episode button.
+        // Saves preference state to local storage and updates active visual class.
+        // -------------------------------------------------------------
+        const includeCurrentEpisodeBtn = this.$('#toggle-include-current-episode');
+        if (includeCurrentEpisodeBtn) {
+            includeCurrentEpisodeBtn.addEventListener('click', () => {
+                // Determine whether inclusion of the current episode is enabled (defaults to false)
+                const isEnabled = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
+                const newValue = !isEnabled;
+
+                // Save updated preference key
+                storage.setItem('pref:includeCurrentEpisodeInMoreFromSeason', newValue);
+
+                // Toggle active style class for switch indicator animation
+                includeCurrentEpisodeBtn.classList.toggle('active', newValue);
+
+                // Log action for support debugging
+                log.info(`Include Current Episode in More From Season set to: ${newValue}`);
             });
         }
 

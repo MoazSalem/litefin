@@ -1018,6 +1018,8 @@
     "UseEpisodeBadgesDescription": "Display the episode SxxExx badge on media cards instead of prefixing the episode title.",
     "UseSeasonBadges": "Show Season Badges",
     "UseSeasonBadgesDescription": "Display the season name/number badge on season cards.",
+    "IncludeCurrentEpisodeInMoreFromSeason": "Include Current Episode in More From Season Row and Jump to it on focus",
+    "IncludeCurrentEpisodeInMoreFromSeasonDescription": "Include the currently playing/opened episode in the 'More From Season' row on the details page, and move focus to it as soon as you focus on the row.",
     "UsernameRequired": "Username is required",
     "VerticalPosition": "Vertical Position",
     "VerticalPositionAss": "Vertical Position (ASS)",

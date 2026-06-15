@@ -1209,7 +1209,8 @@ class DetailsPage extends Page {
             focusSectionName,
             titleElText,
             cardType,
-            onClick
+            onClick,
+            currentIndex
         } = options;
 
         const section = this.$(`#${sectionId}`);
@@ -1236,7 +1237,8 @@ class DetailsPage extends Page {
             initialWindow: isLandscape ? 5 : Math.min(7, items.length),
             focusSectionId: focusSectionName,
             cardType: cardType,
-            renderCard: renderCard
+            renderCard: renderCard,
+            currentIndex: currentIndex
         });
 
         if (!this._virtualRows) this._virtualRows = {};
@@ -1253,6 +1255,16 @@ class DetailsPage extends Page {
         list.onclick = (e) => {
             const card = e.target.closest('.media-card');
             if (card) {
+                // -------------------------------------------------------------
+                // Block navigation events if the clicked card is unpressable
+                // (e.g. the active current episode card in siblings row).
+                // -------------------------------------------------------------
+                if (card.classList.contains('unpressable')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
                 // Save clicked item for exact focus restoration, scoped by current page item ID
                 // to prevent child DetailsPages from consuming parent state
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
@@ -2640,18 +2652,30 @@ class DetailsPage extends Page {
             const response = await api.getEpisodes(this._item.SeriesId, {
                 SeasonId: this._item.SeasonId
             });
-            // Filter out current episode and limit to 24 for row
-            const siblings = (response.Items || []).filter((ep) => ep.Id !== this._itemId).slice(0, 24);
+
+            // -------------------------------------------------------------
+            // Retrieve preference to determine if we include current episode.
+            // Defaults to false.
+            // -------------------------------------------------------------
+            const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
+            const allItems = response.Items || [];
+
+            // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
+            const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
 
             if (siblings.length > 0) {
-                this._renderMoreFromSeason(siblings);
+                // Find index of the current active episode in the siblings list
+                const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
+                
+                // Pass siblings and focused index down to renderer
+                this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
             }
         } catch (error) {
             log.warn('Failed to load season episodes', error);
         }
     }
 
-    _renderMoreFromSeason(episodes) {
+    _renderMoreFromSeason(episodes, currentEpisodeIndex = 0) {
         this._renderVirtualRow({
             sectionId: 'more-from-season-section',
             listId: 'more-from-season-row',
@@ -2666,8 +2690,14 @@ class DetailsPage extends Page {
                             : this._item.SeasonName
                   ])
                 : null,
-            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode'),
-            focusSectionName: 'more-from-season-section'
+            // -------------------------------------------------------------
+            // Pass option down to CardRenderer indicating if this is the active episode details page
+            // -------------------------------------------------------------
+            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode', {
+                isCurrentEpisode: ep.Id === this._itemId
+            }),
+            focusSectionName: 'more-from-season-section',
+            currentIndex: currentEpisodeIndex
         });
     }
 

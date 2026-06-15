@@ -295,7 +295,12 @@ export class VirtualCardRow {
         }
 
         this.bufferZone = Math.floor(this.visibleCount / 2);
-        this.currentIndex = 0; // The index of the currently focused item relative to the array
+        
+        // -------------------------------------------------------------
+        // Initialize focused index. If options.currentIndex is supplied
+        // (for centering rows on active cards), we seed it directly.
+        // -------------------------------------------------------------
+        this.currentIndex = options.currentIndex !== undefined ? options.currentIndex : 0;
 
         this.domNodes = new Map(); // Maps index -> HTMLElement
 
@@ -307,7 +312,7 @@ export class VirtualCardRow {
         if (this._initialWindow != null) {
             this._isBootRender = true;
         }
-        this._updateWindow(0);
+        this._updateWindow(this.currentIndex);
 
         // =================================================================
         // 💎 STARTUP BACKDROP CACHING
