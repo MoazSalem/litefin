@@ -133,8 +133,9 @@ export class ApiClient {
     // ========================================================================
 
     /**
-     * Build the X-Emby-Authorization header
-     * This header format is required by Jellyfin for all authenticated requests
+     * Build the Authorization header value using the Jellyfin MediaBrowser scheme.
+     * This is the current, non-deprecated way to authorize all authenticated requests.
+     * Format: MediaBrowser Client="...", Device="...", DeviceId="...", Version="...[, Token="..."]
      * @returns {string} Authorization header value
      */
     getAuthHeader(tokenOverride = null) {
@@ -234,9 +235,10 @@ export class ApiClient {
         };
 
         if (!options.skipAuth) {
+            // Use only the non-deprecated Authorization header (MediaBrowser scheme).
+            // X-Emby-Authorization was the old name and is now flagged deprecated by Jellyfin.
             const authHeader = this.getAuthHeader();
-            headers['X-Emby-Authorization'] = authHeader;
-            headers['Authorization'] = authHeader; // Standard header for modern servers/proxies
+            headers['Authorization'] = authHeader;
         }
 
         if (!options.body || !(options.body instanceof FormData)) {
@@ -1158,8 +1160,10 @@ export class ApiClient {
         // to bypass redundant transcoding whenever possible on the TV client.
         const path = `/Audio/${itemId}/stream?static=true`;
 
-        // Append the API key query parameter to authorize the browser's playback fetch
-        return this.buildUrl(token ? `${path}&api_key=${token}` : path);
+        // Use ApiKey= (not the deprecated api_key=) to authorize the native browser fetch.
+        // The HTML5 <audio> element cannot send custom headers, so a query param is required.
+        // ApiKey is the supported non-deprecated fallback for exactly this scenario.
+        return this.buildUrl(token ? `${path}&ApiKey=${token}` : path);
     }
 
     // ========================================================================
@@ -1519,8 +1523,10 @@ export class ApiClient {
         // Convert http(s) to ws(s)
         const wsUrl = this._serverUrl.replace('https://', 'wss://').replace('http://', 'ws://');
 
-        // Build WebSocket URL with auth
-        const fullUrl = `${wsUrl}/socket?api_key=${encodeURIComponent(this._accessToken)}&deviceId=${encodeURIComponent(this._deviceId)}`;
+        // Build WebSocket URL with auth using the non-deprecated ApiKey query param.
+        // The WebSocket constructor does not support custom headers, so a query param
+        // is the only option. ApiKey= is the supported (non-deprecated) query param.
+        const fullUrl = `${wsUrl}/socket?ApiKey=${encodeURIComponent(this._accessToken)}&deviceId=${encodeURIComponent(this._deviceId)}`;
 
         log.info('Opening WebSocket connection...');
 

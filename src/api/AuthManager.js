@@ -698,7 +698,8 @@ class AuthManager {
                 await fetch(url, {
                     method: 'POST',
                     headers: {
-                        'X-Emby-Authorization': authHeader,
+                        // Use the standard Authorization header — X-Emby-Authorization is deprecated
+                        'Authorization': authHeader,
                         'Content-Type': 'application/json'
                     }
                 });

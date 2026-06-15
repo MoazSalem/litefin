@@ -1121,9 +1121,11 @@ class PlayerPage extends Page {
             return `${baseUrl}${mediaSource.DirectStreamUrl}`;
         }
 
-        // Build HLS URL for transcoding
+        // Build HLS URL for transcoding — this URL is given directly to the <video>
+        // element, so we must use a query param for auth (no headers possible).
+        // ApiKey= is the non-deprecated query param supported by Jellyfin.
         const params = new URLSearchParams({
-            api_key: api.accessToken,
+            ApiKey: api.accessToken,
             DeviceId: api.deviceId,
             MediaSourceId: mediaSource.Id,
             VideoCodec: 'h264',
@@ -2403,7 +2405,8 @@ class PlayerPage extends Page {
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', url, false);
                     xhr.setRequestHeader('Content-Type', 'application/json');
-                    xhr.setRequestHeader('X-Emby-Authorization', authHeader);
+                    // Use the standard Authorization header — X-Emby-Authorization is deprecated
+                    xhr.setRequestHeader('Authorization', authHeader);
                     xhr.send(JSON.stringify(data));
 
                     if (xhr.status >= 400) {

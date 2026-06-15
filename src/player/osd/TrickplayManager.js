@@ -53,7 +53,7 @@ export class TrickplayManager {
         /* Base server URL (no trailing slash) */
         this._serverUrl = null;
 
-        /* API access token appended as ?api_key= */
+        /* API access token — appended as ?ApiKey= query param in sprite sheet URLs */
         this._authToken = null;
 
         /* Index of the sprite sheet that was most recently requested */
@@ -238,7 +238,9 @@ export class TrickplayManager {
          * We add quality=20 to encourage the server to serve a smaller JPEG,
          * and MediaSourceId to ensure we get the correct tiles for this stream.
          */
-        const url = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${thumbWidth}/${spriteSheetIdx}.jpg?api_key=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
+        // Sprite sheet URL — loaded via new Image(), so a query param is required for auth.
+        // Use ApiKey= (non-deprecated) instead of the old api_key=.
+        const url = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${thumbWidth}/${spriteSheetIdx}.jpg?ApiKey=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
 
         /* Log only when the sheet changes (not on every frame) — avoids spam */
         if (spriteSheetIdx !== this._lastSpriteSheetIndex) {
@@ -294,7 +296,8 @@ export class TrickplayManager {
         const tilesPerSheet = this._trickplayInfo.TileWidth * this._trickplayInfo.TileHeight;
         if (index * tilesPerSheet >= this._trickplayInfo.ThumbnailCount) return;
 
-        const prefetchUrl = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${width}/${index}.jpg?api_key=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
+        // Pre-fetch URL also uses ApiKey= (non-deprecated) for auth
+        const prefetchUrl = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${width}/${index}.jpg?ApiKey=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
         
         const img = new Image();
         img.src = prefetchUrl;

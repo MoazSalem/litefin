@@ -291,9 +291,11 @@ class FontLoader {
                 if (font.DeliveryUrl) {
                     url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;
                     const sep = url.includes('?') ? '&' : '?';
-                    url += `${sep}api_key=${encodeURIComponent(authToken)}`;
+                    // Font attachments are fetched without Authorization headers — use ApiKey= (non-deprecated)
+                    url += `${sep}ApiKey=${encodeURIComponent(authToken)}`;
                 } else {
-                    url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?api_key=${encodeURIComponent(authToken)}`;
+                    // Build the standard Jellyfin attachment URL — ApiKey= is the supported query param fallback
+                    url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?ApiKey=${encodeURIComponent(authToken)}`;
                 }
 
                 // Download the font into memory so we can parse its internal name table.
