@@ -2006,7 +2006,8 @@ class SettingsPage extends Page {
 
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title" data-i18n="VideoQuality">${i18n.t('VideoQuality')}</h2>
+                <h2 class="content-title" data-i18n="Playback">${i18n.t('Playback')}</h2>
+                <h3 class="setting-section-title" data-i18n="VideoQuality">${i18n.t('VideoQuality')}</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -2116,6 +2117,21 @@ class SettingsPage extends Page {
                 </div>
 
                 <h3 class="setting-section-title" data-i18n="PlaybackBehavior">${i18n.t('PlaybackBehavior')}</h3>
+
+                <!-- Await Tracks Before Playback Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AwaitTracksBeforePlayback">${i18n.t('AwaitTracksBeforePlayback') || 'Await Tracks Before Playback'}</span>
+                        <span class="setting-description" data-i18n="AwaitTracksBeforePlaybackDescription">${i18n.t('AwaitTracksBeforePlaybackDescription') || 'Fully await audio and subtitle tracks to load before starting playback and hiding the loading screen.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('awaitTracksBeforePlayback') ? 'active' : ''}" 
+                                id="toggle-await-tracks-before-playback" 
+                                data-setting="awaitTracksBeforePlayback"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -4687,7 +4703,9 @@ class SettingsPage extends Page {
             // encounters interlaced H264 (1080i MPEG-TS in HLS). No profile
             // cache invalidation needed (device caps don't change), but keeping
             // it in this list wires the click → PlayerSettings.set() for us.
-            'toggle-interlaced-backend-fallback'
+            'toggle-interlaced-backend-fallback',
+            // Await tracks before starting playback and hiding loading spinner
+            'toggle-await-tracks-before-playback'
         ];
         profileToggles.forEach((toggleId) => {
             const btn = this.$(`#${toggleId}`);

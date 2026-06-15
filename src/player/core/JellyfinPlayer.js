@@ -1083,6 +1083,36 @@ export class JellyfinPlayer extends EventEmitter {
                 autoPlay: options.autoPlay
             };
 
+            /*
+             * -------------------------------------------------------------------------
+             * Pre-flight Subtitle Awaiting
+             * -------------------------------------------------------------------------
+             * If the user opted into the 'awaitTracksBeforePlayback' setting, we block
+             * and fully download/parse the subtitle cues (e.g. SRT, VTT, ASS canvas fonts,
+             * or PGS bitmaps) BEFORE starting the native player decoder. This completely
+             * eliminates the visual subtitle flash/pop-in effect on TV displays.
+             * -------------------------------------------------------------------------
+             */
+            const isAudioItemSetup = options.item?.MediaType === 'Audio' ||
+                                      options.item?.Type === 'AudioBook';
+
+            const awaitTracks = PlayerSettings.get('awaitTracksBeforePlayback');
+
+            if (awaitTracks && !isAudioItemSetup && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
+                log.info('[Play-Flow] Awaiting subtitle track setup pre-flight...');
+                this._playSetupInProgress = true;
+                try {
+                    // Fully await subtitle loading (resolves once cues/renderers are ready)
+                    await this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex);
+                    log.info('[Play-Flow] Pre-flight subtitle setup completed successfully');
+                } catch (err) {
+                    log.warn('[Play-Flow] Pre-flight initial subtitle setup failed:', err);
+                } finally {
+                    this._playSetupInProgress = false;
+                }
+            }
+
+            // Instruct the resolved backend (TizenAVPlayer, WebOSPlayer, or HTML5) to initialize
             await this._backend.play(backendOptions);
             log.info('Backend play() promise resolved');
 
@@ -1095,20 +1125,17 @@ export class JellyfinPlayer extends EventEmitter {
             });
 
             /*
-             * Subtitle setup only applies to video. Audio items never have subtitle
-             * streams, so attempting to set one would cause spurious log warnings
-             * and unnecessary SubtitleManager.setPrimaryTrack() calls.
+             * -------------------------------------------------------------------------
+             * Standard Asynchronous Subtitle Setup
+             * -------------------------------------------------------------------------
+             * If the awaitTracks option is disabled, we restore the original behavior:
+             * start decoding instantly and load subtitles in the background asynchronously.
+             * -------------------------------------------------------------------------
              */
-            const isAudioItemSetup = options.item?.MediaType === 'Audio' ||
-                                      options.item?.Type === 'AudioBook';
-
-            if (!isAudioItemSetup && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
+            if (!awaitTracks && !isAudioItemSetup && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
                 // Initialize the SubtitleManager with the selected subtitle track.
                 // The subtitle index is already included in the server request, so
-                // this call only needs to set up CLIENT-SIDE rendering (fetch external
-                // text, parse ASS, etc.). Setting _playSetupInProgress=true tells
-                // setSubtitleStreamIndex to skip any restart-triggering logic — the
-                // server already has the correct subtitle in its transcode session.
+                // this call only needs to set up CLIENT-SIDE rendering.
                 this._playSetupInProgress = true;
                 // Fire-and-forget — don't block playback on subtitle fetch
                 this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex)

@@ -331,6 +331,22 @@ const DEFAULTS = {
     // Trailer playback mode ('internal_proxy', 'internal_iframe', 'external')
     trailerPlaybackMode: 'internal_proxy',
 
+    /*
+     * Await Tracks Before Playback
+     * -------------------------------------------------------------------------
+     * When enabled, the player page will hold the loading screen and defer
+     * initiating hardware playback until all audio and subtitle track mapping
+     * has fully completed. This ensures that the first rendered frame already
+     * has the correct subtitle cues and audio channel mapped.
+     *
+     * Trade-off: Deferring playback adds a brief startup delay (especially
+     * for remote external subtitles that need to be fetched/parsed over HTTP),
+     * but prevents audio/subtitle flashing and out-of-sync presentation.
+     *
+     * Default: false (start playback instantly once video is canplay/ready).
+     */
+    awaitTracksBeforePlayback: false,
+
     // Auto-chain mode: when both local AND remote trailers exist and this is
     // true, the TrailerDialog selection screen is skipped entirely. Instead,
     // the local trailer plays immediately via the native player. When it ends

@@ -61,7 +61,7 @@ class FontLoader {
             }
         }
         this._blobUrls.clear();
-        log.debug('[FontLoader] Container font blob URLs cleared.');
+        log.debug('Container font blob URLs cleared.');
     }
 
     /**
@@ -316,10 +316,10 @@ class FontLoader {
                 } catch (fetchErr) {
                     if (fetchErr && fetchErr.name === 'AbortError') {
                         log.warn(
-                            `[FontLoader] Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`
+                            `Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`
                         );
                     } else {
-                        log.warn(`[FontLoader] Failed to download font attachment ${uniqueIndex}:`, fetchErr);
+                        log.warn(`Failed to download font attachment ${uniqueIndex}:`, fetchErr);
                     }
                     continue;
                 }
