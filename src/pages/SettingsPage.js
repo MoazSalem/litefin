@@ -467,6 +467,26 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HoverBorderStyle">${i18n.t('HoverBorderStyle') || 'Hover Border Style'}</span>
+                        <span class="setting-description" data-i18n="HoverBorderStyleDescription">${i18n.t('HoverBorderStyleDescription') || 'Customize the border color style when buttons are hovered.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hover-border-style-select',
+                            [
+                                { value: 'white', label: i18n.t('HoverBorderWhite') || 'White' },
+                                { value: 'follow-theme', label: i18n.t('HoverBorderFollowTheme') || 'Follow Theme' },
+                                { value: 'inverted', label: i18n.t('HoverBorderInverted') || 'Inverted' },
+                                { value: 'black', label: i18n.t('HoverBorderBlack') || 'Black' },
+                                { value: 'hidden', label: i18n.t('HoverBorderHidden') || 'Hidden' }
+                            ],
+                            layoutManager.getHoverBorderStyle()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
@@ -5431,7 +5451,8 @@ class SettingsPage extends Page {
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
-            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
+            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
+            'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -5461,6 +5482,9 @@ class SettingsPage extends Page {
                         } else if (id === 'focus-border-style-select') {
                             // SPECIAL CASE: Focus Border Style handled by LayoutManager
                             layoutManager.setFocusBorderStyle(newValue);
+                        } else if (id === 'hover-border-style-select') {
+                            // SPECIAL CASE: Hover Border Style handled by LayoutManager
+                            layoutManager.setHoverBorderStyle(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {

@@ -40,6 +40,8 @@
     --jf-btn-primary-focus-color: var(--jf-primary-btn-color);
     --jf-btn-primary-focus-border: var(--jf-primary-btn-color);
     --jf-btn-primary-focus-color-rgb: var(--jf-primary-btn-color-rgb, 255, 255, 255);
+    
+    --jf-btn-primary-hover-border: #ffffff;
 
     /* Global Text Fallbacks (Crucial for ultra-legacy ponyfill stability) */
     --jf-text-primary: #ffffff;
@@ -185,6 +187,7 @@ html[data-hide-unfocused-borders="true"] .pagination-btn:not(:focus):not(.focuse
 html[data-hide-unfocused-borders="true"] .empty-state-btn:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .meta-chip:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .modal-option-btn:not(.selected):not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .toggle-switch:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .modal-action-btn:not(.apply):not(:focus):not(.focused) {
     border-color: transparent !important;
 }
@@ -217,6 +220,39 @@ html[data-focus-border-style="inverted"][data-button-style="white-accent"] { --j
 html[data-focus-border-style="inverted"][data-button-style="black-accent"] { --jf-btn-primary-focus-border: #000000 !important; }
 html[data-focus-border-style="inverted"][data-button-style="accent-white"] { --jf-btn-primary-focus-border: var(--jf-accent) !important; }
 html[data-focus-border-style="inverted"][data-button-style="accent-black"] { --jf-btn-primary-focus-border: var(--jf-accent) !important; }
+
+/* 
+ * ============================================================================
+ * Hover Border Style Customizations
+ * ============================================================================
+ * Controls the hover border highlight behavior dynamically via custom 
+ * attribute states (Follow Theme, Inverted, White, Black, or Hidden).
+ */
+html[data-hover-border-style="white"] {
+    --jf-btn-primary-hover-border: #ffffff !important;
+}
+
+html[data-hover-border-style="black"] {
+    --jf-btn-primary-hover-border: #000000 !important;
+}
+
+html[data-hover-border-style="hidden"] {
+    --jf-btn-primary-hover-border: transparent !important;
+}
+
+html[data-hover-border-style="follow-theme"] {
+    --jf-btn-primary-hover-border: var(--jf-primary-btn-color) !important;
+}
+
+/* Inverted hover border style logic */
+html[data-hover-border-style="inverted"][data-button-style="theme-default"] { --jf-btn-primary-hover-border: var(--jf-accent) !important; }
+html[data-hover-border-style="inverted"][data-button-style="theme-inverted"] { --jf-btn-primary-hover-border: var(--jf-primary-btn-color) !important; }
+html[data-hover-border-style="inverted"][data-button-style="monochrome-bw"] { --jf-btn-primary-hover-border: #ffffff !important; }
+html[data-hover-border-style="inverted"][data-button-style="monochrome-wb"] { --jf-btn-primary-hover-border: #000000 !important; }
+html[data-hover-border-style="inverted"][data-button-style="white-accent"] { --jf-btn-primary-hover-border: #ffffff !important; }
+html[data-hover-border-style="inverted"][data-button-style="black-accent"] { --jf-btn-primary-hover-border: #000000 !important; }
+html[data-hover-border-style="inverted"][data-button-style="accent-white"] { --jf-btn-primary-hover-border: var(--jf-accent) !important; }
+html[data-hover-border-style="inverted"][data-button-style="accent-black"] { --jf-btn-primary-hover-border: var(--jf-accent) !important; }
 
 /* Custom UI Font Overrides */
 html[data-ui-font="system"] {

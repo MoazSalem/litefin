@@ -104,6 +104,9 @@ class LayoutManager {
         // Focus border style: 'follow-theme', 'inverted', 'white', 'black', 'hidden'
         this._focusBorderStyle = 'hidden';
 
+        // Hover border style: 'follow-theme', 'inverted', 'white', 'black', 'hidden'
+        this._hoverBorderStyle = 'white';
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -153,6 +156,7 @@ class LayoutManager {
         const savedButtonStyle = storage.getItem('litefin:buttonStyle') || 'theme-default';
         const savedHideUnfocusedBorders = storage.getItem('litefin:hideUnfocusedBorders') === 'true';
         const savedFocusBorderStyle = storage.getItem('litefin:focusBorderStyle') || 'hidden';
+        const savedHoverBorderStyle = storage.getItem('litefin:hoverBorderStyle') || 'white';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -174,6 +178,7 @@ class LayoutManager {
         this.setButtonStyle(savedButtonStyle, false);
         this.setHideUnfocusedBorders(savedHideUnfocusedBorders, false);
         this.setFocusBorderStyle(savedFocusBorderStyle, false);
+        this.setHoverBorderStyle(savedHoverBorderStyle, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -596,6 +601,24 @@ class LayoutManager {
         }
         log.info(`Focus border style updated: ${style}`);
         eventBus.emit('focusBorderStyle:changed', { style });
+    }
+
+    getHoverBorderStyle() {
+        return this._hoverBorderStyle;
+    }
+
+    setHoverBorderStyle(style, save = true) {
+        if (!['follow-theme', 'inverted', 'white', 'black', 'hidden'].includes(style)) {
+            log.warn(`Invalid hover border style specified: "${style}"`);
+            return;
+        }
+        this._hoverBorderStyle = style;
+        document.documentElement.setAttribute('data-hover-border-style', style);
+        if (save) {
+            storage.setItem('litefin:hoverBorderStyle', style);
+        }
+        log.info(`Hover border style updated: ${style}`);
+        eventBus.emit('hoverBorderStyle:changed', { style });
     }
 
 

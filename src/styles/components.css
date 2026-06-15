@@ -49,6 +49,10 @@
     border-color: var(--jf-btn-primary-focus-border) !important;
 }
 
+.btn-primary:hover {
+    border-color: var(--jf-btn-primary-hover-border) !important;
+}
+
 
 .btn-secondary {
     background: var(--jf-button-bg);

@@ -389,8 +389,11 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
  * ring around active player controls.
  */
 
-/* Focus border style follows the global button customization setting */
-.osd-btn:hover,
+/* Focus & hover border styles follow the global button customization settings */
+.osd-btn:hover {
+    border: 2px solid var(--jf-btn-primary-hover-border) !important;
+}
+
 .osd-btn:focus,
 .osd-btn.focused,
 .osd-btn.magic-hover {
