@@ -12,6 +12,7 @@ import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
+import { detailsIcons } from './Icons.js';
 
 class CardRenderer {
     /**
@@ -769,7 +770,8 @@ class CardRenderer {
             const metaParts = [];
             if (item.OfficialRating) metaParts.push(`<span class="card-meta-rating">${item.OfficialRating}</span>`);
             if (item.CommunityRating && shouldShowScore(item))
-                metaParts.push(`<span class="card-meta-score">★ ${item.CommunityRating.toFixed(1)}</span>`);
+                // Render the unified SVG rating star instead of the legacy Unicode character.
+                metaParts.push(`<span class="card-meta-score">${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}</span>`);
             if (item.ProductionYear) metaParts.push(`<span class="card-meta-year">${item.ProductionYear}</span>`);
             if (item.RunTimeTicks) {
                 const mins = Math.round(item.RunTimeTicks / 600000000);

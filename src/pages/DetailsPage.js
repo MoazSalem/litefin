@@ -378,18 +378,9 @@ class DetailsPage extends Page {
         // See more button
         const seeMoreBtn = this.$('.see-more-btn');
         if (seeMoreBtn) {
-            seeMoreBtn.addEventListener('mousedown', (e) => {
-                const now = Date.now();
-                if (now - lastActivateTime < 400) return;
-                lastActivateTime = now;
-                this._showFullOverview();
-            });
-            seeMoreBtn.addEventListener('click', (e) => {
-                const now = Date.now();
-                if (now - lastActivateTime < 400) return;
-                lastActivateTime = now;
-                this._showFullOverview();
-            });
+            // Route events through the central handler to manage activation limits.
+            seeMoreBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showFullOverview()));
+            seeMoreBtn.addEventListener('click', (e) => handleActivate(e, () => this._showFullOverview()));
         }
     }
 
@@ -1742,7 +1733,7 @@ class DetailsPage extends Page {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const starRating = item.CommunityRating && shouldShowScore(item) ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}` : '';
         const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';
@@ -2434,6 +2425,34 @@ class DetailsPage extends Page {
         });
     }
 
+    /**
+     * Toggles the overview description layout between truncated and expanded states.
+     * Complies with Apple's Human Interface Guidelines for focus states and screen flow.
+     */
+    _showFullOverview() {
+        // Fetch references to structural elements
+        const overviewEl = this.$('.overview-text');
+        const seeMoreBtn = this.$('.see-more-btn');
+        if (!overviewEl || !seeMoreBtn) return;
+
+        // Toggle lines clamp styling
+        const isExpanded = !overviewEl.classList.contains('line-clamp-6');
+
+        if (isExpanded) {
+            // Apply line clamping to keep layout neat and clean
+            overviewEl.classList.add('line-clamp-6');
+            seeMoreBtn.textContent = i18n.t('ShowMore');
+            this.el.scrollTop = 0; // Reset scroll view hierarchy
+        } else {
+            // Remove line clamping limits to reveal full description block
+            overviewEl.classList.remove('line-clamp-6');
+            seeMoreBtn.textContent = i18n.t('ShowLess');
+        }
+
+        // Direct focus manager to maintain focus on action button
+        focusManager.focusElement(seeMoreBtn);
+    }
+
     _checkOverviewTruncation() {
         const overviewEl = this.$('.overview-text');
         const seeMoreBtn = this.$('.see-more-btn');
@@ -2456,23 +2475,8 @@ class DetailsPage extends Page {
             this._updateLeaveDown('details-actions', 'details-see-more');
 
             // Handle Click (Toggle)
-            seeMoreBtn.onclick = () => {
-                const isExpanded = !overviewEl.classList.contains('line-clamp-6');
-
-                if (isExpanded) {
-                    // Collapse
-                    overviewEl.classList.add('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowMore');
-                    this.el.scrollTop = 0; // Optional: Reset scroll
-                } else {
-                    // Expand
-                    overviewEl.classList.remove('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowLess');
-                }
-
-                // Keep focus on the button using precision scroll
-                focusManager.focusElement(seeMoreBtn);
-            };
+            // Delegate action directly to the newly defined helper method.
+            seeMoreBtn.onclick = () => this._showFullOverview();
         }
     }
 

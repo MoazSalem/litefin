@@ -304,12 +304,19 @@ export class VirtualCardRow {
 
         this.domNodes = new Map(); // Maps index -> HTMLElement
 
+        // -------------------------------------------------------------
         // Render the initial block.
-        // If an initialWindow was requested, temporarily widen visibleCount so
-        // _updateWindow builds the full initial set of DOM nodes in one pass.
-        // The flag is cleared on the next _updateWindow call so the normal
-        // sliding window takes over transparently from that point.
-        if (this._initialWindow != null) {
+        // If an initialWindow was requested and we are loading at the very
+        // first item (index 0), we temporarily enable boot-render to build
+        // the initial eager set of DOM nodes in one pass.
+        //
+        // However, if we are loading at a non-zero focused index (e.g. pre-scrolled
+        // to a specific episode details card), we MUST bypass boot-render.
+        // This ensures the normal sliding window centers on the active card and
+        // automatically appends and force-loads the correct visible card elements
+        // in the viewport instead of keeping them empty.
+        // -------------------------------------------------------------
+        if (this._initialWindow != null && this.currentIndex === 0) {
             this._isBootRender = true;
         }
         this._updateWindow(this.currentIndex);

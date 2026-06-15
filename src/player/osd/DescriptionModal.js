@@ -13,6 +13,7 @@ import { shouldShowScore } from '../../utils/visibility.js';
 import { api } from '../../api/index.js';
 import { pluginManager } from '../../plugins/PluginManager.js';
 import { storage } from '../../utils/StorageService.js';
+import { detailsIcons } from '../../utils/Icons.js';
 
 export default class DescriptionModal extends BaseMenu {
 
@@ -66,7 +67,7 @@ export default class DescriptionModal extends BaseMenu {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const starRating = item.CommunityRating && shouldShowScore(item) ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}` : '';
         const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';

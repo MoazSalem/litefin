@@ -27,6 +27,7 @@ import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
 import { shouldShowScore } from '../../utils/visibility.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { detailsIcons } from '../../utils/Icons.js';
 
 /**
  * UpNextDialog
@@ -368,13 +369,13 @@ export default class UpNextDialog extends BaseMenu {
             badgeEl.textContent = season || ep ? `${season}${ep}` : '';
         }
 
-        // ---- Community rating (e.g. "★ 8.0") --------------------------------
+        // ---- Community rating (e.g. SVG star + "8.0") --------------------------------
         const ratingEl = this.$el.querySelector('.upnext-rating');
         if (ratingEl) {
             const score = item.CommunityRating;
             if (score != null && !isNaN(score) && shouldShowScore(item)) {
-                // Round to one decimal place (e.g. 8.0, 7.4)
-                ratingEl.textContent = `\u2605 ${parseFloat(score).toFixed(1)}`;
+                // Render rating score with modern unified SVG star icon
+                ratingEl.innerHTML = `${detailsIcons.ratingStar}${parseFloat(score).toFixed(1)}`;
                 ratingEl.style.display = '';
             } else {
                 // No community rating available — hide the element cleanly

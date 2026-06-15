@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { imageService } from '../utils/ImageService.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { detailsIcons } from '../utils/Icons.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -147,7 +148,7 @@ class HeroCarousel {
         const rating = item.OfficialRating;
         const starRating =
             !hasMdbRatings && item.CommunityRating && shouldShowScore(item)
-                ? `★ ${item.CommunityRating.toFixed(1)}`
+                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
                 : '';
 
         let metaHtml = '';

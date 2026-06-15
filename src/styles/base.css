@@ -979,3 +979,20 @@ html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):no
     line-height: 1.25 !important;
     max-height: 2.5em !important;
 }
+
+/* ============================================================================
+   Community Score & Rating Star Styling
+   ============================================================================ */
+.rating-star-icon {
+    /* Set dimensions proportional to font size so it sits correctly inline */
+    width: 1em;
+    height: 1em;
+    /* Adjust vertical alignment relative to baseline */
+    vertical-align: -0.12em;
+    /* Allow SVG paths to inherit parent color */
+    fill: currentColor;
+    /* Set display property to blend seamlessly with surrounding text labels */
+    display: inline-block;
+    /* Set margin to isolate from rating numeric score values */
+    margin-right: 4px;
+}
