@@ -78,9 +78,9 @@ export default class SettingsMenu extends BaseMenu {
             { id: 'quality', label: i18n.t('Quality'), key: 'Quality', icon: osdIcons.quality },
             { id: 'playbackMode', label: i18n.t('PlaybackMode'), key: 'PlaybackMode', icon: osdIcons.layers },
             { id: 'repeatMode', label: i18n.t('RepeatMode'), key: 'RepeatMode', icon: osdIcons.repeat },
-            { id: 'playbackInfo', label: i18n.t('PlaybackData'), key: 'PlaybackData', icon: osdIcons.info },
             { id: 'subtitleOffset', label: i18n.t('SubtitleOffset'), key: 'SubtitleOffset', icon: osdIcons.sync },
-            { id: 'subtitleAppearance', label: i18n.t('SubtitleAppearance'), key: 'SubtitleAppearance', icon: osdIcons.palette }
+            { id: 'subtitleAppearance', label: i18n.t('SubtitleAppearance'), key: 'SubtitleAppearance', icon: osdIcons.palette },
+            { id: 'playbackInfo', label: i18n.t('PlaybackData'), key: 'PlaybackData', icon: osdIcons.info }
         ];
 
         const optionsHtml = options.map((opt, i) => `
@@ -112,7 +112,7 @@ export default class SettingsMenu extends BaseMenu {
 
     handleKey(key) {
         const options = this.$el?.querySelectorAll('.track-option') || [];
-        
+
         switch (key) {
             case 'up':
                 if (this.focusIndex > 0) {
@@ -148,7 +148,7 @@ export default class SettingsMenu extends BaseMenu {
         if (!focusedOption) return;
 
         const actionId = focusedOption.dataset.id;
-        
+
         // Use closeMenu to cleanup focus properly
         this.osd.closeMenu();
 

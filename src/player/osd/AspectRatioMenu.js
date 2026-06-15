@@ -17,9 +17,9 @@ export default class AspectRatioMenu extends BaseMenu {
         // The display transition between outline and filled states is handled 
         // dynamically via CSS rules rather than code-level string swaps.
         this.options = [
-            { id: 'auto', label: i18n.t('Auto'), key: 'Auto', icon: osdIcons.aspectRatio },
-            { id: 'zoom', label: i18n.t('Zoom'), key: 'Zoom', icon: osdIcons.zoomIn },
-            { id: 'stretch', label: i18n.t('Stretch'), key: 'Stretch', icon: osdIcons.aspectRatio } // Reusing icon for now
+            { id: 'auto', label: i18n.t('Auto'), key: 'Auto' },
+            { id: 'zoom', label: i18n.t('Zoom'), key: 'Zoom' },
+            { id: 'stretch', label: i18n.t('Stretch'), key: 'Stretch' } // Reusing icon for now
         ];
     }
 
@@ -38,7 +38,7 @@ export default class AspectRatioMenu extends BaseMenu {
 
     show() {
         // Capture focus context
-        this._prevFocus = this.osd._getFocused(); 
+        this._prevFocus = this.osd._getFocused();
         this._prevRow = this.osd._currentFocusRow;
         this._prevIndex = this.osd._currentFocusIndex;
 
@@ -88,11 +88,10 @@ export default class AspectRatioMenu extends BaseMenu {
         const optionsHtml = this.options.map((opt, i) => {
             const isSelected = opt.id === current;
             const checkIcon = isSelected ? osdIcons.check : '';
-            
+
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" 
                     data-id="${opt.id}" data-menu-index="${i}">
-                <span class="track-option-icon">${opt.icon || ''}</span>
                 <span class="track-option-label" data-i18n="${opt.key}">${opt.label}</span>
                 <span class="track-option-check">${checkIcon}</span>
             </button>

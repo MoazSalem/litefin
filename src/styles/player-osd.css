@@ -381,10 +381,6 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     background: var(--jf-accent) !important;
     color: var(--jf-primary-btn-color) !important;
     outline: none !important;
-    -webkit-transform: scale(1.15);
-    transform: scale(1.15);
-    /* Promote only the focused/hovered button to its own compositor layer */
-    will-change: transform;
 }
 
 /* 
@@ -1791,42 +1787,96 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
    OSD Button and Menu Vector State Toggles (Outline vs Filled SVG)
    ============================================================================ */
 
-/* Hide the filled SVG design path state by default. */
-.icon-filled {
+/* Hide the filled SVG design path state by default inside OSD, overlays, and modals. */
+.player-osd .icon-filled,
+.track-menu-overlay .icon-filled,
+.playback-info-overlay .icon-filled,
+.osd-modal .icon-filled,
+.syncplay-overlay .icon-filled {
     display: none !important;
 }
 
-/* Display the outline SVG design path state by default. */
-.icon-outline {
+/* Display the outline SVG design path state by default inside OSD, overlays, and modals. */
+.player-osd .icon-outline,
+.track-menu-overlay .icon-outline,
+.playback-info-overlay .icon-outline,
+.osd-modal .icon-outline,
+.syncplay-overlay .icon-outline {
     display: inline-block !important;
 }
 
 /* Switch visibility when parent button or menu item is actively focused, selected, or active. */
-.focusable.focused .icon-outline,
-.focusable:focus .icon-outline,
-.track-option.focused .icon-outline,
-.track-option.selected .icon-outline,
-.osd-btn.focused .icon-outline,
-.osd-btn:focus .icon-outline,
-.osd-btn.magic-hover .icon-outline,
-.osd-btn.active .icon-outline,
-.osd-btn.syncplay-active .icon-outline,
-.syncplay-group-item:focus .icon-outline,
-.syncplay-group-item.focused .icon-outline {
+.player-osd .focusable.focused .icon-outline,
+.player-osd .focusable:focus .icon-outline,
+.track-menu-overlay .track-option.focused .icon-outline,
+.track-menu-overlay .track-option.selected .icon-outline,
+.player-osd .osd-btn.focused .icon-outline,
+.player-osd .osd-btn:focus .icon-outline,
+.player-osd .osd-btn.magic-hover .icon-outline,
+.player-osd .osd-btn.active .icon-outline,
+.player-osd .osd-btn.syncplay-active .icon-outline,
+.syncplay-overlay .syncplay-group-item:focus .icon-outline,
+.syncplay-overlay .syncplay-group-item.focused .icon-outline {
     display: none !important;
 }
 
 /* Make filled vector design active when focus or active states match. */
-.focusable.focused .icon-filled,
-.focusable:focus .icon-filled,
-.track-option.focused .icon-filled,
-.track-option.selected .icon-filled,
-.osd-btn.focused .icon-filled,
-.osd-btn:focus .icon-filled,
-.osd-btn.magic-hover .icon-filled,
-.osd-btn.active .icon-filled,
-.osd-btn.syncplay-active .icon-filled,
-.syncplay-group-item:focus .icon-filled,
-.syncplay-group-item.focused .icon-filled {
+.player-osd .focusable.focused .icon-filled,
+.player-osd .focusable:focus .icon-filled,
+.track-menu-overlay .track-option.focused .icon-filled,
+.track-menu-overlay .track-option.selected .icon-filled,
+.player-osd .osd-btn.focused .icon-filled,
+.player-osd .osd-btn:focus .icon-filled,
+.player-osd .osd-btn.magic-hover .icon-filled,
+.player-osd .osd-btn.active .icon-filled,
+.player-osd .osd-btn.syncplay-active .icon-filled,
+.syncplay-overlay .syncplay-group-item:focus .icon-filled,
+.syncplay-overlay .syncplay-group-item.focused .icon-filled {
     display: inline-block !important;
 }
+
+
+/* If button is NOT active (i.e. not favorited): hide all favorite SVGs */
+.osd-btn#osdFavoriteBtn:not(.active) .icon-favorite {
+    display: none !important;
+}
+
+/* If button IS active (i.e. favorited): hide all unfavorite SVGs */
+.osd-btn#osdFavoriteBtn.active .icon-unfavorite {
+    display: none !important;
+}
+
+/* When active but NOT focused, show State 3 (outline favorite) and hide State 4 (filled favorite) */
+.osd-btn#osdFavoriteBtn.active .icon-favorite.icon-outline {
+    display: inline-block !important;
+}
+.osd-btn#osdFavoriteBtn.active .icon-favorite.icon-filled {
+    display: none !important;
+}
+
+/* Hide outline and show filled for unfavorite icon when focused/hovered in inactive state */
+.osd-btn#osdFavoriteBtn:not(.active).focused .icon-unfavorite.icon-outline,
+.osd-btn#osdFavoriteBtn:not(.active):focus .icon-unfavorite.icon-outline,
+.osd-btn#osdFavoriteBtn:not(.active).magic-hover .icon-unfavorite.icon-outline {
+    display: none !important;
+}
+.osd-btn#osdFavoriteBtn:not(.active).focused .icon-unfavorite.icon-filled,
+.osd-btn#osdFavoriteBtn:not(.active):focus .icon-unfavorite.icon-filled,
+.osd-btn#osdFavoriteBtn:not(.active).magic-hover .icon-unfavorite.icon-filled {
+    display: inline-block !important;
+}
+
+/* Hide outline and show filled for favorite icon when focused/hovered in active state */
+.osd-btn#osdFavoriteBtn.active.focused .icon-favorite.icon-outline,
+.osd-btn#osdFavoriteBtn.active:focus .icon-favorite.icon-outline,
+.osd-btn#osdFavoriteBtn.active.magic-hover .icon-favorite.icon-outline {
+    display: none !important;
+}
+.osd-btn#osdFavoriteBtn.active.focused .icon-favorite.icon-filled,
+.osd-btn#osdFavoriteBtn.active:focus .icon-favorite.icon-filled,
+.osd-btn#osdFavoriteBtn.active.magic-hover .icon-favorite.icon-filled {
+    display: inline-block !important;
+}
+
+
+

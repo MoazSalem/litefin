@@ -68,9 +68,9 @@ export default class RepeatModeMenu extends BaseMenu {
 
         // Array list describing the available repeat modes and their mapped icons.
         const modes = [
-            { id: 'RepeatNone', label: i18n.t('Off'), key: 'Off', icon: osdIcons.repeat },
-            { id: 'RepeatAll', label: i18n.t('RepeatAll'), key: 'RepeatAll', icon: osdIcons.repeat },
-            { id: 'RepeatOne', label: i18n.t('RepeatOne'), key: 'RepeatOne', icon: osdIcons.repeatOne }
+            { id: 'RepeatNone', label: i18n.t('Off'), key: 'Off' },
+            { id: 'RepeatAll', label: i18n.t('RepeatAll'), key: 'RepeatAll' },
+            { id: 'RepeatOne', label: i18n.t('RepeatOne'), key: 'RepeatOne' }
         ];
 
         // Locate the array index corresponding to the active repeat setting.
@@ -82,11 +82,10 @@ export default class RepeatModeMenu extends BaseMenu {
         const optionsHtml = modes.map((mode, i) => {
             // Check if loop item is currently selected in play queue.
             const isSelected = mode.id === currentMode;
-            
+
             // Build button layout displaying mode status and checkbox icon.
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" data-id="${mode.id}" data-menu-index="${i}">
-                <span class="track-option-icon">${mode.icon}</span>
                 <span class="track-option-label" data-i18n="${mode.key}">${mode.label}</span>
                 ${isSelected ? `<span class="track-option-check">${osdIcons.check}</span>` : ''}
             </button>
