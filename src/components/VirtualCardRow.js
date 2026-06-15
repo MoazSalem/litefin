@@ -314,6 +314,40 @@ export class VirtualCardRow {
         }
         this._updateWindow(this.currentIndex);
 
+        // -------------------------------------------------------------
+        // Align scroll position instantly to center on the initial focused index
+        // to prevent visual layout jumps on first load.
+        // -------------------------------------------------------------
+        if (this.currentIndex > 0) {
+            const isRtl = document.documentElement.dir === 'rtl';
+            const elementPos = this.getItemPosition(this.currentIndex);
+            const canExpand = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+            const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
+            
+            // Read container width from parent element, fallback to viewport width
+            const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
+            const targetScroll = elementPos - containerWidth / 2 + elementWidth / 2;
+            const maxScroll = Math.max(0, this.getTrackWidth() - containerWidth);
+            const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
+            
+            // Apply coordinates instantly without animation transitions
+            this.track.style.transition = 'none';
+            this.track.style.webkitTransition = 'none';
+            
+            const transformValue = isRtl
+                ? `translate3d(${finalScrollLeft}px, 0, 0)`
+                : `translate3d(-${finalScrollLeft}px, 0, 0)`;
+            
+            this.track.style.webkitTransform = transformValue;
+            this.track.style.transform = transformValue;
+            
+            // Restore transition property asynchronously on next animation frame
+            requestAnimationFrame(() => {
+                this.track.style.webkitTransition = '';
+                this.track.style.transition = '';
+            });
+        }
+
         // =================================================================
         // 💎 STARTUP BACKDROP CACHING
         // =================================================================
