@@ -4,7 +4,7 @@ import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { playQueue } from '../../core/PlayQueue.js';
 import { i18n } from '../../utils/i18n.js';
 import { api } from '../../api/index.js';
-import { ICONS } from './icons.js';
+import { osdIcons } from '../../utils/Icons.js';
 import { TrickplayManager } from './TrickplayManager.js';
 
 import TrackMenu from './TrackMenu.js';
@@ -213,10 +213,10 @@ export default class OSDController extends Component {
                 const syncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
                 btn.classList.toggle('syncplay-active', syncPlayActive);
                 
-                // Update icon content (Filled variant when in a group)
+                // Update icon content (Filled/Outline variants handled by CSS based on syncplay-active class)
                 btn.innerHTML = `
                     <div class="osd-syncplay-icon-wrap">
-                        ${syncPlayActive ? ICONS.groupFilled : ICONS.group}
+                        ${osdIcons.group}
                         <span class="osd-syncplay-dot ${syncPlayActive ? 'visible' : ''}" id="osdSyncPlayDot"></span>
                     </div>
                 `;
@@ -389,7 +389,7 @@ export default class OSDController extends Component {
                 <div class="osd-header" id="osdHeader">
                     <div class="osd-header-left">
                         <button class="osd-btn osd-back-btn" data-action="exit" aria-label="${i18n.t('ButtonBack')}" tabindex="0">
-                            ${ICONS.arrowBack}
+                            ${osdIcons.arrowBack}
                         </button>
                         <div class="osd-title-wrap">
                             <div class="osd-title-main">
@@ -409,35 +409,35 @@ export default class OSDController extends Component {
                     <!-- Controls Row (above slider) -->
                     <div class="osd-controls-row">
                         <div class="osd-controls-left">
-                            <button class="osd-btn" data-action="previousTrack" tabindex="0" id="osdPrevBtn">${ICONS.skipPrevious}</button>
-                            <button class="osd-btn osd-btn-disabled" data-action="previousChapter" tabindex="-1" id="osdPrevChapterBtn">${ICONS.chapterPrevious}</button>
-                            <button class="osd-btn" data-action="rewind" tabindex="0">${ICONS.fastRewind}</button>
-                            <button class="osd-btn osd-btn-play" id="osdPlayPauseBtn" data-action="togglePlay" tabindex="0">${ICONS.pause}</button>
-                            <button class="osd-btn" data-action="fastForward" tabindex="0">${ICONS.fastForward}</button>
-                            <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${ICONS.chapterNext}</button>
-                            <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${ICONS.skipNext}</button>
+                            <button class="osd-btn" data-action="previousTrack" tabindex="0" id="osdPrevBtn">${osdIcons.skipPrevious}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="previousChapter" tabindex="-1" id="osdPrevChapterBtn">${osdIcons.chapterPrevious}</button>
+                            <button class="osd-btn" data-action="rewind" tabindex="0">${osdIcons.fastRewind}</button>
+                            <button class="osd-btn osd-btn-play" id="osdPlayPauseBtn" data-action="togglePlay" tabindex="0">${osdIcons.pause}</button>
+                            <button class="osd-btn" data-action="fastForward" tabindex="0">${osdIcons.fastForward}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${osdIcons.chapterNext}</button>
+                            <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${osdIcons.skipNext}</button>
                             <!-- Queue modal button (always available) -->
-                            <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${ICONS.queue}</button>
+                            <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${osdIcons.queue}</button>
                             <!-- Lyrics modal button -->
-                            <button class="osd-btn osd-btn-disabled hidden" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${ICONS.lyrics}</button>
+                            <button class="osd-btn osd-btn-disabled hidden" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${osdIcons.lyrics}</button>
                             <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
-                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${ICONS.viewList}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${osdIcons.viewList}</button>
                         </div>
                         <div class="osd-ends-at" id="osdEndsAt"></div>
                         <div class="osd-spacer"></div>
                         <div class="osd-controls-right">
-                            <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${ICONS.favorite}</button>
-                            <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
-                            <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
+                            <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${osdIcons.favorite}</button>
+                            <button class="osd-btn" data-action="subtitles" tabindex="0">${osdIcons.closedCaption}</button>
+                            <button class="osd-btn" data-action="audio" tabindex="0">${osdIcons.audiotrack}</button>
                             <!-- SyncPlay group management — only the icon; menu opens on click -->
                             <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">
                                 <div class="osd-syncplay-icon-wrap">
-                                    ${ICONS.group}
+                                    ${osdIcons.group}
                                     <span class="osd-syncplay-dot" id="osdSyncPlayDot"></span>
                                 </div>
                             </button>
-                            <button class="osd-btn" data-action="description" id="osdInfoBtn" tabindex="0" aria-label="Description">${ICONS.info}</button>
-                            <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
+                            <button class="osd-btn" data-action="description" id="osdInfoBtn" tabindex="0" aria-label="Description">${osdIcons.info}</button>
+                            <button class="osd-btn" data-action="settings" tabindex="0">${osdIcons.settings}</button>
                         </div>
                     </div>
 
@@ -1949,6 +1949,8 @@ export default class OSDController extends Component {
 
 
 
+
+
     _findActionIndex(action) {
         const controls = this._getControls();
         return controls.findIndex(btn => btn.dataset.action === action);
@@ -2293,11 +2295,12 @@ export default class OSDController extends Component {
         if (!this._osdPlayPauseBtnEl || !this._player) return;
 
         const isPaused = this._player.isPaused();
-        this._osdPlayPauseBtnEl.innerHTML = isPaused ? ICONS.play : ICONS.pause;
-
         // Toggle only osd-btn-paused — avoid replacing the entire className which
         // would wipe transient classes like .magic-hover and .focused on every call.
         this._osdPlayPauseBtnEl.classList.toggle('osd-btn-paused', isPaused);
+
+        // Update the inner SVG icons directly from unified properties
+        this._osdPlayPauseBtnEl.innerHTML = isPaused ? osdIcons.play : osdIcons.pause;
     }
 
     _startUpdates() {
@@ -3307,7 +3310,6 @@ export default class OSDController extends Component {
         const btn = this._osdEl.querySelector('#osdFavoriteBtn');
         if (!btn || !item?.UserData) return;
         const isFavorite = item.UserData.IsFavorite;
-        btn.innerHTML = isFavorite ? ICONS.favoriteFilled : ICONS.favorite;
         
         if (isFavorite) {
             btn.classList.add('active');

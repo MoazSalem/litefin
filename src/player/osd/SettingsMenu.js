@@ -1,5 +1,10 @@
+// Base overlay implementation from which SettingsMenu inherits controls.
 import BaseMenu from './BaseMenu.js';
-import { ICONS } from './icons.js';
+
+// Global SVG icons utility library housing all outline and filled vectors.
+import { osdIcons } from '../../utils/Icons.js';
+
+// Localization tools to translate layout terms.
 import { i18n } from '../../utils/i18n.js';
 
 /**
@@ -66,15 +71,16 @@ export default class SettingsMenu extends BaseMenu {
             });
         }
 
+        // Settings items configuration containing titles, icons, and event names.
         const options = [
-            { id: 'aspectRatio', label: i18n.t('AspectRatio'), key: 'AspectRatio', icon: ICONS.aspectRatio },
-            { id: 'playbackSpeed', label: i18n.t('PlaybackRate'), key: 'PlaybackRate', icon: ICONS.speed },
-            { id: 'quality', label: i18n.t('Quality'), key: 'Quality', icon: ICONS.quality },
-            { id: 'playbackMode', label: i18n.t('PlaybackMode'), key: 'PlaybackMode', icon: ICONS.layers },
-            { id: 'repeatMode', label: i18n.t('RepeatMode'), key: 'RepeatMode', icon: ICONS.repeat },
-            { id: 'playbackInfo', label: i18n.t('PlaybackData'), key: 'PlaybackData', icon: ICONS.info },
-            { id: 'subtitleOffset', label: i18n.t('SubtitleOffset'), key: 'SubtitleOffset', icon: ICONS.sync },
-            { id: 'subtitleAppearance', label: i18n.t('SubtitleAppearance'), key: 'SubtitleAppearance', icon: ICONS.palette }
+            { id: 'aspectRatio', label: i18n.t('AspectRatio'), key: 'AspectRatio', icon: osdIcons.aspectRatio },
+            { id: 'playbackSpeed', label: i18n.t('PlaybackRate'), key: 'PlaybackRate', icon: osdIcons.speed },
+            { id: 'quality', label: i18n.t('Quality'), key: 'Quality', icon: osdIcons.quality },
+            { id: 'playbackMode', label: i18n.t('PlaybackMode'), key: 'PlaybackMode', icon: osdIcons.layers },
+            { id: 'repeatMode', label: i18n.t('RepeatMode'), key: 'RepeatMode', icon: osdIcons.repeat },
+            { id: 'playbackInfo', label: i18n.t('PlaybackData'), key: 'PlaybackData', icon: osdIcons.info },
+            { id: 'subtitleOffset', label: i18n.t('SubtitleOffset'), key: 'SubtitleOffset', icon: osdIcons.sync },
+            { id: 'subtitleAppearance', label: i18n.t('SubtitleAppearance'), key: 'SubtitleAppearance', icon: osdIcons.palette }
         ];
 
         const optionsHtml = options.map((opt, i) => `

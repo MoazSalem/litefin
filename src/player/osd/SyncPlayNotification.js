@@ -1,6 +1,13 @@
+// Core component class layout from which Litefin components derive.
 import Component from '../../core/Component.js';
-import { ICONS } from './icons.js';
+
+// Centralized icon store loaded globally to reuse SVG layout definitions.
+import { osdIcons } from '../../utils/Icons.js';
+
+// Class level logger for diagnostic output reporting SyncPlay connection signals.
 import { logger } from '../../utils/Logger.js';
+
+// Localizer to translates SyncPlay texts.
 import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('SyncPlayNotification');
@@ -37,7 +44,7 @@ export default class SyncPlayNotification extends Component {
         this._container.innerHTML = `
             <div class="osd-syncplay-notification-glass">
                 <div class="osd-syncplay-notification-icon" id="syncPlayNotifIcon">
-                    ${ICONS.group}
+                    ${osdIcons.group}
                 </div>
                 <div class="osd-syncplay-notification-text">
                     <div class="osd-syncplay-notification-primary" id="syncPlayNotifPrimary">${i18n.t('SyncPlay')}</div>
@@ -79,31 +86,38 @@ export default class SyncPlayNotification extends Component {
             this._hideTimer = null;
         }
 
-        // Set Icon
-        let svgIcon = ICONS.group;
+        // Set dynamic SVG vector markup based on the actionType trigger.
+        let svgIcon = osdIcons.group;
         switch (actionType) {
             case 'play':
             case 'unpause':
-                svgIcon = ICONS.play;
+                // Use playing indicator for start/resume signals.
+                svgIcon = osdIcons.play;
                 break;
             case 'pause':
             case 'stop':
-                svgIcon = ICONS.pause;
+                // Pause indicator.
+                svgIcon = osdIcons.pause;
                 break;
             case 'seek':
-                svgIcon = ICONS.fastForward; // Or skip, depending
+                // Fast-forward indicator icon.
+                svgIcon = osdIcons.fastForward;
                 break;
             case 'buffering':
-                svgIcon = ICONS.group; // Often a spinner or sync icon
+                // Maintain group alignment during buffering events.
+                svgIcon = osdIcons.group;
                 break;
             case 'join':
-                svgIcon = ICONS.group || ICONS.check; // Fallback to check if group not in icons.js
+                // Group checkmark fallback structure.
+                svgIcon = osdIcons.group || osdIcons.check;
                 break;
             case 'leave':
-                svgIcon = ICONS.arrowBack; 
+                // Arrow back icon representation representing room egress.
+                svgIcon = osdIcons.arrowBack; 
                 break;
             default:
-                svgIcon = ICONS.group;
+                // Universal fallback to group membership.
+                svgIcon = osdIcons.group;
                 break;
         }
 

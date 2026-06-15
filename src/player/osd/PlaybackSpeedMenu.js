@@ -1,6 +1,13 @@
+// Base class representing standard player menu structures and layouts.
 import BaseMenu from './BaseMenu.js';
-import { ICONS } from './icons.js';
+
+// Centralized icon store loaded globally to reuse SVG layouts for playback menu checks.
+import { osdIcons } from '../../utils/Icons.js';
+
+// Class level logger to log changes to the media player speed settings.
 import { logger } from '../../utils/Logger.js';
+
+// Localization function library for translation of player UI elements.
 import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('PlaybackSpeedMenu');
@@ -71,10 +78,19 @@ export default class PlaybackSpeedMenu extends BaseMenu {
 
         const currentSpeed = this.osd.player.getPlaybackSpeed();
 
+        // Loop through all speeds to construct the options template.
         const optionsHtml = this.options.map((opt, i) => {
+            // Determine if the speed index is equal to current playback rate.
             const isSelected = opt.id === currentSpeed;
-            const checkIcon = isSelected ? ICONS.check : '';
             
+            // ================================================================
+            // Dynamic Selection Mark
+            // ================================================================
+            // Checkmark SVG applied to option that is actively used.
+            // We use the unified check icon directly.
+            const checkIcon = isSelected ? osdIcons.check : '';
+            
+            // Build and return the HTML button structure for the specific speed.
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" 
                     data-id="${opt.id}" data-menu-index="${i}">

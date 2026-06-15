@@ -1786,3 +1786,47 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
     display: inline-block !important;
     vertical-align: middle;
 }
+
+/* ============================================================================
+   OSD Button and Menu Vector State Toggles (Outline vs Filled SVG)
+   ============================================================================ */
+
+/* Hide the filled SVG design path state by default. */
+.icon-filled {
+    display: none !important;
+}
+
+/* Display the outline SVG design path state by default. */
+.icon-outline {
+    display: inline-block !important;
+}
+
+/* Switch visibility when parent button or menu item is actively focused, selected, or active. */
+.focusable.focused .icon-outline,
+.focusable:focus .icon-outline,
+.track-option.focused .icon-outline,
+.track-option.selected .icon-outline,
+.osd-btn.focused .icon-outline,
+.osd-btn:focus .icon-outline,
+.osd-btn.magic-hover .icon-outline,
+.osd-btn.active .icon-outline,
+.osd-btn.syncplay-active .icon-outline,
+.syncplay-group-item:focus .icon-outline,
+.syncplay-group-item.focused .icon-outline {
+    display: none !important;
+}
+
+/* Make filled vector design active when focus or active states match. */
+.focusable.focused .icon-filled,
+.focusable:focus .icon-filled,
+.track-option.focused .icon-filled,
+.track-option.selected .icon-filled,
+.osd-btn.focused .icon-filled,
+.osd-btn:focus .icon-filled,
+.osd-btn.magic-hover .icon-filled,
+.osd-btn.active .icon-filled,
+.osd-btn.syncplay-active .icon-filled,
+.syncplay-group-item:focus .icon-filled,
+.syncplay-group-item.focused .icon-filled {
+    display: inline-block !important;
+}
