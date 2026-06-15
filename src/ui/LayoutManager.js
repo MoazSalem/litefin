@@ -96,6 +96,9 @@ class LayoutManager {
         // Badge style: 'auto', 'tinted', 'dark'
         this._badgeStyle = 'auto';
 
+        // Button style options: 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb'
+        this._buttonStyle = 'theme-default';
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -141,6 +144,9 @@ class LayoutManager {
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
         const savedCardLabelScale = parseFloat(storage.getItem('pref:cardLabelScale') || '1.0');
 
+        // Load user preferred button customization style
+        const savedButtonStyle = storage.getItem('litefin:buttonStyle') || 'theme-default';
+
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
         this.setThemeMode(initialMode, false);
@@ -156,6 +162,9 @@ class LayoutManager {
         this.setDisableBlurhash(savedDisableBlurhash, false);
         this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
         this.setBadgeStyle(savedBadgeStyle, false);
+
+        // Initial setup for the button styling scheme
+        this.setButtonStyle(savedButtonStyle, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -510,6 +519,44 @@ class LayoutManager {
 
     getOsdButtonBorders() {
         return this._osdButtonBorders;
+    }
+
+    /**
+     * Get the active button style configuration
+     * @returns {string} One of: 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb'
+     */
+    getButtonStyle() {
+        return this._buttonStyle;
+    }
+
+    /**
+     * Sets the active button style theme and updates HTML attributes immediately.
+     * Follows Apple's visual clarity recommendations, ensuring high legibility
+     * and premium spring-like focus behaviors.
+     * @param {string} style - Selected button style
+     * @param {boolean} [save=true] - If true, persist value to localStorage
+     */
+    setButtonStyle(style, save = true) {
+        // Validation check for allowed styles to avoid any UI/rendering inconsistencies
+        if (!['theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+            log.warn(`Invalid button style type specified: "${style}"`);
+            return;
+        }
+
+        this._buttonStyle = style;
+
+        // Stamp style attribute on documentElement so CSS engines can adapt immediately
+        document.documentElement.setAttribute('data-button-style', style);
+
+        // Store preferred settings value
+        if (save) {
+            storage.setItem('litefin:buttonStyle', style);
+        }
+
+        log.info(`Button style configuration successfully updated to: ${style}`);
+
+        // Notify any active UI observers that button style changed
+        eventBus.emit('buttonStyle:changed', { style });
     }
 
     setOsdButtonBorders(mode, save = true) {

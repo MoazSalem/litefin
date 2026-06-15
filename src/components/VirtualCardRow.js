@@ -173,7 +173,7 @@ export class VirtualCardRow {
                     // =========================================================
                     // 🚀 ACTIVE SLIDING WINDOW BACKDROP PRELOADING
                     // =========================================================
-                    // To keep navigation feeling lightning fast and premium (Apple HIG style),
+                    // To keep navigation feeling lightning fast and premium ,
                     // we pre-fetch the next card's backdrop while focused on card N.
                     // This creates a 1-item ahead sliding buffer, so the subsequent
                     // expansion backdrop is completely ready before focus lands on it.
@@ -295,7 +295,7 @@ export class VirtualCardRow {
         }
 
         this.bufferZone = Math.floor(this.visibleCount / 2);
-        
+
         // -------------------------------------------------------------
         // Initialize focused index. If options.currentIndex is supplied
         // (for centering rows on active cards), we seed it directly.
@@ -330,24 +330,24 @@ export class VirtualCardRow {
             const elementPos = this.getItemPosition(this.currentIndex);
             const canExpand = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
             const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
-            
+
             // Read container width from parent element, fallback to viewport width
             const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
             const targetScroll = elementPos - containerWidth / 2 + elementWidth / 2;
             const maxScroll = Math.max(0, this.getTrackWidth() - containerWidth);
             const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
-            
+
             // Apply coordinates instantly without animation transitions
             this.track.style.transition = 'none';
             this.track.style.webkitTransition = 'none';
-            
+
             const transformValue = isRtl
                 ? `translate3d(${finalScrollLeft}px, 0, 0)`
                 : `translate3d(-${finalScrollLeft}px, 0, 0)`;
-            
+
             this.track.style.webkitTransform = transformValue;
             this.track.style.transform = transformValue;
-            
+
             // Restore transition property asynchronously on next animation frame
             requestAnimationFrame(() => {
                 this.track.style.webkitTransition = '';
@@ -361,7 +361,6 @@ export class VirtualCardRow {
         // Eagerly preloads the backdrops for index 0 and index 1 on startup.
         // This ensures the current row has at least 2 backdrops cached
         // immediately when the page loads, giving a gorgeous, lag-free first
-        // impression exactly matching the Apple HIG standard.
         // =================================================================
         if (isModern) {
             // Retrieve the first card (index 0) and preload its backdrop

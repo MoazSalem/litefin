@@ -8,7 +8,6 @@ import { logger } from '../utils/Logger.js';
  * Litefin Tizen - Media Info Modal
  * ============================================================================
  * Displays technical media specifications for an item.
- * Designed with Apple HIG principles: clean, modern, and information-dense.
  * ============================================================================
  */
 

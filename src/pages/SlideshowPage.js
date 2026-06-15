@@ -4,7 +4,7 @@
  * ============================================================================
  * Full-screen photo viewer for Home Videos and Photos libraries.
  *
- * Design philosophy (Apple HIG for TV):
+ * Design philosophy:
  *  - Absolutely minimal chrome — the photo is the UI.
  *  - All controls appear only on focus / navigation, then fade out.
  *  - Opacity crossfade transition (NOT translate) prevents GPU composite

@@ -399,12 +399,12 @@
 }
 
 
-/* Primary Play/Resume Buttons - Inverted Mode (White BG, Blue Text) */
+/* Primary Play/Resume Buttons - Styled dynamically based on user options */
 .play-btn,
 .resume-btn {
-    background: var(--jf-primary-btn-color);
-    color: var(--jf-accent);
-    border: 2px solid var(--jf-primary-btn-color) !important;
+    background: var(--jf-btn-primary-bg);
+    color: var(--jf-btn-primary-color);
+    border: 2px solid var(--jf-btn-primary-border) !important;
 }
 
 .play-btn:focus,
@@ -413,11 +413,11 @@
 .resume-btn.focused {
     -webkit-transform: scale(1.05);
     transform: scale(1.05);
-    background: var(--jf-accent);
-    color: var(--jf-primary-btn-color);
-    border-color: var(--jf-button-border-focus);
+    background: var(--jf-btn-primary-focus-bg);
+    color: var(--jf-btn-primary-focus-color);
+    border-color: var(--jf-btn-primary-focus-border) !important;
     outline: none !important;
-    border: 2px solid var(--jf-button-border-focus) !important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
 }
 
 
@@ -539,33 +539,32 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 
 /* Active State (Heart Filled / Checked) */
 .btn-icon.active {
-    /* Inverted Mode (White BG, Blue Icon) */
-    background: var(--jf-primary-btn-color);
-    color: var(--jf-accent);
-    border-color: var(--jf-primary-btn-color) !important;
+    background: var(--jf-btn-primary-bg);
+    color: var(--jf-btn-primary-color);
+    border-color: var(--jf-btn-primary-border) !important;
 }
 
 /* Focus State (Unified) */
 .btn-icon:focus,
 .btn-icon.focused {
-    -webkit-transform: scale(1.15); /* Slightly larger than standard OSD for prominence */
-    transform: scale(1.15); /* Slightly larger than standard OSD for prominence */
-    background: var(--jf-accent);
-    color: var(--jf-primary-btn-color) !important;
-    border-color: var(--jf-button-border-focus) !important;
+    -webkit-transform: scale(1.15); /* Slightly larger than OSD for prominence */
+    transform: scale(1.15); /* Slightly larger than OSD for prominence */
+    background: var(--jf-btn-primary-focus-bg);
+    color: var(--jf-btn-primary-focus-color) !important;
+    border-color: var(--jf-btn-primary-focus-border) !important;
     outline: none !important;
 }
 
 
 /* 
  * Active + Focused State: 
- * All buttons revert to standard app focus (Blue background, White text).
+ * All buttons use the dynamic active/focused button colors.
  */
 .btn-icon.active:focus,
 .btn-icon.active.focused {
-    background: var(--jf-accent) !important;
-    color: var(--jf-primary-btn-color) !important;
-    border-color: var(--jf-button-border-focus) !important;
+    background: var(--jf-btn-primary-focus-bg) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    border-color: var(--jf-btn-primary-focus-border) !important;
     transform: scale(1.15);
 }
 
@@ -693,18 +692,23 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 }
 
 
+/*
+ * ── RICH DATA METADATA CHIPS FOCUS/HOVER HIGHLIGHT ───────────────────────────
+ * Enhances focused or hovered metadata chips (genres, studios, tags, directors)
+ * on the details page. Dynamically maps to custom button accent colors.
+ */
 .meta-chip:hover,
 .meta-chip:focus,
 .meta-chip.focused {
-    background-color: var(--jf-accent) !important;
-    color: var(--jf-primary-btn-color) !important;
-    border-color: var(--jf-button-border-focus) !important;
+    background-color: var(--jf-btn-primary-focus-bg) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    border-color: var(--jf-btn-primary-focus-border) !important;
     transform: scale(1.1);
     opacity: 1;
     outline: none !important;
     text-decoration: none !important;
     z-index: 5;
-    /* Promote only the focused chip */
+    /* Promote only the focused chip to avoid unnecessary composite layers */
     will-change: transform;
 }
 

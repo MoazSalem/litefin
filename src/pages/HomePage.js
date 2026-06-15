@@ -536,7 +536,7 @@ class HomePage extends Page {
                 // Music, Live TV, Home Video, and Music Video libraries use square cards, everything else uses portrait
                 /*
                  * ============================================================
-                 * UI Layout Aspect Determination (Apple HIG Compliance)
+                 * UI Layout Aspect Determination
                  * ============================================================
                  *
                  * Following Apple's Human Interface Guidelines, grid systems
@@ -552,16 +552,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -588,7 +588,7 @@ class HomePage extends Page {
         // preference under settings, we dynamically coerce all horizontal track rows
         // to use standard portrait layouts ('portrait') with 'poster' cards.
         // This ensures the custom expanding-backdrops and visual transitions apply
-        // universally, aligning with unified grids (Apple HIG style).
+        // universally, aligning with unified grids.
         // ====================================================================
         const isModern = layoutManager.getLayout() === 'modern';
         const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';

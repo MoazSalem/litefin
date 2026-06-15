@@ -414,7 +414,7 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 
 .sidebar-item:focus .sidebar-avatar,
 .sidebar-item.focused .sidebar-avatar {
-    border-color: var(--jf-button-border-focus);
+    border-color: var(--jf-primary-btn-color, #fff);
 }
 
 /* Text - Hidden when collapsed */

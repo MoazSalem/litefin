@@ -35,16 +35,18 @@
 }
 
 .btn-primary {
-    background: var(--jf-accent);
-    color: var(--jf-primary-btn-color);
+    background: var(--jf-btn-primary-bg);
+    color: var(--jf-btn-primary-color);
+    border: 3px solid var(--jf-btn-primary-border) !important;
     margin: 0px;
     margin-left: 8px;
 }
 
 .btn-primary:focus,
 .btn-primary.focused {
-    background: var(--jf-accent-hover);
-    color: var(--jf-primary-btn-color);
+    background: var(--jf-btn-primary-focus-bg);
+    color: var(--jf-btn-primary-focus-color);
+    border-color: var(--jf-btn-primary-focus-border) !important;
 }
 
 
@@ -677,55 +679,66 @@ progress.card-progress::-webkit-progress-value {
 
 /* Focused State: Use dynamic contrast color instead of hardcoded white */
 .modal-option-btn.focused .track-badge {
-    background: rgba(var(--jf-primary-btn-color-rgb), 0.15) !important;
-    border-color: rgba(var(--jf-primary-btn-color-rgb), 0.35) !important;
-    color: var(--jf-primary-btn-color) !important;
+    background: rgba(var(--jf-btn-primary-focus-color-rgb), 0.15) !important;
+    border-color: rgba(var(--jf-btn-primary-focus-color-rgb), 0.35) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .modal-option-btn.focused .track-badge.badge-success,
 .modal-option-btn.focused .track-badge.badge-warning,
 .modal-option-btn.focused .track-badge.badge-danger {
-    background: rgba(var(--jf-primary-btn-color-rgb), 0.2) !important;
-    border-color: rgba(var(--jf-primary-btn-color-rgb), 0.4) !important;
-    color: var(--jf-primary-btn-color) !important;
+    background: rgba(var(--jf-btn-primary-focus-color-rgb), 0.2) !important;
+    border-color: rgba(var(--jf-btn-primary-focus-color-rgb), 0.4) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
 }
 
 
+/*
+ * ── SELECTED MODAL OPTION STYLE ──────────────────────────────────────────────
+ * Maps selected modal options (e.g. tracks, audio, subtitles, qualities) to
+ * the dynamic button theme background variables for consistent color flow.
+ */
 .modal-option-btn.selected {
-    background: rgba(var(--jf-accent-rgb), 0.1);
-    border-color: var(--jf-accent);
+    background: rgba(var(--jf-accent-rgb), 0.1) !important;
+    border-color: var(--jf-btn-primary-bg) !important;
     color: var(--jf-text-primary);
 }
 
-
+/*
+ * ── FOCUSED MODAL OPTION STYLE ───────────────────────────────────────────────
+ * Highlights focused modal option items using customizable button focus states.
+ */
 .modal-option-btn:focus,
 .modal-option-btn.focused {
-    background: var(--jf-accent) !important; /* Force priority over .selected */
-    color: var(--jf-primary-btn-color) !important;
-    /* Subtle white inner border */
+    background: var(--jf-btn-primary-focus-bg) !important; /* Force priority over .selected */
+    color: var(--jf-btn-primary-focus-color) !important;
     outline: none;
     transform: scale(1.03);
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
     will-change: transform;
 }
 
 .modal-option-btn:hover {
     transform: scale(1.03);
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
     will-change: transform;
 }
 
-
+/*
+ * ── SELECTED MODAL OPTION CHECK ICON ─────────────────────────────────────────
+ * Configures the selection checkmarks/icons inside list modal items to follow
+ * dynamic button colors and focus text color properties.
+ */
 .modal-option-btn .check-icon {
     display: inline-block;
     vertical-align: middle;
     width: 20px;
-    height: 20px;
+    height: 32px;
     margin-right: 1.2em; /* Spacing from text */
     flex-shrink: 0;
     opacity: 0; /* Hidden by default */
-    color: var(--jf-accent);
+    color: var(--jf-btn-primary-bg) !important;
 }
 
 .modal-option-btn.selected .check-icon {
@@ -733,7 +746,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .modal-option-btn.focused .check-icon {
-    color: var(--jf-primary-btn-color) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
 }
 
 /* Filter/Sort column layout: flex for modern/legacy, floats for ultra-legacy (Chrome 32) */
@@ -1000,10 +1013,9 @@ progress.card-progress::-webkit-progress-value {
 .subtitle-result-btn:focus .track-badge,
 .track-option.focused .track-badge,
 .track-option:focus .track-badge {
-    background-color: rgba(var(--jf-primary-btn-color-rgb), 0.15) !important;
-    color: var(--jf-primary-btn-color);
-    border-color: rgba(var(--jf-primary-btn-color-rgb), 0.35) !important;
-
+    background-color: rgba(var(--jf-btn-primary-focus-color-rgb), 0.15) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    border-color: rgba(var(--jf-btn-primary-focus-color-rgb), 0.35) !important;
 }
 
 .track-label-text {

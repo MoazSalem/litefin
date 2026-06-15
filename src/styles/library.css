@@ -97,12 +97,22 @@
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
+/*
+ * ── ACTIVE TABS STYLING ──────────────────────────────────────────────────────
+ * Sets active/selected library tabs to the dynamic primary button background 
+ * and text variables to follow user display customization preferences.
+ */
 .tab-btn.active {
-    background-color: var(--jf-accent);
-    color: var(--jf-primary-btn-color);
+    background-color: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-btn-primary-color) !important;
+    border-color: var(--jf-btn-primary-border) !important;
 }
 
-/* Unified Focus Styles - Preserving Roundness */
+/*
+ * ── UNIFIED LIBRARY FOCUS STYLES ──────────────────────────────────────────────
+ * Unified remote-focus styles for navigation tabs, control buttons, footer
+ * pagination buttons, and empty-state buttons. Leverages theme focus vars.
+ */
 .tab-btn:focus,
 .tab-btn.focused,
 .control-btn:focus,
@@ -112,11 +122,11 @@
 .empty-state-btn:focus,
 .empty-state-btn.focused {
     outline: none !important;
-    background-color: var(--jf-accent) !important;
-    color: var(--jf-primary-btn-color, #ffffff) !important;
+    background-color: var(--jf-btn-primary-focus-bg) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
     transform: scale(1.08);
     z-index: 10;
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
     /* Only promote the ONE focused button to its own compositor layer.
        All others share the parent layer with zero GPU overhead. */
     will-change: transform;
@@ -458,17 +468,22 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     /* will-change applied on :focus only — see unified focus rule */
 }
 
+/*
+ * ── EMPTY STATE ACTION BUTTON FOCUS ──────────────────────────────────────────
+ * Redefines empty-state action button focus states using dynamic accent/focus
+ * attributes, preserving border-radius and smooth hover scaling.
+ */
 .empty-state-btn:focus,
 .empty-state-btn.focused,
 .empty-state-btn:hover {
-    background-color: var(--jf-accent) !important;
-    color: var(--jf-primary-btn-color, #ffffff) !important;
+    background-color: var(--jf-btn-primary-focus-bg) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
     transform: scale(1.1);
     outline: none !important;
     overflow: hidden !important;
-    /* Force Tizen 4 layer repaint to respect radius */
     border-radius: var(--jf-border-radius-lg) !important;
     -webkit-border-radius: var(--jf-border-radius-lg) !important;
+    /* Force Tizen 4 layer repaint to respect radius */
     -webkit-mask-image: -webkit-radial-gradient(white, black);
     mask-image: radial-gradient(white, black);
 }
@@ -979,21 +994,30 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
        Only the focused button gets promoted (via .alpha-btn:focus rule below). */
 }
 
+/*
+ * ── ALPHA PICKER ACTIVE LETTER STYLE ─────────────────────────────────────────
+ * Selected alphabetical index letters highlight using the theme's configured
+ * primary color, ensuring alignment with dynamic style choices.
+ */
 .alpha-btn.active {
-    color: var(--jf-accent);
+    color: var(--jf-btn-primary-bg) !important;
     font-weight: 700;
     transform: scale(1.2);
 }
 
+/*
+ * ── ALPHA PICKER FOCUS/HOVER HIGHLIGHT ───────────────────────────────────────
+ * Highlights alphabetical index buttons under active user focus or hover,
+ * dynamically binding background, text color, and border settings.
+ */
 .alpha-btn:focus,
 .alpha-btn.focused,
 .alpha-btn:hover {
     outline: none !important;
-    /* Remove square focus */
-    color: var(--jf-primary-btn-color, #ffffff) !important;
-    background-color: var(--jf-accent) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    background-color: var(--jf-btn-primary-focus-bg) !important;
     transform: scale(1.2);
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
     /* Promote only the one focused button to its own compositor layer */
     will-change: transform;
 }
@@ -1029,11 +1053,17 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     cursor: not-allowed;
 }
 
+/*
+ * ── PAGINATION FOOTER BUTTON FOCUS/HOVER ──────────────────────────────────────
+ * Updates pagination navigation control buttons' active focus and hover states
+ * using dynamic customizable buttons configurations variables.
+ */
 .pagination-btn:not(:disabled):focus,
 .pagination-btn.focused,
 .pagination-btn:not(:disabled):hover {
-    background-color: var(--jf-accent) !important;
-    border-color: var(--jf-accent) !important;
+    background-color: var(--jf-btn-primary-focus-bg) !important;
+    border-color: var(--jf-btn-primary-focus-border) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
     transform: scale(1.1);
 }
 
@@ -1436,19 +1466,29 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     margin-left: 0;
 }
 
+/*
+ * ── MODAL ACTION BUTTON FOCUS STATE ──────────────────────────────────────────
+ * Highlights modal actions (Apply / Close) under focus utilizing custom theme
+ * focus parameters for visual consistency.
+ */
 .modal-action-btn:focus,
 .modal-action-btn.focused {
-    border-color: var(--jf-action-btn-active-border)!important;
+    border-color: var(--jf-btn-primary-focus-border) !important;
     transform: scale(1.10);
-    background-color: var(--jf-accent);
+    background-color: var(--jf-btn-primary-focus-bg) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
     z-index: 10;
     outline: none;
     will-change: transform;
 }
 
+/*
+ * ── MODAL ACTION APPLY STATE ─────────────────────────────────────────────────
+ * Styles positive action buttons (e.g. Apply) using dynamic button variables.
+ */
 .modal-action-btn.apply {
-    background-color: var(--jf-accent);
-    color: var(--jf-primary-btn-color);
+    background-color: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-btn-primary-color) !important;
 }
 
 .modal-action-btn.clear,

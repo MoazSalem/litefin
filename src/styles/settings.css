@@ -254,19 +254,27 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     border-color: transparent !important;
 }
 
+/*
+ * ── ACTIVE OPTION BUTTON STYLE ──────────────────────────────────────────────
+ * Sets the active state for the settings buttons using the custom-defined 
+ * theme variable, allowing seamless transitions on user customization.
+ */
 .btn-option.active {
-    background: var(--jf-accent);
-    color: var(--jf-primary-btn-color, #ffffff);
-    border-color: var(--jf-button-border-focus);
-    /* Subtle white inner border */
+    background: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-btn-primary-color) !important;
+    border-color: var(--jf-btn-primary-border) !important;
 }
 
+/*
+ * ── FOCUSED OPTION BUTTON STYLE ─────────────────────────────────────────────
+ * Highlights the focused option buttons utilizing the custom theme's focus 
+ * variables, creating a consistent and cohesive tactile feedback loop.
+ */
 .btn-option:focus,
-.btn-option.focused{
-    border: 2px solid var(--jf-action-btn-active-border)!important;
-    /* High contrast focus */
-    color: var(--jf-primary-btn-color, #fff);
-    background: var(--jf-accent-hover);
+.btn-option.focused {
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    background: var(--jf-btn-primary-focus-bg) !important;
     transform: scale(1.05);
     outline: none !important;
     will-change: transform;
@@ -300,11 +308,16 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     /* will-change on :focus only */
 }
 
+/*
+ * ── FOCUSED SELECT BUTTON STYLE ─────────────────────────────────────────────
+ * Enhances the select dropdown triggers under focus states by applying 
+ * custom-styled border, text color, and background variables.
+ */
 .select-btn:focus,
-.select-btn.focused{
-    background: var(--jf-accent);
-    color: var(--jf-primary-btn-color, #ffffff);
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+.select-btn.focused {
+    background: var(--jf-btn-primary-focus-bg) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
     transform: scale(1.02);
     will-change: transform;
 }
@@ -397,15 +410,25 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     will-change: transform;
 }
 
+/*
+ * ── SELECTED DROPDOWN OPTION STYLE ──────────────────────────────────────────
+ * Dynamically tracks the color state of selected items inside dropdown menus
+ * mapping them directly to the user-selected button theme accent.
+ */
 .select-option.selected {
-    color: var(--jf-accent);
+    color: var(--jf-btn-primary-bg) !important;
     font-weight: 600;
 }
 
+/*
+ * ── FOCUSED SELECTED OPTION STYLE ───────────────────────────────────────────
+ * Refers back to the dynamic primary focus properties to style active/selected
+ * dropdown elements while they are focused by the user's remote/keys.
+ */
 .select-option:focus.selected,
 .select-option.focused.selected {
-    color: var(--jf-primary-btn-color, #ffffff);
-    background: var(--jf-accent);
+    color: var(--jf-btn-primary-focus-color) !important;
+    background: var(--jf-btn-primary-focus-bg) !important;
 }
 
 /* User Profile Card */
@@ -638,19 +661,33 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
     border-radius: 50%;
 }
 
+/*
+ * ── TOGGLE SWITCH ACTIVE STATE ──────────────────────────────────────────────
+ * Configures the active toggle switch track to use the dynamic theme button 
+ * background color.
+ */
 .toggle-switch.active {
-    background-color: var(--jf-accent);
+    background-color: var(--jf-btn-primary-bg) !important;
 }
 
+/*
+ * ── TOGGLE SWITCH ACTIVE HANDLE ─────────────────────────────────────────────
+ * Sets the active toggle switch handle to map to the dynamic primary button text
+ * color for optimal contrast and compliance with styling rules.
+ */
 .toggle-switch.active::after {
     transform: translateX(26px);
-    background-color: var(--jf-switch-handle); /* Use accent-contrast color when ON */
+    background-color: var(--jf-btn-primary-color) !important;
 }
 
+/*
+ * ── TOGGLE SWITCH FOCUS/HOVER STATE ─────────────────────────────────────────
+ * Applies custom focus border highlights to toggle switches under active focus.
+ */
 .toggle-switch:focus,
 .toggle-switch.focused,
 .toggle-switch:hover {
-    border-color: var(--jf-button-border-focus);
+    border-color: var(--jf-btn-primary-focus-border) !important;
     transform: scale(1.05);
     will-change: transform;
 }
@@ -863,7 +900,7 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 }
 
 /* ==========================================================================
-   Home Layout Customization (Apple HIG Inspired)
+   Home Layout Customization
    ========================================================================== */
 
 .home-layout-container {

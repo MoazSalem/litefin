@@ -94,10 +94,10 @@
     padding: 0.7em 1.8em !important;
     border-radius: var(--jf-border-radius-lg);
 
-    /* Inverted Mode (White BG, Blue Text) */
-    background: var(--jf-primary-btn-color, #ffffff);
-    color: var(--jf-accent);
-    border: 2px solid var(--jf-primary-btn-color) !important;
+    /* Styled dynamically based on user options */
+    background: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-btn-primary-color) !important;
+    border: 2px solid var(--jf-btn-primary-border) !important;
 
     /* Typography */
     font-size: 1.3em;
@@ -116,15 +116,13 @@
         transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Focused state — matches the standard OSD focus style (accent colour fill, no border/outline),
-   same as every other focusable button in the player. The base .osd-btn.focused rule already
-   sets background: var(--osd-accent-color); we just need to confirm the pill shape stays intact. */
+/* Focused state — styled dynamically based on user options */
 .skip-intro-btn.focused,
 .skip-intro-btn:focus {
-    background: var(--osd-accent-color) !important;
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    background: var(--jf-btn-primary-focus-bg) !important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
     outline: none !important;
-    color: var(--jf-primary-btn-color) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
 }
 
 /* ============================= Label & Arrow ============================ */

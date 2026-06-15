@@ -49,9 +49,9 @@
     min-width: unset !important;
     padding: 0.7em 1.8em !important;
     border-radius: var(--jf-border-radius-lg);
-    background: var(--jf-primary-btn-color, #ffffff);
-    color: var(--jf-accent);
-    border: 2px solid var(--jf-primary-btn-color) !important;
+    background: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-btn-primary-color) !important;
+    border: 2px solid var(--jf-btn-primary-border) !important;
     font-size: 1.3em;
     font-weight: 600;
     line-height: 1;
@@ -66,10 +66,10 @@
 
 .local-intros-btn.focused,
 .local-intros-btn:focus {
-    background: var(--osd-accent-color) !important;
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    background: var(--jf-btn-primary-focus-bg) !important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
     outline: none !important;
-    color: var(--jf-primary-btn-color) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
 }
 
 .local-intros-label {

@@ -951,14 +951,13 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${
-                                            user.PrimaryImageTag
-                                                ? api.getUserImageUrl(user.Id, {
-                                                      maxWidth: imageService.getParams('avatar').maxWidth,
-                                                      quality: imageService.getParams('avatar').quality
-                                                  })
-                                                : ''
-                                        }"
+                                        src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -973,14 +972,13 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${
-                                        user.PrimaryImageTag
-                                            ? api.getUserImageUrl(user.Id, {
-                                                  maxWidth: imageService.getParams('avatar').maxWidth,
-                                                  quality: imageService.getParams('avatar').quality
-                                              })
-                                            : ''
-                                    }"
+                                    src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
@@ -1457,7 +1455,6 @@ class LoginPage extends Page {
                                     <div class="server-info">
                                         <div class="name-row">
                                             <span class="server-name">${server.name}</span>
-                                            <!-- Elegant, Apple HIG-style glassmorphic saved badge for visual separation -->
                                             <span class="server-badge" data-i18n="SavedBadge">${i18n.t('SavedBadge') || 'Saved'}</span>
                                             ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
                                         </div>

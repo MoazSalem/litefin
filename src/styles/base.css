@@ -31,6 +31,16 @@
     --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
     --jf-action-btn-active-color: #101010;
 
+    /* Custom Button Customization Variables */
+    --jf-btn-primary-bg: var(--jf-accent);
+    --jf-btn-primary-color: var(--jf-primary-btn-color);
+    --jf-btn-primary-border: transparent;
+    
+    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-color: var(--jf-primary-btn-color);
+    --jf-btn-primary-focus-border: var(--jf-primary-btn-color);
+    --jf-btn-primary-focus-color-rgb: var(--jf-primary-btn-color-rgb, 255, 255, 255);
+
     /* Global Text Fallbacks (Crucial for ultra-legacy ponyfill stability) */
     --jf-text-primary: #ffffff;
     --jf-text-secondary: #999999;
@@ -48,10 +58,114 @@
     --jf-border-radius-lg: 4px;
 }
 
-/* Global Rounded Corners (Apple HIG style) */
+/* Global Rounded Corners */
 html[data-rounded-corners="true"] {
     --jf-border-radius: 12px;
     --jf-border-radius-lg: 16px;
+}
+
+/* 
+ * ============================================================================
+ * Primary Button Color Theme Customizations
+ * ============================================================================
+ * Styles dynamically adjust variables to control background, text/icon colors,
+ * borders, and tactile state feedback based on the user's settings.
+ */
+
+/* 1. Theme Accent (Default): Accent background, contrast primary text, focus matches primary text */
+html[data-button-style="theme-default"] {
+    --jf-btn-primary-bg: var(--jf-accent);
+    --jf-btn-primary-color: var(--jf-primary-btn-color);
+    --jf-btn-primary-border: transparent;
+
+    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-color: var(--jf-primary-btn-color);
+    --jf-btn-primary-focus-border: var(--jf-primary-btn-color);
+    --jf-btn-primary-focus-color-rgb: var(--jf-primary-btn-color-rgb, 255, 255, 255);
+}
+
+/* 2. Theme Inverted: Contrast primary background, accent text, focus matches accent */
+html[data-button-style="theme-inverted"] {
+    --jf-btn-primary-bg: var(--jf-primary-btn-color);
+    --jf-btn-primary-color: var(--jf-accent);
+    --jf-btn-primary-border: var(--jf-primary-btn-color);
+
+    --jf-btn-primary-focus-bg: var(--jf-primary-btn-color);
+    --jf-btn-primary-focus-color: var(--jf-accent-hover);
+    --jf-btn-primary-focus-border: var(--jf-accent);
+    --jf-btn-primary-focus-color-rgb: var(--jf-accent-rgb, 0, 164, 220);
+}
+
+/* 3. Monochrome B&W: White background, black text, focus matches black */
+html[data-button-style="monochrome-bw"] {
+    --jf-btn-primary-bg: #ffffff;
+    --jf-btn-primary-color: #000000;
+    --jf-btn-primary-border: #ffffff;
+
+    --jf-btn-primary-focus-bg: #f5f5f7; /* Subtle off-white hover/focus shade */
+    --jf-btn-primary-focus-color: #000000;
+    --jf-btn-primary-focus-border: #000000;
+    --jf-btn-primary-focus-color-rgb: 0, 0, 0;
+}
+
+/* 4. Monochrome W&B: Black background, white text, focus matches white */
+html[data-button-style="monochrome-wb"] {
+    --jf-btn-primary-bg: #000000;
+    --jf-btn-primary-color: #ffffff;
+    --jf-btn-primary-border: #000000;
+
+    --jf-btn-primary-focus-bg: #1c1c1e; /* HIG dark gray secondary surface background */
+    --jf-btn-primary-focus-color: #ffffff;
+    --jf-btn-primary-focus-border: #ffffff;
+    --jf-btn-primary-focus-color-rgb: 255, 255, 255;
+}
+
+/* 5. White & Accent: White background, accent text, focus is off-white and accent hover */
+html[data-button-style="white-accent"] {
+    --jf-btn-primary-bg: #ffffff;
+    --jf-btn-primary-color: var(--jf-accent);
+    --jf-btn-primary-border: #ffffff;
+
+    --jf-btn-primary-focus-bg: #f5f5f7; /* Subtle off-white hover/focus shade */
+    --jf-btn-primary-focus-color: var(--jf-accent-hover);
+    --jf-btn-primary-focus-border: var(--jf-accent);
+    --jf-btn-primary-focus-color-rgb: var(--jf-accent-rgb, 0, 164, 220);
+}
+
+/* 6. Black & Accent: Black background, accent text, focus is off-black and accent hover */
+html[data-button-style="black-accent"] {
+    --jf-btn-primary-bg: #000000;
+    --jf-btn-primary-color: var(--jf-accent);
+    --jf-btn-primary-border: #000000;
+
+    --jf-btn-primary-focus-bg: #1c1c1e; /* HIG dark gray secondary surface background */
+    --jf-btn-primary-focus-color: var(--jf-accent-hover);
+    --jf-btn-primary-focus-border: var(--jf-accent);
+    --jf-btn-primary-focus-color-rgb: var(--jf-accent-rgb, 0, 164, 220);
+}
+
+/* 7. Accent & White: Accent background, white text, focus is accent hover and white */
+html[data-button-style="accent-white"] {
+    --jf-btn-primary-bg: var(--jf-accent);
+    --jf-btn-primary-color: #ffffff;
+    --jf-btn-primary-border: transparent;
+
+    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-color: #ffffff;
+    --jf-btn-primary-focus-border: #ffffff;
+    --jf-btn-primary-focus-color-rgb: 255, 255, 255;
+}
+
+/* 8. Accent & Black: Accent background, black text, focus is accent hover and black */
+html[data-button-style="accent-black"] {
+    --jf-btn-primary-bg: var(--jf-accent);
+    --jf-btn-primary-color: #000000;
+    --jf-btn-primary-border: transparent;
+
+    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-color: #000000;
+    --jf-btn-primary-focus-border: #000000;
+    --jf-btn-primary-focus-color-rgb: 0, 0, 0;
 }
 
 /* Custom UI Font Overrides */

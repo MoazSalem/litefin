@@ -749,7 +749,7 @@
 
 /* 
  * ============================================================================
- * Apple HIG - Dynamic Masking & Alpha-Blending (Immersive & Semi-Immersive)
+ * Dynamic Masking & Alpha-Blending (Immersive & Semi-Immersive)
  * ============================================================================
  * Rather than drawing solid dark color gradients (which block page backgrounds)
  * on top of the carousel, we apply a high-performance linear-gradient alpha mask

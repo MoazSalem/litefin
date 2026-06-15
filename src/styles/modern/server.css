@@ -179,7 +179,7 @@ html[data-layout-login="modern"] .server-list {
     list-style: none;
     margin-bottom: 12px;
     
-    /* Sleek space-between-tiles grid spacing following Apple HIG design language */
+    /* Sleek space-between-tiles grid spacing */
     gap: 24px;
 }
 

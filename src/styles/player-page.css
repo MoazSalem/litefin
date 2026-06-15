@@ -3,7 +3,7 @@
  * Litefin Tizen - Player Page Styles
  * ============================================================================
  * Styles for full-screen video player, OSD, and subtitle overlays.
- * Uses glassmorphism and smooth animations following Apple HIG.
+ * Uses glassmorphism and smooth animations.
  * ============================================================================
  */
 
@@ -90,7 +90,7 @@
     position: relative;
     width: 500px;
     height: 500px;
-    border-radius: var(--jf-border-radius); /* Apple HIG style rounded corners */
+    border-radius: var(--jf-border-radius);
     background-size: cover;
     background-position: center;
     box-shadow: 0 20px 50px rgba(0,0,0,0.6);

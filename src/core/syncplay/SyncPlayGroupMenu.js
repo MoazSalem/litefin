@@ -10,7 +10,7 @@
  *   - Leave the current group
  *
  * Designed to match litefin's glass-card TV UI language.
- * Uses Apple HIG principles: clear hierarchy, large touch/focus targets,
+ * clear hierarchy, large touch/focus targets,
  * clean state transitions, and spring-like CSS animations.
  *
  * Typical usage (e.g. from OSDController):
