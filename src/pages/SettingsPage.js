@@ -487,6 +487,44 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarSelectedColor">${i18n.t('SidebarSelectedColor') || 'Sidebar Selected Color'}</span>
+                        <span class="setting-description" data-i18n="SidebarSelectedColorDescription">${i18n.t('SidebarSelectedColorDescription') || 'Choose the color for selected sidebar items.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'sidebar-selected-color-select',
+                            [
+                                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' },
+                                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
+                                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' }
+                            ],
+                            layoutManager.getSidebarSelectedColor()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarUnselectedColor">${i18n.t('SidebarUnselectedColor') || 'Sidebar Unselected Color'}</span>
+                        <span class="setting-description" data-i18n="SidebarUnselectedColorDescription">${i18n.t('SidebarUnselectedColorDescription') || 'Choose the color for unselected sidebar items.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'sidebar-unselected-color-select',
+                            [
+                                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
+                                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' },
+                                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' }
+                            ],
+                            layoutManager.getSidebarUnselectedColor()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
@@ -5452,7 +5490,9 @@ class SettingsPage extends Page {
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
-            'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' }
+            'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' },
+            'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
+            'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -5485,6 +5525,12 @@ class SettingsPage extends Page {
                         } else if (id === 'hover-border-style-select') {
                             // SPECIAL CASE: Hover Border Style handled by LayoutManager
                             layoutManager.setHoverBorderStyle(newValue);
+                        } else if (id === 'sidebar-selected-color-select') {
+                            // SPECIAL CASE: Sidebar Selected Color handled by LayoutManager
+                            layoutManager.setSidebarSelectedColor(newValue);
+                        } else if (id === 'sidebar-unselected-color-select') {
+                            // SPECIAL CASE: Sidebar Unselected Color handled by LayoutManager
+                            layoutManager.setSidebarUnselectedColor(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {

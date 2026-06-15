@@ -255,16 +255,53 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
 }
 
 .sidebar-item:hover {
-    transform: scale(1.05);
+    transform: scale(1.03);
     will-change: transform;
 }
 
-.sidebar-item.active {
-    color: var(--jf-accent);
+/* 
+ * ── Sidebar Selected Item Customizations ──────────────────────────────────
+ * Sets the color of active sidebar items (icons and text) based on settings.
+ */
+html[data-sidebar-selected-color="white"] .sidebar-item.active,
+html[data-sidebar-selected-color="white"] .sidebar-item.active .item-icon {
+    color: #ffffff !important;
 }
 
-.sidebar-item.active .item-icon {
-    color: var(--jf-accent);
+html[data-sidebar-selected-color="black"] .sidebar-item.active,
+html[data-sidebar-selected-color="black"] .sidebar-item.active .item-icon {
+    color: #000000 !important;
+}
+
+html[data-sidebar-selected-color="accent"] .sidebar-item.active,
+html[data-sidebar-selected-color="accent"] .sidebar-item.active .item-icon {
+    color: var(--jf-accent) !important;
+}
+
+html[data-sidebar-selected-color="grey"] .sidebar-item.active,
+html[data-sidebar-selected-color="grey"] .sidebar-item.active .item-icon {
+    color: var(--jf-text-secondary) !important;
+}
+
+/* 
+ * ── Sidebar Unselected Item Customizations ──────────────────────────────────
+ * Sets the color of unselected sidebar items (icons and text) based on settings.
+ * Hovered, focused, or active items are bypassed to maintain standard feedback.
+ */
+html[data-sidebar-unselected-color="white"] .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: #ffffff !important;
+}
+
+html[data-sidebar-unselected-color="black"] .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: #000000 !important;
+}
+
+html[data-sidebar-unselected-color="accent"] .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: var(--jf-accent) !important;
+}
+
+html[data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: var(--jf-text-secondary) !important;
 }
 
 .sidebar.expanded .sidebar-item:hover,

@@ -107,6 +107,12 @@ class LayoutManager {
         // Hover border style: 'follow-theme', 'inverted', 'white', 'black', 'hidden'
         this._hoverBorderStyle = 'white';
 
+        // Sidebar unselected icon color: 'grey', 'white', 'black', 'accent'
+        this._sidebarUnselectedColor = 'grey';
+
+        // Sidebar selected icon color: 'grey', 'white', 'black', 'accent'
+        this._sidebarSelectedColor = 'accent';
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -157,6 +163,8 @@ class LayoutManager {
         const savedHideUnfocusedBorders = storage.getItem('litefin:hideUnfocusedBorders') === 'true';
         const savedFocusBorderStyle = storage.getItem('litefin:focusBorderStyle') || 'hidden';
         const savedHoverBorderStyle = storage.getItem('litefin:hoverBorderStyle') || 'white';
+        const savedSidebarUnselectedColor = storage.getItem('litefin:sidebarUnselectedColor') || 'grey';
+        const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'accent';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -179,6 +187,8 @@ class LayoutManager {
         this.setHideUnfocusedBorders(savedHideUnfocusedBorders, false);
         this.setFocusBorderStyle(savedFocusBorderStyle, false);
         this.setHoverBorderStyle(savedHoverBorderStyle, false);
+        this.setSidebarUnselectedColor(savedSidebarUnselectedColor, false);
+        this.setSidebarSelectedColor(savedSidebarSelectedColor, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -619,6 +629,42 @@ class LayoutManager {
         }
         log.info(`Hover border style updated: ${style}`);
         eventBus.emit('hoverBorderStyle:changed', { style });
+    }
+
+    getSidebarUnselectedColor() {
+        return this._sidebarUnselectedColor;
+    }
+
+    setSidebarUnselectedColor(color, save = true) {
+        if (!['grey', 'white', 'black', 'accent'].includes(color)) {
+            log.warn(`Invalid sidebar unselected color specified: "${color}"`);
+            return;
+        }
+        this._sidebarUnselectedColor = color;
+        document.documentElement.setAttribute('data-sidebar-unselected-color', color);
+        if (save) {
+            storage.setItem('litefin:sidebarUnselectedColor', color);
+        }
+        log.info(`Sidebar unselected color updated: ${color}`);
+        eventBus.emit('sidebarUnselectedColor:changed', { color });
+    }
+
+    getSidebarSelectedColor() {
+        return this._sidebarSelectedColor;
+    }
+
+    setSidebarSelectedColor(color, save = true) {
+        if (!['grey', 'white', 'black', 'accent'].includes(color)) {
+            log.warn(`Invalid sidebar selected color specified: "${color}"`);
+            return;
+        }
+        this._sidebarSelectedColor = color;
+        document.documentElement.setAttribute('data-sidebar-selected-color', color);
+        if (save) {
+            storage.setItem('litefin:sidebarSelectedColor', color);
+        }
+        log.info(`Sidebar selected color updated: ${color}`);
+        eventBus.emit('sidebarSelectedColor:changed', { color });
     }
 
 
