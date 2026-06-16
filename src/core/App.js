@@ -20,6 +20,7 @@ import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from './syncplay/SyncPlayGroupMenu.js';
 import { exitDialog } from '../ui/ExitDialog.js';
+import { pinDialog } from '../ui/PinDialog.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -375,6 +376,12 @@ class App {
 
             if (exitDialog && exitDialog.isVisible) {
                 exitDialog.close();
+                return;
+            }
+
+            // PIN entry dialog — Back cancels it (aborts the gated action).
+            if (pinDialog && pinDialog.isVisible) {
+                pinDialog.close(true);
                 return;
             }
 
