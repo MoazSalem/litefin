@@ -198,8 +198,81 @@ class PluginWidgetHost {
                 // Only handle clicks directly on focusable children (buttons)
                 const btn = e.target.closest('button, [data-action]');
                 if (btn) {
+                    /*
+                     * ========================================================================
+                     * DETACHED WIDGET DELEGATION GUARD
+                     * ========================================================================
+                     * On Smart TV hardware (like Samsung Tizen and LG WebOS), the browser engine
+                     * natively schedules and dispatches a synthetic mouse click event after the
+                     * user presses the Enter/OK key on the remote control.
+                     *
+                     * If the keydown event handler immediately switches the track or destroys the
+                     * OSD overlay, the old widget's DOM node is detached. However, the browser's
+                     * event queue still holds the pending click event and dispatches it onto the
+                     * detached element.
+                     *
+                     * By checking whether the widget's container is still connected to the active
+                     * document body, we successfully intercept and ignore these stale events,
+                     * preventing them from carrying over and skipping the next episode.
+                     * ========================================================================
+                     */
+                    if (!document.body.contains(el)) {
+                        log.info(`Ignoring click event on detached widget '${widget.id}'`);
+                        return;
+                    }
+
+                    /*
+                     * ========================================================================
+                     * LOCKOUT ACTIVE GUARD:
+                     * Prevent click event processing if the OSD is currently locked out 
+                     * (e.g. during track transition/cooldown phase). This blocks pointer 
+                     * clicks or synthesized click events from triggering skip actions 
+                     * immediately after track loading.
+                     * ========================================================================
+                     */
+                    if (this._osd && this._osd._focusRestoreLockout) {
+                        log.info(`Ignoring click event on widget '${widget.id}' during active focus restore lockout`);
+                        return;
+                    }
+
                     try {
+                        /*
+                         * ========================================================================
+                         * SYNCHRONOUS VISIBILITY RESET ON SELECT
+                         * ========================================================================
+                         * When a widget action is selected (e.g. Skip Intro), we immediately hide the
+                         * widget elements by setting visible=false and removing .visible/.sync-osd classes.
+                         * This prevents the widget button from lingering on the screen for up to a second
+                         * while waiting for the player's asynchronous seek and timeupdate to update.
+                         * ========================================================================
+                         */
+                        const entry = this._widgets.get(widget.id);
+                        if (entry) {
+                            entry.visible = false;
+                            entry.hideCounter = 0;
+                            if (entry.syncTimer) {
+                                clearTimeout(entry.syncTimer);
+                                entry.syncTimer = null;
+                            }
+                            el.classList.remove('visible');
+                            el.classList.remove('sync-osd');
+                        }
+
                         widget.onSelect(api);
+
+                        /*
+                         * ========================================================================
+                         * PREEMPTIVE FOCUS RESTORATION:
+                         * Immediately shift OSD focus back to the Play/Pause playback controls.
+                         * Selecting a segment skip action (like skip intro or skip outro) renders
+                         * the current overlay button defunct/obsolete (either because we seeked 
+                         * past it, or because the track is ending). Leaving focus stranded on 
+                         * Row -1 causes navigation issues or carry-over bugs on next episode.
+                         * ========================================================================
+                         */
+                        if (this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+                            this._osd.restoreControlsFocus();
+                        }
                     } catch (err) {
                         log.error(`Widget '${widget.id}' onSelect() threw:`, err);
                     }
@@ -423,8 +496,52 @@ class PluginWidgetHost {
 
                 // If key is Enter and widget has onSelect, trigger it
                 if (key === 'enter' && typeof entry.widget.onSelect === 'function') {
+                    /*
+                     * ========================================================================
+                     * LOCKOUT ACTIVE GUARD:
+                     * Prevent key execution if the OSD is currently locked out. This blocks
+                     * Enter/OK keys delegated to the widget from triggering skips on startup.
+                     * ========================================================================
+                     */
+                    if (this._osd && this._osd._focusRestoreLockout) {
+                        log.info(`Ignoring enter key on widget '${entry.widget.id}' during active focus restore lockout`);
+                        return true;
+                    }
+
                     try {
+                        /*
+                         * ========================================================================
+                         * SYNCHRONOUS VISIBILITY RESET ON SELECT
+                         * ========================================================================
+                         * When a widget action is selected (e.g. Skip Intro), we immediately hide the
+                         * widget elements by setting visible=false and removing .visible/.sync-osd classes.
+                         * This prevents the widget button from lingering on the screen for up to a second
+                         * while waiting for the player's asynchronous seek and timeupdate to update.
+                         * ========================================================================
+                         */
+                        entry.visible = false;
+                        entry.hideCounter = 0;
+                        if (entry.syncTimer) {
+                            clearTimeout(entry.syncTimer);
+                            entry.syncTimer = null;
+                        }
+                        entry.el.classList.remove('visible');
+                        entry.el.classList.remove('sync-osd');
+
                         entry.widget.onSelect(entry.api);
+
+                        /*
+                         * ========================================================================
+                         * PREEMPTIVE FOCUS RESTORATION:
+                         * Immediately pull focus back to the primary playback row after executing
+                         * the skip segment action. This ensures the focus border does not linger 
+                         * on a button that is either about to hide or belongs to a track that is
+                         * terminating, avoiding accidental double-skips.
+                         * ========================================================================
+                         */
+                        if (this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+                            this._osd.restoreControlsFocus();
+                        }
                         return true;
                     } catch (err) {
                         log.error(`Widget '${entry.widget.id}' onSelect() threw:`, err);

@@ -79,6 +79,7 @@ export default class OSDController extends Component {
         // Row 2: Seekbar
         this._currentFocusRow = 1;
         this._currentFocusIndex = 2; // Default to Play/Pause
+        this._trackTransitionLockoutActive = false;
 
         this._cachedOverlayRow = [];
         this._cachedHeaderRow = [];
@@ -132,10 +133,16 @@ export default class OSDController extends Component {
          * GHOST CLICK LOCKOUT STATE:
          * Tracks whether we are currently in the 350ms lockout protection window
          * right after focus has transitioned back from overlay widgets (Row -1).
+         *
+         * _trackTransitionLockoutActive is set by updateItem() when the player
+         * switches to a new episode/track. It gates the syncTracks() method,
+         * ensuring only a genuine track-start event (not a pause/resume) triggers
+         * the 1500ms countdown that releases the lockout.
          * ========================================================================
          */
         this._focusRestoreLockout = false;
         this._focusRestoreLockoutTimer = null;
+        this._trackTransitionLockoutActive = false;
     }
 
     _handleQueueUpdate() {
@@ -852,16 +859,37 @@ export default class OSDController extends Component {
              * events from immediately triggering the newly focused Play/Pause button,
              * we trigger a 350ms lockout during which OSD click events are completely
              * discarded.
+             *
+             * TRACK TRANSITION EXCEPTION:
+             * If a full track transition lockout is already in effect (set by updateItem
+             * and timed-out by syncTracks), we do NOT override the longer 1500ms timer
+             * with this short 350ms one. Allowing that overwrite is what previously
+             * caused the skip-intro button on the next episode to become responsive
+             * only 350ms after the track switch — well within remote key repeat range.
              * ========================================================================
              */
-            this._focusRestoreLockout = true;
-            if (this._focusRestoreLockoutTimer) {
-                clearTimeout(this._focusRestoreLockoutTimer);
+            if (!this._trackTransitionLockoutActive) {
+                /*
+                 * Normal focus restore path (no track switch in progress):
+                 * set a 350ms lockout to absorb ghost clicks after a widget action.
+                 */
+                this._focusRestoreLockout = true;
+                if (this._focusRestoreLockoutTimer) {
+                    clearTimeout(this._focusRestoreLockoutTimer);
+                }
+                this._focusRestoreLockoutTimer = setTimeout(() => {
+                    this._focusRestoreLockout = false;
+                    this._focusRestoreLockoutTimer = null;
+                }, 350);
+            } else {
+                /*
+                 * Track transition lockout is in effect — syncTracks() owns the timer.
+                 * Just ensure the flag is set; do NOT start a competing 350ms timer
+                 * that would prematurely clear the lock before the new episode settles.
+                 */
+                this._focusRestoreLockout = true;
+                log.debug('OSDController.restoreControlsFocus: skipping 350ms timer — track transition lockout is active');
             }
-            this._focusRestoreLockoutTimer = setTimeout(() => {
-                this._focusRestoreLockout = false;
-                this._focusRestoreLockoutTimer = null;
-            }, 350);
 
             /*
              * ========================================================================
@@ -879,6 +907,7 @@ export default class OSDController extends Component {
         // Resume normal auto-hide behaviour
         this.resetAutoHide();
     }
+
 
     _updateNavigationButtons() {
         if (!this._osdEl) return;
@@ -1334,8 +1363,44 @@ export default class OSDController extends Component {
         }
     }
 
+    /**
+     * Called by PlayerPage._onPlaying() every time playback begins (including
+     * after a track-to-track transition). When a track switch has occurred,
+     * this starts the 1.5-second input lockout countdown to absorb any ghost
+     * key presses from the remote that triggered the transition.
+     *
+     * Design:
+     *   updateItem() sets _focusRestoreLockout = true with NO timer because the
+     *   loading duration is unknown. syncTracks() fires once the player emits
+     *   'playing' (media is live), and only then starts the timed release.
+     *
+     *   CRITICAL: _trackTransitionLockoutActive must remain TRUE for the entire
+     *   1500ms window. Clearing it early would let restoreControlsFocus() see a
+     *   false flag and overwrite the 1500ms timer with a shorter 350ms one.
+     *   It is cleared inside the timer callback when the window expires.
+     */
     syncTracks() {
         if (!this._player) return;
+
+        if (this._trackTransitionLockoutActive) {
+            log.info('OSDController.syncTracks: New track playing — starting 1500ms input lockout');
+
+            /* Cancel any existing stale timer before starting the authoritative one */
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+
+            /* Lock out enter/click inputs for 1.5 seconds from playback start */
+            this._focusRestoreLockout = true;
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+                /* Now safe to clear — restoreControlsFocus guard can relax */
+                this._trackTransitionLockoutActive = false;
+                log.info('OSDController.syncTracks: Transition lockout cleared — widgets re-enabled');
+            }, 1500);
+        }
+
         if (this._player.getCurrentAudioStreamIndex) {
             const idx = this._player.getCurrentAudioStreamIndex();
             if (idx !== undefined && idx !== null) this._currentAudioIndex = idx;
@@ -3250,6 +3315,38 @@ export default class OSDController extends Component {
 
     updateItem(item) {
         this.setMetadata(item);
+
+        /*
+         * ============================================================================
+         * TRACK TRANSITION FOCUS RESET GUARD
+         * ============================================================================
+         * When switching tracks or advancing to the next episode (e.g., after clicking
+         * Skip Outro), the OSD Controller instance is preserved and reused.
+         *
+         * If the user previously had focus on an overlay widget (Row -1), such as
+         * the skip-outro button, we must explicitly reset the focus row to the
+         * Controls row (Row 1, Play/Pause) to ensure that the new track does not
+         * inherit a stranded Row -1 focus. This prevents accidental double-skips
+         * on the newly loaded item's skip-intro button.
+         * ============================================================================
+         */
+        if (this._currentFocusRow === -1) {
+            this._currentFocusRow = 1;
+            const playIdx = this._findActionIndex('togglePlay');
+            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+        }
+
+        /*
+         * ============================================================================
+         * INDEFINITE TRANSITION LOCKOUT:
+         * Enforce an active focus restore lockout when switching items. This lockout
+         * persists through the entire track loading and buffering transition phase.
+         * The countdown to clear the lockout begins only once the media playback
+         * starts and calls syncTracks().
+         * ============================================================================
+         */
+        this._trackTransitionLockoutActive = true;
+        this._focusRestoreLockout = true;
     }
 
     _getFormattedTitle(item) {
