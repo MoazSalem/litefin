@@ -86,23 +86,71 @@
     z-index: 1;
 }
 
-.audio-album-art {
-    position: relative;
-    width: 500px;
-    height: 500px;
-    border-radius: var(--jf-border-radius);
-    background-size: cover;
-    background-position: center;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+.audio-player-center {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    justify-content: center;
     z-index: 2;
+    /* Translate the cover photo up a bit vertically by default to leave space for info */
+    -webkit-transform: translateY(-30px);
+    transform: translateY(-30px);
     -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
-
 }
 
-body.lyrics-active .audio-album-art {
-    -webkit-transform: translateX(-15vw);
-    transform: translateX(-15vw);
+body.lyrics-active .audio-player-center {
+    /* Translate the wrapper to the left and keep the slight upward position when lyrics are active */
+    -webkit-transform: translate(-15vw, -30px);
+    transform: translate(-15vw, -30px);
+}
+
+.audio-album-art {
+    position: relative;
+    width: 460px; /* Reduced slightly to ensure it doesn't crowd and fits beautifully on various screen sizes */
+    height: 460px; /* Reduced slightly from 500px */
+    border-radius: 24px; /* Sleek, rounded aesthetics following Apple design principles */
+    background-size: cover;
+    background-position: center;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65);
+    -webkit-transition: opacity 0.4s ease;
+    transition: opacity 0.4s ease;
+}
+
+.audio-metadata {
+    margin-top: 28px; /* Clean, spacious distance between cover photo and the track details */
+    text-align: center;
+    color: #fff;
+    max-width: 660px;
+    z-index: 3;
+}
+
+.audio-title {
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    letter-spacing: -0.5px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.audio-subtitle {
+    font-size: 20px;
+    font-weight: 500;
+    margin: 0;
+    color: rgba(255, 255, 255, 0.75);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* ==========================================================================

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://jellyfin.org/jellyfin" version="1.1.25" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://jellyfin.org/jellyfin" version="1.1.26" viewmodes="maximized">
    <tizen:application id="LitefinApp.Litefin" package="LitefinApp" required_version="2.3"></tizen:application>
    <access origin="*" subdomains="true"></access>
    <name>Litefin</name>
