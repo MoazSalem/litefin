@@ -535,6 +535,193 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                
+                <!-- OSD Section -->
+                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
+                <h3 class="setting-section-title" data-i18n="PlayerOsd">${i18n.t('PlayerOsd') || 'Player Osd'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowLogoInOsd">${i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD'}</span>
+                        <span class="setting-description" data-i18n="ShowLogoInOsdDescription">${i18n.t('ShowLogoInOsdDescription') || 'Display show or movie logo instead of text title in the player interface (if available).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdShowLogo') ? 'active' : ''}" 
+                                id="toggle-osd-show-logo" 
+                                data-setting="osdShowLogo"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="osd-logo-size-container" style="display: ${PlayerSettings.get('osdShowLogo') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdLogoSize">${i18n.t('LabelOsdLogoSize') || 'OSD Logo Size'}</span>
+                        <span class="setting-description" data-i18n="OsdLogoSizeDescription">${i18n.t('OsdLogoSizeDescription') || 'Choose the display size of the show or movie logo in the playback overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-logo-size-select',
+            [
+                { value: 'small', label: i18n.t('Small') || 'Small' },
+                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                { value: 'large', label: i18n.t('Large') || 'Large' },
+                { value: 'extralarge', label: i18n.t('ExtraLarge') || 'Extra Large' },
+                { value: 'xxl', label: i18n.t('DoubleExtraLarge') || 'XXL' }
+            ],
+            PlayerSettings.get('osdLogoSize') || 'medium'
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideYearInOsd">${i18n.t('LabelHideYearInOsd') || 'Hide Year in OSD'}</span>
+                        <span class="setting-description" data-i18n="HideYearInOsdDescription">${i18n.t('HideYearInOsdDescription') || 'Hides the production year from the playback overlay title.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideYear') ? 'active' : ''}" 
+                                id="toggle-osd-hide-year" 
+                                data-setting="osdHideYear"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideShowNameInOsd">${i18n.t('LabelHideShowNameInOsd') || 'Hide Show Name'}</span>
+                        <span class="setting-description" data-i18n="HideShowNameInOsdDescription">${i18n.t('HideShowNameInOsdDescription') || 'Hides the show name (or logo) for episodes in the playback overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideShowName') ? 'active' : ''}" 
+                                id="toggle-osd-hide-show-name" 
+                                data-setting="osdHideShowName"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
+                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-time-display-select',
+            [
+                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
+                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
+            ],
+            PlayerSettings.get('osdTimeDisplayMode') || 'total'
+        )}
+                    </div>
+                </div>
+
+
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTrackMenuBgOpacity">${i18n.t('LabelOsdTrackMenuBgOpacity') || 'OSD Track Menu Opacity'}</span>
+                        <span class="setting-description" data-i18n="OsdTrackMenuBgOpacityDescription">${i18n.t('OsdTrackMenuBgOpacityDescription') || 'Adjust the background opacity of the audio and subtitle selection overlay menus.'}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+            'osd-track-menu-bg-opacity',
+            PlayerSettings.get('osdTrackMenuBgOpacity') ?? 85,
+            0,
+            100,
+            5
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonStyle">${i18n.t('OsdButtonStyle') || 'OSD Button Style'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonStyleDescription">${i18n.t('OsdButtonStyleDescription') || 'Choose a button color theme specifically for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-button-style-select',
+            [
+                { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
+                { value: 'theme-default', label: i18n.t('BtnStyleThemeDefault') || 'Theme Default' },
+                { value: 'theme-inverted', label: i18n.t('BtnStyleThemeInverted') || 'Theme Inverted' },
+                { value: 'monochrome-bw', label: i18n.t('BtnStyleMonoBW') || 'White & Black' },
+                { value: 'monochrome-wb', label: i18n.t('BtnStyleMonoWB') || 'Black & White' },
+                { value: 'white-accent', label: i18n.t('BtnStyleWhiteAccent') || 'White & Accent' },
+                { value: 'black-accent', label: i18n.t('BtnStyleBlackAccent') || 'Black & Accent' },
+                { value: 'accent-white', label: i18n.t('BtnStyleAccentWhite') || 'Accent & White' },
+                { value: 'accent-black', label: i18n.t('BtnStyleAccentBlack') || 'Accent & Black' }
+            ],
+            layoutManager.getOsdButtonStyle()
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdFocusBorderStyle">${i18n.t('OsdFocusBorderStyle') || 'OSD Focus Border Style'}</span>
+                        <span class="setting-description" data-i18n="OsdFocusBorderStyleDescription">${i18n.t('OsdFocusBorderStyleDescription') || 'Choose a focus border highlight style specifically for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-focus-border-style-select',
+            [
+                { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
+                { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
+                { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
+                { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
+                { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
+                { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
+            ],
+            layoutManager.getOsdFocusBorderStyle()
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonShape">${i18n.t('OsdButtonShape') || 'OSD Button Shape'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonShapeDescription">${i18n.t('OsdButtonShapeDescription') || 'Choose a custom shape for the player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-button-shape-select',
+            [
+                { value: 'circle', label: i18n.t('OsdShapeCircle') || 'Circle' },
+                { value: 'rounded-square', label: i18n.t('OsdShapeRoundedSquare') || 'Rounded Square' },
+                { value: 'squircle', label: i18n.t('OsdShapeSquircle') || 'Squircle' },
+                { value: 'organic-leaf', label: i18n.t('OsdShapeLeaf') || 'Leaf Shape' },
+                { value: 'hexagon', label: i18n.t('OsdShapeHexagon') || 'Hexagon' },
+                { value: 'outline', label: i18n.t('OsdShapeOutline') || 'Outline' },
+                { value: 'icon-only', label: i18n.t('OsdShapeIconOnly') || 'Icon Only' }
+            ],
+            layoutManager.getOsdButtonShape()
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdUnfocusedButtonStyle">${i18n.t('OsdUnfocusedButtonStyle') || 'OSD Unfocused Button Style'}</span>
+                        <span class="setting-description" data-i18n="OsdUnfocusedButtonStyleDescription">${i18n.t('OsdUnfocusedButtonStyleDescription') || 'Choose the style of player control buttons when they are not focused.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-unfocused-button-style-select',
+            [
+                { value: 'icon-only', label: i18n.t('OsdUnfocusedStyleIconOnly') || 'Icon Only' },
+                { value: 'outline', label: i18n.t('OsdUnfocusedStyleOutline') || 'Outline' },
+                { value: 'semi-transparent', label: i18n.t('OsdUnfocusedStyleSemiTransparent') || 'Semi-Transparent' }
+            ],
+            layoutManager.getOsdUnfocusedButtonStyle()
+        )}
+                    </div>
+                </div>
                 
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
@@ -1121,191 +1308,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- OSD Section -->
-                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
-                <h3 class="setting-section-title" data-i18n="PlayerOsd">${i18n.t('PlayerOsd') || 'Player Osd'}</h3>
-                
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelShowLogoInOsd">${i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD'}</span>
-                        <span class="setting-description" data-i18n="ShowLogoInOsdDescription">${i18n.t('ShowLogoInOsdDescription') || 'Display show or movie logo instead of text title in the player interface (if available).'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('osdShowLogo') ? 'active' : ''}" 
-                                id="toggle-osd-show-logo" 
-                                data-setting="osdShowLogo"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item" id="osd-logo-size-container" style="display: ${PlayerSettings.get('osdShowLogo') ? '' : 'none'}">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelOsdLogoSize">${i18n.t('LabelOsdLogoSize') || 'OSD Logo Size'}</span>
-                        <span class="setting-description" data-i18n="OsdLogoSizeDescription">${i18n.t('OsdLogoSizeDescription') || 'Choose the display size of the show or movie logo in the playback overlay.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                'osd-logo-size-select',
-                [
-                    { value: 'small', label: i18n.t('Small') || 'Small' },
-                    { value: 'medium', label: i18n.t('Medium') || 'Medium' },
-                    { value: 'large', label: i18n.t('Large') || 'Large' },
-                    { value: 'extralarge', label: i18n.t('ExtraLarge') || 'Extra Large' },
-                    { value: 'xxl', label: i18n.t('DoubleExtraLarge') || 'XXL' }
-                ],
-                PlayerSettings.get('osdLogoSize') || 'medium'
-            )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelHideYearInOsd">${i18n.t('LabelHideYearInOsd') || 'Hide Year in OSD'}</span>
-                        <span class="setting-description" data-i18n="HideYearInOsdDescription">${i18n.t('HideYearInOsdDescription') || 'Hides the production year from the playback overlay title.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('osdHideYear') ? 'active' : ''}" 
-                                id="toggle-osd-hide-year" 
-                                data-setting="osdHideYear"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelHideShowNameInOsd">${i18n.t('LabelHideShowNameInOsd') || 'Hide Show Name'}</span>
-                        <span class="setting-description" data-i18n="HideShowNameInOsdDescription">${i18n.t('HideShowNameInOsdDescription') || 'Hides the show name (or logo) for episodes in the playback overlay.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('osdHideShowName') ? 'active' : ''}" 
-                                id="toggle-osd-hide-show-name" 
-                                data-setting="osdHideShowName"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
-                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                'osd-time-display-select',
-                [
-                    { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
-                    { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
-                ],
-                PlayerSettings.get('osdTimeDisplayMode') || 'total'
-            )}
-                    </div>
-                </div>
-
-
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelOsdTrackMenuBgOpacity">${i18n.t('LabelOsdTrackMenuBgOpacity') || 'OSD Track Menu Opacity'}</span>
-                        <span class="setting-description" data-i18n="OsdTrackMenuBgOpacityDescription">${i18n.t('OsdTrackMenuBgOpacityDescription') || 'Adjust the background opacity of the audio and subtitle selection overlay menus.'}</span>
-                    </div>
-                    <div class="setting-control slider-control">
-                        ${this._renderSlider(
-                'osd-track-menu-bg-opacity',
-                PlayerSettings.get('osdTrackMenuBgOpacity') ?? 85,
-                0,
-                100,
-                5
-            )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdButtonStyle">${i18n.t('OsdButtonStyle') || 'OSD Button Style'}</span>
-                        <span class="setting-description" data-i18n="OsdButtonStyleDescription">${i18n.t('OsdButtonStyleDescription') || 'Choose a button color theme specifically for player control buttons.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                'osd-button-style-select',
-                [
-                    { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
-                    { value: 'theme-default', label: i18n.t('BtnStyleThemeDefault') || 'Theme Default' },
-                    { value: 'theme-inverted', label: i18n.t('BtnStyleThemeInverted') || 'Theme Inverted' },
-                    { value: 'monochrome-bw', label: i18n.t('BtnStyleMonoBW') || 'White & Black' },
-                    { value: 'monochrome-wb', label: i18n.t('BtnStyleMonoWB') || 'Black & White' },
-                    { value: 'white-accent', label: i18n.t('BtnStyleWhiteAccent') || 'White & Accent' },
-                    { value: 'black-accent', label: i18n.t('BtnStyleBlackAccent') || 'Black & Accent' },
-                    { value: 'accent-white', label: i18n.t('BtnStyleAccentWhite') || 'Accent & White' },
-                    { value: 'accent-black', label: i18n.t('BtnStyleAccentBlack') || 'Accent & Black' }
-                ],
-                layoutManager.getOsdButtonStyle()
-            )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdFocusBorderStyle">${i18n.t('OsdFocusBorderStyle') || 'OSD Focus Border Style'}</span>
-                        <span class="setting-description" data-i18n="OsdFocusBorderStyleDescription">${i18n.t('OsdFocusBorderStyleDescription') || 'Choose a focus border highlight style specifically for player control buttons.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                'osd-focus-border-style-select',
-                [
-                    { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
-                    { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
-                    { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
-                    { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
-                    { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
-                    { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
-                ],
-                layoutManager.getOsdFocusBorderStyle()
-            )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdButtonShape">${i18n.t('OsdButtonShape') || 'OSD Button Shape'}</span>
-                        <span class="setting-description" data-i18n="OsdButtonShapeDescription">${i18n.t('OsdButtonShapeDescription') || 'Choose a custom shape for the player control buttons.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                'osd-button-shape-select',
-                [
-                    { value: 'circle', label: i18n.t('OsdShapeCircle') || 'Circle' },
-                    { value: 'rounded-square', label: i18n.t('OsdShapeRoundedSquare') || 'Rounded Square' },
-                    { value: 'squircle', label: i18n.t('OsdShapeSquircle') || 'Squircle' },
-                    { value: 'organic-leaf', label: i18n.t('OsdShapeLeaf') || 'Leaf Shape' },
-                    { value: 'hexagon', label: i18n.t('OsdShapeHexagon') || 'Hexagon' },
-                    { value: 'outline', label: i18n.t('OsdShapeOutline') || 'Outline' },
-                    { value: 'icon-only', label: i18n.t('OsdShapeIconOnly') || 'Icon Only' }
-                ],
-                layoutManager.getOsdButtonShape()
-            )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdUnfocusedButtonStyle">${i18n.t('OsdUnfocusedButtonStyle') || 'OSD Unfocused Button Style'}</span>
-                        <span class="setting-description" data-i18n="OsdUnfocusedButtonStyleDescription">${i18n.t('OsdUnfocusedButtonStyleDescription') || 'Choose the style of player control buttons when they are not focused.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'osd-unfocused-button-style-select',
-                            [
-                                { value: 'icon-only', label: i18n.t('OsdUnfocusedStyleIconOnly') || 'Icon Only' },
-                                { value: 'outline', label: i18n.t('OsdUnfocusedStyleOutline') || 'Outline' },
-                                { value: 'semi-transparent', label: i18n.t('OsdUnfocusedStyleSemiTransparent') || 'Semi-Transparent' }
-                            ],
-                            layoutManager.getOsdUnfocusedButtonStyle()
-                        )}
-                    </div>
-                </div>
 
                 <!-- Details Page Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->

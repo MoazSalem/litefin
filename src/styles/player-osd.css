@@ -389,6 +389,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .osd-btn:focus,
 .osd-btn.focused,
 .osd-btn.magic-hover {
+    /* Focus styles use high contrast solid accent colors */
     background: var(--jf-osd-btn-focus-bg) !important;
     color: var(--jf-osd-btn-focus-color) !important;
     outline: none !important;
@@ -400,22 +401,26 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
  * ring around active player controls.
  */
 
-/* Focus & hover border styles follow the global button customization settings */
-.osd-btn:hover {
-    border: 2px solid var(--jf-osd-btn-hover-border) !important;
-}
-
+/* Focus border styles follow the global button customization settings (hover has no border) */
 .osd-btn:focus,
 .osd-btn.focused,
-.osd-btn.magic-hover {
+.osd-btn.magic-hover,
+.osd-btn:hover {
     border: 2px solid var(--jf-osd-btn-focus-border) !important;
 }
 
+/* Accent color for active toggle buttons when not focused */
 .osd-btn.active:not(#osdFavoriteBtn) {
     color: var(--jf-osd-btn-bg) !important;
 }
 
-.osd-btn.active:not(#osdFavoriteBtn):hover,
+/* Active buttons when hovered get standard soft hover treatment */
+.osd-btn.active:not(#osdFavoriteBtn):hover {
+    background: var(--osd-btn-hover) !important;
+    color: var(--osd-text-color) !important;
+}
+
+/* Active buttons when focused receive complete focus ring styling */
 .osd-btn.active:not(#osdFavoriteBtn):focus,
 .osd-btn.active:not(#osdFavoriteBtn).focused,
 .osd-btn.active:not(#osdFavoriteBtn).magic-hover {
@@ -1792,13 +1797,14 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
     display: inline-block !important;
 }
 
-/* Switch visibility when parent button or menu item is actively focused, selected, or active. */
+/* Switch visibility when parent button or menu item is actively focused, hovered, selected, or active. */
 .player-osd .focusable.focused .icon-outline,
 .player-osd .focusable:focus .icon-outline,
 .track-menu-overlay .track-option.focused .icon-outline,
 .track-menu-overlay .track-option.selected .icon-outline,
 .player-osd .osd-btn.focused .icon-outline,
 .player-osd .osd-btn:focus .icon-outline,
+.player-osd .osd-btn:hover .icon-outline,
 .player-osd .osd-btn.magic-hover .icon-outline,
 .player-osd .osd-btn.active .icon-outline,
 .player-osd .osd-btn.syncplay-active .icon-outline,
@@ -1807,13 +1813,14 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
     display: none !important;
 }
 
-/* Make filled vector design active when focus or active states match. */
+/* Make filled vector design active when focus, hover, or active states match. */
 .player-osd .focusable.focused .icon-filled,
 .player-osd .focusable:focus .icon-filled,
 .track-menu-overlay .track-option.focused .icon-filled,
 .track-menu-overlay .track-option.selected .icon-filled,
 .player-osd .osd-btn.focused .icon-filled,
 .player-osd .osd-btn:focus .icon-filled,
+.player-osd .osd-btn:hover .icon-filled,
 .player-osd .osd-btn.magic-hover .icon-filled,
 .player-osd .osd-btn.active .icon-filled,
 .player-osd .osd-btn.syncplay-active .icon-filled,
@@ -1844,11 +1851,13 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
 /* Hide outline and show filled for unfavorite icon when focused/hovered in inactive state */
 .osd-btn#osdFavoriteBtn:not(.active).focused .icon-unfavorite.icon-outline,
 .osd-btn#osdFavoriteBtn:not(.active):focus .icon-unfavorite.icon-outline,
+.osd-btn#osdFavoriteBtn:not(.active):hover .icon-unfavorite.icon-outline,
 .osd-btn#osdFavoriteBtn:not(.active).magic-hover .icon-unfavorite.icon-outline {
     display: none !important;
 }
 .osd-btn#osdFavoriteBtn:not(.active).focused .icon-unfavorite.icon-filled,
 .osd-btn#osdFavoriteBtn:not(.active):focus .icon-unfavorite.icon-filled,
+.osd-btn#osdFavoriteBtn:not(.active):hover .icon-unfavorite.icon-filled,
 .osd-btn#osdFavoriteBtn:not(.active).magic-hover .icon-unfavorite.icon-filled {
     display: inline-block !important;
 }
@@ -1856,11 +1865,13 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
 /* Hide outline and show filled for favorite icon when focused/hovered in active state */
 .osd-btn#osdFavoriteBtn.active.focused .icon-favorite.icon-outline,
 .osd-btn#osdFavoriteBtn.active:focus .icon-favorite.icon-outline,
+.osd-btn#osdFavoriteBtn.active:hover .icon-favorite.icon-outline,
 .osd-btn#osdFavoriteBtn.active.magic-hover .icon-favorite.icon-outline {
     display: none !important;
 }
 .osd-btn#osdFavoriteBtn.active.focused .icon-favorite.icon-filled,
 .osd-btn#osdFavoriteBtn.active:focus .icon-favorite.icon-filled,
+.osd-btn#osdFavoriteBtn.active:hover .icon-favorite.icon-filled,
 .osd-btn#osdFavoriteBtn.active.magic-hover .icon-favorite.icon-filled {
     display: inline-block !important;
 }
