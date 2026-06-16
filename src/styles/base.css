@@ -251,8 +251,178 @@ html[data-hover-border-style="inverted"][data-button-style="monochrome-bw"] { --
 html[data-hover-border-style="inverted"][data-button-style="monochrome-wb"] { --jf-btn-primary-hover-border: #000000 !important; }
 html[data-hover-border-style="inverted"][data-button-style="white-accent"] { --jf-btn-primary-hover-border: #ffffff !important; }
 html[data-hover-border-style="inverted"][data-button-style="black-accent"] { --jf-btn-primary-hover-border: #000000 !important; }
-html[data-hover-border-style="inverted"][data-button-style="accent-white"] { --jf-btn-primary-hover-border: var(--jf-accent) !important; }
 html[data-hover-border-style="inverted"][data-button-style="accent-black"] { --jf-btn-primary-hover-border: var(--jf-accent) !important; }
+
+/* 
+ * ============================================================================
+ * Player OSD Button Style Overrides
+ * ============================================================================
+ * Custom styling rules specifically overriding standard buttons inside the 
+ * playback OSD layout (.player-osd).
+ */
+html[data-osd-button-style="theme-default"] .player-osd {
+    --jf-osd-btn-bg: var(--jf-accent);
+    --jf-osd-btn-color: var(--jf-primary-btn-color);
+    --jf-osd-btn-border: transparent;
+    --jf-osd-btn-focus-bg: var(--jf-accent-hover);
+    --jf-osd-btn-focus-color: var(--jf-primary-btn-color);
+    --jf-osd-btn-focus-border: var(--jf-primary-btn-color);
+}
+html[data-osd-button-style="theme-inverted"] .player-osd {
+    --jf-osd-btn-bg: var(--jf-primary-btn-color);
+    --jf-osd-btn-color: var(--jf-accent);
+    --jf-osd-btn-border: var(--jf-primary-btn-color);
+    --jf-osd-btn-focus-bg: var(--jf-primary-btn-color);
+    --jf-osd-btn-focus-color: var(--jf-accent-hover);
+    --jf-osd-btn-focus-border: var(--jf-accent);
+}
+html[data-osd-button-style="monochrome-bw"] .player-osd {
+    --jf-osd-btn-bg: #ffffff;
+    --jf-osd-btn-color: #000000;
+    --jf-osd-btn-border: #ffffff;
+    --jf-osd-btn-focus-bg: #f5f5f7;
+    --jf-osd-btn-focus-color: #000000;
+    --jf-osd-btn-focus-border: #000000;
+}
+html[data-osd-button-style="monochrome-wb"] .player-osd {
+    --jf-osd-btn-bg: #000000;
+    --jf-osd-btn-color: #ffffff;
+    --jf-osd-btn-border: #000000;
+    --jf-osd-btn-focus-bg: #1c1c1e;
+    --jf-osd-btn-focus-color: #ffffff;
+    --jf-osd-btn-focus-border: #ffffff;
+}
+html[data-osd-button-style="white-accent"] .player-osd {
+    --jf-osd-btn-bg: #ffffff;
+    --jf-osd-btn-color: var(--jf-accent);
+    --jf-osd-btn-border: #ffffff;
+    --jf-osd-btn-focus-bg: #f5f5f7;
+    --jf-osd-btn-focus-color: var(--jf-accent-hover);
+    --jf-osd-btn-focus-border: var(--jf-accent);
+}
+html[data-osd-button-style="black-accent"] .player-osd {
+    --jf-osd-btn-bg: #000000;
+    --jf-osd-btn-color: var(--jf-accent);
+    --jf-osd-btn-border: #000000;
+    --jf-osd-btn-focus-bg: #1c1c1e;
+    --jf-osd-btn-focus-color: var(--jf-accent-hover);
+    --jf-osd-btn-focus-border: var(--jf-accent);
+}
+html[data-osd-button-style="accent-white"] .player-osd {
+    --jf-osd-btn-bg: var(--jf-accent);
+    --jf-osd-btn-color: #ffffff;
+    --jf-osd-btn-border: transparent;
+    --jf-osd-btn-focus-bg: var(--jf-accent-hover);
+    --jf-osd-btn-focus-color: #ffffff;
+    --jf-osd-btn-focus-border: #ffffff;
+}
+html[data-osd-button-style="accent-black"] .player-osd {
+    --jf-osd-btn-bg: var(--jf-accent);
+    --jf-osd-btn-color: #000000;
+    --jf-osd-btn-border: transparent;
+    --jf-osd-btn-focus-bg: var(--jf-accent-hover);
+    --jf-osd-btn-focus-color: #000000;
+    --jf-osd-btn-focus-border: #000000;
+}
+
+/* 
+ * ============================================================================
+ * Player OSD Focus Border Style Overrides
+ * ============================================================================
+ */
+html[data-osd-focus-border-style="white"] .player-osd {
+    --jf-osd-btn-focus-border: #ffffff !important;
+}
+html[data-osd-focus-border-style="black"] .player-osd {
+    --jf-osd-btn-focus-border: #000000 !important;
+}
+html[data-osd-focus-border-style="hidden"] .player-osd {
+    --jf-osd-btn-focus-border: transparent !important;
+}
+
+/* Follow Theme OSD focus border style logic */
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="theme-default"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="theme-default"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="theme-default"] .player-osd { 
+    --jf-osd-btn-focus-border: var(--jf-primary-btn-color) !important; 
+}
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="theme-inverted"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="theme-inverted"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="theme-inverted"] .player-osd { 
+    --jf-osd-btn-focus-border: var(--jf-accent) !important; 
+}
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="monochrome-bw"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="monochrome-bw"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="monochrome-bw"] .player-osd { 
+    --jf-osd-btn-focus-border: #000000 !important; 
+}
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="monochrome-wb"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="monochrome-wb"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="monochrome-wb"] .player-osd { 
+    --jf-osd-btn-focus-border: #ffffff !important; 
+}
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="white-accent"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="white-accent"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="white-accent"] .player-osd { 
+    --jf-osd-btn-focus-border: var(--jf-accent) !important; 
+}
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="black-accent"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="black-accent"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="black-accent"] .player-osd { 
+    --jf-osd-btn-focus-border: var(--jf-accent) !important; 
+}
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="accent-white"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="accent-white"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="accent-white"] .player-osd { 
+    --jf-osd-btn-focus-border: #ffffff !important; 
+}
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="accent-black"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"]:not([data-osd-button-style])[data-button-style="accent-black"] .player-osd,
+html[data-osd-focus-border-style="follow-theme"][data-osd-button-style="follow-global"][data-button-style="accent-black"] .player-osd { 
+    --jf-osd-btn-focus-border: #000000 !important; 
+}
+
+/* Inverted OSD focus border style logic */
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="theme-default"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="theme-default"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="theme-default"] .player-osd {
+    --jf-osd-btn-focus-border: var(--jf-accent) !important;
+}
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="theme-inverted"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="theme-inverted"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="theme-inverted"] .player-osd {
+    --jf-osd-btn-focus-border: var(--jf-primary-btn-color) !important;
+}
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="monochrome-bw"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="monochrome-bw"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="monochrome-bw"] .player-osd {
+    --jf-osd-btn-focus-border: #ffffff !important;
+}
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="monochrome-wb"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="monochrome-wb"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="monochrome-wb"] .player-osd {
+    --jf-osd-btn-focus-border: #000000 !important;
+}
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="white-accent"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="white-accent"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="white-accent"] .player-osd {
+    --jf-osd-btn-focus-border: #ffffff !important;
+}
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="black-accent"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="black-accent"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="black-accent"] .player-osd {
+    --jf-osd-btn-focus-border: #000000 !important;
+}
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="accent-white"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="accent-white"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="accent-white"] .player-osd {
+    --jf-osd-btn-focus-border: var(--jf-accent) !important;
+}
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="accent-black"] .player-osd,
+html[data-osd-focus-border-style="inverted"]:not([data-osd-button-style])[data-button-style="accent-black"] .player-osd,
+html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-global"][data-button-style="accent-black"] .player-osd {
+    --jf-osd-btn-focus-border: var(--jf-accent) !important;
+}
 
 /* Custom UI Font Overrides */
 html[data-ui-font="system"] {

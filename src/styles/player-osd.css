@@ -8,12 +8,23 @@
    CSS Variables
    ============================================================================ */
 
+.player-osd {
+    /* OSD specific button variables with fallback inheritance to global button variables */
+    --jf-osd-btn-bg: var(--jf-btn-primary-bg);
+    --jf-osd-btn-color: var(--jf-btn-primary-color);
+    --jf-osd-btn-border: var(--jf-btn-primary-border);
+    --jf-osd-btn-focus-bg: var(--jf-btn-primary-focus-bg);
+    --jf-osd-btn-focus-color: var(--jf-btn-primary-focus-color);
+    --jf-osd-btn-focus-border: var(--jf-btn-primary-focus-border);
+    --jf-osd-btn-hover-border: var(--jf-btn-primary-hover-border);
+}
+
 :root {
     --osd-text-color: var(--jf-text-primary, #fff);
-    --osd-accent-color: var(--jf-btn-primary-bg);
+    --osd-accent-color: var(--jf-accent);
     --osd-gradient-dark: rgba(0, 0, 0, 0.75);
     --osd-slider-bg: rgba(255, 255, 255, 0.3);
-    --osd-slider-progress: var(--jf-btn-primary-bg);
+    --osd-slider-progress: var(--jf-accent);
     --osd-btn-hover: var(--jf-button-hover, rgba(255, 255, 255, 0.1));
 }
 
@@ -378,8 +389,8 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .osd-btn:focus,
 .osd-btn.focused,
 .osd-btn.magic-hover {
-    background: var(--jf-btn-primary-focus-bg) !important;
-    color: var(--jf-btn-primary-focus-color) !important;
+    background: var(--jf-osd-btn-focus-bg) !important;
+    color: var(--jf-osd-btn-focus-color) !important;
     outline: none !important;
 }
 
@@ -391,26 +402,26 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 /* Focus & hover border styles follow the global button customization settings */
 .osd-btn:hover {
-    border: 2px solid var(--jf-btn-primary-hover-border) !important;
+    border: 2px solid var(--jf-osd-btn-hover-border) !important;
 }
 
 .osd-btn:focus,
 .osd-btn.focused,
 .osd-btn.magic-hover {
-    border: 2px solid var(--jf-btn-primary-focus-border) !important;
+    border: 2px solid var(--jf-osd-btn-focus-border) !important;
 }
 
 .osd-btn.active {
-    color: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-osd-btn-bg) !important;
 }
 
 .osd-btn.active:hover,
 .osd-btn.active:focus,
 .osd-btn.active.focused,
 .osd-btn.active.magic-hover {
-    background: var(--jf-btn-primary-focus-bg) !important;
-    color: var(--jf-btn-primary-focus-color) !important;
-    border-color: var(--jf-btn-primary-focus-border) !important;
+    background: var(--jf-osd-btn-focus-bg) !important;
+    color: var(--jf-osd-btn-focus-color) !important;
+    border-color: var(--jf-osd-btn-focus-border) !important;
 }
 
 /* Pulse Animation Trigger */
@@ -523,9 +534,9 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 .osd-back-btn:focus,
 .osd-back-btn.focused {
-    border: 2px solid var(--jf-btn-primary-focus-border) !important;
-    background: var(--jf-btn-primary-focus-bg) !important;
-    color: var(--jf-btn-primary-focus-color) !important;
+    border: 2px solid var(--jf-osd-btn-focus-border) !important;
+    background: var(--jf-osd-btn-focus-bg) !important;
+    color: var(--jf-osd-btn-focus-color) !important;
     outline: none !important;
 }
 
@@ -551,9 +562,9 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 .osd-btn-play:focus,
 .osd-btn-play.focused {
-    background: var(--jf-btn-primary-focus-bg) !important;
-    color: var(--jf-btn-primary-focus-color) !important;
-    border: 2px solid var(--jf-btn-primary-focus-border) !important;
+    background: var(--jf-osd-btn-focus-bg) !important;
+    color: var(--jf-osd-btn-focus-color) !important;
+    border: 2px solid var(--jf-osd-btn-focus-border) !important;
 }
 
 .osd-btn-play .osd-icon {
@@ -868,7 +879,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 /* Focused button style */
 .osd-btn.focused {
-    background: var(--jf-btn-primary-focus-bg) !important;
+    background: var(--jf-osd-btn-focus-bg) !important;
     outline: none;
 }
 

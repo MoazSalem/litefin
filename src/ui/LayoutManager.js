@@ -113,6 +113,10 @@ class LayoutManager {
         // Sidebar selected icon color: 'grey', 'white', 'black', 'accent'
         this._sidebarSelectedColor = 'accent';
 
+        // OSD Custom Button & Focus Border styles (overrides global)
+        this._osdButtonStyle = 'follow-global';
+        this._osdFocusBorderStyle = 'follow-global';
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -165,6 +169,8 @@ class LayoutManager {
         const savedHoverBorderStyle = storage.getItem('litefin:hoverBorderStyle') || 'white';
         const savedSidebarUnselectedColor = storage.getItem('litefin:sidebarUnselectedColor') || 'grey';
         const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'accent';
+        const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
+        const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -189,6 +195,8 @@ class LayoutManager {
         this.setHoverBorderStyle(savedHoverBorderStyle, false);
         this.setSidebarUnselectedColor(savedSidebarUnselectedColor, false);
         this.setSidebarSelectedColor(savedSidebarSelectedColor, false);
+        this.setOsdButtonStyle(savedOsdButtonStyle, false);
+        this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -665,6 +673,42 @@ class LayoutManager {
         }
         log.info(`Sidebar selected color updated: ${color}`);
         eventBus.emit('sidebarSelectedColor:changed', { color });
+    }
+
+    getOsdButtonStyle() {
+        return this._osdButtonStyle;
+    }
+
+    setOsdButtonStyle(style, save = true) {
+        if (!['follow-global', 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+            log.warn(`Invalid OSD button style specified: "${style}"`);
+            return;
+        }
+        this._osdButtonStyle = style;
+        document.documentElement.setAttribute('data-osd-button-style', style);
+        if (save) {
+            storage.setItem('litefin:osdButtonStyle', style);
+        }
+        log.info(`OSD button style updated: ${style}`);
+        eventBus.emit('osdButtonStyle:changed', { style });
+    }
+
+    getOsdFocusBorderStyle() {
+        return this._osdFocusBorderStyle;
+    }
+
+    setOsdFocusBorderStyle(style, save = true) {
+        if (!['follow-global', 'follow-theme', 'inverted', 'white', 'black', 'hidden'].includes(style)) {
+            log.warn(`Invalid OSD focus border style specified: "${style}"`);
+            return;
+        }
+        this._osdFocusBorderStyle = style;
+        document.documentElement.setAttribute('data-osd-focus-border-style', style);
+        if (save) {
+            storage.setItem('litefin:osdFocusBorderStyle', style);
+        }
+        log.info(`OSD focus border style updated: ${style}`);
+        eventBus.emit('osdFocusBorderStyle:changed', { style });
     }
 
 

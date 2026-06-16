@@ -472,16 +472,16 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'hover-border-style-select',
-                            [
-                                { value: 'white', label: i18n.t('HoverBorderWhite') || 'White' },
-                                { value: 'follow-theme', label: i18n.t('HoverBorderFollowTheme') || 'Follow Theme' },
-                                { value: 'inverted', label: i18n.t('HoverBorderInverted') || 'Inverted' },
-                                { value: 'black', label: i18n.t('HoverBorderBlack') || 'Black' },
-                                { value: 'hidden', label: i18n.t('HoverBorderHidden') || 'Hidden' }
-                            ],
-                            layoutManager.getHoverBorderStyle()
-                        )}
+            'hover-border-style-select',
+            [
+                { value: 'white', label: i18n.t('HoverBorderWhite') || 'White' },
+                { value: 'follow-theme', label: i18n.t('HoverBorderFollowTheme') || 'Follow Theme' },
+                { value: 'inverted', label: i18n.t('HoverBorderInverted') || 'Inverted' },
+                { value: 'black', label: i18n.t('HoverBorderBlack') || 'Black' },
+                { value: 'hidden', label: i18n.t('HoverBorderHidden') || 'Hidden' }
+            ],
+            layoutManager.getHoverBorderStyle()
+        )}
                     </div>
                 </div>
 
@@ -492,15 +492,15 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'sidebar-selected-color-select',
-                            [
-                                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' },
-                                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
-                                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
-                                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' }
-                            ],
-                            layoutManager.getSidebarSelectedColor()
-                        )}
+            'sidebar-selected-color-select',
+            [
+                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' },
+                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
+                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' }
+            ],
+            layoutManager.getSidebarSelectedColor()
+        )}
                     </div>
                 </div>
 
@@ -511,15 +511,15 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'sidebar-unselected-color-select',
-                            [
-                                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
-                                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
-                                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' },
-                                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' }
-                            ],
-                            layoutManager.getSidebarUnselectedColor()
-                        )}
+            'sidebar-unselected-color-select',
+            [
+                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
+                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' },
+                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' }
+            ],
+            layoutManager.getSidebarUnselectedColor()
+        )}
                     </div>
                 </div>
 
@@ -1218,6 +1218,51 @@ class SettingsPage extends Page {
                 0,
                 100,
                 5
+            )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonStyle">${i18n.t('OsdButtonStyle') || 'OSD Button Style'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonStyleDescription">${i18n.t('OsdButtonStyleDescription') || 'Choose a button color theme specifically for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'osd-button-style-select',
+                [
+                    { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
+                    { value: 'theme-default', label: i18n.t('BtnStyleThemeDefault') || 'Theme Default' },
+                    { value: 'theme-inverted', label: i18n.t('BtnStyleThemeInverted') || 'Theme Inverted' },
+                    { value: 'monochrome-bw', label: i18n.t('BtnStyleMonoBW') || 'White & Black' },
+                    { value: 'monochrome-wb', label: i18n.t('BtnStyleMonoWB') || 'Black & White' },
+                    { value: 'white-accent', label: i18n.t('BtnStyleWhiteAccent') || 'White & Accent' },
+                    { value: 'black-accent', label: i18n.t('BtnStyleBlackAccent') || 'Black & Accent' },
+                    { value: 'accent-white', label: i18n.t('BtnStyleAccentWhite') || 'Accent & White' },
+                    { value: 'accent-black', label: i18n.t('BtnStyleAccentBlack') || 'Accent & Black' }
+                ],
+                layoutManager.getOsdButtonStyle()
+            )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdFocusBorderStyle">${i18n.t('OsdFocusBorderStyle') || 'OSD Focus Border Style'}</span>
+                        <span class="setting-description" data-i18n="OsdFocusBorderStyleDescription">${i18n.t('OsdFocusBorderStyleDescription') || 'Choose a focus border highlight style specifically for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'osd-focus-border-style-select',
+                [
+                    { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
+                    { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
+                    { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
+                    { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
+                    { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
+                    { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
+                ],
+                layoutManager.getOsdFocusBorderStyle()
             )}
                     </div>
                 </div>
@@ -5492,7 +5537,9 @@ class SettingsPage extends Page {
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
             'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' },
             'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
-            'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' }
+            'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
+            'osd-button-style-select': { key: 'litefin:osdButtonStyle', type: 'local' },
+            'osd-focus-border-style-select': { key: 'litefin:osdFocusBorderStyle', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -5531,6 +5578,12 @@ class SettingsPage extends Page {
                         } else if (id === 'sidebar-unselected-color-select') {
                             // SPECIAL CASE: Sidebar Unselected Color handled by LayoutManager
                             layoutManager.setSidebarUnselectedColor(newValue);
+                        } else if (id === 'osd-button-style-select') {
+                            // SPECIAL CASE: OSD Button Style handled by LayoutManager
+                            layoutManager.setOsdButtonStyle(newValue);
+                        } else if (id === 'osd-focus-border-style-select') {
+                            // SPECIAL CASE: OSD Focus Border Style handled by LayoutManager
+                            layoutManager.setOsdFocusBorderStyle(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {
