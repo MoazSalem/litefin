@@ -116,6 +116,7 @@ class LayoutManager {
         // OSD Custom Button & Focus Border styles (overrides global)
         this._osdButtonStyle = 'follow-global';
         this._osdFocusBorderStyle = 'follow-global';
+        this._osdButtonShape = 'circle';
 
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
@@ -171,6 +172,7 @@ class LayoutManager {
         const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'accent';
         const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
         const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
+        const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -197,6 +199,7 @@ class LayoutManager {
         this.setSidebarSelectedColor(savedSidebarSelectedColor, false);
         this.setOsdButtonStyle(savedOsdButtonStyle, false);
         this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
+        this.setOsdButtonShape(savedOsdButtonShape, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -709,6 +712,24 @@ class LayoutManager {
         }
         log.info(`OSD focus border style updated: ${style}`);
         eventBus.emit('osdFocusBorderStyle:changed', { style });
+    }
+
+    getOsdButtonShape() {
+        return this._osdButtonShape;
+    }
+
+    setOsdButtonShape(shape, save = true) {
+        if (!['circle', 'rounded-square', 'squircle', 'organic-leaf', 'hexagon', 'outline', 'icon-only'].includes(shape)) {
+            log.warn(`Invalid OSD button shape specified: "${shape}"`);
+            return;
+        }
+        this._osdButtonShape = shape;
+        document.documentElement.setAttribute('data-osd-button-shape', shape);
+        if (save) {
+            storage.setItem('litefin:osdButtonShape', shape);
+        }
+        log.info(`OSD button shape updated: ${shape}`);
+        eventBus.emit('osdButtonShape:changed', { shape });
     }
 
 

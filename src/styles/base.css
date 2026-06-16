@@ -424,6 +424,63 @@ html[data-osd-focus-border-style="inverted"][data-osd-button-style="follow-globa
     --jf-osd-btn-focus-border: var(--jf-accent) !important;
 }
 
+/* 
+ * ============================================================================
+ * Player OSD Button Shape Overrides
+ * ============================================================================
+ */
+html[data-osd-button-shape="circle"] .player-osd .osd-btn,
+html[data-osd-button-shape="circle"] .player-osd .osd-btn-play {
+    border-radius: 50% !important;
+}
+html[data-osd-button-shape="rounded-square"] .player-osd .osd-btn,
+html[data-osd-button-shape="rounded-square"] .player-osd .osd-btn-play {
+    border-radius: 12px !important;
+}
+html[data-osd-button-shape="squircle"] .player-osd .osd-btn,
+html[data-osd-button-shape="squircle"] .player-osd .osd-btn-play {
+    border-radius: 38% !important;
+}
+html[data-osd-button-shape="organic-leaf"] .player-osd .osd-btn,
+html[data-osd-button-shape="organic-leaf"] .player-osd .osd-btn-play {
+    border-radius: 24px 6px 24px 6px !important;
+}
+html[data-osd-button-shape="hexagon"] .player-osd .osd-btn,
+html[data-osd-button-shape="hexagon"] .player-osd .osd-btn-play {
+    border-radius: 0px !important;
+    clip-path: polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%) !important;
+}
+html[data-osd-button-shape="outline"] .player-osd .osd-btn,
+html[data-osd-button-shape="outline"] .player-osd .osd-btn-play {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+html[data-osd-button-shape="outline"] .player-osd .osd-btn:focus,
+html[data-osd-button-shape="outline"] .player-osd .osd-btn.focused,
+html[data-osd-button-shape="outline"] .player-osd .osd-btn-play:focus,
+html[data-osd-button-shape="outline"] .player-osd .osd-btn-play.focused {
+    background: transparent !important;
+    border-color: var(--jf-osd-btn-focus-border) !important;
+    color: var(--jf-osd-btn-focus-color) !important;
+}
+
+html[data-osd-button-shape="icon-only"] .player-osd .osd-btn,
+html[data-osd-button-shape="icon-only"] .player-osd .osd-btn-play {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+html[data-osd-button-shape="icon-only"] .player-osd .osd-btn:focus,
+html[data-osd-button-shape="icon-only"] .player-osd .osd-btn.focused,
+html[data-osd-button-shape="icon-only"] .player-osd .osd-btn-play:focus,
+html[data-osd-button-shape="icon-only"] .player-osd .osd-btn-play.focused {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--jf-osd-btn-focus-color) !important;
+    box-shadow: none !important;
+}
+
 /* Custom UI Font Overrides */
 html[data-ui-font="system"] {
     --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;

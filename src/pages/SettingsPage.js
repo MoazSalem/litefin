@@ -1267,6 +1267,28 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonShape">${i18n.t('OsdButtonShape') || 'OSD Button Shape'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonShapeDescription">${i18n.t('OsdButtonShapeDescription') || 'Choose a custom shape for the player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'osd-button-shape-select',
+                [
+                    { value: 'circle', label: i18n.t('OsdShapeCircle') || 'Circle' },
+                    { value: 'rounded-square', label: i18n.t('OsdShapeRoundedSquare') || 'Rounded Square' },
+                    { value: 'squircle', label: i18n.t('OsdShapeSquircle') || 'Squircle' },
+                    { value: 'organic-leaf', label: i18n.t('OsdShapeLeaf') || 'Leaf Shape' },
+                    { value: 'hexagon', label: i18n.t('OsdShapeHexagon') || 'Hexagon' },
+                    { value: 'outline', label: i18n.t('OsdShapeOutline') || 'Outline' },
+                    { value: 'icon-only', label: i18n.t('OsdShapeIconOnly') || 'Icon Only' }
+                ],
+                layoutManager.getOsdButtonShape()
+            )}
+                    </div>
+                </div>
+
                 <!-- Details Page Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
@@ -5539,7 +5561,8 @@ class SettingsPage extends Page {
             'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
             'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
             'osd-button-style-select': { key: 'litefin:osdButtonStyle', type: 'local' },
-            'osd-focus-border-style-select': { key: 'litefin:osdFocusBorderStyle', type: 'local' }
+            'osd-focus-border-style-select': { key: 'litefin:osdFocusBorderStyle', type: 'local' },
+            'osd-button-shape-select': { key: 'litefin:osdButtonShape', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -5584,6 +5607,9 @@ class SettingsPage extends Page {
                         } else if (id === 'osd-focus-border-style-select') {
                             // SPECIAL CASE: OSD Focus Border Style handled by LayoutManager
                             layoutManager.setOsdFocusBorderStyle(newValue);
+                        } else if (id === 'osd-button-shape-select') {
+                            // SPECIAL CASE: OSD Button Shape handled by LayoutManager
+                            layoutManager.setOsdButtonShape(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {
