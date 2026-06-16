@@ -119,6 +119,18 @@ class LayoutManager {
         this._osdButtonShape = 'circle';
         this._osdUnfocusedButtonStyle = 'icon-only';
 
+        /*
+         * Customized color scheme for the OSD seek bar thumb.
+         * Defaults to 'white'. Supports: 'white', 'black', 'theme-accent', 'theme-inverted'.
+         */
+        this._osdSeekBarThumbColor = 'white';
+
+        /*
+         * Customized color scheme for the OSD seek bar progress.
+         * Defaults to 'theme-accent'. Supports: 'white', 'black', 'theme-accent', 'theme-inverted'.
+         */
+        this._osdSeekBarProgressColor = 'theme-accent';
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -175,6 +187,8 @@ class LayoutManager {
         const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
         const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
         const savedOsdUnfocusedButtonStyle = storage.getItem('litefin:osdUnfocusedButtonStyle') || 'icon-only';
+        const savedOsdSeekBarThumbColor = storage.getItem('litefin:osdSeekBarThumbColor') || 'white';
+        const savedOsdSeekBarProgressColor = storage.getItem('litefin:osdSeekBarProgressColor') || 'theme-accent';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -203,6 +217,8 @@ class LayoutManager {
         this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
         this.setOsdButtonShape(savedOsdButtonShape, false);
         this.setOsdUnfocusedButtonStyle(savedOsdUnfocusedButtonStyle, false);
+        this.setOsdSeekBarThumbColor(savedOsdSeekBarThumbColor, false);
+        this.setOsdSeekBarProgressColor(savedOsdSeekBarProgressColor, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -751,6 +767,56 @@ class LayoutManager {
         }
         log.info(`OSD unfocused button style updated: ${style}`);
         eventBus.emit('osdUnfocusedButtonStyle:changed', { style });
+    }
+
+    /*
+     * Retrieves the current customized color scheme of the OSD seek bar thumb.
+     */
+    getOsdSeekBarThumbColor() {
+        return this._osdSeekBarThumbColor;
+    }
+
+    /*
+     * Sets the customized color scheme of the OSD seek bar thumb.
+     * Stamps documentElement with data-osd-thumb-color so that player-osd.css can adapt.
+     */
+    setOsdSeekBarThumbColor(color, save = true) {
+        if (!['white', 'black', 'theme-accent', 'theme-inverted'].includes(color)) {
+            log.warn(`Invalid OSD seek bar thumb color specified: "${color}"`);
+            return;
+        }
+        this._osdSeekBarThumbColor = color;
+        document.documentElement.setAttribute('data-osd-thumb-color', color);
+        if (save) {
+            storage.setItem('litefin:osdSeekBarThumbColor', color);
+        }
+        log.info(`OSD seek bar thumb color updated: ${color}`);
+        eventBus.emit('osdSeekBarThumbColor:changed', { color });
+    }
+
+    /*
+     * Retrieves the current customized color scheme of the OSD seek bar progress.
+     */
+    getOsdSeekBarProgressColor() {
+        return this._osdSeekBarProgressColor;
+    }
+
+    /*
+     * Sets the customized color scheme of the OSD seek bar progress.
+     * Stamps documentElement with data-osd-progress-color so that player-osd.css can adapt.
+     */
+    setOsdSeekBarProgressColor(color, save = true) {
+        if (!['white', 'black', 'theme-accent', 'theme-inverted'].includes(color)) {
+            log.warn(`Invalid OSD seek bar progress color specified: "${color}"`);
+            return;
+        }
+        this._osdSeekBarProgressColor = color;
+        document.documentElement.setAttribute('data-osd-progress-color', color);
+        if (save) {
+            storage.setItem('litefin:osdSeekBarProgressColor', color);
+        }
+        log.info(`OSD seek bar progress color updated: ${color}`);
+        eventBus.emit('osdSeekBarProgressColor:changed', { color });
     }
 
 

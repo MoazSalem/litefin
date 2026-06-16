@@ -36,7 +36,7 @@
     --jf-btn-primary-color: var(--jf-primary-btn-color);
     --jf-btn-primary-border: transparent;
     
-    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-bg: var(--jf-accent);
     --jf-btn-primary-focus-color: var(--jf-primary-btn-color);
     --jf-btn-primary-focus-border: var(--jf-primary-btn-color);
     --jf-btn-primary-focus-color-rgb: var(--jf-primary-btn-color-rgb, 255, 255, 255);
@@ -80,7 +80,7 @@ html[data-button-style="theme-default"] {
     --jf-btn-primary-color: var(--jf-primary-btn-color);
     --jf-btn-primary-border: transparent;
 
-    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-bg: var(--jf-accent);
     --jf-btn-primary-focus-color: var(--jf-primary-btn-color);
     --jf-btn-primary-focus-border: var(--jf-primary-btn-color);
     --jf-btn-primary-focus-color-rgb: var(--jf-primary-btn-color-rgb, 255, 255, 255);
@@ -93,7 +93,7 @@ html[data-button-style="theme-inverted"] {
     --jf-btn-primary-border: var(--jf-primary-btn-color);
 
     --jf-btn-primary-focus-bg: var(--jf-primary-btn-color);
-    --jf-btn-primary-focus-color: var(--jf-accent-hover);
+    --jf-btn-primary-focus-color: var(--jf-accent);
     --jf-btn-primary-focus-border: var(--jf-accent);
     --jf-btn-primary-focus-color-rgb: var(--jf-accent-rgb, 0, 164, 220);
 }
@@ -129,7 +129,7 @@ html[data-button-style="white-accent"] {
     --jf-btn-primary-border: #ffffff;
 
     --jf-btn-primary-focus-bg: #f5f5f7; /* Subtle off-white hover/focus shade */
-    --jf-btn-primary-focus-color: var(--jf-accent-hover);
+    --jf-btn-primary-focus-color: var(--jf-accent);
     --jf-btn-primary-focus-border: var(--jf-accent);
     --jf-btn-primary-focus-color-rgb: var(--jf-accent-rgb, 0, 164, 220);
 }
@@ -141,7 +141,7 @@ html[data-button-style="black-accent"] {
     --jf-btn-primary-border: #000000;
 
     --jf-btn-primary-focus-bg: #1c1c1e; /* HIG dark gray secondary surface background */
-    --jf-btn-primary-focus-color: var(--jf-accent-hover);
+    --jf-btn-primary-focus-color: var(--jf-accent);
     --jf-btn-primary-focus-border: var(--jf-accent);
     --jf-btn-primary-focus-color-rgb: var(--jf-accent-rgb, 0, 164, 220);
 }
@@ -152,7 +152,7 @@ html[data-button-style="accent-white"] {
     --jf-btn-primary-color: #ffffff;
     --jf-btn-primary-border: transparent;
 
-    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-bg: var(--jf-accent);
     --jf-btn-primary-focus-color: #ffffff;
     --jf-btn-primary-focus-border: #ffffff;
     --jf-btn-primary-focus-color-rgb: 255, 255, 255;
@@ -164,7 +164,7 @@ html[data-button-style="accent-black"] {
     --jf-btn-primary-color: #000000;
     --jf-btn-primary-border: transparent;
 
-    --jf-btn-primary-focus-bg: var(--jf-accent-hover);
+    --jf-btn-primary-focus-bg: var(--jf-accent);
     --jf-btn-primary-focus-color: #000000;
     --jf-btn-primary-focus-border: #000000;
     --jf-btn-primary-focus-color-rgb: 0, 0, 0;
@@ -264,7 +264,7 @@ html[data-osd-button-style="theme-default"] .player-osd {
     --jf-osd-btn-bg: var(--jf-accent);
     --jf-osd-btn-color: var(--jf-primary-btn-color);
     --jf-osd-btn-border: transparent;
-    --jf-osd-btn-focus-bg: var(--jf-accent-hover);
+    --jf-osd-btn-focus-bg: var(--jf-accent);
     --jf-osd-btn-focus-color: var(--jf-primary-btn-color);
     --jf-osd-btn-focus-border: var(--jf-primary-btn-color);
 }
@@ -273,7 +273,7 @@ html[data-osd-button-style="theme-inverted"] .player-osd {
     --jf-osd-btn-color: var(--jf-accent);
     --jf-osd-btn-border: var(--jf-primary-btn-color);
     --jf-osd-btn-focus-bg: var(--jf-primary-btn-color);
-    --jf-osd-btn-focus-color: var(--jf-accent-hover);
+    --jf-osd-btn-focus-color: var(--jf-accent);
     --jf-osd-btn-focus-border: var(--jf-accent);
 }
 html[data-osd-button-style="monochrome-bw"] .player-osd {
@@ -297,7 +297,7 @@ html[data-osd-button-style="white-accent"] .player-osd {
     --jf-osd-btn-color: var(--jf-accent);
     --jf-osd-btn-border: #ffffff;
     --jf-osd-btn-focus-bg: #f5f5f7;
-    --jf-osd-btn-focus-color: var(--jf-accent-hover);
+    --jf-osd-btn-focus-color: var(--jf-accent);
     --jf-osd-btn-focus-border: var(--jf-accent);
 }
 html[data-osd-button-style="black-accent"] .player-osd {
@@ -305,14 +305,14 @@ html[data-osd-button-style="black-accent"] .player-osd {
     --jf-osd-btn-color: var(--jf-accent);
     --jf-osd-btn-border: #000000;
     --jf-osd-btn-focus-bg: #1c1c1e;
-    --jf-osd-btn-focus-color: var(--jf-accent-hover);
+    --jf-osd-btn-focus-color: var(--jf-accent);
     --jf-osd-btn-focus-border: var(--jf-accent);
 }
 html[data-osd-button-style="accent-white"] .player-osd {
     --jf-osd-btn-bg: var(--jf-accent);
     --jf-osd-btn-color: #ffffff;
     --jf-osd-btn-border: transparent;
-    --jf-osd-btn-focus-bg: var(--jf-accent-hover);
+    --jf-osd-btn-focus-bg: var(--jf-accent);
     --jf-osd-btn-focus-color: #ffffff;
     --jf-osd-btn-focus-border: #ffffff;
 }
@@ -320,7 +320,7 @@ html[data-osd-button-style="accent-black"] .player-osd {
     --jf-osd-btn-bg: var(--jf-accent);
     --jf-osd-btn-color: #000000;
     --jf-osd-btn-border: transparent;
-    --jf-osd-btn-focus-bg: var(--jf-accent-hover);
+    --jf-osd-btn-focus-bg: var(--jf-accent);
     --jf-osd-btn-focus-color: #000000;
     --jf-osd-btn-focus-border: #000000;
 }

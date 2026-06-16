@@ -13,8 +13,8 @@
     --jf-osd-btn-bg: var(--jf-btn-primary-bg);
     --jf-osd-btn-color: var(--jf-btn-primary-color);
     --jf-osd-btn-border: var(--jf-btn-primary-border);
-    --jf-osd-btn-focus-bg: var(--jf-btn-primary-focus-bg);
-    --jf-osd-btn-focus-color: var(--jf-btn-primary-focus-color);
+    --jf-osd-btn-focus-bg: var(--jf-btn-primary-bg); /* Align focused button color with primary accent background */
+    --jf-osd-btn-focus-color: var(--jf-btn-primary-color);
     --jf-osd-btn-focus-border: var(--jf-btn-primary-focus-border);
     --jf-osd-btn-hover-border: var(--jf-btn-primary-hover-border);
 }
@@ -24,8 +24,44 @@
     --osd-accent-color: var(--jf-accent);
     --osd-gradient-dark: rgba(0, 0, 0, 0.75);
     --osd-slider-bg: rgba(255, 255, 255, 0.3);
-    --osd-slider-progress: var(--jf-accent);
+    --osd-slider-progress: var(--jf-btn-primary-bg);
     --osd-btn-hover: var(--jf-button-hover, rgba(255, 255, 255, 0.1));
+    /* Fallback value for customized seek bar thumb background */
+    --osd-thumb-bg: #ffffff;
+}
+
+/* 
+ * ── OSD Seek Bar Custom Thumb Color Options ────────────────────────────────
+ * Maps document element attributes to selected theme/monochrome options.
+ */
+html[data-osd-thumb-color="white"] {
+    --osd-thumb-bg: #ffffff;
+}
+html[data-osd-thumb-color="black"] {
+    --osd-thumb-bg: #000000;
+}
+html[data-osd-thumb-color="theme-accent"] {
+    --osd-thumb-bg: var(--jf-btn-primary-bg);
+}
+html[data-osd-thumb-color="theme-inverted"] {
+    --osd-thumb-bg: var(--jf-btn-primary-focus-bg);
+}
+
+/* 
+ * ── OSD Seek Bar Custom Progress Color Options ─────────────────────────────
+ * Maps document element attributes to selected theme/monochrome options.
+ */
+html[data-osd-progress-color="white"] {
+    --osd-slider-progress: #ffffff;
+}
+html[data-osd-progress-color="black"] {
+    --osd-slider-progress: #000000;
+}
+html[data-osd-progress-color="theme-accent"] {
+    --osd-slider-progress: var(--jf-btn-primary-bg);
+}
+html[data-osd-progress-color="theme-inverted"] {
+    --osd-slider-progress: var(--jf-btn-primary-focus-bg);
 }
 
 /* ============================================================================
@@ -767,10 +803,10 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     left: 0;
     top: 0;
     height: 100%;
-    background: var(--osd-accent-color);
+    background: var(--osd-slider-progress);
     width: 0%;
     /* border-radius removed to ensure it touches the thumb seamlessly */
-    box-shadow: 2px 0 0 var(--osd-accent-color); /* Bridge gap to thumb center */
+    box-shadow: 2px 0 0 var(--osd-slider-progress); /* Bridge gap to thumb center */
     pointer-events: none;
     transition: width 0.1s ease-out;
 }
@@ -805,11 +841,16 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .menu-slider .osd-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    background: var(--jf-text-primary, #fff);
+    background: var(--osd-thumb-bg, var(--jf-text-primary, #fff));
     cursor: pointer;
     margin-top: 0 !important; /* Center on thin track when heights match */
     transition: height 0.1s, width 0.1s, margin-top 0.1s;
     border: none !important;
+}
+
+/* Ensure menu/settings sliders always use default text primary color, not OSD seekbar colors */
+.menu-slider .osd-slider::-webkit-slider-thumb {
+    background: var(--jf-text-primary, #fff) !important;
 }
 
 /* Player/Offset Thumbs (8px Track) */
@@ -843,7 +884,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     height: 28px !important;
     border-radius: var(--jf-border-radius) !important;
     margin-top: -10px !important;
-    background: #fff !important;
+    background: var(--osd-thumb-bg, #fff) !important;
 }
 
 /* Settings Focus (24px Thumb on 6px Track) */

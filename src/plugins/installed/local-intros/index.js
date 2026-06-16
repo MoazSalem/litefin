@@ -124,7 +124,7 @@ export default {
                 const container = document.createElement('div');
                 container.className = 'plugin-widget local-intros-widget';
                 container.innerHTML = `
-                    <button class="osd-btn local-intros-btn" tabindex="0" aria-label="${label}">
+                    <button class="local-intros-btn" tabindex="0" aria-label="${label}">
                         <span class="local-intros-label">${label}</span>
                         <span class="local-intros-arrow">▶</span>
                     </button>

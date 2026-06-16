@@ -722,6 +722,44 @@ class SettingsPage extends Page {
         )}
                     </div>
                 </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdSeekBarThumbColor">${i18n.t('OsdSeekBarThumbColor') || 'OSD Seek Bar Thumb Color'}</span>
+                        <span class="setting-description" data-i18n="OsdSeekBarThumbColorDescription">${i18n.t('OsdSeekBarThumbColorDescription') || 'Choose the color for the seek bar thumb.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-seekbar-thumb-color-select',
+            [
+                { value: 'white', label: i18n.t('OsdThumbWhite') || 'White' },
+                { value: 'black', label: i18n.t('OsdThumbBlack') || 'Black' },
+                { value: 'theme-accent', label: i18n.t('OsdThumbAccent') || 'Theme Accent' },
+                { value: 'theme-inverted', label: i18n.t('OsdThumbInverted') || 'Theme Inverted' }
+            ],
+            layoutManager.getOsdSeekBarThumbColor()
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdSeekBarProgressColor">${i18n.t('OsdSeekBarProgressColor') || 'OSD Seek Bar Progress Color'}</span>
+                        <span class="setting-description" data-i18n="OsdSeekBarProgressColorDescription">${i18n.t('OsdSeekBarProgressColorDescription') || 'Choose the color for the seek bar progress fill.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-seekbar-progress-color-select',
+            [
+                { value: 'theme-accent', label: i18n.t('OsdThumbAccent') || 'Theme Accent' },
+                { value: 'white', label: i18n.t('OsdThumbWhite') || 'White' },
+                { value: 'black', label: i18n.t('OsdThumbBlack') || 'Black' },
+                { value: 'theme-inverted', label: i18n.t('OsdThumbInverted') || 'Theme Inverted' }
+            ],
+            layoutManager.getOsdSeekBarProgressColor()
+        )}
+                    </div>
+                </div>
                 
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
@@ -5583,7 +5621,9 @@ class SettingsPage extends Page {
             'osd-button-style-select': { key: 'litefin:osdButtonStyle', type: 'local' },
             'osd-focus-border-style-select': { key: 'litefin:osdFocusBorderStyle', type: 'local' },
             'osd-button-shape-select': { key: 'litefin:osdButtonShape', type: 'local' },
-            'osd-unfocused-button-style-select': { key: 'litefin:osdUnfocusedButtonStyle', type: 'local' }
+            'osd-unfocused-button-style-select': { key: 'litefin:osdUnfocusedButtonStyle', type: 'local' },
+            'osd-seekbar-thumb-color-select': { key: 'litefin:osdSeekBarThumbColor', type: 'local' },
+            'osd-seekbar-progress-color-select': { key: 'litefin:osdSeekBarProgressColor', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -5634,6 +5674,12 @@ class SettingsPage extends Page {
                         } else if (id === 'osd-unfocused-button-style-select') {
                             // SPECIAL CASE: OSD Unfocused Button Style handled by LayoutManager
                             layoutManager.setOsdUnfocusedButtonStyle(newValue);
+                        } else if (id === 'osd-seekbar-thumb-color-select') {
+                            // SPECIAL CASE: OSD Seek Bar Thumb Color handled by LayoutManager
+                            layoutManager.setOsdSeekBarThumbColor(newValue);
+                        } else if (id === 'osd-seekbar-progress-color-select') {
+                            // SPECIAL CASE: OSD Seek Bar Progress Color handled by LayoutManager
+                            layoutManager.setOsdSeekBarProgressColor(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {

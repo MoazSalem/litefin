@@ -750,7 +750,6 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .modal-option-btn.focused .check-icon {
-    color: var(--jf-btn-primary-focus-color) !important;
 }
 
 /* Filter/Sort column layout: flex for modern/legacy, floats for ultra-legacy (Chrome 32) */
@@ -833,12 +832,12 @@ progress.card-progress::-webkit-progress-value {
 .modal-action-btn:focus,
 .modal-action-btn:hover,
 .modal-action-btn.focused {
-    background: var(--jf-accent);
+    background: var(--jf-btn-primary-bg) !important;
     /* High contrast text color calculated by ThemeUtils */
-    color: var(--jf-primary-btn-color, #ffffff);
+    color: var(--jf-btn-primary-color) !important;
     outline: none;
     transform: scale(1.05);
-    border-color: var(--jf-action-btn-active-border, transparent);
+    border-color: var(--jf-btn-primary-border) !important;
     z-index: 10;
 }
 
@@ -867,7 +866,7 @@ progress.card-progress::-webkit-progress-value {
     /* Keep secondary buttons visually distinct even when focused */
     background: rgba(var(--jf-text-primary-rgb, 255, 255, 255), 0.15);
     color: var(--jf-text-primary);
-    border: 3px solid var(--jf-accent) !important;
+    border: 3px solid var(--jf-btn-primary-bg) !important;
 }
 
 /* Redesigned Danger Button for Destructive Modal Actions (e.g. Exit, Delete) */
@@ -887,9 +886,9 @@ progress.card-progress::-webkit-progress-value {
 /* Modal Close Button Focus (Individualized) */
 .modal-close-btn:focus,
 .modal-close-btn.focused {
-    background: var(--jf-accent) !important;
-    color: var(--jf-primary-btn-color) !important;
-    border-color: var(--jf-primary-btn-color) !important;
+    background: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-btn-primary-color) !important;
+    border-color: var(--jf-btn-primary-border) !important;
     transform: scale(1.01) !important;
     outline: none !important;
 }
