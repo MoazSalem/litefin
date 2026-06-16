@@ -322,10 +322,12 @@ html[data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus
 }
 
 /* Update icon background to match item state when focused */
+html[data-sidebar-selected-color] .sidebar-item:focus .item-icon,
+html[data-sidebar-selected-color] .sidebar-item.focused .item-icon,
 .sidebar-item:focus .item-icon,
 .sidebar-item.focused .item-icon {
     background: transparent; /* Indicator handles the background */
-    color: inherit;
+    color: inherit !important;
 }
 
 /* Icon Container - Fixed width for alignment */
