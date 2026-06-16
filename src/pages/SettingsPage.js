@@ -2751,14 +2751,14 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                 'transcode-audio-codec-select',
                 [
-                    /* EAC3 (Dolby Digital Plus) — best quality, HDMI eARC / modern AVRs */
-                    { value: 'eac3', label: 'E-AC3 (Dolby Digital Plus)' },
-                    /* AC3 (Dolby Digital) — maximum legacy compatibility */
-                    { value: 'ac3', label: 'AC3 (Dolby Digital)' },
-                    /* AAC — universal, use for browsers or limited devices */
-                    { value: 'aac', label: 'AAC' }
+                    { value: 'auto', label: i18n.t('TranscodeCodecAuto') || 'Auto (Prefer E-AC3)' },
+                    { value: 'prefer_ac3', label: i18n.t('TranscodeCodecPreferAc3') || 'Prefer AC3 (with AAC fallback)' },
+                    { value: 'prefer_aac', label: i18n.t('TranscodeCodecPreferAac') || 'Prefer AAC' },
+                    { value: 'force_eac3', label: i18n.t('TranscodeCodecForceEac3') || 'Only E-AC3' },
+                    { value: 'force_ac3', label: i18n.t('TranscodeCodecForceAc3') || 'Only AC3' },
+                    { value: 'force_aac', label: i18n.t('TranscodeCodecForceAac') || 'Only AAC' }
                 ],
-                PlayerSettings.get('transcodeAudioCodec') || 'eac3'
+                PlayerSettings.get('transcodeAudioCodec') || 'auto'
             )}
                     </div>
                 </div>

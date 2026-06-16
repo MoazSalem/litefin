@@ -70,12 +70,16 @@ const DEFAULTS = {
     //   'ac3'   — AC3 / Dolby Digital: widest compatibility, capped at 640 kbps
     //             on the 5.1 layout. Best for older receivers.
     //   'aac'   — Advanced Audio Coding: stereo/multichannel, universal browser
-    //             support. Choose this on devices that can't decode AC3/EAC3
-    //             at all (e.g. phones, tablets).
+    //   'auto'        — Auto (Prefer E-AC3): defaults to EAC3 if supported/allowed, fallback to AC3 then AAC.
+    //   'prefer_ac3'  — Prefer AC3: uses AC3 first, with AAC fallback.
+    //   'prefer_aac'  — Prefer AAC.
+    //   'force_eac3'  — Force/Only E-AC3.
+    //   force_ac3'   — Force/Only AC3.
+    //   'force_aac'   — Force/Only AAC.
     //
     // NOTE: This only affects HLS transcode output. DirectPlay/DirectStream paths
     // bypass this entirely — the source audio is copied as-is in those cases.
-    transcodeAudioCodec: 'eac3',
+    transcodeAudioCodec: 'auto',
 
     // Allow FLAC audio in video containers (MKV, MP4, etc.) to DirectPlay.
     // Disabled by default: FLAC demuxing inside video containers causes a ~2s

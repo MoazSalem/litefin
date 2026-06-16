@@ -560,21 +560,29 @@ export function buildJellyfinProfile(options = {}) {
     //   'aac'  — AAC (last resort for devices that can't handle AC3/EAC3 in HLS)
     // ---------------------------------------------------------------------------
 
-    // Read user preference and build the codec list with the preferred codec first.
-    // AAC is always included as a final fallback regardless of preference.
-    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'eac3';
+    // Read user preference and build the codec list.
+    // Options: 'auto', 'prefer_ac3', 'prefer_aac', 'force_eac3', 'force_ac3', 'force_aac'.
+    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
 
     let transAudioCodecsArr;
-    if (preferredTranscodeCodec === 'ac3') {
-        // User prefers AC3 (Dolby Digital) — maximum legacy compatibility.
-        transAudioCodecsArr = ['aac', 'ac3', 'eac3'];
-    } else if (preferredTranscodeCodec === 'aac') {
-        // User prefers AAC only — skip surround codec entirely.
-        transAudioCodecsArr = ['aac'];
-    } else {
-        // Default: prefer EAC3 (Dolby Digital Plus) — better quality, modern AVRs.
-        // NOTE: DTS and TrueHD are deliberately NOT added here (see comment above).
+    if (preferredTranscodeCodec === 'auto') {
+        // Auto (Prefer E-AC3) -> E-AC3 first, then AC3, then AAC fallback
+        transAudioCodecsArr = ['eac3', 'ac3', 'aac'];
+    } else if (preferredTranscodeCodec === 'prefer_ac3') {
+        // Prefer AC3 -> AC3 first, then E-AC3, then AAC fallback
+        transAudioCodecsArr = ['ac3', 'eac3', 'aac'];
+    } else if (preferredTranscodeCodec === 'prefer_aac') {
+        // Prefer AAC -> AAC first, then E-AC3, then AC3
         transAudioCodecsArr = ['aac', 'eac3', 'ac3'];
+    } else if (preferredTranscodeCodec === 'force_eac3') {
+        // Only E-AC3
+        transAudioCodecsArr = ['eac3'];
+    } else if (preferredTranscodeCodec === 'force_ac3') {
+        // Only AC3
+        transAudioCodecsArr = ['ac3'];
+    } else {
+        // Only AAC
+        transAudioCodecsArr = ['aac'];
     }
 
     // NOTE: DTS and TrueHD are deliberately NOT added here (see comment above).

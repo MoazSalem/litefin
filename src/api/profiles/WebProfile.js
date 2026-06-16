@@ -337,24 +337,43 @@ export function buildJellyfinProfile(options = {}) {
     // override applied in getDeviceCapabilities()). This prevents the server
     // from transcoding to a codec the player truly cannot handle.
     // -------------------------------------------------------------------------
-    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'eac3';
-    let transAudioCodecs;
+    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
+    let transAudioCodecsArr = [];
 
-    if (preferredTranscodeCodec === 'eac3' && caps.eac3) {
-        // User prefers EAC3 and it is supported (probe or force-override) — use it as primary.
-        transAudioCodecs = caps.ac3 ? 'aac,eac3,ac3' : 'aac,eac3';
-    } else if (preferredTranscodeCodec === 'ac3' && caps.ac3) {
-        // User prefers AC3 and it is supported — use it as primary.
-        transAudioCodecs = caps.eac3 ? 'aac,ac3,eac3' : 'aac,ac3';
+    if (preferredTranscodeCodec === 'auto') {
+        // Auto (Prefer E-AC3)
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        transAudioCodecsArr.push('aac');
+    } else if (preferredTranscodeCodec === 'prefer_ac3') {
+        // Prefer AC3
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        transAudioCodecsArr.push('aac');
+    } else if (preferredTranscodeCodec === 'prefer_aac') {
+        // Prefer AAC
+        transAudioCodecsArr.push('aac');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+    } else if (preferredTranscodeCodec === 'force_eac3') {
+        // Only E-AC3
+        transAudioCodecsArr.push('eac3');
+    } else if (preferredTranscodeCodec === 'force_ac3') {
+        // Only AC3
+        transAudioCodecsArr.push('ac3');
     } else {
-        // Fallback: AAC only (either user chose AAC, or both AC3 and EAC3 are unsupported).
-        transAudioCodecs = 'aac';
+        // Only AAC (force_aac)
+        transAudioCodecsArr.push('aac');
     }
+
+    let transAudioCodecs = transAudioCodecsArr.join(',');
 
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = audioCodecString;
+        // Keep the custom resolved transcode audio codec list so that the server
+        // transcodes the audio to the user's preferred target codec (e.g. EAC3)
+        // instead of falling back to default browser codecs in audioCodecString.
         transVideoCodecs = generalVideoCodecs.join(',');
     }
 

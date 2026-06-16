@@ -439,23 +439,29 @@ export function buildJellyfinProfile(options = {}) {
     const transAudioCodecsArr = [];
     let transMaxAudioChannels;
 
-    // Read the user's preferred transcode audio codec ('eac3', 'ac3', or 'aac').
-    // We always ensure the preferred codec is FIRST so Jellyfin picks it when
-    // multiple options are listed. The secondary codec is included as fallback.
-    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'eac3';
+    // Read the user's preferred transcode audio codec setting.
+    // The options are: 'auto', 'prefer_ac3', 'prefer_aac', 'force_eac3', 'force_ac3', 'force_aac'.
+    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
 
     if (caps.tizenVersion >= 6) {
-        // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use full surround sound.
-        // Place the preferred codec first, then add the secondary as a fallback.
-        if (preferredTranscodeCodec === 'eac3') {
-            // User prefers E-AC3 (Dolby Digital Plus) — higher quality, modern AVRs.
+        // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use surround sound if preferred.
+        if (preferredTranscodeCodec === 'auto') {
+            // Auto (Prefer E-AC3) -> default to eac3 first, fallback to ac3.
             transAudioCodecsArr.push('eac3', 'ac3');
-        } else if (preferredTranscodeCodec === 'ac3') {
-            // User prefers AC3 (Dolby Digital) — maximum legacy compatibility.
+        } else if (preferredTranscodeCodec === 'prefer_ac3') {
+            // Prefer AC3 (Dolby Digital) -> ac3 first, fallback to eac3.
             transAudioCodecsArr.push('ac3', 'eac3');
+        } else if (preferredTranscodeCodec === 'prefer_aac') {
+            // Prefer AAC -> use aac.
+            transAudioCodecsArr.push('aac');
+        } else if (preferredTranscodeCodec === 'force_eac3') {
+            // Force E-AC3 -> only eac3.
+            transAudioCodecsArr.push('eac3');
+        } else if (preferredTranscodeCodec === 'force_ac3') {
+            // Force AC3 -> only ac3.
+            transAudioCodecsArr.push('ac3');
         } else {
-            // User prefers AAC — safest, used for problem devices or TVs
-            // that can't properly decode AC3/EAC3 at all even on Tizen 6+.
+            // Force AAC -> only aac.
             transAudioCodecsArr.push('aac');
         }
         transMaxAudioChannels = maxAudioChannels;
@@ -548,7 +554,6 @@ export function buildJellyfinProfile(options = {}) {
     let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = videoAudioCodecString;
         directAudioCodecs = videoAudioCodecString;
 
         const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
