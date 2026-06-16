@@ -411,14 +411,14 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     border: 2px solid var(--jf-osd-btn-focus-border) !important;
 }
 
-.osd-btn.active {
+.osd-btn.active:not(#osdFavoriteBtn) {
     color: var(--jf-osd-btn-bg) !important;
 }
 
-.osd-btn.active:hover,
-.osd-btn.active:focus,
-.osd-btn.active.focused,
-.osd-btn.active.magic-hover {
+.osd-btn.active:not(#osdFavoriteBtn):hover,
+.osd-btn.active:not(#osdFavoriteBtn):focus,
+.osd-btn.active:not(#osdFavoriteBtn).focused,
+.osd-btn.active:not(#osdFavoriteBtn).magic-hover {
     background: var(--jf-osd-btn-focus-bg) !important;
     color: var(--jf-osd-btn-focus-color) !important;
     border-color: var(--jf-osd-btn-focus-border) !important;

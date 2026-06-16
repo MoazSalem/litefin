@@ -1289,6 +1289,24 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdUnfocusedButtonStyle">${i18n.t('OsdUnfocusedButtonStyle') || 'OSD Unfocused Button Style'}</span>
+                        <span class="setting-description" data-i18n="OsdUnfocusedButtonStyleDescription">${i18n.t('OsdUnfocusedButtonStyleDescription') || 'Choose the style of player control buttons when they are not focused.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-unfocused-button-style-select',
+                            [
+                                { value: 'icon-only', label: i18n.t('OsdUnfocusedStyleIconOnly') || 'Icon Only' },
+                                { value: 'outline', label: i18n.t('OsdUnfocusedStyleOutline') || 'Outline' },
+                                { value: 'semi-transparent', label: i18n.t('OsdUnfocusedStyleSemiTransparent') || 'Semi-Transparent' }
+                            ],
+                            layoutManager.getOsdUnfocusedButtonStyle()
+                        )}
+                    </div>
+                </div>
+
                 <!-- Details Page Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
@@ -5562,7 +5580,8 @@ class SettingsPage extends Page {
             'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
             'osd-button-style-select': { key: 'litefin:osdButtonStyle', type: 'local' },
             'osd-focus-border-style-select': { key: 'litefin:osdFocusBorderStyle', type: 'local' },
-            'osd-button-shape-select': { key: 'litefin:osdButtonShape', type: 'local' }
+            'osd-button-shape-select': { key: 'litefin:osdButtonShape', type: 'local' },
+            'osd-unfocused-button-style-select': { key: 'litefin:osdUnfocusedButtonStyle', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -5610,6 +5629,9 @@ class SettingsPage extends Page {
                         } else if (id === 'osd-button-shape-select') {
                             // SPECIAL CASE: OSD Button Shape handled by LayoutManager
                             layoutManager.setOsdButtonShape(newValue);
+                        } else if (id === 'osd-unfocused-button-style-select') {
+                            // SPECIAL CASE: OSD Unfocused Button Style handled by LayoutManager
+                            layoutManager.setOsdUnfocusedButtonStyle(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {

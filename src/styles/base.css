@@ -481,6 +481,32 @@ html[data-osd-button-shape="icon-only"] .player-osd .osd-btn-play.focused {
     box-shadow: none !important;
 }
 
+/* 
+ * ============================================================================
+ * Player OSD Unfocused Button Style Overrides
+ * ============================================================================
+ */
+/* 1. Icon Only (Default) - Transparent background, transparent border */
+html[data-osd-unfocused-button-style="icon-only"] .player-osd .osd-btn:not(:focus):not(.focused):not(:hover):not(.active),
+html[data-osd-unfocused-button-style="icon-only"] .player-osd .osd-btn#osdFavoriteBtn:not(:focus):not(.focused):not(:hover) {
+    background: transparent !important;
+    border: 2px solid transparent !important;
+}
+
+/* 2. Outline - Transparent background, action border */
+html[data-osd-unfocused-button-style="outline"] .player-osd .osd-btn:not(:focus):not(.focused):not(:hover):not(.active),
+html[data-osd-unfocused-button-style="outline"] .player-osd .osd-btn#osdFavoriteBtn:not(:focus):not(.focused):not(:hover) {
+    background: transparent !important;
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2)) !important;
+}
+
+/* 3. Semi-Transparent - Action background, transparent border */
+html[data-osd-unfocused-button-style="semi-transparent"] .player-osd .osd-btn:not(:focus):not(.focused):not(:hover):not(.active),
+html[data-osd-unfocused-button-style="semi-transparent"] .player-osd .osd-btn#osdFavoriteBtn:not(:focus):not(.focused):not(:hover) {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 2px solid transparent !important;
+}
+
 /* Custom UI Font Overrides */
 html[data-ui-font="system"] {
     --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;

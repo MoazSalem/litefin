@@ -117,6 +117,7 @@ class LayoutManager {
         this._osdButtonStyle = 'follow-global';
         this._osdFocusBorderStyle = 'follow-global';
         this._osdButtonShape = 'circle';
+        this._osdUnfocusedButtonStyle = 'icon-only';
 
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
@@ -173,6 +174,7 @@ class LayoutManager {
         const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
         const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
         const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
+        const savedOsdUnfocusedButtonStyle = storage.getItem('litefin:osdUnfocusedButtonStyle') || 'icon-only';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -200,6 +202,7 @@ class LayoutManager {
         this.setOsdButtonStyle(savedOsdButtonStyle, false);
         this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
         this.setOsdButtonShape(savedOsdButtonShape, false);
+        this.setOsdUnfocusedButtonStyle(savedOsdUnfocusedButtonStyle, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -730,6 +733,24 @@ class LayoutManager {
         }
         log.info(`OSD button shape updated: ${shape}`);
         eventBus.emit('osdButtonShape:changed', { shape });
+    }
+
+    getOsdUnfocusedButtonStyle() {
+        return this._osdUnfocusedButtonStyle;
+    }
+
+    setOsdUnfocusedButtonStyle(style, save = true) {
+        if (!['icon-only', 'outline', 'semi-transparent'].includes(style)) {
+            log.warn(`Invalid OSD unfocused button style specified: "${style}"`);
+            return;
+        }
+        this._osdUnfocusedButtonStyle = style;
+        document.documentElement.setAttribute('data-osd-unfocused-button-style', style);
+        if (save) {
+            storage.setItem('litefin:osdUnfocusedButtonStyle', style);
+        }
+        log.info(`OSD unfocused button style updated: ${style}`);
+        eventBus.emit('osdUnfocusedButtonStyle:changed', { style });
     }
 
 
