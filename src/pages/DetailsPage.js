@@ -2473,10 +2473,6 @@ class DetailsPage extends Page {
 
             // 3. Link Actions -> See More
             this._updateLeaveDown('details-actions', 'details-see-more');
-
-            // Handle Click (Toggle)
-            // Delegate action directly to the newly defined helper method.
-            seeMoreBtn.onclick = () => this._showFullOverview();
         }
     }
 
