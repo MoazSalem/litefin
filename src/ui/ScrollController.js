@@ -142,9 +142,22 @@ class ScrollController {
             const track = container.querySelector('.vertical-scroll-track');
             if (track) {
                 const transform = track.style.transform || track.style.webkitTransform || '';
-                // Extracts the vertical translation coordinate value.
-                const match = transform.match(/translate3d\(0px,\s*-?([\d.]+)px/);
-                return match ? parseFloat(match[1]) : 0;
+                // ============================================================
+                // ROBUST TRANSLATE3D PARSING REGEX
+                // ============================================================
+                // TV browsers (such as older Tizen or WebOS models) often
+                // normalize unit values in transform strings (e.g., converting
+                // "0px" to "0"). The previous regex was hardcoded to "0px" and
+                // failed to match normalized strings, resulting in scroll offset
+                // read errors (returning 0) and poisoning offset caches.
+                //
+                // This updated regex matches:
+                //   - translate3d(
+                //   - First coordinate (X): optional sign, digits, optional px/%
+                //   - Second coordinate (Y): captured sign and digits, optional px/%
+                // ============================================================
+                const match = transform.match(/translate3d\(\s*-?[\d.]+(?:px|%)?,\s*(-?[\d.]+)(?:px|%)?/);
+                return match ? Math.abs(parseFloat(match[1])) : 0;
             }
         }
 
@@ -448,6 +461,20 @@ class ScrollController {
      * @param {boolean} [options.skipScroll=false] - Skip scroll entirely
      */
     scrollIntoView(element, config = {}, options = {}) {
+        // ====================================================================
+        // OPTION GUARD: SKIP SCROLL
+        // ====================================================================
+        // Under certain navigation contexts (such as restoring exact page states
+        // from history or back operations), the scroll container's offset has
+        // already been restored manually. In these situations, attempting to scroll
+        // the newly focused element into view can override the restored offset or
+        // cause jarring visual jumps. Setting options.skipScroll bypasses the entire
+        // scroll calculation and paint routine.
+        // ====================================================================
+        if (options.skipScroll) {
+            return;
+        }
+
         // Resolve the scroll container for this element
         const pageContent = this.getScrollContainer(element);
 
@@ -718,7 +745,10 @@ class ScrollController {
                             // entirely when navigating vertically (the card is already centered).
                             // track.offsetHeight is a synchronous layout and is expensive on Tizen.
                             const currentTransform = track.style.transform || track.style.webkitTransform || '';
-                            const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
+                            // ================================================================
+                            // Robust horizontal parsing regex matching optional units (px/%)
+                            // ================================================================
+                            const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)(?:px|%)?/);
                             const currentTransformX = match ? parseFloat(match[1]) : 0;
                             const alreadyCentered =
                                 Math.abs(currentTransformX - finalScrollLeft) < SCROLL_SNAP_THRESHOLD;
@@ -752,7 +782,10 @@ class ScrollController {
                             // the same value triggers a useless animated "wobble" on every vertical
                             // row-enter even though the horizontal position hasn't changed at all.
                             const currentTransform = track.style.transform || track.style.webkitTransform || '';
-                            const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
+                            // ================================================================
+                            // Robust horizontal parsing regex matching optional units (px/%)
+                            // ================================================================
+                            const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)(?:px|%)?/);
                             const currentTransformX = match ? parseFloat(match[1]) : 0;
                             if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
                                 if (isRtl) {

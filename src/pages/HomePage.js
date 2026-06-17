@@ -1190,13 +1190,21 @@ class HomePage extends Page {
                 state.delete('home:lastFocusedItem');
                 state.delete('home:lastFocusedItemId');
 
+                // ====================================================================
                 // Restore any captured scroll offset from NavigationState.
+                // ====================================================================
                 // Since we nullified this._pendingNavState synchronously above,
                 // restoreScrollFocusWhenReady() at the end of the pipeline is safely a no-op.
+                //
+                // We delegate this scroll positioning to ScrollController.smoothScrollTo
+                // with duration 0. This guarantees that if the user has GPU scroll mode
+                // enabled, we snap the translate3d transform of .vertical-scroll-track
+                // instead of corrupting the layout by writing to scrollTop directly.
+                // ====================================================================
                 if (restoredFocus && pendingNav) {
                     const scrollContainer = this.$('.page-content');
                     if (scrollContainer && pendingNav.scrollTop > 0) {
-                        scrollContainer.scrollTop = pendingNav.scrollTop;
+                        scrollController.smoothScrollTo(scrollContainer, pendingNav.scrollTop, 0, 'vertical');
                     }
                 }
             }
