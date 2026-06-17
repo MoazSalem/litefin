@@ -30,7 +30,7 @@ class ScreensaverManager {
         this._isVideoPlaying = false;
 
         // Screensaver settings from storage defaults
-        this._delaySeconds = parseInt(storage.getItem('pref:screensaverDelay'), 10) || 300;
+        this._delaySeconds = parseInt(storage.getItem('pref:screensaverDelay'), 10) || 0;
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
 
         this._hideBound = this.hide.bind(this);
@@ -87,7 +87,7 @@ class ScreensaverManager {
 
     _updateConfig() {
         this._delaySeconds = parseInt(storage.getItem('pref:screensaverDelay'), 10);
-        if (isNaN(this._delaySeconds)) this._delaySeconds = 300; // default 5 mins
+        if (isNaN(this._delaySeconds)) this._delaySeconds = 0; // default never
 
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
 
