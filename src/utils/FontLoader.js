@@ -264,12 +264,54 @@ class FontLoader {
 
         if (fontAttachments.length === 0) return [];
 
+        // Download all font attachments in parallel.
+        // This avoids the major sequential bottleneck when a media container has multiple fonts.
+        const downloadPromises = fontAttachments.map(async (font, idx) => {
+            const uniqueIndex = font.Index !== undefined ? font.Index : (idx + 1);
+            let url;
+            if (font.DeliveryUrl) {
+                url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;
+                const sep = url.includes('?') ? '&' : '?';
+                url += `${sep}ApiKey=${encodeURIComponent(authToken)}`;
+            } else {
+                url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?ApiKey=${encodeURIComponent(authToken)}`;
+            }
+
+            try {
+                let res;
+                if (typeof AbortController !== 'undefined') {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 5000);
+                    res = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeout);
+                } else {
+                    res = await fetch(url);
+                }
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const buffer = await res.arrayBuffer();
+                return { font, buffer, uniqueIndex };
+            } catch (fetchErr) {
+                if (fetchErr && fetchErr.name === 'AbortError') {
+                    log.warn(`Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`);
+                } else {
+                    log.warn(`Failed to download font attachment ${uniqueIndex}:`, fetchErr);
+                }
+                return null;
+            }
+        });
+
+        // In parallel, wait for the downloaded files and the ASS font names resolution
+        const [downloadedResults, resolvedAssFontnames] = await Promise.all([
+            Promise.all(downloadPromises),
+            Promise.resolve(assFontnames)
+        ]);
+
         // -----------------------------------------------------------------------
         // Build normalized maps for the ASS Fontnames
         // -----------------------------------------------------------------------
         const assMap = [];
-        if (assFontnames && assFontnames.size > 0) {
-            for (const name of assFontnames) {
+        if (resolvedAssFontnames && resolvedAssFontnames.size > 0) {
+            for (const name of resolvedAssFontnames) {
                 if (name) {
                     const norm = this._normalizeFontName(name);
                     const core = this._getCoreFontName(norm);
@@ -278,54 +320,12 @@ class FontLoader {
             }
             // log.debug(`ASS fontname map: ${assMap.length} entries`, assMap.map(a => a.original));
         }
-
         const loadedFonts = [];
-        let attachIndex = 0;
 
-        for (const font of fontAttachments) {
+        for (const result of downloadedResults) {
+            if (!result) continue;
+            const { font, buffer, uniqueIndex } = result;
             try {
-                attachIndex++;
-                const uniqueIndex = font.Index !== undefined ? font.Index : attachIndex;
-
-                let url;
-                if (font.DeliveryUrl) {
-                    url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;
-                    const sep = url.includes('?') ? '&' : '?';
-                    // Font attachments are fetched without Authorization headers — use ApiKey= (non-deprecated)
-                    url += `${sep}ApiKey=${encodeURIComponent(authToken)}`;
-                } else {
-                    // Build the standard Jellyfin attachment URL — ApiKey= is the supported query param fallback
-                    url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?ApiKey=${encodeURIComponent(authToken)}`;
-                }
-
-                // Download the font into memory so we can parse its internal name table.
-                // The 5-second timeout prevents runaway fetches when playing a transcoded
-                // stream whose original attachment URLs are no longer valid.
-                let buffer;
-                try {
-                    let res;
-                    if (typeof AbortController !== 'undefined') {
-                        const controller = new AbortController();
-                        const timeout = setTimeout(() => controller.abort(), 5000);
-                        res = await fetch(url, { signal: controller.signal });
-                        clearTimeout(timeout);
-                    } else {
-                        // Legacy fallback for WebOS 2/3 (Chrome 38/53)
-                        res = await fetch(url);
-                    }
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    buffer = await res.arrayBuffer();
-                } catch (fetchErr) {
-                    if (fetchErr && fetchErr.name === 'AbortError') {
-                        log.warn(
-                            `Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`
-                        );
-                    } else {
-                        log.warn(`Failed to download font attachment ${uniqueIndex}:`, fetchErr);
-                    }
-                    continue;
-                }
-
                 const internalNames = this._extractInternalFontNames(buffer);
                 if (internalNames.length > 0) {
                     // log.debug(`Binary Extracted Names for Attachment ${uniqueIndex}:`, internalNames);

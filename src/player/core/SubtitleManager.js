@@ -746,29 +746,48 @@ export default class SubtitleManager {
             log.debug(`Fetching ASS subtitle: ${url}`);
             
             // ================================================================
-            // Step 1: Perform the HTTP fetch of raw subtitle file content
+            // Start fetching subtitle content asynchronously
             // ================================================================
-            const response = await fetch(url);
-            
-            // ================================================================
-            // Check if the request was superseded during network transmission
-            // ================================================================
-            if (isStale()) {
-                log.info('[ASSRenderer Setup] Aborting load: session is stale after fetch');
-                return;
+            const subtitleFetchPromise = fetch(url).then(async (response) => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.text();
+            });
+
+            // Start preloading container fonts or custom font in parallel with the subtitle fetch
+            const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
+            let fontsPromise;
+
+            if (overrideAssFonts) {
+                // If override is enabled, load the custom override font in parallel
+                const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
+                fontsPromise = fontId ? FontLoader.loadFont(fontId) : Promise.resolve(false);
+            } else {
+                // Otherwise, download container fonts in parallel.
+                // We pass a promise that extracts the ASS font names once the subtitle fetch finishes.
+                const assFontnamesPromise = subtitleFetchPromise.then(content => this._extractAssFontnames(content));
+                fontsPromise = FontLoader.loadContainerFonts(
+                    this._mediaAttachments,
+                    this._serverUrl,
+                    this._itemId,
+                    this._mediaSourceId,
+                    this._authToken,
+                    assFontnamesPromise
+                );
             }
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
+
             // ================================================================
-            // Step 2: Read response body text
+            // Wait for both subtitle content to be downloaded and fonts to be loaded/registered in parallel
             // ================================================================
-            const content = await response.text();
-            
+            const [content, loadedFontsResult] = await Promise.all([
+                subtitleFetchPromise,
+                fontsPromise
+            ]);
+
             // ================================================================
-            // Check if the request was superseded during stream consumption
+            // Check if the request was superseded during network transmission or font load
             // ================================================================
             if (isStale()) {
-                log.info('[ASSRenderer Setup] Aborting load: session is stale after body read');
+                log.info('[ASSRenderer Setup] Aborting load: session is stale after fetch & font load');
                 return;
             }
 
@@ -791,82 +810,37 @@ export default class SubtitleManager {
                 });
             }
 
-            // ================================================================
-            // Step 3: Pass track data to the renderer
-            // ================================================================
-            await this._assRenderer.setTrack(content);
-            
-            // ================================================================
-            // Check if context changed or was destroyed during track parsing
-            // ================================================================
-            if (isStale()) {
-                log.info('[ASSRenderer Setup] Aborting load: session is stale after setTrack');
-                return;
-            }
-            
             // Apply current subtitle font override
-            const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
             let fontClass = null;
             let fontFamily = null;
 
-            // Extract the exact Fontname strings from the ASS [Styles] section.
-            // FontLoader will use these to register each attachment under the name
-            // the ASS file actually uses, guaranteeing a CSS font-family hit.
-            const assFontnames = this._extractAssFontnames(content);
-            // log.info(`[ASSRenderer Setup] Extracted ${assFontnames.size} ASS fontname(s):`, [...assFontnames]);
-            log.info(`[ASSRenderer Setup] Passing ${this._mediaAttachments.length} media attachments to FontLoader`);
-
-            // ================================================================
-            // Step 4: Load any container-embedded fonts asynchronously
-            // ================================================================
-            const loadedContainerFonts = await FontLoader.loadContainerFonts(
-                this._mediaAttachments, 
-                this._serverUrl, 
-                this._itemId, 
-                this._mediaSourceId, 
-                this._authToken,
-                assFontnames
-            );
-            
-            // ================================================================
-            // Check if session became stale during font attachment downloads
-            // ================================================================
-            if (isStale()) {
-                log.info('[ASSRenderer Setup] Aborting load: session is stale after loading container fonts');
-                return;
-            }
-            
-            log.info(`[ASSRenderer Setup] FontLoader returned ${loadedContainerFonts.length} fonts:`, loadedContainerFonts);
-
-            this._hasContainerFonts = loadedContainerFonts.length > 0;
-
-            if (this._hasContainerFonts && !overrideAssFonts) {
-                // Container fonts are registered under their real filenames via @font-face.
-                // We intentionally leave fontFamily = null here so _preProcessAssContent
-                // will NOT touch the Fontname field in any Style: line — each style keeps
-                // its original name, which libjass then resolves against the registered
-                // @font-face entries. Overriding with a single family (e.g. fonts[0])
-                // would incorrectly clobber every style with one font.
-                // log.info(`[ASSRenderer Setup] Using ${loadedContainerFonts.length} container font(s) for ASS; Fontname overrides disabled.`);
-            } else {
-                // log.info(`[ASSRenderer Setup] Using custom font override path. hasContainerFonts=${this._hasContainerFonts}, overrideAssFonts=${overrideAssFonts}`);
-                const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
-                if (fontId) {
-                    // ========================================================
-                    // Step 5: Load system/configured override font
-                    // ========================================================
-                    await FontLoader.loadFont(fontId);
-                    
-                    // ========================================================
-                    // Check if stale after loading system font override
-                    // ========================================================
-                    if (isStale()) {
-                        log.info('[ASSRenderer Setup] Aborting load: session is stale after system font load');
-                        return;
-                    }
-                }
+            if (overrideAssFonts) {
                 fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
                 fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+            } else {
+                this._hasContainerFonts = Array.isArray(loadedFontsResult) && loadedFontsResult.length > 0;
+                if (this._hasContainerFonts) {
+                    // Container fonts are registered under their real filenames via @font-face.
+                    // We intentionally leave fontFamily = null here so _preProcessAssContent
+                    // will NOT touch the Fontname field in any Style: line — each style keeps
+                    // its original name, which libjass then resolves against the registered
+                    // @font-face entries. Overriding with a single family (e.g. fonts[0])
+                    // would incorrectly clobber every style with one font.
+                } else {
+                    // Fallback to custom override font if no container fonts found
+                    const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
+                    if (fontId) {
+                        await FontLoader.loadFont(fontId);
+                        
+                        // Check if stale after loading fallback system font
+                        if (isStale()) {
+                            log.info('[ASSRenderer Setup] Aborting load: session is stale after fallback font load');
+                            return;
+                        }
+                    }
+                    fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
+                    fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+                }
             }
 
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
@@ -879,15 +853,34 @@ export default class SubtitleManager {
             const bottomOffset = PlayerSettings.get('subtitleBottomOffset');
             
             // ================================================================
-            // Step 6: Apply all formatting styles to the renderer
+            // Step 5: Configure styling properties on ASSRenderer upfront
+            // ----------------------------------------------------------------
+            // By applying the styling options now, we avoid an expensive re-parse 
+            // and WebRenderer/wrapper recreation cycle inside setTrack.
             // ================================================================
             await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset);
-            
+
             // ================================================================
-            // Final stale check before displaying subtitles
+            // Check if stale after applying styles
             // ================================================================
             if (isStale()) {
                 log.info('[ASSRenderer Setup] Aborting load: session is stale after applying styles');
+                return;
+            }
+
+            // ================================================================
+            // Step 6: Parse the track and create the renderer with fully-loaded fonts
+            // ----------------------------------------------------------------
+            // The file is preprocessed and parsed once, instantly using the correct
+            // customizations, margins, outline sizes, and registered fonts.
+            // ================================================================
+            await this._assRenderer.setTrack(content);
+            
+            // ================================================================
+            // Check if context changed or was destroyed during track parsing
+            // ================================================================
+            if (isStale()) {
+                log.info('[ASSRenderer Setup] Aborting load: session is stale after setTrack');
                 return;
             }
 
