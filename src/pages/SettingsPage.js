@@ -3589,13 +3589,44 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'ass-renderer-select',
-                            [
-                                { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
-                                { value: 'jassub', label: 'Jassub (WebGL/WASM, Accurate Styling)' }
-                            ],
-                            PlayerSettings.get('assRenderer')
-                        )}
+            'ass-renderer-select',
+            [
+                { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
+                { value: 'jassub', label: 'Jassub (WebGL/WASM, Accurate Styling)' }
+            ],
+            PlayerSettings.get('assRenderer')
+        )}
+                    </div>
+                </div>
+
+                <!-- Embedded Container Fonts Option (Jassub only) -->
+                <!-- Allows users to test online font downloading by bypassing embedded/attachment fonts extraction -->
+                <div class="setting-item" id="subtitle-ass-load-container-fonts-container"">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssLoadContainerFonts">${i18n.t('AssLoadContainerFonts') || 'Load Embedded Container Fonts'}</span>
+                        <span class="setting-description" data-i18n="AssLoadContainerFontsDescription">${i18n.t('AssLoadContainerFontsDescription') || 'Extract and load fonts attached directly to the media container (e.g. MKV attachments) during playback.'}</span>
+                    </div>
+                    <div class="setting-control">
+                          <button class="toggle-switch ${PlayerSettings.get('subtitleAssLoadContainerFonts') !== false ? 'active' : ''}" 
+                                  id="toggle-subtitle-ass-load-container-fonts" 
+                                  data-setting="subtitleAssLoadContainerFonts"
+                                  tabindex="0">
+                         </button>
+                     </div>
+                 </div>
+
+                <!-- Online Fonts Download Option (Jassub only) -->
+                <div class="setting-item" id="subtitle-ass-online-fonts-container" style="display: ${PlayerSettings.get('assRenderer') === 'jassub' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssOnlineFonts">${i18n.t('AssOnlineFonts') || 'Fetch Missing Fonts Online'}</span>
+                        <span class="setting-description" data-i18n="AssOnlineFontsDescription">${i18n.t('AssOnlineFontsDescription') || 'Query the Google Fonts database to fetch and render missing or fallback subtitle fonts.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('subtitleAssOnlineFonts') !== false ? 'active' : ''}" 
+                                 id="toggle-subtitle-ass-online-fonts" 
+                                 data-setting="subtitleAssOnlineFonts"
+                                 tabindex="0">
+                        </button>
                     </div>
                 </div>
 
@@ -6025,6 +6056,28 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('keepFocusOnSubtitleOffset', newValue);
                 keepFocusOffsetBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle ASS Online Fonts
+        const assOnlineFontsBtn = this.$('#toggle-subtitle-ass-online-fonts');
+        if (assOnlineFontsBtn) {
+            assOnlineFontsBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleAssOnlineFonts') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleAssOnlineFonts', newValue);
+                assOnlineFontsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle ASS Load Container Fonts
+        const assLoadContainerFontsBtn = this.$('#toggle-subtitle-ass-load-container-fonts');
+        if (assLoadContainerFontsBtn) {
+            assLoadContainerFontsBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleAssLoadContainerFonts') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleAssLoadContainerFonts', newValue);
+                assLoadContainerFontsBtn.classList.toggle('active', newValue);
             });
         }
 

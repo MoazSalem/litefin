@@ -467,13 +467,18 @@ export default class SubtitleManager {
         // SRT/VTT track is active, triggering an unwanted overlay.
         // =================================================================
         if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
+            // Check if user has enabled the override ASS fonts option.
             const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
             let fontClass = null;
             let fontFamily = null;
 
-            if (this._hasContainerFonts && !overrideAssFonts) {
-                log.info('Using container fonts for ASS; font override toggle is OFF.');
+            // If the override toggle is OFF, do not replace the font names in the ASS stylesheet
+            // with our user-configured override font (e.g. Baloo Bhaijaan 2). This allows Jassub
+            // to preserve the original fonts and look them up dynamically (locally or online).
+            if (!overrideAssFonts) {
+                log.info('Font override toggle is OFF; preserving original ASS styles/fonts.');
             } else {
+                // If the toggle is ON, load the user's preferred custom ASS font and apply its parameters.
                 const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
                 if (fontId) {
                     await FontLoader.loadFont(fontId);
@@ -762,6 +767,7 @@ export default class SubtitleManager {
 
             // Start preloading container fonts or custom font in parallel with the subtitle fetch
             const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
+            // Retrieve setting to check if container-embedded fonts extraction is allowed
             const loadContainerFontsEnabled = PlayerSettings.get('subtitleAssLoadContainerFonts') !== false;
             let fontsPromise;
 
@@ -782,6 +788,9 @@ export default class SubtitleManager {
                     assFontnamesPromise
                 );
             } else {
+                // If container fonts extraction is turned off, skip loading them entirely
+                // so Jassub falls back to remote font querying over Google Fonts.
+                log.info('Load container fonts setting is OFF; skipping attachments extraction.');
                 fontsPromise = Promise.resolve([]);
             }
 
@@ -856,11 +865,20 @@ export default class SubtitleManager {
             let fontClass = null;
             let fontFamily = null;
 
+            // Determine whether we should force our user font styling rules
+            // over the original styles defined inside the ASS file.
             if (overrideAssFonts) {
+                // Override toggle is enabled; fetch the custom font styling parameters
                 fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
                 fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             } else {
+                // Determine container fonts presence for diagnostic logging.
                 this._hasContainerFonts = Array.isArray(loadedFontsResult) && loadedFontsResult.length > 0;
+                
+                // If override is disabled, keep fontFamily and fontClass as null.
+                // This ensures the pre-processor leaves the Fontname fields untouched,
+                // so the renderer uses the original styling and can trigger online lookups.
+                log.info(`Font override toggle is OFF. Container fonts available: ${this._hasContainerFonts}`);
             }
 
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');

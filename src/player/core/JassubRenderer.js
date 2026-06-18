@@ -17,6 +17,9 @@
 import JASSUB from 'jassub';
 import FontLoader from '../../utils/FontLoader.js';
 import { logger } from '../../utils/Logger.js';
+// Fetch player setting definitions to dynamically control subtitle preferences,
+// including the toggle to allow online font fetching via external APIs.
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('JassubRenderer');
 
@@ -198,8 +201,12 @@ export default class JassubRenderer {
                 wasmUrl: getAbsoluteUrl('js/jassub-worker.wasm'),
                 modernWasmUrl: getAbsoluteUrl('js/jassub-worker-modern.wasm'),
 
-                // Restrict external query requests to local font definitions to prevent TV CPU hikes
-                queryFonts: 'local'
+                // Configure font lookup behavior based on user setting.
+                // When enabled, 'localandremote' permits JASSUB to request missing
+                // fonts dynamically from Google Fonts API, ensuring rich styling fallbacks.
+                // When disabled, 'local' blocks remote web requests, restricting queries
+                // to local pre-loaded fonts to save CPU cycles and bandwidth.
+                queryFonts: (PlayerSettings.get('subtitleAssOnlineFonts') !== false) ? 'localandremote' : 'local'
             });
 
             // Bind the active instance property

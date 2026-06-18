@@ -166,7 +166,11 @@ const DEFAULTS = {
        ------------------------------------------------------------------------- */
     assRenderer: 'libjass',
 
-    // Enable extracting and loading fonts embedded in media containers
+    // Enable fetching fonts online for ASS subtitles (Google Fonts API fallback)
+    subtitleAssOnlineFonts: true,
+
+    // Enable extracting and loading fonts embedded in media containers (e.g. MKV attachments)
+    // Turning this off allows testing online font downloading and fallbacks directly.
     subtitleAssLoadContainerFonts: true,
 
     // Drop all ASS animations (karaoke, \t, \move, fade, etc.) for performance
