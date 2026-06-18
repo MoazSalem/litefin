@@ -98,15 +98,20 @@ class LazyLoader {
             img.onload = () => {
                 img.classList.add('loaded');
 
-                // Remove shimmer from parent card-image and handle BlurHash fade out
+                // Strip the loading shimmer from the parent wrapper element
+                // to reveal the successfully loaded image underneath.
                 const parent = img.parentElement;
-                if (parent && parent.classList.contains('card-image')) {
+                if (parent) {
                     parent.classList.remove('skeleton-shimmer');
 
-                    const canvas = parent.querySelector('.blurhash-canvas');
-                    if (canvas) {
-                        canvas.classList.add('fade-out');
-                        setTimeout(() => canvas.remove(), 160);
+                    // If this is a standard card-image container, trigger the fade-out
+                    // transition on the placeholder BlurHash canvas before removing it.
+                    if (parent.classList.contains('card-image')) {
+                        const canvas = parent.querySelector('.blurhash-canvas');
+                        if (canvas) {
+                            canvas.classList.add('fade-out');
+                            setTimeout(() => canvas.remove(), 160);
+                        }
                     }
                 }
 
@@ -132,15 +137,20 @@ class LazyLoader {
         img.onload = () => {
             img.classList.add('loaded');
 
-            // Remove shimmer from parent card-image and handle BlurHash fade out
+            // Strip the loading shimmer from the parent wrapper element
+            // to reveal the successfully loaded image underneath.
             const parent = img.parentElement;
-            if (parent && parent.classList.contains('card-image')) {
+            if (parent) {
                 parent.classList.remove('skeleton-shimmer');
 
-                const canvas = parent.querySelector('.blurhash-canvas');
-                if (canvas) {
-                    canvas.classList.add('fade-out');
-                    setTimeout(() => canvas.remove(), 160);
+                // If this is a standard card-image container, trigger the fade-out
+                // transition on the placeholder BlurHash canvas before removing it.
+                if (parent.classList.contains('card-image')) {
+                    const canvas = parent.querySelector('.blurhash-canvas');
+                    if (canvas) {
+                        canvas.classList.add('fade-out');
+                        setTimeout(() => canvas.remove(), 160);
+                    }
                 }
             }
 
