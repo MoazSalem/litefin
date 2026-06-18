@@ -157,6 +157,8 @@ const modernConfig = {
                 }
             },
             {
+                // Prevent Webpack from generating duplicate hashed WASM assets.
+                // We explicitly copy the WASM files to js/ and load them from there.
                 test: /\.wasm$/,
                 type: 'asset/resource',
                 generator: {
@@ -210,6 +212,8 @@ const debugConfig = {
                 }
             },
             {
+                // Prevent Webpack from generating duplicate hashed WASM assets.
+                // We explicitly copy the WASM files to js/ and load them from there.
                 test: /\.wasm$/,
                 type: 'asset/resource',
                 generator: {
@@ -284,6 +288,8 @@ const normalConfig = {
                 }
             },
             {
+                // Prevent Webpack from generating duplicate hashed WASM assets.
+                // We explicitly copy the WASM files to js/ and load them from there.
                 test: /\.wasm$/,
                 type: 'asset/resource',
                 generator: {
@@ -364,6 +370,8 @@ const legacyConfig = {
                 }
             },
             {
+                // Prevent Webpack from generating duplicate hashed WASM assets.
+                // We explicitly copy the WASM files to js/ and load them from there.
                 test: /\.wasm$/,
                 type: 'asset/resource',
                 generator: {
@@ -477,6 +485,8 @@ const ultraLegacyConfig = {
                 }
             },
             {
+                // Prevent Webpack from generating duplicate hashed WASM assets.
+                // We explicitly copy the WASM files to js/ and load them from there.
                 test: /\.wasm$/,
                 type: 'asset/resource',
                 generator: {
