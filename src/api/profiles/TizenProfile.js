@@ -476,11 +476,7 @@ export function buildJellyfinProfile(options = {}) {
 
     let transAudioCodecs = transAudioCodecsArr.join(',');
 
-    // mp2 and mp1l2 (MPEG-1 Layer 2) are included here for the same reason they are
-    // in baseAudioCodecs: broadcast MPEGTS streams (DVB/ATSC/IPTV) commonly carry mp2
-    // audio. Without them the server sees AudioCodecNotSupported in the DirectStreamProfiles
-    // and falls back to a full transcode instead of an audio-only remux.
-    const directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3', 'mp2', 'mp1l2'];
+    const directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3'];
     if (enableDts) directAudioCodecsArr.push('dts', 'dca');
     if (enableTrueHd) directAudioCodecsArr.push('truehd');
     let directAudioCodecs = directAudioCodecsArr.join(',');
