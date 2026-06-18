@@ -329,23 +329,7 @@ export function buildJellyfinProfile(options = {}) {
             AudioCodec: videoAudioCodecString
         });
 
-        // TS/MPEGTS: declared for BOTH AVPlay and HTML5 backends on Tizen.
-        // AVPlay uses its native MPEGTS demuxer; Samsung's embedded Chromium
-        // (the HTML5 backend) uses the same underlying TV media stack and plays
-        // progressive MPEGTS natively. This is critical for the InterlacedBackendFallback
-        // path — when AVPlay can't cope with interlaced HLS segments, the player
-        // transparently restarts on HTML5 and re-requests PlaybackInfo with this
-        // profile. Without ts,mpegts here, the server sees ContainerNotSupported
-        // and transcodes the whole stream instead of directing playing it.
-        directPlayProfiles.push({
-            Container: 'ts,mpegts',
-            Type: 'Video',
-            VideoCodec: tsVideoCodecs.join(','),
-            AudioCodec: videoAudioCodecString
-        });
-
-        // Legacy/obscure containers that only AVPlay's native demuxer can handle.
-        // Chromium's HTML5 video element does not support these.
+        // AVPlay handles many legacy containers natively
         if (!isHtml5) {
             if (caps.vc1) {
                 directPlayProfiles.push({
@@ -354,6 +338,12 @@ export function buildJellyfinProfile(options = {}) {
                     AudioCodec: videoAudioCodecString
                 });
             }
+            directPlayProfiles.push({
+                Container: 'ts,mpegts',
+                Type: 'Video',
+                VideoCodec: tsVideoCodecs.join(','),
+                AudioCodec: videoAudioCodecString
+            });
             directPlayProfiles.push({
                 Container: 'm2ts',
                 Type: 'Video',
@@ -728,29 +718,28 @@ export function buildJellyfinProfile(options = {}) {
                 { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
                 /*
-                 * NOTE: The IsInterlaced=false condition was previously placed here with
-                 * IsRequired: true (non-HTML5 only), to prevent AVPlay's HLS segment parser
-                 * from crashing on interlaced H264 (PLAYER_ERROR_NOT_SUPPORTED_FORMAT).
+                 * Interlaced H264 restriction — AVPlay-only:
                  *
-                 * However, that was too broad — it rejected ALL interlaced H264 including
-                 * MPEGTS DirectPlay, where AVPlay's hardware decoder handles interlaced natively
-                 * without any issue. The crash is specific to AVPlay's HLS segment parser, which
-                 * we already avoid because:
+                 * Samsung's AVPlay HLS parser crashes (PLAYER_ERROR_NOT_SUPPORTED_FORMAT) when
+                 * it encounters interlaced H264 frames inside an HLS TS stream. The fix is to
+                 * require IsInterlaced=false in the CodecProfile so that Jellyfin will transcode
+                 * (deinterlace) before delivering the stream.
                  *
-                 *   1. DirectStreamProfiles only declares mp4 (progressive HTTP) — never HLS.
-                 *      So any DirectStream remux goes into MP4, not HLS segments.
-                 *
-                 *   2. TranscodingProfiles HLS performs a real ffmpeg encode, which automatically
-                 *      deinterlaces — the server never copies interlaced frames into HLS segments.
-                 *
-                 *   3. The InterlacedBackendFallback in JellyfinPlayer.js acts as a runtime safety
-                 *      net: if AVPlay still can't handle it, it transparently switches to HTML5.
-                 *
-                 * Removing this condition allows interlaced MPEGTS (e.g. 1080i H264 from HDHomeRun
-                 * or DVB tuners) to DirectPlay correctly on AVPlay. The container-level ts,mpegts
-                 * CodecProfile below still carries an IsRequired: false preference signal which
-                 * nudges Jellyfin toward progressive content without hard-rejecting interlaced.
+                 * The HTML5/Chromium backend Software H264 decoder is fully spec-compliant and
+                 * handles interlaced content natively — no deinterlacing transcode needed there.
+                 * We therefore skip this condition when the caller has indicated html5 backend,
+                 * allowing the server to direct-stream (or direct-play) interlaced content.
                  */
+                ...(!isHtml5
+                    ? [
+                          {
+                              Condition: 'Equals',
+                              Property: 'IsInterlaced',
+                              Value: 'false',
+                              IsRequired: true
+                          }
+                      ]
+                    : []),
                 ...hdrCondition
             ]
         },
@@ -767,18 +756,18 @@ export function buildJellyfinProfile(options = {}) {
             ]
         },
         // -----------------------------------------------------------------------
-        // Soft interlaced preference for TS/MPEGTS DirectPlay.
+        // Block interlaced TS/MPEGTS from DirectPlay.
         //
-        // IsRequired: false means Jellyfin treats this as a preference, NOT a hard
-        // block — interlaced MPEGTS content can still be DirectPlayed. AVPlay's
-        // hardware decoder handles interlaced H264 (e.g. 1080i DVB/ATSC/HDHomeRun)
-        // natively in progressive HTTP TS streams. The crash risk only arises in
-        // HLS *segmented* streams, which can't happen here because:
-        //   - DirectStreamProfiles only declares mp4 (progressive HTTP, never HLS)
-        //   - HLS TranscodingProfiles do a real ffmpeg encode (auto-deinterlace)
+        // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
+        // interlaced H.264. When we include ts/mpegts in DirectPlayProfiles,
+        // the server evaluates these CodecProfile conditions to determine if
+        // DirectPlay is actually viable.
         //
-        // This soft condition just nudges Jellyfin to prefer progressive sources
-        // when both interlaced and progressive options are available.
+        // Without this, Jellyfin opens a 'heavy_' pre-transcode session, then
+        // fails at runtime with DirectPlayError — causing FFmpeg to crash.
+        // With this, the server issues ContainerNotSupported immediately and
+        // opens a 'native_' capture + HLS transcode pipeline, which is exactly
+        // what jellyfin-web does and what works correctly.
         // -----------------------------------------------------------------------
         {
             Type: 'Video',
