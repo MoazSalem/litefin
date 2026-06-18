@@ -403,17 +403,33 @@ export default class JassubRenderer {
         }
     }
 
-    /**
-     * Safely dispose the current Jassub instance
-     * @private
-     */
     _teardownJassub() {
         if (this._jassub) {
+            // Retrieve the direct Web Worker instance reference from JASSUB.
+            const worker = this._jassub._worker;
+
             try {
+                // Terminate the Web Worker thread synchronously and immediately.
+                // Jassub's built-in destroy() is async and awaits this.ready before terminating.
+                // If the worker has hung, failed compilation, or is in the middle of loading,
+                // the built-in destroy will stall or fail, leaking the thread and causing Tizen TV to crawl.
+                if (worker) {
+                    log.info('Directly terminating Jassub Web Worker thread to prevent resource leaks...');
+                    worker.terminate();
+                }
+            } catch (err) {
+                log.warn('Directly terminating Jassub Web Worker failed:', err);
+            }
+
+            try {
+                // Call Jassub's original destroy to execute DOM cleanup, RemoveListeners,
+                // and clear state flags (e.g. _destroyed, _canvas).
                 this._jassub.destroy();
             } catch (e) {
-                log.warn('Error destroying Jassub instance:', e);
+                log.warn('Error destroying Jassub instance wrapper:', e);
             }
+
+            // Remove the instance reference to allow garbage collection
             this._jassub = null;
         }
     }
