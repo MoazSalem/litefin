@@ -71,6 +71,14 @@ If Litefin is useful to you, please consider supporting the development:
   <table border="0">
     <tr>
       <td align="center" width="120">
+        <a href="https://github.com/meric426">
+          <img src="https://github.com/meric426.png?s=100" width="80" alt="Martin Ericson" />
+          <br />
+          <br />
+          <b>Martin Ericson</b>
+        </a>
+      </td>
+      <td align="center" width="120">
         <a href="https://github.com/DatAres37">
           <img src="https://github.com/DatAres37.png?s=100" width="80" alt="DatAres37" />
           <br />
