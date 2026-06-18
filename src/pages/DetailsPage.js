@@ -2228,7 +2228,28 @@ class DetailsPage extends Page {
 
     async _loadNextUp() {
         try {
-            const response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
+            let response;
+            
+            // Check if the current server is Emby. Emby ignores the SeriesId parameter
+            // on the /Shows/NextUp endpoint, so we fall back to querying the first
+            // unplayed episode of the series via /Items, which matches NextUp logic.
+            if (api.isEmby()) {
+                // Fetch the oldest unplayed episode of this series.
+                response = await api.getItems({
+                    ParentId: this._itemId,
+                    Recursive: true,
+                    IncludeItemTypes: 'Episode',
+                    Limit: 1,
+                    Filters: 'IsUnplayed',
+                    SortBy: 'SortName',
+                    // Request all necessary fields for rendering the next up card.
+                    Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                });
+            } else {
+                // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
+                response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
+            }
+            
             this._nextUp = response.Items || [];
 
             if (this._nextUp.length > 0) {
@@ -2968,7 +2989,24 @@ class DetailsPage extends Page {
                         }
                     } else {
                         // 1. Try to get "Next Up" for this series
-                        const nextUp = await api.getNextUp({ SeriesId: this._item.Id, Limit: 1 });
+                        let nextUp;
+                        if (api.isEmby()) {
+                            // On Emby, /Shows/NextUp does not filter by SeriesId.
+                            // We fetch the oldest unplayed episode of the series via /Items instead.
+                            nextUp = await api.getItems({
+                                ParentId: this._item.Id,
+                                Recursive: true,
+                                IncludeItemTypes: 'Episode',
+                                Limit: 1,
+                                Filters: 'IsUnplayed',
+                                SortBy: 'SortName',
+                                Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                            });
+                        } else {
+                            // On Jellyfin, query next up directly using SeriesId parameter.
+                            nextUp = await api.getNextUp({ SeriesId: this._item.Id, Limit: 1 });
+                        }
+
                         if (nextUp && nextUp.Items && nextUp.Items.length > 0) {
                             itemToPlay = nextUp.Items[0];
                             // Auto-resume if it has progress

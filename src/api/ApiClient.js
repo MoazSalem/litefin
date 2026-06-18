@@ -76,6 +76,24 @@ export class ApiClient {
         return this._userId;
     }
 
+    /**
+     * Check if the currently connected server is an Emby instance.
+     * We determine this by checking the public product name returned
+     * during the initial server discovery/handshake.
+     *
+     * @returns {boolean} True if the server identifies as Emby.
+     */
+    isEmby() {
+        // Retrieve the server information stored in global application state.
+        const info = state.get('server:info') || {};
+        
+        // Inspect the ProductName field to see if it targets Emby.
+        const isEmbyInstance = !!(info.ProductName && info.ProductName.toLowerCase().includes('emby'));
+        
+        return isEmbyInstance;
+    }
+
+
     // ========================================================================
     // Configuration Methods
     // ========================================================================
