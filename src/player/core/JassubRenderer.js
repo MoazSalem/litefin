@@ -20,6 +20,7 @@ import { logger } from '../../utils/Logger.js';
 // Fetch player setting definitions to dynamically control subtitle preferences,
 // including the toggle to allow online font fetching via external APIs.
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import SubtitleStyles from '../../utils/SubtitleStyles.js';
 
 const log = logger.create('JassubRenderer');
 
@@ -152,8 +153,16 @@ export default class JassubRenderer {
             const getAbsoluteUrl = (relPath) => new URL(relPath, window.location.href).href;
 
             // Resolve the default font family name from style overrides.
-            // If none is selected or it is 'null', fall back to 'Roboto'.
-            const activeDefaultFont = (this._fontFamily && this._fontFamily !== 'null') ? this._fontFamily : 'Roboto';
+            // Priority order:
+            //   1. The active per-track font override (_fontFamily, set when the override toggle is ON)
+            //   2. The font the user has selected in the ASS font override setting (subtitleFontAss)
+            //   3. Final safety-net: 'Roboto' (always available as a bundled asset)
+            // This ensures the libass fallback font matches what the user has chosen, even when
+            // the override toggle is not rewriting ASS stylesheet font names.
+            const overrideFontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+            const activeDefaultFont = (this._fontFamily && this._fontFamily !== 'null')
+                ? this._fontFamily
+                : (overrideFontFamily || 'Roboto');
 
             // Initialize the JASSUB instance and assign to a local reference.
             // Storing this locally prevents concurrent setTrack executions from
