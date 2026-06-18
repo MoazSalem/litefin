@@ -414,12 +414,13 @@ export function buildJellyfinProfile(options = {}) {
     // enableEac3 force-state setting. We reference it directly here — any
     // 'enable'/'disable' override has already been baked into caps.eac3.
     // -------------------------------------------------------------------------
-    const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    const audioCodecs = [];
+    if (caps.eac3) audioCodecs.push('eac3'); // caps.eac3 already reflects force-state override
+    if (caps.ac3) audioCodecs.push('ac3');
+    audioCodecs.push('aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm');
     if (caps.webosVersion >= 4) {
         audioCodecs.push('opus');
     }
-    if (caps.ac3) audioCodecs.push('ac3');
-    if (caps.eac3) audioCodecs.push('eac3'); // caps.eac3 already reflects force-state override
     if (enableDts) audioCodecs.push('dts', 'dca');
     if (enableTrueHd) audioCodecs.push('truehd');
 

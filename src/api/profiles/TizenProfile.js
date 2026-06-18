@@ -233,11 +233,11 @@ export function buildJellyfinProfile(options = {}) {
     const enableFlacInVideo = PlayerSettings.get('enableFlacInVideo');
 
     // Base codec list shared by all audio contexts.
-    // mp2 (MPEG-1 Layer 2) is included because it is the standard audio codec for
-    // broadcast Live TV (DVB/MPEG-TS) streams in Europe and elsewhere. Without it,
-    // Jellyfin will set AudioCodecNotSupported and force a full transcode for Live TV.
-    // AVPlay handles mp2 natively in TS containers — no transcode needed.
-    const baseAudioCodecs = [
+    // Place EAC3 and AC3 first so they are preferred over AAC in DirectPlay lists.
+    const baseAudioCodecs = [];
+    if (caps.eac3) baseAudioCodecs.push('eac3');
+    if (caps.ac3) baseAudioCodecs.push('ac3');
+    baseAudioCodecs.push(
         'aac',
         'mp3',
         'mp2',
@@ -248,10 +248,8 @@ export function buildJellyfinProfile(options = {}) {
         'pcm_s16le',
         'pcm_s24le',
         'aac_latm'
-    ];
+    );
     if (caps.opus) baseAudioCodecs.push('opus');
-    if (caps.ac3) baseAudioCodecs.push('ac3');
-    if (caps.eac3) baseAudioCodecs.push('eac3');
     if (caps.ac4) baseAudioCodecs.push('ac4');
     if (caps.mpegh) baseAudioCodecs.push('mpegh');
     if (caps.wma) baseAudioCodecs.push('wma');

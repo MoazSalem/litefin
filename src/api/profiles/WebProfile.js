@@ -262,10 +262,12 @@ export function buildJellyfinProfile(options = {}) {
     const trueHdSetting = PlayerSettings.get('enableTrueHd');
     const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
 
-    // Standard web audio
-    const audioCodecs = ['aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav'];
-    if (caps.ac3) audioCodecs.push('ac3');
+    // Standard web audio. Place EAC3 and AC3 first so they are preferred
+    // over AAC in the DirectPlay lists when supported or force-enabled.
+    const audioCodecs = [];
     if (caps.eac3) audioCodecs.push('eac3');
+    if (caps.ac3) audioCodecs.push('ac3');
+    audioCodecs.push('aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav');
     if (enableDts) audioCodecs.push('dts', 'dca');
     if (enableTrueHd) audioCodecs.push('truehd');
 
