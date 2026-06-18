@@ -22,6 +22,24 @@ import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
 
+/*
+ * ResizeObserver polyfill — MUST be applied before `new JASSUB()` is ever called.
+ *
+ * JASSUB uses ResizeObserver as a class field initializer:
+ *   _ro = new ResizeObserver(...)
+ * This runs unconditionally at construction time, so if ResizeObserver is missing
+ * the app crashes immediately. WebOS 5.0 (Chromium 68) does not ship ResizeObserver.
+ *
+ * @juggle/resize-observer is a spec-compliant pure-JS implementation with no
+ * native dependencies, making it safe to run on any Chromium version.
+ * We only install the polyfill when the native API is absent to avoid
+ * overriding a potentially superior platform implementation.
+ */
+import { ResizeObserver as ResizeObserverPolyfill } from '@juggle/resize-observer';
+if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = ResizeObserverPolyfill;
+}
+
 const log = logger.create('JassubRenderer');
 
 export default class JassubRenderer {

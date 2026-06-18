@@ -446,6 +446,8 @@ export const MediaHelper = {
         }
 
         // Append auth token only if the DeliveryUrl doesn't already include one.
+        // Jellyfin bakes ApiKey into DeliveryUrl for some subtitle track types —
+        // appending it again would produce a duplicate (?ApiKey=xxx&ApiKey=xxx).
         if (!url.includes(authKey + '=')) {
             const separator = url.includes('?') ? '&' : '?';
             url += `${separator}${authKey}=${encodeURIComponent(authToken)}`;

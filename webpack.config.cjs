@@ -262,7 +262,10 @@ const normalConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|jassub)[\\/])/,
+                // Whitelist: jassub + deps must be transpiled — they ship modern ES6+ syntax
+                // that older Chromium builds on Tizen 5.0 / WebOS 5.0 cannot execute natively.
+                // @juggle/resize-observer is pure ESM and polyfills the missing ResizeObserver API.
+                exclude: /node_modules[\\/](?!(screenfull|jassub|abslink|lfa-ponyfill|rvfc-polyfill|throughput|@juggle[\\/]resize-observer)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -344,7 +347,9 @@ const legacyConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|jassub)[\\/])/,
+                // Whitelist: jassub + deps must be transpiled for Chromium 47 (Tizen 3 / webOS 4).
+                // @juggle/resize-observer is pure ESM and polyfills the missing ResizeObserver API.
+                exclude: /node_modules[\\/](?!(screenfull|jassub|abslink|lfa-ponyfill|rvfc-polyfill|throughput|@juggle[\\/]resize-observer)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -450,7 +455,9 @@ const ultraLegacyConfig = {
         rules: [
             {
                 test: /\.m?js$/,
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|jassub)[\\/])/,
+                // Whitelist: jassub + all its runtime deps for Chromium 32 (Tizen 2.x / WebOS 1.x).
+                // @juggle/resize-observer is pure ESM and polyfills the missing ResizeObserver API.
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|jassub|abslink|lfa-ponyfill|rvfc-polyfill|throughput|@juggle[\\/]resize-observer)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {

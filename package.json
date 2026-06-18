@@ -81,6 +81,7 @@
     },
     "dependencies": {
         "@jellyfin/libass-wasm": "4.2.4",
+        "@juggle/resize-observer": "^3.4.0",
         "css-vars-ponyfill": "^2.4.9",
         "hls.js": "^1.6.15",
         "jassub": "^2.5.6",

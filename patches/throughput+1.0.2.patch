@@ -1,0 +1,79 @@
+diff --git a/node_modules/throughput/index.js b/node_modules/throughput/index.js
+index 228b1b0..7e99c1f 100644
+--- a/node_modules/throughput/index.js
++++ b/node_modules/throughput/index.js
+@@ -1,10 +1,27 @@
++/*
++ * throughput — sliding-window bandwidth / frame-rate measurer.
++ *
++ * PATCHED for Litefin: converted from CommonJS (module.exports) to ES module
++ * (export default) so that `jassub/dist/debug.js` can do:
++ *
++ *   import throughput from 'throughput';
++ *
++ * without Webpack emitting "export 'default' was not found" errors during the
++ * legacy / normal Babel-transpiled builds.
++ *
++ * Original source: https://github.com/ThaUnknown/throughput
++ */
++
+ const hrtime = typeof process !== 'undefined' && !!process.hrtime
+ const maxTick = 65535
+ const resolution = 10
++
++/* Time base differs between Node (hrtime, nanoseconds) and browser (ms) */
+ const timeDiff = hrtime
+   ? 1e9 / resolution
+   : 1e3 / resolution
+ 
++/* High-resolution timestamp, platform-independent */
+ const now = hrtime
+   ? () => {
+       const [seconds, nanoseconds] = process.hrtime()
+@@ -14,11 +31,17 @@ const now = hrtime
+ 
+ /** @param {number} start */
+ function getTick (start) {
++  /* Scale elapsed time into a 16-bit circular tick counter */
+   return (now() - start) / timeDiff & maxTick
+ }
+ 
+-/** @param {number} seconds */
+-module.exports = function (seconds) {
++/**
++ * Create a sliding-window throughput meter.
++ * @param {number} seconds - Window size in seconds (default 5)
++ * @returns {(delta?: number) => number} - Call with delta bytes/frames to
++ *   record, returns the rolling rate over the window.
++ */
++function throughput (seconds) {
+   const start = now()
+ 
+   const size = resolution * (seconds || 5)
+@@ -32,6 +55,7 @@ module.exports = function (seconds) {
+     if (dist > size) dist = size
+     last = tick
+ 
++    /* Advance the circular buffer, carrying the last value forward */
+     while (dist--) {
+       if (pointer === size) pointer = 0
+       buffer[pointer] = buffer[pointer === 0 ? size - 1 : pointer - 1]
+@@ -45,6 +69,18 @@ module.exports = function (seconds) {
+     /** @type {number} */
+     const btm = buffer.length < size ? 0 : buffer[pointer === size ? 0 : pointer]
+ 
++    /* Return the rate averaged over the actual window length */
+     return buffer.length < resolution ? top : (top - btm) * resolution / buffer.length
+   }
+ }
++
++/*
++ * ES module default export — consumed by jassub/dist/debug.js as:
++ *   import throughput from 'throughput'
++ *
++ * Webpack handles CJS require() interop automatically, so no
++ * module.exports assignment is needed (and it would be illegal here
++ * since this file now uses ESM export syntax).
++ */
++export default throughput
++
