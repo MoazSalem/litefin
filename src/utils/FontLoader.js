@@ -90,7 +90,30 @@ class FontLoader {
         try {
             // Method 1: Font Loading API
             if (document.fonts && document.fonts.load) {
+                /*
+                 * -------------------------------------------------------------
+                 * Stage 1: Invoke Font API Pre-load
+                 * -------------------------------------------------------------
+                 * Tell the browser's layout engine to immediately schedule and
+                 * download the specified font-family name binary.
+                 * -------------------------------------------------------------
+                 */
                 await document.fonts.load(`16px "${fontFamily}"`);
+
+                /*
+                 * -------------------------------------------------------------
+                 * Stage 2: Await Layout Engine Stabilization
+                 * -------------------------------------------------------------
+                 * Standard Font Face loading is asynchronous. Even though load()
+                 * resolved, the engine might not have finished rasterizing or
+                 * linking the font layout tables. Awaiting document.fonts.ready
+                 * guarantees the font is fully active and ready to draw.
+                 * -------------------------------------------------------------
+                 */
+                if (document.fonts.ready) {
+                    await document.fonts.ready;
+                }
+
                 log.debug(`Font loaded via API: ${fontFamily}`);
                 this._loadedStaticFonts.add(fontId);
                 return true;
@@ -478,6 +501,31 @@ class FontLoader {
                 log.warn(`Failed to load container font ${font.Name}:`, e);
             }
         }
+
+        /*
+         * ---------------------------------------------------------------------
+         * Global Font Engine Synchronization
+         * ---------------------------------------------------------------------
+         * When the 'awaitTracksBeforePlayback' setting is active, we must ensure
+         * that the TV browser has completely parsed, validated, and registered
+         * all newly added FontFace objects.
+         *
+         * If the platform supports document.fonts.ready, we block execution
+         * here to let the renderer resolve all font descriptors. This prevents
+         * layout recalculations and font flashes when the first ASS subtitle
+         * frames are rasterized to canvas.
+         * ---------------------------------------------------------------------
+         */
+        if (window.FontFace && document.fonts && document.fonts.ready) {
+            try {
+                log.debug('Awaiting document.fonts.ready for container fonts...');
+                await document.fonts.ready;
+                log.debug('All registered container fonts are layout-ready.');
+            } catch (readyErr) {
+                log.warn('document.fonts.ready failed to resolve:', readyErr);
+            }
+        }
+
         return loadedFonts;
     }
 }
