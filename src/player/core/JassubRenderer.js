@@ -148,8 +148,10 @@ export default class JassubRenderer {
             // ========================================================================
             const getAbsoluteUrl = (relPath) => new URL(relPath, window.location.href).href;
 
-            // Initialize the JASSUB instance
-            this._jassub = new JASSUB({
+            // Initialize the JASSUB instance and assign to a local reference.
+            // Storing this locally prevents concurrent setTrack executions from
+            // referencing or modifying state values of incorrect instances.
+            const jassub = new JASSUB({
                 // Attach the video and canvas element bindings
                 video: this._videoElement,
                 canvas: this._canvas,
@@ -168,9 +170,19 @@ export default class JassubRenderer {
                 queryFonts: 'local'
             });
 
-            // Wait for WASM initialization to complete
-            await this._jassub.ready;
+            // Bind the active instance property
+            this._jassub = jassub;
+
+            // Wait for WASM initialization to complete on the local reference
+            await jassub.ready;
             log.info('Jassub WebAssembly engine ready');
+
+            // Guard against race conditions where a newer setTrack call has already
+            // overwritten the active Jassub instance while we were awaiting ready.
+            if (this._jassub !== jassub) {
+                log.info('Discarding obsolete Jassub initialization pass');
+                return;
+            }
 
             // Force initial layout pass
             this._resizeRenderer();
@@ -295,6 +307,7 @@ export default class JassubRenderer {
      * @private
      */
     _setupDOM() {
+        // Create the parent wrapper container if it does not already exist
         if (!this._wrapper) {
             this._wrapper = document.createElement('div');
             this._wrapper.className = 'jassub-wrapper';
@@ -305,17 +318,27 @@ export default class JassubRenderer {
             this._wrapper.style.height = '100%';
             this._wrapper.style.pointerEvents = 'none';
 
-            // High priority z-index overlay matching PGSRenderer z-index
+            // Align overlay layering matching PGS Subtitles priority
             const isUltraLegacy = document.documentElement.getAttribute('data-layout-tier') === 'ultra-legacy';
             this._wrapper.style.zIndex = isUltraLegacy ? '50' : '1';
 
-            this._canvas = document.createElement('canvas');
-            this._canvas.style.position = 'absolute';
-            this._canvas.style.pointerEvents = 'none';
-
-            this._wrapper.appendChild(this._canvas);
             this._container.appendChild(this._wrapper);
         }
+
+        // Web Assembly / Offscreen Canvas requires a new element to be generated
+        // when resetting the track session. Re-using the same canvas and calling
+        // transferControlToOffscreen() twice throws an InvalidStateError.
+        if (this._canvas) {
+            this._canvas.remove();
+        }
+
+        // Generate a clean HTMLCanvasElement for the new rendering instance
+        this._canvas = document.createElement('canvas');
+        this._canvas.style.position = 'absolute';
+        this._canvas.style.pointerEvents = 'none';
+
+        // Bind the element within our OSD container hierarchy
+        this._wrapper.appendChild(this._canvas);
     }
 
     /**
