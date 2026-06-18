@@ -3576,12 +3576,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
                 
-                <!-- -------------------------------------------------------------
-                   ASS/SSA Subtitle Rendering Engine Option
-                   Allows users on newer TV models to enable Jassub (WASM/WebGL)
-                   for high-fidelity styled anime subtitles, while keeping the
-                   fallback option to libjass (DOM) for older TVs.
-                   ------------------------------------------------------------- -->
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="AssRenderer">${i18n.t('AssRenderer') || 'ASS Subtitle Renderer'}</span>
@@ -3592,55 +3587,8 @@ class SettingsPage extends Page {
             'ass-renderer-select',
             [
                 { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
+                { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' },
                 { value: 'jassub', label: 'Jassub (WebGL/WASM, Accurate Styling)' }
-            ],
-            PlayerSettings.get('assRenderer')
-        )}
-                    </div>
-                </div>
-
-                <!-- Embedded Container Fonts Option (Jassub only) -->
-                <!-- Allows users to test online font downloading by bypassing embedded/attachment fonts extraction -->
-                <div class="setting-item" id="subtitle-ass-load-container-fonts-container"">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="AssLoadContainerFonts">${i18n.t('AssLoadContainerFonts') || 'Load Embedded Container Fonts'}</span>
-                        <span class="setting-description" data-i18n="AssLoadContainerFontsDescription">${i18n.t('AssLoadContainerFontsDescription') || 'Extract and load fonts attached directly to the media container (e.g. MKV attachments) during playback.'}</span>
-                    </div>
-                    <div class="setting-control">
-                          <button class="toggle-switch ${PlayerSettings.get('subtitleAssLoadContainerFonts') !== false ? 'active' : ''}" 
-                                  id="toggle-subtitle-ass-load-container-fonts" 
-                                  data-setting="subtitleAssLoadContainerFonts"
-                                  tabindex="0">
-                         </button>
-                     </div>
-                 </div>
-
-                <!-- Online Fonts Download Option (Jassub only) -->
-                <div class="setting-item" id="subtitle-ass-online-fonts-container" style="display: ${PlayerSettings.get('assRenderer') === 'jassub' ? '' : 'none'}">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="AssOnlineFonts">${i18n.t('AssOnlineFonts') || 'Fetch Missing Fonts Online'}</span>
-                        <span class="setting-description" data-i18n="AssOnlineFontsDescription">${i18n.t('AssOnlineFontsDescription') || 'Query the Google Fonts database to fetch and render missing or fallback subtitle fonts.'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('subtitleAssOnlineFonts') !== false ? 'active' : ''}" 
-                                 id="toggle-subtitle-ass-online-fonts" 
-                                 data-setting="subtitleAssOnlineFonts"
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="AssRenderer">${i18n.t('AssRenderer') || 'ASS Subtitle Renderer'}</span>
-                        <span class="setting-description" data-i18n="AssRendererDescription">${i18n.t('AssRendererDescription') || 'Choose the rendering engine for ASS/SSA subtitle styling.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-            'ass-renderer-select',
-            [
-                { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
-                { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
             ],
             PlayerSettings.get('assRenderer')
         )}

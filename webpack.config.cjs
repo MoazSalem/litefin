@@ -32,7 +32,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 /**
  * Factory function to generate Webpack plugins required for different tiers.
  * Supports customizing the application icon source.
- * 
+ *
  * @param {string} tier - The build tier ('modern' or 'legacy')
  * @param {object} [options] - Additional options to configure build output
  * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'assets/icon.png')
@@ -40,7 +40,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 function getPlugins(tier, options = {}) {
     // Determine the build tier, falling back to 'modern' by default
     const buildTier = tier || 'modern';
-    
+
     // Retrieve the source icon path, defaulting to standard icon.png in assets/
     const iconSrc = options.iconSrc || 'assets/icon.png';
 
@@ -85,10 +85,12 @@ function getPlugins(tier, options = {}) {
                 to: 'assets/fonts/default.woff2',
                 noErrorOnMissing: true
             },
-            {   from: 'node_modules/jassub/dist/wasm/jassub-worker.wasm', 
-                to: 'js/jassub-worker.wasm' },
-            {   from: 'node_modules/jassub/dist/wasm/jassub-worker-modern.wasm', 
-                to: 'js/jassub-worker-modern.wasm', noErrorOnMissing: true },
+            { from: 'node_modules/jassub/dist/wasm/jassub-worker.wasm', to: 'js/jassub-worker.wasm' },
+            {
+                from: 'node_modules/jassub/dist/wasm/jassub-worker-modern.wasm',
+                to: 'js/jassub-worker-modern.wasm',
+                noErrorOnMissing: true
+            }
         );
     }
 
@@ -265,7 +267,8 @@ const normalConfig = {
                 // Whitelist: jassub + deps must be transpiled — they ship modern ES6+ syntax
                 // that older Chromium builds on Tizen 5.0 / WebOS 5.0 cannot execute natively.
                 // @juggle/resize-observer is pure ESM and polyfills the missing ResizeObserver API.
-                exclude: /node_modules[\\/](?!(screenfull|jassub|abslink|lfa-ponyfill|rvfc-polyfill|throughput|@juggle[\\/]resize-observer)[\\/])/,
+                exclude:
+                    /node_modules[\\/](?!(screenfull|jassub|abslink|lfa-ponyfill|rvfc-polyfill|throughput|@juggle[\\/]resize-observer)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -318,8 +321,10 @@ const legacyConfig = {
         hints: 'warning'
     },
     entry: {
-        main: ['url-search-params-polyfill', './src/index.js'],
-        'jassub-worker': './node_modules/jassub/dist/worker/worker.js'
+        // Jassub (WASM/WebGL) is excluded from this build tier — the target
+        // platforms (Chromium 47) do not support OffscreenCanvas.transferControlToOffscreen.
+        // The JassubRenderer is replaced with a no-op stub via NormalModuleReplacementPlugin.
+        main: ['url-search-params-polyfill', './src/index.js']
     },
 
     output: {
@@ -330,7 +335,6 @@ const legacyConfig = {
 
     optimization: {
         splitChunks: {
-            chunks: (chunk) => chunk.name !== 'jassub-worker',
             maxSize: 100000
         },
         minimizer: ['...', new CssMinimizerPlugin()]
@@ -347,9 +351,9 @@ const legacyConfig = {
         rules: [
             {
                 test: /\.js$/,
-                // Whitelist: jassub + deps must be transpiled for Chromium 47 (Tizen 3 / webOS 4).
-                // @juggle/resize-observer is pure ESM and polyfills the missing ResizeObserver API.
-                exclude: /node_modules[\\/](?!(screenfull|jassub|abslink|lfa-ponyfill|rvfc-polyfill|throughput|@juggle[\\/]resize-observer)[\\/])/,
+                // Only screenfull needs transpilation from node_modules in this tier —
+                // jassub and all its deps are excluded via the stub replacement below.
+                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -392,6 +396,17 @@ const legacyConfig = {
         new webpack.NormalModuleReplacementPlugin(
             /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
             path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+        ),
+        /*
+         * Replace JassubRenderer with a throw-only stub so jassub, abslink,
+         * lfa-ponyfill, rvfc-polyfill, throughput, and @juggle/resize-observer
+         * are never pulled into the legacy bundle. The stub constructor throws
+         * immediately, which SubtitleManager's try/catch catches and falls back
+         * to the ASSRenderer (libjass) path.
+         */
+        new webpack.NormalModuleReplacementPlugin(
+            /src[\/\\]player[\/\\]core[\/\\]JassubRenderer\.js$/,
+            path.resolve(__dirname, 'src/player/core/JassubRenderer.legacy.js')
         )
     ]
 };
@@ -428,7 +443,6 @@ const ultraLegacyConfig = {
         'url-search-params-polyfill', // URLSearchParams for Chrome 32
         './src/index.js'
     ],
-    'jassub-worker': './node_modules/jassub/dist/worker/worker.js',
 
     output: {
         path: path.resolve(__dirname, 'dist/ultra-legacy'),
@@ -438,7 +452,6 @@ const ultraLegacyConfig = {
 
     optimization: {
         splitChunks: {
-            chunks: (chunk) => chunk.name !== 'jassub-worker',
             maxSize: 100000
         },
         minimizer: ['...', new CssMinimizerPlugin()]
@@ -455,9 +468,10 @@ const ultraLegacyConfig = {
         rules: [
             {
                 test: /\.m?js$/,
-                // Whitelist: jassub + all its runtime deps for Chromium 32 (Tizen 2.x / WebOS 1.x).
-                // @juggle/resize-observer is pure ESM and polyfills the missing ResizeObserver API.
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|jassub|abslink|lfa-ponyfill|rvfc-polyfill|throughput|@juggle[\\/]resize-observer)[\\/])/,
+                // Only screenfull, css-vars-ponyfill, and libpgs need ESM transpilation
+                // from node_modules in this tier — jassub and all its deps are excluded
+                // via the stub replacement below.
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -509,7 +523,7 @@ const ultraLegacyConfig = {
          *   1. A separate HTML template (index.ultra-legacy.html) that includes the
          *      backup-logger <script> tag before any other scripts.
          *   2. An extra CopyWebpackPlugin entry to ship backup-logger.js to dist.
-         *   3. NormalModuleReplacementPlugin to swap LibassWasmRenderer with a stub
+         *   3. NormalModuleReplacementPlugin to swap LibassWasmRenderer and JassubRenderer with a stub
          *      so the WASM dependencies are kept out of the bundle.
          *
          * The backup logger patches console.* BEFORE the webpack bundle executes,
@@ -545,6 +559,17 @@ const ultraLegacyConfig = {
             new webpack.NormalModuleReplacementPlugin(
                 /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
                 path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+            )
+        );
+        /*
+         * Replace JassubRenderer with a throw-only stub so jassub, abslink,
+         * lfa-ponyfill, rvfc-polyfill, throughput, and @juggle/resize-observer
+         * are never pulled into the ultra-legacy bundle.
+         */
+        base.push(
+            new webpack.NormalModuleReplacementPlugin(
+                /src[\/\\]player[\/\\]core[\/\\]JassubRenderer\.js$/,
+                path.resolve(__dirname, 'src/player/core/JassubRenderer.legacy.js')
             )
         );
 
