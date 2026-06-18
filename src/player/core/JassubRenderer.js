@@ -148,6 +148,10 @@ export default class JassubRenderer {
             // ========================================================================
             const getAbsoluteUrl = (relPath) => new URL(relPath, window.location.href).href;
 
+            // Resolve the default font family name from style overrides.
+            // If none is selected or it is 'null', fall back to 'Roboto'.
+            const activeDefaultFont = (this._fontFamily && this._fontFamily !== 'null') ? this._fontFamily : 'Roboto';
+
             // Initialize the JASSUB instance and assign to a local reference.
             // Storing this locally prevents concurrent setTrack executions from
             // referencing or modifying state values of incorrect instances.
@@ -160,6 +164,34 @@ export default class JassubRenderer {
                 // Jassub expects a negative timeOffset for delay values
                 timeOffset: -this._delaySeconds,
                 fonts: fonts,
+
+                // Configure the default font and available font resources.
+                // Because we replaced './default.woff2' with the local Roboto font asset at
+                // compile-time, we must declare the correct active font family name
+                // so that libass successfully matches it. We map all static bundled fonts
+                // so the worker can dynamically fetch them over HTTP when requested.
+                defaultFont: activeDefaultFont,
+                availableFonts: {
+                    'roboto': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
+                    'liberation sans': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
+                    'courier prime': getAbsoluteUrl('assets/fonts/CourierPrime.woff2'),
+                    'merriweather': getAbsoluteUrl('assets/fonts/Merriweather.woff2'),
+                    'inconsolata': getAbsoluteUrl('assets/fonts/Inconsolata.woff2'),
+                    'dancing script': getAbsoluteUrl('assets/fonts/DancingScript.woff2'),
+                    'patrick hand': getAbsoluteUrl('assets/fonts/PatrickHand.woff2'),
+                    'cinzel': getAbsoluteUrl('assets/fonts/Cinzel.woff2'),
+                    'poppins': getAbsoluteUrl('assets/fonts/Poppins.woff2'),
+                    'noto sans arabic': getAbsoluteUrl('assets/fonts/NotoSansArabic.woff2'),
+                    'silkscreen': getAbsoluteUrl('assets/fonts/Silkscreen.woff2'),
+                    'space grotesk': getAbsoluteUrl('assets/fonts/SpaceGrotesk.woff2'),
+                    'retrotech': getAbsoluteUrl('assets/fonts/RETROTECH.woff2'),
+                    'kitty': getAbsoluteUrl('assets/fonts/Kitty.woff2'),
+                    'inter': getAbsoluteUrl('assets/fonts/Inter.woff2'),
+                    'proxima nova': getAbsoluteUrl('assets/fonts/ProximaNova.woff2'),
+                    'baloo bhaijaan 2': getAbsoluteUrl('assets/fonts/BalooBhaijaan2.woff2'),
+                    'opendyslexic': getAbsoluteUrl('assets/fonts/OpenDyslexic.woff2'),
+                    'atkinson hyperlegible': getAbsoluteUrl('assets/fonts/Atkinson-Hyperlegible.woff2')
+                },
 
                 // Fully qualified URLs resolved against the active origin
                 workerUrl: getAbsoluteUrl('js/jassub-worker.js'),
