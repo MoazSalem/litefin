@@ -1088,6 +1088,31 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item" id="theme-song-volume-item" style="display: ${storage.getItem('pref:playThemeSongs') === 'true' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ThemeSongVolume">${i18n.t('ThemeSongVolume') || 'Theme Song Volume'}</span>
+                        <span class="setting-description" data-i18n="ThemeSongVolumeDescription">${i18n.t('ThemeSongVolumeDescription') || 'Set the volume level for background theme songs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'theme-song-volume-select',
+                            [
+                                { value: '0.1', label: '10%' },
+                                { value: '0.2', label: '20%' },
+                                { value: '0.3', label: '30%' },
+                                { value: '0.4', label: '40%' },
+                                { value: '0.5', label: '50%' },
+                                { value: '0.6', label: '60%' },
+                                { value: '0.7', label: '70%' },
+                                { value: '0.8', label: '80%' },
+                                { value: '0.9', label: '90%' },
+                                { value: '1.0', label: '100%' }
+                            ],
+                            storage.getItem('pref:themeSongVolume') || '0.3'
+                        )}
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -4570,6 +4595,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:playThemeSongs', newValue ? 'true' : 'false');
                 playThemeSongsBtn.classList.toggle('active', newValue);
                 log.info(`Play Theme Songs background audio set to: ${newValue}`);
+
+                // Toggle visibility of the companion volume control element.
+                // If the overall theme song playback is disabled, the volume setting
+                // is redundant and is hidden visually from the Settings page.
+                const volumeContainer = this.$('#theme-song-volume-item');
+                if (volumeContainer) {
+                    volumeContainer.style.display = newValue ? '' : 'none';
+                    
+                    // Invalidate settings content focus mapping cache so navigation
+                    // remains stable on Samsung/LG TV hardware.
+                    focusManager.invalidateCache('settings-content');
+                }
             });
         }
 
@@ -5642,7 +5679,8 @@ class SettingsPage extends Page {
             'osd-button-shape-select': { key: 'litefin:osdButtonShape', type: 'local' },
             'osd-unfocused-button-style-select': { key: 'litefin:osdUnfocusedButtonStyle', type: 'local' },
             'osd-seekbar-thumb-color-select': { key: 'litefin:osdSeekBarThumbColor', type: 'local' },
-            'osd-seekbar-progress-color-select': { key: 'litefin:osdSeekBarProgressColor', type: 'local' }
+            'osd-seekbar-progress-color-select': { key: 'litefin:osdSeekBarProgressColor', type: 'local' },
+            'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
