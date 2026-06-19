@@ -294,6 +294,8 @@
     "TabUpcoming": "Kommende",
     "Tags": "Tagger",
     "ThemeSong": "Tema-låt",
+    "ThemeSongVolume": "Theme Song Volume",
+    "ThemeSongVolumeDescription": "Set the volume level for background theme songs.",
     "ThemeVideo": "Tema-video",
     "Trailer": "Trailer",
     "Trailers": "Trailere",

@@ -294,6 +294,8 @@
     "TabUpcoming": "القادم",
     "Tags": "العلامات",
     "ThemeSong": "أغنية الشارة",
+    "ThemeSongVolume": "مستوى صوت الأغنية الموضوعية",
+    "ThemeSongVolumeDescription": "اضبط مستوى الصوت للأغاني الموضوعية في الخلفية.",
     "ThemeVideo": "فيديو الشارة",
     "Trailer": "العرض الإعلاني",
     "Trailers": "المقطورات",

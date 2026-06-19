@@ -294,6 +294,8 @@
     "TabUpcoming": "Komande",
     "Tags": "Emneknaggar",
     "ThemeSong": "Temasong",
+    "ThemeSongVolume": "Theme Song Volume",
+    "ThemeSongVolumeDescription": "Set the volume level for background theme songs.",
     "ThemeVideo": "Temavideo",
     "Trailer": "Trailer",
     "Trailers": "Trailerar",

@@ -294,6 +294,8 @@
     "TabUpcoming": "Demnächst",
     "Tags": "Markierungen",
     "ThemeSong": "Titellied",
+    "ThemeSongVolume": "Lautstärke des Themensongs",
+    "ThemeSongVolumeDescription": "Lautstärke für Hintergrund-Themensongs festlegen.",
     "ThemeVideo": "Titelvideo",
     "Trailer": "Vorschau",
     "Trailers": "Trailer",

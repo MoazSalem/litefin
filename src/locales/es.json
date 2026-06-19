@@ -294,6 +294,8 @@
     "TabUpcoming": "Próximos",
     "Tags": "Etiquetas",
     "ThemeSong": "Tema principal",
+    "ThemeSongVolume": "Volumen del tema musical",
+    "ThemeSongVolumeDescription": "Establece el nivel de volumen para los temas musicales de fondo.",
     "ThemeVideo": "Vídeo temático",
     "Trailer": "Tráiler",
     "Trailers": "Tráilers",

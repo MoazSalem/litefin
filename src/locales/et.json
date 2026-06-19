@@ -294,6 +294,8 @@
     "TabUpcoming": "Tulemas",
     "Tags": "Sildid",
     "ThemeSong": "Tunnusmeloodia",
+    "ThemeSongVolume": "Theme Song Volume",
+    "ThemeSongVolumeDescription": "Set the volume level for background theme songs.",
     "ThemeVideo": "Tunnusvideo",
     "Trailer": "Treiler",
     "Trailers": "Treilerid",

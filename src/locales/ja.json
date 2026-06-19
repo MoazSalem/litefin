@@ -294,6 +294,8 @@
     "TabUpcoming": "近日公開",
     "Tags": "タグ",
     "ThemeSong": "主題歌",
+    "ThemeSongVolume": "テーマソングの音量",
+    "ThemeSongVolumeDescription": "バックグラウンドのテーマソングの音量レベルを設定します。",
     "ThemeVideo": "テーマビデオ",
     "Trailer": "予告編",
     "Trailers": "トレーラー",
