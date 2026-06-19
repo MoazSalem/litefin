@@ -31,6 +31,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { settingsIcons } from '../utils/Icons.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { setIconStyle } from '../utils/Icons.js';
 
 const log = logger.create('SettingsPage');
 
@@ -281,24 +282,25 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Icon Style Setting (Commented out for future styles extension)
+                
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="IconStyle">Icon Style</span>
                         <span class="setting-description" data-i18n="IconStyleDescription">Choose a visual style theme for icons across the app.</span>
                     </div>
                     <div class="setting-control">
-                        \${this._renderDropdown(
+                        ${this._renderDropdown(
                             'icon-style-select',
                             [
-                                { value: 'default', label: 'Default' }
+                                { value: 'default', label: 'Default' },
+                                { value: 'material3', label: 'Material 3' }
                             ],
                             storage.getItem('pref:iconStyle') || 'default'
                         )}
                     </div>
                 </div>
-                -->
-
+                
+                
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LayoutDirection">${i18n.t('LayoutDirection')}</span>
@@ -5759,7 +5761,7 @@ class SettingsPage extends Page {
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
-            // 'icon-style-select': { key: 'pref:iconStyle', type: 'local', triggerEvent: true },
+            'icon-style-select': { key: 'pref:iconStyle', type: 'local', triggerEvent: true },
             'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' },
             'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
             'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
@@ -5858,6 +5860,9 @@ class SettingsPage extends Page {
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
                             focusManager.invalidateCache('sidebar');
                             focusManager.invalidateCache('home');
+                        } else if (id === 'icon-style-select') {
+                            setIconStyle(newValue);
+                            this._triggerHardReload();    
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
 
