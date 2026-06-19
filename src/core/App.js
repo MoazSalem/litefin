@@ -21,6 +21,7 @@ import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from './syncplay/SyncPlayGroupMenu.js';
 import { exitDialog } from '../ui/ExitDialog.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { pinManager } from '../utils/PinManager.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -769,17 +770,25 @@ class App {
                 const isOffline = state.get('server:offline');
                 const isAuthenticated = state.get('user:authenticated');
                 const sessionCount = state.get('user:sessionCount', 0);
+                // If the restored profile is PIN-locked, never silently auto-resume
+                // it — force the profile picker so ProfilesPage._switchToUser runs
+                // the PIN gate before any content is shown.
+                const activeUserId = auth.getCurrentUser()?.Id;
+                const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
-                } else if (isAuthenticated && sessionCount > 1) {
-                    // Multiple users are stored — make them choose who's watching
-                    log.info(`Initial route: ${sessionCount} sessions stored, navigating to ProfilesPage`);
+                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin)) {
+                    // Multiple users stored, or the restored profile is PIN-locked —
+                    // make them pick a profile (which enforces any PIN).
+                    log.info(
+                        `Initial route: navigating to ProfilesPage (sessions=${sessionCount}, pinLocked=${activeHasPin})`
+                    );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Single user — skip the profiles screen and go straight home
+                    // Single user, no PIN — skip the profiles screen and go straight home
                     log.info('Initial route: Authenticated (single user), navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {
