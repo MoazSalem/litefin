@@ -347,26 +347,50 @@ export function getIconStyle() {
  * ============================================================================
  */
 function createIconProxy(category) {
-    return new Proxy({}, {
-        get(target, prop) {
-            const activeStyle = currentIconStyle;
-            const styleSet = iconStyles[activeStyle] || iconStyles['default'];
-            const categorySet = styleSet[category] || iconStyles['default'][category];
-            return categorySet[prop];
-        },
-        ownKeys(target) {
-            const activeStyle = currentIconStyle;
-            const styleSet = iconStyles[activeStyle] || iconStyles['default'];
-            const categorySet = styleSet[category] || iconStyles['default'][category];
-            return Reflect.ownKeys(categorySet);
-        },
-        getOwnPropertyDescriptor(target, prop) {
-            const activeStyle = currentIconStyle;
-            const styleSet = iconStyles[activeStyle] || iconStyles['default'];
-            const categorySet = styleSet[category] || iconStyles['default'][category];
-            return Reflect.getOwnPropertyDescriptor(categorySet, prop);
-        }
+    // Use Proxy if supported by the browser engine (e.g. Chrome 49+)
+    if (typeof Proxy !== 'undefined') {
+        return new Proxy({}, {
+            get(target, prop) {
+                const activeStyle = currentIconStyle;
+                const styleSet = iconStyles[activeStyle] || iconStyles['default'];
+                const categorySet = styleSet[category] || iconStyles['default'][category];
+                return categorySet[prop];
+            },
+            ownKeys(target) {
+                const activeStyle = currentIconStyle;
+                const styleSet = iconStyles[activeStyle] || iconStyles['default'];
+                const categorySet = styleSet[category] || iconStyles['default'][category];
+                return Reflect.ownKeys(categorySet);
+            },
+            getOwnPropertyDescriptor(target, prop) {
+                const activeStyle = currentIconStyle;
+                const styleSet = iconStyles[activeStyle] || iconStyles['default'];
+                const categorySet = styleSet[category] || iconStyles['default'][category];
+                return Reflect.getOwnPropertyDescriptor(categorySet, prop);
+            }
+        });
+    }
+
+    // Fallback for ancient runtimes (e.g., Tizen 2.x / WebOS 1.x with Chrome 32)
+    // We define getter properties based on the default icon keys to remain dynamic
+    const fallbackObj = {};
+    const defaultSet = iconStyles['default'][category] || {};
+    
+    // Define getters for each static icon property
+    Object.keys(defaultSet).forEach(function(prop) {
+        Object.defineProperty(fallbackObj, prop, {
+            get: function() {
+                const activeStyle = currentIconStyle;
+                const styleSet = iconStyles[activeStyle] || iconStyles['default'];
+                const categorySet = styleSet[category] || iconStyles['default'][category];
+                return categorySet[prop];
+            },
+            enumerable: true,
+            configurable: true
+        });
     });
+
+    return fallbackObj;
 }
 
 // Export dynamic proxies mirroring the original plain objects structure
