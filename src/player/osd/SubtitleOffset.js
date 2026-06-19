@@ -1,5 +1,10 @@
+// Base class representing generic menu parameters and control flows.
 import BaseMenu from './BaseMenu.js';
-import { ICONS } from './icons.js';
+
+// Centralized icon store loaded globally to reuse SVG layout definitions.
+import { osdIcons } from '../../utils/Icons.js';
+
+// localization support utility to translate strings dynamically in-app.
 import { i18n } from '../../utils/i18n.js';
 
 /**
@@ -47,8 +52,9 @@ export default class SubtitleOffset extends BaseMenu {
                         <span class="osd-offset-title">${i18n.t('SubtitleOffset')}</span>
                         <span class="osd-offset-value" id="osdOffsetValue">0.0s</span>
                     </div>
+                    <!-- Close button mapping using centralized vector path -->
                     <button class="osd-offset-close focusable" data-action="closeSubtitleOffset" tabindex="0">
-                        ${ICONS.close}
+                        ${osdIcons.close}
                     </button>
                 </div>
                 <div class="osd-offset-content">

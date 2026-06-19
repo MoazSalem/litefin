@@ -1021,23 +1021,25 @@ class PlayerPage extends Page {
      * Hides the overlay for video items.
      */
     _renderAudioVisuals() {
+        // Check if the current item is an audio track or audiobook.
         const isAudioItem = this._item?.MediaType === 'Audio' || this._item?.Type === 'AudioBook';
 
+        // Retrieve or create the audio visualization overlay container.
         let overlay = this.$('#audio-visual-overlay');
 
+        // If the item is not an audio file, discard the overlay and exit early.
         if (!isAudioItem) {
             if (overlay) overlay.remove();
             return;
         }
 
+        // If the overlay element does not exist, initialize it in the DOM.
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'audio-visual-overlay';
             overlay.className = 'audio-visual-overlay hidden';
-            overlay.innerHTML = `
-                <div class="audio-backdrop"></div>
-                <div class="audio-album-art"></div>
-            `;
+            
+            // Insert the overlay right behind the OSD overlay so it displays beneath it.
             const osd = this.$('#osd-overlay');
             if (osd && osd.parentNode) {
                 osd.parentNode.insertBefore(overlay, osd);
@@ -1046,12 +1048,71 @@ class PlayerPage extends Page {
             }
         }
 
-        // Show the overlay
+        // Establish the HTML layout structure for the music player details panel.
+        // We wrap the album art and metadata inside a centered player panel
+        // that handles the translations and layout adjustments under Apple Guidelines.
+        if (!overlay.querySelector('.audio-player-center')) {
+            overlay.innerHTML = `
+                <div class="audio-backdrop"></div>
+                <div class="audio-player-center">
+                    <div class="audio-album-art"></div>
+                    <div class="audio-metadata">
+                        <div class="audio-title"></div>
+                        <div class="audio-subtitle"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Show the overlay now that it has been initialized.
         overlay.classList.remove('hidden');
 
+        // Resolve reference to backdrop, album art container, and text details.
         const backdropEl = overlay.querySelector('.audio-backdrop');
         const artEl = overlay.querySelector('.audio-album-art');
+        const titleEl = overlay.querySelector('.audio-title');
+        const subtitleEl = overlay.querySelector('.audio-subtitle');
         const itemId = this._item.Id;
+
+        // Populate track name (Apple Human Interface Guidelines: clear hierarchical title).
+        if (titleEl) {
+            titleEl.textContent = this._item.Name || '';
+        }
+
+        // Parse and combine the artists array or fallback to album artist / single artist.
+        if (subtitleEl) {
+            let artist = '';
+            // If the item has an Artists list, join them with commas.
+            if (this._item.Artists && Array.isArray(this._item.Artists)) {
+                artist = this._item.Artists.join(', ');
+            } else {
+                // Otherwise fall back to AlbumArtist or Artist.
+                artist = this._item.AlbumArtist || this._item.Artist || '';
+            }
+
+            // Retrieve album name and check if the track is a single.
+            // A single is identified by either having no album name or having an album name that matches the track name.
+            const album = this._item.Album;
+            const trackName = this._item.Name || '';
+            const isSingle = !album || album.trim().toLowerCase() === trackName.trim().toLowerCase();
+            
+            // Format album portion if not a single, prepending a bullet character for spacing.
+            const albumStr = (!isSingle && album) ? ` • ${album}` : '';
+
+            // Format year portion if available, prepending a bullet character for spacing.
+            const yearStr = this._item.ProductionYear ? ` • ${this._item.ProductionYear}` : '';
+            
+            // Assemble the final metadata subtitle line combining artist, album, and year.
+            if (artist) {
+                subtitleEl.textContent = `${artist}${albumStr}${yearStr}`;
+            } else if (albumStr) {
+                // Strip the leading bullet point if there is no artist before the album.
+                subtitleEl.textContent = `${albumStr.substring(3)}${yearStr}`;
+            } else {
+                // Fallback to only year (stripping the bullet).
+                subtitleEl.textContent = yearStr ? yearStr.substring(3) : '';
+            }
+        }
 
         // Image resolution settings
         const screenWidth = window.innerWidth || 1920;
@@ -1121,9 +1182,11 @@ class PlayerPage extends Page {
             return `${baseUrl}${mediaSource.DirectStreamUrl}`;
         }
 
-        // Build HLS URL for transcoding
+        // Build HLS URL for transcoding — this URL is given directly to the <video>
+        // element, so we must use a query param for auth (no headers possible).
+        // ApiKey= is the non-deprecated query param supported by Jellyfin.
         const params = new URLSearchParams({
-            api_key: api.accessToken,
+            ApiKey: api.accessToken,
             DeviceId: api.deviceId,
             MediaSourceId: mediaSource.Id,
             VideoCodec: 'h264',
@@ -2403,7 +2466,8 @@ class PlayerPage extends Page {
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', url, false);
                     xhr.setRequestHeader('Content-Type', 'application/json');
-                    xhr.setRequestHeader('X-Emby-Authorization', authHeader);
+                    // Use the standard Authorization header — X-Emby-Authorization is deprecated
+                    xhr.setRequestHeader('Authorization', authHeader);
                     xhr.send(JSON.stringify(data));
 
                     if (xhr.status >= 400) {
@@ -2557,11 +2621,12 @@ class PlayerPage extends Page {
         ) {
             const detailsPath = `/details/${this._item.Id}`;
 
-            // The PlayerPage always replaces the page that launched it in history (to prevent bloat).
-            // HOWEVER: if we came from a slideshow, we want to go BACK to the slideshow exactly
-            // where we left off. In that case, App.js pushed the player instead of replacing,
-            // so we just call router.back().
-            if (this.params.fromSlideshow === 'true') {
+            // The PlayerPage normally replaces the page that launched it in history (to prevent bloat)
+            // and returns to the item's Details page on stop.
+            // HOWEVER: if we came from a slideshow or a browse-page Play key, the player was PUSHED
+            // (not replaced) by App.js, and we want to go BACK to that originating page exactly where
+            // we left off — not synthesize a Details page the user never visited. So we call router.back().
+            if (this.params.fromSlideshow === 'true' || this.params.fromBrowse === 'true') {
                 router.back();
             } else {
                 router.navigate(detailsPath, { replace: true, isBack: true });

@@ -1,6 +1,13 @@
+// Import base menu functionality to extend generic menu UI behaviors.
 import BaseMenu from './BaseMenu.js';
-import { ICONS } from './icons.js';
+
+// Import centralized icon registry from utility to load clean, scalable SVG resources.
+import { osdIcons } from '../../utils/Icons.js';
+
+// Import logging utility to facilitate structured OSD and application event debugging.
 import { logger } from '../../utils/Logger.js';
+
+// Import localization utility to map text strings into user-configured locale values.
 import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create( 'PlaybackModeMenu' );
@@ -69,10 +76,19 @@ export default class PlaybackModeMenu extends BaseMenu {
 
         const currentMode = this.osd.player.getPlaybackMode() || 'auto';
 
+        // Loop over each menu item definition to construct the HTML options block.
         const optionsHtml = this.options.map( ( opt, i ) => {
+            // Determine if this specific item corresponds to the player's active state.
             const isSelected = opt.id === currentMode;
-            const checkIcon = isSelected ? ICONS.check : '';
+            
+            // ================================================================
+            // Dynamic Selection Mark
+            // ================================================================
+            // Apply the checkmark icon when the option matches the selected state.
+            // Using the unified check icon.
+            const checkIcon = isSelected ? osdIcons.check : '';
 
+            // Generate HTML markup containing standard button and dynamic SVG state.
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" 
                     data-id="${opt.id}" data-menu-index="${i}">

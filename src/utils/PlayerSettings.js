@@ -37,6 +37,50 @@ const DEFAULTS = {
     // Enable TrueHD passthrough (requires hardware support)
     enableTrueHd: 'auto',
 
+    // -------------------------------------------------------------------------
+    // EAC3 (E-AC3 / Dolby Digital Plus) FORCE STATE
+    // -------------------------------------------------------------------------
+    // On some platforms (WebOS, web browsers), the canPlayType / isTypeSupported
+    // probe for EAC3 returns '' (unsupported) even when the hardware is capable.
+    // This is a known bug — particularly on LG WebOS TVs where the Chromium build
+    // reports no EAC3 support, yet the native media pipeline passes it through
+    // eARC just fine.
+    //
+    // When this reports false:
+    //   - EAC3 is excluded from the DirectPlay audio codec list (Jellyfin treats
+    //     source EAC3 tracks as unsupported and forces an unnecessary transcode).
+    //   - The transcode target codec check (WebProfile) rejects EAC3 even when
+    //     the user has chosen it, silently falling back to AAC.
+    //
+    // 'auto'    — trust the hardware probe (default; may be wrong on some TVs)
+    // 'enable'  — force EAC3 into the profile regardless of what the probe says
+    // 'disable' — explicitly exclude EAC3 even if the probe says it is supported
+    enableEac3: 'auto',
+
+    // -------------------------------------------------------------------------
+    // PREFERRED TRANSCODE AUDIO CODEC
+    // -------------------------------------------------------------------------
+    // Controls which audio codec Jellyfin targets when it must transcode the
+    // audio stream (e.g. DTS is not natively supported, so it transcodes to one
+    // of these lossy surround formats).
+    //
+    // Valid values:
+    //   'eac3'  — E-AC3 / Dolby Digital Plus: higher quality, ~640 kbps cap.
+    //             Modern AVRs (HDMI 1.4+, eARC) handle this natively. Default.
+    //   'ac3'   — AC3 / Dolby Digital: widest compatibility, capped at 640 kbps
+    //             on the 5.1 layout. Best for older receivers.
+    //   'aac'   — Advanced Audio Coding: stereo/multichannel, universal browser
+    //   'auto'        — Auto (Prefer E-AC3): defaults to EAC3 if supported/allowed, fallback to AC3 then AAC.
+    //   'prefer_ac3'  — Prefer AC3: uses AC3 first, with AAC fallback.
+    //   'prefer_aac'  — Prefer AAC.
+    //   'force_eac3'  — Force/Only E-AC3.
+    //   force_ac3'   — Force/Only AC3.
+    //   'force_aac'   — Force/Only AAC.
+    //
+    // NOTE: This only affects HLS transcode output. DirectPlay/DirectStream paths
+    // bypass this entirely — the source audio is copied as-is in those cases.
+    transcodeAudioCodec: 'auto',
+
     // Allow FLAC audio in video containers (MKV, MP4, etc.) to DirectPlay.
     // Disabled by default: FLAC demuxing inside video containers causes a ~2s
     // A/V sync drift on Tizen hardware (the audio buffer diverges from the video
@@ -290,6 +334,22 @@ const DEFAULTS = {
 
     // Trailer playback mode ('internal_proxy', 'internal_iframe', 'external')
     trailerPlaybackMode: 'internal_proxy',
+
+    /*
+     * Await Tracks Before Playback
+     * -------------------------------------------------------------------------
+     * When enabled, the player page will hold the loading screen and defer
+     * initiating hardware playback until all audio and subtitle track mapping
+     * has fully completed. This ensures that the first rendered frame already
+     * has the correct subtitle cues and audio channel mapped.
+     *
+     * Trade-off: Deferring playback adds a brief startup delay (especially
+     * for remote external subtitles that need to be fetched/parsed over HTTP),
+     * but prevents audio/subtitle flashing and out-of-sync presentation.
+     *
+     * Default: false (start playback instantly once video is canplay/ready).
+     */
+    awaitTracksBeforePlayback: false,
 
     // Auto-chain mode: when both local AND remote trailers exist and this is
     // true, the TrailerDialog selection screen is skipped entirely. Instead,

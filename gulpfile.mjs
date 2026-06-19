@@ -1,6 +1,6 @@
 import gulp from 'gulp';
 import { deleteAsync as del } from 'del';
-import { readFileSync, createWriteStream, copyFileSync, existsSync, renameSync, cpSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, createWriteStream, copyFileSync, existsSync, renameSync, cpSync, mkdirSync } from 'fs';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import archiver from 'archiver';
@@ -156,7 +156,54 @@ function copySignatures(buildDir) {
 // Package helpers
 // ============================================================================
 
-async function createWgt(buildDir, outputName) {
+/*
+ * Strip service-related entries from the config.xml that was copied into a
+ * build directory. Used for builds that don't ship the ytresolver background
+ * service (ultra-legacy Tizen WGT and ultra-legacy WebOS IPK).
+ *
+ * Removes:
+ *   • <tizen:service> ... </tizen:service>  — the service registration block
+ *   • <tizen:metadata key="...use.preview" value="bg_service"/>  — the Samsung
+ *     preview metadata that flags this app as having a background service;
+ *     meaningless (and potentially harmful) without the service itself.
+ *
+ * We edit the COPY inside buildDir — the root config.xml is never touched,
+ * so concurrent build tasks targeting other variants are unaffected.
+ */
+function stripServiceFromConfig(buildDir) {
+    const configPath = path.join(buildDir, 'config.xml');
+
+    // Bail out gracefully if webpack hasn't copied the config yet
+    if (!existsSync(configPath)) {
+        console.warn(`stripServiceFromConfig: ${configPath} not found, skipping`);
+        return;
+    }
+
+    // Read the webpack-copied config.xml from the build output dir
+    let xml = readFileSync(configPath, 'utf8');
+
+    // Remove the entire <tizen:service> ... </tizen:service> block.
+    // Non-greedy + dotAll (\s\S) handles multi-line blocks cleanly.
+    xml = xml.replace(/<tizen:service[\s\S]*?<\/tizen:service>\s*/g, '');
+
+    // Remove the Samsung preview metadata self-closing tag — this flag tells
+    // the launcher the app has a background service, which no longer applies.
+    xml = xml.replace(/<tizen:metadata[^>]*key="[^"]*use\.preview"[^>]*\/>\s*/g, '');
+
+    writeFileSync(configPath, xml, 'utf8');
+    console.info(`Stripped <tizen:service> and use.preview metadata from ${configPath}`);
+}
+
+/*
+ * Create a Tizen .wgt package (zip archive) from a build directory.
+ *
+ * @param {string}  buildDir        - Path to the compiled output directory.
+ * @param {string}  outputName      - Destination .wgt filename.
+ * @param {boolean} [includeServices=true] - When false, the `services/`
+ *   directory is NOT bundled into the archive. Set this to false for build
+ *   targets that do not support Tizen background services (ultra-legacy).
+ */
+async function createWgt(buildDir, outputName, includeServices = true) {
     return new Promise((resolve, reject) => {
         const output = createWriteStream(outputName);
         const archive = archiver('zip', { zlib: { level: 9 } });
@@ -169,7 +216,7 @@ async function createWgt(buildDir, outputName) {
         archive.on('error', (err) => reject(err));
 
         archive.pipe(output);
-        
+
         // Tizen packages should not include LG WebOS's appinfo.json.
         // We use glob with an ignore rule instead of deleting the file from disk,
         // because WebOS packaging tasks are running in parallel against the exact same buildDir.
@@ -178,14 +225,22 @@ async function createWgt(buildDir, outputName) {
             ignore: ['appinfo.json']
         });
 
-        if (existsSync('services')) {
+        // Only include the background-service directory when the build target
+        // actually supports it. Ultra-legacy (Tizen 2.x) omits it entirely.
+        if (includeServices && existsSync('services')) {
             archive.directory('services/', 'services');
         }
+
         archive.finalize();
     });
 }
 
-async function createIpk(buildDir, outputDir, finalName) {
+/*
+ * @param {boolean} [includeServices=true] - When false, the `services/` directory
+ *   is NOT passed to ares-package. Set this to false for ultra-legacy WebOS builds
+ *   where the ytresolver service is not supported.
+ */
+async function createIpk(buildDir, outputDir, finalName, includeServices = true) {
     /*
      * IMPORTANT: We must NOT modify `buildDir` directly because the Tizen WGT
      * packaging tasks may be reading from the same directory in parallel.
@@ -266,8 +321,11 @@ async function createIpk(buildDir, outputDir, finalName) {
         const ipkOutDir = `${stagingDir}-out`;
         mkdirSync(ipkOutDir, { recursive: true });
 
+        // Only pass the services directory to ares-package when this build
+        // variant actually ships the background service.
+        const servicesArg = (includeServices && existsSync('services')) ? '"services"' : '';
         const { stdout, stderr } = await execAsync(
-            `npx ares-package --no-minify "${stagingDir}" "services" -o "${ipkOutDir}"`
+            `npx ares-package --no-minify "${stagingDir}" ${servicesArg} -o "${ipkOutDir}"`
         );
         if (stdout) console.info(stdout);
         if (stderr) console.warn(stderr);
@@ -363,8 +421,13 @@ async function packageWebosUltraLegacy() {
     const buildDir = 'dist/ultra-legacy';
     const ipkName = `Litefin-${version}-ultra-legacy-webos.ipk`;
 
+    /*
+     * Ultra-legacy WebOS targets old webOS 1.x/2.x hardware that does not
+     * support the Luna service model used by the ytresolver service.
+     * Exclude the services/ directory from the IPK entirely.
+     */
     console.info(`Creating ${ipkName}...`);
-    await createIpk(buildDir, '.', ipkName);
+    await createIpk(buildDir, '.', ipkName, /* includeServices */ false);
 }
 
 async function packageLegacy() {
@@ -380,9 +443,17 @@ async function packageUltraLegacy() {
     const buildDir = 'dist/ultra-legacy';
     const wgtName = `Litefin-${version}-ultra-legacy.wgt`;
 
+    /*
+     * Ultra-legacy targets Tizen 2.3 / Chrome 38 hardware where the background
+     * service runtime is unreliable or absent. Strip the <tizen:service> entry
+     * from the config.xml that webpack copied into the build dir, and do NOT
+     * include the services/ directory in the archive.
+     */
+    await stripServiceFromConfig(buildDir);
+
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
-    await createWgt(buildDir, wgtName);
+    await createWgt(buildDir, wgtName, /* includeServices */ false);
 }
 
 // ============================================================================

@@ -285,15 +285,15 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-/* "Play Now" — Inverted Mode (White BG, Blue Text) */
+/* "Play Now" — Dynamic theme styling */
 .upnext-btn-play {
-    background: var(--jf-primary-btn-color);
-    color: var(--jf-accent);
-    border: 0.125em solid var(--jf-primary-btn-color) !important;
+    background: var(--jf-btn-primary-bg);
+    color: var(--jf-btn-primary-color);
+    border: 0.125em solid var(--jf-btn-primary-border) !important;
 }
 
 .upnext-btn-play:hover {
-    background: color-mix(in srgb, var(--jf-accent) 80%, white 20%);
+    background: var(--jf-btn-primary-focus-bg);
 }
 
 /* "Hide" — muted ghost button */
@@ -324,9 +324,9 @@
 
 .upnext-btn-play.focused,
 .upnext-btn-play:focus {
-    background: var(--jf-accent) !important;
-    border-color: var(--jf-button-border-focus) !important;
-    color: var(--jf-primary-btn-color) !important;
+    background: var(--jf-btn-primary-focus-bg) !important;
+    border-color: var(--jf-btn-primary-focus-border) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
 }
 
 .upnext-btn-hide.focused,

@@ -233,11 +233,11 @@ export function buildJellyfinProfile(options = {}) {
     const enableFlacInVideo = PlayerSettings.get('enableFlacInVideo');
 
     // Base codec list shared by all audio contexts.
-    // mp2 (MPEG-1 Layer 2) is included because it is the standard audio codec for
-    // broadcast Live TV (DVB/MPEG-TS) streams in Europe and elsewhere. Without it,
-    // Jellyfin will set AudioCodecNotSupported and force a full transcode for Live TV.
-    // AVPlay handles mp2 natively in TS containers — no transcode needed.
-    const baseAudioCodecs = [
+    // Place EAC3 and AC3 first so they are preferred over AAC in DirectPlay lists.
+    const baseAudioCodecs = [];
+    if (caps.eac3) baseAudioCodecs.push('eac3');
+    if (caps.ac3) baseAudioCodecs.push('ac3');
+    baseAudioCodecs.push(
         'aac',
         'mp3',
         'mp2',
@@ -248,10 +248,8 @@ export function buildJellyfinProfile(options = {}) {
         'pcm_s16le',
         'pcm_s24le',
         'aac_latm'
-    ];
+    );
     if (caps.opus) baseAudioCodecs.push('opus');
-    if (caps.ac3) baseAudioCodecs.push('ac3');
-    if (caps.eac3) baseAudioCodecs.push('eac3');
     if (caps.ac4) baseAudioCodecs.push('ac4');
     if (caps.mpegh) baseAudioCodecs.push('mpegh');
     if (caps.wma) baseAudioCodecs.push('wma');
@@ -430,13 +428,40 @@ export function buildJellyfinProfile(options = {}) {
     // Tizen 6+ (2021+ TVs):
     //   The updated AVPlay properly supports AC3/EAC3 in HLS/TS, so we can request
     //   surround-sound AC3/EAC3 and AVPlay will decode it natively.
+    //
+    // The user can choose their preferred transcode target codec via
+    // PlayerSettings.get('transcodeAudioCodec'). This allows choosing EAC3
+    // (better quality, Dolby Digital Plus) vs AC3 (wider legacy compatibility).
+    // EAC3 is the default. AAC is the safe last-resort for problem hardware.
     // =========================================================================
     const transAudioCodecsArr = [];
     let transMaxAudioChannels;
 
+    // Read the user's preferred transcode audio codec setting.
+    // The options are: 'auto', 'prefer_ac3', 'prefer_aac', 'force_eac3', 'force_ac3', 'force_aac'.
+    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
+
     if (caps.tizenVersion >= 6) {
-        // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use full surround sound
-        transAudioCodecsArr.push('ac3', 'eac3');
+        // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use surround sound if preferred.
+        if (preferredTranscodeCodec === 'auto') {
+            // Auto (Prefer E-AC3) -> default to eac3 first, fallback to ac3.
+            transAudioCodecsArr.push('eac3', 'ac3');
+        } else if (preferredTranscodeCodec === 'prefer_ac3') {
+            // Prefer AC3 (Dolby Digital) -> ac3 first, fallback to eac3.
+            transAudioCodecsArr.push('ac3', 'eac3');
+        } else if (preferredTranscodeCodec === 'prefer_aac') {
+            // Prefer AAC -> use aac.
+            transAudioCodecsArr.push('aac');
+        } else if (preferredTranscodeCodec === 'force_eac3') {
+            // Force E-AC3 -> only eac3.
+            transAudioCodecsArr.push('eac3');
+        } else if (preferredTranscodeCodec === 'force_ac3') {
+            // Force AC3 -> only ac3.
+            transAudioCodecsArr.push('ac3');
+        } else {
+            // Force AAC -> only aac.
+            transAudioCodecsArr.push('aac');
+        }
         transMaxAudioChannels = maxAudioChannels;
     } else {
         // Tizen 5.x: strict AAC-only HLS path. Must also cap at 2 channels —
@@ -523,7 +548,6 @@ export function buildJellyfinProfile(options = {}) {
     let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = videoAudioCodecString;
         directAudioCodecs = videoAudioCodecString;
 
         const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);

@@ -508,11 +508,16 @@
     background-color: rgba(40, 40, 40, 0.4) !important;
 }
 
+/*
+ * ── LIVE TV PAGINATION BUTTON FOCUS ─────────────────────────────────────────
+ * Updates EPG Live TV pagination controls focus styling to use dynamic,
+ * customized primary button settings variables.
+ */
 .pagination-btn:not(:disabled):focus,
 .pagination-btn.focused {
-    background-color: var(--jf-accent) !important;
-    border-color: var(--jf-accent) !important;
-    color: var(--jf-primary-btn-color) !important;
+    background-color: var(--jf-btn-primary-focus-bg) !important;
+    border-color: var(--jf-btn-primary-focus-border) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
     transform: scale(1.1);
     outline: none !important;
     will-change: transform;

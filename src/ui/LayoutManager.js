@@ -75,8 +75,7 @@ class LayoutManager {
         // Card label text scale multiplier
         this._cardLabelScale = 1.0;
 
-        // OSD button borders mode: 'auto', 'light', 'dark', 'hidden'
-        this._osdButtonBorders = 'auto';
+
 
         // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
         this._lowVramMode = false;
@@ -95,6 +94,42 @@ class LayoutManager {
 
         // Badge style: 'auto', 'tinted', 'dark'
         this._badgeStyle = 'auto';
+
+        // Button style options: 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb'
+        this._buttonStyle = 'theme-default';
+
+        // Hide unfocused borders: true, false
+        this._hideUnfocusedBorders = false;
+
+        // Focus border style: 'follow-theme', 'inverted', 'white', 'black', 'hidden'
+        this._focusBorderStyle = 'hidden';
+
+        // Hover border style: 'follow-theme', 'inverted', 'white', 'black', 'hidden'
+        this._hoverBorderStyle = 'white';
+
+        // Sidebar unselected icon color: 'grey', 'white', 'black', 'accent'
+        this._sidebarUnselectedColor = 'grey';
+
+        // Sidebar selected icon color: 'grey', 'white', 'black', 'accent'
+        this._sidebarSelectedColor = 'accent';
+
+        // OSD Custom Button & Focus Border styles (overrides global)
+        this._osdButtonStyle = 'follow-global';
+        this._osdFocusBorderStyle = 'follow-global';
+        this._osdButtonShape = 'circle';
+        this._osdUnfocusedButtonStyle = 'icon-only';
+
+        /*
+         * Customized color scheme for the OSD seek bar thumb.
+         * Defaults to 'white'. Supports: 'white', 'black', 'theme-accent', 'theme-inverted'.
+         */
+        this._osdSeekBarThumbColor = 'white';
+
+        /*
+         * Customized color scheme for the OSD seek bar progress.
+         * Defaults to 'theme-accent'. Supports: 'white', 'black', 'theme-accent', 'theme-inverted'.
+         */
+        this._osdSeekBarProgressColor = 'theme-accent';
 
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
@@ -132,7 +167,7 @@ class LayoutManager {
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
         const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
-        const savedOsdBorders = storage.getItem('litefin:osdButtonBorders') || 'auto';
+
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
@@ -140,6 +175,20 @@ class LayoutManager {
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
         const savedCardLabelScale = parseFloat(storage.getItem('pref:cardLabelScale') || '1.0');
+
+        // Load user preferred button customization style
+        const savedButtonStyle = storage.getItem('litefin:buttonStyle') || 'theme-default';
+        const savedHideUnfocusedBorders = storage.getItem('litefin:hideUnfocusedBorders') === 'true';
+        const savedFocusBorderStyle = storage.getItem('litefin:focusBorderStyle') || 'hidden';
+        const savedHoverBorderStyle = storage.getItem('litefin:hoverBorderStyle') || 'white';
+        const savedSidebarUnselectedColor = storage.getItem('litefin:sidebarUnselectedColor') || 'grey';
+        const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'accent';
+        const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
+        const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
+        const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
+        const savedOsdUnfocusedButtonStyle = storage.getItem('litefin:osdUnfocusedButtonStyle') || 'icon-only';
+        const savedOsdSeekBarThumbColor = storage.getItem('litefin:osdSeekBarThumbColor') || 'white';
+        const savedOsdSeekBarProgressColor = storage.getItem('litefin:osdSeekBarProgressColor') || 'theme-accent';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -149,13 +198,27 @@ class LayoutManager {
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
         this.setCardLabelScale(savedCardLabelScale, false);
-        this.setOsdButtonBorders(savedOsdBorders, false);
+
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
         this.setSimpleLoader(savedSimpleLoader, false);
         this.setDisableBlurhash(savedDisableBlurhash, false);
         this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
         this.setBadgeStyle(savedBadgeStyle, false);
+
+        // Initial setup for the button styling scheme
+        this.setButtonStyle(savedButtonStyle, false);
+        this.setHideUnfocusedBorders(savedHideUnfocusedBorders, false);
+        this.setFocusBorderStyle(savedFocusBorderStyle, false);
+        this.setHoverBorderStyle(savedHoverBorderStyle, false);
+        this.setSidebarUnselectedColor(savedSidebarUnselectedColor, false);
+        this.setSidebarSelectedColor(savedSidebarSelectedColor, false);
+        this.setOsdButtonStyle(savedOsdButtonStyle, false);
+        this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
+        this.setOsdButtonShape(savedOsdButtonShape, false);
+        this.setOsdUnfocusedButtonStyle(savedOsdUnfocusedButtonStyle, false);
+        this.setOsdSeekBarThumbColor(savedOsdSeekBarThumbColor, false);
+        this.setOsdSeekBarProgressColor(savedOsdSeekBarProgressColor, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -508,26 +571,255 @@ class LayoutManager {
         return this._cardLabelScale;
     }
 
-    getOsdButtonBorders() {
-        return this._osdButtonBorders;
+
+
+    /**
+     * Get the active button style configuration
+     * @returns {string} One of: 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb'
+     */
+    getButtonStyle() {
+        return this._buttonStyle;
     }
 
-    setOsdButtonBorders(mode, save = true) {
-        if (!['auto', 'light', 'dark', 'hidden'].includes(mode)) {
-            log.warn(`Invalid OSD border mode "${mode}"`);
+    /**
+     * Sets the active button style theme and updates HTML attributes immediately.
+     * Follows Apple's visual clarity recommendations, ensuring high legibility
+     * and premium spring-like focus behaviors.
+     * @param {string} style - Selected button style
+     * @param {boolean} [save=true] - If true, persist value to localStorage
+     */
+    setButtonStyle(style, save = true) {
+        // Validation check for allowed styles to avoid any UI/rendering inconsistencies
+        if (!['theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+            log.warn(`Invalid button style type specified: "${style}"`);
             return;
         }
 
-        this._osdButtonBorders = mode;
-        document.documentElement.setAttribute('data-osd-borders', mode);
+        this._buttonStyle = style;
 
+        // Stamp style attribute on documentElement so CSS engines can adapt immediately
+        document.documentElement.setAttribute('data-button-style', style);
+
+        // Store preferred settings value
         if (save) {
-            storage.setItem('litefin:osdButtonBorders', mode);
+            storage.setItem('litefin:buttonStyle', style);
         }
 
-        log.info(`OSD button borders updated: ${mode}`);
-        eventBus.emit('osdButtonBorders:changed', { mode });
+        log.info(`Button style configuration successfully updated to: ${style}`);
+
+        // Notify any active UI observers that button style changed
+        eventBus.emit('buttonStyle:changed', { style });
     }
+
+    getHideUnfocusedBorders() {
+        return this._hideUnfocusedBorders;
+    }
+
+    setHideUnfocusedBorders(hide, save = true) {
+        this._hideUnfocusedBorders = hide;
+        document.documentElement.setAttribute('data-hide-unfocused-borders', hide ? 'true' : 'false');
+        if (save) {
+            storage.setItem('litefin:hideUnfocusedBorders', hide ? 'true' : 'false');
+        }
+        log.info(`Hide unfocused borders updated: ${hide}`);
+        eventBus.emit('hideUnfocusedBorders:changed', { hide });
+    }
+
+    getFocusBorderStyle() {
+        return this._focusBorderStyle;
+    }
+
+    setFocusBorderStyle(style, save = true) {
+        if (!['follow-theme', 'inverted', 'white', 'black', 'hidden'].includes(style)) {
+            log.warn(`Invalid focus border style specified: "${style}"`);
+            return;
+        }
+        this._focusBorderStyle = style;
+        document.documentElement.setAttribute('data-focus-border-style', style);
+        if (save) {
+            storage.setItem('litefin:focusBorderStyle', style);
+        }
+        log.info(`Focus border style updated: ${style}`);
+        eventBus.emit('focusBorderStyle:changed', { style });
+    }
+
+    getHoverBorderStyle() {
+        return this._hoverBorderStyle;
+    }
+
+    setHoverBorderStyle(style, save = true) {
+        if (!['follow-theme', 'inverted', 'white', 'black', 'hidden'].includes(style)) {
+            log.warn(`Invalid hover border style specified: "${style}"`);
+            return;
+        }
+        this._hoverBorderStyle = style;
+        document.documentElement.setAttribute('data-hover-border-style', style);
+        if (save) {
+            storage.setItem('litefin:hoverBorderStyle', style);
+        }
+        log.info(`Hover border style updated: ${style}`);
+        eventBus.emit('hoverBorderStyle:changed', { style });
+    }
+
+    getSidebarUnselectedColor() {
+        return this._sidebarUnselectedColor;
+    }
+
+    setSidebarUnselectedColor(color, save = true) {
+        if (!['grey', 'white', 'black', 'accent'].includes(color)) {
+            log.warn(`Invalid sidebar unselected color specified: "${color}"`);
+            return;
+        }
+        this._sidebarUnselectedColor = color;
+        document.documentElement.setAttribute('data-sidebar-unselected-color', color);
+        if (save) {
+            storage.setItem('litefin:sidebarUnselectedColor', color);
+        }
+        log.info(`Sidebar unselected color updated: ${color}`);
+        eventBus.emit('sidebarUnselectedColor:changed', { color });
+    }
+
+    getSidebarSelectedColor() {
+        return this._sidebarSelectedColor;
+    }
+
+    setSidebarSelectedColor(color, save = true) {
+        if (!['grey', 'white', 'black', 'accent'].includes(color)) {
+            log.warn(`Invalid sidebar selected color specified: "${color}"`);
+            return;
+        }
+        this._sidebarSelectedColor = color;
+        document.documentElement.setAttribute('data-sidebar-selected-color', color);
+        if (save) {
+            storage.setItem('litefin:sidebarSelectedColor', color);
+        }
+        log.info(`Sidebar selected color updated: ${color}`);
+        eventBus.emit('sidebarSelectedColor:changed', { color });
+    }
+
+    getOsdButtonStyle() {
+        return this._osdButtonStyle;
+    }
+
+    setOsdButtonStyle(style, save = true) {
+        if (!['follow-global', 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+            log.warn(`Invalid OSD button style specified: "${style}"`);
+            return;
+        }
+        this._osdButtonStyle = style;
+        document.documentElement.setAttribute('data-osd-button-style', style);
+        if (save) {
+            storage.setItem('litefin:osdButtonStyle', style);
+        }
+        log.info(`OSD button style updated: ${style}`);
+        eventBus.emit('osdButtonStyle:changed', { style });
+    }
+
+    getOsdFocusBorderStyle() {
+        return this._osdFocusBorderStyle;
+    }
+
+    setOsdFocusBorderStyle(style, save = true) {
+        if (!['follow-global', 'follow-theme', 'inverted', 'white', 'black', 'hidden'].includes(style)) {
+            log.warn(`Invalid OSD focus border style specified: "${style}"`);
+            return;
+        }
+        this._osdFocusBorderStyle = style;
+        document.documentElement.setAttribute('data-osd-focus-border-style', style);
+        if (save) {
+            storage.setItem('litefin:osdFocusBorderStyle', style);
+        }
+        log.info(`OSD focus border style updated: ${style}`);
+        eventBus.emit('osdFocusBorderStyle:changed', { style });
+    }
+
+    getOsdButtonShape() {
+        return this._osdButtonShape;
+    }
+
+    setOsdButtonShape(shape, save = true) {
+        if (!['circle', 'rounded-square', 'squircle', 'organic-leaf', 'hexagon', 'outline', 'icon-only'].includes(shape)) {
+            log.warn(`Invalid OSD button shape specified: "${shape}"`);
+            return;
+        }
+        this._osdButtonShape = shape;
+        document.documentElement.setAttribute('data-osd-button-shape', shape);
+        if (save) {
+            storage.setItem('litefin:osdButtonShape', shape);
+        }
+        log.info(`OSD button shape updated: ${shape}`);
+        eventBus.emit('osdButtonShape:changed', { shape });
+    }
+
+    getOsdUnfocusedButtonStyle() {
+        return this._osdUnfocusedButtonStyle;
+    }
+
+    setOsdUnfocusedButtonStyle(style, save = true) {
+        if (!['icon-only', 'outline', 'semi-transparent'].includes(style)) {
+            log.warn(`Invalid OSD unfocused button style specified: "${style}"`);
+            return;
+        }
+        this._osdUnfocusedButtonStyle = style;
+        document.documentElement.setAttribute('data-osd-unfocused-button-style', style);
+        if (save) {
+            storage.setItem('litefin:osdUnfocusedButtonStyle', style);
+        }
+        log.info(`OSD unfocused button style updated: ${style}`);
+        eventBus.emit('osdUnfocusedButtonStyle:changed', { style });
+    }
+
+    /*
+     * Retrieves the current customized color scheme of the OSD seek bar thumb.
+     */
+    getOsdSeekBarThumbColor() {
+        return this._osdSeekBarThumbColor;
+    }
+
+    /*
+     * Sets the customized color scheme of the OSD seek bar thumb.
+     * Stamps documentElement with data-osd-thumb-color so that player-osd.css can adapt.
+     */
+    setOsdSeekBarThumbColor(color, save = true) {
+        if (!['white', 'black', 'theme-accent', 'theme-inverted'].includes(color)) {
+            log.warn(`Invalid OSD seek bar thumb color specified: "${color}"`);
+            return;
+        }
+        this._osdSeekBarThumbColor = color;
+        document.documentElement.setAttribute('data-osd-thumb-color', color);
+        if (save) {
+            storage.setItem('litefin:osdSeekBarThumbColor', color);
+        }
+        log.info(`OSD seek bar thumb color updated: ${color}`);
+        eventBus.emit('osdSeekBarThumbColor:changed', { color });
+    }
+
+    /*
+     * Retrieves the current customized color scheme of the OSD seek bar progress.
+     */
+    getOsdSeekBarProgressColor() {
+        return this._osdSeekBarProgressColor;
+    }
+
+    /*
+     * Sets the customized color scheme of the OSD seek bar progress.
+     * Stamps documentElement with data-osd-progress-color so that player-osd.css can adapt.
+     */
+    setOsdSeekBarProgressColor(color, save = true) {
+        if (!['white', 'black', 'theme-accent', 'theme-inverted'].includes(color)) {
+            log.warn(`Invalid OSD seek bar progress color specified: "${color}"`);
+            return;
+        }
+        this._osdSeekBarProgressColor = color;
+        document.documentElement.setAttribute('data-osd-progress-color', color);
+        if (save) {
+            storage.setItem('litefin:osdSeekBarProgressColor', color);
+        }
+        log.info(`OSD seek bar progress color updated: ${color}`);
+        eventBus.emit('osdSeekBarProgressColor:changed', { color });
+    }
+
+
 
     /**
      * Enable or disable Low VRAM Mode

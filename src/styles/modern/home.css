@@ -166,7 +166,7 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card).focused .card-
     
     /* PERFORMANCE: Removed the 'focusPulse' infinite keyframe animation entirely.
        Continuous box-shadow/opacity animations drive continuous browser repaints, which severely
-       lags weaker TV hardware. Apple HIG favors a static, elegant, instant visual focus accent. */
+       lags weaker TV hardware. favors a static, elegant, instant visual focus accent. */
 }
 
 /* Exclude grid cards from modern absolute image sizing */

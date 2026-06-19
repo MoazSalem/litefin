@@ -125,7 +125,7 @@
 
 /*
  * ============================================================================
- * HIGH-PERFORMANCE GLASS-FREE IMMERSIVE SIDEBARS (APPLE HIG CRITERIA)
+ * HIGH-PERFORMANCE GLASS-FREE IMMERSIVE SIDEBARS
  * ============================================================================
  * Optimized specifically for low-overhead Smart TV graphic pipelines. 
  * Completely avoids expensive GPU blur filters (backdrop-filter) and heavy 
@@ -190,7 +190,7 @@
 
 /*
  * ============================================================================
- * HIGH-CONTRAST FOCUS ACCESSIBILITY OVERRIDES (APPLE HIG & MACOS STYLE)
+ * HIGH-CONTRAST FOCUS ACCESSIBILITY OVERRIDES
  * ============================================================================
  * On macOS and Apple-inspired systems, focus states must remain beautifully
  * legible even when placed on top of high-vibrancy colored backing layers.

@@ -43,6 +43,7 @@ import { i18n } from '../utils/i18n.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { imageService } from '../utils/ImageService.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { quickPlayItem } from '../utils/QuickPlay.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import HeroCarousel from '../ui/HeroCarousel.js';
@@ -536,7 +537,7 @@ class HomePage extends Page {
                 // Music, Live TV, Home Video, and Music Video libraries use square cards, everything else uses portrait
                 /*
                  * ============================================================
-                 * UI Layout Aspect Determination (Apple HIG Compliance)
+                 * UI Layout Aspect Determination
                  * ============================================================
                  *
                  * Following Apple's Human Interface Guidelines, grid systems
@@ -552,16 +553,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -588,7 +589,7 @@ class HomePage extends Page {
         // preference under settings, we dynamically coerce all horizontal track rows
         // to use standard portrait layouts ('portrait') with 'poster' cards.
         // This ensures the custom expanding-backdrops and visual transitions apply
-        // universally, aligning with unified grids (Apple HIG style).
+        // universally, aligning with unified grids.
         // ====================================================================
         const isModern = layoutManager.getLayout() === 'modern';
         const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
@@ -1190,13 +1191,21 @@ class HomePage extends Page {
                 state.delete('home:lastFocusedItem');
                 state.delete('home:lastFocusedItemId');
 
+                // ====================================================================
                 // Restore any captured scroll offset from NavigationState.
+                // ====================================================================
                 // Since we nullified this._pendingNavState synchronously above,
                 // restoreScrollFocusWhenReady() at the end of the pipeline is safely a no-op.
+                //
+                // We delegate this scroll positioning to ScrollController.smoothScrollTo
+                // with duration 0. This guarantees that if the user has GPU scroll mode
+                // enabled, we snap the translate3d transform of .vertical-scroll-track
+                // instead of corrupting the layout by writing to scrollTop directly.
+                // ====================================================================
                 if (restoredFocus && pendingNav) {
                     const scrollContainer = this.$('.page-content');
                     if (scrollContainer && pendingNav.scrollTop > 0) {
-                        scrollContainer.scrollTop = pendingNav.scrollTop;
+                        scrollController.smoothScrollTo(scrollContainer, pendingNav.scrollTop, 0, 'vertical');
                     }
                 }
             }
@@ -1312,6 +1321,44 @@ class HomePage extends Page {
                 rowEntry.virtualRow.syncIndexFromNode(e.target);
             }
         });
+
+        // ── Remote Play key → play the focused card directly ─────────────────
+        // Mirrors the official Jellyfin app: pressing the dedicated Play (or
+        // Play/Pause) key on a focused show/episode card starts playback without
+        // first opening its details page. Both events are bound because remotes
+        // expose either a discrete Play key (key:play) or a combined toggle
+        // (key:playPause). Page._subscriptions auto-unbinds these on destroy.
+        this.on('key:play', () => this._playFocusedCard());
+        this.on('key:playPause', () => this._playFocusedCard());
+    }
+
+    /**
+     * Launch playback of the currently focused media card (remote Play key).
+     * Skips cards that aren't directly playable (library folders, people).
+     */
+    _playFocusedCard() {
+        const card = this.$('.media-card.focused');
+        if (!card?.dataset?.itemId) {
+            log.debug('Play key pressed but no focused media card');
+            return;
+        }
+
+        const { itemId, type, contextType } = card.dataset;
+
+        // Library/collection cards open a library view; people open a person
+        // page — neither is directly playable, so let the Play key fall through.
+        if (contextType === 'library') return;
+        if (['Person', 'MusicArtist', 'Artist', 'AlbumArtist'].includes(type)) return;
+
+        // Persist focus for back-nav restoration, mirroring handleActivate().
+        const sectionEl = card.closest('section[data-row-id]');
+        state.set('home:lastFocusedItem', {
+            itemId,
+            rowId: sectionEl ? sectionEl.getAttribute('data-row-id') : null
+        });
+
+        log.info(`Play key: quick-playing focused card ${itemId} (${type || 'unknown'})`);
+        quickPlayItem(itemId);
     }
 
     // =========================================================================

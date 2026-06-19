@@ -119,11 +119,11 @@ class PGSRenderer {
             // works normally for valid (≥ 0) cue indices, avoiding redundant
             // GPU paints. Only the "nothing here yet" sentinel is exempted.
             // ================================================================
-            this._renderer.implementation.renderAtIndex = function(index) {
+            this._renderer.implementation.renderAtIndex = function (index) {
                 if (index < 0) {
                     // Log once per change so we don't spam 60 times a second
                     if (this.previousTimestampIndex !== -1) {
-                        log.debug('[PGSRenderer] getIndexFromTimestamps returned -1: Parse progress has not yet reached the requested playback time, waiting...');
+                        log.debug('getIndexFromTimestamps returned -1: Parse progress has not yet reached the requested playback time, waiting...');
                     }
                     // Before the first cue or past the last — clear canvas but
                     // do NOT cache -1 as previousTimestampIndex, so the very
@@ -131,10 +131,10 @@ class PGSRenderer {
                     this.render(index);
                     return;
                 }
-                
+
                 // Track when the subtitle FINALLY catches up to the playback target!
                 if (this.previousTimestampIndex === undefined || this.previousTimestampIndex === -1 || isNaN(this.previousTimestampIndex)) {
-                    log.info(`[PGSRenderer] BINGO! Target subtitle cue ${index} successfully mapped and rendered.`);
+                    log.info(`BINGO! Target subtitle cue ${index} successfully mapped and rendered.`);
                 }
 
                 // Standard dedup for actual subtitle frames: only repaint when
@@ -152,7 +152,7 @@ class PGSRenderer {
             this._renderer.implementation.onTimestampsUpdated = () => {
                 this._isBufferLoaded = true;
                 if (this._isDestroyed) return;
-                
+
                 // Show how many subtitles are loaded so far (if property exists)
                 const c = this._renderer.implementation.timestamps ? this._renderer.implementation.timestamps.length : '?';
 
@@ -167,8 +167,8 @@ class PGSRenderer {
                             const renderTime = this._lastTickTime !== null
                                 ? this._lastTickTime + this._timeOffset
                                 : this._timeOffset;
-                                
-                            log.debug(`[PGSRenderer] Parsing active: ${c} cues mapped so far. Checking target t=${renderTime.toFixed(2)}s...`);    
+
+                            log.debug(`Parsing active: ${c} cues mapped so far. Checking target t=${renderTime.toFixed(2)}s...`);
                             this._renderer.renderAtTimestamp(renderTime);
                         }
                     });
@@ -260,7 +260,7 @@ class PGSRenderer {
         if (this._renderer && !this._isDestroyed) {
             // Fancy Logging: track seek clearing action
             log.info('Clearing PGS canvas instantly on seek');
-            
+
             try {
                 // Ticking/rendering to -1 forces a canvas repaint to blank
                 this._renderer.renderAtTimestamp(-1);

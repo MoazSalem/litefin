@@ -10,7 +10,7 @@
  *   - Leave the current group
  *
  * Designed to match litefin's glass-card TV UI language.
- * Uses Apple HIG principles: clear hierarchy, large touch/focus targets,
+ * clear hierarchy, large touch/focus targets,
  * clean state transitions, and spring-like CSS animations.
  *
  * Typical usage (e.g. from OSDController):
@@ -24,7 +24,8 @@ import { api } from '../../api/index.js';
 import { eventBus } from '../EventBus.js';
 import { logger } from '../../utils/Logger.js';
 import { focusManager } from '../../ui/FocusManager.js';
-import { ICONS } from '../../player/osd/icons.js';
+// Import centralized icon registry from utility to load clean, scalable SVG resources.
+import { osdIcons } from '../../utils/Icons.js';
 import { i18n } from '../../utils/i18n.js';
 
 // Note: no longer imports BaseMenu — SyncPlayGroupMenu is now a fully
@@ -197,9 +198,11 @@ export class SyncPlayGroupMenu {
         this._overlay.innerHTML = `
             <div class="syncplay-panel">
                 <div class="syncplay-header">
-                    <!-- SyncPlay icon (groups) -->
-                    <div class="syncplay-icon">
-                        ${getSyncPlayManager()?.isEnabled ? ICONS.groupFilled : ICONS.group}
+                    <!-- SyncPlay group membership status icon wrapper.
+                         Uses unified group icon containing both outline and filled SVGs.
+                         CSS toggles filled/outline visibility based on .active class. -->
+                    <div class="syncplay-icon ${getSyncPlayManager()?.isEnabled ? 'active' : ''}">
+                        ${osdIcons.group}
                     </div>
                     <div>
                         <div class="syncplay-title">${i18n.t('SyncPlay')}</div>
@@ -274,10 +277,15 @@ export class SyncPlayGroupMenu {
             badge.outerHTML = this._renderStatusBadge();
         }
 
-        // Update the header icon
+        // ====================================================================
+        // Update Header Icon Active State
+        // ====================================================================
+        // We set the innerHTML to the unified group icon and toggle the active 
+        // class, allowing CSS to dynamically display the filled/outline state.
         const iconContainer = this._overlay.querySelector('.syncplay-icon');
         if (iconContainer) {
-            iconContainer.innerHTML = manager.isEnabled ? ICONS.groupFilled : ICONS.group;
+            iconContainer.innerHTML = osdIcons.group;
+            iconContainer.classList.toggle('active', manager.isEnabled);
         }
 
         // Swap the action button (leave ↔ create)

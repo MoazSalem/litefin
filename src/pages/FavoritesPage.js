@@ -277,7 +277,6 @@ class FavoritesPage extends Page {
         // If active, we dynamically coerce all horizontal favorite tracks
         // to render as portrait posters that expand horizontally on focus.
         // This creates a gorgeous, unified visual aesthetic that matches
-        // Apple HIG style and matches our homepage layout conversion.
         // ==========================================================
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
         const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';

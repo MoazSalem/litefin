@@ -61,7 +61,7 @@ class FontLoader {
             }
         }
         this._blobUrls.clear();
-        log.debug('[FontLoader] Container font blob URLs cleared.');
+        log.debug('Container font blob URLs cleared.');
     }
 
     /**
@@ -90,7 +90,30 @@ class FontLoader {
         try {
             // Method 1: Font Loading API
             if (document.fonts && document.fonts.load) {
+                /*
+                 * -------------------------------------------------------------
+                 * Stage 1: Invoke Font API Pre-load
+                 * -------------------------------------------------------------
+                 * Tell the browser's layout engine to immediately schedule and
+                 * download the specified font-family name binary.
+                 * -------------------------------------------------------------
+                 */
                 await document.fonts.load(`16px "${fontFamily}"`);
+
+                /*
+                 * -------------------------------------------------------------
+                 * Stage 2: Await Layout Engine Stabilization
+                 * -------------------------------------------------------------
+                 * Standard Font Face loading is asynchronous. Even though load()
+                 * resolved, the engine might not have finished rasterizing or
+                 * linking the font layout tables. Awaiting document.fonts.ready
+                 * guarantees the font is fully active and ready to draw.
+                 * -------------------------------------------------------------
+                 */
+                if (document.fonts.ready) {
+                    await document.fonts.ready;
+                }
+
                 log.debug(`Font loaded via API: ${fontFamily}`);
                 this._loadedStaticFonts.add(fontId);
                 return true;
@@ -264,12 +287,54 @@ class FontLoader {
 
         if (fontAttachments.length === 0) return [];
 
+        // Download all font attachments in parallel.
+        // This avoids the major sequential bottleneck when a media container has multiple fonts.
+        const downloadPromises = fontAttachments.map(async (font, idx) => {
+            const uniqueIndex = font.Index !== undefined ? font.Index : (idx + 1);
+            let url;
+            if (font.DeliveryUrl) {
+                url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;
+                const sep = url.includes('?') ? '&' : '?';
+                url += `${sep}ApiKey=${encodeURIComponent(authToken)}`;
+            } else {
+                url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?ApiKey=${encodeURIComponent(authToken)}`;
+            }
+
+            try {
+                let res;
+                if (typeof AbortController !== 'undefined') {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 5000);
+                    res = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeout);
+                } else {
+                    res = await fetch(url);
+                }
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const buffer = await res.arrayBuffer();
+                return { font, buffer, uniqueIndex };
+            } catch (fetchErr) {
+                if (fetchErr && fetchErr.name === 'AbortError') {
+                    log.warn(`Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`);
+                } else {
+                    log.warn(`Failed to download font attachment ${uniqueIndex}:`, fetchErr);
+                }
+                return null;
+            }
+        });
+
+        // In parallel, wait for the downloaded files and the ASS font names resolution
+        const [downloadedResults, resolvedAssFontnames] = await Promise.all([
+            Promise.all(downloadPromises),
+            Promise.resolve(assFontnames)
+        ]);
+
         // -----------------------------------------------------------------------
         // Build normalized maps for the ASS Fontnames
         // -----------------------------------------------------------------------
         const assMap = [];
-        if (assFontnames && assFontnames.size > 0) {
-            for (const name of assFontnames) {
+        if (resolvedAssFontnames && resolvedAssFontnames.size > 0) {
+            for (const name of resolvedAssFontnames) {
                 if (name) {
                     const norm = this._normalizeFontName(name);
                     const core = this._getCoreFontName(norm);
@@ -278,52 +343,12 @@ class FontLoader {
             }
             // log.debug(`ASS fontname map: ${assMap.length} entries`, assMap.map(a => a.original));
         }
-
         const loadedFonts = [];
-        let attachIndex = 0;
 
-        for (const font of fontAttachments) {
+        for (const result of downloadedResults) {
+            if (!result) continue;
+            const { font, buffer, uniqueIndex } = result;
             try {
-                attachIndex++;
-                const uniqueIndex = font.Index !== undefined ? font.Index : attachIndex;
-
-                let url;
-                if (font.DeliveryUrl) {
-                    url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;
-                    const sep = url.includes('?') ? '&' : '?';
-                    url += `${sep}api_key=${encodeURIComponent(authToken)}`;
-                } else {
-                    url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?api_key=${encodeURIComponent(authToken)}`;
-                }
-
-                // Download the font into memory so we can parse its internal name table.
-                // The 5-second timeout prevents runaway fetches when playing a transcoded
-                // stream whose original attachment URLs are no longer valid.
-                let buffer;
-                try {
-                    let res;
-                    if (typeof AbortController !== 'undefined') {
-                        const controller = new AbortController();
-                        const timeout = setTimeout(() => controller.abort(), 5000);
-                        res = await fetch(url, { signal: controller.signal });
-                        clearTimeout(timeout);
-                    } else {
-                        // Legacy fallback for WebOS 2/3 (Chrome 38/53)
-                        res = await fetch(url);
-                    }
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    buffer = await res.arrayBuffer();
-                } catch (fetchErr) {
-                    if (fetchErr && fetchErr.name === 'AbortError') {
-                        log.warn(
-                            `[FontLoader] Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`
-                        );
-                    } else {
-                        log.warn(`[FontLoader] Failed to download font attachment ${uniqueIndex}:`, fetchErr);
-                    }
-                    continue;
-                }
-
                 const internalNames = this._extractInternalFontNames(buffer);
                 if (internalNames.length > 0) {
                     // log.debug(`Binary Extracted Names for Attachment ${uniqueIndex}:`, internalNames);
@@ -476,6 +501,31 @@ class FontLoader {
                 log.warn(`Failed to load container font ${font.Name}:`, e);
             }
         }
+
+        /*
+         * ---------------------------------------------------------------------
+         * Global Font Engine Synchronization
+         * ---------------------------------------------------------------------
+         * When the 'awaitTracksBeforePlayback' setting is active, we must ensure
+         * that the TV browser has completely parsed, validated, and registered
+         * all newly added FontFace objects.
+         *
+         * If the platform supports document.fonts.ready, we block execution
+         * here to let the renderer resolve all font descriptors. This prevents
+         * layout recalculations and font flashes when the first ASS subtitle
+         * frames are rasterized to canvas.
+         * ---------------------------------------------------------------------
+         */
+        if (window.FontFace && document.fonts && document.fonts.ready) {
+            try {
+                log.debug('Awaiting document.fonts.ready for container fonts...');
+                await document.fonts.ready;
+                log.debug('All registered container fonts are layout-ready.');
+            } catch (readyErr) {
+                log.warn('document.fonts.ready failed to resolve:', readyErr);
+            }
+        }
+
         return loadedFonts;
     }
 }

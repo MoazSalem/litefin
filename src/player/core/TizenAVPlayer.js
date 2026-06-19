@@ -194,6 +194,13 @@ export class TizenAVPlayer {
             this._playStartTime = Date.now();
             this._currentPlayOptions = options;
 
+            // Reset the pre-play await tracks timeout safety net
+            this._forceTizenPlayPassed = false;
+            if (this._readyTrackTimeoutId) {
+                clearTimeout(this._readyTrackTimeoutId);
+                this._readyTrackTimeoutId = null;
+            }
+
             // Reset the post-seek safety net timer to clear out any stale handlers
             // leftover from previous media items or streams
             this._seekSafetyTimeoutId = null;
@@ -422,6 +429,24 @@ export class TizenAVPlayer {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // Metadata is now loaded, display is ready, and seek position is set.
+            // If awaitTracksBeforePlayback is enabled, we set up a 2-second safety timeout
+            // to bypass the track selection gate in case header parsing deadlocks the player.
+            const awaitTracks = PlayerSettings.get('awaitTracksBeforePlayback');
+            const hasPending = this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null;
+
+            if (awaitTracks && hasPending) {
+                log.info('Await tracks before playback is enabled. Setting 2s safety timeout.');
+                if (this._readyTrackTimeoutId) clearTimeout(this._readyTrackTimeoutId);
+                this._readyTrackTimeoutId = setTimeout(() => {
+                    this._readyTrackTimeoutId = null;
+                    if (this._avplay && this._isPrepared && !this._forceTizenPlayPassed) {
+                        log.warn('READY-state safety timeout reached. Forcing play to prevent TV UI deadlock.');
+                        this._forceTizenPlayPassed = true;
+                        this._checkNativePlay();
+                    }
+                }, 2000);
+            }
+
             // Check if we can start native playback yet (requires buffering complete).
             this._checkNativePlay();
 
@@ -516,16 +541,16 @@ export class TizenAVPlayer {
                 log.info('Buffering complete (network threshold reached)');
                 this._bufferingComplete = true;
 
-                // Hardware is settled (due to 6s buffer threshold), 
-                // but we only fire if the decoder is also prepared and intent is to play.
-                this._checkNativePlay();
-                
                 // Track transition point: Buffer is full but clock hasn't started yet.
                 // Apply pending tracks now. If they fail (e.g., Tizen needs more time to parse text),
                 // they remain pending and get picked up by oncurrentplaytime.
                 if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null) {
                     this._applyPendingTracks();
                 }
+
+                // Hardware is settled (due to 6s buffer threshold), 
+                // but we only fire if the decoder is also prepared and intent is to play.
+                this._checkNativePlay();
 
                 // If the player was already natively playing (e.g. stalled for network buffer),
                 // it natively auto-resumes once buffering is complete. We must emit 'playing' 
@@ -916,6 +941,18 @@ export class TizenAVPlayer {
                 log.warn(`Post-stabilization subtitle re-apply failed for index ${savedIndex}:`, e);
             }
         }
+
+        // If all pending tracks are successfully applied, clear the safety timeout and trigger check play
+        if (this._pendingAudioIndex === null && this._pendingSubtitleIndex === null) {
+            if (this._readyTrackTimeoutId) {
+                clearTimeout(this._readyTrackTimeoutId);
+                this._readyTrackTimeoutId = null;
+            }
+            if (PlayerSettings.get('awaitTracksBeforePlayback') && this._isPlaying && !this._isTizenPlaying) {
+                log.info('All tracks applied, triggering native check play');
+                this._checkNativePlay();
+            }
+        }
     }
 
     /**
@@ -958,6 +995,16 @@ export class TizenAVPlayer {
         }
 
         if (this._isPlaying && this._isPrepared && this._bufferingComplete && !this._isTizenPlaying) {
+            // If awaitTracksBeforePlayback is enabled, check if we are still waiting for audio/subtitle tracks to resolve.
+            // If they are pending and the safety timeout has not yet bypassed, we hold playback.
+            const awaitTracks = PlayerSettings.get('awaitTracksBeforePlayback');
+            const hasPending = this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null;
+
+            if (awaitTracks && hasPending && !this._forceTizenPlayPassed) {
+                log.info('_checkNativePlay(): deferring play() because tracks are pending');
+                return;
+            }
+
             try {
                 this._avplay.play();
                 this._isTizenPlaying = true;
@@ -1258,6 +1305,10 @@ export class TizenAVPlayer {
         if (this._suppressWaitingTimeout) {
             clearTimeout(this._suppressWaitingTimeout);
             this._suppressWaitingTimeout = null;
+        }
+        if (this._readyTrackTimeoutId) {
+            clearTimeout(this._readyTrackTimeoutId);
+            this._readyTrackTimeoutId = null;
         }
 
         // Unconditionally cancel the seek safety timer on stop to avoid fires

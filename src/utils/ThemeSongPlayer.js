@@ -10,6 +10,7 @@
 
 import { logger } from './Logger.js';
 import { eventBus } from '../core/EventBus.js';
+import { storage } from './StorageService.js';
 
 const log = logger.create('ThemeSongPlayer');
 
@@ -225,27 +226,39 @@ class ThemeSongPlayer {
     }
 
     /**
-     * Interpolates volume from 0 to 1 for a premium entry transition.
+     * Interpolates volume from 0 to the user-configured target volume level
+     * for a premium, Apple-style smooth entry transition.
      */
     _fadeIn() {
+        // Read the user's custom volume preference from local storage.
+        // Under Apple's HIG principles, sound levels should default to a comfortable,
+        // ambient level (30% or 0.3) rather than blasting at 100%.
+        const targetVolume = parseFloat(storage.getItem('pref:themeSongVolume') || '0.3');
+        
+        // Calculate the total number of updates needed to complete the transition
+        // based on the configured step size (e.g. 1500ms / 30ms = 50 steps).
         const steps = this.FADE_IN_DURATION / this.FADE_INTERVAL_STEP;
-        const volumeIncrement = 1 / steps;
+        
+        // Compute the amount of volume to add during each step interval
+        const volumeIncrement = targetVolume / steps;
         let currentStep = 0;
 
         this._fadeInterval = setInterval(() => {
+            // Safety check: if audio instance is destroyed mid-fade, abort immediately
             if (!this._audio) {
                 this._clearFade();
                 return;
             }
 
             currentStep++;
-            // Slowly increase the volume fraction
-            const nextVolume = Math.min(1, currentStep * volumeIncrement);
+            
+            // Slowly increase the volume level up to the target cap
+            const nextVolume = Math.min(targetVolume, currentStep * volumeIncrement);
             this._audio.volume = nextVolume;
 
-            // Target volume reached: end interpolation
-            if (nextVolume >= 1) {
-                log.debug('Volumetric fade-in transition completed');
+            // Target volume reached: clear the interval to stop looping
+            if (nextVolume >= targetVolume) {
+                log.debug('Volumetric fade-in transition completed with target:', targetVolume);
                 this._clearFade();
             }
         }, this.FADE_INTERVAL_STEP);

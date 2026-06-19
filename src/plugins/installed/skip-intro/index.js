@@ -441,7 +441,7 @@ const skipIntroPlugin = {
                 container.className = `plugin-widget ${cssClass}`;
                 container.innerHTML = `
                     <button
-                        class="osd-btn skip-intro-btn"
+                        class="skip-intro-btn"
                         tabindex="0"
                         aria-label="${label}"
                     >

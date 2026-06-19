@@ -1,5 +1,5 @@
 import BaseMenu from './BaseMenu.js';
-import { ICONS } from './icons.js';
+import { osdIcons } from '../../utils/Icons.js';
 import { logger } from '../../utils/Logger.js';
 import { i18n } from '../../utils/i18n.js';
 
@@ -9,10 +9,17 @@ export default class AspectRatioMenu extends BaseMenu {
     constructor(osdController) {
         super(osdController);
         this.isModal = true;
+        // ====================================================================
+        // Menu Option Definitions
+        // ====================================================================
+        // We define the supported aspect ratios here. Notice we now reference the 
+        // unified osdIcons.aspectRatio and osdIcons.zoomIn properties directly.
+        // The display transition between outline and filled states is handled 
+        // dynamically via CSS rules rather than code-level string swaps.
         this.options = [
-            { id: 'auto', label: i18n.t('Auto'), key: 'Auto', icon: ICONS.aspectRatio },
-            { id: 'zoom', label: i18n.t('Zoom'), key: 'Zoom', icon: ICONS.zoomIn },
-            { id: 'stretch', label: i18n.t('Stretch'), key: 'Stretch', icon: ICONS.aspectRatio } // Reusing icon for now
+            { id: 'auto', label: i18n.t('Auto'), key: 'Auto' },
+            { id: 'zoom', label: i18n.t('Zoom'), key: 'Zoom' },
+            { id: 'stretch', label: i18n.t('Stretch'), key: 'Stretch' } // Reusing icon for now
         ];
     }
 
@@ -31,7 +38,7 @@ export default class AspectRatioMenu extends BaseMenu {
 
     show() {
         // Capture focus context
-        this._prevFocus = this.osd._getFocused(); 
+        this._prevFocus = this.osd._getFocused();
         this._prevRow = this.osd._currentFocusRow;
         this._prevIndex = this.osd._currentFocusIndex;
 
@@ -73,14 +80,18 @@ export default class AspectRatioMenu extends BaseMenu {
 
         const current = this.osd.player.getAspectRatio();
 
+        // ====================================================================
+        // Build Aspect Ratio Options HTML List
+        // ====================================================================
+        // Maps options to layout templates. The active selection gets a checkmark icon.
+        // We reference the unified osdIcons.check icon instead of checkOutline.
         const optionsHtml = this.options.map((opt, i) => {
             const isSelected = opt.id === current;
-            const checkIcon = isSelected ? ICONS.check : '';
-            
+            const checkIcon = isSelected ? osdIcons.check : '';
+
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" 
                     data-id="${opt.id}" data-menu-index="${i}">
-                <span class="track-option-icon">${opt.icon || ''}</span>
                 <span class="track-option-label" data-i18n="${opt.key}">${opt.label}</span>
                 <span class="track-option-check">${checkIcon}</span>
             </button>

@@ -1,7 +1,8 @@
 import Component from '../core/Component.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
-import { ICONS } from '../player/osd/icons.js'; // Borrowing native OSD icons
+// Centralized icon utility library hosting standard SVG mappings.
+import { osdIcons } from '../utils/Icons.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -109,8 +110,9 @@ export class TrailerPlayer extends Component {
                     <!-- Header -->
                     <div class="osd-header">
                         <div class="osd-header-left">
+                            <!-- Back button using centralized back arrow unified SVG -->
                             <button class="osd-btn osd-back-btn focusable" data-action="close" aria-label="${i18n.t('Close') || 'Close'}" tabindex="0">
-                                ${ICONS.arrowBack}
+                                ${osdIcons.arrowBack}
                             </button>
                             <span class="osd-title" id="trailerTitle"></span>
                         </div>
@@ -120,11 +122,13 @@ export class TrailerPlayer extends Component {
                     <div class="osd-bottom">
                         <div class="osd-controls-row" style="justify-content: center;">
                             <div class="osd-controls-left" style="margin: 0 auto;">
-                                <button class="osd-btn focusable" data-action="prev" tabindex="0" id="trailerPrevBtn">${ICONS.skipPrevious}</button>
-                                <button class="osd-btn focusable" data-action="rewind" tabindex="0">${ICONS.fastRewind}</button>
-                                <button class="osd-btn osd-btn-play focusable" id="trailerPlayPauseBtn" data-action="togglePlay" tabindex="0">${ICONS.pause}</button>
-                                <button class="osd-btn focusable" data-action="fastForward" tabindex="0">${ICONS.fastForward}</button>
-                                <button class="osd-btn focusable" data-action="next" tabindex="0" id="trailerNextBtn">${ICONS.skipNext}</button>
+                                <!-- Standard player control buttons utilizing unified SVG definitions.
+                                     CSS handles outline/filled states dynamically based on hover/focus/active. -->
+                                <button class="osd-btn focusable" data-action="prev" tabindex="0" id="trailerPrevBtn">${osdIcons.skipPrevious}</button>
+                                <button class="osd-btn focusable" data-action="rewind" tabindex="0">${osdIcons.fastRewind}</button>
+                                <button class="osd-btn osd-btn-play focusable" id="trailerPlayPauseBtn" data-action="togglePlay" tabindex="0">${osdIcons.pause}</button>
+                                <button class="osd-btn focusable" data-action="fastForward" tabindex="0">${osdIcons.fastForward}</button>
+                                <button class="osd-btn focusable" data-action="next" tabindex="0" id="trailerNextBtn">${osdIcons.skipNext}</button>
                             </div>
                         </div>
 
@@ -600,9 +604,9 @@ export class TrailerPlayer extends Component {
     _onYTStateChange(event) {
         // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
         if (event.data === 1) {
-            // Playing
+            // Playing state active - display filled pause design
             this._isPlaying = true;
-            this._playPauseBtn.innerHTML = ICONS.pause;
+            this._playPauseBtn.innerHTML = osdIcons.pause;
             this._hideLoading();
 
             // Try again on play in case data was delayed
@@ -613,9 +617,9 @@ export class TrailerPlayer extends Component {
                 }
             } catch (e) {}
         } else if (event.data === 2) {
-            // Paused
+            // Paused state active - display filled play design
             this._isPlaying = false;
-            this._playPauseBtn.innerHTML = ICONS.play;
+            this._playPauseBtn.innerHTML = osdIcons.play;
         } else if (event.data === 0) {
             // Ended
             this._executeAction('next'); // Auto-advance to next trailer
@@ -959,11 +963,11 @@ export class TrailerPlayer extends Component {
 
         if (msg.event === 'playing') {
             this._isPlaying = true;
-            this._playPauseBtn.innerHTML = ICONS.pause;
+            this._playPauseBtn.innerHTML = osdIcons.pause;
             this._hideLoading();
         } else if (msg.event === 'paused') {
             this._isPlaying = false;
-            this._playPauseBtn.innerHTML = ICONS.play;
+            this._playPauseBtn.innerHTML = osdIcons.play;
             this._resetAutoHide();
         } else if (msg.type === 'time') {
             this._proxyCurrentTime = msg.t / 1000;
@@ -992,10 +996,10 @@ export class TrailerPlayer extends Component {
             if (msg.s !== undefined && msg.s !== -1) {
                 if (msg.s === 1) {
                     this._isPlaying = true;
-                    this._playPauseBtn.innerHTML = ICONS.pause;
+                    this._playPauseBtn.innerHTML = osdIcons.pause;
                 } else if (msg.s === 2) {
                     this._isPlaying = false;
-                    this._playPauseBtn.innerHTML = ICONS.play;
+                    this._playPauseBtn.innerHTML = osdIcons.play;
                 } else if (msg.s === 0) {
                     this._executeAction('next');
                 }
@@ -1004,10 +1008,10 @@ export class TrailerPlayer extends Component {
             const state = msg.data;
             if (state === 1) {
                 this._isPlaying = true;
-                this._playPauseBtn.innerHTML = ICONS.pause;
+                this._playPauseBtn.innerHTML = osdIcons.pause;
             } else if (state === 2) {
                 this._isPlaying = false;
-                this._playPauseBtn.innerHTML = ICONS.play;
+                this._playPauseBtn.innerHTML = osdIcons.play;
             } else if (state === 0) {
                 this._executeAction('next');
             }

@@ -103,7 +103,7 @@ export const MediaHelper = {
                     if (mediaSource.LiveStreamId) {
                         url += `&LiveStreamId=${encodeURIComponent(mediaSource.LiveStreamId)}`;
                     }
-                    url += `&api_key=${encodeURIComponent(authToken)}`;
+                    url += `&ApiKey=${encodeURIComponent(authToken)}`;
                     if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
                         url += `&AudioStreamIndex=${audioStreamIndex}`;
                     }
@@ -122,7 +122,7 @@ export const MediaHelper = {
                     if (mediaSource.LiveStreamId) {
                         url += `&LiveStreamId=${encodeURIComponent(mediaSource.LiveStreamId)}`;
                     }
-                    url += `&api_key=${encodeURIComponent(authToken)}`;
+                    url += `&ApiKey=${encodeURIComponent(authToken)}`;
                     isHls = true;
                 }
 
@@ -148,7 +148,7 @@ export const MediaHelper = {
                 url = `${serverUrl}/Videos/${itemId}/stream.${mediaSource.Container}`;
                 url += `?Static=true`;
                 url += `&mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
-                url += `&api_key=${encodeURIComponent(authToken)}`;
+                url += `&ApiKey=${encodeURIComponent(authToken)}`;
                 if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
                     url += `&AudioStreamIndex=${audioStreamIndex}`;
                 }
@@ -169,7 +169,7 @@ export const MediaHelper = {
                 url = `${serverUrl}/Videos/${itemId}/master.m3u8`;
                 url += `?mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
                 url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
-                url += `&api_key=${encodeURIComponent(authToken)}`;
+                url += `&ApiKey=${encodeURIComponent(authToken)}`;
                 url += `&StartTimeTicks=${startPositionTicks || 0}`;
                 if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
                     url += `&AudioStreamIndex=${audioStreamIndex}`;
@@ -352,7 +352,7 @@ export const MediaHelper = {
      * @param {string} serverUrl   - Jellyfin server base URL (e.g. http://host:8096)
      * @param {string} itemId      - Item ID (unused, kept for backward-compat signature)
      * @param {string} mediaSourceId - Media source ID (unused, kept for backward-compat)
-     * @param {string} authToken   - Authentication token for the api_key query param
+     * @param {string} authToken   - Authentication token for the ApiKey query param
      * @param {string} [format]    - If provided, overrides the extension in the DeliveryUrl
      *                               (e.g. 'vtt').  If omitted the DeliveryUrl is used as-is.
      * @returns {string} Fully-qualified subtitle URL including auth token
@@ -388,7 +388,7 @@ export const MediaHelper = {
             const format_  = format || codec;            // honour caller's override
             deliveryPath = `/Videos/${itemId}/${mediaSourceId}/Subtitles/${track.Index}/0/Stream.${format_}`;
             const sep = '?';
-            return `${serverUrl}${deliveryPath}${sep}api_key=${encodeURIComponent(authToken)}`;
+            return `${serverUrl}${deliveryPath}${sep}ApiKey=${encodeURIComponent(authToken)}`;
         }
 
         // Ensure it's a fully-qualified URL (DeliveryUrl is usually root-relative)
@@ -405,7 +405,7 @@ export const MediaHelper = {
 
         // Append auth token (DeliveryUrl itself usually omits it)
         const separator = url.includes('?') ? '&' : '?';
-        url += `${separator}api_key=${encodeURIComponent(authToken)}`;
+        url += `${separator}ApiKey=${encodeURIComponent(authToken)}`;
 
         return url;
     },

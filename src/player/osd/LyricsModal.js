@@ -1,6 +1,6 @@
 import Component from '../../core/Component.js';
 import { logger } from '../../utils/Logger.js';
-import { ICONS } from './icons.js';
+import { osdIcons } from '../../utils/Icons.js';
 import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('LyricsModal');
@@ -57,8 +57,9 @@ export default class LyricsModal extends Component {
                 <div class="osd-offset-title-group">
                     <span class="osd-offset-title">${i18n.t('Lyrics') || 'Lyrics'}</span>
                 </div>
+                <!-- Close Button utilizing unified close icon -->
                 <button class="osd-offset-close focusable" data-action="lyrics" tabindex="0">
-                    ${ICONS.close}
+                    ${osdIcons.close}
                 </button>
             </div>
             <div class="lyrics-container" style="height: calc(100% - 40px); overflow-y: hidden;">

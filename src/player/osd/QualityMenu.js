@@ -1,7 +1,16 @@
+// Base class providing overlay modal logic and key handlers for generic player menus.
 import BaseMenu from './BaseMenu.js';
-import { ICONS } from './icons.js';
+
+// Centralized icon resource definitions to display outlines and filled vectors.
+import { osdIcons } from '../../utils/Icons.js';
+
+// Logger interface to stream diagnostic information concerning settings state.
 import { logger } from '../../utils/Logger.js';
+
+// Global local configurations and persistent user storage mapping.
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+
+// Direct internationalization API to dynamically translate strings.
 import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('QualityMenu');
@@ -46,7 +55,12 @@ export default class QualityMenu extends BaseMenu {
         const margin = 100000; // 100kbps margin
         const limit = (sourceBitrate || Infinity) + margin;
 
-        const options = [{ id: 0, label: i18n.t('Auto'), icon: ICONS.auto || ICONS.check }];
+        // ====================================================================
+        // Default Option Mapping
+        // ====================================================================
+        // Establish primary auto mode fallback setting index 0 at top of selection.
+        // We reference the unified osdIcons.check icon directly.
+        const options = [{ id: 0, label: i18n.t('Auto'), icon: osdIcons.check }];
         
         this.bitrates.forEach(b => {
             if (b.val <= limit) {
@@ -137,9 +151,16 @@ export default class QualityMenu extends BaseMenu {
             currentMaxBitrate = 0;
         }
 
+        // Construct layout elements representing active bandwidth settings.
         const optionsHtml = this.validOptions.map((opt, i) => {
+            // Assess selection matches comparing option item to current bitrate.
             const isSelected = opt.id === currentMaxBitrate;
-            const checkIcon = isSelected ? ICONS.check : '';
+            
+            // ================================================================
+            // Dynamic Selection Mark
+            // ================================================================
+            // Assign unified check icon element to identify selected list values.
+            const checkIcon = isSelected ? osdIcons.check : '';
             
             // User requested: Auto = Direct Play, Lower = Transcoding
             const secondaryLabel = opt.id === 0 ? i18n.t('DirectPlay') : i18n.t('Transcoding');

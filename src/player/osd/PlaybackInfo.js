@@ -1,5 +1,5 @@
 import BaseMenu from './BaseMenu.js';
-import { ICONS } from './icons.js';
+import { osdIcons } from '../../utils/Icons.js';
 import { MediaHelper } from '../core/MediaHelper.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { i18n } from '../../utils/i18n.js';
@@ -44,10 +44,12 @@ export default class PlaybackInfo extends BaseMenu {
         }
     }
 
-
-
     render() {
-        const closeIcon = ICONS.close;
+        // ====================================================================
+        // Close Icon Mapping
+        // ====================================================================
+        // We reference the unified close icon directly.
+        const closeIcon = osdIcons.close;
         const html = `
             <div id="osdPlaybackInfoOverlay" class="playback-info-overlay">
                 <div class="playback-info-header">

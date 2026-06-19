@@ -99,6 +99,19 @@ export function getDeviceCapabilities() {
     ac3 = ac3 || video.canPlayType('audio/mp4; codecs="ac-3"') !== '';
     eac3 = eac3 || video.canPlayType('audio/mp4; codecs="ec-3"') !== '';
 
+    // Apply the user's EAC3 force-state setting.
+    // Browser canPlayType / MSE.isTypeSupported for EAC3 are notoriously unreliable
+    // on some platforms (WebOS, some Samsung browsers). If the user has set 'enable',
+    // we override the probe result so EAC3 gets into the DirectPlay list and the
+    // transcode target list regardless of what the browser reports.
+    const eac3ForceSetting = PlayerSettings.get('enableEac3');
+    if (eac3ForceSetting === 'enable') {
+        eac3 = true;
+    } else if (eac3ForceSetting === 'disable') {
+        eac3 = false;
+    }
+    // 'auto' (default): keep the probed value as-is
+
     // Dolby Vision detection
     const dolbyVision =
         video.canPlayType('video/mp4; codecs="dvh1.05.01"') !== '' ||
@@ -249,10 +262,12 @@ export function buildJellyfinProfile(options = {}) {
     const trueHdSetting = PlayerSettings.get('enableTrueHd');
     const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
 
-    // Standard web audio
-    const audioCodecs = ['aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav'];
-    if (caps.ac3) audioCodecs.push('ac3');
+    // Standard web audio. Place EAC3 and AC3 first so they are preferred
+    // over AAC in the DirectPlay lists when supported or force-enabled.
+    const audioCodecs = [];
     if (caps.eac3) audioCodecs.push('eac3');
+    if (caps.ac3) audioCodecs.push('ac3');
+    audioCodecs.push('aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav');
     if (enableDts) audioCodecs.push('dts', 'dca');
     if (enableTrueHd) audioCodecs.push('truehd');
 
@@ -312,11 +327,55 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
+    // -------------------------------------------------------------------------
+    // HLS transcode audio codec selection.
+    //
+    // Uses the user's preferred transcode audio codec setting. The preferred
+    // codec is placed first so the Jellyfin server selects it when evaluating
+    // supported codecs. AAC is always retained as an inner fallback.
+    //
+    // Note: for the Web/HTML5 profile, AC3/EAC3 are only used here if the
+    // effective caps value is true (which already accounts for the force-state
+    // override applied in getDeviceCapabilities()). This prevents the server
+    // from transcoding to a codec the player truly cannot handle.
+    // -------------------------------------------------------------------------
+    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
+    let transAudioCodecsArr = [];
+
+    if (preferredTranscodeCodec === 'auto') {
+        // Auto (Prefer E-AC3)
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        transAudioCodecsArr.push('aac');
+    } else if (preferredTranscodeCodec === 'prefer_ac3') {
+        // Prefer AC3
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        transAudioCodecsArr.push('aac');
+    } else if (preferredTranscodeCodec === 'prefer_aac') {
+        // Prefer AAC
+        transAudioCodecsArr.push('aac');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+    } else if (preferredTranscodeCodec === 'force_eac3') {
+        // Only E-AC3
+        transAudioCodecsArr.push('eac3');
+    } else if (preferredTranscodeCodec === 'force_ac3') {
+        // Only AC3
+        transAudioCodecsArr.push('ac3');
+    } else {
+        // Only AAC (force_aac)
+        transAudioCodecsArr.push('aac');
+    }
+
+    let transAudioCodecs = transAudioCodecsArr.join(',');
+
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = audioCodecString;
+        // Keep the custom resolved transcode audio codec list so that the server
+        // transcodes the audio to the user's preferred target codec (e.g. EAC3)
+        // instead of falling back to default browser codecs in audioCodecString.
         transVideoCodecs = generalVideoCodecs.join(',');
     }
 

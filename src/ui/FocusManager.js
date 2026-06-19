@@ -717,7 +717,14 @@ class FocusManager {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback
             const scrollContainer = this._scroll.getScrollContainer(this._focusedElement);
-            if (scrollContainer && scrollContainer.scrollTop > 0) {
+            // ================================================================
+            // GPU SCROLL COMPATIBLE VERTICAL SCROLL CHECK
+            // ================================================================
+            // Direct reads of scrollContainer.scrollTop return 0 in GPU scroll mode.
+            // Using getVerticalScroll ensures we correctly identify if the page
+            // is scrolled down before animating back to top.
+            // ================================================================
+            if (scrollContainer && this._scroll.getVerticalScroll(scrollContainer) > 0) {
                 this._scroll.smoothScrollTo(scrollContainer, 0);
             }
         }

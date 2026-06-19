@@ -226,6 +226,30 @@ class SearchPage extends Page {
         this.setActiveSection('search-header');
     }
 
+    /**
+     * Overrides the default page-level loading state mechanism.
+     * 
+     * By default, Page.js adds a 'loading' class to the page container, which
+     * hides all other child elements (via opacity: 0) to prevent interaction.
+     * For live search, this causes a jarring UI flash/pulse on every keystroke
+     * because the input box itself disappears.
+     * 
+     * Instead, we manually toggle the visibility of the search spinner element,
+     * keeping the search input field and any existing results fully visible.
+     *
+     * @param {boolean} show - True to display the spinner, false to hide it.
+     */
+    setLoading(show) {
+        const spinner = this.$('.page-loading');
+        if (spinner) {
+            if (show) {
+                spinner.classList.remove('hidden');
+            } else {
+                spinner.classList.add('hidden');
+            }
+        }
+    }
+
     _onSearchInput(query) {
         this._query = query.trim();
 
@@ -244,10 +268,11 @@ class SearchPage extends Page {
             return;
         }
 
-        // Debounce search
+        // Debounce search - set to 500ms to ensure snappier updates as the user types
+        // while still grouping fast keystrokes to limit redundant API requests.
         this._debounceTimer = setTimeout(() => {
             this._search();
-        }, 300);
+        }, 500);
     }
 
     async _search() {

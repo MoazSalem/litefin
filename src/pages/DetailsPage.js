@@ -35,6 +35,7 @@ import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
+import { detailsIcons } from '../utils/Icons.js';
 
 const log = logger.create('DetailsPage');
 
@@ -98,46 +99,35 @@ class DetailsPage extends Page {
                             <!-- Actions -->
                             <section class="details-actions" id="actions">
                                 <button class="btn btn-primary play-btn" tabindex="0">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    ${detailsIcons.play}
                                     <span data-i18n="Play">Play</span>
                                 </button>
                                 <button class="btn btn-secondary resume-btn hidden" tabindex="-1">
                                     <span data-i18n="ButtonResume">Resume</span>
                                 </button>
                                 <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                        <path d="M3 3v5h5"/>
-                                    </svg>
+                                    ${detailsIcons.reset}
                                 </button>
                                 <!-- Trailer button — shown only when item has local or remote trailers.
                                      Visibility is set dynamically by _updateTrailerButton() after load. -->
                                 <button class="btn btn-icon trailer-btn hidden" tabindex="-1" aria-label="${i18n.t('WatchTrailer') || 'Watch Trailer'}">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/>
-                                    </svg>
+                                    ${detailsIcons.trailer}
                                 </button>
                                 <button class="btn btn-icon shuffle-btn hidden" tabindex="-1" aria-label="${i18n.t('Shuffle')}">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
-                                    </svg>
+                                    ${detailsIcons.shuffle}
                                 </button>
                                 <button class="btn btn-icon watched-btn" tabindex="0" aria-label="${i18n.t('MarkWatched')}">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                    ${detailsIcons.watchedOutline}
                                 </button>
                                 <!-- Favorite Button Injected Here -->
                                 <button class="btn btn-icon audio-btn" tabindex="0" aria-label="${i18n.t('AudioTracks')}">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+                                    ${detailsIcons.audio}
                                 </button>
                                 <button class="btn btn-icon subtitle-btn" tabindex="0" aria-label="${i18n.t('SubtitleTracks')}">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
+                                    ${detailsIcons.subtitle}
                                 </button>
                                 <button class="btn btn-icon more-btn" tabindex="0" aria-label="${i18n.t('MoreOptions')}">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <circle cx="12" cy="12" r="1"></circle>
-                                        <circle cx="12" cy="5" r="1"></circle>
-                                        <circle cx="12" cy="19" r="1"></circle>
-                                    </svg>
+                                    ${detailsIcons.more}
                                 </button>
                             </section>
 
@@ -388,18 +378,9 @@ class DetailsPage extends Page {
         // See more button
         const seeMoreBtn = this.$('.see-more-btn');
         if (seeMoreBtn) {
-            seeMoreBtn.addEventListener('mousedown', (e) => {
-                const now = Date.now();
-                if (now - lastActivateTime < 400) return;
-                lastActivateTime = now;
-                this._showFullOverview();
-            });
-            seeMoreBtn.addEventListener('click', (e) => {
-                const now = Date.now();
-                if (now - lastActivateTime < 400) return;
-                lastActivateTime = now;
-                this._showFullOverview();
-            });
+            // Route events through the central handler to manage activation limits.
+            seeMoreBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showFullOverview()));
+            seeMoreBtn.addEventListener('click', (e) => handleActivate(e, () => this._showFullOverview()));
         }
     }
 
@@ -1209,7 +1190,8 @@ class DetailsPage extends Page {
             focusSectionName,
             titleElText,
             cardType,
-            onClick
+            onClick,
+            currentIndex
         } = options;
 
         const section = this.$(`#${sectionId}`);
@@ -1236,7 +1218,8 @@ class DetailsPage extends Page {
             initialWindow: isLandscape ? 5 : Math.min(7, items.length),
             focusSectionId: focusSectionName,
             cardType: cardType,
-            renderCard: renderCard
+            renderCard: renderCard,
+            currentIndex: currentIndex
         });
 
         if (!this._virtualRows) this._virtualRows = {};
@@ -1253,6 +1236,16 @@ class DetailsPage extends Page {
         list.onclick = (e) => {
             const card = e.target.closest('.media-card');
             if (card) {
+                // -------------------------------------------------------------
+                // Block navigation events if the clicked card is unpressable
+                // (e.g. the active current episode card in siblings row).
+                // -------------------------------------------------------------
+                if (card.classList.contains('unpressable')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
                 // Save clicked item for exact focus restoration, scoped by current page item ID
                 // to prevent child DetailsPages from consuming parent state
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
@@ -1740,7 +1733,7 @@ class DetailsPage extends Page {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const starRating = item.CommunityRating && shouldShowScore(item) ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}` : '';
         const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';
@@ -2069,7 +2062,7 @@ class DetailsPage extends Page {
         // Photo overrides for Action Buttons
         if (item.Type === 'Photo') {
             if (playBtn) {
-                const playIcon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+                const playIcon = detailsIcons.photo;
                 playBtn.innerHTML = `${playIcon} <span>${i18n.t('ViewPhoto') || 'View Photo'}</span>`;
                 playBtn.onclick = () => {
                     const parentId = this._item.LibraryId || this._item.ParentId || state.get('activeLibraryId') || '';
@@ -2120,15 +2113,21 @@ class DetailsPage extends Page {
         const resumeLabel = i18n.t('ResumeAt', [timeString]);
 
         // Update the inner HTML of the resume button with a play icon and the formatted label.
-        resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${resumeLabel}</span>`;
+        resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
         requestAnimationFrame(() => {});
 
         // Watched button
-        if (userData.Played) {
-            if (watchedBtn) watchedBtn.classList.add('active');
+        if (watchedBtn) {
+            if (userData.Played) {
+                watchedBtn.classList.add('active');
+                watchedBtn.innerHTML = detailsIcons.watchedFilled;
+            } else {
+                watchedBtn.classList.remove('active');
+                watchedBtn.innerHTML = detailsIcons.watchedOutline;
+            }
         }
 
         // Shuffle Button Visibility
@@ -2141,7 +2140,7 @@ class DetailsPage extends Page {
                 shuffleBtn.classList.remove('hidden');
                 shuffleBtn.setAttribute('tabindex', '0');
                 shuffleBtn.setAttribute('aria-label', i18n.t('Slideshow') || 'Slideshow');
-                const playIcon = `<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+                const playIcon = detailsIcons.playLarge;
                 shuffleBtn.innerHTML = playIcon;
                 shuffleBtn.onclick = () => {
                     // Slideshow auto-starts via query param if we wanted, but right now SlideshowPage
@@ -2229,7 +2228,28 @@ class DetailsPage extends Page {
 
     async _loadNextUp() {
         try {
-            const response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
+            let response;
+            
+            // Check if the current server is Emby. Emby ignores the SeriesId parameter
+            // on the /Shows/NextUp endpoint, so we fall back to querying the first
+            // unplayed episode of the series via /Items, which matches NextUp logic.
+            if (api.isEmby()) {
+                // Fetch the oldest unplayed episode of this series.
+                response = await api.getItems({
+                    ParentId: this._itemId,
+                    Recursive: true,
+                    IncludeItemTypes: 'Episode',
+                    Limit: 1,
+                    Filters: 'IsUnplayed',
+                    SortBy: 'SortName',
+                    // Request all necessary fields for rendering the next up card.
+                    Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                });
+            } else {
+                // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
+                response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
+            }
+            
             this._nextUp = response.Items || [];
 
             if (this._nextUp.length > 0) {
@@ -2426,6 +2446,34 @@ class DetailsPage extends Page {
         });
     }
 
+    /**
+     * Toggles the overview description layout between truncated and expanded states.
+     * Complies with Apple's Human Interface Guidelines for focus states and screen flow.
+     */
+    _showFullOverview() {
+        // Fetch references to structural elements
+        const overviewEl = this.$('.overview-text');
+        const seeMoreBtn = this.$('.see-more-btn');
+        if (!overviewEl || !seeMoreBtn) return;
+
+        // Toggle lines clamp styling
+        const isExpanded = !overviewEl.classList.contains('line-clamp-6');
+
+        if (isExpanded) {
+            // Apply line clamping to keep layout neat and clean
+            overviewEl.classList.add('line-clamp-6');
+            seeMoreBtn.textContent = i18n.t('ShowMore');
+            this.el.scrollTop = 0; // Reset scroll view hierarchy
+        } else {
+            // Remove line clamping limits to reveal full description block
+            overviewEl.classList.remove('line-clamp-6');
+            seeMoreBtn.textContent = i18n.t('ShowLess');
+        }
+
+        // Direct focus manager to maintain focus on action button
+        focusManager.focusElement(seeMoreBtn);
+    }
+
     _checkOverviewTruncation() {
         const overviewEl = this.$('.overview-text');
         const seeMoreBtn = this.$('.see-more-btn');
@@ -2446,25 +2494,6 @@ class DetailsPage extends Page {
 
             // 3. Link Actions -> See More
             this._updateLeaveDown('details-actions', 'details-see-more');
-
-            // Handle Click (Toggle)
-            seeMoreBtn.onclick = () => {
-                const isExpanded = !overviewEl.classList.contains('line-clamp-6');
-
-                if (isExpanded) {
-                    // Collapse
-                    overviewEl.classList.add('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowMore');
-                    this.el.scrollTop = 0; // Optional: Reset scroll
-                } else {
-                    // Expand
-                    overviewEl.classList.remove('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowLess');
-                }
-
-                // Keep focus on the button using precision scroll
-                focusManager.focusElement(seeMoreBtn);
-            };
         }
     }
 
@@ -2640,18 +2669,30 @@ class DetailsPage extends Page {
             const response = await api.getEpisodes(this._item.SeriesId, {
                 SeasonId: this._item.SeasonId
             });
-            // Filter out current episode and limit to 24 for row
-            const siblings = (response.Items || []).filter((ep) => ep.Id !== this._itemId).slice(0, 24);
+
+            // -------------------------------------------------------------
+            // Retrieve preference to determine if we include current episode.
+            // Defaults to false.
+            // -------------------------------------------------------------
+            const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
+            const allItems = response.Items || [];
+
+            // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
+            const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
 
             if (siblings.length > 0) {
-                this._renderMoreFromSeason(siblings);
+                // Find index of the current active episode in the siblings list
+                const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
+                
+                // Pass siblings and focused index down to renderer
+                this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
             }
         } catch (error) {
             log.warn('Failed to load season episodes', error);
         }
     }
 
-    _renderMoreFromSeason(episodes) {
+    _renderMoreFromSeason(episodes, currentEpisodeIndex = 0) {
         this._renderVirtualRow({
             sectionId: 'more-from-season-section',
             listId: 'more-from-season-row',
@@ -2666,8 +2707,14 @@ class DetailsPage extends Page {
                             : this._item.SeasonName
                   ])
                 : null,
-            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode'),
-            focusSectionName: 'more-from-season-section'
+            // -------------------------------------------------------------
+            // Pass option down to CardRenderer indicating if this is the active episode details page
+            // -------------------------------------------------------------
+            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode', {
+                isCurrentEpisode: ep.Id === this._itemId
+            }),
+            focusSectionName: 'more-from-season-section',
+            currentIndex: currentEpisodeIndex
         });
     }
 
@@ -2942,7 +2989,24 @@ class DetailsPage extends Page {
                         }
                     } else {
                         // 1. Try to get "Next Up" for this series
-                        const nextUp = await api.getNextUp({ SeriesId: this._item.Id, Limit: 1 });
+                        let nextUp;
+                        if (api.isEmby()) {
+                            // On Emby, /Shows/NextUp does not filter by SeriesId.
+                            // We fetch the oldest unplayed episode of the series via /Items instead.
+                            nextUp = await api.getItems({
+                                ParentId: this._item.Id,
+                                Recursive: true,
+                                IncludeItemTypes: 'Episode',
+                                Limit: 1,
+                                Filters: 'IsUnplayed',
+                                SortBy: 'SortName',
+                                Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                            });
+                        } else {
+                            // On Jellyfin, query next up directly using SeriesId parameter.
+                            nextUp = await api.getNextUp({ SeriesId: this._item.Id, Limit: 1 });
+                        }
+
                         if (nextUp && nextUp.Items && nextUp.Items.length > 0) {
                             itemToPlay = nextUp.Items[0];
                             // Auto-resume if it has progress
@@ -3146,7 +3210,7 @@ class DetailsPage extends Page {
                 return `
                 <button class="modal-option-btn ${isSelected ? 'selected' : ''}" data-index="${track.Index}" tabindex="0">
                     <div class="check-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        ${detailsIcons.check}
                     </div>
                     <span class="track-option-label">
                         <span class="track-label-text">${label}</span>
@@ -4260,10 +4324,16 @@ class DetailsPage extends Page {
         try {
             if (isPlayed) {
                 await api.unmarkPlayed(this._itemId);
-                btn?.classList.remove('active');
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = detailsIcons.watchedOutline;
+                }
             } else {
                 await api.markPlayed(this._itemId);
-                btn?.classList.add('active');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.innerHTML = detailsIcons.watchedFilled;
+                }
             }
 
             this._item.UserData = this._item.UserData || {};

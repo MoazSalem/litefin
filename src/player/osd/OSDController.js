@@ -4,7 +4,7 @@ import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { playQueue } from '../../core/PlayQueue.js';
 import { i18n } from '../../utils/i18n.js';
 import { api } from '../../api/index.js';
-import { ICONS } from './icons.js';
+import { osdIcons } from '../../utils/Icons.js';
 import { TrickplayManager } from './TrickplayManager.js';
 
 import TrackMenu from './TrackMenu.js';
@@ -79,6 +79,7 @@ export default class OSDController extends Component {
         // Row 2: Seekbar
         this._currentFocusRow = 1;
         this._currentFocusIndex = 2; // Default to Play/Pause
+        this._trackTransitionLockoutActive = false;
 
         this._cachedOverlayRow = [];
         this._cachedHeaderRow = [];
@@ -132,10 +133,16 @@ export default class OSDController extends Component {
          * GHOST CLICK LOCKOUT STATE:
          * Tracks whether we are currently in the 350ms lockout protection window
          * right after focus has transitioned back from overlay widgets (Row -1).
+         *
+         * _trackTransitionLockoutActive is set by updateItem() when the player
+         * switches to a new episode/track. It gates the syncTracks() method,
+         * ensuring only a genuine track-start event (not a pause/resume) triggers
+         * the 1500ms countdown that releases the lockout.
          * ========================================================================
          */
         this._focusRestoreLockout = false;
         this._focusRestoreLockoutTimer = null;
+        this._trackTransitionLockoutActive = false;
     }
 
     _handleQueueUpdate() {
@@ -213,10 +220,10 @@ export default class OSDController extends Component {
                 const syncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
                 btn.classList.toggle('syncplay-active', syncPlayActive);
                 
-                // Update icon content (Filled variant when in a group)
+                // Update icon content (Filled/Outline variants handled by CSS based on syncplay-active class)
                 btn.innerHTML = `
                     <div class="osd-syncplay-icon-wrap">
-                        ${syncPlayActive ? ICONS.groupFilled : ICONS.group}
+                        ${osdIcons.group}
                         <span class="osd-syncplay-dot ${syncPlayActive ? 'visible' : ''}" id="osdSyncPlayDot"></span>
                     </div>
                 `;
@@ -389,7 +396,7 @@ export default class OSDController extends Component {
                 <div class="osd-header" id="osdHeader">
                     <div class="osd-header-left">
                         <button class="osd-btn osd-back-btn" data-action="exit" aria-label="${i18n.t('ButtonBack')}" tabindex="0">
-                            ${ICONS.arrowBack}
+                            ${osdIcons.arrowBack}
                         </button>
                         <div class="osd-title-wrap">
                             <div class="osd-title-main">
@@ -409,35 +416,35 @@ export default class OSDController extends Component {
                     <!-- Controls Row (above slider) -->
                     <div class="osd-controls-row">
                         <div class="osd-controls-left">
-                            <button class="osd-btn" data-action="previousTrack" tabindex="0" id="osdPrevBtn">${ICONS.skipPrevious}</button>
-                            <button class="osd-btn osd-btn-disabled" data-action="previousChapter" tabindex="-1" id="osdPrevChapterBtn">${ICONS.chapterPrevious}</button>
-                            <button class="osd-btn" data-action="rewind" tabindex="0">${ICONS.fastRewind}</button>
-                            <button class="osd-btn osd-btn-play" id="osdPlayPauseBtn" data-action="togglePlay" tabindex="0">${ICONS.pause}</button>
-                            <button class="osd-btn" data-action="fastForward" tabindex="0">${ICONS.fastForward}</button>
-                            <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${ICONS.chapterNext}</button>
-                            <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${ICONS.skipNext}</button>
+                            <button class="osd-btn" data-action="previousTrack" tabindex="0" id="osdPrevBtn">${osdIcons.skipPrevious}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="previousChapter" tabindex="-1" id="osdPrevChapterBtn">${osdIcons.chapterPrevious}</button>
+                            <button class="osd-btn" data-action="rewind" tabindex="0">${osdIcons.fastRewind}</button>
+                            <button class="osd-btn osd-btn-play" id="osdPlayPauseBtn" data-action="togglePlay" tabindex="0">${osdIcons.pause}</button>
+                            <button class="osd-btn" data-action="fastForward" tabindex="0">${osdIcons.fastForward}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${osdIcons.chapterNext}</button>
+                            <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${osdIcons.skipNext}</button>
                             <!-- Queue modal button (always available) -->
-                            <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${ICONS.queue}</button>
+                            <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${osdIcons.queue}</button>
                             <!-- Lyrics modal button -->
-                            <button class="osd-btn osd-btn-disabled hidden" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${ICONS.lyrics}</button>
+                            <button class="osd-btn osd-btn-disabled hidden" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${osdIcons.lyrics}</button>
                             <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
-                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${ICONS.viewList}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${osdIcons.viewList}</button>
                         </div>
                         <div class="osd-ends-at" id="osdEndsAt"></div>
                         <div class="osd-spacer"></div>
                         <div class="osd-controls-right">
-                            <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${ICONS.favorite}</button>
-                            <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
-                            <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
+                            <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${osdIcons.favorite}</button>
+                            <button class="osd-btn" data-action="subtitles" tabindex="0">${osdIcons.closedCaption}</button>
+                            <button class="osd-btn" data-action="audio" tabindex="0">${osdIcons.audiotrack}</button>
                             <!-- SyncPlay group management — only the icon; menu opens on click -->
                             <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">
                                 <div class="osd-syncplay-icon-wrap">
-                                    ${ICONS.group}
+                                    ${osdIcons.group}
                                     <span class="osd-syncplay-dot" id="osdSyncPlayDot"></span>
                                 </div>
                             </button>
-                            <button class="osd-btn" data-action="description" id="osdInfoBtn" tabindex="0" aria-label="Description">${ICONS.info}</button>
-                            <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
+                            <button class="osd-btn" data-action="description" id="osdInfoBtn" tabindex="0" aria-label="Description">${osdIcons.info}</button>
+                            <button class="osd-btn" data-action="settings" tabindex="0">${osdIcons.settings}</button>
                         </div>
                     </div>
 
@@ -852,16 +859,37 @@ export default class OSDController extends Component {
              * events from immediately triggering the newly focused Play/Pause button,
              * we trigger a 350ms lockout during which OSD click events are completely
              * discarded.
+             *
+             * TRACK TRANSITION EXCEPTION:
+             * If a full track transition lockout is already in effect (set by updateItem
+             * and timed-out by syncTracks), we do NOT override the longer 1500ms timer
+             * with this short 350ms one. Allowing that overwrite is what previously
+             * caused the skip-intro button on the next episode to become responsive
+             * only 350ms after the track switch — well within remote key repeat range.
              * ========================================================================
              */
-            this._focusRestoreLockout = true;
-            if (this._focusRestoreLockoutTimer) {
-                clearTimeout(this._focusRestoreLockoutTimer);
+            if (!this._trackTransitionLockoutActive) {
+                /*
+                 * Normal focus restore path (no track switch in progress):
+                 * set a 350ms lockout to absorb ghost clicks after a widget action.
+                 */
+                this._focusRestoreLockout = true;
+                if (this._focusRestoreLockoutTimer) {
+                    clearTimeout(this._focusRestoreLockoutTimer);
+                }
+                this._focusRestoreLockoutTimer = setTimeout(() => {
+                    this._focusRestoreLockout = false;
+                    this._focusRestoreLockoutTimer = null;
+                }, 350);
+            } else {
+                /*
+                 * Track transition lockout is in effect — syncTracks() owns the timer.
+                 * Just ensure the flag is set; do NOT start a competing 350ms timer
+                 * that would prematurely clear the lock before the new episode settles.
+                 */
+                this._focusRestoreLockout = true;
+                log.debug('OSDController.restoreControlsFocus: skipping 350ms timer — track transition lockout is active');
             }
-            this._focusRestoreLockoutTimer = setTimeout(() => {
-                this._focusRestoreLockout = false;
-                this._focusRestoreLockoutTimer = null;
-            }, 350);
 
             /*
              * ========================================================================
@@ -879,6 +907,7 @@ export default class OSDController extends Component {
         // Resume normal auto-hide behaviour
         this.resetAutoHide();
     }
+
 
     _updateNavigationButtons() {
         if (!this._osdEl) return;
@@ -1334,8 +1363,44 @@ export default class OSDController extends Component {
         }
     }
 
+    /**
+     * Called by PlayerPage._onPlaying() every time playback begins (including
+     * after a track-to-track transition). When a track switch has occurred,
+     * this starts the 1.5-second input lockout countdown to absorb any ghost
+     * key presses from the remote that triggered the transition.
+     *
+     * Design:
+     *   updateItem() sets _focusRestoreLockout = true with NO timer because the
+     *   loading duration is unknown. syncTracks() fires once the player emits
+     *   'playing' (media is live), and only then starts the timed release.
+     *
+     *   CRITICAL: _trackTransitionLockoutActive must remain TRUE for the entire
+     *   1500ms window. Clearing it early would let restoreControlsFocus() see a
+     *   false flag and overwrite the 1500ms timer with a shorter 350ms one.
+     *   It is cleared inside the timer callback when the window expires.
+     */
     syncTracks() {
         if (!this._player) return;
+
+        if (this._trackTransitionLockoutActive) {
+            log.info('OSDController.syncTracks: New track playing — starting 1500ms input lockout');
+
+            /* Cancel any existing stale timer before starting the authoritative one */
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+
+            /* Lock out enter/click inputs for 1.5 seconds from playback start */
+            this._focusRestoreLockout = true;
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+                /* Now safe to clear — restoreControlsFocus guard can relax */
+                this._trackTransitionLockoutActive = false;
+                log.info('OSDController.syncTracks: Transition lockout cleared — widgets re-enabled');
+            }, 1500);
+        }
+
         if (this._player.getCurrentAudioStreamIndex) {
             const idx = this._player.getCurrentAudioStreamIndex();
             if (idx !== undefined && idx !== null) this._currentAudioIndex = idx;
@@ -1463,7 +1528,29 @@ export default class OSDController extends Component {
                 // focused button is sufficient to dispatch the action correctly.
                 // We do NOT fall through to togglePlay; the widget owns this press.
                 const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
-                if (focusedEl) focusedEl.click();
+                /*
+                 * ====================================================================
+                 * HIDDEN WIDGET GUARD:
+                 * If the widget that previously claimed Row -1 has since been hidden
+                 * (e.g. Skip Outro was pressed, ended the episode, and the new episode
+                 * loaded before focus could be restored), the focusedEl is either gone
+                 * or lives inside a container that lost its .visible class.
+                 * In that case we must NOT fire the button — instead snap focus back
+                 * to Play/Pause and execute it so the OK press is never silently eaten.
+                 * ====================================================================
+                 */
+                if (focusedEl && focusedEl.closest('.plugin-widget.visible')) {
+                    focusedEl.click();
+                    return true;
+                }
+
+                // Widget is hidden/gone — recover: reset row to controls and
+                // execute play/pause as the user's intent for this wakeup press.
+                this._currentFocusRow = 1;
+                const playIdx = this._findActionIndex('togglePlay');
+                if (playIdx !== -1) this._currentFocusIndex = playIdx;
+                this._updateFocus();
+                this._executeAction('togglePlay');
             } else if (this._currentFocusRow === 2) {
                 // Seekbar row: OK = toggle play/pause
                 this._executeAction('togglePlay');
@@ -1542,10 +1629,27 @@ export default class OSDController extends Component {
                     // Overlay row (Row -1): plugin widget holds focus.
                     // Click the focused button directly in JavaScript.
                     const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
-                    if (focusedEl) {
+                    /*
+                     * ====================================================================
+                     * HIDDEN WIDGET GUARD:
+                     * A widget may have been cleaned up (episode ended, next episode
+                     * loaded) leaving focus stranded at Row -1 with no visible button.
+                     * Only fire the click when the element is still inside a .visible
+                     * plugin-widget container — otherwise reset to controls row and
+                     * execute play/pause so the press is never silently swallowed.
+                     * ====================================================================
+                     */
+                    if (focusedEl && focusedEl.closest('.plugin-widget.visible')) {
                         focusedEl.click();
                         return true;
                     }
+
+                    // Widget is hidden/gone — recover to controls row so the
+                    // subsequent row checks below will dispatch correctly.
+                    this._currentFocusRow = 1;
+                    const recoverPlayIdx = this._findActionIndex('togglePlay');
+                    if (recoverPlayIdx !== -1) this._currentFocusIndex = recoverPlayIdx;
+                    this._updateFocus();
                 }
 
                 if (this._currentFocusRow === 2) {
@@ -1910,6 +2014,8 @@ export default class OSDController extends Component {
 
 
 
+
+
     _findActionIndex(action) {
         const controls = this._getControls();
         return controls.findIndex(btn => btn.dataset.action === action);
@@ -2254,11 +2360,12 @@ export default class OSDController extends Component {
         if (!this._osdPlayPauseBtnEl || !this._player) return;
 
         const isPaused = this._player.isPaused();
-        this._osdPlayPauseBtnEl.innerHTML = isPaused ? ICONS.play : ICONS.pause;
-
         // Toggle only osd-btn-paused — avoid replacing the entire className which
         // would wipe transient classes like .magic-hover and .focused on every call.
         this._osdPlayPauseBtnEl.classList.toggle('osd-btn-paused', isPaused);
+
+        // Update the inner SVG icons directly from unified properties
+        this._osdPlayPauseBtnEl.innerHTML = isPaused ? osdIcons.play : osdIcons.pause;
     }
 
     _startUpdates() {
@@ -3208,6 +3315,38 @@ export default class OSDController extends Component {
 
     updateItem(item) {
         this.setMetadata(item);
+
+        /*
+         * ============================================================================
+         * TRACK TRANSITION FOCUS RESET GUARD
+         * ============================================================================
+         * When switching tracks or advancing to the next episode (e.g., after clicking
+         * Skip Outro), the OSD Controller instance is preserved and reused.
+         *
+         * If the user previously had focus on an overlay widget (Row -1), such as
+         * the skip-outro button, we must explicitly reset the focus row to the
+         * Controls row (Row 1, Play/Pause) to ensure that the new track does not
+         * inherit a stranded Row -1 focus. This prevents accidental double-skips
+         * on the newly loaded item's skip-intro button.
+         * ============================================================================
+         */
+        if (this._currentFocusRow === -1) {
+            this._currentFocusRow = 1;
+            const playIdx = this._findActionIndex('togglePlay');
+            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+        }
+
+        /*
+         * ============================================================================
+         * INDEFINITE TRANSITION LOCKOUT:
+         * Enforce an active focus restore lockout when switching items. This lockout
+         * persists through the entire track loading and buffering transition phase.
+         * The countdown to clear the lockout begins only once the media playback
+         * starts and calls syncTracks().
+         * ============================================================================
+         */
+        this._trackTransitionLockoutActive = true;
+        this._focusRestoreLockout = true;
     }
 
     _getFormattedTitle(item) {
@@ -3268,7 +3407,6 @@ export default class OSDController extends Component {
         const btn = this._osdEl.querySelector('#osdFavoriteBtn');
         if (!btn || !item?.UserData) return;
         const isFavorite = item.UserData.IsFavorite;
-        btn.innerHTML = isFavorite ? ICONS.favoriteFilled : ICONS.favorite;
         
         if (isFavorite) {
             btn.classList.add('active');
