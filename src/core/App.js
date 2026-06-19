@@ -510,7 +510,8 @@ class App {
                 audioStreamIndex,
                 subtitleStreamIndex,
                 backdropUrl,
-                fromSlideshow
+                fromSlideshow,
+                fromBrowse
             }) => {
                 log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
@@ -589,9 +590,15 @@ class App {
                     log.debug(`Setting initial subtitle stream index: ${subtitleStreamIndex}`);
                 }
 
-                // Navigate to player page with item ID and resume flag
+                // Navigate to player page with item ID and resume flag.
+                // fromSlideshow and fromBrowse (the Home/Library Play key) both
+                // mark launchers that should PUSH the player, so Back/Stop returns
+                // to the originating page (see replace flag below).
                 const resumeParam = resume ? 'true' : 'false';
-                const slideshowParam = fromSlideshow ? '?fromSlideshow=true' : '';
+                const queryParts = [];
+                if (fromSlideshow) queryParts.push('fromSlideshow=true');
+                if (fromBrowse) queryParts.push('fromBrowse=true');
+                const queryParam = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
 
                 // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
                 // Instead, we command the server to start playback of the new item. The server
@@ -614,10 +621,11 @@ class App {
                     return;
                 }
 
-                // If we came from a slideshow, we PUSH the player so we can go BACK to the slideshow.
-                // For all other cases (Details/Library), we REPLACE the previous page to prevent history bloat.
-                router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${slideshowParam}`, {
-                    replace: !fromSlideshow
+                // If we came from a slideshow or a browse-page Play key, we PUSH the
+                // player so we can go BACK to the originating page exactly where we
+                // left off. For DetailsPage launches we REPLACE to prevent history bloat.
+                router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${queryParam}`, {
+                    replace: !fromSlideshow && !fromBrowse
                 });
             }
         );

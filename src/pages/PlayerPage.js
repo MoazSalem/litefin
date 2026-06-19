@@ -2621,11 +2621,12 @@ class PlayerPage extends Page {
         ) {
             const detailsPath = `/details/${this._item.Id}`;
 
-            // The PlayerPage always replaces the page that launched it in history (to prevent bloat).
-            // HOWEVER: if we came from a slideshow, we want to go BACK to the slideshow exactly
-            // where we left off. In that case, App.js pushed the player instead of replacing,
-            // so we just call router.back().
-            if (this.params.fromSlideshow === 'true') {
+            // The PlayerPage normally replaces the page that launched it in history (to prevent bloat)
+            // and returns to the item's Details page on stop.
+            // HOWEVER: if we came from a slideshow or a browse-page Play key, the player was PUSHED
+            // (not replaced) by App.js, and we want to go BACK to that originating page exactly where
+            // we left off — not synthesize a Details page the user never visited. So we call router.back().
+            if (this.params.fromSlideshow === 'true' || this.params.fromBrowse === 'true') {
                 router.back();
             } else {
                 router.navigate(detailsPath, { replace: true, isBack: true });

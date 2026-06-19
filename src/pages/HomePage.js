@@ -43,6 +43,7 @@ import { i18n } from '../utils/i18n.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { imageService } from '../utils/ImageService.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { quickPlayItem } from '../utils/QuickPlay.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import HeroCarousel from '../ui/HeroCarousel.js';
@@ -1320,6 +1321,44 @@ class HomePage extends Page {
                 rowEntry.virtualRow.syncIndexFromNode(e.target);
             }
         });
+
+        // ── Remote Play key → play the focused card directly ─────────────────
+        // Mirrors the official Jellyfin app: pressing the dedicated Play (or
+        // Play/Pause) key on a focused show/episode card starts playback without
+        // first opening its details page. Both events are bound because remotes
+        // expose either a discrete Play key (key:play) or a combined toggle
+        // (key:playPause). Page._subscriptions auto-unbinds these on destroy.
+        this.on('key:play', () => this._playFocusedCard());
+        this.on('key:playPause', () => this._playFocusedCard());
+    }
+
+    /**
+     * Launch playback of the currently focused media card (remote Play key).
+     * Skips cards that aren't directly playable (library folders, people).
+     */
+    _playFocusedCard() {
+        const card = this.$('.media-card.focused');
+        if (!card?.dataset?.itemId) {
+            log.debug('Play key pressed but no focused media card');
+            return;
+        }
+
+        const { itemId, type, contextType } = card.dataset;
+
+        // Library/collection cards open a library view; people open a person
+        // page — neither is directly playable, so let the Play key fall through.
+        if (contextType === 'library') return;
+        if (['Person', 'MusicArtist', 'Artist', 'AlbumArtist'].includes(type)) return;
+
+        // Persist focus for back-nav restoration, mirroring handleActivate().
+        const sectionEl = card.closest('section[data-row-id]');
+        state.set('home:lastFocusedItem', {
+            itemId,
+            rowId: sectionEl ? sectionEl.getAttribute('data-row-id') : null
+        });
+
+        log.info(`Play key: quick-playing focused card ${itemId} (${type || 'unknown'})`);
+        quickPlayItem(itemId);
     }
 
     // =========================================================================
