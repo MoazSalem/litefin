@@ -4197,9 +4197,17 @@ class SettingsPage extends Page {
                 if (!userId) return;
 
                 if (pinManager.hasPin(userId)) {
-                    // Currently enabled — turn it off.
-                    pinManager.removePin(userId);
-                    this._switchTab('account', true);
+                    // Currently enabled — require the current PIN before disabling.
+                    pinDialog.show({
+                        mode: 'verify',
+                        userId,
+                        title: i18n.t('EnterPin') || 'Enter PIN',
+                        onSuccess: () => {
+                            pinManager.removePin(userId);
+                            this._switchTab('account', true);
+                        }
+                        // On cancel: leave the PIN in place (no re-render needed).
+                    });
                 } else {
                     // Enable — set a new PIN first; only persist on success.
                     pinDialog.show({
@@ -4219,12 +4227,20 @@ class SettingsPage extends Page {
             changePinBtn.addEventListener('click', () => {
                 const userId = auth.getCurrentUser()?.Id;
                 if (!userId) return;
+                // Require the current PIN before allowing a new one to be set.
                 pinDialog.show({
-                    mode: 'set',
-                    title: i18n.t('ChangePin') || 'Change PIN',
-                    onSuccess: (pin) => {
-                        pinManager.setPin(userId, pin);
-                        this._switchTab('account', true);
+                    mode: 'verify',
+                    userId,
+                    title: i18n.t('EnterPin') || 'Enter PIN',
+                    onSuccess: () => {
+                        pinDialog.show({
+                            mode: 'set',
+                            title: i18n.t('ChangePin') || 'Change PIN',
+                            onSuccess: (pin) => {
+                                pinManager.setPin(userId, pin);
+                                this._switchTab('account', true);
+                            }
+                        });
                     }
                 });
             });
