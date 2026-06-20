@@ -803,38 +803,24 @@ export class TizenAVPlayer {
                 }
             } else {
                 // ================================================================
-                // IMPROVEMENT C: PLAYING state gate before setSelectTrack.
+                // IMPROVEMENT C: State gate before setSelectTrack('TEXT', ...).
                 //
-                // Some Tizen firmwares (especially 2.4–3.0, and some 4.x units)
-                // silently ignore setSelectTrack('TEXT', ...) if the player is in
-                // anything other than the PLAYING state at the moment of the call.
+                // Per Samsung docs, setSelectTrack('TEXT', ...) is valid in PLAYING
+                // and PAUSED for HLS/DASH (READY is Smooth Streaming only). We defer
+                // to oncurrentplaytime if not in a valid state.
                 //
-                // This function is called from both onbufferingcomplete (state=READY)
-                // and oncurrentplaytime (state=PLAYING).  We attempt the switch only
-                // when we're verified PLAYING; otherwise we leave _pendingSubtitleIndex
-                // set so the oncurrentplaytime loop retries on the next tick.
-                //
-                // Exception: if we are in READY state and the eager pre-play path
-                // (Improvement A) is running, we still try — on modern Tizen that works.
-                // We detect READY by checking !this._isTizenPlaying.
+                // The _delayedSubtitleIndex post-stabilization path provides a retry
+                // for firmware where early calls silently no-op.
                 // ================================================================
                 let avplayState = 'UNKNOWN';
                 try { avplayState = this._avplay.getState(); } catch (_) {}
 
-                // Allow attempt from READY state (pre-play Improvement A path)
-                // or from PLAYING state (normal oncurrentplaytime path).
-                // Bail out from PAUSED — the pause/resume cycle in setSubtitleStreamIndex
-                // already handles that scenario via _delayedSubtitleIndex.
-                const isReadyOrPlaying = avplayState === 'PLAYING' || avplayState === 'READY';
+                const isValidForText = avplayState === 'PLAYING' || avplayState === 'PAUSED';
 
-                if (!isReadyOrPlaying) {
-                    log.debug(`Subtitle track selection deferred — AVPlay state is '${avplayState}', not READY/PLAYING`);
+                if (!isValidForText) {
+                    log.debug(`Subtitle track selection deferred — AVPlay state is '${avplayState}', not PLAYING/PAUSED`);
                     // Leave _pendingSubtitleIndex set for the next oncurrentplaytime retry.
                 } else {
-                    // Pre-first-frame: try the raw setSelectTrack. This works on
-                    // Tizen 5.5+ where tracks activate during READY/buffering. On Tizen 5.0
-                    // it silently no-ops, but _delayedSubtitleIndex stays set so the
-                    // post-stabilization path will catch it later.
                     const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
                     if (tizenSubIndex !== null) {
                         try {
@@ -1719,9 +1705,9 @@ export class TizenAVPlayer {
                     let avplayState = 'UNKNOWN';
                     try { avplayState = this._avplay.getState(); } catch (e) {}
 
-                    // Tizen 4.0+ firmwares ignore setSelectTrack when PAUSED/buffering.
-                    // If we didn't force the pause ourselves for the legacy workaround, defer it.
-                    if (!needsPauseForSubSwitch && avplayState !== 'PLAYING' && avplayState !== 'READY') {
+                    // Per Samsung docs, setSelectTrack('TEXT', ...) is valid in PLAYING
+                    // and PAUSED for HLS. Defer if in READY/IDLE/NONE.
+                    if (!needsPauseForSubSwitch && avplayState !== 'PLAYING' && avplayState !== 'PAUSED') {
                         this._pendingSubtitleIndex = index;
                         this._currentSubtitleStreamIndex = index;
                         log.debug(`setSubtitleStreamIndex: Player state is ${avplayState}. Deferring TEXT track ${tizenSubIndex}.`);
