@@ -757,28 +757,33 @@ export class TizenAVPlayer {
         }
 
         if (this._pendingAudioIndex !== null) {
-            const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
-            if (tizenAudioIndex !== null) {
-                try {
-                    this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
-                    this._pendingAudioIndex = null;
-                } catch (e) {
-                    // If Tizen returns InvalidStateError, the engine isn't ready for track switching.
-                    // Keep the index pending so the oncurrentplaytime loop can retry once stable.
-                    if (e.name === 'InvalidStateError' || e.code === 11) {
-                         log.debug(`Postponing audio track ${tizenAudioIndex} (InvalidStateError)`);
-                    } else {
-                        log.warn('Failed to apply audio track:', e);
+            // For HLS/DASH, setSelectTrack('AUDIO', ...) is only valid in PLAYING state
+            // per Samsung docs. Defer if not playing yet — oncurrentplaytime will retry.
+            let avplayState = 'UNKNOWN';
+            try { avplayState = this._avplay.getState(); } catch (_) {}
+            if (avplayState !== 'PLAYING') {
+                log.debug(`Audio track selection deferred — AVPlay state is '${avplayState}', not PLAYING`);
+            } else {
+                const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
+                if (tizenAudioIndex !== null) {
+                    try {
+                        this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                        this._pendingAudioIndex = null;
+                    } catch (e) {
+                        if (e.name === 'InvalidStateError' || e.code === 11) {
+                             log.debug(`Postponing audio track ${tizenAudioIndex} (InvalidStateError)`);
+                        } else {
+                            log.warn('Failed to apply audio track:', e);
+                            this._pendingAudioIndex = null;
+                        }
+                    }
+                } else {
+                    const totalTracks = this._avplay.getTotalTrackInfo() || [];
+                    if (totalTracks.some(t => t.type === 'AUDIO')) {
+                        log.warn(`Could not map pending audio index ${this._pendingAudioIndex}`);
                         this._pendingAudioIndex = null;
                     }
                 }
-            } else {
-                const totalTracks = this._avplay.getTotalTrackInfo() || [];
-                if (totalTracks.some(t => t.type === 'AUDIO')) {
-                    log.warn(`Could not map pending audio index ${this._pendingAudioIndex}`);
-                    this._pendingAudioIndex = null;
-                }
-                // Else: AVPlay hasn't parsed audio tracks yet. Remain pending.
             }
         }
 
