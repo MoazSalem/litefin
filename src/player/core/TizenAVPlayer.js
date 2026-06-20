@@ -1079,13 +1079,17 @@ export class TizenAVPlayer {
                     // If a specific track was already successfully applied eagerly during READY state,
                     // the proactive silence just muted it. Unmute it to restore visibility.
                     if (this._activeTizenSubtitleIndex !== null && this._activeTizenSubtitleIndex !== -1) {
-                        try {
-                            // Re-assert the track selection. This acts as a pipeline flush
-                            // for backwards seeks where AVPlay's internal text buffer gets corrupted.
-                            this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
-                        } catch(e) {}
-                        this._avplay.setSilentSubtitle(false);
-                        log.debug('Restored silence state (unmuted) for active TEXT track');
+                        // Per Samsung docs, setSelectTrack('TEXT', ...) is only valid in
+                        // PLAYING or PAUSED for HLS. play() may not have transitioned yet.
+                        let postPlayState = 'UNKNOWN';
+                        try { postPlayState = this._avplay.getState(); } catch (_) {}
+                        if (postPlayState === 'PLAYING' || postPlayState === 'PAUSED') {
+                            try {
+                                this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
+                            } catch(e) {}
+                            this._avplay.setSilentSubtitle(false);
+                            log.debug('Restored silence state (unmuted) for active TEXT track');
+                        }
                     }
                 } catch (silenceErr) {
                     // Non-fatal — older firmware may throw in early PLAYING phase.
