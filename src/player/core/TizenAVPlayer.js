@@ -255,8 +255,13 @@ export class TizenAVPlayer {
                         }
                     }
                     
-                    // 2. Legacy 4K Mode (Required for some older Tizen TVs to accept 4K HLS)
-                    if (!isDirectPlay && (options.mediaSource?.Bitrate > 20000000 || options.mediaSource?.Width > 1920)) {
+                    // 2. Legacy 4K Mode — DEPRECATED on Tizen 5.0+
+                    //    SET_MODE_4K is deprecated since Tizen 5.0. On 5.0+, FIXED_MAX_RESOLUTION
+                    //    in ADAPTIVE_INFO (set below) replaces it and handles 4K/8K dynamically.
+                    //    On Tizen < 5.0, set it only when the device is UHD-capable AND the
+                    //    content is 4K+ (or likely 4K+ based on bitrate when resolution unknown).
+                    if (!isDirectPlay && TIZEN_VERSION < 5.0 && DEVICE_CAPS.uhd &&
+                        (options.mediaSource?.Height > 1080 || options.mediaSource?.Width > 1920 || options.mediaSource?.Bitrate > 20000000)) {
                         try {
                             this._avplay.setStreamingProperty("SET_MODE_4K", "TRUE");
                         } catch (e) {
