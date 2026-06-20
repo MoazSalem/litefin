@@ -553,16 +553,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -1442,25 +1442,70 @@ class HomePage extends Page {
             // HERO CAROUSEL DATA FILTERS RESOLUTION
             // =================================================================
             // Check if the user has enabled the "Ignore Watched Content" preference.
-            // If active, we append the 'IsUnplayed' item filter to the request so that
-            // the Jellyfin backend returns only unplayed Movies and Series for the banner.
+            // The Jellyfin 'IsUnplayed' server-side filter works for Movies but not
+            // for Series (where play state is tracked per-episode). When the filter
+            // is active we make separate requests: Movies with the server-side
+            // 'IsUnplayed' filter, and Series fetched normally then filtered
+            // client-side by checking UserData.Played.
             const ignoreWatched = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
-            const filters = ignoreWatched ? 'HasBackdrop,IsUnplayed' : 'HasBackdrop';
+            const fields =
+                'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds';
+            const imageTypes = 'Primary,Backdrop,Logo';
 
-            // Fetch random items with backdrops from user libraries.
-            const response = await api.getItems({
-                SortBy: 'Random',
-                Recursive: true,
-                Limit: limit,
-                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds',
-                EnableImageTypes: 'Primary,Backdrop,Logo',
-                IncludeItemTypes: 'Movie,Series',
-                Filters: filters
-            });
+            let items = [];
 
-            if (!this._isMounted) return;
+            if (ignoreWatched) {
+                // Fetch unplayed movies (IsUnplayed works correctly for Movies)
+                const moviesResponse = await api.getItems({
+                    SortBy: 'Random',
+                    Recursive: true,
+                    Limit: limit,
+                    Fields: fields,
+                    EnableImageTypes: imageTypes,
+                    IncludeItemTypes: 'Movie',
+                    Filters: 'HasBackdrop,IsUnplayed'
+                });
 
-            const items = response.Items || [];
+                if (!this._isMounted) return;
+
+                const movies = moviesResponse.Items || [];
+
+                // Fetch series and filter client-side (IsUnplayed doesn't work for Series)
+                const seriesResponse = await api.getItems({
+                    SortBy: 'Random',
+                    Recursive: true,
+                    Limit: limit,
+                    Fields: `${fields},UserData`,
+                    EnableImageTypes: imageTypes,
+                    IncludeItemTypes: 'Series',
+                    Filters: 'HasBackdrop'
+                });
+
+                if (!this._isMounted) return;
+
+                const series = (seriesResponse.Items || []).filter(
+                    (item) => !item.UserData || item.UserData.Played !== true
+                );
+
+                // Combine and randomly pick 'limit' items
+                const combined = [...movies, ...series];
+                items = combined.sort(() => Math.random() - 0.5).slice(0, limit);
+            } else {
+                // No filter — single fetch for both types
+                const response = await api.getItems({
+                    SortBy: 'Random',
+                    Recursive: true,
+                    Limit: limit,
+                    Fields: fields,
+                    EnableImageTypes: imageTypes,
+                    IncludeItemTypes: 'Movie,Series',
+                    Filters: 'HasBackdrop'
+                });
+
+                if (!this._isMounted) return;
+
+                items = response.Items || [];
+            }
             if (items.length === 0) {
                 log.info('No hero items found, skipping carousel.');
                 return;
