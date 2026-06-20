@@ -605,12 +605,10 @@ export class TizenAVPlayer {
                         (this._pendingSubtitleIndex === null || this._pendingSubtitleIndex === -1)) {
                         const seekMs = this._pendingSeekMs;
                         this._pendingSeekMs = null;
-                        try {
-                            log.info(`Resume seek to ${seekMs}ms (post first frame, no subtitle pending)`);
-                            this._avplay.seekTo(seekMs);
-                        } catch (e) {
+                        log.info(`Resume seek to ${seekMs}ms (post first frame, no subtitle pending)`);
+                        this._safeSeekTo(seekMs, null, (e) => {
                             log.warn('Resume seek failed:', e);
-                        }
+                        });
                     }
                 }
 
@@ -677,12 +675,10 @@ export class TizenAVPlayer {
                             if (this._pendingSeekMs !== null) {
                                 const stuckSeekMs = this._pendingSeekMs;
                                 this._pendingSeekMs = null;
-                                try {
-                                    log.warn(`[SubtitleSeek] Subtitle timed out — flushing deferred seek to ${stuckSeekMs}ms`);
-                                    this._avplay.seekTo(stuckSeekMs);
-                                } catch (e) {
+                                log.warn(`[SubtitleSeek] Subtitle timed out — flushing deferred seek to ${stuckSeekMs}ms`);
+                                this._safeSeekTo(stuckSeekMs, null, (e) => {
                                     log.warn('[SubtitleSeek] Deferred seek after subtitle timeout failed:', e);
-                                }
+                                });
                             }
                         }
                     }
@@ -892,20 +888,19 @@ export class TizenAVPlayer {
                                 const seekMs = this._pendingSeekMs;
                                 const seekSubIndex = tizenSubIndex; // capture for post-seek closure
                                 this._pendingSeekMs = null; // consume now to prevent double-apply
-                                try {
-                                    log.info(`[SubtitleSeek] Subtitle confirmed — seeking to resume position ${seekMs}ms`);
-                                    this._avplay.seekTo(seekMs);
 
-                                    // Re-apply the subtitle track 200ms after seekTo.
-                                    // seekTo() can internally reset the active TEXT track on some
-                                    // Tizen firmware. The 200ms window gives the decoder time to
-                                    // stabilize before we re-assert the selection.
-                                    setTimeout(() => {
+                                log.info(`[SubtitleSeek] Subtitle confirmed — seeking to resume position ${seekMs}ms`);
+
+                                // Re-apply the subtitle track in the seekTo success callback.
+                                // seekTo() can internally reset the active TEXT track on some
+                                // Tizen firmware. Using the success callback instead of a raw
+                                // timer ensures we only re-apply after seek completes.
+                                this._safeSeekTo(
+                                    seekMs,
+                                    () => {
                                         if (!this._avplay || !this._isPrepared || !this._isPlaying) return;
                                         if (this._activeTizenSubtitleIndex !== seekSubIndex) return;
 
-                                        // Per Samsung docs, setSelectTrack('TEXT', ...) is only valid in
-                                        // PLAYING or PAUSED for HLS. Skip if seek left us in bad state.
                                         let seekState = 'UNKNOWN';
                                         try { seekState = this._avplay.getState(); } catch (_) {}
                                         if (seekState !== 'PLAYING' && seekState !== 'PAUSED') {
@@ -921,10 +916,11 @@ export class TizenAVPlayer {
                                         } catch (e) {
                                             log.warn('[SubtitleSeek] Post-seek subtitle re-apply failed:', e.message || e);
                                         }
-                                    }, 200);
-                                } catch (e) {
-                                    log.warn('[SubtitleSeek] Deferred resume seek failed:', e.message || e);
-                                }
+                                    },
+                                    (e) => {
+                                        log.warn('[SubtitleSeek] Deferred resume seek failed:', e);
+                                    }
+                                );
                             }
                         } catch (e) {
                             // If Tizen returns InvalidStateError, keep trying in the loop.
@@ -1110,6 +1106,32 @@ export class TizenAVPlayer {
      */
     _stopPositionTracking() {
         // No-op (handled by native events)
+    }
+
+    /**
+     * Wrapper around avplay.seekTo that uses success/error callbacks.
+     * Per Samsung docs, no other AVPlay API may be called while seekTo
+     * is in progress — the callbacks signal when it's safe.
+     * @private
+     * @param {number} ms - Target position in milliseconds
+     * @param {Function} [onSuccess] - Called when seek completes
+     * @param {Function} [onError] - Called if seek fails
+     */
+    _safeSeekTo(ms, onSuccess, onError) {
+        if (!this._avplay) {
+            if (onError) onError(new Error('No avplay instance'));
+            return;
+        }
+        try {
+            this._avplay.seekTo(
+                ms,
+                () => { if (onSuccess) onSuccess(); },
+                () => { if (onError) onError(new Error('seekTo failed')); }
+            );
+        } catch (e) {
+            log.warn('_safeSeekTo threw synchronously:', e);
+            if (onError) onError(e);
+        }
     }
 
     /**
@@ -1437,8 +1459,6 @@ export class TizenAVPlayer {
             if (options.suppressWaitingEvent) {
                 this._suppressWaitingEvent = true;
                 
-                // Clear the suppression flag after a safe timeout, or it will be
-                // cleared naturally by onbufferingcomplete / oncurrentplaytime
                 if (this._suppressWaitingTimeout) clearTimeout(this._suppressWaitingTimeout);
                 this._suppressWaitingTimeout = setTimeout(() => {
                     this._suppressWaitingEvent = false;
@@ -1449,75 +1469,87 @@ export class TizenAVPlayer {
             if (this._currentPlayOptions?.transcodingOffsetTicks) {
                 targetTicks = Math.max(0, positionTicks - this._currentPlayOptions.transcodingOffsetTicks);
             }
-            const positionMs = Math.floor(targetTicks / 10000);
-            this._avplay.seekTo(positionMs);
+            let positionMs = Math.floor(targetTicks / 10000);
+
+            // ── LIVE DVR Range Validation ────────────────────────────────────────
+            // For live streams, clamp the seek position to the available DVR range.
+            if (this._currentPlayOptions?.mediaSource?.IsLive) {
+                try {
+                    const liveDuration = this._avplay.getStreamingProperty('GET_LIVE_DURATION');
+                    if (liveDuration) {
+                        const parts = liveDuration.split('|');
+                        const dvrStart = parseInt(parts[0], 10);
+                        const dvrEnd = parseInt(parts[1], 10);
+                        if (!isNaN(dvrStart) && !isNaN(dvrEnd)) {
+                            const clamped = Math.max(dvrStart, Math.min(positionMs, dvrEnd));
+                            if (clamped !== positionMs) {
+                                log.warn(`seek(): Live DVR clamp ${positionMs}ms → ${clamped}ms (range: ${dvrStart}-${dvrEnd})`);
+                                positionMs = clamped;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    log.debug('seek(): GET_LIVE_DURATION not available, skipping DVR clamp');
+                }
+            }
 
             // ========================================================================
             // Post-Seek State Management and Automatic Playback Resume
             // ========================================================================
-            //
-            // After executing seekTo(), the AVPlay hardware pipeline begins fetching
-            // and buffering frames from the new position. If we were already playing
-            // (either logically _isPlaying or native _isTizenPlaying), AVPlay transitions
-            // internally into a buffering/READY state, requiring a subsequent .play()
-            // call to resume clock execution.
-            //
-            // We cache if the player was active before seek to initiate our safety timer.
-            // We set _isTizenPlaying to false so that the double-gate checks or unpause
-            // mechanisms know to re-assert play() once buffering completes.
-            //
             const wasPlayingBeforeSeek = this._isTizenPlaying || this._isPlaying;
             if (this._isTizenPlaying) {
                 this._isTizenPlaying = false;
                 log.debug('seek(): reset _isTizenPlaying for post-seek resume');
             }
 
-            // Emit a seek event so SyncPlayManager can react (e.g. broadcast to group, suppress echo).
             this.onEvent({ type: 'seek' });
 
-            // Manual timeupdate for paused state (native oncurrentplaytime is only fired when playing)
             const currentTime = targetTicks / 10000000;
             this.onEvent({ type: 'timeupdate', data: { time: currentTime } });
 
-            // ========================================================================
-            // ── Post-Seek Safety Resume Net ──────────────────────────────────────────
-            // ========================================================================
-            //
-            // On certain Tizen firmware models and network states, calling seekTo() can
-            // shift the media pipeline into the READY state without triggering the standard
-            // onbufferingstart / onbufferingcomplete native events. This happens particularly
-            // if the seek target is close to the current location or the chunk was already
-            // fully loaded in memory (such as fast skips triggered by plugins like intro-skipper).
-            //
-            // If those events do not fire, the player gets permanently stuck in the READY
-            // state (paused natively) because the JavaScript state machine never gets the trigger
-            // to execute _checkNativePlay().
-            //
-            // To address this at the core, we implement a 250ms safety timer. If the player
-            // is logically supposed to be playing (_isPlaying is true) but hasn't successfully
-            // resumed native play (_isTizenPlaying remains false) within 250ms, we force
-            // a safety check that triggers _checkNativePlay() to resume playback natively.
-            //
-            // ────────────────────────────────────────────────────────────────────────
-            if (wasPlayingBeforeSeek) {
-                if (this._seekSafetyTimeoutId !== null) {
-                    clearTimeout(this._seekSafetyTimeoutId);
-                }
-                this._seekSafetyTimeoutId = setTimeout(() => {
-                    this._seekSafetyTimeoutId = null;
-                    
-                    // Verify if the session is still active and logically intended to play
-                    if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
-                        log.info('seek(): safety timeout fired, re-asserting native playback after skip/seek');
-                        
-                        // Force buffering complete flag to true as a failsafe since the TV is stable
-                        this._bufferingComplete = true;
-                        
-                        // Re-gate and execute play() natively
-                        this._checkNativePlay();
+            // ── Execute seek with callbacks ──────────────────────────────────────
+            // Per Samsung docs, no other AVPlay API may be called while seekTo is
+            // in progress. The safety timer and any subtitle re-apply must wait for
+            // the success callback.
+            this._safeSeekTo(
+                positionMs,
+                () => {
+                    // ── Post-Seek Safety Resume Net ──────────────────────────────
+                    // On certain Tizen firmware, seekTo can leave the pipeline stuck
+                    // in READY without firing buffering events. This safety timer
+                    // re-asserts play() if the native layer hasn't resumed after 250ms.
+                    if (wasPlayingBeforeSeek) {
+                        if (this._seekSafetyTimeoutId !== null) {
+                            clearTimeout(this._seekSafetyTimeoutId);
+                        }
+                        this._seekSafetyTimeoutId = setTimeout(() => {
+                            this._seekSafetyTimeoutId = null;
+                            if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
+                                log.info('seek(): safety timeout fired, re-asserting native playback after skip/seek');
+                                this._bufferingComplete = true;
+                                this._checkNativePlay();
+                            }
+                        }, 250);
                     }
-                }, 250);
-            }
+                },
+                (e) => {
+                    log.warn('seek(): seekTo failed, safety net still armed:', e);
+                    // Even on error, arm the safety net as a fallback.
+                    if (wasPlayingBeforeSeek) {
+                        if (this._seekSafetyTimeoutId !== null) {
+                            clearTimeout(this._seekSafetyTimeoutId);
+                        }
+                        this._seekSafetyTimeoutId = setTimeout(() => {
+                            this._seekSafetyTimeoutId = null;
+                            if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
+                                log.info('seek(): error fallback safety timer fired');
+                                this._bufferingComplete = true;
+                                this._checkNativePlay();
+                            }
+                        }, 250);
+                    }
+                }
+            );
         } catch (e) {
             log.error('Seek failed:', e);
         }
