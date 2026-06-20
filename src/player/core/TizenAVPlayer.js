@@ -866,6 +866,15 @@ export class TizenAVPlayer {
                                 if (!this._avplay || !this._isPrepared || !this._isPlaying) return;
                                 if (this._activeTizenSubtitleIndex !== _confirmedTizenIndex) return;
 
+                                // Per Samsung docs, setSelectTrack('TEXT', ...) is only valid in
+                                // PLAYING or PAUSED for HLS. Skip if state has changed.
+                                let confirmState = 'UNKNOWN';
+                                try { confirmState = this._avplay.getState(); } catch (_) {}
+                                if (confirmState !== 'PLAYING' && confirmState !== 'PAUSED') {
+                                    log.debug(`[SubtitleConfirm] Skipped — AVPlay state is '${confirmState}', not PLAYING/PAUSED`);
+                                    return;
+                                }
+
                                 try {
                                     log.info(`[SubtitleConfirm] Re-applying TEXT track ${_confirmedTizenIndex} at +4s to ensure hardware compliance`);
                                     this._avplay.setSelectTrack('TEXT', _confirmedTizenIndex);
@@ -899,6 +908,16 @@ export class TizenAVPlayer {
                                     setTimeout(() => {
                                         if (!this._avplay || !this._isPrepared || !this._isPlaying) return;
                                         if (this._activeTizenSubtitleIndex !== seekSubIndex) return;
+
+                                        // Per Samsung docs, setSelectTrack('TEXT', ...) is only valid in
+                                        // PLAYING or PAUSED for HLS. Skip if seek left us in bad state.
+                                        let seekState = 'UNKNOWN';
+                                        try { seekState = this._avplay.getState(); } catch (_) {}
+                                        if (seekState !== 'PLAYING' && seekState !== 'PAUSED') {
+                                            log.debug(`[SubtitleSeek] Skipped — AVPlay state is '${seekState}', not PLAYING/PAUSED`);
+                                            return;
+                                        }
+
                                         try {
                                             log.info(`[SubtitleSeek] Post-seek re-apply of TEXT track ${seekSubIndex}`);
                                             this._avplay.setSelectTrack('TEXT', seekSubIndex);
