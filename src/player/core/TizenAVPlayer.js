@@ -1582,8 +1582,24 @@ export class TizenAVPlayer {
 
             if (index >= 0 && index < audioTracks.length) {
                 const track = audioTracks[index];
+
+                // Per Samsung docs, setSelectTrack('AUDIO', ...) is only valid in
+                // PLAYING state for HLS/DASH. Defer via _pendingAudioIndex if not.
+                let avplayState = 'UNKNOWN';
+                try { avplayState = this._avplay.getState(); } catch (_) {}
+                if (avplayState !== 'PLAYING') {
+                    log.debug(`Audio track ${track.index} deferred — AVPlay state is '${avplayState}', not PLAYING`);
+                    const jellyfinStreamIndex = this._currentPlayOptions?.mediaSource?.MediaStreams
+                        ?.filter(s => s.Type === 'Audio')?.[index]?.Index;
+                    if (jellyfinStreamIndex !== undefined) {
+                        this._pendingAudioIndex = jellyfinStreamIndex;
+                    }
+                    this._currentAudioStreamIndex = index;
+                    return;
+                }
+
                 this._avplay.setSelectTrack('AUDIO', track.index);
-                this._currentAudioStreamIndex = index; // Update state
+                this._currentAudioStreamIndex = index;
             } else {
                 log.error('Invalid audio index:', index, 'max:', audioTracks.length - 1);
             }
