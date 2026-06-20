@@ -747,6 +747,15 @@ export class TizenAVPlayer {
     _applyPendingTracks() {
         if (!this._avplay || !this._isPrepared) return;
 
+        // Per Samsung docs, getTotalTrackInfo() is valid in PLAYING and PAUSED.
+        // READY is only valid when using synchronous prepare() — we use prepareAsync().
+        let guardState = 'UNKNOWN';
+        try { guardState = this._avplay.getState(); } catch (_) {}
+        if (guardState !== 'PLAYING' && guardState !== 'PAUSED') {
+            log.debug(`_applyPendingTracks deferred — AVPlay state is '${guardState}', not PLAYING/PAUSED`);
+            return;
+        }
+
         const trackInfo = this._avplay.getTotalTrackInfo() || [];
         
         // If track info is completely empty, older Tizen might still be parsing headers.
@@ -1774,13 +1783,19 @@ export class TizenAVPlayer {
     _applySubtitlePosition() {
         if (!this._avplay || !this._isPrepared) return;
 
+        // Per Samsung docs, setSubtitlePosition() is only valid in PLAYING or PAUSED.
+        let guardState = 'UNKNOWN';
+        try { guardState = this._avplay.getState(); } catch (_) {}
+        if (guardState !== 'PLAYING' && guardState !== 'PAUSED') {
+            log.debug(`Subtitle offset deferred — AVPlay state is '${guardState}', not PLAYING/PAUSED`);
+            return;
+        }
+
         try {
-            // Convert seconds to milliseconds for AVPlay API
             const offsetMs = Math.round(this._subtitleOffset * 1000);
             this._avplay.setSubtitlePosition(offsetMs);
             log.debug(`Subtitle offset applied: ${this._subtitleOffset}s (${offsetMs}ms)`);
         } catch (e) {
-            // setSubtitlePosition may fail if not in PLAYING/PAUSED state
             log.warn('Failed to apply subtitle offset:', e);
         }
     }
