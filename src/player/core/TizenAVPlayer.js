@@ -1672,6 +1672,18 @@ export class TizenAVPlayer {
             return Promise.resolve();
         }
 
+        // Per Samsung docs, setSilentSubtitle and setSelectTrack('TEXT', ...) are only
+        // valid in PLAYING or PAUSED state for HLS. If the AVPlay session hasn't started
+        // yet (state = NONE/IDLE/READY), defer via _pendingSubtitleIndex.
+        let initState = 'UNKNOWN';
+        try { initState = this._avplay.getState(); } catch (_) {}
+        if (initState !== 'PLAYING' && initState !== 'PAUSED') {
+            log.debug(`setSubtitleStreamIndex deferred — AVPlay state is '${initState}', not PLAYING/PAUSED`);
+            this._pendingSubtitleIndex = index;
+            this._currentSubtitleStreamIndex = index;
+            return;
+        }
+
         // ================================================================
         // Conditional pause/resume for old Tizen firmware.
         //
