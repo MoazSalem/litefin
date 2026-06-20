@@ -132,7 +132,7 @@ const iconStyles = {
             shuffle: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="M18 17.883V16l5 3l-5 3v-2.09a9 9 0 0 1-6.997-5.365L11 14.54l-.003.006A9 9 0 0 1 2.725 20H2v-2h.725a7 7 0 0 0 6.434-4.243L9.912 12l-.753-1.757A7 7 0 0 0 2.725 6H2V4h.725a9 9 0 0 1 8.272 5.455L11 9.46l.003-.006A9 9 0 0 1 18 4.09V2l5 3l-5 3V6.117a7 7 0 0 0-5.159 4.126L12.088 12l.753 1.757A7 7 0 0 0 18 17.883"/></svg>`,
             watchedOutline: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="m9.343 18.782l-1.932-.518l.787-2.939a11 11 0 0 1-3.237-1.872l-2.153 2.154l-1.414-1.414l2.153-2.154a10.96 10.96 0 0 1-2.371-5.07l1.968-.359a9.002 9.002 0 0 0 17.713 0l1.968.358a10.96 10.96 0 0 1-2.372 5.071l2.154 2.154l-1.414 1.414l-2.154-2.154a11 11 0 0 1-3.237 1.872l.788 2.94l-1.932.517l-.788-2.94a11 11 0 0 1-3.74 0z"/></svg>`,
             watchedFilled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="M1.182 12C2.122 6.88 6.608 3 12 3s9.878 3.88 10.819 9c-.94 5.12-5.427 9-10.819 9s-9.878-3.88-10.818-9M12 17a5 5 0 1 0 0-10a5 5 0 0 0 0 10m0-2a3 3 0 1 1 0-6a3 3 0 0 1 0 6"/></svg>`,
-            audio: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Design Icons --><path fill="currentColor" d="M3 3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h4v-4H3V5h18v2h2V5c0-1.1-.9-2-2-2m-2.5 1.5c.8 0 1.5.7 1.5 1.5s-.7 1.5-1.5 1.5S17 12.8 17 12s.7-1.5 1.5-1.5m0 10c-1.7 0-3-1.3-3-3c0-1.6 1.3-3 2.9-3h.1c1.7 0 3 1.3 3 3s-1.3 3-3 3m0-4.5c-.8 0-1.5.7-1.5 1.5s.7 1.5 1.5 1.5s1.5-.7 1.5-1.5s-.7-1.5-1.5-1.5"/></svg>`,
+            audio: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Design Icons by Pictogrammers - https://github.com/Templarian/MaterialDesign/blob/master/LICENSE --><path fill="currentColor" d="M3 3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h4v-4H3V5h18v2h2V5c0-1.1-.9-2-2-2zm18 6h-5c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h5c1.1 0 2-.9 2-2v-9c0-1.1-.9-2-2-2m-2.5 1.5c.8 0 1.5.7 1.5 1.5s-.7 1.5-1.5 1.5S17 12.8 17 12s.7-1.5 1.5-1.5m0 10c-1.7 0-3-1.3-3-3c0-1.6 1.3-3 2.9-3h.1c1.7 0 3 1.3 3 3s-1.3 3-3 3m0-4.5c-.8 0-1.5.7-1.5 1.5s.7 1.5 1.5 1.5s1.5-.7 1.5-1.5s-.7-1.5-1.5-1.5"/></svg>`,
             subtitle: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols --><path fill="currentColor" d="M4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20zm3-4h6q.425 0 .713-.288T14 15t-.288-.712T13 14H7q-.425 0-.712.288T6 15t.288.713T7 16m4-4h6q.425 0 .713-.288T18 11t-.288-.712T17 10h-6q-.425 0-.712.288T10 11t.288.713T11 12m-3.287-.288Q8 11.426 8 11t-.288-.712T7 10t-.712.288T6 11t.288.713T7 12t.713-.288m10 4Q18 15.426 18 15t-.288-.712T17 14t-.712.288T16 15t.288.713T17 16t.713-.288"/></svg>`,
             more: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="M12 3c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m0 14c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m0-7c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/></svg>`,
             photo: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="m5 11.1l2-2l5.5 5.5l3.5-3.5l3 3V5H5zM4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1m11.5 7a1.5 1.5 0 1 1 0-3a1.5 1.5 0 0 1 0 3"/></svg>`,
@@ -375,11 +375,11 @@ function createIconProxy(category) {
     // We define getter properties based on the default icon keys to remain dynamic
     const fallbackObj = {};
     const defaultSet = iconStyles['default'][category] || {};
-    
+
     // Define getters for each static icon property
-    Object.keys(defaultSet).forEach(function(prop) {
+    Object.keys(defaultSet).forEach(function (prop) {
         Object.defineProperty(fallbackObj, prop, {
-            get: function() {
+            get: function () {
                 const activeStyle = currentIconStyle;
                 const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                 const categorySet = styleSet[category] || iconStyles['default'][category];
@@ -408,7 +408,7 @@ export const osdIcons = createIconProxy('osdIcons');
 export function getLibraryIcon(type) {
     // Normalize string casing to ensure match
     const colType = (type || '').toLowerCase();
-    
+
     // Resolve alias matches to simplify dictionary keys
     let resolvedType = colType;
     if (colType === 'photo') resolvedType = 'photos';
@@ -419,7 +419,7 @@ export function getLibraryIcon(type) {
     const activeStyle = currentIconStyle;
     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
     const libraryIcons = styleSet.libraryIcons || iconStyles['default'].libraryIcons;
-    
+
     // Fetch and return the full SVG string directly
     return libraryIcons[resolvedType] || libraryIcons['folders'] || libraryIcons['default'];
 }
