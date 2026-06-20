@@ -1,0 +1,138 @@
+/* ==========================================================================
+   PIN Dialog — numeric keypad modal for per-profile PIN entry
+   Reuses .modal-overlay / .settings-modal from components.css.
+   ========================================================================== */
+
+.pin-dialog-modal {
+    width: 420px;
+    min-height: 0;
+    padding-bottom: 28px;
+    align-items: center;
+    text-align: center;
+}
+
+.pin-dialog-modal .modal-header {
+    width: 100%;
+    text-align: center;
+}
+
+.pin-dialog-subtitle {
+    margin: 4px 0 18px;
+    min-height: 1.2em;
+    padding: 0 24px;
+    font-size: 1rem;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.65));
+}
+
+.pin-dialog-subtitle.error {
+    color: var(--jf-danger, #ff5c5c);
+}
+
+/* --- Dot indicators --------------------------------------------------- */
+/* NOTE: layout avoids CSS grid and flex `gap` — neither is available on the
+   legacy/ultra-legacy Chromium baselines (47 / 38). Spacing uses margins. */
+
+.pin-dots {
+    text-align: center;
+    margin: 0 0 26px;
+}
+
+.pin-dot {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin: 0 9px;
+    border-radius: 50%;
+    -webkit-border-radius: 50%;
+    border: 2px solid var(--jf-text-secondary, rgba(255, 255, 255, 0.5));
+    background: transparent;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.pin-dot.filled {
+    background: var(--jf-accent);
+    border-color: var(--jf-accent);
+    transform: scale(1.1);
+    -webkit-transform: scale(1.1);
+}
+
+.pin-dots.pin-error {
+    animation: pin-shake 0.45s ease;
+    -webkit-animation: pin-shake 0.45s ease;
+}
+
+.pin-dots.pin-error .pin-dot {
+    border-color: var(--jf-danger, #ff5c5c);
+}
+
+@keyframes pin-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-7px); }
+    80% { transform: translateX(7px); }
+}
+
+@-webkit-keyframes pin-shake {
+    0%, 100% { -webkit-transform: translateX(0); }
+    20% { -webkit-transform: translateX(-10px); }
+    40% { -webkit-transform: translateX(10px); }
+    60% { -webkit-transform: translateX(-7px); }
+    80% { -webkit-transform: translateX(7px); }
+}
+
+/* --- Keypad ----------------------------------------------------------- */
+
+.pin-keypad {
+    width: 264px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.pin-key {
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 72px;
+    height: 72px;
+    margin: 7px;
+    border-radius: 50%;
+    -webkit-border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--jf-text-primary);
+    font-size: 1.7rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.pin-key svg {
+    display: block;
+}
+
+.pin-key.focused,
+.pin-key:focus {
+    background: var(--jf-accent);
+    color: var(--jf-accent-content-color, #fff);
+    transform: scale(1.08);
+    -webkit-transform: scale(1.08);
+    outline: none;
+}
+
+.pin-key-action {
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+/* Spacer cell to keep "0" centered in the bottom row */
+.pin-key-empty {
+    background: none;
+    border: none;
+    pointer-events: none;
+    visibility: hidden;
+}

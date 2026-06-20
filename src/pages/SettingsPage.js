@@ -29,6 +29,8 @@ import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
 import { settingsIcons } from '../utils/Icons.js';
+import { pinManager } from '../utils/PinManager.js';
+import { pinDialog } from '../ui/PinDialog.js';
 
 const log = logger.create('SettingsPage');
 
@@ -3760,11 +3762,13 @@ class SettingsPage extends Page {
     _renderAccountTab() {
         const user = auth.getCurrentUser();
         const serverUrl = auth.getSavedServerUrl();
+        const userId = user?.Id;
+        const hasPin = userId ? pinManager.hasPin(userId) : false;
 
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Account">${i18n.t('Account')}</h2>
-                
+
                 <div class="user-profile-card">
                     <div class="user-avatar-wrapper">
                          ${this._renderUserAvatar(user)}
@@ -3772,6 +3776,30 @@ class SettingsPage extends Page {
                     <h3 class="user-name-large">${user?.Name || i18n.t('Guest')}</h3>
                     <p class="server-url-display">${serverUrl || i18n.t('Offline')}</p>
                 </div>
+
+                ${
+                    userId
+                        ? `
+                <h3 class="setting-section-title" data-i18n="ProfilePin">${i18n.t('ProfilePin')}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RequirePin">${i18n.t('RequirePin')}</span>
+                        <span class="setting-description" data-i18n="RequirePinDescription">${i18n.t('RequirePinDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${hasPin ? 'active' : ''}" id="toggle-profile-pin" tabindex="0"></button>
+                    </div>
+                </div>
+                ${
+                    hasPin
+                        ? `<div class="setting-actions centered">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-change-pin" tabindex="0" data-i18n="ChangePin">${i18n.t('ChangePin')}</button>
+                    </div>`
+                        : ''
+                }
+                `
+                        : ''
+                }
 
                 <div class="setting-actions centered">
                     <!-- Navigate to the Who's Watching screen to pick a different profile -->
@@ -4181,6 +4209,67 @@ class SettingsPage extends Page {
                 this._setLayout(btn.dataset.layout);
             });
         });
+
+        // ==========================================
+        // PROFILE PIN (Account tab)
+        // ==========================================
+        // Opt-in local PIN that gates profile selection on the sign-in page and
+        // the in-app "Who's Watching" switcher. Keyed by the current user's id.
+        const profilePinToggle = this.$('#toggle-profile-pin');
+        if (profilePinToggle) {
+            profilePinToggle.addEventListener('click', () => {
+                const userId = auth.getCurrentUser()?.Id;
+                if (!userId) return;
+
+                if (pinManager.hasPin(userId)) {
+                    // Currently enabled — require the current PIN before disabling.
+                    pinDialog.show({
+                        mode: 'verify',
+                        userId,
+                        title: i18n.t('EnterPin') || 'Enter PIN',
+                        onSuccess: () => {
+                            pinManager.removePin(userId);
+                            this._switchTab('account', true);
+                        }
+                        // On cancel: leave the PIN in place (no re-render needed).
+                    });
+                } else {
+                    // Enable — set a new PIN first; only persist on success.
+                    pinDialog.show({
+                        mode: 'set',
+                        title: i18n.t('SetPin') || 'Set PIN',
+                        onSuccess: (pin) => {
+                            pinManager.setPin(userId, pin);
+                            this._switchTab('account', true);
+                        }
+                    });
+                }
+            });
+        }
+
+        const changePinBtn = this.$('#btn-change-pin');
+        if (changePinBtn) {
+            changePinBtn.addEventListener('click', () => {
+                const userId = auth.getCurrentUser()?.Id;
+                if (!userId) return;
+                // Require the current PIN before allowing a new one to be set.
+                pinDialog.show({
+                    mode: 'verify',
+                    userId,
+                    title: i18n.t('EnterPin') || 'Enter PIN',
+                    onSuccess: () => {
+                        pinDialog.show({
+                            mode: 'set',
+                            title: i18n.t('ChangePin') || 'Change PIN',
+                            onSuccess: (pin) => {
+                                pinManager.setPin(userId, pin);
+                                this._switchTab('account', true);
+                            }
+                        });
+                    }
+                });
+            });
+        }
 
         // Toggle My Media
         const myMediaBtn = this.$('#toggle-my-media');

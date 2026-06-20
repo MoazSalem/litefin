@@ -71,6 +71,7 @@ import './styles/settings.css';
 import './styles/season.css';
 import './styles/offline.css';
 import './styles/profiles.css'; /* "Who's Watching" profile switcher */
+import './styles/pin-dialog.css'; /* Per-profile PIN entry keypad */
 import './styles/screensaver.css';
 import './styles/hero-carousel.css';
 import './styles/livetv.css';

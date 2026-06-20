@@ -160,7 +160,20 @@ class TizenAdapter {
                 'ColorF2Yellow',
                 'ColorF3Blue',
                 'Info',
-                'Tools'
+                'Tools',
+                // Numeric keys (0-9). Tizen does NOT deliver these to the web app
+                // unless registered. Needed so the profile PIN keypad can read
+                // physical remote number presses (see ui/PinDialog.js).
+                '0',
+                '1',
+                '2',
+                '3',
+                '4',
+                '5',
+                '6',
+                '7',
+                '8',
+                '9'
             ];
 
             keys.forEach((key) => {

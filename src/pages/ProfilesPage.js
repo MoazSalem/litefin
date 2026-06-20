@@ -23,6 +23,8 @@ import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
 import { imageService } from '../utils/ImageService.js';
+import { pinManager } from '../utils/PinManager.js';
+import { pinDialog } from '../ui/PinDialog.js';
 
 const log = logger.create('ProfilesPage');
 
@@ -313,8 +315,20 @@ class ProfilesPage extends Page {
      *
      * @param {string} userId
      */
-    async _switchToUser(userId) {
+    async _switchToUser(userId, pinVerified = false) {
         if (this._isSwitching) return; // Debounce double-tap
+
+        // Per-profile PIN gate (opt-in, local). Require the PIN before switching
+        // into a profile that has one configured.
+        if (!pinVerified && pinManager.hasPin(userId)) {
+            pinDialog.show({
+                mode: 'verify',
+                userId,
+                title: i18n.t('EnterPin') || 'Enter PIN',
+                onSuccess: () => this._switchToUser(userId, true)
+            });
+            return;
+        }
 
         this._isSwitching = true;
         log.info('Switching to user:', userId);

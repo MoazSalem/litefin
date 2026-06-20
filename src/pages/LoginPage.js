@@ -18,6 +18,8 @@ import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { imageService } from '../utils/ImageService.js';
+import { pinManager } from '../utils/PinManager.js';
+import { pinDialog } from '../ui/PinDialog.js';
 
 const log = logger.create('Login');
 
@@ -1006,11 +1008,24 @@ class LoginPage extends Page {
      * If user has password, show password form
      * @param {Object} user - User object from getPublicUsers
      */
-    async _selectUser(user) {
+    async _selectUser(user, pinVerified = false) {
         log.info(`LoginPage: _selectUser called for "${user?.Name}"`);
 
         if (!user) {
             log.error('LoginPage: _selectUser called with null/undefined user');
+            return;
+        }
+
+        // Per-profile PIN gate (opt-in, local). If this profile has a PIN
+        // configured, require it before proceeding into the normal login flow.
+        if (!pinVerified && pinManager.hasPin(user.Id)) {
+            pinDialog.show({
+                mode: 'verify',
+                userId: user.Id,
+                title: i18n.t('EnterPin') || 'Enter PIN',
+                onSuccess: () => this._selectUser(user, true),
+                onCancel: () => this._showState(STATE.USERS)
+            });
             return;
         }
 
