@@ -9,7 +9,7 @@
 
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
-import { detectTizenVersion } from '../../api/profiles/TizenProfile.js';
+import { detectTizenVersion, getDeviceCapabilities } from '../../api/profiles/TizenProfile.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('TizenAVPlayer');
@@ -18,6 +18,7 @@ const log = logger.create('TizenAVPlayer');
 // Used to gate hardware-specific workarounds (e.g. subtitle pause/resume cycle
 // is only needed on Tizen 2.4–3.x; Tizen 4.0+ handles it natively).
 const TIZEN_VERSION = detectTizenVersion();
+const DEVICE_CAPS = getDeviceCapabilities();
 
 // ============================================================================
 // TizenAVPlayer Class
@@ -266,15 +267,32 @@ export class TizenAVPlayer {
                     // 3. ABR Quality Kickstart (HLS/Adaptive Only)
                     if (!isDirectPlay) {
                         try {
+                            // Derive FIXED_MAX_RESOLUTION from device capabilities + content resolution.
+                            // Per Samsung docs, only needed when the manifest doesn't describe resolutions,
+                            // but we set it unconditionally as a safety cap so AVPlay never requests
+                            // segments beyond what the device can decode.
+                            const contentWidth = options.mediaSource?.Width || 0;
+                            const contentHeight = options.mediaSource?.Height || 0;
+                            let fixedMaxRes;
+                            if (contentWidth > 0 && contentHeight > 0) {
+                                const w = Math.min(contentWidth, DEVICE_CAPS.screenWidth);
+                                const h = Math.min(contentHeight, DEVICE_CAPS.screenHeight);
+                                fixedMaxRes = `${w}x${h}`;
+                            } else {
+                                // No content resolution info — tell AVPlay the device's max so ABR
+                                // doesn't limit itself (common with 8K manifests missing resolution data).
+                                fixedMaxRes = `${DEVICE_CAPS.screenWidth}x${DEVICE_CAPS.screenHeight}`;
+                            }
+
                             const props = [
-                                'FIXED_MAX_RESOLUTION=3840x2160', // Correctly cased 'x' per modern Tizen docs, though 'X' works on some.
+                                `FIXED_MAX_RESOLUTION=${fixedMaxRes}`,
                                 'STARTBITRATE=HIGHEST', // Force hardware to skip ramp-up delay
                                 'USER_AGENT=JellyfinTizenClient', // Modern way to set UA in 5.0+
                                 `INITIAL_BUFFER_DURATION=${bufferPlaySec * 1000}`,
                                 `RESUME_BUFFER_DURATION=${bufferResumeSec * 1000}`
                             ].join('|');
                             this._avplay.setStreamingProperty("ADAPTIVE_INFO", props);
-                            log.info('Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin, FIXED_MAX_RESOLUTION=3840x2160');
+                            log.info(`Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin, FIXED_MAX_RESOLUTION=${fixedMaxRes}`);
                         } catch (e) {
                              log.warn('Failed to set hls-specific properties:', e.message || e);
                         }
