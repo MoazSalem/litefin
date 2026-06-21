@@ -35,7 +35,7 @@
     -webkit-justify-content: center;
     justify-content: center;
     /* Darker backdrop — backdrop-filter is unsupported on Chrome 69 */
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(var(--jf-overlay-bg-rgb, 0, 0, 0), var(--osd-track-menu-bg-opacity, 0.85));
     opacity: 0;
     -webkit-transition: opacity 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
     transition: opacity 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
