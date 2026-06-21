@@ -317,21 +317,21 @@ const iconStyles = {
     },
     material3: {
         detailsIcons: {
-            play: `<svg  width="32" height="32" viewBox="3 3 18 18"><!-- Icon from Material 3 --><path fill="currentColor" d="M8 6.82v10.36c0 .79.87 1.27 1.54.84l8.14-5.18a1 1 0 0 0 0-1.69L9.54 5.98A.998.998 0 0 0 8 6.82"/></svg>`,
-            playLarge: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2M9.5 14.67V9.33c0-.79.88-1.27 1.54-.84l4.15 2.67a1 1 0 0 1 0 1.68l-4.15 2.67c-.66.43-1.54-.05-1.54-.84"/></svg>`,
+            play: `<svg width="32" height="32" viewBox="3 3 18 18"><!-- Icon from Material 3 --><path fill="currentColor" d="M8 6.82v10.36c0 .79.87 1.27 1.54.84l8.14-5.18a1 1 0 0 0 0-1.69L9.54 5.98A.998.998 0 0 0 8 6.82"/></svg>`,
+            playLarge: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2M9.5 14.67V9.33c0-.79.88-1.27 1.54-.84l4.15 2.67a1 1 0 0 1 0 1.68l-4.15 2.67c-.66.43-1.54-.05-1.54-.84"/></svg>`,
             reset: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M12 5V2.21c0-.45-.54-.67-.85-.35l-3.8 3.79c-.2.2-.2.51 0 .71l3.79 3.79c.32.31.86.09.86-.36V7c3.73 0 6.68 3.42 5.86 7.29c-.47 2.27-2.31 4.1-4.57 4.57c-3.57.75-6.75-1.7-7.23-5.01a1 1 0 0 0-.98-.85c-.6 0-1.08.53-1 1.13c.62 4.39 4.8 7.64 9.53 6.72c3.12-.61 5.63-3.12 6.24-6.24C20.84 9.48 16.94 5 12 5"/></svg>`,
-            trailer: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M18 4v1h-2V4c0-.55-.45-1-1-1H9c-.55 0-1 .45-1 1v1H6V4c0-.55-.45-1-1-1s-1 .45-1 1v16c0 .55.45 1 1 1s1-.45 1-1v-1h2v1c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-1h2v1c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1s-1 .45-1 1M8 17H6v-2h2zm0-4H6v-2h2zm0-4H6V7h2zm10 8h-2v-2h2zm0-4h-2v-2h2zm0-4h-2V7h2z"/></svg>`,
-            shuffle: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M21 1H3c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2M4.3 4.7a.996.996 0 0 1 1.41 0l4.47 4.47l-1.42 1.4L4.3 6.11a.996.996 0 0 1 0-1.41m15.29 14.8c0 .28-.22.5-.5.5H15.3a.5.5 0 0 1-.36-.85l1.2-1.2l-3.13-3.13l1.41-1.41l3.13 3.14l1.19-1.19c.31-.32.85-.1.85.35zm0-11.21a.5.5 0 0 1-.85.36l-1.19-1.19L5.7 19.29a.996.996 0 1 1-1.41-1.41L16.13 6.04l-1.19-1.19A.5.5 0 0 1 15.3 4h3.79c.28 0 .5.22.5.5z"/></svg>`,
-            watchedOutline: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M9 16.17L5.53 12.7a.996.996 0 1 0-1.41 1.41l4.18 4.18c.39.39 1.02.39 1.41 0L20.29 7.71a.996.996 0 1 0-1.41-1.41z"/></svg>`,
-            watchedFilled: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M9 16.17L5.53 12.7a.996.996 0 1 0-1.41 1.41l4.18 4.18c.39.39 1.02.39 1.41 0L20.29 7.71a.996.996 0 1 0-1.41-1.41z"/></svg>`,
-            audio: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M17 2H7c-1.1 0-2 .9-2 2v16c0 1.1.9 1.99 2 1.99L17 22c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-5 2c1.1 0 2 .9 2 2s-.9 2-2 2a2 2 0 1 1 0-4m0 16c-2.76 0-5-2.24-5-5s2.24-5 5-5s5 2.24 5 5s-2.24 5-5 5m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3s3-1.34 3-3s-1.34-3-3-3"/></svg>`,
-            subtitle: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2M5 12h2c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1s.45-1 1-1m8 6H5c-.55 0-1-.45-1-1s.45-1 1-1h8c.55 0 1 .45 1 1s-.45 1-1 1m6 0h-2c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1s-.45 1-1 1m0-4h-8c-.55 0-1-.45-1-1s.45-1 1-1h8c.55 0 1 .45 1 1s-.45 1-1 1"/></svg>`,
-            more: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2s-2 .9-2 2s.9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/></svg>`,
-            photo: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.9 13.98l2.1 2.53l3.1-3.99c.2-.26.6-.26.8.01l3.51 4.68a.5.5 0 0 1-.4.8H6.02c-.42 0-.65-.48-.39-.81L8.12 14c.19-.26.57-.27.78-.02"/></svg>`,
-            check: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2M9.29 16.29L5.7 12.7a.996.996 0 1 1 1.41-1.41L10 14.17l6.88-6.88a.996.996 0 1 1 1.41 1.41l-7.59 7.59a.996.996 0 0 1-1.41 0"/></svg>`,
-            favoriteOutline: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M19.66 3.99c-2.64-1.8-5.9-.96-7.66 1.1c-1.76-2.06-5.02-2.91-7.66-1.1c-1.4.96-2.28 2.58-2.34 4.29c-.14 3.88 3.3 6.99 8.55 11.76l.1.09c.76.69 1.93.69 2.69-.01l.11-.1c5.25-4.76 8.68-7.87 8.55-11.75c-.06-1.7-.94-3.32-2.34-4.28M12.1 18.55l-.1.1l-.1-.1C7.14 14.24 4 11.39 4 8.5C4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5c0 2.89-3.14 5.74-7.9 10.05"/></svg>`,
-            favoriteFilled: `<svg  width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M13.35 20.13c-.76.69-1.93.69-2.69-.01l-.11-.1C5.3 15.27 1.87 12.16 2 8.28c.06-1.7.93-3.33 2.34-4.29c2.64-1.8 5.9-.96 7.66 1.1c1.76-2.06 5.02-2.91 7.66-1.1c1.41.96 2.28 2.59 2.34 4.29c.14 3.88-3.3 6.99-8.55 11.76z"/></svg>`,
-            ghost: `<svg  width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="M12 2c3.5 0 6 3 7 6c3 1 4 3.73 4 6l-2.775.793a1 1 0 0 0-.725.961v1.496A1.75 1.75 0 0 1 17.75 19h-.596a2 2 0 0 0-1.668.896Q14.094 22 12 22t-3.486-2.104A2 2 0 0 0 6.846 19H6.25a1.75 1.75 0 0 1-1.75-1.75v-1.496a1 1 0 0 0-.725-.961L1 14c0-2.266 1-5 4-6c1-3 3.5-6 7-6m0 10c-.828 0-1.5 1.12-1.5 2.5S11.172 17 12 17s1.5-1.12 1.5-2.5S12.828 12 12 12M9.5 8a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m5 0a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3"/></svg>`,
+            trailer: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M18 4v1h-2V4c0-.55-.45-1-1-1H9c-.55 0-1 .45-1 1v1H6V4c0-.55-.45-1-1-1s-1 .45-1 1v16c0 .55.45 1 1 1s1-.45 1-1v-1h2v1c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-1h2v1c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1s-1 .45-1 1M8 17H6v-2h2zm0-4H6v-2h2zm0-4H6V7h2zm10 8h-2v-2h2zm0-4h-2v-2h2zm0-4h-2V7h2z"/></svg>`,
+            shuffle: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m16.6 18l-3.175-3.175L14.85 13.4L18 16.55V15q0-.425.288-.712T19 14t.713.288T20 15v4q0 .425-.288.713T19 20h-4q-.425 0-.712-.288T14 19t.288-.712T15 18zM18 7.4L5.7 19.7q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7L16.6 6H15q-.425 0-.712-.287T14 5t.288-.712T15 4h4q.425 0 .713.288T20 5v4q0 .425-.288.713T19 10t-.712-.288T18 9zm-8.825 3.175L4.275 5.7Q4 5.425 4 5t.275-.7t.688-.275t.712.275l4.9 4.875z"/></svg>`,
+            watchedOutline: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M9 16.17L5.53 12.7a.996.996 0 1 0-1.41 1.41l4.18 4.18c.39.39 1.02.39 1.41 0L20.29 7.71a.996.996 0 1 0-1.41-1.41z"/></svg>`,
+            watchedFilled: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M9 16.17L5.53 12.7a.996.996 0 1 0-1.41 1.41l4.18 4.18c.39.39 1.02.39 1.41 0L20.29 7.71a.996.996 0 1 0-1.41-1.41z"/></svg>`,
+            audio: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M17 2H7c-1.1 0-2 .9-2 2v16c0 1.1.9 1.99 2 1.99L17 22c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-5 2c1.1 0 2 .9 2 2s-.9 2-2 2a2 2 0 1 1 0-4m0 16c-2.76 0-5-2.24-5-5s2.24-5 5-5s5 2.24 5 5s-2.24 5-5 5m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3s3-1.34 3-3s-1.34-3-3-3"/></svg>`,
+            subtitle: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2M5 12h2c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1s.45-1 1-1m8 6H5c-.55 0-1-.45-1-1s.45-1 1-1h8c.55 0 1 .45 1 1s-.45 1-1 1m6 0h-2c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1s-.45 1-1 1m0-4h-8c-.55 0-1-.45-1-1s.45-1 1-1h8c.55 0 1 .45 1 1s-.45 1-1 1"/></svg>`,
+            more: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2s-2 .9-2 2s.9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2s2-.9 2-2s-.9-2-2-2"/></svg>`,
+            photo: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.9 13.98l2.1 2.53l3.1-3.99c.2-.26.6-.26.8.01l3.51 4.68a.5.5 0 0 1-.4.8H6.02c-.42 0-.65-.48-.39-.81L8.12 14c.19-.26.57-.27.78-.02"/></svg>`,
+            check: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2M9.29 16.29L5.7 12.7a.996.996 0 1 1 1.41-1.41L10 14.17l6.88-6.88a.996.996 0 1 1 1.41 1.41l-7.59 7.59a.996.996 0 0 1-1.41 0"/></svg>`,
+            favoriteOutline: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M19.66 3.99c-2.64-1.8-5.9-.96-7.66 1.1c-1.76-2.06-5.02-2.91-7.66-1.1c-1.4.96-2.28 2.58-2.34 4.29c-.14 3.88 3.3 6.99 8.55 11.76l.1.09c.76.69 1.93.69 2.69-.01l.11-.1c5.25-4.76 8.68-7.87 8.55-11.75c-.06-1.7-.94-3.32-2.34-4.28M12.1 18.55l-.1.1l-.1-.1C7.14 14.24 4 11.39 4 8.5C4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5c0 2.89-3.14 5.74-7.9 10.05"/></svg>`,
+            favoriteFilled: `<svg width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M13.35 20.13c-.76.69-1.93.69-2.69-.01l-.11-.1C5.3 15.27 1.87 12.16 2 8.28c.06-1.7.93-3.33 2.34-4.29c2.64-1.8 5.9-.96 7.66 1.1c1.76-2.06 5.02-2.91 7.66-1.1c1.41.96 2.28 2.59 2.34 4.29c.14 3.88-3.3 6.99-8.55 11.76z"/></svg>`,
+            ghost: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon --><path fill="currentColor" d="M12 2c3.5 0 6 3 7 6c3 1 4 3.73 4 6l-2.775.793a1 1 0 0 0-.725.961v1.496A1.75 1.75 0 0 1 17.75 19h-.596a2 2 0 0 0-1.668.896Q14.094 22 12 22t-3.486-2.104A2 2 0 0 0 6.846 19H6.25a1.75 1.75 0 0 1-1.75-1.75v-1.496a1 1 0 0 0-.725-.961L1 14c0-2.266 1-5 4-6c1-3 3.5-6 7-6m0 10c-.828 0-1.5 1.12-1.5 2.5S11.172 17 12 17s1.5-1.12 1.5-2.5S12.828 12 12 12M9.5 8a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m5 0a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3"/></svg>`,
             ratingStar: `<svg class="rating-star-icon" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="m12 17.27l4.15 2.51c.76.46 1.69-.22 1.49-1.08l-1.1-4.72l3.67-3.18c.67-.58.31-1.68-.57-1.75l-4.83-.41l-1.89-4.46c-.34-.81-1.5-.81-1.84 0L9.19 8.63l-4.83.41c-.88.07-1.24 1.17-.57 1.75l3.67 3.18l-1.1 4.72c-.2.86.73 1.54 1.49 1.08z"/></svg>`
         },
         osdIcons: {
@@ -419,7 +419,7 @@ const iconStyles = {
             chapterNext: `
                 <svg class="osd-icon icon-outline" width="32" height="32" viewBox="-1 0 24 24"><!-- Icon from Material 3 --><path fill="currentColor" d="M9.29 6.71a.996.996 0 0 0 0 1.41L13.17 12l-3.88 3.88a.996.996 0 1 0 1.41 1.41l4.59-4.59a.996.996 0 0 0 0-1.41L10.7 6.7c-.38-.38-1.02-.38-1.41.01"/></svg>
                 <svg class="osd-icon icon-filled" width="32" height="32" viewBox="-1 0 24 24"><!-- Icon from Material 3 --><path fill="currentColor" d="M9.29 6.71a.996.996 0 0 0 0 1.41L13.17 12l-3.88 3.88a.996.996 0 1 0 1.41 1.41l4.59-4.59a.996.996 0 0 0 0-1.41L10.7 6.7c-.38-.38-1.02-.38-1.41.01"/></svg>
-            `,    
+            `,
             speed: `
                 <svg class="osd-icon icon-outline" width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material Symbols Rounded --><path fill="currentColor" d="M10.45 15.5q.625.625 1.575.588T13.4 15.4l4.225-6.325q.225-.35-.062-.638t-.638-.062L10.6 12.6q-.65.45-.712 1.363t.562 1.537M5.1 20q-.55 0-1.012-.238t-.738-.712q-.65-1.175-1-2.437T2 14q0-2.075.788-3.9t2.137-3.175T8.1 4.788T12 4q2.05 0 3.85.775T19 6.888t2.15 3.125t.825 3.837q.025 1.375-.312 2.688t-1.038 2.512q-.275.475-.737.713T18.874 20z"/></svg>
                 <svg class="osd-icon icon-filled" width="32" height="32" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material Symbols Rounded --><path fill="currentColor" d="M10.45 15.5q.625.625 1.575.588T13.4 15.4l4.225-6.325q.225-.35-.062-.638t-.638-.062L10.6 12.6q-.65.45-.712 1.363t.562 1.537M5.1 20q-.55 0-1.012-.238t-.738-.712q-.65-1.175-1-2.437T2 14q0-2.075.788-3.9t2.137-3.175T8.1 4.788T12 4q2.05 0 3.85.775T19 6.888t2.15 3.125t.825 3.837q.025 1.375-.312 2.688t-1.038 2.512q-.275.475-.737.713T18.874 20z"/></svg>
@@ -619,14 +619,6 @@ export function setIconStyle(styleName) {
 }
 
 /**
- * Retrieve the active icon style theme.
- * @returns {string} The active style theme name
- */
-export function getIconStyle() {
-    return currentIconStyle;
-}
-
-/**
  * ============================================================================
  * Proxy Factories for Dynamic Resolution
  * ============================================================================
@@ -639,19 +631,19 @@ function createIconProxy(category) {
     if (typeof Proxy !== 'undefined') {
         return new Proxy({}, {
             get(target, prop) {
-                const activeStyle = currentIconStyle;
+                const activeStyle = getActiveStyle();
                 const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                 const categorySet = styleSet[category] || iconStyles['default'][category];
                 return categorySet[prop];
             },
             ownKeys(target) {
-                const activeStyle = currentIconStyle;
+                const activeStyle = getActiveStyle();
                 const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                 const categorySet = styleSet[category] || iconStyles['default'][category];
                 return Reflect.ownKeys(categorySet);
             },
             getOwnPropertyDescriptor(target, prop) {
-                const activeStyle = currentIconStyle;
+                const activeStyle = getActiveStyle();
                 const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                 const categorySet = styleSet[category] || iconStyles['default'][category];
                 return Reflect.getOwnPropertyDescriptor(categorySet, prop);
@@ -668,7 +660,7 @@ function createIconProxy(category) {
     Object.keys(defaultSet).forEach(function (prop) {
         Object.defineProperty(fallbackObj, prop, {
             get: function () {
-                const activeStyle = currentIconStyle;
+                const activeStyle = getActiveStyle();
                 const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                 const categorySet = styleSet[category] || iconStyles['default'][category];
                 return categorySet[prop];
