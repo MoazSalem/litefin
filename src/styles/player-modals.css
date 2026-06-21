@@ -43,7 +43,7 @@
      * producing visible flickering as the modal opens. The semi-transparent solid
      * background is visually equivalent and renders without artifacts.
      */
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(var(--jf-overlay-bg-rgb, 0, 0, 0), var(--osd-track-menu-bg-opacity, 0.85));
     z-index: 9999;
 
     /*
