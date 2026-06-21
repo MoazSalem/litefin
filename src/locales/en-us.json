@@ -645,6 +645,8 @@
     "Html5MaxMaxBufferLengthDesc": "Maximum length of video buffer allowed when bitrates are low.",
     "IconStyle": "Icon Style",
     "IconStyleDescription": "Choose a visual style theme for icons across the app.",
+    "IconVariant": "Icon Variant Preference",
+    "IconVariantDescription": "Select whether icons should be outlined, filled, or change dynamically based on focus state.",
     "ImageQuality": "Image Quality",
     "ImageQualityDescription": "Adjust for device performance (requires restart)",
     "ImageRelated": "Image Related",

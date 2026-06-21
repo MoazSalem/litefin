@@ -31,7 +31,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { settingsIcons } from '../utils/Icons.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
-import { setIconStyle } from '../utils/Icons.js';
+import { setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 
 const log = logger.create('SettingsPage');
 
@@ -297,6 +297,56 @@ class SettingsPage extends Page {
                             ],
                             storage.getItem('pref:iconStyle') || 'default'
                         )}
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="IconVariant">Icon Variant Preference</span>
+                        <span class="setting-description" data-i18n="IconVariantDescription">Select whether icons should be outlined, filled, or change dynamically based on focus state.</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                            /*
+                             * Retrieve the support capability of the active icon set (e.g. 'both' or 'filled').
+                             * If a style theme only supports one visual format, we limit the dropdown options
+                             * list to that specific format but keep it interactively reachable and clickable
+                             * so the user can inspect the setting rather than it being disabled/unreachable.
+                             */
+                            const supports = getSupportedStyles();
+                            let options = [];
+
+                            // Determine available dropdown options based on current style capabilities
+                            if (supports === 'both') {
+                                options = [
+                                    { value: 'dynamic', label: 'Dynamic (Outlined/Filled)' },
+                                    { value: 'outlined', label: 'Always Outlined' },
+                                    { value: 'filled', label: 'Always Filled' }
+                                ];
+                            } else if (supports === 'filled') {
+                                options = [
+                                    { value: 'filled', label: 'Always Filled' }
+                                ];
+                            } else if (supports === 'outlined') {
+                                options = [
+                                    { value: 'outlined', label: 'Always Outlined' }
+                                ];
+                            }
+
+                            // If only a single state is supported, fallback to it directly
+                            const activeVal = supports === 'both' ? (storage.getItem('pref:iconVariant') || 'dynamic') : supports;
+
+                            /*
+                             * Render the dropdown element dynamically.
+                             * We pass false for the disabled parameter so that the setting remains accessible,
+                             * allowing users to navigate to it, click it, and open it.
+                             */
+                            return this._renderDropdown(
+                                'icon-variant-select',
+                                options,
+                                activeVal,
+                                false
+                            );
+                        })()}
                     </div>
                 </div>
                 
@@ -5368,19 +5418,20 @@ class SettingsPage extends Page {
         });
     }
 
-    _renderDropdown(id, options, currentValue) {
+    _renderDropdown(id, options, currentValue, disabled = false) {
         // Find current label (using String conversion to match storage strings with number options)
         const currentOption = options.find((o) => String(o.value) === String(currentValue)) || options[0];
         const currentLabel = currentOption ? i18n.ensureBiDi(currentOption.label) : i18n.t('Select');
 
         // Render as a button that triggers the modal
         return `
-            <button class="setting-action-btn select-btn" id="${id}-btn" 
+            <button class="setting-action-btn select-btn ${disabled ? 'disabled' : ''}" id="${id}-btn" 
                     data-id="${id}" 
                     data-value="${currentValue}"
                     data-options='${JSON.stringify(options).replace(/'/g, '&#39;')}'
-                    tabindex="0"
-                    data-focusable="true">
+                    tabindex="${disabled ? '-1' : '0'}"
+                    ${disabled ? 'disabled' : ''}
+                    data-focusable="${disabled ? 'false' : 'true'}">
                 <span class="btn-label">${currentLabel}</span>
             </button>
         `;
@@ -5762,6 +5813,7 @@ class SettingsPage extends Page {
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
             'icon-style-select': { key: 'pref:iconStyle', type: 'local', triggerEvent: true },
+            'icon-variant-select': { key: 'pref:iconVariant', type: 'local', triggerEvent: true },
             'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' },
             'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
             'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
@@ -5863,6 +5915,13 @@ class SettingsPage extends Page {
                         } else if (id === 'icon-style-select') {
                             setIconStyle(newValue);
                             this._triggerHardReload();    
+                        } else if (id === 'icon-variant-select') {
+                            /* 
+                              Saves the preferred icon rendering variant (dynamic, outlined, filled)
+                              to local storage and forces a clean UI rebuild to propagate changes.
+                            */
+                            storage.setItem('pref:iconVariant', newValue);
+                            this._triggerHardReload();
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
 

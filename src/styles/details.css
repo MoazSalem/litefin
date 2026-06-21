@@ -568,6 +568,42 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 }
 
 /* 
+ * ============================================================================
+ * Dynamic Icon Variant Toggling (Outlined vs. Filled)
+ * ============================================================================
+ * Support responsiveness for "dynamic" icon variants where both outline and 
+ * filled SVGs are loaded simultaneously. Hide the filled icons by default,
+ * showing outline state, and swap them seamlessly when focused, hovered, 
+ * or when the action button itself is marked active.
+ * ============================================================================
+ */
+.details-actions .btn .icon-filled,
+.details-actions .btn-icon .icon-filled {
+    display: none;
+}
+
+.details-actions .btn:focus .icon-filled,
+.details-actions .btn.focused .icon-filled,
+.details-actions .btn:hover .icon-filled,
+.details-actions .btn-icon:focus .icon-filled,
+.details-actions .btn-icon.focused .icon-filled,
+.details-actions .btn-icon:hover .icon-filled,
+.details-actions .btn-icon.active .icon-filled {
+    display: inline-block;
+}
+
+.details-actions .btn:focus .icon-outline,
+.details-actions .btn.focused .icon-outline,
+.details-actions .btn:hover .icon-outline,
+.details-actions .btn-icon:focus .icon-outline,
+.details-actions .btn-icon.focused .icon-outline,
+.details-actions .btn-icon:hover .icon-outline,
+.details-actions .btn-icon.active .icon-outline {
+    display: none;
+}
+
+
+/* 
  * Pulse Animation Trigger:
  * Added via JS temporarily during toggle to provide "something happened" feedback.
  */
