@@ -557,8 +557,27 @@ export class WebOSPlayer {
                 }
             } else {
                 const nativeTracks = this._videoElement?.audioTracks;
-                const outputIndex = (!nativeTracks || nativeTracks.length <= 1) ? 0 : resolvedIndex;
-                this.setAudioStreamIndex(outputIndex);
+
+                // ── Direct-play with no audioTracks yet ───────────────────────
+                // For MKV/MP4 direct-play, WebOS does not populate audioTracks.
+                // That is fine here — JellyfinPlayer already embedded
+                // AudioStreamIndex in the stream URL, so the server is already
+                // serving the correct track. Calling setAudioStreamIndex() now
+                // would fire audiotrackswitchfailed → restart → "play() was
+                // interrupted by a new load request" error on every startup.
+                //
+                // We only need to call setAudioStreamIndex() when audioTracks IS
+                // populated (HLS native path), so the decoder reinitialises on
+                // the right track.  Mid-playback user switches still reach
+                // setAudioStreamIndex() via JellyfinPlayer and will correctly
+                // fire audiotrackswitchfailed → restart if tracks are empty.
+                // ─────────────────────────────────────────────────────────────
+                if (!nativeTracks || nativeTracks.length === 0) {
+                    log.debug('WebOSPlayer: _applyInitialTracks — audioTracks empty (direct-play). Skipping initial switch; URL already carries AudioStreamIndex.');
+                } else {
+                    const outputIndex = nativeTracks.length <= 1 ? 0 : resolvedIndex;
+                    this.setAudioStreamIndex(outputIndex);
+                }
             }
         }
 
@@ -896,15 +915,56 @@ export class WebOSPlayer {
         if (!video) return;
 
         const audioTracks = video.audioTracks;
+
+        // ── Empty audioTracks: deferred restart fallback ──────────────────────
+        //
+        // WebOS does not populate video.audioTracks for progressive MKV/MP4.
+        // supportsNativeAudioTracks() already accounts for this at play-setup
+        // time, but a race is possible if the media was loaded before tracks
+        // became available, or if the server returned DirectPlay when we
+        // expected HLS. Either way, silently failing here leaves the user on
+        // the wrong track — we log clearly and signal to the caller instead.
         if (!audioTracks || audioTracks.length === 0) {
-            log.debug('WebOSPlayer: Native audioTracks not available');
+            // ── Direct-play MKV/MP4: audioTracks is not populated by WebOS ───────
+            //
+            // WebOS does not expose the HTML5 audioTracks API for progressive
+            // container downloads (MKV, MP4). The collection stays empty for
+            // the entire playback session, so any .enabled toggle is a no-op.
+            //
+            // Signal a restart to JellyfinPlayer so it can re-open the stream
+            // with AudioStreamIndex in the server URL, which causes the server
+            // (or the container parser) to serve the correct audio track from
+            // the start. This is the same path used for Transcode audio switches.
+            // ─────────────────────────────────────────────────────────────────
+            log.warn('WebOSPlayer: video.audioTracks is empty for direct-play — firing audiotrackswitchfailed to trigger restart');
+            this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
             return;
         }
 
+        // ── WebOS track reordering guard ──────────────────────────────────────
+        //
+        // WebOS Chromium does NOT guarantee that video.audioTracks reflects the
+        // physical stream order from the container. Specifically, the track
+        // flagged as "default" in the MKV/MP4 container is placed at
+        // audioTracks[0] regardless of its source stream index. This inverts our
+        // positional assumptions:
+        //
+        //   Jellyfin order  (by stream Index): [1=English, 2=Japanese*(default)]
+        //   WebOS audioTracks order:           [0=Japanese*(default), 1=English]
+        //
+        // listIndex=1 (intended: Japanese) would then incorrectly enable
+        // audioTracks[1] (English), inverting every audio track selection.
+        //
+        // _resolveNativeAudioIndex() uses BCP-47 language tag matching to find
+        // the correct audioTracks position, falling back to positional indexing
+        // only when language data is absent or ambiguous.
+        // ─────────────────────────────────────────────────────────────────────
+        const nativeIndex = this._resolveNativeAudioIndex(listIndex, audioTracks);
+
         for (let i = 0; i < audioTracks.length; i++) {
-            audioTracks[i].enabled = (i === listIndex);
+            audioTracks[i].enabled = (i === nativeIndex);
         }
-        log.info('WebOSPlayer: Native audio track → list index', listIndex);
+        log.info('WebOSPlayer: Native audio track → list index', listIndex, '→ native index', nativeIndex);
 
         // WebOS native media pipeline does not apply audioTracks.enabled changes
         // mid-playback without a seek. A sub-frame back-seek (≤0.1 s) forces the
@@ -913,6 +973,125 @@ export class WebOSPlayer {
         if (video.readyState >= 2 /* HAVE_CURRENT_DATA */ && video.currentTime > 0.1) {
             video.currentTime = video.currentTime - 0.1;
         }
+    }
+
+    /**
+     * Resolve a Jellyfin-visible audio list index to the actual position inside
+     * the browser's video.audioTracks collection.
+     *
+     * WebOS Chromium reorders audioTracks — the container's "default" track is
+     * always placed at index 0, regardless of its physical stream order. Our
+     * Jellyfin-side index (sorted by stream Index) therefore doesn't map 1-to-1.
+     *
+     * Resolution strategy (in priority order):
+     *
+     *   1. Language-tag match — find all native tracks whose BCP-47 language
+     *      code overlaps the Jellyfin stream's Language field. Prefix matching
+     *      is used to bridge ISO 639-2 ("eng", "jpn") ↔ BCP-47 ("en", "ja")
+     *      differences.
+     *
+     *   2. Same-language disambiguation — when multiple native tracks share the
+     *      same language, pick by the stream's relative position among Jellyfin
+     *      streams with that same language (e.g. the 2nd English track maps to
+     *      the 2nd native English track).
+     *
+     *   3. Positional fallback — used when language data is absent, 'und', or
+     *      when no native track language matches. Identical to the original
+     *      pre-fix behaviour, preserving backwards compatibility.
+     *
+     * @param   {number}         listIndex    0-based index into the Jellyfin
+     *                                        filtered audio stream array
+     *                                        (audioTrackListIndex from play options).
+     * @param   {AudioTrackList} nativeTracks video.audioTracks from the element.
+     * @returns {number}  Index to use for audioTracks[i].enabled.
+     * @private
+     */
+    _resolveNativeAudioIndex(listIndex, nativeTracks) {
+        // Nothing to resolve on a single-track file, or before media context is ready.
+        if (!nativeTracks || nativeTracks.length <= 1) return listIndex;
+
+        // ── Rebuild the Jellyfin-visible audio stream list ────────────────────
+        // Apply the same codec filter used by JellyfinPlayer._getBackendAudioTracks
+        // so our listIndex maps to the exact same Jellyfin stream entry.
+        const mediaStreams = this._currentPlayOptions?.mediaSource?.MediaStreams || [];
+        const jellyfinAudioStreams = mediaStreams.filter(s => {
+            if (s.Type !== 'Audio') return false;
+            const codec = (s.Codec || '').toLowerCase();
+            // Exclude passthrough formats WebOS cannot decode natively
+            if (codec === 'truehd' && !PlayerSettings.get('enableTrueHd')) return false;
+            if ((codec.includes('dts') || codec === 'dca') && !PlayerSettings.get('enableDts')) return false;
+            return true;
+        });
+
+        // ── Guard: list index out of range ────────────────────────────────────
+        const targetStream = jellyfinAudioStreams[listIndex];
+        if (!targetStream) {
+            log.debug('WebOSPlayer: _resolveNativeAudioIndex — listIndex', listIndex, 'out of range, using as-is');
+            return listIndex;
+        }
+
+        // ── Primary: BCP-47 language-tag matching ─────────────────────────────
+        const targetLang = (targetStream.Language || '').toLowerCase();
+        if (!targetLang || targetLang === 'und' || targetLang === 'unknown') {
+            // No usable language tag on this stream — positional fallback only
+            log.debug('WebOSPlayer: _resolveNativeAudioIndex — no language for stream',
+                targetStream.Index, ', using positional index', listIndex);
+            return listIndex;
+        }
+
+        // Collect all native audioTracks positions whose language tag overlaps.
+        // Prefix matching bridges ISO 639-2 ("eng", "jpn") vs BCP-47 ("en", "ja").
+        const nativeMatches = [];
+        for (let i = 0; i < nativeTracks.length; i++) {
+            const nativeLang = (nativeTracks[i].language || '').toLowerCase();
+            if (!nativeLang) continue;
+            if (
+                nativeLang === targetLang
+                || nativeLang.startsWith(targetLang)
+                || targetLang.startsWith(nativeLang)
+            ) {
+                nativeMatches.push(i);
+            }
+        }
+
+        // ── No language match — positional fallback ───────────────────────────
+        if (nativeMatches.length === 0) {
+            log.debug('WebOSPlayer: _resolveNativeAudioIndex — no native track matched lang "' +
+                targetLang + '", using positional index', listIndex);
+            return listIndex;
+        }
+
+        // ── Unique match — done ───────────────────────────────────────────────
+        if (nativeMatches.length === 1) {
+            if (nativeMatches[0] !== listIndex) {
+                log.info('WebOSPlayer: _resolveNativeAudioIndex — corrected audio index',
+                    listIndex, '→', nativeMatches[0], '(lang: "' + targetLang + '")');
+            }
+            return nativeMatches[0];
+        }
+
+        // ── Multiple native tracks share the same language ────────────────────
+        // Disambiguate by the stream's relative position among same-language
+        // entries in the Jellyfin stream list. e.g. two English tracks [5.1, 2.0]:
+        // the 2nd Jellyfin English stream maps to the 2nd native English track.
+        const sameLanguageStreams = jellyfinAudioStreams.filter(
+            s => (s.Language || '').toLowerCase() === targetLang
+        );
+        const posWithinLang = sameLanguageStreams.findIndex(s => s.Index === targetStream.Index);
+
+        if (posWithinLang >= 0 && posWithinLang < nativeMatches.length) {
+            const resolved = nativeMatches[posWithinLang];
+            if (resolved !== listIndex) {
+                log.info('WebOSPlayer: _resolveNativeAudioIndex — multi-track disambiguated index',
+                    listIndex, '→', resolved,
+                    '(lang: "' + targetLang + '", pos-within-lang:', posWithinLang, ')');
+            }
+            return resolved;
+        }
+
+        // ── Last resort: first language match ─────────────────────────────────
+        log.debug('WebOSPlayer: _resolveNativeAudioIndex — falling back to first lang match', nativeMatches[0]);
+        return nativeMatches[0];
     }
 
     /**
@@ -944,13 +1123,22 @@ export class WebOSPlayer {
     }
 
     /**
-     * Check if this backend can natively switch audio tracks without restart.
-     * WebOS's audioTracks API is stable across all supported TV generations.
+     * Report whether this backend can natively switch audio tracks without
+     * requiring a full playback restart.
+     *
+     * For WebOS, this returns true unconditionally because:
+     *   - HLS streams (native or Hls.js) always expose video.audioTracks.
+     *   - DirectPlay MKV/MP4 does NOT populate audioTracks — but that case
+     *     is handled at switch-time in setAudioStreamIndex() by firing an
+     *     'audiotrackswitchfailed' event so JellyfinPlayer can restart.
+     *
+     * Returning false here would cause JellyfinPlayer to force a remux upgrade
+     * even for HLS content where native switching works perfectly, so we keep
+     * the answer static and resolve the edge case at call time instead.
+     *
      * @returns {boolean}
      */
     supportsNativeAudioTracks() {
-        // WebOS reliably supports the HTML5 audioTracks API — no need for
-        // the Tizen version check we do in HtmlVideoPlayer.
         return true;
     }
 

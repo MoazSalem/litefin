@@ -490,6 +490,67 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+        // ── WebOS: native audio switch fell through (audioTracks empty) ───────
+        //
+        // WebOS does not expose video.audioTracks for progressive MKV/MP4
+        // direct-play. When setAudioStreamIndex() can't toggle .enabled, it
+        // fires this event so we can restart playback with the correct index
+        // embedded in the stream URL — same mechanism as a Transcode restart.
+        if (event.type === 'audiotrackswitchfailed') {
+            const targetIndex = this._currentAudioStreamIndex;
+            log.warn('audiotrackswitchfailed: audioTracks empty on WebOS direct-play.',
+                'Restarting to apply audio index', targetIndex);
+
+            if (this._currentPlayOptions && !this._audioRestartInProgress) {
+                const currentTicks = this.getCurrentPositionTicks();
+
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    audioStreamIndex:   targetIndex,
+                    startPositionTicks: currentTicks,
+                    // MUST use 'remux' here — not 'directPlay'.
+                    //
+                    // For DirectPlay (Static=true), Jellyfin streams the raw container
+                    // bytes and completely ignores the AudioStreamIndex query parameter.
+                    // The WebOS pipeline then picks up whatever track the container flags
+                    // as default, ignoring our request.
+                    //
+                    // 'remux' forces DirectStream mode: the server runs ffmpeg to
+                    // rewrap the container, selecting exactly the requested audio track
+                    // and copying the video stream bitstream. The resulting URL will be
+                    // a .m3u8/stream endpoint that actually honours AudioStreamIndex.
+                    //
+                    // If the session was already in transcode mode, keep it there —
+                    // switching to remux would skip necessary codec profile checks.
+                    playbackMode: this._playbackMode === 'transcode' ? 'transcode' : 'remux'
+                };
+
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions    = restartOptions;
+                this._audioRestartInProgress = true;
+                this._isRestarting = true;
+
+                this.emit(PlayerEvent.RESTARTING);
+
+                // Restart asynchronously so this event handler can return cleanly
+                (async () => {
+                    try {
+                        await this.stop();
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await this.play(restartOptions);
+                        this._isRestarting = false;
+                    } catch (e) {
+                        log.error('audiotrackswitchfailed restart failed:', e);
+                        this._isRestarting = false;
+                    } finally {
+                        this._audioRestartInProgress = false;
+                    }
+                    this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { audioStreamIndex: targetIndex });
+                })();
+            }
+            return;
+        }
+
         // Re-emit events from backend
         this.emit(event.type, event.data);
     }
