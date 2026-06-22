@@ -20,9 +20,27 @@ import libjass from 'libjass';
 import 'libjass/libjass.css';
 import { logger } from '../../utils/Logger.js';
 
+// Check pathSegList capability safely using a dummy instance.
+// Directly accessing SVGPathElement.prototype.pathSegList throws "Illegal invocation"
+// on older browsers (like Chrome 38) because the native getter expects an instance context.
+let hasPathSeg = false;
+try {
+    if (typeof document !== 'undefined') {
+        /*
+         * Create a transient path element to check support on an instance level.
+         * This avoids invoking the native getter directly on the prototype object.
+         */
+        const dummyPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        hasPathSeg = !!dummyPath.pathSegList;
+    }
+} catch (e) {
+    // Fail-safe to false if SVG elements cannot be created or fail to query
+    hasPathSeg = false;
+}
+
 // Polyfill SVGPathElement.prototype.pathSegList for modern browsers where it was removed.
 // Required for libjass's ASS vector drawing (\p tag) support.
-if (typeof window !== 'undefined' && typeof SVGPathElement !== 'undefined' && !SVGPathElement.prototype.pathSegList) {
+if (typeof window !== 'undefined' && typeof SVGPathElement !== 'undefined' && !hasPathSeg) {
     Object.defineProperty(SVGPathElement.prototype, 'pathSegList', {
         get() {
             const path = this;
