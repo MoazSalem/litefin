@@ -745,11 +745,47 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-btn-primary-bg) !important;
 }
 
+/*
+ * Force Selection Modals to only display the filled check icon variant.
+ * Since the checkmark is only visible when an option is selected, we hide 
+ * the outlined SVG state entirely and force the filled state to display,
+ * applying the high-contrast primary text color.
+ */
+/*
+ * Switch between outline and filled check icon variant based on selected/focus state.
+ *
+ * Design Guidelines:
+ * - If the option is selected and unfocused: display the outline checkmark icon.
+ * - If the option is selected and focused/hovered: switch to the filled checkmark icon.
+ * - Apply a premium look by styling the filled icon with the primary text color variable.
+ */
+
+/* By default, show outline icon, hide filled icon */
+.modal-option-btn .check-icon .icon-outline {
+    display: inline-block;
+}
+
+.modal-option-btn .check-icon .icon-filled {
+    display: none;
+    color: var(--jf-text-primary) !important;
+}
+
+/* Make selected icons visible */
 .modal-option-btn.selected .check-icon {
     opacity: 1;
 }
 
-.modal-option-btn.focused .check-icon {
+/* Switch outline icon to hidden and filled icon to visible on focus or hover */
+.modal-option-btn.selected.focused .check-icon .icon-outline,
+.modal-option-btn.selected:focus .check-icon .icon-outline,
+.modal-option-btn.selected:hover .check-icon .icon-outline {
+    display: none;
+}
+
+.modal-option-btn.selected.focused .check-icon .icon-filled,
+.modal-option-btn.selected:focus .check-icon .icon-filled,
+.modal-option-btn.selected:hover .check-icon .icon-filled {
+    display: inline-block;
 }
 
 /* Filter/Sort column layout: flex for modern/legacy, floats for ultra-legacy (Chrome 32) */
