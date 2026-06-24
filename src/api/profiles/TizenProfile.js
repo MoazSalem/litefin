@@ -118,7 +118,10 @@ export function getDeviceCapabilities() {
         vp9: tizenVersion >= 2.3, // Supported since Tizen 2.3 (2015)
         vp8: true,
         ac3: true,
-        eac3: true,
+        eac3: (() => {
+            const setting = PlayerSettings.get('enableEac3');
+            return setting === 'enable' ? true : setting === 'disable' ? false : true; // default true for Tizen
+        })(),
         dts: tizenVersion < 4, // Samsung dropped DTS in Tizen 4.0 (2018)
         wma: tizenVersion < 9.0, // Samsung dropped WMA in Tizen 9.0 (2025)
         vc1: tizenVersion < 9.0, // Samsung dropped VC-1 in Tizen 9.0 (2025)
@@ -476,7 +479,10 @@ export function buildJellyfinProfile(options = {}) {
 
     let transAudioCodecs = transAudioCodecsArr.join(',');
 
-    const directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3'];
+    const directAudioCodecsArr = [];
+    if (caps.eac3) directAudioCodecsArr.push('eac3');
+    if (caps.ac3) directAudioCodecsArr.push('ac3');
+    directAudioCodecsArr.push('aac', 'mp3');
     if (enableDts) directAudioCodecsArr.push('dts', 'dca');
     if (enableTrueHd) directAudioCodecsArr.push('truehd');
     let directAudioCodecs = directAudioCodecsArr.join(',');
