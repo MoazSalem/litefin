@@ -21,6 +21,7 @@
 
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { logger } from '../../utils/Logger.js';
+import { state } from '../../core/StateManager.js';
 
 const log = logger.create('TrickplayManager');
 
@@ -97,6 +98,15 @@ export class TrickplayManager {
             this._enabled = false;
             return;
         }
+
+        /*
+         * Identify the correct query parameter key name for the connected server.
+         * Emby does not return a 'ProductName' in its public (unauthenticated)
+         * System Info response, whereas Jellyfin does.
+         */
+        const serverInfo = state.get('server:info') || {};
+        const isEmbyInstance = !!(serverInfo.ServerName && (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby')));
+        this._authParamKey = isEmbyInstance ? 'api_key' : 'ApiKey';
 
         /* ------------------------------------------------------------------ */
         /* Look up trickplay data in the item's Trickplay map                  */
@@ -240,7 +250,7 @@ export class TrickplayManager {
          */
         // Sprite sheet URL — loaded via new Image(), so a query param is required for auth.
         // Use ApiKey= (non-deprecated) instead of the old api_key=.
-        const url = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${thumbWidth}/${spriteSheetIdx}.jpg?ApiKey=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
+        const url = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${thumbWidth}/${spriteSheetIdx}.jpg?${this._authParamKey}=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
 
         /* Log only when the sheet changes (not on every frame) — avoids spam */
         if (spriteSheetIdx !== this._lastSpriteSheetIndex) {
@@ -296,8 +306,8 @@ export class TrickplayManager {
         const tilesPerSheet = this._trickplayInfo.TileWidth * this._trickplayInfo.TileHeight;
         if (index * tilesPerSheet >= this._trickplayInfo.ThumbnailCount) return;
 
-        // Pre-fetch URL also uses ApiKey= (non-deprecated) for auth
-        const prefetchUrl = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${width}/${index}.jpg?ApiKey=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
+        // Pre-fetch URL also uses the dynamic authentication parameter key
+        const prefetchUrl = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${width}/${index}.jpg?${this._authParamKey}=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
         
         const img = new Image();
         img.src = prefetchUrl;
@@ -315,5 +325,6 @@ export class TrickplayManager {
         this._serverUrl          = null;
         this._authToken          = null;
         this._lastSpriteSheetIndex = -1;
+        this._authParamKey       = null;
     }
 }

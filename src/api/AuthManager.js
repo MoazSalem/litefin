@@ -695,13 +695,23 @@ class AuthManager {
 
             log.info('Notifying server of logout...');
             try {
+                /*
+                 * Construct appropriate headers for the logout request.
+                 * If we are connected to an Emby server, we must supply
+                 * the token in the dedicated 'X-Emby-Token' header.
+                 */
+                const headers = {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json'
+                };
+                
+                if (api.isEmby()) {
+                    headers['X-Emby-Token'] = session.accessToken;
+                }
+
                 await fetch(url, {
                     method: 'POST',
-                    headers: {
-                        // Use the standard Authorization header — X-Emby-Authorization is deprecated
-                        'Authorization': authHeader,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: headers
                 });
                 log.info('Server notified of logout');
             } catch (e) {

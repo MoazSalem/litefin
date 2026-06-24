@@ -2305,12 +2305,33 @@ export class JellyfinPlayer extends EventEmitter {
             }
         }
 
+        /*
+         * Construct the request headers for PlaybackInfo.
+         * For Emby compatibility, we format the Authorization header
+         * with the Emby scheme and pass the token in X-Emby-Token.
+         * For Jellyfin, we use the standard MediaBrowser scheme containing the Token.
+         */
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+
+        if (api.isEmby()) {
+            /*
+             * Fetch client/device information formatted under the Emby schema.
+             * Note that Emby's getAuthHeader() does not bake the token directly.
+             */
+            headers['Authorization'] = api.getAuthHeader();
+            if (this.authToken) {
+                headers['X-Emby-Token'] = this.authToken;
+            }
+        } else {
+            // Standard Jellyfin Authorization format
+            headers['Authorization'] = `MediaBrowser Token="${this.authToken}"`;
+        }
+
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `MediaBrowser Token="${this.authToken}"`
-            },
+            headers,
             body: JSON.stringify(requestBody)
         });
 

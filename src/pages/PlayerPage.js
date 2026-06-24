@@ -1182,11 +1182,13 @@ class PlayerPage extends Page {
             return `${baseUrl}${mediaSource.DirectStreamUrl}`;
         }
 
-        // Build HLS URL for transcoding — this URL is given directly to the <video>
-        // element, so we must use a query param for auth (no headers possible).
-        // ApiKey= is the non-deprecated query param supported by Jellyfin.
+        /*
+         * Build HLS URL for transcoding — this URL is given directly to the <video>
+         * element, so we must use a query param for auth (no headers possible).
+         * For Emby, we use the lowercase 'api_key' parameter name.
+         * For Jellyfin, we use the camelCase 'ApiKey' parameter name.
+         */
         const params = new URLSearchParams({
-            ApiKey: api.accessToken,
             DeviceId: api.deviceId,
             MediaSourceId: mediaSource.Id,
             VideoCodec: 'h264',
@@ -1197,6 +1199,12 @@ class PlayerPage extends Page {
             MinSegments: 1,
             BreakOnNonKeyFrames: true
         });
+
+        if (api.isEmby()) {
+            params.set('api_key', api.accessToken);
+        } else {
+            params.set('ApiKey', api.accessToken);
+        }
 
         return `${baseUrl}/Videos/${this._item.Id}/master.m3u8?${params.toString()}`;
     }
@@ -2468,6 +2476,15 @@ class PlayerPage extends Page {
                     xhr.setRequestHeader('Content-Type', 'application/json');
                     // Use the standard Authorization header — X-Emby-Authorization is deprecated
                     xhr.setRequestHeader('Authorization', authHeader);
+
+                    /*
+                     * For Emby compatibility, we also append the X-Emby-Token header
+                     * on our synchronous stop report XHR request.
+                     */
+                    if (api.isEmby() && api.accessToken) {
+                        xhr.setRequestHeader('X-Emby-Token', api.accessToken);
+                    }
+
                     xhr.send(JSON.stringify(data));
 
                     if (xhr.status >= 400) {
