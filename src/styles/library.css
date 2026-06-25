@@ -520,7 +520,6 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     padding-bottom: 0;
     margin: 0 auto;
 }
-
 /* ── View mode: Poster (default) ─────────────────────────────────── */
 /* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. 
    Calculated: 5 * 320px + 4 * 20px = 1680px block width. 
@@ -915,6 +914,53 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* Reset media-card styles for Grid context */
 /* --- Media Fallback Styles moved to components.css --- */
+
+/* 
+ * =============================================================================
+ * DYNAMIC GRID LAYOUT ENGINE (FLUID COLUMNS)
+ * =============================================================================
+ * When the grid is set to "dynamic" mode, the column count is driven by the
+ * custom CSS property `--grid-columns` (e.g. set inline as 4, 6, 8, etc.).
+ *
+ * Defined at the end of the view-mode styles so its width and margin properties
+ * override static mode dimensions correctly due to CSS source ordering.
+ * =============================================================================
+ */
+.library-grid.mode-dynamic {
+    /* Custom property for the horizontal/vertical spacing between cards */
+    --grid-card-margin: 20px;
+    
+    /* 
+     * Pull the container right to offset the margin-right on the last child card.
+     * This ensures the grid bounds align perfectly with the parent container boundaries
+     * and prevents off-screen overhangs that trigger scroll layout bugs on Tizen 4.
+     */
+    margin-right: calc(-1 * var(--grid-card-margin)) !important;
+    width: calc(100% + var(--grid-card-margin)) !important;
+    max-width: none !important;
+    min-width: 0 !important;
+}
+
+.library-grid.mode-dynamic .media-card {
+    /* 
+     * Force layout containment to isolate paint operations and optimize 
+     * scrolling performance during focus transitions on low-spec TV hardware.
+     */
+    flex: 0 0 auto !important;
+    
+    /* 
+     * Divide 100% by the number of columns, then subtract the card margin.
+     * Card + margin-right will sum exactly to 100% / columns.
+     */
+    width: calc((100% / var(--grid-columns)) - var(--grid-card-margin)) !important;
+    min-width: 0 !important; /* Overrides static banner min-width */
+    margin-right: var(--grid-card-margin) !important;
+    margin-left: 0 !important;
+    margin-bottom: var(--grid-card-margin) !important;
+    
+    contain: layout style paint !important;
+}
+
 
 /* Premium Hover/Focus Polish for larger cards.
  * We use a deeper, more breathable shadow for the 320px cards. */

@@ -24,7 +24,7 @@ class CardRenderer {
      * @returns {string} HTML string
      */
     static createCardHtml(item, options = {}) {
-        const { isLandscape = false, type = 'poster', contextType = null, isGrid = false } = options;
+        const { isLandscape = false, type = 'poster', contextType = null, isGrid = false, cardWidth = null } = options;
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         let imageUrl = '';
@@ -35,10 +35,28 @@ class CardRenderer {
         let resolvedImageType = '';
         let resolvedImageTag = '';
         const originalGetImageUrl = api.getImageUrl;
-        api.getImageUrl = function (id, imageType, options = {}) {
+        api.getImageUrl = function (id, imageType, getUrlOptions = {}) {
             resolvedImageType = imageType;
-            resolvedImageTag = options.tag || '';
-            return originalGetImageUrl.call(api, id, imageType, options);
+            resolvedImageTag = getUrlOptions.tag || '';
+
+            /*
+             * =========================================================================
+             * DYNAMIC IMAGE SIZE OVERRIDE
+             * =========================================================================
+             * When rendering in dynamic column mode, cardWidth specifies the exact
+             * computed logical layout width of the card. We scale it by the device's
+             * pixel ratio to request a size that matches the physical resolution perfectly
+             * (critical for crispness on 4K screens) while preventing over-fetching.
+             * =========================================================================
+             */
+            if (cardWidth) {
+                const scaleFactor = window.devicePixelRatio || 1.5;
+                getUrlOptions = Object.assign({}, getUrlOptions, {
+                    maxWidth: Math.round(cardWidth * scaleFactor)
+                });
+            }
+
+            return originalGetImageUrl.call(api, id, imageType, getUrlOptions);
         };
 
         // --- 1. Image Resolution Strategy ---
@@ -771,7 +789,9 @@ class CardRenderer {
             if (item.OfficialRating) metaParts.push(`<span class="card-meta-rating">${item.OfficialRating}</span>`);
             if (item.CommunityRating && shouldShowScore(item))
                 // Render the unified SVG rating star instead of the legacy Unicode character.
-                metaParts.push(`<span class="card-meta-score">${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}</span>`);
+                metaParts.push(
+                    `<span class="card-meta-score">${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}</span>`
+                );
             if (item.ProductionYear) metaParts.push(`<span class="card-meta-year">${item.ProductionYear}</span>`);
             if (item.RunTimeTicks) {
                 const mins = Math.round(item.RunTimeTicks / 600000000);
