@@ -499,6 +499,16 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
    ========================================================================== */
 
 .library-grid {
+    /* 
+     * =========================================================================
+     * DYNAMIC FLEX GRID BASE STRETCH
+     * =========================================================================
+     * Set default width to 100% to stretch across available viewport area.
+     * This avoids shrink-wrapping around a small number of items (which would 
+     * center them), while keeping the entire grid container aligned and scalable.
+     * =========================================================================
+     */
+    width: 100%;
     /* Flexbox wrap lets us control card width per view mode */
     display: flex;
     flex-wrap: wrap;
@@ -513,10 +523,10 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* ── View mode: Poster (default) ─────────────────────────────────── */
 /* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. 
-   Calculated: 5 * 320px + 4 * 20px = 1680px block width. */
+   Calculated: 5 * 320px + 4 * 20px = 1680px block width. 
+   Removed static min-width to prevent screen overflow on narrower displays. */
 .library-grid:not([class*="view-"]) {
     max-width: 1720px;
-    min-width: 1700px;
 }
 
 .library-grid:not([class*="view-"]) .media-card {
@@ -569,10 +579,10 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* ── View mode: Small Poster ─────────────────────────────────────── */
 /* Tighter portrait cards (160px) — exactly 9 per 1080p row. 
-   Calculated: 9 * 160px + 8 * 20px = 1600px block width. */
+   Calculated: 9 * 160px + 8 * 20px = 1600px block width. 
+   Removed static min-width to support fluid responsiveness. */
 .library-grid.view-small-poster {
     max-width: 1664px;
-    min-width: 1470px;
 }
 
 .library-grid.view-small-poster .media-card {
@@ -598,10 +608,10 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* ── View mode: Thumb ────────────────────────────────────────────── */
 /* 16:9 landscape cards (390px wide) — exactly 4 per 1080p row. 
-   Calculated: 4 * 390px + 3 * 30px = 1650px block width. */
+   Calculated: 4 * 390px + 3 * 30px = 1650px block width. 
+   Removed min-width to avoid horizontal clipping when sidebar is open. */
 .library-grid.view-thumb {
     max-width: 1680px;
-    min-width: 1670px;
 }
 
 .library-grid.view-thumb .media-card {
@@ -628,10 +638,10 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* ── View mode: Banner ───────────────────────────────────────────── */
 /* Horizontal banners (540px wide) — exactly 3 per 1080p row. 
-   Calculated: 3 * 545px + 2 * 20px = 1675px block width. */
+   Calculated: 3 * 545px + 2 * 20px = 1675px block width. 
+   Removed min-width to prevent overflow while centering on wider viewports. */
 .library-grid.view-banner {
     max-width: 1695px; 
-    min-width: 1685px;
 }
 
 .library-grid.view-banner .media-card {
