@@ -247,10 +247,19 @@ export function getTextStyles(isHdr = false) {
             styles.push({ className: 'font-proxima' });
             break;
         case 'baloo':
-            /* -------------------------------------------------------------
-               Baloo Bhaijaan 2 font option injected into styles array
-               ------------------------------------------------------------- */
             styles.push({ className: 'font-baloo' });
+            break;
+        case 'silkscreen':
+            styles.push({ className: 'font-silkscreen' });
+            break;
+        case 'space-grotesk':
+            styles.push({ className: 'font-space-grotesk' });
+            break;
+        case 'poiret-one':
+            styles.push({ className: 'font-poiret-one' });
+            break;
+        case 'zen-kaku-gothic-new':
+            styles.push({ className: 'font-zen-kaku-gothic-new' });
             break;
         case 'opendyslexic':
             styles.push({ className: 'font-opendyslexic' });
@@ -440,6 +449,8 @@ const fontClasses = [
     'font-inter',
     'font-proxima',
     'font-baloo',
+    'font-poiret-one',
+    'font-zen-kaku-gothic-new',
     'font-opendyslexic',
     'font-atkinson',
     'font-default'
@@ -529,10 +540,11 @@ export default {
             case 'proxima':
                 return 'font-proxima';
             case 'baloo':
-                /* -------------------------------------------------------------
-                   Map internal 'baloo' ID to '.font-baloo' class name
-                   ------------------------------------------------------------- */
                 return 'font-baloo';
+            case 'poiret-one':
+                return 'font-poiret-one';
+            case 'zen-kaku-gothic-new':
+                return 'font-zen-kaku-gothic-new';
             case 'opendyslexic':
                 return 'font-opendyslexic';
             case 'atkinson':
@@ -575,10 +587,13 @@ export default {
             case 'proxima':
                 return 'Proxima Nova';
             case 'baloo':
-                /* -------------------------------------------------------------
-                   Map internal 'baloo' ID to the CSS font-family name
-                   ------------------------------------------------------------- */
                 return 'Baloo Bhaijaan 2';
+            case 'space-grotesk':
+                return 'Space Grotesk';
+            case 'poiret-one':
+                return 'Poiret One';
+            case 'zen-kaku-gothic-new':
+                return 'Zen Kaku Gothic New';
             case 'opendyslexic':
                 return 'OpenDyslexic';
             case 'atkinson':

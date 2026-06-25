@@ -104,7 +104,7 @@
     font-display: swap;
 }
 
-/* Space Grotesk - Modern geometric sans-serif */
+/* Space Grotesk - Geometric sans */
 @font-face {
     font-family: 'Space Grotesk';
     src: url('../assets/fonts/SpaceGrotesk.woff2') format('woff2');
@@ -117,6 +117,15 @@
 @font-face {
     font-family: 'RETROTECH';
     src: url('../assets/fonts/RETROTECH.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Poiret One - Art Deco display */
+@font-face {
+    font-family: 'Poiret One';
+    src: url('../assets/fonts/PoiretOne.woff2') format('woff2');
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -142,9 +151,6 @@
 
 /* Proxima Nova - Modern geometric sans-serif */
 @font-face {
-    /* ---------------------------------------------------------
-       Proxima Nova font definition
-       --------------------------------------------------------- */
     font-family: 'Proxima Nova';
     src: url('../assets/fonts/ProximaNova.woff2') format('woff2');
     font-weight: 400;
@@ -154,11 +160,17 @@
 
 /* Baloo Bhaijaan 2 - Playful, bold Arabic/Latin sans-serif */
 @font-face {
-    /* ---------------------------------------------------------
-       Baloo Bhaijaan 2 font definition - Premium typography
-       --------------------------------------------------------- */
     font-family: 'Baloo Bhaijaan 2';
     src: url('../assets/fonts/BalooBhaijaan2.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Zen Kaku Gothic New - Japanese Gothic */
+@font-face {
+    font-family: 'Zen Kaku Gothic New';
+    src: url('../assets/fonts/ZenKakuGothicNew.woff2') format('woff2');
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -219,6 +231,8 @@
 .font-inter { font-family: 'Inter', sans-serif; }
 .font-proxima { font-family: 'Proxima Nova', sans-serif; }
 .font-baloo { font-family: 'Baloo Bhaijaan 2', sans-serif; }
+.font-poiret-one { font-family: 'Poiret One', sans-serif; }
+.font-zen-kaku-gothic-new { font-family: 'Zen Kaku Gothic New', sans-serif; }
 .font-opendyslexic { font-family: 'OpenDyslexic', sans-serif; }
 .font-atkinson { font-family: 'Atkinson Hyperlegible', sans-serif; }
 
