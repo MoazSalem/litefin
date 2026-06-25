@@ -589,6 +589,20 @@ html[data-ui-font="atkinson"] {
     --jf-font-family: 'Atkinson Hyperlegible', sans-serif;
 }
 
+/* 
+ * ============================================================================
+ * Poiret One & Zen Kaku Gothic New UI Font overrides
+ * Sets the global app-wide typography family mapping when selected.
+ * ============================================================================
+ */
+html[data-ui-font="poiret-one"] {
+    --jf-font-family: 'Poiret One', sans-serif;
+}
+
+html[data-ui-font="zen-kaku-gothic-new"] {
+    --jf-font-family: 'Zen Kaku Gothic New', sans-serif;
+}
+
 html {
     /* Apply global font-family here so it inherits downwards to * */
     font-family: var(--jf-font-family);
