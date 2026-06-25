@@ -33,12 +33,11 @@ class FontLoader {
             kitty: 'Kitty',
             inter: 'Inter',
             proxima: 'Proxima Nova',
-            /* ---------------------------------------------------------
-               Baloo Bhaijaan 2 - Rounded high-quality font
-               --------------------------------------------------------- */
             baloo: 'Baloo Bhaijaan 2',
             opendyslexic: 'OpenDyslexic',
-            atkinson: 'Atkinson Hyperlegible'
+            atkinson: 'Atkinson Hyperlegible',
+            'poiret-one': 'Poiret One',
+            'zen-kaku-gothic-new': 'Zen Kaku Gothic New'
         };
 
         // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls

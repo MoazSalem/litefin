@@ -399,6 +399,8 @@ class SettingsPage extends Page {
                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                 { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' },
+                { value: 'zen-kaku-gothic-new', label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New' },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
                 { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
             ],
@@ -3332,6 +3334,7 @@ class SettingsPage extends Page {
                 },
                 { value: 'poppins', label: i18n.t('FontPoppins') || 'Poppins' },
                 { value: 'roboto', label: i18n.t('FontRoboto') || 'Roboto' },
+                { value: 'google', label: i18n.t('FontGoogleSans') || 'Google Sans' },
                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                 { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
@@ -3346,6 +3349,8 @@ class SettingsPage extends Page {
                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                 { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' },
+                { value: 'zen-kaku-gothic-new', label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New' },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
                 { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
             ],
@@ -3684,6 +3689,8 @@ class SettingsPage extends Page {
                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                 { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' },
+                { value: 'zen-kaku-gothic-new', label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New' },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
                 { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
             ],
