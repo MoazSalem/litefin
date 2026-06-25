@@ -50,10 +50,17 @@ class CardRenderer {
              * =========================================================================
              */
             if (cardWidth) {
-                const scaleFactor = window.devicePixelRatio || 1.5;
-                getUrlOptions = Object.assign({}, getUrlOptions, {
-                    maxWidth: Math.round(cardWidth * scaleFactor)
-                });
+                // Fetch the quality multiplier from the centralized ImageService
+                // to align the requested dynamic card image width with the user's settings.
+                const scaleFactor = imageService.getPresetScale();
+
+                // If the scaleFactor is resolved (i.e. not 'original' where no limit is needed),
+                // calculate the targeted resolution using cardWidth * scaleFactor.
+                if (scaleFactor !== null) {
+                    getUrlOptions = Object.assign({}, getUrlOptions, {
+                        maxWidth: Math.round(cardWidth * scaleFactor)
+                    });
+                }
             }
 
             return originalGetImageUrl.call(api, id, imageType, getUrlOptions);

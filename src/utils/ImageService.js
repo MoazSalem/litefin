@@ -19,6 +19,38 @@ class ImageService {
     }
 
     /**
+     * Get the scale multiplier associated with the current image quality preset.
+     * Used for dynamic card sizing requests to match the selected quality preset's scale.
+     *
+     * @returns {number|null} Multiplier value or null if original quality is requested
+     */
+    getPresetScale() {
+        // Retrieve the current preset value from local storage preferences
+        const preset = this.getPreset();
+
+        // Original quality indicates that we want the original uncompressed source image
+        // without applying any width or height constraints.
+        if (preset === 'original') {
+            return null;
+        }
+
+        // Map containing the quality scaling multipliers.
+        // These multipliers determine the scaling factor applied to card base dimensions.
+        const scaleMap = {
+            low: 0.75,
+            'medium-low': 0.9,
+            medium: 1.0,
+            'medium-high': 1.1,
+            high: 1.2,
+            'very-high': 1.5,
+            ultra: 2.0
+        };
+
+        // Return mapped value or fallback to standard medium scale (1.0)
+        return scaleMap[preset] !== undefined ? scaleMap[preset] : 1.0;
+    }
+
+    /**
      * Set quality preset and save to storage
      * @param {string} preset - low | medium-low | medium | medium-high | high | ultra
      */
@@ -500,13 +532,13 @@ class ImageService {
                     layoutDefaultScale;
                 if (scale !== layoutDefaultScale) {
                     const scaleMap = {
-                        'low': 0.75,
-                        'medium-low': 0.90,
-                        'medium': 1.00,
-                        'medium-high': 1.10,
-                        'high': 1.20,
-                        'very-high': 1.50,
-                        'ultra': 2.00
+                        low: 0.75,
+                        'medium-low': 0.9,
+                        medium: 1.0,
+                        'medium-high': 1.1,
+                        high: 1.2,
+                        'very-high': 1.5,
+                        ultra: 2.0
                     };
                     const currentPresetScale = scaleMap[targetPreset] || 1.0;
                     const targetScale = currentPresetScale + (scale - layoutDefaultScale);
