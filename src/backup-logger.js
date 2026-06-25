@@ -21,19 +21,24 @@
  */
 (function () {
     /* ---------------------------------------------------------------------- */
-    /* CONFIG                                                                   */
+    /* CONFIGURATION VARIABLES                                                  */
+    /* Using var instead of const/let for Chrome 26 / webOS 1.x compatibility  */
     /* ---------------------------------------------------------------------- */
-    const BL_MAX_LINES = 300;
-    const BL_MAX_STORE = 6000;
+    var BL_MAX_LINES = 300;
+    var BL_MAX_STORE = 6000;
 
     /* ---------------------------------------------------------------------- */
     /* CREATE THE RAW DOM PANEL                                                 */
+    /* Using var to avoid ES6 block scope errors on older WebKit engines       */
     /* ---------------------------------------------------------------------- */
-    const panel = document.createElement('div');
+    var panel = document.createElement('div');
     panel.id = 'bl';
 
-    /* Individual property assignments — no cssText with CSS vars */
-    const ps = panel.style;
+    /* 
+     * Get style handle.
+     * We use individual assignments to avoid cssText overwrite issues.
+     */
+    var ps = panel.style;
     ps.position = 'fixed';
     ps.top = '0';
     ps.left = '0';
@@ -57,7 +62,7 @@
      * We only show the panel when debug_overlay_enabled is set, so normal
      * users never see it.
      */
-    let _debugActive = false;
+    var _debugActive = false;
     try {
         _debugActive = localStorage.getItem('debug_overlay_enabled') === 'true';
     } catch (e) {}
@@ -66,15 +71,22 @@
     /* Append to <html> — <body> may not exist yet at this point */
     (document.head || document.documentElement).appendChild(panel);
 
-    let lineCount = 0;
+    /* Track the number of printed log lines */
+    var lineCount = 0;
 
     /* ---------------------------------------------------------------------- */
     /* _write(level, args)                                                      */
+    /* Formats and prints log messages safely to the DOM overlay and local      */
+    /* storage. Uses var variables to avoid ES6 issues on ancient engines.      */
     /* ---------------------------------------------------------------------- */
     function _write(level, args) {
-        let msg = '';
-        for (let i = 0; i < args.length; i++) {
-            const a = args[i];
+        /* Initialize message buffer */
+        var msg = '';
+        
+        /* Iterate through arguments using legacy var loop */
+        var i;
+        for (i = 0; i < args.length; i++) {
+            var a = args[i];
             if (a === null) {
                 msg += 'null ';
                 continue;
@@ -94,9 +106,12 @@
             }
         }
 
-        /* Persist to localStorage — survives crashes/reboots */
+        /* 
+         * Persist to localStorage — survives crashes/reboots.
+         * Checked with standard try-catch in case localStorage is disabled or full.
+         */
         try {
-            let stored = localStorage.getItem('bl_log') || '';
+            var stored = localStorage.getItem('bl_log') || '';
             stored += new Date().toLocaleTimeString() + ' [' + level + '] ' + msg + '\n';
             if (stored.length > BL_MAX_STORE) {
                 stored = stored.slice(stored.length - BL_MAX_STORE);
@@ -104,11 +119,15 @@
             localStorage.setItem('bl_log', stored);
         } catch (e) {}
 
-        /* Render a row to the DOM panel */
-        const row = document.createElement('div');
+        /* 
+         * Render a row to the DOM panel.
+         * Create div element using legacy styling rules.
+         */
+        var row = document.createElement('div');
         row.style.borderBottom = '1px solid #1a1a1a';
         row.style.padding = '1px 0';
 
+        /* Color code log level outputs for readability */
         if (level === 'ERR') row.style.color = '#f55';
         else if (level === 'WARN') row.style.color = '#fe0';
         else if (level === 'INF') row.style.color = '#aaf';
@@ -116,6 +135,7 @@
         row.textContent = '[' + level + '] ' + msg;
         panel.appendChild(row);
 
+        /* Increment line count and prune oldest if exceeding limit */
         lineCount++;
         if (lineCount > BL_MAX_LINES && panel.firstChild) {
             panel.removeChild(panel.firstChild);
@@ -126,30 +146,38 @@
 
     /* ---------------------------------------------------------------------- */
     /* MONKEYPATCH console.* — safe wrappers that never throw                  */
+    /* Save references to original console methods using var                  */
     /* ---------------------------------------------------------------------- */
-    const _origLog = console.log;
-    const _origInfo = console.info;
-    const _origWarn = console.warn;
-    const _origError = console.error;
+    var _origLog = console.log;
+    var _origInfo = console.info;
+    var _origWarn = console.warn;
+    var _origError = console.error;
 
+    /* Patch console.log */
     console.log = function () {
         _write('LOG', arguments);
         try {
             if (_origLog) _origLog.apply(console, arguments);
         } catch (e) {}
     };
+    
+    /* Patch console.info */
     console.info = function () {
         _write('INF', arguments);
         try {
             if (_origInfo) _origInfo.apply(console, arguments);
         } catch (e) {}
     };
+    
+    /* Patch console.warn */
     console.warn = function () {
         _write('WARN', arguments);
         try {
             if (_origWarn) _origWarn.apply(console, arguments);
         } catch (e) {}
     };
+    
+    /* Patch console.error */
     console.error = function () {
         _write('ERR', arguments);
         try {
@@ -157,10 +185,12 @@
         } catch (e) {}
     };
 
+    /* Write initialization info */
     _write('INF', ['[BackupLogger] Active. UA=' + navigator.userAgent]);
 
     /* ---------------------------------------------------------------------- */
     /* GLOBAL API                                                               */
+    /* Expose helper functions on window object                                 */
     /* ---------------------------------------------------------------------- */
     window.__hideBackupLogger = function () {
         panel.style.display = 'none';

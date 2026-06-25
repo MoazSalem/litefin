@@ -418,7 +418,15 @@ const ultraLegacyConfig = {
                             [
                                 '@babel/preset-env',
                                 {
-                                    targets: { chrome: '32' },
+                                    /*
+                                     * =======================================================================
+                                     * Target Environment Configuration
+                                     * =======================================================================
+                                     * Downgraded target to Chrome 26 to support ancient webOS 1.0 and 2.0
+                                     * platforms which run older Chromium runtimes. This forces Babel to
+                                     * transpile down further and include matching polyfills.
+                                     */
+                                    targets: { chrome: '26' },
                                     useBuiltIns: 'usage',
                                     corejs: 3
                                 }

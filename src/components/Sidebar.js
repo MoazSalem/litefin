@@ -344,25 +344,40 @@ class Sidebar extends Component {
     }
 
     _updateLogoSettings() {
-        const isEnabled = storage.getItem('pref:logoSettings') === 'true';
-        const logoHeader = this.el.querySelector('#sidebar-logo-header');
-        const settingsBtn = this.el.querySelector('#sidebar-settings');
+        // ---------------------------------------------------------------
+        // Wrap entire function in try/catch — if ANY DOM call throws on
+        // ultra-legacy WebKit (e.g. setAttribute with an unexpected type),
+        // we must NOT silently swallow it and leave boot frozen.
+        // ---------------------------------------------------------------
+        try {
+            const isEnabled = storage.getItem('pref:logoSettings') === 'true';
+            const logoHeader = this.el.querySelector('#sidebar-logo-header');
+            const settingsBtn = this.el.querySelector('#sidebar-settings');
 
-        if (logoHeader) {
-            logoHeader.classList.toggle('sidebar-item', isEnabled);
-            logoHeader.setAttribute('data-focusable', isEnabled.toString());
-            logoHeader.setAttribute('tabindex', isEnabled ? '0' : '-1');
+            if (logoHeader) {
+                // Toggle whether logo header acts as a focusable sidebar item
+                logoHeader.classList.toggle('sidebar-item', isEnabled);
+                logoHeader.setAttribute('data-focusable', isEnabled.toString());
+                logoHeader.setAttribute('tabindex', isEnabled ? '0' : '-1');
 
-            if (isEnabled) {
-                logoHeader.dataset.path = '/settings';
-                if (settingsBtn) settingsBtn.classList.add('hidden');
-            } else {
-                delete logoHeader.dataset.path;
-                if (settingsBtn) settingsBtn.classList.remove('hidden');
+                /*
+                 * On older webOS web engines (like webOS 2.x), mutating or deleting
+                 * properties on the dataset object directly can throw TypeErrors.
+                 * We use standard setAttribute and removeAttribute calls instead.
+                 */
+                if (isEnabled) {
+                    logoHeader.setAttribute('data-path', '/settings');
+                    if (settingsBtn) settingsBtn.classList.add('hidden');
+                } else {
+                    logoHeader.removeAttribute('data-path');
+                    if (settingsBtn) settingsBtn.classList.remove('hidden');
+                }
+
+                // Invalidate cache since focusability of a header element changed
+                focusManager.invalidateCache('sidebar');
             }
-
-            // Invalidate cache since focusability of a header element changed
-            focusManager.invalidateCache('sidebar');
+        } catch (err) {
+            log.error('Failed to update sidebar logo settings due to DOM error:', err);
         }
     }
 
@@ -797,23 +812,42 @@ class Sidebar extends Component {
         if (!sidebarContent) return;
 
         /* ── 1. Collect all sidebar items with their layout IDs ────────────── */
+        /*
+         * Avoid using querySelectorAll with ':scope > ...' selector because the ':scope'
+         * pseudo-class was introduced in Chrome 27. On Chromium 26 (webOS 1.x/2.x),
+         * it throws a DOMException 12 (SyntaxError).
+         * 
+         * Instead, we manually iterate over the direct DOM children of sidebarContent
+         * and filter by their classes ('sidebar-item' or 'sidebar-section-header').
+         */
         const allItems = [];
+        const children = sidebarContent.children;
+        const len = children.length;
 
-        // Collect everything flatly from .sidebar-content
-        const items = sidebarContent.querySelectorAll(':scope > .sidebar-item, :scope > .sidebar-section-header');
-        items.forEach((el) => {
-            if (el.classList.contains('library-item')) {
-                // It's a dynamically injected library
-                allItems.push({ id: el.dataset.layoutId, el: el });
-            } else if (el.id === 'section-header') {
-                // It's the library section header
-                allItems.push({ id: 'section-header', el: el });
-            } else {
-                // It's a static navigation item
-                const rawId = el.id ? el.id.replace('sidebar-', '') : null;
-                if (rawId) allItems.push({ id: rawId, el: el });
+        /* Iterate over children elements using a safe traditional loop */
+        for (let i = 0; i < len; i++) {
+            const el = children[i];
+            
+            /* Verify if the element matches our target sidebar items */
+            const isSidebarItem = el.classList.contains('sidebar-item');
+            const isSectionHeader = el.classList.contains('sidebar-section-header');
+            
+            if (isSidebarItem || isSectionHeader) {
+                if (el.classList.contains('library-item')) {
+                    /* It's a dynamically injected library shortcut */
+                    allItems.push({ id: el.dataset.layoutId, el: el });
+                } else if (el.id === 'section-header') {
+                    /* It's the library section header label */
+                    allItems.push({ id: 'section-header', el: el });
+                } else {
+                    /* It's a static main navigation item (Home, Search, Settings, etc.) */
+                    const rawId = el.id ? el.id.replace('sidebar-', '') : null;
+                    if (rawId) {
+                        allItems.push({ id: rawId, el: el });
+                    }
+                }
             }
-        });
+        }
 
         /* ── 2. Ask the manager to order and annotate items ────────────────── */
         const ordered = sidebarLayoutManager.applyLayout(allItems);
