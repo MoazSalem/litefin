@@ -2241,7 +2241,7 @@ class DetailsPage extends Page {
                     IncludeItemTypes: 'Episode',
                     Limit: 1,
                     Filters: 'IsUnplayed',
-                    SortBy: 'SortName',
+                    SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
                     Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                 });
@@ -2948,7 +2948,7 @@ class DetailsPage extends Page {
                             Recursive: true,
                             IncludeItemTypes: 'Episode',
                             Limit: 1,
-                            SortBy: 'SortName',
+                            SortBy: 'ParentIndexNumber,IndexNumber',
                             Fields: fields
                         });
                         if (firstEp && firstEp.Items && firstEp.Items.length > 0) {
@@ -2999,7 +2999,7 @@ class DetailsPage extends Page {
                                 IncludeItemTypes: 'Episode',
                                 Limit: 1,
                                 Filters: 'IsUnplayed',
-                                SortBy: 'SortName',
+                                SortBy: 'ParentIndexNumber,IndexNumber',
                                 Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                             });
                         } else {

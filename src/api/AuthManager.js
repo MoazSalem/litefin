@@ -284,6 +284,16 @@ class AuthManager {
                 primaryImageTag: user.PrimaryImageTag || null
             });
 
+            // Populate server:info so api.isEmby() works correctly on cold start.
+            // Without this, _restoreSession() never calls getPublicInfo(), leaving
+            // server:info null and causing all isEmby() checks to return false.
+            try {
+                const serverInfo = await api.getPublicInfo();
+                state.set('server:info', serverInfo);
+            } catch (e) {
+                log.warn('Failed to fetch server info on restore — isEmby() may behave incorrectly:', e);
+            }
+
             // Publish authenticated state
             state.set('user:data', user);
             state.set('user:authenticated', true);
