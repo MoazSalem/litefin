@@ -108,7 +108,22 @@ function hasResumePosition(item) {
  * Series → "Next Up" episode (resume if it has progress), else first episode.
  */
 async function resolveSeries(series) {
-    const nextUp = await api.getNextUp({ SeriesId: series.Id, Limit: 1 });
+    let nextUp;
+    if (api.isEmby()) {
+        // Emby's /Shows/NextUp ignores SeriesId — fetch oldest unplayed episode instead.
+        nextUp = await api.getItems({
+            ParentId: series.Id,
+            Recursive: true,
+            IncludeItemTypes: 'Episode',
+            Limit: 1,
+            Filters: 'IsUnplayed',
+            SortBy: 'ParentIndexNumber,IndexNumber',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+        });
+    } else {
+        nextUp = await api.getNextUp({ SeriesId: series.Id, Limit: 1 });
+    }
+
     if (nextUp?.Items?.length > 0) {
         const ep = nextUp.Items[0];
         return { item: ep, resume: hasResumePosition(ep) };
@@ -120,7 +135,7 @@ async function resolveSeries(series) {
         Recursive: true,
         IncludeItemTypes: 'Episode',
         Limit: 1,
-        SortBy: 'SortName'
+        SortBy: 'ParentIndexNumber,IndexNumber'
     });
     if (firstEp?.Items?.length > 0) {
         const ep = firstEp.Items[0];
@@ -140,7 +155,7 @@ async function resolveSeason(season) {
         ParentId: season.Id,
         Recursive: true,
         IncludeItemTypes: 'Episode',
-        SortBy: 'SortName',
+        SortBy: 'ParentIndexNumber,IndexNumber',
         Fields: 'UserData'
     });
     const episodes = result?.Items || [];
