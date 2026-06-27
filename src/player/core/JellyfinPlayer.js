@@ -1173,6 +1173,22 @@ export class JellyfinPlayer extends EventEmitter {
                 }
             }
 
+            // ====================================================================
+            // Temporary OSD and Playback Audio Debugging Logs
+            // ====================================================================
+            log.info('[AudioDebug] JellyfinPlayer.play:');
+            log.info('  - options.audioStreamIndex:', options.audioStreamIndex);
+            log.info('  - this._currentAudioStreamIndex:', this._currentAudioStreamIndex);
+            log.info('  - playMethod:', playMethod);
+            log.info('  - audioTrackListIndex:', backendOptions.audioTrackListIndex);
+            log.info('  - mediaSource.DefaultAudioStreamIndex:', mediaSource.DefaultAudioStreamIndex);
+            if (mediaSource.MediaStreams) {
+                log.info('  - Jellyfin Audio Streams:');
+                mediaSource.MediaStreams.filter(s => s.Type === 'Audio').forEach(s => {
+                    log.info(`    * Index: ${s.Index}, Language: ${s.Language}, Codec: ${s.Codec}, IsDefault: ${s.IsDefault}`);
+                });
+            }
+
             // Instruct the resolved backend (TizenAVPlayer, WebOSPlayer, or HTML5) to initialize
             await this._backend.play(backendOptions);
             log.info('Backend play() promise resolved');
