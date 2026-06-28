@@ -340,7 +340,7 @@ export function buildJellyfinProfile(options = {}) {
     // from transcoding to a codec the player truly cannot handle.
     // -------------------------------------------------------------------------
     const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
-    let transAudioCodecsArr = [];
+    const transAudioCodecsArr = [];
 
     if (preferredTranscodeCodec === 'auto') {
         // Auto (Prefer E-AC3)
@@ -368,8 +368,6 @@ export function buildJellyfinProfile(options = {}) {
         transAudioCodecsArr.push('aac');
     }
 
-    let transAudioCodecs = transAudioCodecsArr.join(',');
-
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
@@ -383,11 +381,14 @@ export function buildJellyfinProfile(options = {}) {
         .filter(Boolean)
         .join(',');
 
-    const transcodingProfiles = [
-        {
+    const transcodingProfiles = [];
+
+    // Primary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
+    for (const audioCodec of transAudioCodecsArr) {
+        transcodingProfiles.push({
             Container: 'mp4',
             Type: 'Video',
-            AudioCodec: transAudioCodecs,
+            AudioCodec: audioCodec,
             VideoCodec: broadTransVideo,
             Context: 'Streaming',
             Protocol: 'hls',
@@ -395,11 +396,15 @@ export function buildJellyfinProfile(options = {}) {
             MinSegments: '2',
             SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
             BreakOnNonKeyFrames: playbackMode !== 'remux'
-        },
-        {
+        });
+    }
+
+    // Secondary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
+    for (const audioCodec of transAudioCodecsArr) {
+        transcodingProfiles.push({
             Container: 'ts',
             Type: 'Video',
-            AudioCodec: transAudioCodecs,
+            AudioCodec: audioCodec,
             VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
@@ -407,7 +412,11 @@ export function buildJellyfinProfile(options = {}) {
             MinSegments: '2',
             SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
             BreakOnNonKeyFrames: playbackMode !== 'remux'
-        },
+        });
+    }
+
+    // Pure Audio transcoding profiles
+    transcodingProfiles.push(
         {
             Container: 'aac',
             Type: 'Audio',
@@ -431,7 +440,7 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'http'
         }
-    ];
+    );
 
     // Relaxed levels for HTML5/MSE
     const h264Level = '51';
