@@ -60,7 +60,9 @@ class LibraryPage extends Page {
              * Music libraries default to 'square' (album-cover style), which maps to
              * CardRenderer type 'square' rather than adding a 6th viewMode constant.
              */
-            viewMode: 'poster'
+            viewMode: 'poster',
+            gridMode: 'dynamic',
+            gridColumns: 5
         };
 
         // Bindings
@@ -221,6 +223,30 @@ class LibraryPage extends Page {
                 </div>
             </div>
         `;
+    }
+
+    /*
+     * =========================================================================
+     * GRID COLUMNS DEFAULT CONFIGURATION
+     * =========================================================================
+     * Retrieves the default static column counts based on the active view mode
+     * for standard TV displays.
+     * =========================================================================
+     */
+    _getDefaultColumnsForMode(mode) {
+        switch (mode) {
+            case 'small-poster':
+                return 9;
+            case 'thumb':
+                return 4;
+            case 'banner':
+                return 3;
+            case 'list':
+                return 1;
+            case 'poster':
+            default:
+                return 5;
+        }
     }
 
     // ========================================================================
@@ -1565,6 +1591,22 @@ class LibraryPage extends Page {
         }
 
         log.info(`[ViewMode] Loaded view mode: ${this.state.viewMode} for library ${this.state.libraryId}`);
+
+        /*
+         * =========================================================================
+         * REHYDRATE GRID CONFIGURATIONS
+         * =========================================================================
+         * Loads whether we are using Static or Dynamic sizing modes, and the specific
+         * custom column counts selected for this viewMode.
+         * =========================================================================
+         */
+        const modeKey = `pref:library:gridMode:${this.state.libraryId}`;
+        const savedMode = storage.getItem(modeKey);
+        this.state.gridMode = savedMode === 'static' ? 'static' : 'dynamic';
+
+        const colsKey = `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewMode}`;
+        const savedCols = parseInt(storage.getItem(colsKey), 10);
+        this.state.gridColumns = !isNaN(savedCols) ? savedCols : this._getDefaultColumnsForMode(this.state.viewMode);
     }
 
     _loadPersistedSortMode() {
@@ -1878,6 +1920,30 @@ class LibraryPage extends Page {
             // Any unknown mode (e.g. stale 'square' from old storage) falls through to poster
         }
 
+        /*
+         * =========================================================================
+         * DYNAMIC LAYOUT ENGINE RESOLUTION
+         * =========================================================================
+         * When Dynamic columns mode is enabled (and we are not in single-column List
+         * view), we dynamically inject the CSS variables onto the grid node and
+         * calculate the exact pixel width of each card.
+         * =========================================================================
+         */
+        let cardWidth = null;
+        if (this.state.gridMode === 'dynamic' && this.state.viewMode !== 'list') {
+            grid.classList.add('mode-dynamic');
+            grid.style.setProperty('--grid-columns', this.state.gridColumns);
+
+            // Compute card width minus margins to feed ImageService parameters
+            const containerWidth = grid.clientWidth || 1720;
+            const columns = this.state.gridColumns || 5;
+            const margin = 20; // Must align with --grid-card-margin in library.css
+            cardWidth = Math.round((containerWidth - (columns - 1) * margin) / columns);
+        } else {
+            grid.classList.remove('mode-dynamic');
+            grid.style.removeProperty('--grid-columns');
+        }
+
         if (!items || items.length === 0) {
             grid.innerHTML = '';
             this.$('#empty-state').classList.remove('hidden');
@@ -2029,7 +2095,8 @@ class LibraryPage extends Page {
                               : 'library',
                     // Only show rich meta row in list view (rating, score, runtime)
                     showMeta: !isLandscape && this.state.viewMode === 'list',
-                    isGrid: true
+                    isGrid: true,
+                    cardWidth: cardWidth
                 })
             )
             .join('');
@@ -2065,8 +2132,14 @@ class LibraryPage extends Page {
         }
 
         // Re-register focus for grid items
+        const currentColumns =
+            this.state.gridMode === 'dynamic' && this.state.viewMode !== 'list'
+                ? this.state.gridColumns
+                : this._getDefaultColumnsForMode(isLandscape ? 'thumb' : this.state.viewMode);
+
         focusManager.register('library-grid', grid, {
             orientation: 'grid',
+            columns: currentColumns,
             leaveUp: isAlphaVisible ? 'alpha-picker' : 'library-controls',
             leaveDown: 'library-pagination',
             leaveLeft: 'sidebar',
@@ -2852,13 +2925,6 @@ class LibraryPage extends Page {
         this._renderViewModeModal();
     }
 
-    /**
-     * Render the view mode picker modal.
-     *
-     * Presents 5 available modes as radio-style option buttons with icons.
-     * The currently active mode is pre-selected. Applying a new mode immediately
-     * re-renders the grid and persists the choice to StorageService.
-     */
     _renderViewModeModal() {
         const overlay = this.$('#modal-overlay');
         if (!overlay) return;
@@ -2868,11 +2934,30 @@ class LibraryPage extends Page {
         this._prevSection = focusManager.getActiveSection();
 
         const current = this.state.viewMode;
+        let tempMode = current;
+        let tempGridMode = this.state.gridMode;
+        let tempColumns = this.state.gridColumns;
 
-        /*
-         * View mode options — each has a label i18n key, a mode value, and an
-         * inline SVG icon that visually communicates the layout style.
-         */
+        const colOptionsMap = {
+            poster: [4, 5, 6, 7],
+            'small-poster': [6, 8, 10, 12],
+            thumb: [3, 4, 5, 6],
+            banner: [2, 3, 4, 5]
+        };
+
+        const getColumnsHtml = (mode, currentVal) => {
+            const opts = colOptionsMap[mode] || [];
+            return opts
+                .map(
+                    (c) => `
+                <button class="tab-btn column-option-btn ${c === currentVal ? 'active' : ''}" data-cols="${c}" tabindex="0">
+                    ${c} ${i18n.t('Items') || 'Items'}
+                </button>
+            `
+                )
+                .join('');
+        };
+
         const modes = [
             {
                 value: 'poster',
@@ -2932,25 +3017,123 @@ class LibraryPage extends Page {
             }
         ];
 
+        const updateModalUI = () => {
+            const hasGridOptions = tempMode !== 'list';
+            const secGridMode = overlay.querySelector('#section-grid-mode');
+            const secCols = overlay.querySelector('#section-columns');
+
+            if (secGridMode) secGridMode.style.display = hasGridOptions ? 'block' : 'none';
+
+            if (secCols) {
+                if (hasGridOptions && tempGridMode === 'dynamic') {
+                    secCols.style.display = 'block';
+                    const colsContainer = overlay.querySelector('#columns-options');
+                    if (colsContainer) {
+                        colsContainer.innerHTML = getColumnsHtml(tempMode, tempColumns);
+
+                        // Bind events on new column buttons
+                        colsContainer.querySelectorAll('.column-option-btn').forEach((btn) => {
+                            btn.addEventListener('click', () => {
+                                tempColumns = parseInt(btn.dataset.cols, 10);
+                                colsContainer.querySelectorAll('.column-option-btn').forEach((b) => {
+                                    b.classList.toggle('active', parseInt(b.dataset.cols, 10) === tempColumns);
+                                });
+                            });
+                        });
+                    }
+                } else {
+                    secCols.style.display = 'none';
+                }
+            }
+
+            // Re-register focus sections as size/visibility changed
+            registerFocusSections();
+        };
+
+        const registerFocusSections = () => {
+            this.registerFocusSection('view-mode-options', overlay.querySelector('#view-mode-options'), {
+                orientation: 'horizontal',
+                leaveDown: tempMode !== 'list' ? 'grid-mode-options' : 'vm-actions',
+                leaveUp: 'vm-actions',
+                selector: '.view-mode-option-btn',
+                enterTo: 'active-element'
+            });
+
+            if (tempMode !== 'list') {
+                this.registerFocusSection('grid-mode-options', overlay.querySelector('#grid-mode-options'), {
+                    orientation: 'horizontal',
+                    leaveUp: 'view-mode-options',
+                    leaveDown: tempGridMode === 'dynamic' ? 'columns-options' : 'vm-actions',
+                    selector: '.grid-mode-btn',
+                    enterTo: 'active-element'
+                });
+
+                if (tempGridMode === 'dynamic') {
+                    this.registerFocusSection('columns-options', overlay.querySelector('#columns-options'), {
+                        orientation: 'horizontal',
+                        leaveUp: 'grid-mode-options',
+                        leaveDown: 'vm-actions',
+                        selector: '.column-option-btn',
+                        enterTo: 'active-element'
+                    });
+                }
+            }
+
+            this.registerFocusSection('vm-actions', overlay.querySelector('#vm-actions'), {
+                orientation: 'horizontal',
+                leaveUp:
+                    tempMode === 'list'
+                        ? 'view-mode-options'
+                        : tempGridMode === 'dynamic'
+                          ? 'columns-options'
+                          : 'grid-mode-options',
+                selector: 'button'
+            });
+        };
+
         overlay.innerHTML = `
-            <div class="library-modal view-mode-modal">
-                <h2 class="modal-title">${i18n.t('ViewMode')}</h2>
-                <div class="view-mode-options" id="view-mode-options">
-                    ${modes
-                        .map(
-                            (m) => `
-                        <button class="view-mode-option-btn ${m.value === current ? 'selected' : ''}"
-                                data-mode="${m.value}"
-                                tabindex="0">
-                            <span class="vm-icon-wrap">${m.icon}</span>
-                            <span class="vm-label">${i18n.t(m.label)}</span>
-                        </button>
-                    `
-                        )
-                        .join('')}
+            <div class="library-modal view-mode-modal" style="width: 800px; max-width: 90%; max-height: 85vh; padding: 30px;">
+                <h2 class="modal-title" style="margin-bottom: 20px;">${i18n.t('ViewMode')}</h2>
+                
+                <!-- Layout Style Category Section -->
+                <div class="view-mode-section" style="margin-bottom: 25px;">
+                    <h3 class="section-subtitle" style="font-size: 1.2rem; opacity: 0.7; margin-bottom: 12px;">Layout Style</h3>
+                    <div class="view-mode-options" id="view-mode-options" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        ${modes
+                            .map(
+                                (m) => `
+                            <button class="view-mode-option-btn ${m.value === tempMode ? 'selected' : ''}"
+                                    data-mode="${m.value}"
+                                    tabindex="0">
+                                <span class="vm-icon-wrap">${m.icon}</span>
+                                <span class="vm-label">${i18n.t(m.label)}</span>
+                            </button>
+                        `
+                            )
+                            .join('')}
+                    </div>
                 </div>
-                <div class="modal-actions" id="vm-actions">
+
+                <!-- Grid Mode Toggle (Static vs Dynamic) -->
+                <div class="view-mode-section" id="section-grid-mode" style="margin-bottom: 25px; display: ${tempMode !== 'list' ? 'block' : 'none'};">
+                    <h3 class="section-subtitle" style="font-size: 1.2rem; opacity: 0.7; margin-bottom: 12px;">Sizing Mode</h3>
+                    <div class="grid-mode-options" id="grid-mode-options" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button class="tab-btn grid-mode-btn ${tempGridMode === 'static' ? 'active' : ''}" data-gmode="static" tabindex="0">Static Columns</button>
+                        <button class="tab-btn grid-mode-btn ${tempGridMode === 'dynamic' ? 'active' : ''}" data-gmode="dynamic" tabindex="0">Dynamic Columns</button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Columns Options Selector -->
+                <div class="view-mode-section" id="section-columns" style="margin-bottom: 25px; display: ${tempMode !== 'list' && tempGridMode === 'dynamic' ? 'block' : 'none'};">
+                    <h3 class="section-subtitle" style="font-size: 1.2rem; opacity: 0.7; margin-bottom: 12px;">Items Per Row</h3>
+                    <div class="columns-options" id="columns-options" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <!-- Generated Dynamically -->
+                    </div>
+                </div>
+
+                <div class="modal-actions" id="vm-actions" style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
                     <button class="modal-action-btn close" id="btn-vm-close">${i18n.t('ButtonClose')}</button>
+                    <button class="modal-action-btn apply" id="btn-vm-apply" style="background-color: var(--jf-btn-primary-bg) !important; color: var(--jf-btn-primary-color) !important;">${i18n.t('ButtonApply') || 'Apply'}</button>
                 </div>
             </div>
         `;
@@ -2959,49 +3142,67 @@ class LibraryPage extends Page {
         overlay.classList.add('visible');
         overlay.setAttribute('aria-hidden', 'false');
 
-        // Track temp selection before applying
-        let tempMode = current;
-
-        // Option button click handler: mark selected and immediately apply preview
+        // Style/Mode Button Listeners
         overlay.querySelectorAll('.view-mode-option-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
-                // Update temp and visual selection state
                 tempMode = btn.dataset.mode;
                 overlay.querySelectorAll('.view-mode-option-btn').forEach((b) => {
                     b.classList.toggle('selected', b.dataset.mode === tempMode);
                 });
 
-                // Apply immediately: re-render grid with new mode and persist
-                this.state.viewMode = tempMode;
-                storage.setItem(`pref:library:viewMode:${this.state.libraryId}`, tempMode);
-                this._renderGrid(this.state.items);
+                // When switching modes, check if we need to load columns default value
+                const defaultCols = this._getDefaultColumnsForMode(tempMode);
+                const colsKey = `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
+                const savedCols = parseInt(storage.getItem(colsKey), 10);
+                tempColumns = !isNaN(savedCols) ? savedCols : defaultCols;
 
-                log.info(`[ViewMode] Changed to: ${tempMode} for library ${this.state.libraryId}`);
-
-                // Close modal after selection (single-action UX — no Apply button needed)
-                this._closeModal();
+                updateModalUI();
             });
         });
 
+        overlay.querySelectorAll('.grid-mode-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                tempGridMode = btn.dataset.gmode;
+                overlay.querySelectorAll('.grid-mode-btn').forEach((b) => {
+                    b.classList.toggle('active', b.dataset.gmode === tempGridMode);
+                });
+                updateModalUI();
+            });
+        });
+
+        // Initialize UI
+        updateModalUI();
+
+        // Close / Apply Buttons
         this.$('#btn-vm-close')?.addEventListener('click', () => this._closeModal());
 
-        // Register FocusManager sections for D-pad navigation inside the modal
-        this.registerFocusSection('view-mode-options', overlay.querySelector('#view-mode-options'), {
-            orientation: 'horizontal',
-            leaveDown: 'vm-actions',
-            leaveUp: 'vm-actions',
-            selector: '.view-mode-option-btn',
-            enterTo: 'active-element' // Land on the currently selected mode
+        this.$('#btn-vm-apply')?.addEventListener('click', () => {
+            // Apply all states
+            this.state.viewMode = tempMode;
+            this.state.gridMode = tempGridMode;
+            this.state.gridColumns = tempColumns;
+
+            // Persist to local storage
+            storage.setItem(`pref:library:viewMode:${this.state.libraryId}`, tempMode);
+            storage.setItem(`pref:library:gridMode:${this.state.libraryId}`, tempGridMode);
+            storage.setItem(`pref:library:gridColumns:${this.state.libraryId}:${tempMode}`, tempColumns);
+
+            // Re-render and reload grid content
+            this._renderGrid(this.state.items);
+            this._closeModal();
+
+            log.info(
+                `[ViewMode] Applied configuration: Mode=${tempMode}, Grid=${tempGridMode}, Columns=${tempColumns}`
+            );
         });
 
-        this.registerFocusSection('vm-actions', overlay.querySelector('#vm-actions'), {
-            orientation: 'horizontal',
-            leaveUp: 'view-mode-options',
-            selector: 'button'
-        });
-
-        // Start focus on the options row
-        this.setActiveSection('view-mode-options');
+        // Set initial focus to Style Row
+        setTimeout(() => {
+            const selected =
+                overlay.querySelector('.view-mode-option-btn.selected') ||
+                overlay.querySelector('.view-mode-option-btn');
+            if (selected) focusManager.focusElement(selected);
+        }, 50);
     }
 
     _renderSortModal(sortOptions, orderOptions) {
