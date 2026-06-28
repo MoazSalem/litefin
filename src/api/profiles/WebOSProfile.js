@@ -79,7 +79,16 @@ function getProbedCodecs() {
             supportsCodec('video/mp4; codecs="hvc1.2.4.L120.B0"'),
 
         ac3: v.canPlayType('audio/mp4; codecs="ac-3"') !== '',
-        eac3: v.canPlayType('audio/mp4; codecs="ec-3"') !== ''
+        eac3: v.canPlayType('audio/mp4; codecs="ec-3"') !== '',
+        mpeg2video:
+            supportsCodec('video/mp4; codecs="mp2v.20.2"') ||
+            supportsCodec('video/mpeg') ||
+            supportsCodec('video/mp2t; codecs="mp2v.20.2"'),
+        mpegts:
+            supportsCodec('video/mp2t'),
+        mp2:
+            v.canPlayType('audio/mpeg; codecs="mp2"') !== '' ||
+            v.canPlayType('audio/mp4; codecs="mp2"') !== ''
     };
 
     return _codecCache;
@@ -246,6 +255,9 @@ export function getDeviceCapabilities() {
         eac3,
         dts,
         truehd: false,
+        mpeg2video: codecs.mpeg2video,
+        mpegts: codecs.mpegts,
+        mp2: codecs.mp2,
         maxAudioChannels: DEFAULT_MAX_CHANNELS
     };
 
@@ -417,7 +429,11 @@ export function buildJellyfinProfile(options = {}) {
     const audioCodecs = [];
     if (caps.eac3) audioCodecs.push('eac3'); // caps.eac3 already reflects force-state override
     if (caps.ac3) audioCodecs.push('ac3');
-    audioCodecs.push('aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm');
+    audioCodecs.push('aac', 'mp3');
+    // NOTE: mp2 and aac_latm are deliberately omitted from WebOS's audioCodecs list because WebOS's 
+    // native HLS pipeline/MSE decoder stalls when playing raw mp2/aac_latm inside HLS streams.
+    // Excluding them forces the server to copy the video stream (remux) and transcode the audio to eac3/ac3/aac.
+    audioCodecs.push('flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le');
     if (caps.webosVersion >= 4) {
         audioCodecs.push('opus');
     }
@@ -426,25 +442,40 @@ export function buildJellyfinProfile(options = {}) {
 
     const audioCodecString = audioCodecs.join(',');
 
-    const generalVideoCodecs = ['h264', 'mpeg2video', 'vc1'];
+    const generalVideoCodecs = ['h264', 'vc1'];
     if (enableHEVC) generalVideoCodecs.push('hevc');
     if (enableVP9) generalVideoCodecs.push('vp9');
     if (caps.vp8) generalVideoCodecs.push('vp8');
     if (enableAV1) generalVideoCodecs.push('av1');
+    if (caps.mpeg2video) generalVideoCodecs.push('mpeg2video');
 
     const mkvVideoCodecs = [...generalVideoCodecs, 'msmpeg4v2'];
 
-    const webmVideoCodecs = [];
+     const webmVideoCodecs = [];
     if (caps.vp8) webmVideoCodecs.push('vp8');
     if (enableVP9) webmVideoCodecs.push('vp9');
     if (enableAV1) webmVideoCodecs.push('av1');
 
-    const tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
-    if (enableHEVC) tsVideoCodecs.push('hevc');
-    // AV1 in MPEG-TS is not supported on WebOS
-
-    const m2tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
-
+    // =========================================================================
+    // Direct Play Profiles Configuration
+    // =========================================================================
+    // We only declare standard web-compatible containers (MP4, MKV, WebM, HLS)
+    // for Direct Play on webOS.
+    //
+    // CRITICAL DETAIL:
+    // We previously had an override block here that allowed TS, M2TS, AVI, WMV, 
+    // and MPG containers to direct play when using the native WebOSPlayer backend. 
+    // However, while the webOS hardware can play these containers locally (e.g. 
+    // via USB), the browser engine's HTML5 <video> tag does NOT support progressive 
+    // HTTP playback of these formats. Trying to Direct Play a static .ts file 
+    // results in a DEMUXER_ERROR_COULD_NOT_OPEN crash.
+    //
+    // By removing them from Direct Play, we force the Jellyfin server to remux 
+    // them (Direct Stream) into standard HLS streams. Since webOS natively 
+    // supports HLS streaming, these files will play flawlessly and without quality 
+    // loss, as the server just repackages the container on-the-fly without 
+    // transcoding the actual audio/video streams.
+    // =========================================================================
     const directPlayProfiles = [];
 
     if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
@@ -470,56 +501,8 @@ export function buildJellyfinProfile(options = {}) {
             });
         }
 
-        /*
-         * Extended container support — only the native WebOS backend (WebOSPlayer) can
-         * reliably direct-play these containers. The HTML5 fallback (Hls.js) cannot
-         * handle TS/M2TS/AVI/WMV natively and would fail silently or stall.
-         * By gating these profiles on the native backend, we ensure that a library of
-         * Blu-ray rips (M2TS), DVB recordings (TS), or legacy AVI/WMV files direct-play
-         * on real WebOS hardware rather than triggering an unnecessary transcode.
-         */
-        if (!isHtml5) {
-            /*
-             * TS/MPEGTS DirectPlay: enabled for WebOS native backend.
-             *
-             * IMPORTANT — interlaced streams are excluded via a CodecProfile condition
-             * added below. HDHomeRun ATSC channels broadcast interlaced MPEG-2 or H.264.
-             * If we claim DirectPlay for those, Jellyfin opens a 'heavy_' pre-transcode
-             * session, fails with DirectPlayError, and the fallback crashes FFmpeg.
-             * Jellyfin-web applies the same block — the server correctly falls through to
-             * a native 'ContainerNotSupported' HLS transcode which succeeds.
-             */
-            directPlayProfiles.push({
-                Container: 'ts,mpegts',
-                Type: 'Video',
-                VideoCodec: tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
-            });
-
-            directPlayProfiles.push({
-                Container: 'm2ts',
-                Type: 'Video',
-                VideoCodec: m2tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
-            });
-            directPlayProfiles.push({
-                Container: 'avi',
-                Type: 'Video',
-                VideoCodec: 'h264,mpeg2video',
-                AudioCodec: audioCodecString
-            });
-            directPlayProfiles.push({
-                Container: 'wmv,asf',
-                Type: 'Video',
-                AudioCodec: audioCodecString
-            });
-            directPlayProfiles.push({
-                Container: 'mpg,mpeg,flv,3gp,vob,vro',
-                Type: 'Video',
-                AudioCodec: audioCodecString
-            });
-        }
-
+        // Audio direct play profiles (MP3, FLAC, AAC etc.) are also gated
+        // under direct playback mode (non-transcode/non-remux).
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
             Type: 'Audio',
@@ -762,34 +745,6 @@ export function buildJellyfinProfile(options = {}) {
             Type: 'Video',
             Codec: 'h264',
             Conditions: [{ Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false }]
-        },
-        // -----------------------------------------------------------------------
-        // Block interlaced TS/MPEGTS from DirectPlay.
-        //
-        // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
-        // interlaced H.264. When we include ts/mpegts in DirectPlayProfiles,
-        // the server evaluates these CodecProfile conditions to determine if
-        // DirectPlay is actually viable. The NotEquals:IsInterlaced:true
-        // condition tells the server "interlaced content is not supported for
-        // direct play in this container".
-        //
-        // Without this, Jellyfin opens a 'heavy_' pre-transcode session, then
-        // fails at runtime with DirectPlayError — causing FFmpeg to crash.
-        // With this, the server issues ContainerNotSupported immediately and
-        // opens a 'native_' capture + HLS transcode pipeline, which is exactly
-        // what jellyfin-web does and what works correctly.
-        // -----------------------------------------------------------------------
-        {
-            Type: 'Video',
-            Container: 'ts,mpegts',
-            Conditions: [
-                {
-                    Condition: 'Equals',
-                    Property: 'IsInterlaced',
-                    Value: 'false',
-                    IsRequired: false
-                }
-            ]
         },
         {
             Type: 'Audio',

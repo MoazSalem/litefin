@@ -154,6 +154,7 @@
     "LabelTextColorSdr": "SDR Text Color",
     "LabelTextSize": "Text size",
     "LabelTextWeight": "Text weight",
+    "LabelTranscodeReasons": "Transcode Reason",
     "LabelTranscodingInfo": "Transcoding Info",
     "LabelUsername": "Username",
     "LabelVideoBitrate": "Video bitrate",

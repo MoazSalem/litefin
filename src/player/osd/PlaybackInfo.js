@@ -234,11 +234,29 @@ export default class PlaybackInfo extends BaseMenu {
             const effectiveLimit = manualBitrate || globalBitrate;
             const limitDisplay = effectiveLimit ? (effectiveLimit / 1000000).toFixed(1) + ' Mbps' : i18n.t('Unlimited');
 
-            html += createSection(i18n.t('LabelTranscodingInfo'), [
+            // Parse and display the exact transcode reasons from the server
+            const reasonsMatch = transUrl.match(/[?&]TranscodeReasons=([^&]+)/);
+            const reasonsDisplay = reasonsMatch
+                ? decodeURIComponent(reasonsMatch[1])
+                    .split(',')
+                    .map(r => r.trim())
+                    .join(', ')
+                : null;
+
+            const transFields = [
                 { label: i18n.t('LabelVideoCodec'), value: vCodecLabel },
                 { label: i18n.t('LabelAudioCodec'), value: aCodecLabel },
                 { label: i18n.t('LabelRemoteClientBitrateLimit'), value: limitDisplay }
-            ]);
+            ];
+
+            if (reasonsDisplay) {
+                transFields.push({
+                    label: i18n.t('LabelTranscodeReasons') || 'Transcode Reason',
+                    value: reasonsDisplay
+                });
+            }
+
+            html += createSection(i18n.t('LabelTranscodingInfo'), transFields);
         }
 
         if (mediaSource) {

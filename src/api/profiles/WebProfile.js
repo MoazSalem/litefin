@@ -63,6 +63,9 @@ export function getDeviceCapabilities() {
     let vp8 = false;
     let ac3 = false;
     let eac3 = false;
+    let mpeg2video = false;
+    let mpegts = false;
+    let mp2 = false;
 
     // Check basic MSE support
     if (window.MediaSource) {
@@ -98,6 +101,17 @@ export function getDeviceCapabilities() {
     vp8 = vp8 || video.canPlayType('video/webm; codecs="vp8"') !== '';
     ac3 = ac3 || video.canPlayType('audio/mp4; codecs="ac-3"') !== '';
     eac3 = eac3 || video.canPlayType('audio/mp4; codecs="ec-3"') !== '';
+
+    // MPEG-2 Video and TS container detection via HTML5 video canPlayType
+    mpeg2video =
+        video.canPlayType('video/mp4; codecs="mp2v.20.2"') !== '' ||
+        video.canPlayType('video/mpeg') !== '' ||
+        video.canPlayType('video/mp2t; codecs="mp2v.20.2"') !== '';
+    mpegts =
+        video.canPlayType('video/mp2t') !== '';
+
+    // MP2 audio detection via HTML5 audio canPlayType
+    mp2 = false; // HTML5 browsers do not support MP2 in media streams natively (probes are unreliable)
 
     // Apply the user's EAC3 force-state setting.
     // Browser canPlayType / MSE.isTypeSupported for EAC3 are notoriously unreliable
@@ -178,6 +192,9 @@ export function getDeviceCapabilities() {
         eac3,
         dts,
         truehd,
+        mpeg2video,
+        mpegts,
+        mp2,
         maxAudioChannels
     };
 
@@ -267,7 +284,9 @@ export function buildJellyfinProfile(options = {}) {
     const audioCodecs = [];
     if (caps.eac3) audioCodecs.push('eac3');
     if (caps.ac3) audioCodecs.push('ac3');
-    audioCodecs.push('aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav');
+    audioCodecs.push('aac', 'mp3');
+    if (caps.mp2) audioCodecs.push('mp2');
+    audioCodecs.push('flac', 'opus', 'vorbis', 'pcm', 'wav');
     if (enableDts) audioCodecs.push('dts', 'dca');
     if (enableTrueHd) audioCodecs.push('truehd');
 
@@ -278,6 +297,7 @@ export function buildJellyfinProfile(options = {}) {
     if (enableVP9) generalVideoCodecs.push('vp9');
     if (caps.vp8) generalVideoCodecs.push('vp8');
     if (enableAV1) generalVideoCodecs.push('av1');
+    if (caps.mpeg2video) generalVideoCodecs.push('mpeg2video');
 
     const webmVideoCodecs = [];
     if (caps.vp8) webmVideoCodecs.push('vp8');
@@ -319,6 +339,16 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: generalVideoCodecs.join(','),
             AudioCodec: audioCodecString
         });
+
+        // Add TS/MPEGTS DirectPlay profile if natively supported by the browser (e.g. Safari, Smart TVs)
+        if (caps.mpegts) {
+            directPlayProfiles.push({
+                Container: 'ts,mpegts',
+                Type: 'Video',
+                VideoCodec: generalVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+        }
 
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
@@ -372,6 +402,7 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    if (caps.mpeg2video) transVideoCodecs += ',mpeg2video';
 
     if (playbackMode === 'remux') {
         // Keep the custom resolved transcode audio codec list so that the server
@@ -495,26 +526,6 @@ export function buildJellyfinProfile(options = {}) {
                     Condition: 'LessThanEqual',
                     Property: 'AudioChannels',
                     Value: maxAudioChannels,
-                    IsRequired: false
-                }
-            ]
-        },
-        // -----------------------------------------------------------------------
-        // Block interlaced TS/MPEGTS from DirectPlay.
-        //
-        // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
-        // interlaced H.264. This prevents the server from attempting to
-        // DirectPlay these streams if TS were somehow added to the DirectPlay
-        // profiles, forcing it to fall back to a clean HLS transcode.
-        // -----------------------------------------------------------------------
-        {
-            Type: 'Video',
-            Container: 'ts,mpegts',
-            Conditions: [
-                {
-                    Condition: 'Equals',
-                    Property: 'IsInterlaced',
-                    Value: 'false',
                     IsRequired: false
                 }
             ]
