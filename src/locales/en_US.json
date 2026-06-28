@@ -1073,6 +1073,7 @@
     "TranscodeAudioCodecDescription": "When audio must be transcoded (e.g. DTS is unsupported), use this codec. E-AC3 is higher quality; AC3 has the widest legacy receiver support; AAC is the universal fallback.",
     "TranscodeCodecAuto": "Auto (Prefer E-AC3)",
     "TranscodeCodecForceAac": "Only AAC",
+    "TranscodeCodecForceMp3": "Only MP3",
     "TranscodeCodecForceAc3": "Only AC3",
     "TranscodeCodecForceEac3": "Only E-AC3",
     "TranscodeCodecPreferAac": "Prefer AAC",

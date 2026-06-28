@@ -76,8 +76,9 @@ const DEFAULTS = {
     //   'force_eac3'  — Force/Only E-AC3.
     //   force_ac3'   — Force/Only AC3.
     //   'force_aac'   — Force/Only AAC.
-    //
-    // NOTE: This only affects HLS transcode output. DirectPlay/DirectStream paths
+    //   'force_mp3'   — Force/Only MP3.
+    //                   
+    // NOTE: This only affects HLS transcode output.DirectPlay/DirectStream paths
     // bypass this entirely — the source audio is copied as-is in those cases.
     transcodeAudioCodec: 'auto',
 
