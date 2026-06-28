@@ -1101,13 +1101,37 @@ export class JellyfinPlayer extends EventEmitter {
             if (awaitTracks && !isAudioItemSetup && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
                 log.info('[Play-Flow] Awaiting subtitle track setup pre-flight...');
                 this._playSetupInProgress = true;
+                
+                let preFlightTimeoutId = null;
                 try {
-                    // Fully await subtitle loading (resolves once cues/renderers are ready)
-                    await this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex);
+                    /*
+                     * -----------------------------------------------------------------
+                     * Pre-Flight Safety Timeout (Vanguard Strategy)
+                     * -----------------------------------------------------------------
+                     * We wrap the pre-flight subtitle setup in a Promise.race. If
+                     * subtitle extraction on the server takes a long time (e.g. OCR)
+                     * or font downloading hangs, we bypass the gate after 15 seconds.
+                     *
+                     * This prevents TV UI deadlocks, letting the subtitle load in
+                     * the background asynchronously.
+                     * -----------------------------------------------------------------
+                     */
+                    const subtitlePromise = this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex);
+                    
+                    const timeoutPromise = new Promise((_, reject) => {
+                        preFlightTimeoutId = setTimeout(() => {
+                            reject(new Error('Pre-flight subtitle loading timed out (15s threshold exceeded)'));
+                        }, 15000);
+                    });
+
+                    await Promise.race([subtitlePromise, timeoutPromise]);
                     log.info('[Play-Flow] Pre-flight subtitle setup completed successfully');
                 } catch (err) {
-                    log.warn('[Play-Flow] Pre-flight initial subtitle setup failed:', err);
+                    log.warn('[Play-Flow] Pre-flight initial subtitle setup failed or timed out:', err.message || err);
                 } finally {
+                    if (preFlightTimeoutId) {
+                        clearTimeout(preFlightTimeoutId);
+                    }
                     this._playSetupInProgress = false;
                 }
             }

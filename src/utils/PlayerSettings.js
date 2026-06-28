@@ -348,9 +348,9 @@ const DEFAULTS = {
      * for remote external subtitles that need to be fetched/parsed over HTTP),
      * but prevents audio/subtitle flashing and out-of-sync presentation.
      *
-     * Default: false (start playback instantly once video is canplay/ready).
+     * Default: true (hold playback until subtitle cues and audio tracks are loaded).
      */
-    awaitTracksBeforePlayback: false,
+    awaitTracksBeforePlayback: true,
 
     // Auto-chain mode: when both local AND remote trailers exist and this is
     // true, the TrailerDialog selection screen is skipped entirely. Instead,
