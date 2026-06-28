@@ -565,30 +565,37 @@ export function buildJellyfinProfile(options = {}) {
     // Options: 'auto', 'prefer_ac3', 'prefer_aac', 'force_eac3', 'force_ac3', 'force_aac'.
     const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
 
-    let transAudioCodecsArr;
+    const transAudioCodecsArr = [];
     if (preferredTranscodeCodec === 'auto') {
         // Auto (Prefer E-AC3) -> E-AC3 first, then AC3, then AAC fallback
-        transAudioCodecsArr = ['eac3', 'ac3', 'aac'];
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        transAudioCodecsArr.push('aac');
     } else if (preferredTranscodeCodec === 'prefer_ac3') {
         // Prefer AC3 -> AC3 first, then E-AC3, then AAC fallback
-        transAudioCodecsArr = ['ac3', 'eac3', 'aac'];
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        transAudioCodecsArr.push('aac');
     } else if (preferredTranscodeCodec === 'prefer_aac') {
         // Prefer AAC -> AAC first, then E-AC3, then AC3
-        transAudioCodecsArr = ['aac', 'eac3', 'ac3'];
+        transAudioCodecsArr.push('aac');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
     } else if (preferredTranscodeCodec === 'force_eac3') {
         // Only E-AC3
-        transAudioCodecsArr = ['eac3'];
+        transAudioCodecsArr.push('eac3');
     } else if (preferredTranscodeCodec === 'force_ac3') {
         // Only AC3
-        transAudioCodecsArr = ['ac3'];
+        transAudioCodecsArr.push('ac3');
+    } else if (preferredTranscodeCodec === 'force_mp3') {
+        // Only MP3
+        transAudioCodecsArr.push('mp3');    
     } else {
         // Only AAC
-        transAudioCodecsArr = ['aac'];
+        transAudioCodecsArr.push('aac');
     }
 
     // NOTE: DTS and TrueHD are deliberately NOT added here (see comment above).
-    const transAudioCodecs = transAudioCodecsArr.join(',');
-
     // ---------------------------------------------------------------------------
     // DirectStream audio codec list (DirectStreamProfiles).
     //
@@ -615,8 +622,11 @@ export function buildJellyfinProfile(options = {}) {
         transVideoCodecs = 'copy';
     }
 
-    const transcodingProfiles = [
-        {
+    const transcodingProfiles = [];
+
+    // Primary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
+    for (const audioCodec of transAudioCodecsArr) {
+        transcodingProfiles.push({
             /*
              * Primary HLS video transcoding profile.
              *
@@ -635,7 +645,7 @@ export function buildJellyfinProfile(options = {}) {
              */
             Container: primaryHlsContainer,
             Type: 'Video',
-            AudioCodec: transAudioCodecs,
+            AudioCodec: audioCodec,
             VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
@@ -663,7 +673,11 @@ export function buildJellyfinProfile(options = {}) {
             // Exception: fMP4 is already forced-IDR by the muxer; and remux mode
             // passes the stream through as-is so we must not override it either.
             BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false // always false for TS on WebOS
-        },
+        });
+    }
+
+    // Pure Audio transcoding profiles
+    transcodingProfiles.push(
         {
             Container: 'aac',
             Type: 'Audio',
@@ -686,7 +700,11 @@ export function buildJellyfinProfile(options = {}) {
             AudioCodec: 'opus',
             Context: 'Streaming',
             Protocol: 'http'
-        },
+        }
+    );
+
+    // Static transcoding profiles
+    transcodingProfiles.push(
         {
             Container: 'mkv',
             Type: 'Video',
@@ -703,7 +721,7 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: enableHEVC ? 'h264,hevc' : 'h264',
             Context: 'Static'
         }
-    ];
+    );
 
     // -------------------------------------------------------------------------
     // Secondary fMP4 HLS profile
@@ -712,21 +730,23 @@ export function buildJellyfinProfile(options = {}) {
     // fMP4 is not already the primary container (no duplicate).
     // DOVI content no longer mandates fMP4 — it routes fine via TS.
     if (supportsFmp4Hls && primaryHlsContainer !== 'mp4') {
-        transcodingProfiles.push({
-            Container: 'mp4',
-            Type: 'Video',
-            AudioCodec: transAudioCodecs,
-            VideoCodec: transVideoCodecs,
-            Context: 'Streaming',
-            Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
-            MinSegments: 1,
-            SegmentLength: isHtml5
-                ? PlayerSettings.get('html5SegmentLength') || 2
-                : PlayerSettings.get('webosSegmentLength') || 6,
-            // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
-            BreakOnNonKeyFrames: false
-        });
+        for (const audioCodec of transAudioCodecsArr) {
+            transcodingProfiles.push({
+                Container: 'mp4',
+                Type: 'Video',
+                AudioCodec: audioCodec,
+                VideoCodec: transVideoCodecs,
+                Context: 'Streaming',
+                Protocol: 'hls',
+                MaxAudioChannels: maxAudioChannels,
+                MinSegments: 1,
+                SegmentLength: isHtml5
+                    ? PlayerSettings.get('html5SegmentLength') || 2
+                    : PlayerSettings.get('webosSegmentLength') || 6,
+                // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
+                BreakOnNonKeyFrames: false
+            });
+        }
     }
 
     // H.264 levels: 5.1 for UHD, 4.1 for 1080p

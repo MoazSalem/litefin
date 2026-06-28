@@ -28,10 +28,9 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
-import { settingsIcons } from '../utils/Icons.js';
+import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
-import { setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 
 const log = logger.create('SettingsPage');
 
@@ -2855,7 +2854,8 @@ class SettingsPage extends Page {
                     { value: 'prefer_aac', label: i18n.t('TranscodeCodecPreferAac') || 'Prefer AAC' },
                     { value: 'force_eac3', label: i18n.t('TranscodeCodecForceEac3') || 'Only E-AC3' },
                     { value: 'force_ac3', label: i18n.t('TranscodeCodecForceAc3') || 'Only AC3' },
-                    { value: 'force_aac', label: i18n.t('TranscodeCodecForceAac') || 'Only AAC' }
+                    { value: 'force_aac', label: i18n.t('TranscodeCodecForceAac') || 'Only AAC' },
+                    { value: 'force_mp3', label: i18n.t('TranscodeCodecForceMp3') || 'Only MP3' }
                 ],
                 PlayerSettings.get('transcodeAudioCodec') || 'auto'
             )}
