@@ -393,9 +393,6 @@ export function buildJellyfinProfile(options = {}) {
     } else if (preferredTranscodeCodec === 'force_ac3') {
         // Only AC3
         transAudioCodecsArr.push('ac3');
-    } else if (preferredTranscodeCodec === 'force_mp3') {
-        // Only MP3
-        transAudioCodecsArr.push('mp3');    
     } else {
         // Only AAC (force_aac)
         transAudioCodecsArr.push('aac');
