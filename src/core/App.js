@@ -519,7 +519,8 @@ class App {
                 subtitleStreamIndex,
                 backdropUrl,
                 fromSlideshow,
-                fromBrowse
+                fromBrowse,
+                ghostMode
             }) => {
                 log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
@@ -606,6 +607,7 @@ class App {
                 const queryParts = [];
                 if (fromSlideshow) queryParts.push('fromSlideshow=true');
                 if (fromBrowse) queryParts.push('fromBrowse=true');
+                if (ghostMode) queryParts.push('ghostMode=true');
                 const queryParam = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
 
                 // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.

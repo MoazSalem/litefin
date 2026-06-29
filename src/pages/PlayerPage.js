@@ -74,6 +74,9 @@ class PlayerPage extends Page {
         // Used to report the exact total duration instead of slightly shorter
         // positions to guarantee played-to-completion scrobbling on server.
         this._isPlaybackEnded = false;
+
+        // Flag indicating if the current session is private/incognito (no progress reported)
+        this._isGhostMode = false;
     }
 
     /**
@@ -148,6 +151,9 @@ class PlayerPage extends Page {
 
         // Reset playback completion flag for the new video page session.
         this._isPlaybackEnded = false;
+
+        // Parse Ghost Mode flag from the navigation query parameters.
+        this._isGhostMode = this.params.ghostMode === 'true';
 
         // Hide global clock during player loading/playback
         globalClock.setVisibility(false);
@@ -1921,6 +1927,12 @@ class PlayerPage extends Page {
     async _reportPlaybackStart() {
         if (!this._player || !this._item) return;
 
+        // Skip reporting start completely if running in private/ghost mode
+        if (this._isGhostMode) {
+            log.info('Ghost Mode is active: skipping playback start report');
+            return;
+        }
+
         // Never report playback start for intros — we don't want them tracked or in Continue Watching
         if (this._item.isIntro) {
             log.info('Skipping PlaybackStart report for intro item');
@@ -2178,6 +2190,11 @@ class PlayerPage extends Page {
     async _reportPlaybackProgress(eventName = 'timeupdate', manualPositionTicks = null) {
         if (!this._player || !this._item) return;
 
+        // Skip reporting progress completely if running in private/ghost mode
+        if (this._isGhostMode) {
+            return;
+        }
+
         // Never report progress for intros
         if (this._item.isIntro) {
             return;
@@ -2411,6 +2428,12 @@ class PlayerPage extends Page {
         }
         if (!this._item) return;
 
+        // Skip reporting stopped completely if running in private/ghost mode
+        if (this._isGhostMode) {
+            log.info('Ghost Mode is active: skipping playback stopped report');
+            return;
+        }
+
         try {
             // 1. Capture data
             const mediaSource =
@@ -2542,6 +2565,12 @@ class PlayerPage extends Page {
      * Called when app is about to close or go to background
      */
     _handleAppExit() {
+        // Skip reporting on exit if running in private/ghost mode
+        if (this._isGhostMode) {
+            log.info('Ghost Mode is active: skipping app exit playback stopped report');
+            return;
+        }
+
         log.info('App exit detected, reporting playback stopped');
 
         // Capture info before it's too late

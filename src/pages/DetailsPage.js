@@ -108,6 +108,9 @@ class DetailsPage extends Page {
                                 <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}">
                                     ${detailsIcons.reset}
                                 </button>
+                                <button class="btn btn-icon ghost-btn hidden" tabindex="-1" aria-label="${i18n.t('GhostMode') || 'Ghost Mode'}">
+                                    ${detailsIcons.ghost}
+                                </button>
                                 <!-- Trailer button — shown only when item has local or remote trailers.
                                      Visibility is set dynamically by _updateTrailerButton() after load. -->
                                 <button class="btn btn-icon trailer-btn hidden" tabindex="-1" aria-label="${i18n.t('WatchTrailer') || 'Watch Trailer'}">
@@ -336,6 +339,13 @@ class DetailsPage extends Page {
         if (resetBtn) {
             resetBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._resetProgress()));
             resetBtn.addEventListener('click', (e) => handleActivate(e, () => this._resetProgress()));
+        }
+
+        // Ghost button
+        const ghostBtn = this.$('.ghost-btn');
+        if (ghostBtn) {
+            ghostBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._play({ ghostMode: true })));
+            ghostBtn.addEventListener('click', (e) => handleActivate(e, () => this._play({ ghostMode: true })));
         }
 
         // Trailer button
@@ -2059,6 +2069,20 @@ class DetailsPage extends Page {
             }
         }
 
+        // Ghost Mode button visibility
+        const ghostBtn = this.$('.ghost-btn');
+        if (ghostBtn) {
+            const isSyncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
+            const isPlayable = item.Type !== 'Photo' && !isSyncPlayActive;
+            if (isPlayable) {
+                ghostBtn.classList.remove('hidden');
+                ghostBtn.setAttribute('tabindex', '0');
+            } else {
+                ghostBtn.classList.add('hidden');
+                ghostBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
         // Photo overrides for Action Buttons
         if (item.Type === 'Photo') {
             if (playBtn) {
@@ -2827,7 +2851,7 @@ class DetailsPage extends Page {
         });
     }
 
-    async _play({ resume = false, isShufflePlay = false } = {}) {
+    async _play({ resume = false, isShufflePlay = false, ghostMode = false } = {}) {
         let itemToPlay = this._item;
 
         // If it's a Live TV Program, play the parent Channel instead
@@ -3072,11 +3096,12 @@ class DetailsPage extends Page {
 
         eventBus.emit('player:play', {
             item: itemToPlay,
-            resume,
+            resume: ghostMode ? false : resume,
             mediaSourceId: this._selectedMediaSourceId,
             audioStreamIndex: this._selectedAudioIndex,
             subtitleStreamIndex: this._selectedSubtitleIndex,
-            backdropUrl
+            backdropUrl,
+            ghostMode
         });
     }
 
