@@ -835,13 +835,21 @@ class FocusManager {
             return;
         }
 
-        // 0. Default Focus Selector (config-driven, replaces hardcoded section checks)
-        // If a section specifies defaultFocusSelector, always focus that element on entry.
-        // Example: sidebar uses '#sidebar-home' to always land on Home.
         if (config.defaultFocusSelector) {
             const defaultEl = focusables.find((el) => el.matches(config.defaultFocusSelector));
             const target = defaultEl || focusables[0];
-            this.focusElement(target, { skipScroll: true });
+            // ================================================================
+            // FIX: Honor Scroll Configuration for Default Focus Selection
+            // ================================================================
+            // Previously, this forced { skipScroll: true }, which disabled all
+            // scrolling for elements focused via defaultFocusSelector. This caused
+            // sections like the action buttons on the Details page (which use a
+            // default selector to target Resume/Play on entry) to never scroll
+            // the page back to the top when entered from below.
+            // We now correctly forward instantScroll and preserve the ability to
+            // scroll the target into view.
+            // ================================================================
+            this.focusElement(target, { instantScroll: !!options.instantScroll });
             return;
         }
 
