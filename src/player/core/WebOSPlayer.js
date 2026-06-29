@@ -24,8 +24,41 @@ import Hls from 'hls.js';
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { getDeviceCapabilities } from '../../api/DeviceProfile.js';
 
 const log = logger.create('WebOSPlayer');
+
+// ────────────────────────────────────────────────────────────────────────────
+// Audio Capability Detection Helpers
+// ────────────────────────────────────────────────────────────────────────────
+// Evaluates user settings ('enable', 'disable', 'auto') for high-end audio
+// formats. On 'auto', we dynamically query getDeviceCapabilities() to see
+// if the current TV hardware actually advertises native decoding capability
+// for DTS and TrueHD.
+// ────────────────────────────────────────────────────────────────────────────
+const isTrueHdSupported = () => {
+    const setting = PlayerSettings.get('enableTrueHd');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.truehd;
+    } catch (e) {
+        return false;
+    }
+};
+
+const isDtsSupported = () => {
+    const setting = PlayerSettings.get('enableDts');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.dts;
+    } catch (e) {
+        return false;
+    }
+};
 
 // ============================================================================
 // Constants
@@ -1096,10 +1129,10 @@ export class WebOSPlayer {
             const codec = (s.Codec || '').toLowerCase();
             
             // Exclude TrueHD audio formats if disabled in settings
-            if (codec === 'truehd' && !PlayerSettings.get('enableTrueHd')) return false;
+            if (codec === 'truehd' && !isTrueHdSupported()) return false;
             
             // Exclude DTS / DCA audio formats if disabled in settings
-            if ((codec.includes('dts') || codec === 'dca') && !PlayerSettings.get('enableDts')) return false;
+            if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
             
             return true;
         });
@@ -1162,8 +1195,8 @@ export class WebOSPlayer {
             const codec = (s.Codec || '').toLowerCase();
             
             // Exclude passthrough formats that the WebOS system cannot decode natively
-            if (codec === 'truehd' && !PlayerSettings.get('enableTrueHd')) return false;
-            if ((codec.includes('dts') || codec === 'dca') && !PlayerSettings.get('enableDts')) return false;
+            if (codec === 'truehd' && !isTrueHdSupported()) return false;
+            if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
             return true;
         });
 

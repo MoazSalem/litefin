@@ -17,7 +17,7 @@ import { TizenAVPlayer } from './TizenAVPlayer.js';
 import { WebOSPlayer } from './WebOSPlayer.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { MediaHelper } from './MediaHelper.js';
-import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
+import { buildJellyfinProfile, getDeviceCapabilities } from '../../api/DeviceProfile.js';
 import SubtitleManager, { DeliveryMethod } from './SubtitleManager.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
@@ -25,6 +25,38 @@ import { api } from '../../api/index.js';
 import { storage } from '../../utils/StorageService.js';
 
 const log = logger.create('JellyfinPlayer');
+
+// ────────────────────────────────────────────────────────────────────────────
+// Audio Capability Detection Helpers
+// ────────────────────────────────────────────────────────────────────────────
+// Evaluates user settings ('enable', 'disable', 'auto') for high-end audio
+// formats. On 'auto', we dynamically query getDeviceCapabilities() to see
+// if the current TV hardware actually advertises native decoding capability
+// for DTS and TrueHD.
+// ────────────────────────────────────────────────────────────────────────────
+const isTrueHdSupported = () => {
+    const setting = PlayerSettings.get('enableTrueHd');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.truehd;
+    } catch (e) {
+        return false;
+    }
+};
+
+const isDtsSupported = () => {
+    const setting = PlayerSettings.get('enableDts');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.dts;
+    } catch (e) {
+        return false;
+    }
+};
 
 
 // ============================================================================
@@ -1404,9 +1436,9 @@ export class JellyfinPlayer extends EventEmitter {
                 const targetCodec = targetTrack.Codec.toLowerCase();
                 if (this._backendType === 'tizen' && (targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
                     isTargetCodecSupported = false;
-                } else if (targetCodec.includes('dts') && !PlayerSettings.get('enableDts')) {
+                } else if (targetCodec.includes('dts') && !isDtsSupported()) {
                     isTargetCodecSupported = false;
-                } else if (targetCodec === 'truehd' && !PlayerSettings.get('enableTrueHd')) {
+                } else if (targetCodec === 'truehd' && !isTrueHdSupported()) {
                     isTargetCodecSupported = false;
                 }
             }
@@ -1983,11 +2015,11 @@ export class JellyfinPlayer extends EventEmitter {
         return tracks.filter((track) => {
             const codec = (track.Codec || '').toLowerCase();
 
-            if (codec === 'truehd' && !PlayerSettings.get('enableTrueHd')) {
+            if (codec === 'truehd' && !isTrueHdSupported()) {
                 return false;
             }
 
-            if ((codec.includes('dts') || codec === 'dca') && !PlayerSettings.get('enableDts')) {
+            if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
                 return false;
             }
 
