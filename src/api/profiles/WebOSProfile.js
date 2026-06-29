@@ -426,13 +426,19 @@ export function buildJellyfinProfile(options = {}) {
     // enableEac3 force-state setting. We reference it directly here — any
     // 'enable'/'disable' override has already been baked into caps.eac3.
     // -------------------------------------------------------------------------
+    const mp2Setting = PlayerSettings.get('enableMp2') || 'auto';
+    // On WebOS, we default to false/disabled for MP2 because the native HLS pipeline stalls on it.
+    // However, the user can override this to true/enable.
+    const enableMp2 = mp2Setting === 'enable' ? true : mp2Setting === 'disable' ? false : false;
+
     const audioCodecs = [];
     if (caps.eac3) audioCodecs.push('eac3'); // caps.eac3 already reflects force-state override
     if (caps.ac3) audioCodecs.push('ac3');
     audioCodecs.push('aac', 'mp3');
-    // NOTE: mp2 and aac_latm are deliberately omitted from WebOS's audioCodecs list because WebOS's 
-    // native HLS pipeline/MSE decoder stalls when playing raw mp2/aac_latm inside HLS streams.
-    // Excluding them forces the server to copy the video stream (remux) and transcode the audio to eac3/ac3/aac.
+    if (enableMp2) audioCodecs.push('mp2');
+    // NOTE: aac_latm is deliberately omitted from WebOS's audioCodecs list because WebOS's 
+    // native HLS pipeline/MSE decoder stalls when playing raw aac_latm inside HLS streams.
+    // Excluding it forces the server to copy the video stream (remux) and transcode the audio to eac3/ac3/aac.
     audioCodecs.push('flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le');
     if (caps.webosVersion >= 4) {
         audioCodecs.push('opus');
@@ -554,14 +560,17 @@ export function buildJellyfinProfile(options = {}) {
         if (caps.eac3) transAudioCodecsArr.push('eac3');
         if (caps.ac3) transAudioCodecsArr.push('ac3');
         transAudioCodecsArr.push('aac');
+        if (enableMp2) transAudioCodecsArr.push('mp2');
     } else if (preferredTranscodeCodec === 'prefer_ac3') {
         // Prefer AC3 -> AC3 first, then E-AC3, then AAC fallback
         if (caps.ac3) transAudioCodecsArr.push('ac3');
         if (caps.eac3) transAudioCodecsArr.push('eac3');
         transAudioCodecsArr.push('aac');
+        if (enableMp2) transAudioCodecsArr.push('mp2');
     } else if (preferredTranscodeCodec === 'prefer_aac') {
         // Prefer AAC -> AAC first, then E-AC3, then AC3
         transAudioCodecsArr.push('aac');
+        if (enableMp2) transAudioCodecsArr.push('mp2');
         if (caps.eac3) transAudioCodecsArr.push('eac3');
         if (caps.ac3) transAudioCodecsArr.push('ac3');
     } else if (preferredTranscodeCodec === 'force_eac3') {

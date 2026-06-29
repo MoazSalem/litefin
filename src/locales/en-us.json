@@ -61,6 +61,8 @@
     "EditSubtitles": "Edit subtitles",
     "EnableEAC3": "EAC3 (Dolby Digital Plus) Force State",
     "EnableEAC3Description": "⚠ Use when EAC3 sources transcode unnecessarily. Overrides the browser/hardware probe. Enable if your TV passes EAC3 through eARC but the app still transcodes it.",
+    "EnableMP2": "MP2 Audio Force State",
+    "EnableMP2Description": "⚠ Use to override browser/hardware MP2 audio support detection. Disable to force server transcoding (avoids TV stalls).",
     "EndsAtValue": "Ends at {0}",
     "Episodes": "Episodes",
     "ExifAltitude": "Altitude",

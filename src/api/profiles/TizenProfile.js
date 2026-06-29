@@ -199,7 +199,8 @@ export function buildJellyfinProfile(options = {}) {
 
     const supportsMpeg2Video = isHtml5 ? caps.browserMpeg2video : true;
     const supportsMpegts = isHtml5 ? caps.browserMpegts : true;
-    const supportsMp2 = isHtml5 ? caps.browserMp2 : true;
+    const mp2Setting = PlayerSettings.get('enableMp2') || 'auto';
+    const supportsMp2 = mp2Setting === 'enable' ? true : mp2Setting === 'disable' ? false : (isHtml5 ? caps.browserMp2 : true);
 
     const hevcSetting = PlayerSettings.get('enableHEVC');
     const enableHEVC = hevcSetting === 'enable' ? true : hevcSetting === 'disable' ? false : caps.hevc;

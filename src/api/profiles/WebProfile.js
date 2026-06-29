@@ -279,13 +279,16 @@ export function buildJellyfinProfile(options = {}) {
     const trueHdSetting = PlayerSettings.get('enableTrueHd');
     const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
 
+    const mp2Setting = PlayerSettings.get('enableMp2') || 'auto';
+    const enableMp2 = mp2Setting === 'enable' ? true : mp2Setting === 'disable' ? false : caps.mp2;
+
     // Standard web audio. Place EAC3 and AC3 first so they are preferred
     // over AAC in the DirectPlay lists when supported or force-enabled.
     const audioCodecs = [];
     if (caps.eac3) audioCodecs.push('eac3');
     if (caps.ac3) audioCodecs.push('ac3');
     audioCodecs.push('aac', 'mp3');
-    if (caps.mp2) audioCodecs.push('mp2');
+    if (enableMp2) audioCodecs.push('mp2');
     audioCodecs.push('flac', 'opus', 'vorbis', 'pcm', 'wav');
     if (enableDts) audioCodecs.push('dts', 'dca');
     if (enableTrueHd) audioCodecs.push('truehd');
@@ -377,14 +380,17 @@ export function buildJellyfinProfile(options = {}) {
         if (caps.eac3) transAudioCodecsArr.push('eac3');
         if (caps.ac3) transAudioCodecsArr.push('ac3');
         transAudioCodecsArr.push('aac');
+        if (enableMp2) transAudioCodecsArr.push('mp2');
     } else if (preferredTranscodeCodec === 'prefer_ac3') {
         // Prefer AC3
         if (caps.ac3) transAudioCodecsArr.push('ac3');
         if (caps.eac3) transAudioCodecsArr.push('eac3');
         transAudioCodecsArr.push('aac');
+        if (enableMp2) transAudioCodecsArr.push('mp2');
     } else if (preferredTranscodeCodec === 'prefer_aac') {
         // Prefer AAC
         transAudioCodecsArr.push('aac');
+        if (enableMp2) transAudioCodecsArr.push('mp2');
         if (caps.eac3) transAudioCodecsArr.push('eac3');
         if (caps.ac3) transAudioCodecsArr.push('ac3');
     } else if (preferredTranscodeCodec === 'force_eac3') {

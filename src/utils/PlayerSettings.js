@@ -56,6 +56,7 @@ const DEFAULTS = {
     // 'enable'  — force EAC3 into the profile regardless of what the probe says
     // 'disable' — explicitly exclude EAC3 even if the probe says it is supported
     enableEac3: 'auto',
+    enableMp2: 'auto',
 
     // -------------------------------------------------------------------------
     // PREFERRED TRANSCODE AUDIO CODEC
@@ -501,7 +502,8 @@ export const PlayerSettings = {
             key === 'enableHDR' ||
             key === 'enableDolbyVision' ||
             key === 'enableDts' ||
-            key === 'enableTrueHd'
+            key === 'enableTrueHd' ||
+            key === 'enableMp2'
         ) {
             if (stored === 'true') return 'enable';
             if (stored === 'false') return 'disable';

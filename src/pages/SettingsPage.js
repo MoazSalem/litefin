@@ -2883,6 +2883,20 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableMP2">${i18n.t('EnableMP2') || 'MP2 Audio Force State'}</span>
+                        <span class="setting-description" data-i18n="EnableMP2Description">${supportStatus(caps.mp2)} — ${i18n.t('EnableMP2Description') || '⚠ Use to override browser/hardware MP2 audio support detection. Disable to force server transcoding (avoids TV stalls).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'mp2-force-select',
+                forceStateOptions,
+                PlayerSettings.get('enableMp2') || 'auto'
+            )}
+                    </div>
+                </div>
+
                 ${platformInfo.isTizen
                 ? `
                 <div class="setting-item">
@@ -5782,6 +5796,8 @@ class SettingsPage extends Page {
             'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
             /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
             'eac3-force-select': { type: 'player', key: 'enableEac3' },
+            /* MP2 force-state override — corrects false positives or forces transcoding to avoid stalls */
+            'mp2-force-select': { type: 'player', key: 'enableMp2' },
             /*
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
@@ -6024,6 +6040,8 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'enableTrueHd' ||
                                 /* EAC3 force-state is baked into the cached caps object — must re-probe */
                                 settingConfig.key === 'enableEac3' ||
+                                /* MP2 force-state is baked into the cached caps object — must re-probe */
+                                settingConfig.key === 'enableMp2' ||
                                 /* Changing the target transcode codec requires a fresh profile build */
                                 settingConfig.key === 'transcodeAudioCodec'
                             ) {
