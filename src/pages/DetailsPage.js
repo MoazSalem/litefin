@@ -287,18 +287,29 @@ class DetailsPage extends Page {
     }
 
     _setupFocus() {
-        // Register Action Buttons
+        // ====================================================================
+        // Details Page Primary Actions Focus Registration
+        // ====================================================================
+        // We register the actions section using a 'grid' orientation instead
+        // of 'horizontal'. Under Apple's Human Interface Guidelines (HIG) and TV
+        // navigation best practices, controls must be predictable and reachable.
+        // On smaller displays or layouts with wrapped buttons, a strict horizontal
+        // orientation forces users to navigate linearly and skips wrapped elements
+        // when pressing vertical keys (UP/DOWN).
+        // Using 'grid' delegates movement to the SpatialNavigator, allowing the D-pad
+        // to move naturally between wrapped rows of action buttons.
+        // ====================================================================
         this.registerFocusSection('details-actions', this.$('#actions'), {
-            orientation: 'horizontal',
-            leaveUp: null, // Top of page
-            leaveDown: null, // Will be updated dynamically
+            orientation: 'grid',
+            leaveUp: null, // Boundary at the top of the page
+            leaveDown: null, // Dynamically chained based on sibling visibility
             leaveLeft: 'sidebar',
-            // PRIORITIZE: Always land on Resume (if visible) or Play when entering this row
-            // This prevents "random" landing on Favorite/Subtitle buttons when coming from below
+            // Landing priority: always favor primary action (Play or Resume)
+            // when entering this section to keep interaction flow consistent.
             defaultFocusSelector: '.resume-btn:not(.hidden), .play-btn'
         });
 
-        // Default to actions row (will be overridden in _loadDetails for Season items)
+        // Set the primary actions row as the initial active focus section
         this.setActiveSection('details-actions');
     }
 
