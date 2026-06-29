@@ -973,6 +973,41 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     /* transform: translateZ(0); */
 }
 
+/*
+ * ── FAVORITE BUTTON DYNAMIC ICON STATES ──────────────────────────────────────
+ * Manages the transitions between outlined and filled states for the favorite
+ * heart icon. To align with Apple HIG rules, unfocused non-favorites remain
+ * outlined, while hover/focus/active states instantly swap to the premium filled
+ * SVG representation for clear interactive feedback.
+ */
+
+/* By default, hide the filled SVG to allow the outlined structure to show */
+.favorite-btn .icon-filled {
+    display: none;
+}
+
+/* 
+ * Display the filled SVG when the button is active (marked as favorite)
+ * or when the user hovers or focuses the button.
+ */
+.favorite-btn.active .icon-filled,
+.favorite-btn:focus .icon-filled,
+.favorite-btn.focused .icon-filled,
+.favorite-btn:hover .icon-filled {
+    display: inline-block;
+}
+
+/*
+ * Hide the outline SVG when the filled SVG is shown to prevent rendering
+ * duplicate icons concurrently.
+ */
+.favorite-btn.active .icon-outline,
+.favorite-btn:focus .icon-outline,
+.favorite-btn.focused .icon-outline,
+.favorite-btn:hover .icon-outline {
+    display: none;
+}
+
 .btn-icon-text {
     height: 56px;
     border-radius: var(--jf-border-radius-lg);
