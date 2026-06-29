@@ -479,9 +479,14 @@ export class TizenAVPlayer {
                 if (this._readyTrackTimeoutId) clearTimeout(this._readyTrackTimeoutId);
                 this._readyTrackTimeoutId = setTimeout(() => {
                     this._readyTrackTimeoutId = null;
+                    log.debug('READY-state safety timeout fired (checking conditions)');
                     if (this._avplay && this._isPrepared && !this._forceTizenPlayPassed) {
                         log.warn('READY-state safety timeout reached. Forcing play to prevent TV UI deadlock.');
                         this._forceTizenPlayPassed = true;
+                        // Bypass _bufferingComplete gate — if onbufferingcomplete never
+                        // fired (stale decoder state on resume), we must still attempt
+                        // play() or the player hangs in READY forever.
+                        this._bufferingComplete = true;
                         this._checkNativePlay();
                     }
                 }, 2000);
@@ -1129,24 +1134,30 @@ export class TizenAVPlayer {
                 // This is safe even when _pendingSubtitleIndex is null (no subtitle
                 // was requested) because setSilentSubtitle(true) is idempotent.
                 // ================================================================
+                //
+                // NOTE: setSilentSubtitle() and setSelectTrack() are only valid when
+                // AVPlay state is PLAYING or PAUSED. On resume after close+open,
+                // play() may return before the state transitions — calling AVPlay
+                // APIs in an intermediate state causes native decoder freezes.
+                // ================================================================
                 try {
-                    this._avplay.setSilentSubtitle(true);
-                    log.debug('Proactive subtitle silence applied immediately after play()');
-                    
-                    // If a specific track was already successfully applied eagerly during READY state,
-                    // the proactive silence just muted it. Unmute it to restore visibility.
-                    if (this._activeTizenSubtitleIndex !== null && this._activeTizenSubtitleIndex !== -1) {
-                        // Per Samsung docs, setSelectTrack('TEXT', ...) is only valid in
-                        // PLAYING or PAUSED for HLS. play() may not have transitioned yet.
-                        let postPlayState = 'UNKNOWN';
-                        try { postPlayState = this._avplay.getState(); } catch (_) {}
-                        if (postPlayState === 'PLAYING' || postPlayState === 'PAUSED') {
+                    let postPlayState = 'UNKNOWN';
+                    try { postPlayState = this._avplay.getState(); } catch (_) {}
+                    if (postPlayState === 'PLAYING' || postPlayState === 'PAUSED') {
+                        this._avplay.setSilentSubtitle(true);
+                        log.debug('Proactive subtitle silence applied immediately after play()');
+
+                        // If a specific track was already successfully applied eagerly during READY state,
+                        // the proactive silence just muted it. Unmute it to restore visibility.
+                        if (this._activeTizenSubtitleIndex !== null && this._activeTizenSubtitleIndex !== -1) {
                             try {
                                 this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
                             } catch(e) {}
                             this._avplay.setSilentSubtitle(false);
                             log.debug('Restored silence state (unmuted) for active TEXT track');
                         }
+                    } else {
+                        log.debug('Deferred proactive subtitle silence — state is ' + postPlayState + ' after play()');
                     }
                 } catch (silenceErr) {
                     // Non-fatal — older firmware may throw in early PLAYING phase.
@@ -1157,6 +1168,42 @@ export class TizenAVPlayer {
                 // oncurrentplaytime loop only ticks every 500ms, waiting for the first 
                 // tick causes audio to leak for half a second behind the loading screen.
                 this._emitPlaying();
+
+                // IMPROVEMENT E: Eager seek on forced path.
+                //
+                // When _forceTizenPlayPassed is true, the safety timeout bypassed
+                // the awaitTracksBeforePlayback gate. If _pendingSeekMs is set,
+                // apply the seek directly here (after play() + _emitPlaying())
+                // instead of deferring to _applyPendingTracks(). This separates
+                // seekTo from subtitle operations (setSelectTrack + setSilentSubtitle
+                // toggles) that happen in oncurrentplaytime, preventing the rapid
+                // succession of AVPlay API calls that causes native hangs on resume.
+                // ================================================================
+                if (this._forceTizenPlayPassed && this._pendingSeekMs !== null) {
+                    const seekMs = this._pendingSeekMs;
+                    this._pendingSeekMs = null;
+                    this._bufferingComplete = false;
+                    this._seekInProgress = true;
+                    log.info('Eager seek on forced path to ' + seekMs + 'ms');
+                    this._safeSeekTo(
+                        seekMs,
+                        () => {
+                            this._seekInProgress = false;
+                            if (!this._isNativeBuffering) {
+                                this._bufferingComplete = true;
+                            }
+                            if (this._bufferingCompleteDuringSeek) {
+                                this._bufferingComplete = true;
+                                this._bufferingCompleteDuringSeek = false;
+                            }
+                            log.info('Eager seek on forced path completed to ' + seekMs + 'ms');
+                        },
+                        () => {
+                            this._seekInProgress = false;
+                            log.warn('Eager seek on forced path failed for ' + seekMs + 'ms');
+                        }
+                    );
+                }
 
             } catch (e) {
                 log.error('Double-Gate play() failed:', e.message || e);
