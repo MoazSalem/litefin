@@ -67,7 +67,13 @@ class PlayerPage extends Page {
         this._subtitleEndTime = null;
 
         // End-time tracker for secondary subtitle cue clearing
+        // (set during _onSubtitleChange, checked on _onTimeUpdate)
         this._secondarySubtitleEndTime = null;
+
+        // Tracks whether the current item has naturally reached the end.
+        // Used to report the exact total duration instead of slightly shorter
+        // positions to guarantee played-to-completion scrobbling on server.
+        this._isPlaybackEnded = false;
     }
 
     /**
@@ -139,6 +145,9 @@ class PlayerPage extends Page {
         this._hasReportedStart = false;
         this._isPaused = false;
         this._cachedPlayMethod = null;
+
+        // Reset playback completion flag for the new video page session.
+        this._isPlaybackEnded = false;
 
         // Hide global clock during player loading/playback
         globalClock.setVisibility(false);
@@ -802,6 +811,10 @@ class PlayerPage extends Page {
      * Start playback of the current item
      */
     async _startPlayback() {
+        // Reset playback ended state before beginning new playback session.
+        // This ensures subsequent video loads or queue transitions start clean.
+        this._isPlaybackEnded = false;
+
         // === Plugin System ===
         // Allow plugins to perform late-stage preparation before playback actually
         // initializes. This is where Local Intros injects pre-roll videos into the queue.
@@ -1348,6 +1361,10 @@ class PlayerPage extends Page {
 
     _onEnded() {
         log.info('Ended event received');
+
+        // Mark playback as naturally completed so that any upcoming stopped reports
+        // carry the exact duration ticks rather than a slightly truncated position.
+        this._isPlaybackEnded = true;
 
         // If we're already exiting (e.g., user pressed back which called stop()),
         // don't call router.back() again - _stopAndExit already handles navigation
@@ -2399,8 +2416,25 @@ class PlayerPage extends Page {
             const mediaSource =
                 capturedMediaSource ?? this._player?.getCurrentMediaSource?.() ?? this._cachedMediaSource;
 
-            // Ensure position is a rounded integer
-            const rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+            // Ensure position is a rounded integer. We grab the reported position
+            // from the player backend or the fallback parameters.
+            let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+
+            // If the video naturally completed (ended event was fired), we override
+            // the reported position with the total duration ticks of the media.
+            // This prevents minor timing differences between player backend and server
+            // from leaving the item unmarked as watched and failing scrobble sync.
+            if (this._isPlaybackEnded) {
+                const durationTicks = this._player?.getDurationTicks?.() ||
+                                      mediaSource?.RunTimeTicks ||
+                                      this._item?.RunTimeTicks ||
+                                      0;
+                if (durationTicks > 0) {
+                    log.info(`Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`);
+                    rawPosition = durationTicks;
+                }
+            }
+
             const positionTicks = Math.round(rawPosition);
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
