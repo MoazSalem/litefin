@@ -77,6 +77,14 @@ class PlayerPage extends Page {
 
         // Flag indicating if the current session is private/incognito (no progress reported)
         this._isGhostMode = false;
+
+        // Tracking ID to detect item switches in the queue and reset version/track preferences
+        this._playingItemId = null;
+
+        // Pre-selected version and tracks from the Details page to persist across error retries
+        this._preSelectedMediaSourceId = undefined;
+        this._preSelectedAudio = undefined;
+        this._preSelectedSubtitle = undefined;
     }
 
     /**
@@ -856,15 +864,32 @@ class PlayerPage extends Page {
 
         const item = this._item;
 
-        // 1. Check for pre-selected tracks/version from DetailsPage (stored in state)
-        const preSelectedMediaSourceId = state.get('player:initialMediaSourceId');
-        const preSelectedAudio = state.get('player:initialAudioIndex');
-        const preSelectedSubtitle = state.get('player:initialSubtitleIndex');
+        // Reset version and track selections if the item has changed (e.g. queue advance/prev)
+        if (this._playingItemId !== item.Id) {
+            this._playingItemId = item.Id;
+            this._preSelectedMediaSourceId = undefined;
+            this._preSelectedAudio = undefined;
+            this._preSelectedSubtitle = undefined;
+        }
 
-        // Clear state to prevent persistence to future playbacks
-        state.set('player:initialMediaSourceId', null);
-        state.set('player:initialAudioIndex', null);
-        state.set('player:initialSubtitleIndex', null);
+        // 1. Check for pre-selected tracks/version from DetailsPage (stored in state)
+        // Store these on the page instance once so they persist across error/retry attempts
+        if (this._preSelectedMediaSourceId === undefined) {
+            this._preSelectedMediaSourceId = state.get('player:initialMediaSourceId') || null;
+            state.set('player:initialMediaSourceId', null);
+        }
+        if (this._preSelectedAudio === undefined) {
+            this._preSelectedAudio = state.get('player:initialAudioIndex') ?? null;
+            state.set('player:initialAudioIndex', null);
+        }
+        if (this._preSelectedSubtitle === undefined) {
+            this._preSelectedSubtitle = state.get('player:initialSubtitleIndex') ?? null;
+            state.set('player:initialSubtitleIndex', null);
+        }
+
+        const preSelectedMediaSourceId = this._preSelectedMediaSourceId;
+        const preSelectedAudio = this._preSelectedAudio;
+        const preSelectedSubtitle = this._preSelectedSubtitle;
 
         // Resolve MediaSource to use
         const mediaSource = preSelectedMediaSourceId
