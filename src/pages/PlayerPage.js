@@ -267,8 +267,12 @@ class PlayerPage extends Page {
 
             // Sync the active item to the instance that PlayQueue just minted.
             // This prevents duplicate-fetch bugs with plugins like Local Intros.
+            // Rather than replacing the item completely (which discards metadata fields 
+            // like MediaSources or Chapters that weren't returned by collection or episode 
+            // query lists), we merge the fetched details onto the queue instance in-place.
             const queueItem = playQueue.getCurrentItem();
             if (queueItem && queueItem.Id === this._item.Id) {
+                Object.assign(queueItem, this._item);
                 this._item = queueItem;
             }
 
@@ -931,12 +935,17 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
+            // Build player options. If a specific media source version was pre-selected 
+            // on the details screen (e.g. 720p vs 1080p), ensure we pass the target 
+            // mediaSourceId down as a fallback even if the client-side metadata matching 
+            // did not resolve (for example if the media sources array was empty or lost 
+            // during page transitions).
             const playOptions = {
                 item: item, // Pass full item which might have Chapters
                 itemId: item.Id,
                 userId: api.userId, // Required for playback info
                 startPositionTicks: this._resumePosition,
-                mediaSourceId: mediaSource?.Id,
+                mediaSourceId: preSelectedMediaSourceId || mediaSource?.Id,
                 audioStreamIndex: savedAudioIndex,
                 subtitleStreamIndex: savedSubtitleIndex,
                 autoPlay: syncPlayManager.wantsAutoPlay()
