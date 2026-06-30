@@ -346,6 +346,8 @@
     "AppVersion": "Version {0}",
     "ArabicNotoSans": "Arabic - Noto Sans",
     "AssFontFamily": "ASS Format Font Family",
+    "AssRenderer": "ASS Subtitle Renderer",
+    "AssRendererDescription": "Choose the rendering engine for ASS/SSA subtitle styling.",
     "Auto": "Auto",
     "AutoComplexFormatsOnly": "Auto (complex formats only)",
     "AutoPlayNextDescription": "Automatically play next episode when current ends",

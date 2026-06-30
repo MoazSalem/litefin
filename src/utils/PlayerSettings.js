@@ -150,6 +150,20 @@ const DEFAULTS = {
     // Override container fonts with the chosen ASS font (or system fallback)
     subtitleOverrideAssFonts: false,
 
+    /* -------------------------------------------------------------------------
+       ASS SUBTITLE RENDERING ENGINE
+       -------------------------------------------------------------------------
+       Determines which engine is used to parse and render styled ASS/SSA cues:
+         'libjass'    — DOM-based native JS renderer. High performance on older,
+                        limited hardware, but doesn't support complex typesetting.
+         'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
+                         accurate styling and drawing support.
+       ------------------------------------------------------------------------- */
+    assRenderer: 'libjass',
+
+    // Enable extracting and loading fonts embedded in media containers
+    subtitleAssLoadContainerFonts: true,
+
     // Global font scale multiplier for ASS subtitles
     subtitleFontScale: 1.0,
 

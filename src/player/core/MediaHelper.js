@@ -422,9 +422,11 @@ export const MediaHelper = {
                      .replace(/\.\w+$/, `.${format}`);      // or at end of string
         }
 
-        // Append auth token (DeliveryUrl itself usually omits it)
-        const separator = url.includes('?') ? '&' : '?';
-        url += `${separator}${authKey}=${encodeURIComponent(authToken)}`;
+        // Append auth token only if the DeliveryUrl doesn't already include one.
+        if (!url.includes(authKey + '=')) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += `${separator}${authKey}=${encodeURIComponent(authToken)}`;
+        }
 
         return url;
     },

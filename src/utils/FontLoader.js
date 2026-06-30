@@ -65,6 +65,21 @@ class FontLoader {
     }
 
     /**
+     * =========================================================================
+     * getContainerFontUrls
+     * =========================================================================
+     * Returns a flat array of all active container-embedded font blob URLs currently
+     * stored in the session cache. This allows the WASM subtitle renderer
+     * (libass-wasm / SubtitlesOctopus) to resolve and draw custom typesetting
+     * files directly.
+     * =========================================================================
+     * @returns {string[]} Array of active blob URLs
+     */
+    getContainerFontUrls() {
+        return Array.from(this._blobUrls);
+    }
+
+    /**
      * Get the font family name for a given internal ID
      * @param {string} fontId - Internal font identifier (e.g., 'typewriter')
      * @returns {string|null} The font family name, or null if not mapped
@@ -293,13 +308,16 @@ class FontLoader {
          * System Info response, whereas Jellyfin does.
          */
         const serverInfo = state.get('server:info') || {};
-        const isEmbyInstance = !!(serverInfo.ServerName && (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby')));
+        const isEmbyInstance = !!(
+            serverInfo.ServerName &&
+            (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby'))
+        );
         const authKey = isEmbyInstance ? 'api_key' : 'ApiKey';
 
         // Download all font attachments in parallel.
         // This avoids the major sequential bottleneck when a media container has multiple fonts.
         const downloadPromises = fontAttachments.map(async (font, idx) => {
-            const uniqueIndex = font.Index !== undefined ? font.Index : (idx + 1);
+            const uniqueIndex = font.Index !== undefined ? font.Index : idx + 1;
             let url;
             if (font.DeliveryUrl) {
                 url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;
