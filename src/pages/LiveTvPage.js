@@ -32,6 +32,10 @@ class LiveTvPage extends Page {
         this._tabData = new Map(); // Cache data for tabs
         this._virtualRows = [];
         this._isMounted = false;
+        this._isAsyncPage = true;
+
+        // Per-tab saved state (scroll, EPG position) for tab switches within the page
+        this._tabState = new Map();
 
         // Pagination State
         this._startIndex = 0;
@@ -40,6 +44,53 @@ class LiveTvPage extends Page {
 
         // Handlers
         this._onPageChange = this._handlePageChange.bind(this);
+    }
+
+    /**
+     * Provide the correct scroll container for NavigationState capture/restore.
+     */
+    getScrollContainer() {
+        return this.$('#livetv-scroll-container');
+    }
+
+    /**
+     * Save page state for navigation history (back-navigation).
+     * Captures current tab, per-tab scroll/EPG state, and pagination.
+     */
+    getNavigationState() {
+        this._saveCurrentTabState();
+
+        const state = {
+            currentTab: this._currentTab,
+            startIndex: this._startIndex,
+            limit: this._limit,
+            tabStates: {}
+        };
+
+        for (const [tabId, tabState] of this._tabState.entries()) {
+            state.tabStates[tabId] = tabState;
+        }
+
+        return state;
+    }
+
+    /**
+     * Restore page state from navigation history (back-navigation).
+     * Sets the correct tab and per-tab state BEFORE content loads.
+     */
+    setNavigationState(savedState) {
+        if (!savedState) return;
+
+        this._currentTab = savedState.currentTab || 'suggestions';
+        this._startIndex = savedState.startIndex || 0;
+        this._limit = savedState.limit || Number(storage.getItem('pref:libraryPageSize')) || 100;
+
+        this._tabState.clear();
+        if (savedState.tabStates) {
+            for (const [tabId, tabState] of Object.entries(savedState.tabStates)) {
+                this._tabState.set(tabId, tabState);
+            }
+        }
     }
 
     render() {
@@ -79,25 +130,23 @@ class LiveTvPage extends Page {
         `;
     }
 
-    onInit() {
+    async onInit() {
         this._isMounted = true;
+
+        // Sync tab button active states to match _currentTab before doing anything else.
+        // The template defaults to 'suggestions', but setNavigationState may have
+        // restored a different tab for back-navigation.
+        this._syncTabState();
+
         this._setupTabHandlers();
         this._setupPaginationHandlers();
-
-        // Load the initial tab (usually Suggestions)
-        this._loadTab(this._currentTab);
-
         this._attachDelegatedListeners();
 
-        /**
-         * =====================================================================
-         * INITIAL FOCUS
-         * =====================================================================
-         * When entering the page via forward navigation (e.g., from Home),
-         * we explicitly set focus to the tab switcher so the user has immediate
-         * feedback and control.
-         */
-        this.setActiveSection('livetv-tabs');
+        // Load the initial tab (set by setNavigationState for back-nav)
+        await this._loadTab(this._currentTab);
+
+        // Restore tab-specific state after content is fully rendered
+        this._restoreCurrentTabState();
 
         // Initial selector position
         setTimeout(() => this._updateTabSelector(), 200);
@@ -110,8 +159,10 @@ class LiveTvPage extends Page {
 
         /**
          * Handle back-navigation state restoration (if any).
-         * If the user is returning to this page, this will restore their
-         * previous scroll position and focused element.
+         * For non-EPG tabs, NavigationState.restoreScrollFocus restores
+         * native scroll position and focus by selector/index.
+         * For the EPG guide tab, _restoreCurrentTabState handles it and
+         * nullifies _pendingNavState to prevent overrides.
          */
         this.restoreScrollFocusWhenReady();
     }
@@ -216,15 +267,30 @@ class LiveTvPage extends Page {
         });
     }
 
+    /**
+     * Sync tab button `active` classes to match `this._currentTab`.
+     * Needed because the template hardcodes the first tab as active,
+     * but back-navigation may restore a different tab.
+     */
+    _syncTabState() {
+        const tabsEl = this.$('#livetv-tabs');
+        if (!tabsEl) return;
+        const btns = tabsEl.querySelectorAll('.ltv-tab-btn');
+        btns.forEach((btn) => {
+            const shouldBeActive = btn.dataset.tab === this._currentTab;
+            btn.classList.toggle('active', shouldBeActive);
+            btn.tabIndex = shouldBeActive ? 0 : -1;
+        });
+    }
+
     _switchTab(tabId) {
         if (this._currentTab === tabId) return;
 
-        // Update UI state
-        const oldTab = this.$(`.ltv-tab-btn[data-tab="${this._currentTab}"]`);
-        const newTab = this.$(`.ltv-tab-btn[data-tab="${tabId}"]`);
+        // Save state for the current tab before switching away
+        this._saveCurrentTabState();
 
-        if (oldTab) oldTab.classList.remove('active');
-        if (newTab) newTab.classList.add('active');
+        // Update UI state
+        this._syncTabState();
 
         this._currentTab = tabId;
         this._startIndex = 0; // Reset pagination for new tab
@@ -261,9 +327,20 @@ class LiveTvPage extends Page {
         const container = this.$('#livetv-content');
         container.innerHTML = '<div class="page-loading"><div class="loading-spinner"></div></div>';
 
-        // Reset virtual rows
+        // Clean up previous tab's virtual rows and focus sections
+        this._virtualRows.forEach((row) => {
+            if (row && row.destroy) row.destroy();
+        });
         this._virtualRows = [];
-        focusManager.unregister('livetv-content-section');
+
+        for (const name of this._focusSections) {
+            if (name !== 'livetv-tabs' && name !== 'livetv-pagination') {
+                focusManager.unregister(name);
+            }
+        }
+        this._focusSections = this._focusSections.filter(
+            (name) => name === 'livetv-tabs' || name === 'livetv-pagination'
+        );
 
         try {
             switch (tabId) {
@@ -280,6 +357,12 @@ class LiveTvPage extends Page {
                     await this._renderRecordings();
                     break;
             }
+
+            // Sync tab button active states (back-nav may have restored a different tab)
+            this._syncTabState();
+
+            // Restore tab-specific state after content is rendered
+            this._restoreCurrentTabState();
         } catch (err) {
             log.error(`Failed to load tab ${tabId}:`, err);
             container.innerHTML = `<div class="page-error">${i18n.t('ErrorLoadingData')}</div>`;
@@ -518,17 +601,153 @@ class LiveTvPage extends Page {
 
         if (nextIndex < 0 || nextIndex >= this._totalCount) return;
 
+        // Save current focus/scroll before pagination
+        this._saveCurrentTabState();
+
         this._startIndex = nextIndex;
+        // Clear stale tab state BEFORE _loadTab so _restoreCurrentTabState
+        // (called inside _loadTab) doesn't restore the old page's position
+        this._tabState.delete(this._currentTab);
         await this._loadTab(this._currentTab);
 
         // Scroll back to top
         const scrollContainer = this.$('#livetv-scroll-container');
         if (scrollContainer) scrollContainer.scrollTop = 0;
 
-        // Try to focus the first item in the new page
+        // Focus the first item in the new page
         const firstItem = this.$('#livetv-content .media-card');
         if (firstItem) {
             focusManager.focusElement(firstItem);
+        } else {
+            this.setActiveSection('livetv-tabs');
+        }
+    }
+
+    // =========================================================================
+    // Tab State Save / Restore
+    // =========================================================================
+
+    /**
+     * Save the current tab's scroll position and EPG virtual state.
+     * Called before switching tabs within the page, and from getNavigationState().
+     */
+    _saveCurrentTabState() {
+        const container = this.$('#livetv-scroll-container');
+        const state = {
+            scrollTop: container ? container.scrollTop : 0
+        };
+
+        // Save focus position
+        const focused = focusManager.getFocused();
+        if (focused) {
+            const section = focusManager.getSectionForElement(focused);
+            if (section) {
+                state.focusSection = section;
+                const focusables = focusManager._getFocusables(section);
+                state.focusIndex = focusables.indexOf(focused);
+            }
+        }
+
+        // Save EPG virtual scroll state (guide tab only)
+        if (this._currentTab === 'guide') {
+            const epg = this._virtualRows.find((r) => r instanceof EpgGrid);
+            if (epg && !epg._isDestroyed) {
+                state.epgScrollX = epg.scrollX;
+                state.epgScrollY = epg.scrollY;
+                state.epgFocusedChannelId = epg._focusedEl?.dataset?.channelId || null;
+                state.epgFocusedProgramId = epg._focusedEl?.dataset?.programId || null;
+            }
+        }
+
+        this._tabState.set(this._currentTab, state);
+    }
+
+    /**
+     * Restore the current tab's scroll position, EPG state, and focus.
+     * Called after tab content is rendered in _loadTab().
+     * For the EPG guide tab, this handles virtual scroll restoration that
+     * the standard NavigationState mechanism cannot (it only knows native scrollTop).
+     */
+    _restoreCurrentTabState() {
+        const state = this._tabState.get(this._currentTab);
+
+        // EPG Guide Tab — custom virtual scroll + focus restoration
+        if (this._currentTab === 'guide') {
+            const epg = this._virtualRows.find((r) => r instanceof EpgGrid);
+            if (!epg || epg._isDestroyed) return;
+
+            if (state) {
+                if (state.epgScrollX !== undefined) epg.scrollX = state.epgScrollX;
+                if (state.epgScrollY !== undefined) epg.scrollY = state.epgScrollY;
+                epg._renderVirtualGrid();
+
+                // Try to restore focus to the previously focused program
+                if (state.epgFocusedProgramId) {
+                    const data = epg.domNodes.get(state.epgFocusedChannelId);
+                    if (data) {
+                        const el = data.rowEl.querySelector(`[data-program-id="${state.epgFocusedProgramId}"]`);
+                        if (el) {
+                            epg._focusedEl = el;
+                            focusManager.focusElement(el);
+                            this._pendingNavState = null;
+                            return;
+                        }
+                    }
+                }
+
+                // Fall back to the previously focused channel row
+                if (state.epgFocusedChannelId) {
+                    const data = epg.domNodes.get(state.epgFocusedChannelId);
+                    if (data && data.channelEl) {
+                        epg._focusedEl = data.channelEl;
+                        focusManager.focusElement(data.channelEl);
+                        this._pendingNavState = null;
+                        return;
+                    }
+                }
+            }
+
+            // No saved state or couldn't restore — focus current program
+            epg._focusNow();
+            // Prevent standard NavigationState from overriding EPG focus
+            this._pendingNavState = null;
+            return;
+        }
+
+        // Non-EPG tabs
+        if (!state) {
+            // Forward navigation (no saved state) — default focus to tabs
+            if (!focusManager.getFocused()) {
+                this.setActiveSection('livetv-tabs');
+            }
+            return;
+        }
+
+        // Restore native scroll position for non-EPG tabs
+        const container = this.$('#livetv-scroll-container');
+        if (container && state.scrollTop > 0) {
+            container.scrollTop = state.scrollTop;
+        }
+
+        // Restore focus for tab switches within the page (no _pendingNavState)
+        if (!this._pendingNavState && state.focusSection) {
+            const config = focusManager.getConfig(state.focusSection);
+            if (config) {
+                this.setActiveSection(state.focusSection);
+                if (state.focusIndex >= 0) {
+                    const focusables = focusManager._getFocusables(state.focusSection);
+                    if (state.focusIndex < focusables.length) {
+                        focusManager.focusElement(focusables[state.focusIndex]);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Default: leave focus to be handled by NavigationState.restoreScrollFocus
+        // or set to tabs if no _pendingNavState and nothing focused yet
+        if (!this._pendingNavState && !focusManager.getFocused()) {
+            this.setActiveSection('livetv-tabs');
         }
     }
 
