@@ -2726,27 +2726,40 @@ class PlayerPage extends Page {
         // the item they were just watching is more intuitive than returning
         // to the initial entry point.
         // ----------------------------------------------------------------
+        const isTvChannel = this._item?.Type === 'TvChannel';
+        const shouldNavigateTv = isTvChannel && (this.params.fromGuide === 'true' || this.params.fromDetails === 'true');
+
         if (
             this._item &&
             this._item.Id &&
             !this._item.isIntro &&
-            this._item.Type !== 'TvChannel' &&
-            this._item.Type !== 'Trailer'
+            this._item.Type !== 'Trailer' &&
+            (!isTvChannel || shouldNavigateTv)
         ) {
-            const detailsPath = `/details/${this._item.Id}`;
+            // Determine exit destination path:
+            // Standard items and details-launched channels route back to details.
+            // Guide-launched Live TV channels route back to the guide screen.
+            let targetPath = `/details/${this._item.Id}`;
+            if (isTvChannel && this.params.fromGuide === 'true') {
+                targetPath = '/livetv';
+            }
 
             // The PlayerPage normally replaces the page that launched it in history (to prevent bloat)
             // and returns to the item's Details page on stop.
             // HOWEVER: if we came from a slideshow or a browse-page Play key, the player was PUSHED
             // (not replaced) by App.js, and we want to go BACK to that originating page exactly where
             // we left off — not synthesize a Details page the user never visited. So we call router.back().
-            if (this.params.fromSlideshow === 'true' || this.params.fromBrowse === 'true') {
+            //
+            // Standard web exception:
+            // If we are on standard web (non-Tizen and non-webOS), we always want to just go back
+            // to the existing details page rather than replacing history and recreating a new DetailsPage/Guide instance.
+            if (this.params.fromSlideshow === 'true' || this.params.fromBrowse === 'true' || platformInfo.isWeb) {
                 router.back();
             } else {
-                router.navigate(detailsPath, { replace: true, isBack: true });
+                router.navigate(targetPath, { replace: true, isBack: true });
             }
         } else {
-            // Standard back navigation for special types (Live TV, Intros) or if no item state exists.
+            // Standard back navigation for special types (Live TV default, Intros) or if no item state exists.
             router.back();
         }
     }

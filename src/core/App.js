@@ -608,6 +608,17 @@ class App {
                 if (fromSlideshow) queryParts.push('fromSlideshow=true');
                 if (fromBrowse) queryParts.push('fromBrowse=true');
                 if (ghostMode) queryParts.push('ghostMode=true');
+
+                // Determine referrer context to handle exit routing cleanly.
+                // If we are playing from a details screen or the Live TV guide,
+                // we want to ensure we navigate back to the correct view on exit.
+                const currentPath = router.getCurrentPath?.() || '';
+                if (currentPath.startsWith('/details/')) {
+                    queryParts.push('fromDetails=true');
+                } else if (currentPath.startsWith('/livetv')) {
+                    queryParts.push('fromGuide=true');
+                }
+
                 const queryParam = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
 
                 // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
@@ -634,8 +645,14 @@ class App {
                 // If we came from a slideshow or a browse-page Play key, we PUSH the
                 // player so we can go BACK to the originating page exactly where we
                 // left off. For DetailsPage launches we REPLACE to prevent history bloat.
+                //
+                // Standard web exception:
+                // We disable this optimization on standard web browsers to prevent breaking
+                // the browser's native back button behavior and page reload flow.
+                const shouldReplace = !fromSlideshow && !fromBrowse && !platformInfo.isWeb;
+
                 router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${queryParam}`, {
-                    replace: !fromSlideshow && !fromBrowse
+                    replace: shouldReplace
                 });
             }
         );
