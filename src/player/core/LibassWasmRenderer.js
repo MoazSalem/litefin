@@ -22,6 +22,35 @@ import SubtitleStyles from '../../utils/SubtitleStyles.js';
 
 const log = logger.create('LibassWasmRenderer');
 
+const getAbsoluteUrl = (relPath) => new URL(relPath, window.location.href).href;
+
+let _availableFonts = null;
+function getAvailableFonts() {
+    if (_availableFonts) return _availableFonts;
+    _availableFonts = {
+        'roboto': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
+        'liberation sans': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
+        'courier prime': getAbsoluteUrl('assets/fonts/CourierPrime.woff2'),
+        'merriweather': getAbsoluteUrl('assets/fonts/Merriweather.woff2'),
+        'inconsolata': getAbsoluteUrl('assets/fonts/Inconsolata.woff2'),
+        'dancing script': getAbsoluteUrl('assets/fonts/DancingScript.woff2'),
+        'patrick hand': getAbsoluteUrl('assets/fonts/PatrickHand.woff2'),
+        'cinzel': getAbsoluteUrl('assets/fonts/Cinzel.woff2'),
+        'poppins': getAbsoluteUrl('assets/fonts/Poppins.woff2'),
+        'noto sans arabic': getAbsoluteUrl('assets/fonts/NotoSansArabic.woff2'),
+        'silkscreen': getAbsoluteUrl('assets/fonts/Silkscreen.woff2'),
+        'space grotesk': getAbsoluteUrl('assets/fonts/SpaceGrotesk.woff2'),
+        'retrotech': getAbsoluteUrl('assets/fonts/RETROTECH.woff2'),
+        'kitty': getAbsoluteUrl('assets/fonts/Kitty.woff2'),
+        'inter': getAbsoluteUrl('assets/fonts/Inter.woff2'),
+        'proxima nova': getAbsoluteUrl('assets/fonts/ProximaNova.woff2'),
+        'baloo bhaijaan 2': getAbsoluteUrl('assets/fonts/BalooBhaijaan2.woff2'),
+        'opendyslexic': getAbsoluteUrl('assets/fonts/OpenDyslexic.woff2'),
+        'atkinson hyperlegible': getAbsoluteUrl('assets/fonts/Atkinson-Hyperlegible.woff2')
+    };
+    return _availableFonts;
+}
+
 export default class LibassWasmRenderer {
     /**
      * @param {Object} options
@@ -52,6 +81,8 @@ export default class LibassWasmRenderer {
         this._delaySeconds = 0;
         this._lastTime = null;
         this._rawContent = null;
+        this._lastProcessedHash = null;
+        this._lastProcessedResult = null;
 
         this._videoProxy = {
             currentTime: 0,
@@ -92,47 +123,34 @@ export default class LibassWasmRenderer {
         try {
             this._setupDOM();
 
-            const processedContent = this._preProcessAssContent(
-                content,
-                this._fontFamily,
-                this._fontScale,
-                this._outlineThickness,
-                this._shadowThickness
-            );
+            // Cache preprocessed content — skip reprocessing if content unchanged
+            const contentHash = content.length + '|' + (this._fontFamily || '') + '|' + this._fontScale;
+            if (this._lastProcessedHash !== contentHash) {
+                this._lastProcessedResult = this._preProcessAssContent(
+                    content,
+                    this._fontFamily,
+                    this._fontScale,
+                    this._outlineThickness,
+                    this._shadowThickness
+                );
+                this._lastProcessedHash = contentHash;
+            }
+            const processedContent = this._lastProcessedResult;
 
             const fonts = FontLoader.getContainerFontUrls();
             log.info(`Initializing SubtitlesOctopus with ${fonts.length} container font(s)`);
 
-            const getAbsoluteUrl = (relPath) => new URL(relPath, window.location.href).href;
-
-            const availableFonts = {
-                'roboto': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
-                'liberation sans': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
-                'courier prime': getAbsoluteUrl('assets/fonts/CourierPrime.woff2'),
-                'merriweather': getAbsoluteUrl('assets/fonts/Merriweather.woff2'),
-                'inconsolata': getAbsoluteUrl('assets/fonts/Inconsolata.woff2'),
-                'dancing script': getAbsoluteUrl('assets/fonts/DancingScript.woff2'),
-                'patrick hand': getAbsoluteUrl('assets/fonts/PatrickHand.woff2'),
-                'cinzel': getAbsoluteUrl('assets/fonts/Cinzel.woff2'),
-                'poppins': getAbsoluteUrl('assets/fonts/Poppins.woff2'),
-                'noto sans arabic': getAbsoluteUrl('assets/fonts/NotoSansArabic.woff2'),
-                'silkscreen': getAbsoluteUrl('assets/fonts/Silkscreen.woff2'),
-                'space grotesk': getAbsoluteUrl('assets/fonts/SpaceGrotesk.woff2'),
-                'retrotech': getAbsoluteUrl('assets/fonts/RETROTECH.woff2'),
-                'kitty': getAbsoluteUrl('assets/fonts/Kitty.woff2'),
-                'inter': getAbsoluteUrl('assets/fonts/Inter.woff2'),
-                'proxima nova': getAbsoluteUrl('assets/fonts/ProximaNova.woff2'),
-                'baloo bhaijaan 2': getAbsoluteUrl('assets/fonts/BalooBhaijaan2.woff2'),
-                'opendyslexic': getAbsoluteUrl('assets/fonts/OpenDyslexic.woff2'),
-                'atkinson hyperlegible': getAbsoluteUrl('assets/fonts/Atkinson-Hyperlegible.woff2')
-            };
-
+            const availableFonts = getAvailableFonts();
             const overrideFontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const targetFontFamily = (this._fontFamily && this._fontFamily !== 'null')
                 ? this._fontFamily
                 : (overrideFontFamily || 'Roboto');
 
             const fallbackFontUrl = availableFonts[targetFontFamily.toLowerCase()] || getAbsoluteUrl('js/default.woff2');
+
+            const dropAnimations = PlayerSettings.get('subtitleAssDropAnimations') === true;
+            const prescaleFactor = parseFloat(PlayerSettings.get('subtitleAssPrescaleFactor')) || 0.8;
+            const maxHeight = Math.min(2160, typeof screen !== 'undefined' ? (screen.height || 1080) : 1080);
 
             const options = {
                 video: this._videoElement,
@@ -145,15 +163,15 @@ export default class LibassWasmRenderer {
                 fallbackFont: fallbackFontUrl,
                 availableFonts: availableFonts,
                 renderMode: 'wasm-blend',
-                dropAllAnimations: false,
+                dropAllAnimations: dropAnimations,
                 libassMemoryLimit: 40,
                 libassGlyphLimit: 40,
                 targetFps: 24,
-                prescaleFactor: 0.8,
+                prescaleFactor: prescaleFactor,
                 prescaleHeightLimit: 1080,
-                maxRenderHeight: 2160,
+                maxRenderHeight: maxHeight,
                 resizeVariation: 0.2,
-                renderAhead: this._isVirtual ? 0 : 90
+                renderAhead: this._isVirtual ? 30 : 50
             };
 
             this._octopus = new SubtitlesOctopus(options);
@@ -215,6 +233,8 @@ export default class LibassWasmRenderer {
         this._updateWrapperStyles();
 
         if (this._rawContent && styleRequiresReparse) {
+            // Invalidate hash so setTrack re-processes the content
+            this._lastProcessedHash = null;
             log.info('Re-preprocessing ASS content for SubtitlesOctopus...');
             await this.setTrack(this._rawContent);
         }
@@ -239,6 +259,8 @@ export default class LibassWasmRenderer {
     clearTrack() {
         this._teardownOctopus();
         this._rawContent = null;
+        this._lastProcessedHash = null;
+        this._lastProcessedResult = null;
         if (this._wrapper) {
             this._wrapper.style.display = 'none';
         }

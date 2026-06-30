@@ -2850,18 +2850,21 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                'transcode-audio-codec-select',
-                [
-                    { value: 'auto', label: i18n.t('TranscodeCodecAuto') || 'Auto (Prefer E-AC3)' },
-                    { value: 'prefer_ac3', label: i18n.t('TranscodeCodecPreferAc3') || 'Prefer AC3 (with AAC fallback)' },
-                    { value: 'prefer_aac', label: i18n.t('TranscodeCodecPreferAac') || 'Prefer AAC' },
-                    { value: 'force_eac3', label: i18n.t('TranscodeCodecForceEac3') || 'Only E-AC3' },
-                    { value: 'force_ac3', label: i18n.t('TranscodeCodecForceAc3') || 'Only AC3' },
-                    { value: 'force_aac', label: i18n.t('TranscodeCodecForceAac') || 'Only AAC' },
-                    { value: 'force_mp3', label: i18n.t('TranscodeCodecForceMp3') || 'Only MP3' }
-                ],
-                PlayerSettings.get('transcodeAudioCodec') || 'auto'
-            )}
+                            'transcode-audio-codec-select',
+                            [
+                                { value: 'auto', label: i18n.t('TranscodeCodecAuto') || 'Auto (Prefer E-AC3)' },
+                                {
+                                    value: 'prefer_ac3',
+                                    label: i18n.t('TranscodeCodecPreferAc3') || 'Prefer AC3 (with AAC fallback)'
+                                },
+                                { value: 'prefer_aac', label: i18n.t('TranscodeCodecPreferAac') || 'Prefer AAC' },
+                                { value: 'force_eac3', label: i18n.t('TranscodeCodecForceEac3') || 'Only E-AC3' },
+                                { value: 'force_ac3', label: i18n.t('TranscodeCodecForceAc3') || 'Only AC3' },
+                                { value: 'force_aac', label: i18n.t('TranscodeCodecForceAac') || 'Only AAC' },
+                                { value: 'force_mp3', label: i18n.t('TranscodeCodecForceMp3') || 'Only MP3' }
+                            ],
+                            PlayerSettings.get('transcodeAudioCodec') || 'auto'
+                        )}
                     </div>
                 </div>
 
@@ -2893,15 +2896,16 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                'mp2-force-select',
-                forceStateOptions,
-                PlayerSettings.get('enableMp2') || 'auto'
-            )}
+                            'mp2-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableMp2') || 'auto'
+                        )}
                     </div>
                 </div>
 
-                ${platformInfo.isTizen
-                ? `
+                ${
+                    platformInfo.isTizen
+                        ? `
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="FLACPassthrough">${i18n.t('FLACPassthrough') || 'FLAC in Video Passthrough'}</span>
@@ -3325,6 +3329,41 @@ class SettingsPage extends Page {
                                 { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
                             ],
                             PlayerSettings.get('assRenderer')
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="ass-drop-animations-container" style="display: ${PlayerSettings.get('assRenderer') === 'libass-wasm' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssDropAnimations">${i18n.t('AssDropAnimations') || 'Drop ASS Animations'}</span>
+                        <span class="setting-description" data-i18n="AssDropAnimationsDescription">${i18n.t('AssDropAnimationsDescription') || 'Skip animated effects (karaoke, \\t, \\move) for better performance on slow TVs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('subtitleAssDropAnimations') ? 'active' : ''}" 
+                                 id="toggle-subtitle-ass-drop-animations" 
+                                 data-setting="subtitleAssDropAnimations"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="ass-prescale-factor-container" style="display: ${PlayerSettings.get('assRenderer') === 'libass-wasm' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssPrescaleFactor">${i18n.t('AssPrescaleFactor') || 'Subtitle Canvas Scale'}</span>
+                        <span class="setting-description" data-i18n="AssPrescaleFactorDescription">${i18n.t('AssPrescaleFactorDescription') || 'Lower = better performance but softer text (1.0 = full resolution).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'ass-prescale-factor-select',
+                            [
+                                { value: 0.5, label: '0.5x (fastest)' },
+                                { value: 0.6, label: '0.6x' },
+                                { value: 0.7, label: '0.7x' },
+                                { value: 0.8, label: '0.8x (recommended)' },
+                                { value: 0.9, label: '0.9x' },
+                                { value: 1.0, label: '1.0x (highest quality)' }
+                            ],
+                            PlayerSettings.get('subtitleAssPrescaleFactor')
                         )}
                     </div>
                 </div>
@@ -5027,6 +5066,17 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle ASS Drop Animations
+        const assDropAnimBtn = this.$('#toggle-subtitle-ass-drop-animations');
+        if (assDropAnimBtn) {
+            assDropAnimBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleAssDropAnimations') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleAssDropAnimations', newValue);
+                assDropAnimBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle ASS Outline/Shadow Override
         const assOverrideBtn = this.$('#subtitle-override-ass-toggle');
         if (assOverrideBtn) {
@@ -5783,6 +5833,7 @@ class SettingsPage extends Page {
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
             'subtitle-font-ass-select': { key: 'subtitleFontAss', type: 'player' },
             'ass-renderer-select': { key: 'assRenderer', type: 'player' },
+            'ass-prescale-factor-select': { key: 'subtitleAssPrescaleFactor', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
             'subtitle-color-select-hdr': { key: 'subtitleTextColorHdr', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
@@ -6020,7 +6071,7 @@ class SettingsPage extends Page {
                             imageService.setDetailsPreset(newValue);
                         } else if (settingConfig.type === 'player') {
                             // Numeric settings need parseFloat/parseInt conversion
-                            const floatKeys = ['webosBufferGate'];
+                            const floatKeys = ['webosBufferGate', 'subtitleAssPrescaleFactor'];
                             const intKeys = [
                                 'skipForwardLength',
                                 'skipBackLength',
@@ -6047,6 +6098,16 @@ class SettingsPage extends Page {
                             if (settingConfig.key === 'playerBackend') {
                                 this._switchTab('player', false, true);
                                 return; // Skip further processing, DOM is refreshed
+                            }
+
+                            // Show/hide libass-wasm-only settings based on renderer
+                            if (settingConfig.key === 'assRenderer') {
+                                const isLibass = newValue === 'libass-wasm';
+                                const animContainer = this.$('#ass-drop-animations-container');
+                                const scaleContainer = this.$('#ass-prescale-factor-container');
+                                if (animContainer) animContainer.style.display = isLibass ? '' : 'none';
+                                if (scaleContainer) scaleContainer.style.display = isLibass ? '' : 'none';
+                                focusManager.invalidateCache('settings-content');
                             }
 
                             // Invalidate cached device capabilities when profile-affecting settings change
