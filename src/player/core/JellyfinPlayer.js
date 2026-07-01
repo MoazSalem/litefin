@@ -208,6 +208,18 @@ export class JellyfinPlayer extends EventEmitter {
         this._manualBitrate = PlayerSettings.get('maxBitrateInternet') || null;
         this._isRestarting = false; // Flag to suppress stop events during manual quality change
         this._playbackMode = 'auto'; // Current playback mode ('auto', 'directPlay', 'transcode', 'remux')
+        
+        // ────────────────────────────────────────────────────────────────────
+        // Initial Playback Mode Store
+        // ────────────────────────────────────────────────────────────────────
+        // Caches the user's initial requested playback mode configuration
+        // (usually 'auto' or 'directPlay') at startup. This enables us to
+        // revert back to the user's preferred play mode when restarting due
+        // to an audio track switch, preventing the player from getting
+        // permanently stuck in a transcode/remux state.
+        // ────────────────────────────────────────────────────────────────────
+        this._initialPlaybackMode = 'auto';
+        
         this._transcodingOffsetTicks = 0; // Offset for transcoded streams that start at 0
         this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
         this._pendingStartPositionTicks = null; // Target position before first frame
@@ -619,6 +631,17 @@ export class JellyfinPlayer extends EventEmitter {
             log.debug(`Requesting PlaybackInfo from ${this.serverUrl}...`);
 
             this._playbackMode = options.playbackMode || 'auto';
+            
+            // ────────────────────────────────────────────────────────────────
+            // Capture Original User Intent
+            // ────────────────────────────────────────────────────────────────
+            // We cache the initial requested playbackMode to prevent track-switch
+            // restarts from overriding the session setting permanently. We only
+            // capture this on fresh play requests (when _isRestarting is false).
+            // ────────────────────────────────────────────────────────────────
+            if (!this._isRestarting) {
+                this._initialPlaybackMode = this._playbackMode;
+            }
 
             // Determine if we need to force a remux for audio tracks on HTML5
             const isHtml5Backend = !(this._backend instanceof TizenAVPlayer);
@@ -1446,11 +1469,19 @@ export class JellyfinPlayer extends EventEmitter {
 
         const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
 
-        // Remux on WebOS with a supported codec: HLS already has all tracks, switch natively.
-        // Remux on Tizen always restarts — AVPlay FLAC gate must stay in effect.
+        // ────────────────────────────────────────────────────────────────────
+        // Transcode and Remux Stream Switching State
+        // ────────────────────────────────────────────────────────────────────
+        // During Transcode, DirectStream, and Remux playback methods, the
+        // server-side HLS/progressive packaging only outputs a single audio
+        // stream (the requested index) to the TV. Because the other audio
+        // tracks are not muxed in the current playing stream, we cannot perform
+        // native track switching on the client side. A playback restart is
+        // required to request the new track stream index from the server.
+        // ────────────────────────────────────────────────────────────────────
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                               this._currentPlayMethod === 'DirectStream' ||
-                              (this._currentPlayMethod === 'Remux' && !(this._backendType === 'webos' && isTargetCodecSupported && supportsNativeAudio));
+                              this._currentPlayMethod === 'Remux';
         const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && !supportsNativeAudio);
 
         log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart} isTargetCodecSupported=${isTargetCodecSupported}`);
@@ -1471,10 +1502,23 @@ export class JellyfinPlayer extends EventEmitter {
                 }
             }
 
-            // 'auto' preserves CodecProfiles so Jellyfin transcodes unsupported codecs correctly.
-            const restartPlaybackMode = this._playbackMode === 'transcode' ? 'transcode'
+            // ────────────────────────────────────────────────────────────────
+            // Calculate Restart Playback Mode
+            // ────────────────────────────────────────────────────────────────
+            // - If the user's initial mode was explicitly a forced mode
+            //   ('transcode' or 'remux'), we preserve it.
+            // - Otherwise, we default to 'auto' to let the server decide.
+            // - If the target codec is unsupported, we MUST force 'auto'
+            //   so that CodecProfiles are sent to the server for transcode.
+            // - If the target codec is supported, we revert to the user's
+            //   initial playback mode (which allows going back to DirectPlay).
+            // ────────────────────────────────────────────────────────────────
+            const baseMode = (this._initialPlaybackMode === 'transcode' || this._initialPlaybackMode === 'remux')
+                ? this._initialPlaybackMode
+                : 'auto';
+            const restartPlaybackMode = baseMode === 'transcode' ? 'transcode'
                 : !isTargetCodecSupported ? 'auto'
-                : 'remux';
+                : baseMode;
             const restartOptions = {
                 ...this._currentPlayOptions,
                 audioStreamIndex: index,
