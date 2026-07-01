@@ -1839,8 +1839,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                  ? item.OriginalTitle
-                  : ''
+                    ? item.OriginalTitle
+                    : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -2152,7 +2152,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => {});
+        requestAnimationFrame(() => { });
 
         // Watched button
         if (watchedBtn) {
@@ -2264,7 +2264,7 @@ class DetailsPage extends Page {
     async _loadNextUp() {
         try {
             let response;
-            
+
             // Check if the current server is Emby. Emby ignores the SeriesId parameter
             // on the /Shows/NextUp endpoint, so we fall back to querying the first
             // unplayed episode of the series via /Items, which matches NextUp logic.
@@ -2284,7 +2284,7 @@ class DetailsPage extends Page {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
                 response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
             }
-            
+
             this._nextUp = response.Items || [];
 
             if (this._nextUp.length > 0) {
@@ -2718,7 +2718,7 @@ class DetailsPage extends Page {
             if (siblings.length > 0) {
                 // Find index of the current active episode in the siblings list
                 const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
-                
+
                 // Pass siblings and focused index down to renderer
                 this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
             }
@@ -2735,12 +2735,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                      this._item.SeasonName.toLowerCase().startsWith('season ')
-                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                          : /^\d+$/.test(this._item.SeasonName)
+                    this._item.SeasonName.toLowerCase().startsWith('season ')
+                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                        : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                  ])
+                ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page

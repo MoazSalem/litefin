@@ -211,10 +211,21 @@ export function getDeviceCapabilities() {
     const eac3Setting = PlayerSettings.get('enableEac3');
     const eac3 = eac3Setting === 'enable' ? true : eac3Setting === 'disable' ? false : codecs.eac3;
 
+    // ────────────────────────────────────────────────────────────────────────
+    // DTS Passthrough & Decode Evaluation
+    // ────────────────────────────────────────────────────────────────────────
     // LG disabled DTS decode support on WebOS 5.0 through 22, however, TVs can
-    // still pass-through DTS over eARC. Delegate this capability directly to the user's
-    // settings toggle, rather than hardcoding it to true or false.
-    const dts = PlayerSettings.get('enableDts') === true;
+    // still pass-through DTS over eARC. Since the user settings return strings
+    // ('enable', 'disable', 'auto'), a strict comparison against boolean true
+    // would always evaluate to false, rendering auto-detection non-functional.
+    // We now evaluate this setting string correctly:
+    //   - 'enable' yields true
+    //   - 'disable' yields false
+    //   - 'auto' falls back to true on older WebOS < 5.0 platforms which have
+    //     native DTS decoding capabilities.
+    // ────────────────────────────────────────────────────────────────────────
+    const dtsSetting = PlayerSettings.get('enableDts');
+    const dts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : (webosVersion < 5);
 
     const manualRes = PlayerSettings.get('maxResolution');
     if (manualRes && manualRes !== 'auto') {
