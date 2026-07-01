@@ -19,6 +19,7 @@
 import libjass from 'libjass';
 import 'libjass/libjass.css';
 import { logger } from '../../utils/Logger.js';
+import SubtitleStyles from '../../utils/SubtitleStyles.js';
 
 // Check pathSegList capability safely using a dummy instance.
 // Directly accessing SVGPathElement.prototype.pathSegList throws "Illegal invocation"
@@ -315,7 +316,14 @@ export default class ASSRenderer {
 
         // Base class
         const classNames = ['libjass-wrapper'];
-        if (this._fontClass) classNames.push(this._fontClass);
+
+        // Resolve the active font class with a fallback priority:
+        //   1. _fontClass — set when the user's override toggle is ON
+        //   2. The CSS class of the ASS font override setting (subtitleFontAss)
+        //      so the libjass wrapper inherits the correct font even when the
+        //      override toggle is not rewriting ASS stylesheet font names.
+        const activeFontClass = this._fontClass || SubtitleStyles.getFontClassName('subtitleFontAss');
+        if (activeFontClass) classNames.push(activeFontClass);
 
         // Spacing overrides
         const hasLineHeight = this._lineHeight !== undefined && this._lineHeight !== 0;

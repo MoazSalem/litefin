@@ -78,7 +78,7 @@ const DEFAULTS = {
     //   force_ac3'   — Force/Only AC3.
     //   'force_aac'   — Force/Only AAC.
     //   'force_mp3'   — Force/Only MP3.
-    //                   
+    //
     // NOTE: This only affects HLS transcode output.DirectPlay/DirectStream paths
     // bypass this entirely — the source audio is copied as-is in those cases.
     transcodeAudioCodec: 'auto',
@@ -149,6 +149,26 @@ const DEFAULTS = {
 
     // Override container fonts with the chosen ASS font (or system fallback)
     subtitleOverrideAssFonts: false,
+
+    /* -------------------------------------------------------------------------
+       ASS SUBTITLE RENDERING ENGINE
+       -------------------------------------------------------------------------
+       Determines which engine is used to parse and render styled ASS/SSA cues:
+         'libjass'    — DOM-based native JS renderer. High performance on older,
+                        limited hardware, but doesn't support complex typesetting.
+         'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
+                         accurate styling and drawing support.
+       ------------------------------------------------------------------------- */
+    assRenderer: 'libjass',
+
+    // Enable extracting and loading fonts embedded in media containers
+    subtitleAssLoadContainerFonts: true,
+
+    // Drop all ASS animations (karaoke, \t, \move, fade, etc.) for performance
+    subtitleAssDropAnimations: false,
+
+    // Scale down the subtitle canvas to improve performance (1.0 = full res)
+    subtitleAssPrescaleFactor: 0.8,
 
     // Global font scale multiplier for ASS subtitles
     subtitleFontScale: 1.0,

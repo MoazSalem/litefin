@@ -29,7 +29,44 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 // ============================================================================
 // Shared plugins factory
 // ============================================================================
-function getPlugins() {
+function getPlugins(tier) {
+    const buildTier = tier || 'modern';
+
+    const patterns = [
+        { from: 'config.xml', to: 'config.xml' },
+        { from: 'appinfo.json', to: 'appinfo.json' },
+        { from: 'icon.png', to: 'icon.png' },
+        { from: 'tile_1920x1080.png', to: 'tile_1920x1080.png', noErrorOnMissing: true },
+        { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
+        { from: 'src/locales', to: 'locales' },
+        { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
+        /*
+         * WebOS SDK: required for window.webOS and window.webOS.service to exist.
+         * Without this script the Luna service check in ApiClient.js
+         * will silently fall through to the HTTP scan on WebOS.
+         * The file is a no-op on non-WebOS platforms so safe to include in all builds.
+         */
+        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
+    ];
+
+    if (buildTier === 'modern') {
+        patterns.push(
+            {
+                from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.js',
+                to: 'js/subtitles-octopus-worker.js'
+            },
+            {
+                from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.wasm',
+                to: 'js/subtitles-octopus-worker.wasm'
+            },
+            {
+                from: 'node_modules/@jellyfin/libass-wasm/dist/js/default.woff2',
+                to: 'js/default.woff2',
+                noErrorOnMissing: true
+            }
+        );
+    }
+
     return [
         new MiniCssExtractPlugin({
             filename: 'css/[name].css'
@@ -40,24 +77,7 @@ function getPlugins() {
             inject: 'body',
             scriptLoading: 'blocking'
         }),
-        new CopyWebpackPlugin({
-            patterns: [
-                { from: 'config.xml', to: 'config.xml' },
-                { from: 'appinfo.json', to: 'appinfo.json' },
-                { from: 'icon.png', to: 'icon.png' },
-                { from: 'tile_1920x1080.png', to: 'tile_1920x1080.png', noErrorOnMissing: true },
-                { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
-                { from: 'src/locales', to: 'locales' },
-                { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
-                /*
-                 * WebOS SDK: required for window.webOS and window.webOS.service to exist.
-                 * Without this script the Luna service check in ApiClient.js
-                 * will silently fall through to the HTTP scan on WebOS.
-                 * The file is a no-op on non-WebOS platforms so safe to include in all builds.
-                 */
-                { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
-            ]
-        }),
+        new CopyWebpackPlugin({ patterns }),
         new webpack.DefinePlugin({
             __APP_VERSION__: JSON.stringify(require('./package.json').version)
         })
@@ -94,11 +114,19 @@ const es6Config = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Modern tier: WASM-capable (ES6+ / no transpilation needed)
+    plugins: getPlugins('modern')
 };
 
 // ============================================================================
@@ -133,11 +161,19 @@ const debugConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Modern tier: same WASM-capable worker set as es6, just with source maps
+    plugins: getPlugins('modern')
 };
 
 // ============================================================================
@@ -188,11 +224,19 @@ const normalConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Modern tier: Chromium 63 supports WASM and OffscreenCanvas
+    plugins: getPlugins('modern')
 };
 
 // ============================================================================
@@ -249,11 +293,25 @@ const legacyConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Legacy tier: LibassWasmRenderer is stubbed — no WASM workers are shipped.
+    plugins: [
+        ...getPlugins('legacy'),
+        new webpack.NormalModuleReplacementPlugin(
+            /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
+            path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+        )
+    ]
 };
 
 // ============================================================================
@@ -274,12 +332,12 @@ const ultraLegacyConfig = {
          * because regenerator-runtime internally calls Symbol() and
          * iterates with for-of (which needs Symbol.iterator).
          */
-        'core-js/es/symbol',          // Symbol — used by regenerator-runtime
-        'core-js/es/promise',         // Promise — async/await transpilation target
-        'core-js/es/map',             // Map — used by several core-js internals
-        'core-js/es/set',             // Set — used by several core-js internals
-        'core-js/es/array/from',      // Array.from — spread/iterator polyfill
-        'whatwg-fetch',               // fetch() for Tizen 2.x / WebOS 1.x
+        'core-js/es/symbol', // Symbol — used by regenerator-runtime
+        'core-js/es/promise', // Promise — async/await transpilation target
+        'core-js/es/map', // Map — used by several core-js internals
+        'core-js/es/set', // Set — used by several core-js internals
+        'core-js/es/array/from', // Array.from — spread/iterator polyfill
+        'whatwg-fetch', // fetch() for Tizen 2.x / WebOS 1.x
         'url-search-params-polyfill', // URLSearchParams for Chrome 32
         './src/index.js'
     ],
@@ -339,6 +397,13 @@ const ultraLegacyConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
@@ -349,12 +414,14 @@ const ultraLegacyConfig = {
          *   1. A separate HTML template (index.ultra-legacy.html) that includes the
          *      backup-logger <script> tag before any other scripts.
          *   2. An extra CopyWebpackPlugin entry to ship backup-logger.js to dist.
+         *   3. NormalModuleReplacementPlugin to swap LibassWasmRenderer with a stub
+         *      so the WASM dependencies are kept out of the bundle.
          *
          * The backup logger patches console.* BEFORE the webpack bundle executes,
          * which is the only effective way to intercept the boot crash on Chrome 32/38
          * (Tizen 2.x / WebOS 3.x). All other build tiers do not need or include it.
          */
-        var base = getPlugins();
+        var base = getPlugins('ultra-legacy');
 
         /* Swap HtmlWebpackPlugin for the ultra-legacy-specific template */
         base = base.map(function (p) {
@@ -379,8 +446,15 @@ const ultraLegacyConfig = {
             }
         });
 
+        base.push(
+            new webpack.NormalModuleReplacementPlugin(
+                /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
+                path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+            )
+        );
+
         return base;
-    }())
+    })()
 };
 
 // Export all configs. Run a specific one with --config-name <name>.
