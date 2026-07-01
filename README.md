@@ -98,6 +98,13 @@ If Litefin is useful to you, please consider supporting the development:
           <b>witek</b>
         </a>
       </td>
+       <td align="center" width="120">
+        <a href="https://github.com/h3xler">
+          <img src="https://github.com/h3xler.png?s=100" width="80" alt="h3xler" />
+          <br />
+          <b>h3xler</b>
+        </a>
+      </td>
       </tr>
     
   </table>
