@@ -1414,6 +1414,7 @@ html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-l
 html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
     margin-left: 0 !important;
     margin-right: auto !important;
+    margin-top: 4px !important;
 }
 [dir="rtl"] html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
     margin-left: auto !important;

@@ -26,9 +26,23 @@
     pointer-events: none;
 }
 
-/* Align skeleton cards with the row titles and loaded cards (60px padding) */
+/* 
+ * =========================================================================
+ * Skeleton Spacing & Alignment
+ * =========================================================================
+ * To prevent layout shifting and visual jumps when real data loads:
+ *
+ * 1. Classic Layout:
+ *    - Real cards start at left: 60px (sidePadding) + margin-left: 12px = 72px.
+ *    - Skeletons use margin-left: 0, so we set padding-left: 72px on the track.
+ *
+ * 2. Modern Layout:
+ *    - Real cards start at left: 60px (sidePadding) + margin-left: 0 = 60px.
+ *    - Skeletons use margin-left: 0, so we set padding-left: 60px on the track.
+ * =========================================================================
+ */
 .media-row--skeleton .row-items-track {
-    padding-left: 48px;
+    padding-left: 72px;
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
@@ -37,7 +51,7 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 
 [dir="rtl"] .media-row--skeleton .row-items-track {
     padding-left: 0;
-    padding-right: 48px;
+    padding-right: 72px;
 }
 
 [dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
@@ -45,6 +59,10 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
     padding-right: 60px;
 }
 
+/*
+ * ── Classic Skeleton Dimensions ──────────────────────────────────────────
+ * Classic cards use static variables computed from classic scale factors.
+ */
 .media-row--skeleton .media-card {
     width: var(--skeleton-card-width, 240px) !important;
     margin-right: var(--skeleton-card-margin, 24px) !important;
@@ -53,6 +71,27 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 
 .media-row--skeleton .media-card.landscape {
     width: var(--skeleton-card-width, 400px) !important;
+}
+
+/*
+ * ── Modern Skeleton Dimensions ───────────────────────────────────────────
+ * Modern cards use dynamically calculated variables (--card-width,
+ * --card-expanded-width, --card-margin) that scale with user settings.
+ * We override classic skeletons with high-specificity modern selectors.
+ */
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card {
+    width: var(--card-width) !important;
+    height: var(--card-height) !important;
+    margin-right: var(--card-margin) !important;
+    margin-left: 0 !important;
+}
+
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape {
+    width: var(--card-expanded-width) !important;
+}
+
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
+    width: var(--card-square-width) !important;
 }
 
 /* Skeleton rows fade out naturally when replaced (the real row fades in) */
