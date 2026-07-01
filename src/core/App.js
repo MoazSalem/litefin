@@ -154,15 +154,38 @@ class App {
             smartHubManager.init();
         }
 
-        // 4.6. Initialize Plugin Manager and Screensaver if user is authenticated (session restores).
+        // ====================================================================
+        // 4.6. Plugin Manager Initialization
+        // ====================================================================
+        // Initialize Plugin Manager if a user session was successfully restored.
+        // However, if we have multiple cached user profiles or the active profile
+        // is protected by a PIN, the app will route the user to the "Who's Watching"
+        // selection screen. In that scenario, we must defer initialization until
+        // a profile is explicitly selected and unlocked, preventing unauthorized
+        // background API requests from firing on the selection screen.
         if (state.get('user:authenticated')) {
-            pluginManager
-                .init({
-                    api,
-                    focusManager,
-                    toast: null // Toast component reference wired up once UI is ready
-                })
-                .catch((err) => log.error('pluginManager.init failed:', err));
+            // Count of saved user profiles on the server
+            const sessionCount = state.get('user:sessionCount', 0);
+            
+            // Retrieve current active user profile ID
+            const activeUserId = auth.getCurrentUser()?.Id;
+            
+            // Verify if the active user profile has a local PIN lock enabled
+            const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
+
+            // Defer if user needs to go through profiles selection or PIN verification
+            if (sessionCount > 1 || activeHasPin) {
+                log.info('Deferring plugin manager initialization: profiles screen or PIN gate is active');
+            } else {
+                log.info('No profile switcher active: initializing plugin manager immediately');
+                pluginManager
+                    .init({
+                        api,
+                        focusManager,
+                        toast: null // Toast component reference wired up once UI is ready
+                    })
+                    .catch((err) => log.error('pluginManager.init failed:', err));
+            }
         }
 
         // Initialize ScreensaverManager (runs on all pages, handles its own auth checks)
@@ -469,6 +492,12 @@ class App {
          */
         eventBus.on('auth:switchToProfiles', () => {
             log.info('Switching to profiles screen (other sessions remain)');
+            
+            // Wrecks active plugin instances and clears server plugin detection cache
+            // before redirecting to the user selection view, ensuring no background
+            // plugins continue fetching endpoints during the profile select flow.
+            pluginManager.destroy();
+
             router.reset('/profiles');
         });
 
