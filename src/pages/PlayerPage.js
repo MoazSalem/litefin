@@ -1798,26 +1798,36 @@ class PlayerPage extends Page {
         }
 
         // 2. Subtitle Track Capture
-        const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
-        if (activeSubtitleIndex !== undefined) {
-            if (activeSubtitleIndex === -1) {
-                // User explicitly disabled subtitles
-                storage.setItem('session:lastSubtitleLang', 'none');
-                storage.setItem('session:lastSubtitleTitle', 'none');
-                log.info(`[Track Memory] Saved Subtitle: none`);
-            } else {
-                const activeSubtitleTrack = mediaSource.MediaStreams.find(
-                    (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                );
-                if (activeSubtitleTrack) {
-                    storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
-                    storage.setItem(
-                        'session:lastSubtitleTitle',
-                        activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+        // ---------------------------------------------------------------------
+        // Check if the current media source contains any subtitle tracks.
+        // If there are no subtitle tracks at all (e.g. hardcoded subs or no subs),
+        // we skip track selection capture entirely. This prevents overwriting the
+        // stored user subtitle preference with 'none' for subsequent episodes.
+        // ---------------------------------------------------------------------
+        const hasSubtitles = mediaSource.MediaStreams.some((s) => s.Type === 'Subtitle');
+        if (hasSubtitles) {
+            const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
+            if (activeSubtitleIndex !== undefined) {
+                // An index of -1 represents the user explicitly turning subtitles off
+                if (activeSubtitleIndex === -1) {
+                    storage.setItem('session:lastSubtitleLang', 'none');
+                    storage.setItem('session:lastSubtitleTitle', 'none');
+                    log.info(`[Track Memory] Saved Subtitle: none`);
+                } else {
+                    // Search for the stream details using the active stream index
+                    const activeSubtitleTrack = mediaSource.MediaStreams.find(
+                        (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
                     );
-                    log.info(
-                        `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
-                    );
+                    if (activeSubtitleTrack) {
+                        storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
+                        storage.setItem(
+                            'session:lastSubtitleTitle',
+                            activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                        );
+                        log.info(
+                            `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
+                        );
+                    }
                 }
             }
         }
