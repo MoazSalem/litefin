@@ -606,6 +606,9 @@ class AuthManager {
     async switchUser(userId) {
         log.info(`Switching to user ${userId}...`);
 
+        // Invalidate homepage data cache — it belongs to the previous user/server
+        state.delete('home:pageCache');
+
         const sessions = this._loadSessions();
         const session = sessions.find((s) => s.userId === userId);
 
@@ -682,6 +685,9 @@ class AuthManager {
      */
     async logout() {
         log.info('Logging out current user...');
+
+        // Invalidate homepage data cache — user-specific data no longer applies
+        state.delete('home:pageCache');
 
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
         const sessions = this._loadSessions();

@@ -61,6 +61,13 @@ const log = logger.create('HomePage');
 const IMAGE_PREWARM_PER_ROW = 10;
 
 /**
+ * How long (in ms) to cache homepage data for instant back-navigation.
+ * 5 minutes — stale enough that users see fresh data on re-visit,
+ * fresh enough that back/forward navigation feels instant.
+ */
+const PAGE_CACHE_TTL = 5 * 60 * 1000;
+
+/**
  * Card width definitions (matching home.css) — used by VirtualCardRow internally.
  * Landscape: 400px, Portrait: 240px, gap: 24px.
  * Kept here for reference; VirtualCardRow reads these from its own constructor options.
@@ -638,54 +645,68 @@ class HomePage extends Page {
         try {
             log.info(`Starting progressive render pipeline for user ${preAuth.uid}`);
 
-            // ─── Step 1: Load core dependencies ──────────────────────────────
-            // Libraries are shared across multiple descriptors, so we fetch them
-            // once upfront before building the descriptor list.
-            const viewsResponse = await api.getUserViews();
-            this._libraries = viewsResponse.Items || [];
+            // ─── Step 0: Try to restore from cached data ────────────────────
+            // On back-navigation, avoid all network calls and render from cache.
+            const cache = this._getValidCache();
 
-            if (!this._isMounted) return;
-
-            // ─── Step 1b: Prune stale libThumb:* cache keys ──────────────────
-            // If a library was removed from Jellyfin, its cached thumbnail URL
-            // stays in localStorage forever. We run a quick Set-lookup against
-            // the IDs we just fetched and evict any orphaned keys via StorageService
-            // (which correctly updates the in-memory cache, not just disk).
-            const currentLibraryIds = new Set(this._libraries.map((l) => l.Id));
-            storage
-                .keys()
-                .filter((k) => k.startsWith('libThumb:'))
-                .forEach((k) => {
-                    const id = k.replace('libThumb:', '');
-                    if (!currentLibraryIds.has(id)) {
-                        log.info(`Pruning stale libThumb for removed library: ${id}`);
-                        storage.removeItem(k);
-                    }
-                });
-
-            // ─── Step 2: Library thumbnails + Hero Carousel ──────────────────
-            const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
-            const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
-            const needsThumbs = (thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0;
-
-            if (needsThumbs && enableHero) {
-                // Both are independent API calls — fire in parallel
-                await Promise.all([
-                    this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode),
-                    this._loadHeroCarousel()
-                ]);
+            if (cache) {
+                log.info('Restoring homepage from cache');
+                this._restoreFromCache(cache);
             } else {
-                if (needsThumbs) {
-                    await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
+                // ─── Step 1: Load core dependencies ──────────────────────────────
+                // Libraries are shared across multiple descriptors, so we fetch them
+                // once upfront before building the descriptor list.
+                const viewsResponse = await api.getUserViews();
+                this._libraries = viewsResponse.Items || [];
+
+                if (!this._isMounted) return;
+
+                // ─── Step 1b: Prune stale libThumb:* cache keys ──────────────────
+                // If a library was removed from Jellyfin, its cached thumbnail URL
+                // stays in localStorage forever. We run a quick Set-lookup against
+                // the IDs we just fetched and evict any orphaned keys via StorageService
+                // (which correctly updates the in-memory cache, not just disk).
+                const currentLibraryIds = new Set(this._libraries.map((l) => l.Id));
+                storage
+                    .keys()
+                    .filter((k) => k.startsWith('libThumb:'))
+                    .forEach((k) => {
+                        const id = k.replace('libThumb:', '');
+                        if (!currentLibraryIds.has(id)) {
+                            log.info(`Pruning stale libThumb for removed library: ${id}`);
+                            storage.removeItem(k);
+                        }
+                    });
+
+                // ─── Step 2: Library thumbnails + Hero Carousel ──────────────────
+                const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+                const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
+                const needsThumbs = (thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0;
+
+                if (needsThumbs && enableHero) {
+                    // Both are independent API calls — fire in parallel
+                    await Promise.all([
+                        this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode),
+                        this._loadHeroCarousel()
+                    ]);
+                } else {
+                    if (needsThumbs) {
+                        await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
+                    }
+                    if (enableHero) {
+                        await this._loadHeroCarousel();
+                    }
                 }
-                if (enableHero) {
-                    await this._loadHeroCarousel();
-                }
+                if (!this._isMounted) return;
             }
-            if (!this._isMounted) return;
 
             // ─── Step 3: Build descriptors ────────────────────────────────────
             const descriptors = this._getRowDescriptors();
+
+            // If restored from cache, replace fetchFns with cached item arrays
+            if (cache) {
+                this._applyCachedRowData(descriptors, cache.rows);
+            }
 
             // Validate focus target exists in the generated descriptors
             const lastFocusedObj = state.get('home:lastFocusedItem');
@@ -763,6 +784,11 @@ class HomePage extends Page {
             // (e.g. all rows failed or there was no target row), initialize now.
             if (!this._focusInitialized) {
                 this._tryInitializeFocus(this.$('#home-rows'));
+            }
+
+            // ─── Cache data for instant back-navigation ─────────────────────
+            if (!cache) {
+                this._savePageCache();
             }
 
             // ── Reveal page with focus already in place ───────────────────────
@@ -2035,6 +2061,92 @@ class HomePage extends Page {
                 }
             })
         );
+    }
+
+    // =========================================================================
+    // Page Data Cache (instant back-navigation)
+    // =========================================================================
+
+    /**
+     * Returns the cached homepage data if it exists and hasn't expired.
+     * @returns {Object|null} Cache object or null
+     */
+    _getValidCache() {
+        const cache = state.get('home:pageCache');
+        if (!cache || !cache.rows || !cache.libraries) return null;
+
+        // Never serve cache from a different user or server
+        if (cache.serverUrl !== api._serverUrl || cache.userId !== api._userId) {
+            state.delete('home:pageCache');
+            return null;
+        }
+
+        if (Date.now() - cache.timestamp > PAGE_CACHE_TTL) {
+            state.delete('home:pageCache');
+            return null;
+        }
+
+        return cache;
+    }
+
+    /**
+     * Restores libraries and thumbnails from cache, skipping network calls.
+     * @param {Object} cache
+     */
+    _restoreFromCache(cache) {
+        this._libraries = cache.libraries;
+
+        if (cache.thumbUrls) {
+            for (const lib of this._libraries) {
+                const url = cache.thumbUrls[lib.Id];
+                if (url) lib._dynamicThumbUrl = url;
+            }
+        }
+    }
+
+    /**
+     * Replaces each descriptor's fetchFn to return cached items instantly.
+     * @param {RowDescriptor[]} descriptors
+     * @param {Object<string, Array>} rowCache - Row ID -> items map
+     */
+    _applyCachedRowData(descriptors, rowCache) {
+        for (const desc of descriptors) {
+            const cachedItems = rowCache[desc.id];
+            if (cachedItems) {
+                desc.fetchFn = () => Promise.resolve(cachedItems);
+            }
+        }
+    }
+
+    /**
+     * Saves the current homepage data to the state cache,
+     * so that back-navigation renders instantly without network calls.
+     */
+    _savePageCache() {
+        const rows = {};
+        for (const [id, entry] of this._rowRegistry) {
+            if (entry.virtualRow && entry.virtualRow.items && entry.virtualRow.items.length > 0) {
+                rows[id] = entry.virtualRow.items;
+            }
+        }
+
+        const thumbUrls = {};
+        for (const lib of this._libraries) {
+            if (lib._dynamicThumbUrl) {
+                thumbUrls[lib.Id] = lib._dynamicThumbUrl;
+            }
+        }
+
+        state.set('home:pageCache', {
+            libraries: this._libraries,
+            thumbUrls,
+            rows,
+            serverUrl: api._serverUrl,
+            userId: api._userId,
+            timestamp: Date.now()
+        });
+
+        log.info('Homepage data cached for instant back-navigation');
     }
 
     // =========================================================================
