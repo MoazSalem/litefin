@@ -641,7 +641,6 @@ class HomePage extends Page {
             // ─── Step 1: Load core dependencies ──────────────────────────────
             // Libraries are shared across multiple descriptors, so we fetch them
             // once upfront before building the descriptor list.
-            await api.getCurrentUser(); // Validate session
             const viewsResponse = await api.getUserViews();
             this._libraries = viewsResponse.Items || [];
 
@@ -664,19 +663,26 @@ class HomePage extends Page {
                     }
                 });
 
-            // ─── Step 2: Optional dynamic library thumbnails ──────────────────
+            // ─── Step 2: Library thumbnails + Hero Carousel ──────────────────
             const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
-            if ((thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0) {
-                await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
-                if (!this._isMounted) return;
-            }
-
-            // ─── Step 2b: Hero Carousel ──────────────────────────────────────
             const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
-            if (enableHero) {
-                await this._loadHeroCarousel();
-                if (!this._isMounted) return;
+            const needsThumbs = (thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0;
+
+            if (needsThumbs && enableHero) {
+                // Both are independent API calls — fire in parallel
+                await Promise.all([
+                    this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode),
+                    this._loadHeroCarousel()
+                ]);
+            } else {
+                if (needsThumbs) {
+                    await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
+                }
+                if (enableHero) {
+                    await this._loadHeroCarousel();
+                }
             }
+            if (!this._isMounted) return;
 
             // ─── Step 3: Build descriptors ────────────────────────────────────
             const descriptors = this._getRowDescriptors();
@@ -723,13 +729,22 @@ class HomePage extends Page {
                 this.setLoading(false);
             }
 
-            // ─── Step 6: Render groups sequentially by priority ───────────────
-            for (const priority of priorities) {
-                const group = priorityGroups.get(priority);
+            // ─── Step 6: Render groups — priority 0 first, then rest in parallel ──
+            // Priority 0 (My Media) renders first since data is already in memory.
+            // Remaining priorities are independent, so they fire in parallel.
+            const p0Group = priorityGroups.get(0);
+            if (p0Group) {
+                await Promise.all(p0Group.map((descriptor) => this._loadAndRenderRow(descriptor)));
+                if (!this._isMounted) return;
+            }
 
-                // Fire all rows in this priority group in parallel
-                await Promise.all(group.map((descriptor) => this._loadAndRenderRow(descriptor)));
-
+            const remainingPriorities = priorities.filter((p) => p !== 0);
+            if (remainingPriorities.length > 0) {
+                await Promise.all(
+                    remainingPriorities.map((p) =>
+                        Promise.all(priorityGroups.get(p).map((d) => this._loadAndRenderRow(d)))
+                    )
+                );
                 if (!this._isMounted) return;
             }
 

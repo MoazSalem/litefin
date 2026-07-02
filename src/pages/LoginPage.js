@@ -520,9 +520,7 @@ class LoginPage extends Page {
 
             // Ensure splash hides after switching states (if it was up)
             setTimeout(() => {
-                import('../core/EventBus.js').then(({ eventBus }) => {
-                    eventBus.emit('app:hideSplash');
-                });
+                eventBus.emit('app:hideSplash');
             }, 10);
         }
 
@@ -953,13 +951,14 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                        src="${
+                                            user.PrimaryImageTag
+                                                ? api.getUserImageUrl(user.Id, {
+                                                      maxWidth: imageService.getParams('avatar').maxWidth,
+                                                      quality: imageService.getParams('avatar').quality
+                                                  })
+                                                : ''
+                                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -974,13 +973,14 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                    src="${
+                                        user.PrimaryImageTag
+                                            ? api.getUserImageUrl(user.Id, {
+                                                  maxWidth: imageService.getParams('avatar').maxWidth,
+                                                  quality: imageService.getParams('avatar').quality
+                                              })
+                                            : ''
+                                    }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >

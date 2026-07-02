@@ -51,6 +51,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { smartHubManager } from '../tizen/SmartHubManager.js';
 import { remoteButtonManager } from './RemoteButtonManager.js';
+import { screensaverManager } from './ScreensaverManager.js';
 
 const log = logger.create('App');
 
@@ -125,12 +126,13 @@ class App {
         //      CSS variables are already present on <html> when the polyfill scans the DOM.
         cssVarsPolyfill.init();
 
-        // 3.5. Initialize translations
-        // Ensures language dictionaries are loaded before the UI renders
+        // 3.5. Initialize translations + auth session in parallel
+        // i18n and auth are completely independent — overlapping them saves a round-trip
         const appLanguage = storage.getItem('app_language') || 'en-us';
-        await i18n.init(appLanguage);
+        const i18nPromise = i18n.init(appLanguage);
+        const authPromise = auth.init();
 
-        // 3.6. Initialize Layout Direction (RTL/LTR)
+        // 3.6. Initialize Layout Direction (RTL/LTR) — only needs appLanguage string, not i18n data
         const layoutDirection = storage.getItem('layout_direction') || 'auto';
         let isRtl = false;
 
@@ -144,8 +146,8 @@ class App {
 
         document.documentElement.setAttribute('dir', isRtl ? 'rtl' : 'ltr');
 
-        // 4. Try to restore auth session
-        await auth.init();
+        // Wait for both to complete — they've been running in parallel
+        await Promise.all([i18nPromise, authPromise]);
 
         // 4.5. Initialize Smart Hub Preview (Tizen 4+ only — gracefully no-ops on older
         //      hardware or other platforms. Must run after auth.init() so the manager can
@@ -166,10 +168,10 @@ class App {
         if (state.get('user:authenticated')) {
             // Count of saved user profiles on the server
             const sessionCount = state.get('user:sessionCount', 0);
-            
+
             // Retrieve current active user profile ID
             const activeUserId = auth.getCurrentUser()?.Id;
-            
+
             // Verify if the active user profile has a local PIN lock enabled
             const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
@@ -190,7 +192,6 @@ class App {
 
         // Initialize ScreensaverManager (runs on all pages, handles its own auth checks)
         // Must be initialized after StorageService so it can read delay preferences.
-        const { screensaverManager } = await import('./ScreensaverManager.js');
         screensaverManager.init();
 
         /*
@@ -492,7 +493,7 @@ class App {
          */
         eventBus.on('auth:switchToProfiles', () => {
             log.info('Switching to profiles screen (other sessions remain)');
-            
+
             // Wrecks active plugin instances and clears server plugin detection cache
             // before redirecting to the user selection view, ensuring no background
             // plugins continue fetching endpoints during the profile select flow.
