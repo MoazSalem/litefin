@@ -92,6 +92,8 @@ const TECHNICAL_KEYS = [
     "FontBaloo",
 	"FontAtkinson", 
 	"FontOpenDyslexic",
+    "FontPoiretOne",
+    "FontZenKakuGothicNew",
     "HD",
     "Option4K",
     "Path",
