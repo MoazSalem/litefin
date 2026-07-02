@@ -6419,6 +6419,36 @@ class SettingsPage extends Page {
             });
         }
 
+        // ==========================================================
+        // TOGGLE SHOW MDB LIST AWARDS BADGES
+        // ==========================================================
+        //
+        // This button handles toggling of the community/critic award badges
+        // retrieved from the MDBList plugin on the details page.
+        // It relies on standard localStorage preference flags.
+        // If not set, it defaults to true.
+        //
+        const showMdbAwardsToggle = this.$('#toggle-mdb-awards');
+        if (showMdbAwardsToggle) {
+            showMdbAwardsToggle.addEventListener('click', () => {
+                // Retrieve current setting from storage (defaults to true unless explicitly disabled)
+                const isEnabled = storage.getItem('pref:showMdbAwards') !== 'false';
+                
+                // Invert the state
+                const newValue = !isEnabled;
+                
+                // Persist the new value as a string representation
+                storage.setItem('pref:showMdbAwards', newValue.toString());
+                
+                // Toggle the 'active' class on the switch for visual state updates
+                showMdbAwardsToggle.classList.toggle('active', newValue);
+                
+                // Log the state transition for auditing and troubleshooting
+                log.info(`Show Awards Badges set to: ${newValue}`);
+            });
+        }
+
+
         // Toggle Switch for Show Date Aired
         const showDateAiredToggle = this.$('#toggle-show-date-aired');
         if (showDateAiredToggle) {
