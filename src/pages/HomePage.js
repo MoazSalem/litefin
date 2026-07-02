@@ -2072,6 +2072,12 @@ class HomePage extends Page {
      * @returns {Object|null} Cache object or null
      */
     _getValidCache() {
+        // Respect user preference — caching can be disabled via settings
+        if (storage.getItem('pref:homeScreenCache') === 'false') {
+            state.delete('home:pageCache');
+            return null;
+        }
+
         const cache = state.get('home:pageCache');
         if (!cache || !cache.rows || !cache.libraries) return null;
 
@@ -2123,6 +2129,9 @@ class HomePage extends Page {
      * so that back-navigation renders instantly without network calls.
      */
     _savePageCache() {
+        // Respect user preference
+        if (storage.getItem('pref:homeScreenCache') === 'false') return;
+
         const rows = {};
         for (const [id, entry] of this._rowRegistry) {
             if (entry.virtualRow && entry.virtualRow.items && entry.virtualRow.items.length > 0) {

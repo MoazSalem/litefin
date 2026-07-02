@@ -1106,6 +1106,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HomeScreenCache">${i18n.t('HomeScreenCache') || 'Enable Home Screen Caching'}</span>
+                        <span class="setting-description" data-i18n="HomeScreenCacheDescription">${i18n.t('HomeScreenCacheDescription') || 'Cache home screen data between pages to make back-navigation instant. Turn off if you frequently switch users or servers.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:homeScreenCache') !== 'false' ? 'active' : ''}"
+                                id="toggle-home-screen-cache"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelSimpleLoader">${i18n.t('LabelSimpleLoader') || 'Simple Loading Indicator'}</span>
                         <span class="setting-description" data-i18n="SimpleLoaderDescription">${i18n.t('SimpleLoaderDescription') || 'Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.'}</span>
                     </div>
@@ -4747,6 +4760,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Home Screen Caching
+        const homeCacheBtn = this.$('#toggle-home-screen-cache');
+        if (homeCacheBtn) {
+            homeCacheBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:homeScreenCache') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:homeScreenCache', newValue.toString());
+                homeCacheBtn.classList.toggle('active', newValue);
+                log.info(`Home screen caching set to: ${newValue}`);
+            });
+        }
+
         // Toggle Simple Loader
         const simpleLoaderBtn = this.$('#toggle-simple-loader');
         if (simpleLoaderBtn) {
@@ -6433,21 +6458,20 @@ class SettingsPage extends Page {
             showMdbAwardsToggle.addEventListener('click', () => {
                 // Retrieve current setting from storage (defaults to true unless explicitly disabled)
                 const isEnabled = storage.getItem('pref:showMdbAwards') !== 'false';
-                
+
                 // Invert the state
                 const newValue = !isEnabled;
-                
+
                 // Persist the new value as a string representation
                 storage.setItem('pref:showMdbAwards', newValue.toString());
-                
+
                 // Toggle the 'active' class on the switch for visual state updates
                 showMdbAwardsToggle.classList.toggle('active', newValue);
-                
+
                 // Log the state transition for auditing and troubleshooting
                 log.info(`Show Awards Badges set to: ${newValue}`);
             });
         }
-
 
         // Toggle Switch for Show Date Aired
         const showDateAiredToggle = this.$('#toggle-show-date-aired');
