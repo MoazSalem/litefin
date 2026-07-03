@@ -1153,13 +1153,22 @@ export class ApiClient {
     // ========================================================================
 
     getImageUrl(itemId, imageType = 'Primary', options = {}) {
+        // Create parameter builder for Jellyfin image query string
         const params = new URLSearchParams();
 
+        // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
+        
+        // Map fill constraints (contain style aspect preservation)
+        if (options.fillWidth) params.append('fillWidth', options.fillWidth);
+        if (options.fillHeight) params.append('fillHeight', options.fillHeight);
+        
+        // Map quality and unique content tags
         if (options.quality) params.append('quality', options.quality);
         if (options.tag) params.append('tag', options.tag);
 
+        // Compile query string and final endpoint URL reference
         const queryString = params.toString();
         const path = `/Items/${itemId}/Images/${imageType}`;
 
@@ -1167,12 +1176,21 @@ export class ApiClient {
     }
 
     getUserImageUrl(userId, options = {}) {
+        // Create parameter builder for user profile image
         const params = new URLSearchParams();
 
+        // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
+        
+        // Map fill constraints (contain style aspect preservation)
+        if (options.fillWidth) params.append('fillWidth', options.fillWidth);
+        if (options.fillHeight) params.append('fillHeight', options.fillHeight);
+        
+        // Map quality settings
         if (options.quality) params.append('quality', options.quality);
 
+        // Compile query string and final user endpoint URL reference
         const queryString = params.toString();
         const path = `/Users/${userId}/Images/Primary`;
 

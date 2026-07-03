@@ -1649,8 +1649,15 @@ class DetailsPage extends Page {
 
         if (logoItemId && logoTag) {
             const params = imageService.getParams('details-logo');
+            const titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+            const isLogoOnly = titleStyle === 'logo-only';
+            const baseWidth = isLogoOnly ? 360 : 280;
+            const baseHeight = isLogoOnly ? 140 : 100;
+            const dpr = window.devicePixelRatio || 1;
+
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: params.maxWidth,
+                fillWidth: Math.round(baseWidth * dpr),
+                fillHeight: Math.round(baseHeight * dpr),
                 quality: params.quality,
                 tag: logoTag
             });
@@ -1671,6 +1678,25 @@ class DetailsPage extends Page {
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
+                    // =========================================================================
+                    // Apple HIG: Dynamic Visual Weight Adaptation (Sleek Proportional Spacing)
+                    // =========================================================================
+                    // Calculate the natural aspect ratio of the loaded logo image.
+                    // By dividing the max width by the aspect ratio, we find the target height.
+                    // We cap the height dynamically to keep the layout visually balanced:
+                    // - Tall/square logos get more height (up to 140px) to remain legible.
+                    // - Wide/short logos shrink in container height to eliminate top whitespace.
+                    // =========================================================================
+                    const aspect = img.naturalWidth / img.naturalHeight || 1;
+                    const maxW = isLogoOnly ? 360 : 280;
+                    const targetHeight = maxW / aspect;
+                    const minHeight = isLogoOnly ? 60 : 50;
+                    const maxHeight = isLogoOnly ? 140 : 100;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+
+                    // Apply the computed height dynamically
+                    logoContainer.style.height = `${containerHeight}px`;
+
                     logoContainer.innerHTML = '';
                     logoContainer.appendChild(img);
                     img.classList.add('loaded');

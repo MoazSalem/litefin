@@ -221,10 +221,10 @@
     /* Balanced scale: cinematic presence without overwhelming other metadata */
     width: 100%;
     max-width: 360px;
-    /* Clean vertical spacing for widescreen dynamic logos */
-    height: 110px;
-    /* Generous breathing room above actions and meta rows */
-    margin-top: 10px;
+    /* Default height before JS overrides it dynamically based on aspect ratio */
+    height: 100px;
+    /* Generous breathing room above actions and meta rows (optimized from 10px) */
+    margin-top: 0px;
     margin-bottom: 24px;
     pointer-events: none;
 }

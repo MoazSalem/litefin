@@ -3255,15 +3255,23 @@ export default class OSDController extends Component {
             if (logoItemId) {
                 // Get the custom logo size from player settings (default to medium)
                 const logoSize = PlayerSettings.get('osdLogoSize') || 'medium';
-                let maxImgHeight = 60;
+                let maxImgHeight = 52;
+                let maxImgWidth = 200;
                 if (logoSize === 'small') {
-                    maxImgHeight = 40;
+                    maxImgHeight = 36;
+                    maxImgWidth = 140;
+                } else if (logoSize === 'medium') {
+                    maxImgHeight = 52;
+                    maxImgWidth = 200;
                 } else if (logoSize === 'large') {
-                    maxImgHeight = 80;
+                    maxImgHeight = 68;
+                    maxImgWidth = 260;
                 } else if (logoSize === 'extralarge') {
-                    maxImgHeight = 100;
+                    maxImgHeight = 84;
+                    maxImgWidth = 320;
                 } else if (logoSize === 'xxl') {
-                    maxImgHeight = 120;
+                    maxImgHeight = 100;
+                    maxImgWidth = 380;
                 }
 
                 // Add size class to the logo element
@@ -3274,8 +3282,13 @@ export default class OSDController extends Component {
                     wrapEl.classList.add('has-logo-' + logoSize);
                 }
 
-                // Max height of maxImgHeight to fit well in the OSD header
-                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', { maxHeight: maxImgHeight });
+                // Retrieve optimized contain-scaled image by specifying exact OSD dimensions and DPR
+                const dpr = window.devicePixelRatio || 1;
+                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', {
+                    fillWidth: Math.round(maxImgWidth * dpr),
+                    fillHeight: Math.round(maxImgHeight * dpr),
+                    tag: item.ImageTags?.Logo || item.SeriesImageTags?.Logo || item.ParentLogoImageTag
+                });
                 
                 logoEl.onload = () => {
                     // Only switch if this is still the active item
