@@ -4,7 +4,6 @@
    <access origin="*" subdomains="true"></access>
    <name>Litefin</name>
    <icon src="icon.png"></icon>
-   <tizen:metadata key="http://samsung.com/tv/metadata/app_tile" value="tile_1920x1080.png"/>
    <content src="index.html"></content>
    <tizen:privilege name="http://tizen.org/privilege/internet"/>
    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>

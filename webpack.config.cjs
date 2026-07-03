@@ -29,16 +29,34 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 // ============================================================================
 // Shared plugins factory
 // ============================================================================
-function getPlugins(tier) {
+/**
+ * Factory function to generate Webpack plugins required for different tiers.
+ * Supports customizing the application icon source.
+ * 
+ * @param {string} tier - The build tier ('modern' or 'legacy')
+ * @param {object} [options] - Additional options to configure build output
+ * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'icon.png')
+ */
+function getPlugins(tier, options = {}) {
+    // Determine the build tier, falling back to 'modern' by default
     const buildTier = tier || 'modern';
+    
+    // Retrieve the source icon path, defaulting to standard icon.png
+    const iconSrc = options.iconSrc || 'icon.png';
 
+    // Build files pattern list for CopyWebpackPlugin
     const patterns = [
+        // Copy Tizen config file to root of build directory
         { from: 'config.xml', to: 'config.xml' },
+        // Copy WebOS app info to root of build directory
         { from: 'appinfo.json', to: 'appinfo.json' },
-        { from: 'icon.png', to: 'icon.png' },
-        { from: 'tile_1920x1080.png', to: 'tile_1920x1080.png', noErrorOnMissing: true },
+        // Copy selected icon file as icon.png to root of build directory
+        { from: iconSrc, to: 'icon.png' },
+        // Copy general assets (images, resources, etc.)
         { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
+        // Copy translation localization files
         { from: 'src/locales', to: 'locales' },
+        // Copy libpgs web worker file
         { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
         /*
          * WebOS SDK: required for window.webOS and window.webOS.service to exist.
@@ -457,6 +475,83 @@ const ultraLegacyConfig = {
     })()
 };
 
+// ============================================================================
+// Normal Oblong build - Tizen 5.0+ (Chromium 63) with oblong icon
+// ============================================================================
+/**
+ * Configuration for the "Normal Oblong" build target.
+ * Matches the "normal" configuration but replaces the default icon with icon_oblong.png.
+ */
+const normalOblongConfig = {
+    // Unique identifier for this configuration
+    name: 'normal-oblong',
+    // Run in production mode for optimization
+    mode: 'production',
+    // The main app entry point
+    entry: './src/index.js',
+
+    output: {
+        // Output to the specific normal-oblong folder in dist
+        path: path.resolve(__dirname, 'dist/normal-oblong'),
+        // Keep standard JavaScript subdirectory layout
+        filename: 'js/[name].js',
+        // Clean output directory before building
+        clean: true
+    },
+
+    optimization: {
+        // Shared optimization settings
+        splitChunks: { chunks: 'all', maxSize: 100000 },
+        minimizer: ['...', new CssMinimizerPlugin()]
+    },
+
+    module: {
+        rules: [
+            {
+                // Transpile JS using Babel for Chromium 63
+                test: /\.js$/,
+                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: [
+                            [
+                                '@babel/preset-env',
+                                {
+                                    targets: { chrome: '63' },
+                                    useBuiltIns: 'usage',
+                                    corejs: 3
+                                }
+                            ]
+                        ]
+                    }
+                }
+            },
+            // Load and package CSS stylesheets
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            // Handle font assets
+            {
+                test: /\.(woff|woff2|eot|ttf|otf)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/fonts/[name][ext]'
+                }
+            },
+            // Prevent loading WASM files on output
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
+            }
+        ]
+    },
+
+    // Load plugins with the modern tier configuration, selecting icon_oblong.png
+    plugins: getPlugins('modern', { iconSrc: 'icon_oblong.png' })
+};
+
 // Export all configs. Run a specific one with --config-name <name>.
 // e.g. npx webpack --config webpack.config.cjs --config-name debug
-module.exports = [es6Config, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig];
+module.exports = [es6Config, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];
