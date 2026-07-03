@@ -2463,9 +2463,9 @@ class PlayerPage extends Page {
      * Report playback stopped to server
      * @param {Object} [capturedMediaSource] - Pre-captured media source
      * @param {number} [capturedPosition] - Pre-captured position ticks
-     * @param {boolean} [isSync=true] - Whether to use synchronous XHR
+     * @param {boolean} [isSync=false] - Whether to use synchronous XHR
      */
-    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = true) {
+    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = false) {
         if (this._item?.isIntro) {
             log.info('Skipping PlaybackStopped report for intro item');
             return;
@@ -2708,8 +2708,13 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            // Report stopped with captured values
-            await this._reportPlaybackStopped(mediaSource, positionTicks);
+            // Report stopped with captured values.
+            // We do NOT await this request so the player page closes and navigates instantly.
+            // Since reportPlaybackStopped uses fetch with keepalive: true, the request is
+            // guaranteed to complete in the background even if the page is destroyed.
+            this._reportPlaybackStopped(mediaSource, positionTicks, false).catch((err) => {
+                log.warn('Background stop report failed:', err);
+            });
         } catch (error) {
             log.warn('Error during stop:', error);
         }
@@ -2763,7 +2768,17 @@ class PlayerPage extends Page {
             // Standard web exception:
             // If we are on standard web (non-Tizen and non-webOS), we always want to just go back
             // to the existing details page rather than replacing history and recreating a new DetailsPage/Guide instance.
-            if (this.params.fromSlideshow === 'true' || this.params.fromBrowse === 'true' || platformInfo.isWeb) {
+            // fromSlideshow / fromBrowse: the player was PUSHED on top of the originating page,
+            // so a simple back() pop restores that page exactly where it was.
+            // fromGuide: same — App.js now pushes the player instead of replacing /livetv,
+            // which means /livetv is still in history with its saved tab/EPG state intact.
+            // On web: always back() to let the browser handle history natively.
+            if (
+                this.params.fromSlideshow === 'true' ||
+                this.params.fromBrowse === 'true' ||
+                this.params.fromGuide === 'true' ||
+                platformInfo.isWeb
+            ) {
                 router.back();
             } else {
                 router.navigate(targetPath, { replace: true, isBack: true });

@@ -672,14 +672,20 @@ class App {
                     return;
                 }
 
-                // If we came from a slideshow or a browse-page Play key, we PUSH the
-                // player so we can go BACK to the originating page exactly where we
-                // left off. For DetailsPage launches we REPLACE to prevent history bloat.
+                // If we came from a slideshow, a browse-page Play key, or the Live TV guide,
+                // we PUSH the player so we can go BACK to the originating page exactly where
+                // we left off. The Live TV case is critical: replacing /livetv in history
+                // destroys the saved tab, EPG scroll position, and focused program, so
+                // pressing Back from the player lands the user on a blank suggestions tab
+                // with no focus (stuck). Pushing the player keeps /livetv alive in history.
+                //
+                // For DetailsPage launches we still REPLACE to prevent history bloat.
                 //
                 // Standard web exception:
                 // We disable this optimization on standard web browsers to prevent breaking
                 // the browser's native back button behavior and page reload flow.
-                const shouldReplace = !fromSlideshow && !fromBrowse && !platformInfo.isWeb;
+                const isFromLiveTv = currentPath.startsWith('/livetv');
+                const shouldReplace = !fromSlideshow && !fromBrowse && !isFromLiveTv && !platformInfo.isWeb;
 
                 router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${queryParam}`, {
                     replace: shouldReplace
