@@ -365,12 +365,7 @@ class LibraryPage extends Page {
             return;
         }
 
-        // 1. Fetch Library Info — skip for virtual libraries ('all') as they have no real item record.
-        // Virtual library info was already set up in the isVirtualLibrary block above.
-        if (!isVirtualLibrary) {
-            await this._fetchLibraryInfo();
-        }
-
+        // Library info was already fetched at the top (shared with cache-hit path).
         // Load persisted view mode, sort configurations, and filters now that we know
         // the libraryId and collectionType. This happens before _renderGrid() so the correct
         // display modes and subsets are active from the very beginning.
