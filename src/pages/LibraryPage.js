@@ -270,6 +270,38 @@ class LibraryPage extends Page {
                 virtualTitle = decodeURIComponent(this.params.personName);
             } else if (this.params.searchTerm) {
                 virtualTitle = `${i18n.t('Search')}: ${decodeURIComponent(this.params.searchTerm)}`;
+            } else if (this.params.IsFavorite === 'true') {
+                // =============================================================
+                // TRANSLATABLE TYPE-SPECIFIC FAVORITE HEADERS
+                // =============================================================
+                // Maps the includeItemTypes query filter parameters to localized 
+                // singular or plural display values (e.g. Movies, TV Shows, etc.).
+                // =============================================================
+                let typeLabel = '';
+                if (this.params.includeItemTypes) {
+                    if (this.params.includeItemTypes.includes('Movie')) {
+                        typeLabel = i18n.t('Movies') || 'Movies';
+                    } else if (this.params.includeItemTypes.includes('Series')) {
+                        typeLabel = i18n.t('TypeOptionPluralSeries') || 'TV Shows';
+                    } else if (this.params.includeItemTypes.includes('Season')) {
+                        typeLabel = i18n.t('HeaderSeasons') || 'Seasons';
+                    } else if (this.params.includeItemTypes.includes('Episode')) {
+                        typeLabel = i18n.t('Episodes') || 'Episodes';
+                    } else if (this.params.includeItemTypes.includes('TvChannel')) {
+                        typeLabel = i18n.t('LiveTv') || 'Live TV';
+                    } else if (this.params.includeItemTypes.includes('Person')) {
+                        typeLabel = i18n.t('People') || 'People';
+                    } else if (this.params.includeItemTypes.includes('MusicArtist')) {
+                        typeLabel = i18n.t('Artists') || 'Artists';
+                    } else if (this.params.includeItemTypes.includes('MusicAlbum')) {
+                        typeLabel = i18n.t('Albums') || 'Albums';
+                    } else if (this.params.includeItemTypes.includes('Audio')) {
+                        typeLabel = i18n.t('Songs') || 'Songs';
+                    }
+                }
+                
+                // Format title as e.g. "Favorites - Movies" or just fallback to "Favorites"
+                virtualTitle = `${i18n.t('Favorites') || 'Favorites'}${typeLabel ? ' - ' + typeLabel : ''}`;
             }
 
             this.state.libraryInfo = {
@@ -300,6 +332,18 @@ class LibraryPage extends Page {
             this._loadPersistedSortMode();
             this._loadPersistedFilters();
 
+            // =========================================================================
+            // QUERY PARAMETER FILTER OVERRIDES (CACHE)
+            // =========================================================================
+            // If the route contains an explicit 'IsFavorite=true' query parameter,
+            // we override the loaded library filters to enforce favorite filtering.
+            // This allows linking directly to a favorite-filtered subset of any library.
+            // =========================================================================
+            if (this.params.IsFavorite === 'true') {
+                this.state.filters = this.state.filters || {};
+                this.state.filters.IsFavorite = true;
+            }
+
             // 1. Setup UI Components
             this._renderTabs();
             this._renderAlphaPicker();
@@ -308,7 +352,19 @@ class LibraryPage extends Page {
             i18n.translateDOM(this.el);
             this._bindEvents();
 
-            this.$('#library-title').textContent = this.state.libraryInfo?.Name || this.title;
+            // =========================================================================
+            // FAVORITES TITLE DECORATION (CACHE)
+            // =========================================================================
+            // If we are displaying favorite-filtered items, prepend "Favorites"
+            // to the page title to provide clear contextual feedback.
+            // =========================================================================
+            let title = this.state.libraryInfo?.Name || this.title;
+            if (this.params.IsFavorite === 'true') {
+                title = `${i18n.t('Favorites') || 'Favorites'} - ${title}`;
+            }
+
+            this.$('#library-title').textContent = title;
+            this.title = title;
 
             // 2. Hide loading skeleton, show correct container
             const isHorizontalLayout =
@@ -372,6 +428,18 @@ class LibraryPage extends Page {
         this._loadPersistedViewMode();
         this._loadPersistedSortMode();
         this._loadPersistedFilters();
+
+        // =========================================================================
+        // QUERY PARAMETER FILTER OVERRIDES (FRESH)
+        // =========================================================================
+        // If the route contains an explicit 'IsFavorite=true' query parameter,
+        // we override the loaded library filters to enforce favorite filtering.
+        // This allows linking directly to a favorite-filtered subset of any library.
+        // =========================================================================
+        if (this.params.IsFavorite === 'true') {
+            this.state.filters = this.state.filters || {};
+            this.state.filters.IsFavorite = true;
+        }
 
         // 2. Setup UI Components
         this._renderTabs();
@@ -717,8 +785,20 @@ class LibraryPage extends Page {
                 item.Type === 'Folder' || (item.Type === 'CollectionFolder' && !item.CollectionType && item.ParentId);
 
             this.state.libraryInfo = item;
-            this.$('#library-title').textContent = item.Name;
-            this.title = item.Name; // Update Page title
+            let title = item.Name;
+
+            // =========================================================================
+            // FAVORITES TITLE DECORATION (FETCH)
+            // =========================================================================
+            // If the route contains an explicit 'IsFavorite=true' query parameter,
+            // we prepend the localized 'Favorites' string to the library page title.
+            // =========================================================================
+            if (this.params.IsFavorite === 'true') {
+                title = `${i18n.t('Favorites') || 'Favorites'} - ${title}`;
+            }
+
+            this.$('#library-title').textContent = title;
+            this.title = title; // Update Page title
         } catch (e) {
             log.error('Failed to fetch info', e);
         }

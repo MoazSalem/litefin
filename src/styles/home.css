@@ -347,3 +347,65 @@ html[data-layout-tier="ultra-legacy"] .media-card.focused .card-overlay-label {
     transform: scale(1.05);
 }
 
+/* ============================================================================
+   Favorites Page Clickable Header Styles (Independent)
+   ============================================================================ */
+.favorites-row-header {
+    margin-top: 15px;
+    margin-bottom: 5px;
+    padding-top: 5px;
+    /* Indent the container to 60px sidePadding minus 16px button padding = 44px */
+    margin-left: 44px;
+    margin-right: 44px;
+}
+
+.favorites-header-focusable {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--jf-text-primary);
+    padding: 6px 16px;
+    border-radius: var(--jf-border-radius);
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s ease-out, background-color 0.2s ease-out;
+    background-color: transparent;
+    border: 3px solid transparent;
+    outline: none;
+    transform-origin: left center;
+}
+
+.favorites-header-focusable svg,
+.favorites-header-focusable i {
+    margin-right: 8px;
+}
+
+/* Arrow margin specifically */
+.favorites-header-focusable .favorites-header-arrow {
+    margin-left: 12px;
+    transition: transform 0.2s ease-out;
+}
+
+.favorites-header-focusable:focus,
+.favorites-header-focusable.focused,
+.favorites-header-focusable:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: scale(1.08); /* Apple-style pop */
+    border-color: var(--jf-focus-border-color);
+    overflow: hidden !important;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
+}
+
+.favorites-header-focusable:focus .favorites-header-arrow,
+.favorites-header-focusable.focused .favorites-header-arrow {
+    transform: translateX(4px);
+}
+
+[data-theme="light"] .favorites-header-focusable:focus,
+[data-theme="light"] .favorites-header-focusable.focused {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: #000;
+}
+
