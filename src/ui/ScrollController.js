@@ -244,9 +244,9 @@ class ScrollController {
             if (isVertical) {
                 if (scrollMode === 'gpu' && track) {
                     // Update transform coordinates on GPU compositor track.
-                    track.style.transform = `translate3d(0px, -${targetScroll}px, 0px)`;
-                    track.style.webkitTransform = `translate3d(0px, -${targetScroll}px, 0px)`;
-                    container.scrollTop = 0;
+                    track.style.transform = `translate3d(0px, -0px, 0px)`;
+                    track.style.webkitTransform = `translate3d(0px, -0px, 0px)`;
+                    container.scrollTop = targetScroll;
                 } else {
                     container.scrollTop = targetScroll;
                 }
