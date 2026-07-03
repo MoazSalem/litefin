@@ -652,6 +652,14 @@ class HomePage extends Page {
             if (cache) {
                 log.info('Restoring homepage from cache');
                 this._restoreFromCache(cache);
+
+                // Re-initialize the hero carousel from cached items — no API call needed.
+                // The enableHero preference is re-checked so the user's current setting
+                // is always honoured even after a settings change between navigations.
+                const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
+                if (enableHero && cache.heroItems && cache.heroItems.length > 0) {
+                    this._initHeroCarouselFromItems(cache.heroItems);
+                }
             } else {
                 // ─── Step 1: Load core dependencies ──────────────────────────────
                 // Libraries are shared across multiple descriptors, so we fetch them
@@ -2111,6 +2119,42 @@ class HomePage extends Page {
     }
 
     /**
+     * Initializes the HeroCarousel component from a pre-fetched items array.
+     * Extracted from _loadHeroCarousel() so it can be reused during cache restoration
+     * without making any network calls — the items are already in memory.
+     *
+     * @param {Array} items - Previously fetched hero carousel items
+     */
+    _initHeroCarouselFromItems(items) {
+        try {
+            // Build the carousel instance from the cached items list
+            this._hero = new HeroCarousel({ items });
+
+            const placeholder = this.$('#home-hero-placeholder');
+            if (placeholder) {
+                // Read style prefs fresh — user may have changed them since the cache was written
+                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
+                const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+
+                // Reset any stale classes before applying current style
+                placeholder.className = '';
+                placeholder.classList.add(`style-${carouselStyle}`);
+                if (isCompact) {
+                    placeholder.classList.add('style-compact');
+                }
+
+                // Inject the carousel markup and wire up its event listeners
+                placeholder.innerHTML = this._hero.render();
+                this._hero.init(placeholder.firstElementChild);
+
+                log.info('Hero carousel restored from cache.');
+            }
+        } catch (e) {
+            log.error('Failed to initialize Hero Carousel from cache', e);
+        }
+    }
+
+    /**
      * Replaces each descriptor's fetchFn to return cached items instantly.
      * @param {RowDescriptor[]} descriptors
      * @param {Object<string, Array>} rowCache - Row ID -> items map
@@ -2127,6 +2171,8 @@ class HomePage extends Page {
     /**
      * Saves the current homepage data to the state cache,
      * so that back-navigation renders instantly without network calls.
+     * Hero carousel items are also persisted so the carousel can be
+     * re-initialized on restoration without any network calls.
      */
     _savePageCache() {
         // Respect user preference
@@ -2146,10 +2192,15 @@ class HomePage extends Page {
             }
         }
 
+        // Snapshot the hero carousel items so restoration skips the API call entirely.
+        // HeroCarousel stores its items array on the instance as ._items.
+        const heroItems = this._hero ? this._hero._items : [];
+
         state.set('home:pageCache', {
             libraries: this._libraries,
             thumbUrls,
             rows,
+            heroItems,
             serverUrl: api._serverUrl,
             userId: api._userId,
             timestamp: Date.now()
