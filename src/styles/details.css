@@ -290,6 +290,11 @@
     margin-bottom: 16px;
 }
 
+/* Custom class when secondary title uses secondary text color preference */
+.details-episode-info.secondary-color {
+    color: var(--jf-text-secondary);
+}
+
 .clickable-subtitle {
     cursor: pointer;
     display: inline-block;

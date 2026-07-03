@@ -1523,6 +1523,29 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!--
+                  =============================================================================
+                  Apple Human Interface Guidelines: Layout Settings - Secondary Title Contrast
+                  =============================================================================
+                  Allows TV users to toggle the color scheme of the secondary details title 
+                  (episode number and show name) between the primary accent color and the 
+                  more subtle secondary text color (--jf-text-secondary) for lower distraction.
+                  =============================================================================
+                -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSecondaryTitleSecondaryColor">${i18n.t('LabelSecondaryTitleSecondaryColor') || 'Use Secondary Color for Episode Info'}</span>
+                        <span class="setting-description" data-i18n="SecondaryTitleSecondaryColorDescription">${i18n.t('SecondaryTitleSecondaryColorDescription') || 'Use the secondary text color for the episode number and show name secondary title on the details page instead of the primary accent color.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <!-- Tactile fluid toggle switch matching Apple & TV navigation design guidelines -->
+                        <button class="toggle-switch ${storage.getItem('pref:secondaryTitleSecondaryColor') === 'true' ? 'active' : ''}" 
+                                id="toggle-secondary-title-color" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
@@ -6441,6 +6464,31 @@ class SettingsPage extends Page {
                 hideOriginalTitleToggle.classList.toggle('active', newValue);
                 // Log state changes internally for better diagnostics and traceability
                 log.info(`Hide Original Title set to: ${newValue}`);
+            });
+        }
+
+        // =====================================================================
+        // Apple HIG Guidelines: Tactile Toggle Event Handling - Secondary Title Color
+        // =====================================================================
+        // Registers click handler for the secondary details title color switch.
+        // Reading current state from localStorage key, toggles value, and persists 
+        // to storage so that subsequent detail page renders adapt dynamically.
+        // Provides instant visual styling feedback by toggling the 'active' class.
+        // =====================================================================
+        const secondaryTitleColorToggle = this.$('#toggle-secondary-title-color');
+        if (secondaryTitleColorToggle) {
+            secondaryTitleColorToggle.addEventListener('click', () => {
+                // Read from local storage (defaults to false)
+                const currentValue = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
+                // Toggle state
+                const newValue = !currentValue;
+
+                // Persist the updated configuration state
+                storage.setItem('pref:secondaryTitleSecondaryColor', newValue.toString());
+                // Instantly update UI class to transition switch visual indicator
+                secondaryTitleColorToggle.classList.toggle('active', newValue);
+                // Log the state transition for debugging and diagnostics
+                log.info(`Secondary Title Secondary Color set to: ${newValue}`);
             });
         }
 

@@ -1873,7 +1873,19 @@ class DetailsPage extends Page {
                 ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
                 : `${seasonPrefix}${episodePrefix} - ${item.SeriesName}`;
 
-            heroHtml += `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+            // =========================================================================
+            // Apple Guidelines & Design Aesthetics: Dynamic Title/Subtitle Color Override
+            // =========================================================================
+            // Under Apple Human Interface Guidelines, user control over contrast and visual 
+            // hierarchy is essential for high-fidelity TV experiences. If the user prefers 
+            // a more subdued look, this check retrieves the toggle preference and applies 
+            // the 'secondary-color' CSS class to color the episode metadata with 
+            // --jf-text-secondary instead of the vibrant primary accent color.
+            // =========================================================================
+            const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
+            const colorClass = useSecondaryColor ? 'secondary-color' : '';
+
+            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
         }
 
         // Finish appending standard metadata row and secondary date labels.
