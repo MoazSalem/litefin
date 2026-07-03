@@ -1091,7 +1091,7 @@ class PlayerPage extends Page {
             overlay = document.createElement('div');
             overlay.id = 'audio-visual-overlay';
             overlay.className = 'audio-visual-overlay hidden';
-            
+
             // Insert the overlay right behind the OSD overlay so it displays beneath it.
             const osd = this.$('#osd-overlay');
             if (osd && osd.parentNode) {
@@ -1103,7 +1103,7 @@ class PlayerPage extends Page {
 
         // Establish the HTML layout structure for the music player details panel.
         // We wrap the album art and metadata inside a centered player panel
-        // that handles the translations and layout adjustments under Apple Guidelines.
+        // that handles the translations and layout adjustments.
         if (!overlay.querySelector('.audio-player-center')) {
             overlay.innerHTML = `
                 <div class="audio-backdrop"></div>
@@ -1148,13 +1148,13 @@ class PlayerPage extends Page {
             const album = this._item.Album;
             const trackName = this._item.Name || '';
             const isSingle = !album || album.trim().toLowerCase() === trackName.trim().toLowerCase();
-            
+
             // Format album portion if not a single, prepending a bullet character for spacing.
             const albumStr = (!isSingle && album) ? ` • ${album}` : '';
 
             // Format year portion if available, prepending a bullet character for spacing.
             const yearStr = this._item.ProductionYear ? ` • ${this._item.ProductionYear}` : '';
-            
+
             // Assemble the final metadata subtitle line combining artist, album, and year.
             if (artist) {
                 subtitleEl.textContent = `${artist}${albumStr}${yearStr}`;
@@ -2493,9 +2493,9 @@ class PlayerPage extends Page {
             // from leaving the item unmarked as watched and failing scrobble sync.
             if (this._isPlaybackEnded) {
                 const durationTicks = this._player?.getDurationTicks?.() ||
-                                      mediaSource?.RunTimeTicks ||
-                                      this._item?.RunTimeTicks ||
-                                      0;
+                    mediaSource?.RunTimeTicks ||
+                    this._item?.RunTimeTicks ||
+                    0;
                 if (durationTicks > 0) {
                     log.info(`Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`);
                     rawPosition = durationTicks;

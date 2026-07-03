@@ -1655,6 +1655,19 @@ class DetailsPage extends Page {
                 tag: logoTag
             });
             const img = new Image();
+            if (item.Type === 'Season' || item.Type === 'Episode') {
+                const targetId = item.SeriesId;
+                if (targetId) {
+                    img.classList.add('clickable-logo');
+                    img.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        log.info('Logo clicked, navigating to series details:', targetId);
+                        router.navigate(`/details/${targetId}`);
+                    };
+                }
+            }
+
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
@@ -1831,8 +1844,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                  ? item.OriginalTitle
-                  : ''
+                    ? item.OriginalTitle
+                    : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -1873,15 +1886,6 @@ class DetailsPage extends Page {
                 ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
                 : `${seasonPrefix}${episodePrefix} - ${item.SeriesName}`;
 
-            // =========================================================================
-            // Apple Guidelines & Design Aesthetics: Dynamic Title/Subtitle Color Override
-            // =========================================================================
-            // Under Apple Human Interface Guidelines, user control over contrast and visual 
-            // hierarchy is essential for high-fidelity TV experiences. If the user prefers 
-            // a more subdued look, this check retrieves the toggle preference and applies 
-            // the 'secondary-color' CSS class to color the episode metadata with 
-            // --jf-text-secondary instead of the vibrant primary accent color.
-            // =========================================================================
             const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
             const colorClass = useSecondaryColor ? 'secondary-color' : '';
 
@@ -2156,7 +2160,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => {});
+        requestAnimationFrame(() => { });
 
         // Watched button
         if (watchedBtn) {
@@ -2739,12 +2743,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                      this._item.SeasonName.toLowerCase().startsWith('season ')
-                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                          : /^\d+$/.test(this._item.SeasonName)
+                    this._item.SeasonName.toLowerCase().startsWith('season ')
+                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                        : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                  ])
+                ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page

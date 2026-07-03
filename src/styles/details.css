@@ -305,6 +305,17 @@
     opacity: 0.8;
 }
 
+/* Clickable logo styling for Seasons/Episodes */
+.clickable-logo {
+    cursor: pointer;
+    pointer-events: auto !important;
+    transition: opacity 0.2s ease;
+}
+
+.clickable-logo:hover {
+    opacity: 0.8 !important;
+}
+
 /* Metadata Row */
 .details-meta-row {
     display: flex;
