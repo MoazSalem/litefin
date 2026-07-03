@@ -473,6 +473,11 @@ class DetailsPage extends Page {
                 }
             }
 
+            // Fire user fetch in parallel with item fetch — they're independent.
+            // The user object is only needed for the context menu (admin checks),
+            // not for the initial render, so it does not block text/poster display.
+            const userPromise = state.get('user:data') ? Promise.resolve(state.get('user:data')) : api.getCurrentUser();
+
             const item = await api.getItem(this._itemId, {
                 // We request comprehensive fields to avoid redundant refetching.
                 // CanDelete is essential for implementing the 'Delete Media' feature.
@@ -481,40 +486,26 @@ class DetailsPage extends Page {
                 Fields: requestedFields.join(',')
             });
             this._item = item;
-            //log.debug('Item loaded:', item);
 
-            // ── Restore persisted version selection ─────────────────────────────────
-            // We key by itemId so each item independently remembers its last version.
-            // Only restore if the saved ID still exists in the current MediaSources list
-            // (the server may have removed a version since the last visit).
-            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
-            if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
-                this._selectedMediaSourceId = savedSourceId;
-                log.info('Restored persisted media source:', savedSourceId);
-            } else {
-                // Reset — either first visit or the saved source no longer exists
-                this._selectedMediaSourceId = null;
-            }
-
-            // Reset stream selections on every fresh item load (they are version-specific)
-            this._selectedAudioIndex = undefined;
-            this._selectedSubtitleIndex = undefined;
-
-            // ────────────────────────────────────────────────────────────────────────
-            // 3. Fetch User and Library Context
-            // ────────────────────────────────────────────────────────────────────────
-            this._currentUser = await api.getCurrentUser();
-            log.debug('Current user loaded:', this._currentUser);
-
-            // 2. Render all text content immediately (Metadata, Hero Info)
+            // 2. Render all text content immediately — only needs this._item
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
-
-            // Show/hide the trailer button based on what the item exposes.
-            // We can do this immediately — both LocalTrailerCount and RemoteTrailers
-            // are present in the initial getItem response without extra API calls.
             this._updateTrailerButton();
+
+            // ── Restore persisted version selection ─────────────────────────────────
+            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
+            if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
+                this._selectedMediaSourceId = savedSourceId;
+            } else {
+                this._selectedMediaSourceId = null;
+            }
+
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
+
+            // Await user data (likely already resolved from state cache)
+            this._currentUser = await userPromise;
 
             // 3. Fire image loading in the background (fire-and-forget).
             // The poster and backdrop are not used for layout — they are decorative
@@ -603,10 +594,8 @@ class DetailsPage extends Page {
                     }
                 }
 
-                // 6. NOW hide loading - page is scrolled and focused correctly
-                requestAnimationFrame(() => {
-                    this.setLoading(false);
-                });
+                // 6. NOW hide loading — page is scrolled and focused correctly
+                this.setLoading(false);
             });
         } catch (error) {
             log.error('Failed to load', error);
@@ -1754,7 +1743,10 @@ class DetailsPage extends Page {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating && shouldShowScore(item) ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}` : '';
+        const starRating =
+            item.CommunityRating && shouldShowScore(item)
+                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
+                : '';
         const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';
@@ -1839,8 +1831,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                    ? item.OriginalTitle
-                    : ''
+                  ? item.OriginalTitle
+                  : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -2152,7 +2144,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => { });
+        requestAnimationFrame(() => {});
 
         // Watched button
         if (watchedBtn) {
@@ -2735,19 +2727,20 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                    this._item.SeasonName.toLowerCase().startsWith('season ')
-                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                        : /^\d+$/.test(this._item.SeasonName)
+                      this._item.SeasonName.toLowerCase().startsWith('season ')
+                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                          : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                ])
+                  ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
             // -------------------------------------------------------------
-            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode', {
-                isCurrentEpisode: ep.Id === this._itemId
-            }),
+            renderCard: (ep) =>
+                this._renderMediaCard(ep, true, 'episode', {
+                    isCurrentEpisode: ep.Id === this._itemId
+                }),
             focusSectionName: 'more-from-season-section',
             currentIndex: currentEpisodeIndex
         });
