@@ -813,10 +813,14 @@ export default class SubtitleManager {
             if (!this._assRenderer) {
                 let width = 1920;
                 let height = 1080;
+                let videoFrameRate = 24;
                 const videoStream = this._mediaStreams.find(s => s.Type === 'Video');
                 if (videoStream && videoStream.Width && videoStream.Height) {
                     width = videoStream.Width;
                     height = videoStream.Height;
+                }
+                if (videoStream && videoStream.RealFrameRate) {
+                    videoFrameRate = videoStream.RealFrameRate;
                 }
 
                 try {
@@ -824,7 +828,8 @@ export default class SubtitleManager {
                         container: this._container,
                         video: this._videoElement,
                         width,
-                        height
+                        height,
+                        videoFrameRate
                     });
                 } catch (initErr) {
                     log.warn(`Failed to initialize ${TargetRendererClass.name}, falling back to ASSRenderer (libjass):`, initErr);

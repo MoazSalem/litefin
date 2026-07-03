@@ -58,13 +58,15 @@ export default class LibassWasmRenderer {
      * @param {HTMLVideoElement} [options.video] - The video element (for VideoClock sync)
      * @param {number} [options.width] - Video width (required if video not provided)
      * @param {number} [options.height] - Video height (required if video not provided)
+     * @param {number} [options.videoFrameRate] - Video framerate (for render sync)
      */
-    constructor({ container, video, width, height }) {
+    constructor({ container, video, width, height, videoFrameRate }) {
         this._container = container;
         this._videoElement = video || null;
         this._isVirtual = !video;
         this._videoWidth = width || 1920;
         this._videoHeight = height || 1080;
+        this._videoFrameRate = videoFrameRate || 24;
 
         this._fontFamily = null;
         this._fontClass = null;
@@ -81,6 +83,8 @@ export default class LibassWasmRenderer {
         this._delaySeconds = 0;
         this._lastTime = null;
         this._rawContent = null;
+        this._lastProcessedHash = null;
+        this._lastProcessedResult = null;
         this._lastProcessedHash = null;
         this._lastProcessedResult = null;
 
@@ -166,7 +170,7 @@ export default class LibassWasmRenderer {
                 dropAllAnimations: dropAnimations,
                 libassMemoryLimit: 40,
                 libassGlyphLimit: 40,
-                targetFps: 24,
+                targetFps: this._videoFrameRate,
                 prescaleFactor: prescaleFactor,
                 prescaleHeightLimit: 1080,
                 maxRenderHeight: maxHeight,
