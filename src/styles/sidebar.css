@@ -249,7 +249,8 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
 }
 
 .sidebar-item:focus,
-.sidebar-item.focused{
+.sidebar.expanded .sidebar-item.focused,
+.sidebar:hover .sidebar-item.focused {
     background: transparent;
     color: var(--jf-primary-btn-color);
 }
@@ -315,7 +316,8 @@ html[data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus
 .sidebar.expanded .sidebar-item.active.focused,
 .sidebar:hover .sidebar-item.active:focus,
 .sidebar:hover .sidebar-item.active.focused,
-.sidebar-item.focused {
+.sidebar.expanded .sidebar-item.focused,
+.sidebar:hover .sidebar-item.focused {
     color: var(--jf-primary-btn-color) !important;
     transform: none;
     will-change: unset;
@@ -323,9 +325,11 @@ html[data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus
 
 /* Update icon background to match item state when focused */
 html[data-sidebar-selected-color] .sidebar-item:focus .item-icon,
-html[data-sidebar-selected-color] .sidebar-item.focused .item-icon,
+html[data-sidebar-selected-color] .sidebar.expanded .sidebar-item.focused .item-icon,
+html[data-sidebar-selected-color] .sidebar:hover .sidebar-item.focused .item-icon,
 .sidebar-item:focus .item-icon,
-.sidebar-item.focused .item-icon {
+.sidebar.expanded .sidebar-item.focused .item-icon,
+.sidebar:hover .sidebar-item.focused .item-icon {
     background: transparent; /* Indicator handles the background */
     color: inherit !important;
 }
@@ -425,14 +429,16 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 }
 
 .sidebar-item.active .item-icon .icon-outline,
-.sidebar-item.focused .item-icon .icon-outline,
+.sidebar.expanded .sidebar-item.focused .item-icon .icon-outline,
+.sidebar:hover .sidebar-item.focused .item-icon .icon-outline,
 .sidebar-item:focus .item-icon .icon-outline,
 .sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-outline {
     display: none;
 }
 
 .sidebar-item.active .item-icon .icon-filled,
-.sidebar-item.focused .item-icon .icon-filled,
+.sidebar.expanded .sidebar-item.focused .item-icon .icon-filled,
+.sidebar:hover .sidebar-item.focused .item-icon .icon-filled,
 .sidebar-item:focus .item-icon .icon-filled,
 .sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-filled {
     display: block;
@@ -452,7 +458,8 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 }
 
 .sidebar-item:focus .sidebar-avatar,
-.sidebar-item.focused .sidebar-avatar {
+.sidebar.expanded .sidebar-item.focused .sidebar-avatar,
+.sidebar:hover .sidebar-item.focused .sidebar-avatar {
     border-color: var(--jf-primary-btn-color, #fff);
 }
 
