@@ -105,6 +105,8 @@
     "Home": "Ana Ekran",
     "HomeForceExpandablePosters": "Genişleyen Afişleri Zorla",
     "HomeForceExpandablePostersDescription": "Ana ekrandaki tüm satırları (Medyalarım hariç), odaklanıldığında yatay olarak genişleyen dikey afişler kullanmaya zorlar.",
+    "HomeScreenCache": "Ana Ekran Önbelleğe Alma",
+    "HomeScreenCacheDescription": "Geri gezinmeyi anında yapmak için ana ekran verilerini sayfalar arasında önbelleğe alın. Kullanıcıları veya sunucuları sık sık değiştiriyorsanız kapatın.",
     "ItemCount": "{0} öge",
     "ItemCountSingle": "1 öğe",
     "ItemCountValue": "{0} öğe",

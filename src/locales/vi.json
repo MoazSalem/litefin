@@ -105,6 +105,8 @@
     "Home": "Trang chủ",
     "HomeForceExpandablePosters": "Buộc biểu ngữ co giãn",
     "HomeForceExpandablePostersDescription": "Buộc tất cả các hàng ở màn hình chính (trừ Thư mục của tôi) sử dụng áp phích dọc có thể mở rộng theo chiều ngang khi được chọn.",
+    "HomeScreenCache": "Bộ nhớ đệm màn hình chính",
+    "HomeScreenCacheDescription": "Lưu dữ liệu màn hình chính vào bộ nhớ đệm giữa các trang để quay lại ngay lập tức. Tắt đi nếu bạn thường xuyên chuyển đổi người dùng hoặc máy chủ.",
     "ItemCount": "{0} mục",
     "ItemCountSingle": "1 mục",
     "ItemCountValue": "{0} mục",

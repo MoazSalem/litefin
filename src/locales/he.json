@@ -105,6 +105,8 @@
     "Home": "בית",
     "HomeForceExpandablePosters": "Force Expandable Posters",
     "HomeForceExpandablePostersDescription": "Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.",
+    "HomeScreenCache": "Home Screen Caching",
+    "HomeScreenCacheDescription": "Cache home screen data between pages to make back-navigation instant. Turn off if you frequently switch users or servers.",
     "ItemCount": "פריטים {0}",
     "ItemCountSingle": "1 item",
     "ItemCountValue": "{0} items",

@@ -105,6 +105,8 @@
     "Home": "홈",
     "HomeForceExpandablePosters": "확장형 포스터 강제 적용",
     "HomeForceExpandablePostersDescription": "홈 화면의 모든 줄(내 미디어 제외)에 포커스 시 가로로 확장되는 세로형 포스터를 강제로 사용합니다.",
+    "HomeScreenCache": "홈 화면 캐싱",
+    "HomeScreenCacheDescription": "이전 페이지로의 이동을 즉각적으로 만들기 위해 페이지 간에 홈 화면 데이터를 캐싱합니다. 사용자나 서버를 자주 전환하는 경우 이 기능을 끄십시오.",
     "ItemCount": "{0} 항목",
     "ItemCountSingle": "1개 항목",
     "ItemCountValue": "{0}개 항목",

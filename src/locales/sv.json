@@ -105,6 +105,8 @@
     "Home": "Hem",
     "HomeForceExpandablePosters": "Tvinga expanderbara affischer",
     "HomeForceExpandablePostersDescription": "Tvingar alla rader på startskärmen (utom Mina medier) att använda stående affischer som expanderar horisontellt vid fokus.",
+    "HomeScreenCache": "Cachning av startskärmen",
+    "HomeScreenCacheDescription": "Cacha startskärmsdata mellan sidor för att göra bakåtnavigering omedelbar. Stäng av om du ofta byter användare eller server.",
     "ItemCount": "{0} objekt",
     "ItemCountSingle": "1 objekt",
     "ItemCountValue": "{0} objekt",

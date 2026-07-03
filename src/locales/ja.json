@@ -105,6 +105,8 @@
     "Home": "ホーム",
     "HomeForceExpandablePosters": "拡大可能なポスターを強制",
     "HomeForceExpandablePostersDescription": "ホーム画面のすべての行（マイメディアを除く）で、フォーカス時に横に拡大する縦型ポスターを強制的に使用します。",
+    "HomeScreenCache": "ホーム画面のキャッシュ",
+    "HomeScreenCacheDescription": "戻るナビゲーションを瞬時に行うため、ページ間でホーム画面のデータをキャッシュします。ユーザーやサーバーを頻繁に切り替える場合はオフにしてください。",
     "ItemCount": "{0} アイテム",
     "ItemCountSingle": "1 アイテム",
     "ItemCountValue": "{0} アイテム",

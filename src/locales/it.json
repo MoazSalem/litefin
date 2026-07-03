@@ -105,6 +105,8 @@
     "Home": "Home",
     "HomeForceExpandablePosters": "Forza poster espandibili",
     "HomeForceExpandablePostersDescription": "Forza tutte le righe della schermata iniziale (eccetto I Miei Media) a utilizzare poster verticali che si espandono orizzontalmente quando evidenziati.",
+    "HomeScreenCache": "Caching della schermata iniziale",
+    "HomeScreenCacheDescription": "Memorizza nella cache i dati della schermata iniziale tra le pagine per rendere istantanea la navigazione a ritroso. Disattiva se cambi frequentemente utenti o server.",
     "ItemCount": "{0} elementi",
     "ItemCountSingle": "1 elemento",
     "ItemCountValue": "{0} elementi",

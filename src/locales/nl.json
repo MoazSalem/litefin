@@ -105,6 +105,8 @@
     "Home": "Home",
     "HomeForceExpandablePosters": "Forceer uitvouwbare posters",
     "HomeForceExpandablePostersDescription": "Forceert alle rijen op het startscherm (behalve Mijn media) om staande posters te gebruiken die horizontaal uitvouwen bij focus.",
+    "HomeScreenCache": "Caching van startscherm",
+    "HomeScreenCacheDescription": "Sla gegevens van het startscherm op in het cachegeheugen tussen pagina's om terugnavigatie direct te maken. Schakel uit als u vaak van gebruiker of server wisselt.",
     "ItemCount": "{0} items",
     "ItemCountSingle": "1 item",
     "ItemCountValue": "{0} items",

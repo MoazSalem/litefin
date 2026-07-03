@@ -105,6 +105,8 @@
     "Home": "Accueil",
     "HomeForceExpandablePosters": "Forcer les affiches extensibles",
     "HomeForceExpandablePostersDescription": "Force toutes les lignes de l'écran d'accueil (sauf Mes Médias) à utiliser des affiches verticales qui s'étendent horizontalement lors de la mise au point.",
+    "HomeScreenCache": "Mise en cache de l'écran d'accueil",
+    "HomeScreenCacheDescription": "Mettre en cache les données de l'écran d'accueil entre les pages pour rendre la navigation retour instantanée. Désactivez cette option si vous changez fréquemment d'utilisateur ou de serveur.",
     "ItemCount": "{0} éléments",
     "ItemCountSingle": "1 élément",
     "ItemCountValue": "{0} éléments",

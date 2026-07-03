@@ -105,6 +105,8 @@
     "Home": "首页",
     "HomeForceExpandablePosters": "强制可展开海报",
     "HomeForceExpandablePostersDescription": "强制首页所有行（我的媒体除外）使用在聚焦时会横向展开的竖版海报。",
+    "HomeScreenCache": "主屏幕缓存",
+    "HomeScreenCacheDescription": "在页面之间缓存主屏幕数据，以实现即时返回。如果您经常切换用户或服务器，请关闭此选项。",
     "ItemCount": "{0} 项",
     "ItemCountSingle": "1 个项目",
     "ItemCountValue": "{0} 个项目",

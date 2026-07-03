@@ -105,6 +105,8 @@
     "Home": "Główna",
     "HomeForceExpandablePosters": "Wymuś rozwijane plakaty",
     "HomeForceExpandablePostersDescription": "Wymusza na wszystkich rzędach ekranu głównego (oprócz Moich mediów) używanie pionowych plakatów, które rozwijają się poziomo po zaznaczeniu.",
+    "HomeScreenCache": "Pamięć podręczna ekranu głównego",
+    "HomeScreenCacheDescription": "Zapisuj dane ekranu głównego w pamięci podręcznej między stronami, aby powrót był natychmiastowy. Wyłącz, jeśli często zmieniasz użytkowników lub serwery.",
     "ItemCount": "{0} elementów",
     "ItemCountSingle": "1 element",
     "ItemCountValue": "{0} elementów",

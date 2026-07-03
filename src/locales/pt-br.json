@@ -105,6 +105,8 @@
     "Home": "Início",
     "HomeForceExpandablePosters": "Forçar pôsteres expansíveis",
     "HomeForceExpandablePostersDescription": "Força todas as linhas da tela inicial (exceto Minha Mídia) a usar pôsteres verticais que se expandem horizontalmente ao focar.",
+    "HomeScreenCache": "Cache da tela inicial",
+    "HomeScreenCacheDescription": "Armazena em cache os dados da tela inicial entre as páginas para tornar a navegação de retorno instantânea. Desative se você alterna frequentemente de usuário ou servidor.",
     "ItemCount": "{0} itens",
     "ItemCountSingle": "1 item",
     "ItemCountValue": "{0} itens",

@@ -105,6 +105,8 @@
     "Home": "Početna",
     "HomeForceExpandablePosters": "Prisili proširive plakate",
     "HomeForceExpandablePostersDescription": "Prisiljava sve retke početnog zaslona (osim Moji mediji) da koriste uspravne plakate koji se vodoravno šire pri fokusiranju.",
+    "HomeScreenCache": "Predmemoriranje početnog zaslona",
+    "HomeScreenCacheDescription": "Predmemorirajte podatke početnog zaslona između stranica kako bi navigacija unatrag bila trenutna. Isključite ako često mijenjate korisnike ili poslužitelje.",
     "ItemCount": "{0} stavaka",
     "ItemCountSingle": "1 stavka",
     "ItemCountValue": "{0} stavki",

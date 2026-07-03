@@ -105,6 +105,8 @@
     "Home": "Startseite",
     "HomeForceExpandablePosters": "Erweiterbare Poster erzwingen",
     "HomeForceExpandablePostersDescription": "Erzwingt auf allen Startseitenzeilen (außer Meine Medien) die Verwendung von Porträtpostern, die sich bei Fokus horizontal erweitern.",
+    "HomeScreenCache": "Startbildschirm-Caching",
+    "HomeScreenCacheDescription": "Daten des Startbildschirms zwischen Seiten zwischenspeichern, um die Zurück-Navigation zu beschleunigen. Deaktivieren, wenn Sie häufig Benutzer oder Server wechseln.",
     "ItemCount": "{0} Einträge",
     "ItemCountSingle": "1 Element",
     "ItemCountValue": "{0} Elemente",
