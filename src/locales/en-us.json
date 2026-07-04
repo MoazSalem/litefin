@@ -630,6 +630,8 @@
     "HideRichMetadata": "Hide Rich Metadata",
     "HideRichMetadataDescription": "Hide the genres, directors, and studios table on the details page.",
     "HideShowNameInOsdDescription": "Hides the show name (or logo) for episodes in the playback overlay.",
+    "HideSidebarLibraryHeader": "Hide Sidebar Library Header",
+    "HideSidebarLibraryHeaderDescription": "Hide the \"My Media\" library group title and its divider spacing in the sidebar.",
     "HideSimilarSectionDescription": "Do not load or display the similar recommendations section on the details page.",
     "HideUnfocusedBorders": "Hide Unfocused Borders",
     "HideUnfocusedBordersDescription": "Hide borders on buttons when they are not focused.",

@@ -185,6 +185,11 @@ class Sidebar extends Component {
         };
         eventBus.on('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
 
+        this._onHideLibraryHeaderChanged = () => {
+            this._loadLibraries();
+        };
+        eventBus.on('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
+
         // ── Sidebar Layout customization ──────────────────────────────────────
         // Hot-reload the sidebar layout when the user saves changes in Settings.
         this._onSidebarLayoutChanged = () => {
@@ -292,6 +297,10 @@ class Sidebar extends Component {
 
         if (this._onTransparentCollapsedChanged) {
             eventBus.off('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+        }
+
+        if (this._onHideLibraryHeaderChanged) {
+            eventBus.off('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
         }
     }
 
@@ -591,7 +600,8 @@ class Sidebar extends Component {
             // Remove any previously rendered libraries and headers to allow clean reloading
             sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach((el) => el.remove());
 
-            if (items.length > 0) {
+            const hideHeader = storage.getItem('pref:hideSidebarLibraryHeader') === 'true';
+            if (items.length > 0 && !hideHeader) {
                 // Determine header label based on layout block ('My Media')
                 const header = document.createElement('div');
                 header.className = 'sidebar-section-header';
