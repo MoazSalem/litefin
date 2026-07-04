@@ -545,14 +545,11 @@ html[data-layout-tier="ultra-legacy"] .item-text {
        to completely eliminate layout shifting. Spans the full visible 100px width
        of the collapsed sidebar by shifting margins (margin-left: 250px).
     */
-    font-size: 0;
-    color: transparent;
-    padding: 0;
-    height: 0;
-    margin: 22px 0 21px 250px;
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    height: auto;
+    border-top: 1px solid hsla(0, 0%, 100%, .15);
     opacity: 0.6;
     overflow: hidden;
+    visibility: hidden;
 }
 
 .sidebar:not(.expanded):not(:hover):not(.show-lib-icons-collapsed) .sidebar-section-header,
