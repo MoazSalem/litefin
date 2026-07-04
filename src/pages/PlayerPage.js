@@ -67,7 +67,24 @@ class PlayerPage extends Page {
         this._subtitleEndTime = null;
 
         // End-time tracker for secondary subtitle cue clearing
+        // (set during _onSubtitleChange, checked on _onTimeUpdate)
         this._secondarySubtitleEndTime = null;
+
+        // Tracks whether the current item has naturally reached the end.
+        // Used to report the exact total duration instead of slightly shorter
+        // positions to guarantee played-to-completion scrobbling on server.
+        this._isPlaybackEnded = false;
+
+        // Flag indicating if the current session is private/incognito (no progress reported)
+        this._isGhostMode = false;
+
+        // Tracking ID to detect item switches in the queue and reset version/track preferences
+        this._playingItemId = null;
+
+        // Pre-selected version and tracks from the Details page to persist across error retries
+        this._preSelectedMediaSourceId = undefined;
+        this._preSelectedAudio = undefined;
+        this._preSelectedSubtitle = undefined;
     }
 
     /**
@@ -139,6 +156,12 @@ class PlayerPage extends Page {
         this._hasReportedStart = false;
         this._isPaused = false;
         this._cachedPlayMethod = null;
+
+        // Reset playback completion flag for the new video page session.
+        this._isPlaybackEnded = false;
+
+        // Parse Ghost Mode flag from the navigation query parameters.
+        this._isGhostMode = this.params.ghostMode === 'true';
 
         // Hide global clock during player loading/playback
         globalClock.setVisibility(false);
@@ -252,8 +275,12 @@ class PlayerPage extends Page {
 
             // Sync the active item to the instance that PlayQueue just minted.
             // This prevents duplicate-fetch bugs with plugins like Local Intros.
+            // Rather than replacing the item completely (which discards metadata fields 
+            // like MediaSources or Chapters that weren't returned by collection or episode 
+            // query lists), we merge the fetched details onto the queue instance in-place.
             const queueItem = playQueue.getCurrentItem();
             if (queueItem && queueItem.Id === this._item.Id) {
+                Object.assign(queueItem, this._item);
                 this._item = queueItem;
             }
 
@@ -802,6 +829,10 @@ class PlayerPage extends Page {
      * Start playback of the current item
      */
     async _startPlayback() {
+        // Reset playback ended state before beginning new playback session.
+        // This ensures subsequent video loads or queue transitions start clean.
+        this._isPlaybackEnded = false;
+
         // === Plugin System ===
         // Allow plugins to perform late-stage preparation before playback actually
         // initializes. This is where Local Intros injects pre-roll videos into the queue.
@@ -833,15 +864,32 @@ class PlayerPage extends Page {
 
         const item = this._item;
 
-        // 1. Check for pre-selected tracks/version from DetailsPage (stored in state)
-        const preSelectedMediaSourceId = state.get('player:initialMediaSourceId');
-        const preSelectedAudio = state.get('player:initialAudioIndex');
-        const preSelectedSubtitle = state.get('player:initialSubtitleIndex');
+        // Reset version and track selections if the item has changed (e.g. queue advance/prev)
+        if (this._playingItemId !== item.Id) {
+            this._playingItemId = item.Id;
+            this._preSelectedMediaSourceId = undefined;
+            this._preSelectedAudio = undefined;
+            this._preSelectedSubtitle = undefined;
+        }
 
-        // Clear state to prevent persistence to future playbacks
-        state.set('player:initialMediaSourceId', null);
-        state.set('player:initialAudioIndex', null);
-        state.set('player:initialSubtitleIndex', null);
+        // 1. Check for pre-selected tracks/version from DetailsPage (stored in state)
+        // Store these on the page instance once so they persist across error/retry attempts
+        if (this._preSelectedMediaSourceId === undefined) {
+            this._preSelectedMediaSourceId = state.get('player:initialMediaSourceId') || null;
+            state.set('player:initialMediaSourceId', null);
+        }
+        if (this._preSelectedAudio === undefined) {
+            this._preSelectedAudio = state.get('player:initialAudioIndex') ?? null;
+            state.set('player:initialAudioIndex', null);
+        }
+        if (this._preSelectedSubtitle === undefined) {
+            this._preSelectedSubtitle = state.get('player:initialSubtitleIndex') ?? null;
+            state.set('player:initialSubtitleIndex', null);
+        }
+
+        const preSelectedMediaSourceId = this._preSelectedMediaSourceId;
+        const preSelectedAudio = this._preSelectedAudio;
+        const preSelectedSubtitle = this._preSelectedSubtitle;
 
         // Resolve MediaSource to use
         const mediaSource = preSelectedMediaSourceId
@@ -912,12 +960,17 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
+            // Build player options. If a specific media source version was pre-selected 
+            // on the details screen (e.g. 720p vs 1080p), ensure we pass the target 
+            // mediaSourceId down as a fallback even if the client-side metadata matching 
+            // did not resolve (for example if the media sources array was empty or lost 
+            // during page transitions).
             const playOptions = {
                 item: item, // Pass full item which might have Chapters
                 itemId: item.Id,
                 userId: api.userId, // Required for playback info
                 startPositionTicks: this._resumePosition,
-                mediaSourceId: mediaSource?.Id,
+                mediaSourceId: preSelectedMediaSourceId || mediaSource?.Id,
                 audioStreamIndex: savedAudioIndex,
                 subtitleStreamIndex: savedSubtitleIndex,
                 autoPlay: syncPlayManager.wantsAutoPlay()
@@ -1038,7 +1091,7 @@ class PlayerPage extends Page {
             overlay = document.createElement('div');
             overlay.id = 'audio-visual-overlay';
             overlay.className = 'audio-visual-overlay hidden';
-            
+
             // Insert the overlay right behind the OSD overlay so it displays beneath it.
             const osd = this.$('#osd-overlay');
             if (osd && osd.parentNode) {
@@ -1050,7 +1103,7 @@ class PlayerPage extends Page {
 
         // Establish the HTML layout structure for the music player details panel.
         // We wrap the album art and metadata inside a centered player panel
-        // that handles the translations and layout adjustments under Apple Guidelines.
+        // that handles the translations and layout adjustments.
         if (!overlay.querySelector('.audio-player-center')) {
             overlay.innerHTML = `
                 <div class="audio-backdrop"></div>
@@ -1095,13 +1148,13 @@ class PlayerPage extends Page {
             const album = this._item.Album;
             const trackName = this._item.Name || '';
             const isSingle = !album || album.trim().toLowerCase() === trackName.trim().toLowerCase();
-            
+
             // Format album portion if not a single, prepending a bullet character for spacing.
             const albumStr = (!isSingle && album) ? ` • ${album}` : '';
 
             // Format year portion if available, prepending a bullet character for spacing.
             const yearStr = this._item.ProductionYear ? ` • ${this._item.ProductionYear}` : '';
-            
+
             // Assemble the final metadata subtitle line combining artist, album, and year.
             if (artist) {
                 subtitleEl.textContent = `${artist}${albumStr}${yearStr}`;
@@ -1182,11 +1235,13 @@ class PlayerPage extends Page {
             return `${baseUrl}${mediaSource.DirectStreamUrl}`;
         }
 
-        // Build HLS URL for transcoding — this URL is given directly to the <video>
-        // element, so we must use a query param for auth (no headers possible).
-        // ApiKey= is the non-deprecated query param supported by Jellyfin.
+        /*
+         * Build HLS URL for transcoding — this URL is given directly to the <video>
+         * element, so we must use a query param for auth (no headers possible).
+         * For Emby, we use the lowercase 'api_key' parameter name.
+         * For Jellyfin, we use the camelCase 'ApiKey' parameter name.
+         */
         const params = new URLSearchParams({
-            ApiKey: api.accessToken,
             DeviceId: api.deviceId,
             MediaSourceId: mediaSource.Id,
             VideoCodec: 'h264',
@@ -1197,6 +1252,12 @@ class PlayerPage extends Page {
             MinSegments: 1,
             BreakOnNonKeyFrames: true
         });
+
+        if (api.isEmby()) {
+            params.set('api_key', api.accessToken);
+        } else {
+            params.set('ApiKey', api.accessToken);
+        }
 
         return `${baseUrl}/Videos/${this._item.Id}/master.m3u8?${params.toString()}`;
     }
@@ -1340,6 +1401,10 @@ class PlayerPage extends Page {
 
     _onEnded() {
         log.info('Ended event received');
+
+        // Mark playback as naturally completed so that any upcoming stopped reports
+        // carry the exact duration ticks rather than a slightly truncated position.
+        this._isPlaybackEnded = true;
 
         // If we're already exiting (e.g., user pressed back which called stop()),
         // don't call router.back() again - _stopAndExit already handles navigation
@@ -1733,26 +1798,36 @@ class PlayerPage extends Page {
         }
 
         // 2. Subtitle Track Capture
-        const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
-        if (activeSubtitleIndex !== undefined) {
-            if (activeSubtitleIndex === -1) {
-                // User explicitly disabled subtitles
-                storage.setItem('session:lastSubtitleLang', 'none');
-                storage.setItem('session:lastSubtitleTitle', 'none');
-                log.info(`[Track Memory] Saved Subtitle: none`);
-            } else {
-                const activeSubtitleTrack = mediaSource.MediaStreams.find(
-                    (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                );
-                if (activeSubtitleTrack) {
-                    storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
-                    storage.setItem(
-                        'session:lastSubtitleTitle',
-                        activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+        // ---------------------------------------------------------------------
+        // Check if the current media source contains any subtitle tracks.
+        // If there are no subtitle tracks at all (e.g. hardcoded subs or no subs),
+        // we skip track selection capture entirely. This prevents overwriting the
+        // stored user subtitle preference with 'none' for subsequent episodes.
+        // ---------------------------------------------------------------------
+        const hasSubtitles = mediaSource.MediaStreams.some((s) => s.Type === 'Subtitle');
+        if (hasSubtitles) {
+            const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
+            if (activeSubtitleIndex !== undefined) {
+                // An index of -1 represents the user explicitly turning subtitles off
+                if (activeSubtitleIndex === -1) {
+                    storage.setItem('session:lastSubtitleLang', 'none');
+                    storage.setItem('session:lastSubtitleTitle', 'none');
+                    log.info(`[Track Memory] Saved Subtitle: none`);
+                } else {
+                    // Search for the stream details using the active stream index
+                    const activeSubtitleTrack = mediaSource.MediaStreams.find(
+                        (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
                     );
-                    log.info(
-                        `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
-                    );
+                    if (activeSubtitleTrack) {
+                        storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
+                        storage.setItem(
+                            'session:lastSubtitleTitle',
+                            activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                        );
+                        log.info(
+                            `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
+                        );
+                    }
                 }
             }
         }
@@ -1895,6 +1970,12 @@ class PlayerPage extends Page {
 
     async _reportPlaybackStart() {
         if (!this._player || !this._item) return;
+
+        // Skip reporting start completely if running in private/ghost mode
+        if (this._isGhostMode) {
+            log.info('Ghost Mode is active: skipping playback start report');
+            return;
+        }
 
         // Never report playback start for intros — we don't want them tracked or in Continue Watching
         if (this._item.isIntro) {
@@ -2153,6 +2234,11 @@ class PlayerPage extends Page {
     async _reportPlaybackProgress(eventName = 'timeupdate', manualPositionTicks = null) {
         if (!this._player || !this._item) return;
 
+        // Skip reporting progress completely if running in private/ghost mode
+        if (this._isGhostMode) {
+            return;
+        }
+
         // Never report progress for intros
         if (this._item.isIntro) {
             return;
@@ -2377,22 +2463,45 @@ class PlayerPage extends Page {
      * Report playback stopped to server
      * @param {Object} [capturedMediaSource] - Pre-captured media source
      * @param {number} [capturedPosition] - Pre-captured position ticks
-     * @param {boolean} [isSync=true] - Whether to use synchronous XHR
+     * @param {boolean} [isSync=false] - Whether to use synchronous XHR
      */
-    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = true) {
+    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = false) {
         if (this._item?.isIntro) {
             log.info('Skipping PlaybackStopped report for intro item');
             return;
         }
         if (!this._item) return;
 
+        // Skip reporting stopped completely if running in private/ghost mode
+        if (this._isGhostMode) {
+            log.info('Ghost Mode is active: skipping playback stopped report');
+            return;
+        }
+
         try {
             // 1. Capture data
             const mediaSource =
                 capturedMediaSource ?? this._player?.getCurrentMediaSource?.() ?? this._cachedMediaSource;
 
-            // Ensure position is a rounded integer
-            const rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+            // Ensure position is a rounded integer. We grab the reported position
+            // from the player backend or the fallback parameters.
+            let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+
+            // If the video naturally completed (ended event was fired), we override
+            // the reported position with the total duration ticks of the media.
+            // This prevents minor timing differences between player backend and server
+            // from leaving the item unmarked as watched and failing scrobble sync.
+            if (this._isPlaybackEnded) {
+                const durationTicks = this._player?.getDurationTicks?.() ||
+                    mediaSource?.RunTimeTicks ||
+                    this._item?.RunTimeTicks ||
+                    0;
+                if (durationTicks > 0) {
+                    log.info(`Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`);
+                    rawPosition = durationTicks;
+                }
+            }
+
             const positionTicks = Math.round(rawPosition);
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
@@ -2468,6 +2577,15 @@ class PlayerPage extends Page {
                     xhr.setRequestHeader('Content-Type', 'application/json');
                     // Use the standard Authorization header — X-Emby-Authorization is deprecated
                     xhr.setRequestHeader('Authorization', authHeader);
+
+                    /*
+                     * For Emby compatibility, we also append the X-Emby-Token header
+                     * on our synchronous stop report XHR request.
+                     */
+                    if (api.isEmby() && api.accessToken) {
+                        xhr.setRequestHeader('X-Emby-Token', api.accessToken);
+                    }
+
                     xhr.send(JSON.stringify(data));
 
                     if (xhr.status >= 400) {
@@ -2491,6 +2609,12 @@ class PlayerPage extends Page {
      * Called when app is about to close or go to background
      */
     _handleAppExit() {
+        // Skip reporting on exit if running in private/ghost mode
+        if (this._isGhostMode) {
+            log.info('Ghost Mode is active: skipping app exit playback stopped report');
+            return;
+        }
+
         log.info('App exit detected, reporting playback stopped');
 
         // Capture info before it's too late
@@ -2584,8 +2708,13 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            // Report stopped with captured values
-            await this._reportPlaybackStopped(mediaSource, positionTicks);
+            // Report stopped with captured values.
+            // We do NOT await this request so the player page closes and navigates instantly.
+            // Since reportPlaybackStopped uses fetch with keepalive: true, the request is
+            // guaranteed to complete in the background even if the page is destroyed.
+            this._reportPlaybackStopped(mediaSource, positionTicks, false).catch((err) => {
+                log.warn('Background stop report failed:', err);
+            });
         } catch (error) {
             log.warn('Error during stop:', error);
         }
@@ -2612,27 +2741,50 @@ class PlayerPage extends Page {
         // the item they were just watching is more intuitive than returning
         // to the initial entry point.
         // ----------------------------------------------------------------
+        const isTvChannel = this._item?.Type === 'TvChannel';
+        const shouldNavigateTv = isTvChannel && (this.params.fromGuide === 'true' || this.params.fromDetails === 'true');
+
         if (
             this._item &&
             this._item.Id &&
             !this._item.isIntro &&
-            this._item.Type !== 'TvChannel' &&
-            this._item.Type !== 'Trailer'
+            this._item.Type !== 'Trailer' &&
+            (!isTvChannel || shouldNavigateTv)
         ) {
-            const detailsPath = `/details/${this._item.Id}`;
+            // Determine exit destination path:
+            // Standard items and details-launched channels route back to details.
+            // Guide-launched Live TV channels route back to the guide screen.
+            let targetPath = `/details/${this._item.Id}`;
+            if (isTvChannel && this.params.fromGuide === 'true') {
+                targetPath = '/livetv';
+            }
 
             // The PlayerPage normally replaces the page that launched it in history (to prevent bloat)
             // and returns to the item's Details page on stop.
             // HOWEVER: if we came from a slideshow or a browse-page Play key, the player was PUSHED
             // (not replaced) by App.js, and we want to go BACK to that originating page exactly where
             // we left off — not synthesize a Details page the user never visited. So we call router.back().
-            if (this.params.fromSlideshow === 'true' || this.params.fromBrowse === 'true') {
+            //
+            // Standard web exception:
+            // If we are on standard web (non-Tizen and non-webOS), we always want to just go back
+            // to the existing details page rather than replacing history and recreating a new DetailsPage/Guide instance.
+            // fromSlideshow / fromBrowse: the player was PUSHED on top of the originating page,
+            // so a simple back() pop restores that page exactly where it was.
+            // fromGuide: same — App.js now pushes the player instead of replacing /livetv,
+            // which means /livetv is still in history with its saved tab/EPG state intact.
+            // On web: always back() to let the browser handle history natively.
+            if (
+                this.params.fromSlideshow === 'true' ||
+                this.params.fromBrowse === 'true' ||
+                this.params.fromGuide === 'true' ||
+                platformInfo.isWeb
+            ) {
                 router.back();
             } else {
-                router.navigate(detailsPath, { replace: true, isBack: true });
+                router.navigate(targetPath, { replace: true, isBack: true });
             }
         } else {
-            // Standard back navigation for special types (Live TV, Intros) or if no item state exists.
+            // Standard back navigation for special types (Live TV default, Intros) or if no item state exists.
             router.back();
         }
     }

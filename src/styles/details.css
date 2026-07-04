@@ -221,10 +221,10 @@
     /* Balanced scale: cinematic presence without overwhelming other metadata */
     width: 100%;
     max-width: 360px;
-    /* Clean vertical spacing for widescreen dynamic logos */
-    height: 110px;
-    /* Generous breathing room above actions and meta rows */
-    margin-top: 10px;
+    /* Default height before JS overrides it dynamically based on aspect ratio */
+    height: 100px;
+    /* Generous breathing room above actions and meta rows (optimized from 10px) */
+    margin-top: 0px;
     margin-bottom: 24px;
     pointer-events: none;
 }
@@ -290,6 +290,11 @@
     margin-bottom: 16px;
 }
 
+/* Custom class when secondary title uses secondary text color preference */
+.details-episode-info.secondary-color {
+    color: var(--jf-text-secondary);
+}
+
 .clickable-subtitle {
     cursor: pointer;
     display: inline-block;
@@ -298,6 +303,17 @@
 
 .clickable-subtitle:hover {
     opacity: 0.8;
+}
+
+/* Clickable logo styling for Seasons/Episodes */
+.clickable-logo {
+    cursor: pointer;
+    pointer-events: auto !important;
+    transition: opacity 0.2s ease;
+}
+
+.clickable-logo:hover {
+    opacity: 0.8 !important;
 }
 
 /* Metadata Row */
@@ -566,6 +582,42 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     border-color: var(--jf-btn-primary-border) !important;
     transform: scale(1.15);
 }
+
+/* 
+ * ============================================================================
+ * Dynamic Icon Variant Toggling (Outlined vs. Filled)
+ * ============================================================================
+ * Support responsiveness for "dynamic" icon variants where both outline and 
+ * filled SVGs are loaded simultaneously. Hide the filled icons by default,
+ * showing outline state, and swap them seamlessly when focused, hovered, 
+ * or when the action button itself is marked active.
+ * ============================================================================
+ */
+.details-actions .btn .icon-filled,
+.details-actions .btn-icon .icon-filled {
+    display: none;
+}
+
+.details-actions .btn:focus .icon-filled,
+.details-actions .btn.focused .icon-filled,
+.details-actions .btn:hover .icon-filled,
+.details-actions .btn-icon:focus .icon-filled,
+.details-actions .btn-icon.focused .icon-filled,
+.details-actions .btn-icon:hover .icon-filled,
+.details-actions .btn-icon.active .icon-filled {
+    display: inline-block;
+}
+
+.details-actions .btn:focus .icon-outline,
+.details-actions .btn.focused .icon-outline,
+.details-actions .btn:hover .icon-outline,
+.details-actions .btn-icon:focus .icon-outline,
+.details-actions .btn-icon.focused .icon-outline,
+.details-actions .btn-icon:hover .icon-outline,
+.details-actions .btn-icon.active .icon-outline {
+    display: none;
+}
+
 
 /* 
  * Pulse Animation Trigger:
@@ -935,6 +987,41 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     align-items: center;
     /* REDUNDANT: Container level */
     /* transform: translateZ(0); */
+}
+
+/*
+ * ── FAVORITE BUTTON DYNAMIC ICON STATES ──────────────────────────────────────
+ * Manages the transitions between outlined and filled states for the favorite
+ * heart icon. To align with Apple HIG rules, unfocused non-favorites remain
+ * outlined, while hover/focus/active states instantly swap to the premium filled
+ * SVG representation for clear interactive feedback.
+ */
+
+/* By default, hide the filled SVG to allow the outlined structure to show */
+.favorite-btn .icon-filled {
+    display: none;
+}
+
+/* 
+ * Display the filled SVG when the button is active (marked as favorite)
+ * or when the user hovers or focuses the button.
+ */
+.favorite-btn.active .icon-filled,
+.favorite-btn:focus .icon-filled,
+.favorite-btn.focused .icon-filled,
+.favorite-btn:hover .icon-filled {
+    display: inline-block;
+}
+
+/*
+ * Hide the outline SVG when the filled SVG is shown to prevent rendering
+ * duplicate icons concurrently.
+ */
+.favorite-btn.active .icon-outline,
+.favorite-btn:focus .icon-outline,
+.favorite-btn.focused .icon-outline,
+.favorite-btn:hover .icon-outline {
+    display: none;
 }
 
 .btn-icon-text {

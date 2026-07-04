@@ -28,7 +28,9 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
-import { settingsIcons } from '../utils/Icons.js';
+import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
+import { pinManager } from '../utils/PinManager.js';
+import { pinDialog } from '../ui/PinDialog.js';
 
 const log = logger.create('SettingsPage');
 
@@ -279,24 +281,67 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Icon Style Setting (Commented out for future styles extension)
+                
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="IconStyle">Icon Style</span>
                         <span class="setting-description" data-i18n="IconStyleDescription">Choose a visual style theme for icons across the app.</span>
                     </div>
                     <div class="setting-control">
-                        \${this._renderDropdown(
-                            'icon-style-select',
-                            [
-                                { value: 'default', label: 'Default' }
-                            ],
-                            storage.getItem('pref:iconStyle') || 'default'
-                        )}
+                        ${this._renderDropdown(
+            'icon-style-select',
+            [
+                { value: 'default', label: 'Default' },
+                { value: 'material3', label: 'Material 3' }
+            ],
+            storage.getItem('pref:iconStyle') || 'default'
+        )}
                     </div>
                 </div>
-                -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="IconVariant">Icon Variant Preference</span>
+                        <span class="setting-description" data-i18n="IconVariantDescription">Select whether icons should be outlined, filled, or change dynamically based on focus state.</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                /*
+                 * Retrieve the support capability of the active icon set (e.g. 'both' or 'filled').
+                 * If a style theme only supports one visual format, we limit the dropdown options
+                 * list to that specific format but keep it interactively reachable and clickable
+                 * so the user can inspect the setting rather than it being disabled/unreachable.
+                 */
+                const supports = getSupportedStyles();
+                let options = [];
 
+                // Determine available dropdown options based on current style capabilities
+                if (supports === 'both') {
+                    options = [
+                        { value: 'dynamic', label: 'Dynamic (Outlined/Filled)' },
+                        { value: 'outlined', label: 'Always Outlined' },
+                        { value: 'filled', label: 'Always Filled' }
+                    ];
+                } else if (supports === 'filled') {
+                    options = [{ value: 'filled', label: 'Always Filled' }];
+                } else if (supports === 'outlined') {
+                    options = [{ value: 'outlined', label: 'Always Outlined' }];
+                }
+
+                // If only a single state is supported, fallback to it directly
+                const activeVal =
+                    supports === 'both' ? storage.getItem('pref:iconVariant') || 'dynamic' : supports;
+
+                /*
+                 * Render the dropdown element dynamically.
+                 * We pass false for the disabled parameter so that the setting remains accessible,
+                 * allowing users to navigate to it, click it, and open it.
+                 */
+                return this._renderDropdown('icon-variant-select', options, activeVal, false);
+            })()}
+                    </div>
+                </div>
+                
+                
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LayoutDirection">${i18n.t('LayoutDirection')}</span>
@@ -304,14 +349,14 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'layout-direction-select',
-            [
-                { value: 'auto', label: i18n.t('DirectionAuto', ['Auto']) },
-                { value: 'ltr', label: i18n.t('DirectionLTR', ['Left-to-Right']) },
-                { value: 'rtl', label: i18n.t('DirectionRTL', ['Right-to-Left']) }
-            ],
-            storage.getItem('layout_direction') || 'auto'
-        )}
+                'layout-direction-select',
+                [
+                    { value: 'auto', label: i18n.t('DirectionAuto', ['Auto']) },
+                    { value: 'ltr', label: i18n.t('DirectionLTR', ['Left-to-Right']) },
+                    { value: 'rtl', label: i18n.t('DirectionRTL', ['Right-to-Left']) }
+                ],
+                storage.getItem('layout_direction') || 'auto'
+            )}
                     </div>
                 </div>
                         
@@ -322,34 +367,39 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'ui-font-select',
-            [
-                { value: 'poppins', label: i18n.t('ModernPoppins') },
-                {
-                    value: 'system',
-                    label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
-                },
-                { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
-                { value: 'roboto', label: i18n.t('FontRoboto') },
-                { value: 'google', label: i18n.t('FontGoogleSans') },
-                { value: 'typewriter', label: i18n.t('Typewriter') },
-                { value: 'print', label: i18n.t('Print') },
-                { value: 'console', label: i18n.t('Console') },
-                { value: 'cursive', label: i18n.t('Cursive') },
-                { value: 'casual', label: i18n.t('Casual') },
-                { value: 'smallcaps', label: i18n.t('SmallCaps') },
-                { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
-                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
-                { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
-                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
-                { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
-                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
-                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
-                { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
-                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
-            ],
-            layoutManager.getUiFont()
-        )}
+                'ui-font-select',
+                [
+                    { value: 'poppins', label: i18n.t('ModernPoppins') },
+                    {
+                        value: 'system',
+                        label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
+                    },
+                    { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
+                    { value: 'roboto', label: i18n.t('FontRoboto') },
+                    { value: 'google', label: i18n.t('FontGoogleSans') },
+                    { value: 'typewriter', label: i18n.t('Typewriter') },
+                    { value: 'print', label: i18n.t('Print') },
+                    { value: 'console', label: i18n.t('Console') },
+                    { value: 'cursive', label: i18n.t('Cursive') },
+                    { value: 'casual', label: i18n.t('Casual') },
+                    { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                    { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                    { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                    { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                    { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                    { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                    { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
+                    { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                    { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' },
+                    {
+                        value: 'zen-kaku-gothic-new',
+                        label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New'
+                    },
+                    { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
+                    { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
+                ],
+                layoutManager.getUiFont()
+            )}
                     </div>
                 </div>
 
@@ -360,24 +410,24 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'text-scale-select',
-            [
-                { value: '0.8', label: '80%' },
-                { value: '0.85', label: '85%' },
-                { value: '0.9', label: '90%' },
-                { value: '0.95', label: '95%' },
-                { value: '1', label: 'Normal (100%)' },
-                { value: '1.05', label: '105%' },
-                { value: '1.1', label: '110%' },
-                { value: '1.15', label: '115%' },
-                { value: '1.2', label: '120%' },
-                { value: '1.25', label: '125%' },
-                { value: '1.3', label: '130%' },
-                { value: '1.35', label: '135%' },
-                { value: '1.4', label: '140%' }
-            ],
-            layoutManager.getTextScale().toString()
-        )}
+                'text-scale-select',
+                [
+                    { value: '0.8', label: '80%' },
+                    { value: '0.85', label: '85%' },
+                    { value: '0.9', label: '90%' },
+                    { value: '0.95', label: '95%' },
+                    { value: '1', label: 'Normal (100%)' },
+                    { value: '1.05', label: '105%' },
+                    { value: '1.1', label: '110%' },
+                    { value: '1.15', label: '115%' },
+                    { value: '1.2', label: '120%' },
+                    { value: '1.25', label: '125%' },
+                    { value: '1.3', label: '130%' },
+                    { value: '1.35', label: '135%' },
+                    { value: '1.4', label: '140%' }
+                ],
+                layoutManager.getTextScale().toString()
+            )}
                     </div>
                 </div>
 
@@ -391,27 +441,27 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'theme-mode-select',
-            [
-                // ====================================================================
-                // Ambient Glow Theme Mode (Mac/Apple TV inspired dynamic accent gradients)
-                // ====================================================================
-                { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' },
+                'theme-mode-select',
+                [
+                    // ====================================================================
+                    // Ambient Glow Theme Mode (Mac/Apple TV inspired dynamic accent gradients)
+                    // ====================================================================
+                    { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' },
 
-                // Tinted background theme mapping closely with specific selected colors.
-                { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
+                    // Tinted background theme mapping closely with specific selected colors.
+                    { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
 
-                // Black OLED theme for extreme battery saving and deep contrast profiles.
-                { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
+                    // Black OLED theme for extreme battery saving and deep contrast profiles.
+                    { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
 
-                // Traditional Dark Theme with deep charcoal shades.
-                { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
+                    // Traditional Dark Theme with deep charcoal shades.
+                    { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
 
-                // Traditional Light Theme utilizing classic paper/white gradients.
-                { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
-            ],
-            layoutManager.getThemeMode()
-        )}
+                    // Traditional Light Theme utilizing classic paper/white gradients.
+                    { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
+                ],
+                layoutManager.getThemeMode()
+            )}
                     </div>
                 </div>
 
@@ -434,19 +484,22 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'button-style-select',
-            [
-                { value: 'theme-default', label: i18n.t('BtnStyleThemeDefault') || 'Theme Accent (Default)' },
-                { value: 'theme-inverted', label: i18n.t('BtnStyleThemeInverted') || 'Theme Inverted' },
-                { value: 'monochrome-bw', label: i18n.t('BtnStyleMonoBW') || 'White & Black' },
-                { value: 'monochrome-wb', label: i18n.t('BtnStyleMonoWB') || 'Black & White' },
-                { value: 'white-accent', label: i18n.t('BtnStyleWhiteAccent') || 'White & Accent' },
-                { value: 'black-accent', label: i18n.t('BtnStyleBlackAccent') || 'Black & Accent' },
-                { value: 'accent-white', label: i18n.t('BtnStyleAccentWhite') || 'Accent & White' },
-                { value: 'accent-black', label: i18n.t('BtnStyleAccentBlack') || 'Accent & Black' }
-            ],
-            layoutManager.getButtonStyle()
-        )}
+                'button-style-select',
+                [
+                    {
+                        value: 'theme-default',
+                        label: i18n.t('BtnStyleThemeDefault') || 'Theme Accent (Default)'
+                    },
+                    { value: 'theme-inverted', label: i18n.t('BtnStyleThemeInverted') || 'Theme Inverted' },
+                    { value: 'monochrome-bw', label: i18n.t('BtnStyleMonoBW') || 'White & Black' },
+                    { value: 'monochrome-wb', label: i18n.t('BtnStyleMonoWB') || 'Black & White' },
+                    { value: 'white-accent', label: i18n.t('BtnStyleWhiteAccent') || 'White & Accent' },
+                    { value: 'black-accent', label: i18n.t('BtnStyleBlackAccent') || 'Black & Accent' },
+                    { value: 'accent-white', label: i18n.t('BtnStyleAccentWhite') || 'Accent & White' },
+                    { value: 'accent-black', label: i18n.t('BtnStyleAccentBlack') || 'Accent & Black' }
+                ],
+                layoutManager.getButtonStyle()
+            )}
                     </div>
                 </div>
 
@@ -470,16 +523,16 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'focus-border-style-select',
-            [
-                { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
-                { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
-                { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
-                { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
-                { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
-            ],
-            layoutManager.getFocusBorderStyle()
-        )}
+                'focus-border-style-select',
+                [
+                    { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
+                    { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
+                    { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
+                    { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
+                    { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
+                ],
+                layoutManager.getFocusBorderStyle()
+            )}
                     </div>
                 </div>
 
@@ -490,16 +543,16 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'hover-border-style-select',
-            [
-                { value: 'white', label: i18n.t('HoverBorderWhite') || 'White' },
-                { value: 'follow-theme', label: i18n.t('HoverBorderFollowTheme') || 'Follow Theme' },
-                { value: 'inverted', label: i18n.t('HoverBorderInverted') || 'Inverted' },
-                { value: 'black', label: i18n.t('HoverBorderBlack') || 'Black' },
-                { value: 'hidden', label: i18n.t('HoverBorderHidden') || 'Hidden' }
-            ],
-            layoutManager.getHoverBorderStyle()
-        )}
+                'hover-border-style-select',
+                [
+                    { value: 'white', label: i18n.t('HoverBorderWhite') || 'White' },
+                    { value: 'follow-theme', label: i18n.t('HoverBorderFollowTheme') || 'Follow Theme' },
+                    { value: 'inverted', label: i18n.t('HoverBorderInverted') || 'Inverted' },
+                    { value: 'black', label: i18n.t('HoverBorderBlack') || 'Black' },
+                    { value: 'hidden', label: i18n.t('HoverBorderHidden') || 'Hidden' }
+                ],
+                layoutManager.getHoverBorderStyle()
+            )}
                     </div>
                 </div>
 
@@ -510,15 +563,15 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'sidebar-selected-color-select',
-            [
-                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' },
-                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
-                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
-                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' }
-            ],
-            layoutManager.getSidebarSelectedColor()
-        )}
+                'sidebar-selected-color-select',
+                [
+                    { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' },
+                    { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
+                    { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                    { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' }
+                ],
+                layoutManager.getSidebarSelectedColor()
+            )}
                     </div>
                 </div>
 
@@ -529,15 +582,15 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'sidebar-unselected-color-select',
-            [
-                { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
-                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
-                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' },
-                { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' }
-            ],
-            layoutManager.getSidebarUnselectedColor()
-        )}
+                'sidebar-unselected-color-select',
+                [
+                    { value: 'grey', label: i18n.t('SidebarColorGrey') || 'Grey' },
+                    { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                    { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' },
+                    { value: 'accent', label: i18n.t('SidebarColorAccent') || 'Accent' }
+                ],
+                layoutManager.getSidebarUnselectedColor()
+            )}
                     </div>
                 </div>
 
@@ -580,16 +633,16 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-logo-size-select',
-            [
-                { value: 'small', label: i18n.t('Small') || 'Small' },
-                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
-                { value: 'large', label: i18n.t('Large') || 'Large' },
-                { value: 'extralarge', label: i18n.t('ExtraLarge') || 'Extra Large' },
-                { value: 'xxl', label: i18n.t('DoubleExtraLarge') || 'XXL' }
-            ],
-            PlayerSettings.get('osdLogoSize') || 'medium'
-        )}
+                'osd-logo-size-select',
+                [
+                    { value: 'small', label: i18n.t('Small') || 'Small' },
+                    { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                    { value: 'large', label: i18n.t('Large') || 'Large' },
+                    { value: 'extralarge', label: i18n.t('ExtraLarge') || 'Extra Large' },
+                    { value: 'xxl', label: i18n.t('DoubleExtraLarge') || 'XXL' }
+                ],
+                PlayerSettings.get('osdLogoSize') || 'medium'
+            )}
                     </div>
                 </div>
 
@@ -628,13 +681,13 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-time-display-select',
-            [
-                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
-                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
-            ],
-            PlayerSettings.get('osdTimeDisplayMode') || 'total'
-        )}
+                'osd-time-display-select',
+                [
+                    { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
+                    { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
+                ],
+                PlayerSettings.get('osdTimeDisplayMode') || 'total'
+            )}
                     </div>
                 </div>
 
@@ -647,12 +700,12 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
-            'osd-track-menu-bg-opacity',
-            PlayerSettings.get('osdTrackMenuBgOpacity') ?? 85,
-            0,
-            100,
-            5
-        )}
+                'osd-track-menu-bg-opacity',
+                PlayerSettings.get('osdTrackMenuBgOpacity') ?? 85,
+                0,
+                100,
+                5
+            )}
                     </div>
                 </div>
 
@@ -663,20 +716,20 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-button-style-select',
-            [
-                { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
-                { value: 'theme-default', label: i18n.t('BtnStyleThemeDefault') || 'Theme Default' },
-                { value: 'theme-inverted', label: i18n.t('BtnStyleThemeInverted') || 'Theme Inverted' },
-                { value: 'monochrome-bw', label: i18n.t('BtnStyleMonoBW') || 'White & Black' },
-                { value: 'monochrome-wb', label: i18n.t('BtnStyleMonoWB') || 'Black & White' },
-                { value: 'white-accent', label: i18n.t('BtnStyleWhiteAccent') || 'White & Accent' },
-                { value: 'black-accent', label: i18n.t('BtnStyleBlackAccent') || 'Black & Accent' },
-                { value: 'accent-white', label: i18n.t('BtnStyleAccentWhite') || 'Accent & White' },
-                { value: 'accent-black', label: i18n.t('BtnStyleAccentBlack') || 'Accent & Black' }
-            ],
-            layoutManager.getOsdButtonStyle()
-        )}
+                'osd-button-style-select',
+                [
+                    { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
+                    { value: 'theme-default', label: i18n.t('BtnStyleThemeDefault') || 'Theme Default' },
+                    { value: 'theme-inverted', label: i18n.t('BtnStyleThemeInverted') || 'Theme Inverted' },
+                    { value: 'monochrome-bw', label: i18n.t('BtnStyleMonoBW') || 'White & Black' },
+                    { value: 'monochrome-wb', label: i18n.t('BtnStyleMonoWB') || 'Black & White' },
+                    { value: 'white-accent', label: i18n.t('BtnStyleWhiteAccent') || 'White & Accent' },
+                    { value: 'black-accent', label: i18n.t('BtnStyleBlackAccent') || 'Black & Accent' },
+                    { value: 'accent-white', label: i18n.t('BtnStyleAccentWhite') || 'Accent & White' },
+                    { value: 'accent-black', label: i18n.t('BtnStyleAccentBlack') || 'Accent & Black' }
+                ],
+                layoutManager.getOsdButtonStyle()
+            )}
                     </div>
                 </div>
 
@@ -687,17 +740,17 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-focus-border-style-select',
-            [
-                { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
-                { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
-                { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
-                { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
-                { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
-                { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
-            ],
-            layoutManager.getOsdFocusBorderStyle()
-        )}
+                'osd-focus-border-style-select',
+                [
+                    { value: 'follow-global', label: i18n.t('OsdStyleFollowGlobal') || 'Follow Global' },
+                    { value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' },
+                    { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' },
+                    { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' },
+                    { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' },
+                    { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }
+                ],
+                layoutManager.getOsdFocusBorderStyle()
+            )}
                     </div>
                 </div>
 
@@ -708,18 +761,18 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-button-shape-select',
-            [
-                { value: 'circle', label: i18n.t('OsdShapeCircle') || 'Circle' },
-                { value: 'rounded-square', label: i18n.t('OsdShapeRoundedSquare') || 'Rounded Square' },
-                { value: 'squircle', label: i18n.t('OsdShapeSquircle') || 'Squircle' },
-                { value: 'organic-leaf', label: i18n.t('OsdShapeLeaf') || 'Leaf Shape' },
-                { value: 'hexagon', label: i18n.t('OsdShapeHexagon') || 'Hexagon' },
-                { value: 'outline', label: i18n.t('OsdShapeOutline') || 'Outline' },
-                { value: 'icon-only', label: i18n.t('OsdShapeIconOnly') || 'Icon Only' }
-            ],
-            layoutManager.getOsdButtonShape()
-        )}
+                'osd-button-shape-select',
+                [
+                    { value: 'circle', label: i18n.t('OsdShapeCircle') || 'Circle' },
+                    { value: 'rounded-square', label: i18n.t('OsdShapeRoundedSquare') || 'Rounded Square' },
+                    { value: 'squircle', label: i18n.t('OsdShapeSquircle') || 'Squircle' },
+                    { value: 'organic-leaf', label: i18n.t('OsdShapeLeaf') || 'Leaf Shape' },
+                    { value: 'hexagon', label: i18n.t('OsdShapeHexagon') || 'Hexagon' },
+                    { value: 'outline', label: i18n.t('OsdShapeOutline') || 'Outline' },
+                    { value: 'icon-only', label: i18n.t('OsdShapeIconOnly') || 'Icon Only' }
+                ],
+                layoutManager.getOsdButtonShape()
+            )}
                     </div>
                 </div>
 
@@ -730,14 +783,17 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-unfocused-button-style-select',
-            [
-                { value: 'icon-only', label: i18n.t('OsdUnfocusedStyleIconOnly') || 'Icon Only' },
-                { value: 'outline', label: i18n.t('OsdUnfocusedStyleOutline') || 'Outline' },
-                { value: 'semi-transparent', label: i18n.t('OsdUnfocusedStyleSemiTransparent') || 'Semi-Transparent' }
-            ],
-            layoutManager.getOsdUnfocusedButtonStyle()
-        )}
+                'osd-unfocused-button-style-select',
+                [
+                    { value: 'icon-only', label: i18n.t('OsdUnfocusedStyleIconOnly') || 'Icon Only' },
+                    { value: 'outline', label: i18n.t('OsdUnfocusedStyleOutline') || 'Outline' },
+                    {
+                        value: 'semi-transparent',
+                        label: i18n.t('OsdUnfocusedStyleSemiTransparent') || 'Semi-Transparent'
+                    }
+                ],
+                layoutManager.getOsdUnfocusedButtonStyle()
+            )}
                     </div>
                 </div>
 
@@ -748,15 +804,15 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-seekbar-thumb-color-select',
-            [
-                { value: 'white', label: i18n.t('OsdThumbWhite') || 'White' },
-                { value: 'black', label: i18n.t('OsdThumbBlack') || 'Black' },
-                { value: 'theme-accent', label: i18n.t('OsdThumbAccent') || 'Theme Accent' },
-                { value: 'theme-inverted', label: i18n.t('OsdThumbInverted') || 'Theme Inverted' }
-            ],
-            layoutManager.getOsdSeekBarThumbColor()
-        )}
+                'osd-seekbar-thumb-color-select',
+                [
+                    { value: 'white', label: i18n.t('OsdThumbWhite') || 'White' },
+                    { value: 'black', label: i18n.t('OsdThumbBlack') || 'Black' },
+                    { value: 'theme-accent', label: i18n.t('OsdThumbAccent') || 'Theme Accent' },
+                    { value: 'theme-inverted', label: i18n.t('OsdThumbInverted') || 'Theme Inverted' }
+                ],
+                layoutManager.getOsdSeekBarThumbColor()
+            )}
                     </div>
                 </div>
 
@@ -767,15 +823,15 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'osd-seekbar-progress-color-select',
-            [
-                { value: 'theme-accent', label: i18n.t('OsdThumbAccent') || 'Theme Accent' },
-                { value: 'white', label: i18n.t('OsdThumbWhite') || 'White' },
-                { value: 'black', label: i18n.t('OsdThumbBlack') || 'Black' },
-                { value: 'theme-inverted', label: i18n.t('OsdThumbInverted') || 'Theme Inverted' }
-            ],
-            layoutManager.getOsdSeekBarProgressColor()
-        )}
+                'osd-seekbar-progress-color-select',
+                [
+                    { value: 'theme-accent', label: i18n.t('OsdThumbAccent') || 'Theme Accent' },
+                    { value: 'white', label: i18n.t('OsdThumbWhite') || 'White' },
+                    { value: 'black', label: i18n.t('OsdThumbBlack') || 'Black' },
+                    { value: 'theme-inverted', label: i18n.t('OsdThumbInverted') || 'Theme Inverted' }
+                ],
+                layoutManager.getOsdSeekBarProgressColor()
+            )}
                     </div>
                 </div>
                 
@@ -789,19 +845,19 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'image-quality-select',
-            [
-                { value: 'low', label: i18n.t('Low') },
-                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
-                { value: 'medium', label: i18n.t('Medium') },
-                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
-                { value: 'high', label: i18n.t('High') },
-                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
-                { value: 'ultra', label: i18n.t('Ultra') },
-                { value: 'original', label: i18n.t('Original') }
-            ],
-            imageService.getPreset() || 'medium'
-        )}
+                'image-quality-select',
+                [
+                    { value: 'low', label: i18n.t('Low') },
+                    { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
+                    { value: 'medium', label: i18n.t('Medium') },
+                    { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
+                    { value: 'high', label: i18n.t('High') },
+                    { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
+                    { value: 'ultra', label: i18n.t('Ultra') },
+                    { value: 'original', label: i18n.t('Original') }
+                ],
+                imageService.getPreset() || 'medium'
+            )}
                     </div>
                 </div>
 
@@ -812,20 +868,20 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'details-image-quality-select',
-            [
-                { value: 'default', label: i18n.t('Default') || 'Default' },
-                { value: 'low', label: i18n.t('Low') || 'Low' },
-                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
-                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
-                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
-                { value: 'high', label: i18n.t('High') || 'High' },
-                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
-                { value: 'ultra', label: i18n.t('Ultra') },
-                { value: 'original', label: i18n.t('Original') }
-            ],
-            imageService.getDetailsPreset() || 'very-high'
-        )}
+                'details-image-quality-select',
+                [
+                    { value: 'default', label: i18n.t('Default') || 'Default' },
+                    { value: 'low', label: i18n.t('Low') || 'Low' },
+                    { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
+                    { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                    { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
+                    { value: 'high', label: i18n.t('High') || 'High' },
+                    { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
+                    { value: 'ultra', label: i18n.t('Ultra') },
+                    { value: 'original', label: i18n.t('Original') }
+                ],
+                imageService.getDetailsPreset() || 'very-high'
+            )}
                     </div>
                 </div>
 
@@ -839,14 +895,14 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'time-format-select',
-            [
-                { value: '12h', label: i18n.t('TimeFormat12h') || '12-hour' },
-                { value: '24h', label: i18n.t('TimeFormat24h') || '24-hour' },
-                { value: 'none', label: i18n.t('TimeFormatNone') || 'Hidden' }
-            ],
-            PlayerSettings.get('timeFormat') || '12h'
-        )}
+                'time-format-select',
+                [
+                    { value: '12h', label: i18n.t('TimeFormat12h') || '12-hour' },
+                    { value: '24h', label: i18n.t('TimeFormat24h') || '24-hour' },
+                    { value: 'none', label: i18n.t('TimeFormatNone') || 'Hidden' }
+                ],
+                PlayerSettings.get('timeFormat') || '12h'
+            )}
                     </div>
                 </div>
 
@@ -860,16 +916,16 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'screensaver-delay-select',
-            [
-                { value: 0, label: i18n.t('Never') || 'Never' },
-                { value: 60, label: i18n.t('1Minute') || '1 Minute' },
-                { value: 300, label: i18n.t('5Minutes') || '5 Minutes' },
-                { value: 600, label: i18n.t('10Minutes') || '10 Minutes' },
-                { value: 1800, label: i18n.t('30Minutes') || '30 Minutes' }
-            ],
-            storage.getItem('pref:screensaverDelay') || 0
-        )}
+                'screensaver-delay-select',
+                [
+                    { value: 0, label: i18n.t('Never') || 'Never' },
+                    { value: 60, label: i18n.t('1Minute') || '1 Minute' },
+                    { value: 300, label: i18n.t('5Minutes') || '5 Minutes' },
+                    { value: 600, label: i18n.t('10Minutes') || '10 Minutes' },
+                    { value: 1800, label: i18n.t('30Minutes') || '30 Minutes' }
+                ],
+                storage.getItem('pref:screensaverDelay') || 0
+            )}
                     </div>
                 </div>
 
@@ -880,14 +936,14 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'screensaver-type-select',
-            [
-                { value: 'backdrop', label: i18n.t('Backdrop') || 'Backdrop' },
-                { value: 'logo', label: i18n.t('Logo') || 'Logo' },
-                { value: 'black', label: i18n.t('ScreensaverBlack') || 'Black' }
-            ],
-            storage.getItem('pref:screensaverType') || 'backdrop'
-        )}
+                'screensaver-type-select',
+                [
+                    { value: 'backdrop', label: i18n.t('Backdrop') || 'Backdrop' },
+                    { value: 'logo', label: i18n.t('Logo') || 'Logo' },
+                    { value: 'black', label: i18n.t('ScreensaverBlack') || 'Black' }
+                ],
+                storage.getItem('pref:screensaverType') || 'backdrop'
+            )}
                     </div>
                 </div>
 
@@ -898,21 +954,21 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'backdrop-dimmer-select',
-            [
-                { value: '0', label: i18n.t('Off') || 'Off' },
-                { value: '0.1', label: '10%' },
-                { value: '0.2', label: '20%' },
-                { value: '0.3', label: '30%' },
-                { value: '0.4', label: '40%' },
-                { value: '0.5', label: '50%' },
-                { value: '0.6', label: '60%' },
-                { value: '0.7', label: '70%' },
-                { value: '0.8', label: '80%' },
-                { value: '0.9', label: '90%' }
-            ],
-            storage.getItem('pref:backdropDimmer') || '0.3'
-        )}
+                'backdrop-dimmer-select',
+                [
+                    { value: '0', label: i18n.t('Off') || 'Off' },
+                    { value: '0.1', label: '10%' },
+                    { value: '0.2', label: '20%' },
+                    { value: '0.3', label: '30%' },
+                    { value: '0.4', label: '40%' },
+                    { value: '0.5', label: '50%' },
+                    { value: '0.6', label: '60%' },
+                    { value: '0.7', label: '70%' },
+                    { value: '0.8', label: '80%' },
+                    { value: '0.9', label: '90%' }
+                ],
+                storage.getItem('pref:backdropDimmer') || '0.3'
+            )}
                     </div>
                 </div>
 
@@ -951,27 +1007,27 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'vertical-scroll-mode-select',
-            [
-                /* -------------------------------------------------------------
-                 * Normal (Current) scroll mode uses standard custom JS RAF loops
-                 * ------------------------------------------------------------- */
-                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Normal (Current)' },
-                /* -------------------------------------------------------------
-                 * Smooth (Native) mode delegates scrolling directly to the browser
-                 * ------------------------------------------------------------- */
-                { value: 'native', label: i18n.t('ScrollModeNative') || 'Smooth (Native)' },
-                /* -------------------------------------------------------------
-                 * Fast (GPU Accelerated) mode transforms page contents using CSS
-                 * ------------------------------------------------------------- */
-                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'Fast (GPU Accelerated)' },
-                /* -------------------------------------------------------------
-                 * Instant (No Animation) mode snaps content immediately to target
-                 * ------------------------------------------------------------- */
-                { value: 'instant', label: i18n.t('ScrollModeInstant') || 'Instant (No Animation)' }
-            ],
-            storage.getItem('pref:verticalScrollMode') || 'native'
-        )}
+                'vertical-scroll-mode-select',
+                [
+                    /* -------------------------------------------------------------
+                     * Normal (Current) scroll mode uses standard custom JS RAF loops
+                     * ------------------------------------------------------------- */
+                    { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Normal (Current)' },
+                    /* -------------------------------------------------------------
+                     * Smooth (Native) mode delegates scrolling directly to the browser
+                     * ------------------------------------------------------------- */
+                    { value: 'native', label: i18n.t('ScrollModeNative') || 'Smooth (Native)' },
+                    /* -------------------------------------------------------------
+                     * Fast (GPU Accelerated) mode transforms page contents using CSS
+                     * ------------------------------------------------------------- */
+                    { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'Fast (GPU Accelerated)' },
+                    /* -------------------------------------------------------------
+                     * Instant (No Animation) mode snaps content immediately to target
+                     * ------------------------------------------------------------- */
+                    { value: 'instant', label: i18n.t('ScrollModeInstant') || 'Instant (No Animation)' }
+                ],
+                storage.getItem('pref:verticalScrollMode') || 'native'
+            )}
                     </div>
                 </div>
                 
@@ -982,16 +1038,16 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-            'library-page-size-select',
-            [
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 75, label: '75' },
-                { value: 100, label: '100' },
-                { value: 150, label: '150' }
-            ],
-            storage.getItem('pref:libraryPageSize') || 100
-        )}
+                'library-page-size-select',
+                [
+                    { value: 25, label: '25' },
+                    { value: 50, label: '50' },
+                    { value: 75, label: '75' },
+                    { value: 100, label: '100' },
+                    { value: 150, label: '150' }
+                ],
+                storage.getItem('pref:libraryPageSize') || 100
+            )}
                     </div>
                 </div>
 
@@ -1049,6 +1105,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HomeScreenCache">${i18n.t('HomeScreenCache') || 'Enable Home Screen Caching'}</span>
+                        <span class="setting-description" data-i18n="HomeScreenCacheDescription">${i18n.t('HomeScreenCacheDescription') || 'Cache home screen data between pages to make back-navigation instant. Turn off if you frequently switch users or servers.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:homeScreenCache') !== 'false' ? 'active' : ''}"
+                                id="toggle-home-screen-cache"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelSimpleLoader">${i18n.t('LabelSimpleLoader') || 'Simple Loading Indicator'}</span>
                         <span class="setting-description" data-i18n="SimpleLoaderDescription">${i18n.t('SimpleLoaderDescription') || 'Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.'}</span>
                     </div>
@@ -1096,21 +1165,21 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'theme-song-volume-select',
-                            [
-                                { value: '0.1', label: '10%' },
-                                { value: '0.2', label: '20%' },
-                                { value: '0.3', label: '30%' },
-                                { value: '0.4', label: '40%' },
-                                { value: '0.5', label: '50%' },
-                                { value: '0.6', label: '60%' },
-                                { value: '0.7', label: '70%' },
-                                { value: '0.8', label: '80%' },
-                                { value: '0.9', label: '90%' },
-                                { value: '1.0', label: '100%' }
-                            ],
-                            storage.getItem('pref:themeSongVolume') || '0.3'
-                        )}
+                'theme-song-volume-select',
+                [
+                    { value: '0.1', label: '10%' },
+                    { value: '0.2', label: '20%' },
+                    { value: '0.3', label: '30%' },
+                    { value: '0.4', label: '40%' },
+                    { value: '0.5', label: '50%' },
+                    { value: '0.6', label: '60%' },
+                    { value: '0.7', label: '70%' },
+                    { value: '0.8', label: '80%' },
+                    { value: '0.9', label: '90%' },
+                    { value: '1.0', label: '100%' }
+                ],
+                storage.getItem('pref:themeSongVolume') || '0.3'
+            )}
                     </div>
                 </div>
             </div>
@@ -1448,6 +1517,29 @@ class SettingsPage extends Page {
                         <!-- Sleek fluid iOS-style toggle matching general appearance preferences, off by default -->
                         <button class="toggle-switch ${storage.getItem('pref:hideOriginalTitle') === 'true' ? 'active' : ''}" 
                                 id="toggle-hide-original-title" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!--
+                  =============================================================================
+                  Apple Human Interface Guidelines: Layout Settings - Secondary Title Contrast
+                  =============================================================================
+                  Allows TV users to toggle the color scheme of the secondary details title 
+                  (episode number and show name) between the primary accent color and the 
+                  more subtle secondary text color (--jf-text-secondary) for lower distraction.
+                  =============================================================================
+                -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSecondaryTitleSecondaryColor">${i18n.t('LabelSecondaryTitleSecondaryColor') || 'Use Secondary Color for Episode Info'}</span>
+                        <span class="setting-description" data-i18n="SecondaryTitleSecondaryColorDescription">${i18n.t('SecondaryTitleSecondaryColorDescription') || 'Use the secondary text color for the episode number and show name secondary title on the details page instead of the primary accent color.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <!-- Tactile fluid toggle switch matching Apple & TV navigation design guidelines -->
+                        <button class="toggle-switch ${storage.getItem('pref:secondaryTitleSecondaryColor') === 'true' ? 'active' : ''}" 
+                                id="toggle-secondary-title-color" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -1985,6 +2077,20 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                           <button class="toggle-switch ${storage.getItem('pref:showCollapsedLibraryIcons') === 'true' ? 'active' : ''}" 
                                   id="toggle-show-collapsed-library-icons" 
+                                  tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hide Sidebar Library Header Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideSidebarLibraryHeader">${i18n.t('HideSidebarLibraryHeader') || 'Hide Sidebar Library Header'}</span>
+                        <span class="setting-description" data-i18n="HideSidebarLibraryHeaderDescription">${i18n.t('HideSidebarLibraryHeaderDescription') || 'Hide the "My Media" library group title and its divider spacing in the sidebar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                          <button class="toggle-switch ${storage.getItem('pref:hideSidebarLibraryHeader') === 'true' ? 'active' : ''}" 
+                                  id="toggle-hide-sidebar-library-header" 
                                   tabindex="0">
                         </button>
                     </div>
@@ -2795,11 +2901,15 @@ class SettingsPage extends Page {
                 'transcode-audio-codec-select',
                 [
                     { value: 'auto', label: i18n.t('TranscodeCodecAuto') || 'Auto (Prefer E-AC3)' },
-                    { value: 'prefer_ac3', label: i18n.t('TranscodeCodecPreferAc3') || 'Prefer AC3 (with AAC fallback)' },
+                    {
+                        value: 'prefer_ac3',
+                        label: i18n.t('TranscodeCodecPreferAc3') || 'Prefer AC3 (with AAC fallback)'
+                    },
                     { value: 'prefer_aac', label: i18n.t('TranscodeCodecPreferAac') || 'Prefer AAC' },
                     { value: 'force_eac3', label: i18n.t('TranscodeCodecForceEac3') || 'Only E-AC3' },
                     { value: 'force_ac3', label: i18n.t('TranscodeCodecForceAc3') || 'Only AC3' },
-                    { value: 'force_aac', label: i18n.t('TranscodeCodecForceAac') || 'Only AAC' }
+                    { value: 'force_aac', label: i18n.t('TranscodeCodecForceAac') || 'Only AAC' },
+                    { value: 'force_mp3', label: i18n.t('TranscodeCodecForceMp3') || 'Only MP3' }
                 ],
                 PlayerSettings.get('transcodeAudioCodec') || 'auto'
             )}
@@ -2823,6 +2933,20 @@ class SettingsPage extends Page {
                 'eac3-force-select',
                 forceStateOptions,
                 PlayerSettings.get('enableEac3') || 'auto'
+            )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableMP2">${i18n.t('EnableMP2') || 'MP2 Audio Force State'}</span>
+                        <span class="setting-description" data-i18n="EnableMP2Description">${supportStatus(caps.mp2)} — ${i18n.t('EnableMP2Description') || '⚠ Use to override browser/hardware MP2 audio support detection. Disable to force server transcoding (avoids TV stalls).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'mp2-force-select',
+                forceStateOptions,
+                PlayerSettings.get('enableMp2') || 'auto'
             )}
                     </div>
                 </div>
@@ -3241,6 +3365,58 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssRenderer">${i18n.t('AssRenderer') || 'ASS Subtitle Renderer'}</span>
+                        <span class="setting-description" data-i18n="AssRendererDescription">${i18n.t('AssRendererDescription') || 'Choose the rendering engine for ASS/SSA subtitle styling.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'ass-renderer-select',
+            [
+                { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
+                { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
+            ],
+            PlayerSettings.get('assRenderer')
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="ass-drop-animations-container" style="display: ${PlayerSettings.get('assRenderer') === 'libass-wasm' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssDropAnimations">${i18n.t('AssDropAnimations') || 'Drop ASS Animations'}</span>
+                        <span class="setting-description" data-i18n="AssDropAnimationsDescription">${i18n.t('AssDropAnimationsDescription') || 'Skip animated effects (karaoke, \\t, \\move) for better performance on slow TVs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('subtitleAssDropAnimations') ? 'active' : ''}" 
+                                 id="toggle-subtitle-ass-drop-animations" 
+                                 data-setting="subtitleAssDropAnimations"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="ass-prescale-factor-container" style="display: ${PlayerSettings.get('assRenderer') === 'libass-wasm' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssPrescaleFactor">${i18n.t('AssPrescaleFactor') || 'Subtitle Canvas Scale'}</span>
+                        <span class="setting-description" data-i18n="AssPrescaleFactorDescription">${i18n.t('AssPrescaleFactorDescription') || 'Lower = better performance but softer text (1.0 = full resolution).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'ass-prescale-factor-select',
+            [
+                { value: 0.5, label: '0.5x (fastest)' },
+                { value: 0.6, label: '0.6x' },
+                { value: 0.7, label: '0.7x' },
+                { value: 0.8, label: '0.8x (recommended)' },
+                { value: 0.9, label: '0.9x' },
+                { value: 1.0, label: '1.0x (highest quality)' }
+            ],
+            PlayerSettings.get('subtitleAssPrescaleFactor')
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelPgsPlaybackMode">${i18n.t('LabelPgsPlaybackMode') || 'PGS Subtitle Engine'}</span>
                         <span class="setting-description" data-i18n="PgsPlaybackModeDescription">${i18n.t('PgsPlaybackModeDescription') || 'Choose how graphic subtitles (PGS/VOBSUB) are handled.'}</span>
                     </div>
@@ -3278,6 +3454,7 @@ class SettingsPage extends Page {
                 },
                 { value: 'poppins', label: i18n.t('FontPoppins') || 'Poppins' },
                 { value: 'roboto', label: i18n.t('FontRoboto') || 'Roboto' },
+                { value: 'google', label: i18n.t('FontGoogleSans') || 'Google Sans' },
                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                 { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
@@ -3292,6 +3469,11 @@ class SettingsPage extends Page {
                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                 { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' },
+                {
+                    value: 'zen-kaku-gothic-new',
+                    label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New'
+                },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
                 { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
             ],
@@ -3630,6 +3812,11 @@ class SettingsPage extends Page {
                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                 { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' },
+                {
+                    value: 'zen-kaku-gothic-new',
+                    label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New'
+                },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
                 { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
             ],
@@ -3760,11 +3947,13 @@ class SettingsPage extends Page {
     _renderAccountTab() {
         const user = auth.getCurrentUser();
         const serverUrl = auth.getSavedServerUrl();
+        const userId = user?.Id;
+        const hasPin = userId ? pinManager.hasPin(userId) : false;
 
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Account">${i18n.t('Account')}</h2>
-                
+
                 <div class="user-profile-card">
                     <div class="user-avatar-wrapper">
                          ${this._renderUserAvatar(user)}
@@ -3772,6 +3961,28 @@ class SettingsPage extends Page {
                     <h3 class="user-name-large">${user?.Name || i18n.t('Guest')}</h3>
                     <p class="server-url-display">${serverUrl || i18n.t('Offline')}</p>
                 </div>
+
+                ${userId
+                ? `
+                <h3 class="setting-section-title" data-i18n="ProfilePin">${i18n.t('ProfilePin')}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RequirePin">${i18n.t('RequirePin')}</span>
+                        <span class="setting-description" data-i18n="RequirePinDescription">${i18n.t('RequirePinDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${hasPin ? 'active' : ''}" id="toggle-profile-pin" tabindex="0"></button>
+                    </div>
+                </div>
+                ${hasPin
+                    ? `<div class="setting-actions centered">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-change-pin" tabindex="0" data-i18n="ChangePin">${i18n.t('ChangePin')}</button>
+                    </div>`
+                    : ''
+                }
+                `
+                : ''
+            }
 
                 <div class="setting-actions centered">
                     <!-- Navigate to the Who's Watching screen to pick a different profile -->
@@ -4182,6 +4393,67 @@ class SettingsPage extends Page {
             });
         });
 
+        // ==========================================
+        // PROFILE PIN (Account tab)
+        // ==========================================
+        // Opt-in local PIN that gates profile selection on the sign-in page and
+        // the in-app "Who's Watching" switcher. Keyed by the current user's id.
+        const profilePinToggle = this.$('#toggle-profile-pin');
+        if (profilePinToggle) {
+            profilePinToggle.addEventListener('click', () => {
+                const userId = auth.getCurrentUser()?.Id;
+                if (!userId) return;
+
+                if (pinManager.hasPin(userId)) {
+                    // Currently enabled — require the current PIN before disabling.
+                    pinDialog.show({
+                        mode: 'verify',
+                        userId,
+                        title: i18n.t('EnterPin') || 'Enter PIN',
+                        onSuccess: () => {
+                            pinManager.removePin(userId);
+                            this._switchTab('account', true);
+                        }
+                        // On cancel: leave the PIN in place (no re-render needed).
+                    });
+                } else {
+                    // Enable — set a new PIN first; only persist on success.
+                    pinDialog.show({
+                        mode: 'set',
+                        title: i18n.t('SetPin') || 'Set PIN',
+                        onSuccess: (pin) => {
+                            pinManager.setPin(userId, pin);
+                            this._switchTab('account', true);
+                        }
+                    });
+                }
+            });
+        }
+
+        const changePinBtn = this.$('#btn-change-pin');
+        if (changePinBtn) {
+            changePinBtn.addEventListener('click', () => {
+                const userId = auth.getCurrentUser()?.Id;
+                if (!userId) return;
+                // Require the current PIN before allowing a new one to be set.
+                pinDialog.show({
+                    mode: 'verify',
+                    userId,
+                    title: i18n.t('EnterPin') || 'Enter PIN',
+                    onSuccess: () => {
+                        pinDialog.show({
+                            mode: 'set',
+                            title: i18n.t('ChangePin') || 'Change PIN',
+                            onSuccess: (pin) => {
+                                pinManager.setPin(userId, pin);
+                                this._switchTab('account', true);
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
         // Toggle My Media
         const myMediaBtn = this.$('#toggle-my-media');
         if (myMediaBtn) {
@@ -4520,6 +4792,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Home Screen Caching
+        const homeCacheBtn = this.$('#toggle-home-screen-cache');
+        if (homeCacheBtn) {
+            homeCacheBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:homeScreenCache') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:homeScreenCache', newValue.toString());
+                homeCacheBtn.classList.toggle('active', newValue);
+                log.info(`Home screen caching set to: ${newValue}`);
+            });
+        }
+
         // Toggle Simple Loader
         const simpleLoaderBtn = this.$('#toggle-simple-loader');
         if (simpleLoaderBtn) {
@@ -4602,7 +4886,7 @@ class SettingsPage extends Page {
                 const volumeContainer = this.$('#theme-song-volume-item');
                 if (volumeContainer) {
                     volumeContainer.style.display = newValue ? '' : 'none';
-                    
+
                     // Invalidate settings content focus mapping cache so navigation
                     // remains stable on Samsung/LG TV hardware.
                     focusManager.invalidateCache('settings-content');
@@ -4836,6 +5120,17 @@ class SettingsPage extends Page {
 
                 // Invalidate focus cache so the newly visible items can be focused
                 focusManager.invalidateCache();
+            });
+        }
+
+        // Toggle ASS Drop Animations
+        const assDropAnimBtn = this.$('#toggle-subtitle-ass-drop-animations');
+        if (assDropAnimBtn) {
+            assDropAnimBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleAssDropAnimations') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleAssDropAnimations', newValue);
+                assDropAnimBtn.classList.toggle('active', newValue);
             });
         }
 
@@ -5277,19 +5572,20 @@ class SettingsPage extends Page {
         });
     }
 
-    _renderDropdown(id, options, currentValue) {
+    _renderDropdown(id, options, currentValue, disabled = false) {
         // Find current label (using String conversion to match storage strings with number options)
         const currentOption = options.find((o) => String(o.value) === String(currentValue)) || options[0];
         const currentLabel = currentOption ? i18n.ensureBiDi(currentOption.label) : i18n.t('Select');
 
         // Render as a button that triggers the modal
         return `
-            <button class="setting-action-btn select-btn" id="${id}-btn" 
+            <button class="setting-action-btn select-btn ${disabled ? 'disabled' : ''}" id="${id}-btn" 
                     data-id="${id}" 
                     data-value="${currentValue}"
                     data-options='${JSON.stringify(options).replace(/'/g, '&#39;')}'
-                    tabindex="0"
-                    data-focusable="true">
+                    tabindex="${disabled ? '-1' : '0'}"
+                    ${disabled ? 'disabled' : ''}
+                    data-focusable="${disabled ? 'false' : 'true'}">
                 <span class="btn-label">${currentLabel}</span>
             </button>
         `;
@@ -5593,6 +5889,8 @@ class SettingsPage extends Page {
             'subtitle-weight-select': { key: 'subtitleWeight', type: 'player' },
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
             'subtitle-font-ass-select': { key: 'subtitleFontAss', type: 'player' },
+            'ass-renderer-select': { key: 'assRenderer', type: 'player' },
+            'ass-prescale-factor-select': { key: 'subtitleAssPrescaleFactor', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
             'subtitle-color-select-hdr': { key: 'subtitleTextColorHdr', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
@@ -5633,6 +5931,8 @@ class SettingsPage extends Page {
             'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
             /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
             'eac3-force-select': { type: 'player', key: 'enableEac3' },
+            /* MP2 force-state override — corrects false positives or forces transcoding to avoid stalls */
+            'mp2-force-select': { type: 'player', key: 'enableMp2' },
             /*
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
@@ -5670,7 +5970,8 @@ class SettingsPage extends Page {
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
-            // 'icon-style-select': { key: 'pref:iconStyle', type: 'local', triggerEvent: true },
+            'icon-style-select': { key: 'pref:iconStyle', type: 'local', triggerEvent: true },
+            'icon-variant-select': { key: 'pref:iconVariant', type: 'local', triggerEvent: true },
             'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' },
             'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
             'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
@@ -5751,7 +6052,6 @@ class SettingsPage extends Page {
                         } else if (id === 'login-page-layout-select') {
                             layoutManager.setLoginPageLayout(newValue);
                             this._triggerHardReload();
-
                         } else if (id === 'card-label-style-select') {
                             storage.setItem('pref:cardLabelStyle', newValue);
                             document.documentElement.setAttribute('data-card-label-style', newValue);
@@ -5769,6 +6069,16 @@ class SettingsPage extends Page {
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
                             focusManager.invalidateCache('sidebar');
                             focusManager.invalidateCache('home');
+                        } else if (id === 'icon-style-select') {
+                            setIconStyle(newValue);
+                            this._triggerHardReload();
+                        } else if (id === 'icon-variant-select') {
+                            /* 
+                              Saves the preferred icon rendering variant (dynamic, outlined, filled)
+                              to local storage and forces a clean UI rebuild to propagate changes.
+                            */
+                            storage.setItem('pref:iconVariant', newValue);
+                            this._triggerHardReload();
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
 
@@ -5818,7 +6128,7 @@ class SettingsPage extends Page {
                             imageService.setDetailsPreset(newValue);
                         } else if (settingConfig.type === 'player') {
                             // Numeric settings need parseFloat/parseInt conversion
-                            const floatKeys = ['webosBufferGate'];
+                            const floatKeys = ['webosBufferGate', 'subtitleAssPrescaleFactor'];
                             const intKeys = [
                                 'skipForwardLength',
                                 'skipBackLength',
@@ -5847,6 +6157,16 @@ class SettingsPage extends Page {
                                 return; // Skip further processing, DOM is refreshed
                             }
 
+                            // Show/hide libass-wasm-only settings based on renderer
+                            if (settingConfig.key === 'assRenderer') {
+                                const isLibass = newValue === 'libass-wasm';
+                                const animContainer = this.$('#ass-drop-animations-container');
+                                const scaleContainer = this.$('#ass-prescale-factor-container');
+                                if (animContainer) animContainer.style.display = isLibass ? '' : 'none';
+                                if (scaleContainer) scaleContainer.style.display = isLibass ? '' : 'none';
+                                focusManager.invalidateCache('settings-content');
+                            }
+
                             // Invalidate cached device capabilities when profile-affecting settings change
                             if (
                                 settingConfig.key === 'maxResolution' ||
@@ -5864,6 +6184,8 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'enableTrueHd' ||
                                 /* EAC3 force-state is baked into the cached caps object — must re-probe */
                                 settingConfig.key === 'enableEac3' ||
+                                /* MP2 force-state is baked into the cached caps object — must re-probe */
+                                settingConfig.key === 'enableMp2' ||
                                 /* Changing the target transcode codec requires a fresh profile build */
                                 settingConfig.key === 'transcodeAudioCodec'
                             ) {
@@ -6051,6 +6373,19 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Switch for Hide Sidebar Library Header
+        const hideSidebarLibraryHeaderToggle = this.$('#toggle-hide-sidebar-library-header');
+        if (hideSidebarLibraryHeaderToggle) {
+            hideSidebarLibraryHeaderToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:hideSidebarLibraryHeader') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:hideSidebarLibraryHeader', newValue.toString());
+                hideSidebarLibraryHeaderToggle.classList.toggle('active', newValue);
+                eventBus.emit('prefChanged:hideSidebarLibraryHeader', newValue);
+                log.info(`Hide Sidebar Library Header set to: ${newValue}`);
+            });
+        }
+
         // Toggle Switch for Hide Unfocused Borders
         const hideUnfocusedBordersToggle = this.$('#toggle-hide-unfocused-borders');
         if (hideUnfocusedBordersToggle) {
@@ -6151,6 +6486,60 @@ class SettingsPage extends Page {
                 hideOriginalTitleToggle.classList.toggle('active', newValue);
                 // Log state changes internally for better diagnostics and traceability
                 log.info(`Hide Original Title set to: ${newValue}`);
+            });
+        }
+
+        // =====================================================================
+        // Apple HIG Guidelines: Tactile Toggle Event Handling - Secondary Title Color
+        // =====================================================================
+        // Registers click handler for the secondary details title color switch.
+        // Reading current state from localStorage key, toggles value, and persists 
+        // to storage so that subsequent detail page renders adapt dynamically.
+        // Provides instant visual styling feedback by toggling the 'active' class.
+        // =====================================================================
+        const secondaryTitleColorToggle = this.$('#toggle-secondary-title-color');
+        if (secondaryTitleColorToggle) {
+            secondaryTitleColorToggle.addEventListener('click', () => {
+                // Read from local storage (defaults to false)
+                const currentValue = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
+                // Toggle state
+                const newValue = !currentValue;
+
+                // Persist the updated configuration state
+                storage.setItem('pref:secondaryTitleSecondaryColor', newValue.toString());
+                // Instantly update UI class to transition switch visual indicator
+                secondaryTitleColorToggle.classList.toggle('active', newValue);
+                // Log the state transition for debugging and diagnostics
+                log.info(`Secondary Title Secondary Color set to: ${newValue}`);
+            });
+        }
+
+        // ==========================================================
+        // TOGGLE SHOW MDB LIST AWARDS BADGES
+        // ==========================================================
+        //
+        // This button handles toggling of the community/critic award badges
+        // retrieved from the MDBList plugin on the details page.
+        // It relies on standard localStorage preference flags.
+        // If not set, it defaults to true.
+        //
+        const showMdbAwardsToggle = this.$('#toggle-mdb-awards');
+        if (showMdbAwardsToggle) {
+            showMdbAwardsToggle.addEventListener('click', () => {
+                // Retrieve current setting from storage (defaults to true unless explicitly disabled)
+                const isEnabled = storage.getItem('pref:showMdbAwards') !== 'false';
+
+                // Invert the state
+                const newValue = !isEnabled;
+
+                // Persist the new value as a string representation
+                storage.setItem('pref:showMdbAwards', newValue.toString());
+
+                // Toggle the 'active' class on the switch for visual state updates
+                showMdbAwardsToggle.classList.toggle('active', newValue);
+
+                // Log the state transition for auditing and troubleshooting
+                log.info(`Show Awards Badges set to: ${newValue}`);
             });
         }
 

@@ -84,13 +84,15 @@ export class ApiClient {
      * @returns {boolean} True if the server identifies as Emby.
      */
     isEmby() {
-        // Retrieve the server information stored in global application state.
+        /*
+         * Retrieve the server information stored in global application state.
+         * Emby does not return a 'ProductName' in its public (unauthenticated)
+         * System Info response, whereas Jellyfin does. We detect Emby by checking
+         * if the server returns a ServerName but omits ProductName, or if the
+         * ProductName explicitly contains 'emby'.
+         */
         const info = state.get('server:info') || {};
-        
-        // Inspect the ProductName field to see if it targets Emby.
-        const isEmbyInstance = !!(info.ProductName && info.ProductName.toLowerCase().includes('emby'));
-        
-        return isEmbyInstance;
+        return !!(info.ServerName && (!info.ProductName || info.ProductName.toLowerCase().includes('emby')));
     }
 
 
@@ -157,8 +159,37 @@ export class ApiClient {
      * @returns {string} Authorization header value
      */
     getAuthHeader(tokenOverride = null) {
-        // Build MediaBrowser authorization header
-        // Format: MediaBrowser Client="...", Device="...", DeviceId="...", Version="..."[, Token="..."]
+        /*
+         * Check if we are connected to an Emby server instance.
+         * Emby handles the Authorization header differently than Jellyfin.
+         */
+        if (this.isEmby()) {
+            /*
+             * Emby auth header format uses the 'Emby' scheme.
+             * It requires 'UserId' (if authenticated) but does NOT carry the 
+             * 'Token' inside the Authorization header itself. Instead, the token 
+             * is transmitted in the separate 'X-Emby-Token' request header.
+             */
+            const parts = [
+                `Client="${this._clientName}"`,
+                `Device="${this._deviceName}"`,
+                `DeviceId="${this._deviceId}"`,
+                `Version="${this._clientVersion}"`
+            ];
+
+            // Append UserId only if the session is fully authenticated
+            if (this._userId) {
+                parts.unshift(`UserId="${this._userId}"`);
+            }
+
+            return `Emby ${parts.join(', ')}`;
+        }
+
+        /*
+         * Standard Jellyfin MediaBrowser authorization header.
+         * Formatted with the MediaBrowser scheme containing Client, Device,
+         * DeviceId, Version, and optionally the Token parameter.
+         */
         const parts = [
             `Client="${this._clientName}"`,
             `Device="${this._deviceName}"`,
@@ -166,7 +197,10 @@ export class ApiClient {
             `Version="${this._clientVersion}"`
         ];
 
-        // Add token if authenticated or overridden
+        /*
+         * Retrieve the active authentication token from memory
+         * or fallback to the provided token override.
+         */
         const token = tokenOverride || this._accessToken;
         if (token) {
             parts.push(`Token="${token}"`);
@@ -253,10 +287,21 @@ export class ApiClient {
         };
 
         if (!options.skipAuth) {
-            // Use only the non-deprecated Authorization header (MediaBrowser scheme).
-            // X-Emby-Authorization was the old name and is now flagged deprecated by Jellyfin.
+            /*
+             * Fetch the formatted authorization header.
+             * For Jellyfin, this contains client/device info plus the auth token.
+             * For Emby, it contains client/device/user info, but NO token.
+             */
             const authHeader = this.getAuthHeader();
             headers['Authorization'] = authHeader;
+
+            /*
+             * Emby servers require the token to be explicitly supplied via
+             * the dedicated 'X-Emby-Token' request header on authenticated endpoints.
+             */
+            if (this.isEmby() && this._accessToken) {
+                headers['X-Emby-Token'] = this._accessToken;
+            }
         }
 
         if (!options.body || !(options.body instanceof FormData)) {
@@ -1108,13 +1153,22 @@ export class ApiClient {
     // ========================================================================
 
     getImageUrl(itemId, imageType = 'Primary', options = {}) {
+        // Create parameter builder for Jellyfin image query string
         const params = new URLSearchParams();
 
+        // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
+        
+        // Map fill constraints (contain style aspect preservation)
+        if (options.fillWidth) params.append('fillWidth', options.fillWidth);
+        if (options.fillHeight) params.append('fillHeight', options.fillHeight);
+        
+        // Map quality and unique content tags
         if (options.quality) params.append('quality', options.quality);
         if (options.tag) params.append('tag', options.tag);
 
+        // Compile query string and final endpoint URL reference
         const queryString = params.toString();
         const path = `/Items/${itemId}/Images/${imageType}`;
 
@@ -1122,12 +1176,21 @@ export class ApiClient {
     }
 
     getUserImageUrl(userId, options = {}) {
+        // Create parameter builder for user profile image
         const params = new URLSearchParams();
 
+        // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
+        
+        // Map fill constraints (contain style aspect preservation)
+        if (options.fillWidth) params.append('fillWidth', options.fillWidth);
+        if (options.fillHeight) params.append('fillHeight', options.fillHeight);
+        
+        // Map quality settings
         if (options.quality) params.append('quality', options.quality);
 
+        // Compile query string and final user endpoint URL reference
         const queryString = params.toString();
         const path = `/Users/${userId}/Images/Primary`;
 
@@ -1178,10 +1241,15 @@ export class ApiClient {
         // to bypass redundant transcoding whenever possible on the TV client.
         const path = `/Audio/${itemId}/stream?static=true`;
 
-        // Use ApiKey= (not the deprecated api_key=) to authorize the native browser fetch.
-        // The HTML5 <audio> element cannot send custom headers, so a query param is required.
-        // ApiKey is the supported non-deprecated fallback for exactly this scenario.
-        return this.buildUrl(token ? `${path}&ApiKey=${token}` : path);
+        /*
+         * Select the query param authentication key dynamically based on server.
+         * Emby does not recognize 'ApiKey' and requires the lowercase 'api_key'.
+         * Jellyfin prefers the camelCase 'ApiKey' parameter name.
+         */
+        const authKey = this.isEmby() ? 'api_key' : 'ApiKey';
+
+        // Use the selected parameter key to authorize native browser fetch
+        return this.buildUrl(token ? `${path}&${authKey}=${token}` : path);
     }
 
     // ========================================================================
@@ -1541,10 +1609,20 @@ export class ApiClient {
         // Convert http(s) to ws(s)
         const wsUrl = this._serverUrl.replace('https://', 'wss://').replace('http://', 'ws://');
 
-        // Build WebSocket URL with auth using the non-deprecated ApiKey query param.
-        // The WebSocket constructor does not support custom headers, so a query param
-        // is the only option. ApiKey= is the supported (non-deprecated) query param.
-        const fullUrl = `${wsUrl}/socket?ApiKey=${encodeURIComponent(this._accessToken)}&deviceId=${encodeURIComponent(this._deviceId)}`;
+        /*
+         * Dynamically adapt WebSocket connection parameters for Emby.
+         * Emby connects via the '/embywebsocket' path rather than '/socket'.
+         * It also requires the lowercase query parameter 'api_key' instead of 'ApiKey'.
+         */
+        const isEmbyInstance = this.isEmby();
+        const wsEndpointPath = isEmbyInstance ? '/embywebsocket' : '/socket';
+        const authParamKey = isEmbyInstance ? 'api_key' : 'ApiKey';
+
+        /*
+         * Construct the complete WebSocket connection URL.
+         * We pass authorization and device details via the query parameters.
+         */
+        const fullUrl = `${wsUrl}${wsEndpointPath}?${authParamKey}=${encodeURIComponent(this._accessToken)}&deviceId=${encodeURIComponent(this._deviceId)}`;
 
         log.info('Opening WebSocket connection...');
 

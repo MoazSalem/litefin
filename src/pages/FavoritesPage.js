@@ -60,8 +60,8 @@ class FavoritesPage extends Page {
             const userId = typeof api.userId === 'function' ? api.userId() : api._userId;
             if (!userId) throw new Error('User not authenticated');
 
-            // Parallel fetch of all favorite types, including music and live tv
-            const [movies, shows, seasons, episodes, channels, people, artists, albums, songs] = await Promise.all([
+            // Parallel fetch of all favorite types, including music and live tv, plus user library views
+            const [movies, shows, seasons, episodes, channels, people, artists, albums, songs, viewsResponse] = await Promise.all([
                 api.getItems({
                     Filters: 'IsFavorite',
                     IncludeItemTypes: 'Movie',
@@ -129,8 +129,25 @@ class FavoritesPage extends Page {
                     SortOrder: 'Ascending',
                     Limit: 50,
                     Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
-                })
+                }),
+                api.getUserViews()
             ]);
+
+            // =========================================================================
+            // RESOLVE USER LIBRARIES FOR CLICKABLE HEADERS
+            // =========================================================================
+            // Parse through the user's active root libraries (views) returned by 
+            // the server, mapping each CollectionType to its corresponding Library ID.
+            // This mapping enables header buttons to route to the correct library view.
+            // =========================================================================
+            const views = viewsResponse?.Items || [];
+            const libraryMap = {};
+            for (const view of views) {
+                if (view.CollectionType && !libraryMap[view.CollectionType]) {
+                    libraryMap[view.CollectionType] = view.Id;
+                }
+            }
+            this._libraryMap = libraryMap;
 
             this.setLoading(false);
 
@@ -249,16 +266,27 @@ class FavoritesPage extends Page {
     _renderSection(title, items, type, sectionId, prevId, nextId) {
         const container = this.$('#favorites-rows');
 
+        // =====================================================================
+        // HTML RENDERING WITH FOCUSABLE HEADER
+        // =====================================================================
+        // Renders the section header as a button with class 
+        // 'favorites-header-focusable' to style it completely independently
+        // of library page layouts.
+        // =====================================================================
         const sectionHtml = `
              <div class="media-row" id="${sectionId}-row">
-                 <h2 class="row-title">${title}</h2>
+                 <div class="favorites-row-header">
+                     <button class="favorites-header-focusable" tabindex="0" data-section-id="${sectionId}">
+                         <span class="favorites-header-title">${title}</span>
+                     </button>
+                 </div>
                  <div class="row-items" id="${sectionId}-items">
                      <div class="row-items-track"></div>
                  </div>
              </div>
          `;
 
-        // Append HTML
+        // Append HTML row to the parent favorites rows container
         const temp = document.createElement('div');
         temp.innerHTML = sectionHtml;
         const rowEl = temp.firstElementChild;
@@ -269,15 +297,14 @@ class FavoritesPage extends Page {
 
         let virtualRow = null;
 
-        // ==========================================================
-        // Force Expandable Posters Logic for Favorites
-        // ==========================================================
+        // =====================================================================
+        // FORCE EXPANDABLE POSTERS COERCION
+        // =====================================================================
         // Checks if the user is running the Modern layout and has toggled on
         // the "Force Expandable Posters" preference under display settings.
         // If active, we dynamically coerce all horizontal favorite tracks
         // to render as portrait posters that expand horizontally on focus.
-        // This creates a gorgeous, unified visual aesthetic that matches
-        // ==========================================================
+        // =====================================================================
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
         const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
 
@@ -301,8 +328,50 @@ class FavoritesPage extends Page {
         if (!this._virtualRows) this._virtualRows = {};
         this._virtualRows[sectionId] = virtualRow;
 
-        // Click handling
-        itemsContainer.onclick = (e) => {
+        // =====================================================================
+        // ROW CLICK LISTENER (CARDS & HEADERS)
+        // =====================================================================
+        // Handle click/activation on both media cards and the row header button.
+        // Header clicks navigate to the library view filtered by favorite status.
+        // =====================================================================
+        rowEl.onclick = (e) => {
+            const headerBtn = e.target.closest('.favorites-header-focusable');
+            if (headerBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Get library ID mapping determined in loadFavorites
+                const map = this._libraryMap || {};
+                let targetPath = '/library/all';
+
+                // Map row section to target library collection and item types
+                if (sectionId === 'fav-movie') {
+                    targetPath = `/library/${map['movies'] || 'all'}?includeItemTypes=Movie`;
+                } else if (sectionId === 'fav-series') {
+                    targetPath = `/library/${map['tvshows'] || 'all'}?includeItemTypes=Series`;
+                } else if (sectionId === 'fav-season') {
+                    targetPath = `/library/${map['tvshows'] || 'all'}?includeItemTypes=Season`;
+                } else if (sectionId === 'fav-episode') {
+                    targetPath = `/library/${map['tvshows'] || 'all'}?includeItemTypes=Episode`;
+                } else if (sectionId === 'fav-channel') {
+                    targetPath = `/library/all?includeItemTypes=TvChannel`;
+                } else if (sectionId === 'fav-person') {
+                    targetPath = `/library/all?includeItemTypes=Person`;
+                } else if (sectionId === 'fav-artist') {
+                    targetPath = `/library/${map['music'] || 'all'}?includeItemTypes=MusicArtist,Artist`;
+                } else if (sectionId === 'fav-album') {
+                    targetPath = `/library/${map['music'] || 'all'}?includeItemTypes=MusicAlbum`;
+                } else if (sectionId === 'fav-song') {
+                    targetPath = `/library/${map['music'] || 'all'}?includeItemTypes=Audio`;
+                }
+
+                // Build destination URL with IsFavorite query filter parameter
+                const destination = `${targetPath}${targetPath.includes('?') ? '&' : '?'}IsFavorite=true`;
+                log.info(`Row header clicked. Navigating to favorite-filtered library: ${destination}`);
+                router.navigate(destination);
+                return;
+            }
+
             const card = e.target.closest('.media-card');
             if (card && card.dataset.itemId) {
                 // Save clicked item for exact focus restoration
@@ -313,7 +382,6 @@ class FavoritesPage extends Page {
 
                 if (type === 'person' || type === 'artist') {
                     // Both Persons and Music Artists navigate to the PersonPage
-                    // (artists have their albums/songs shown there)
                     router.navigate(`/person/${card.dataset.itemId}`);
                 } else {
                     router.navigate(`/details/${card.dataset.itemId}`);
@@ -322,32 +390,55 @@ class FavoritesPage extends Page {
         };
 
         // Focus index synchronization
-        itemsContainer.addEventListener('focusin', (e) => {
+        rowEl.addEventListener('focusin', (e) => {
             if (e.target.classList.contains('media-card') && virtualRow) {
                 virtualRow.syncIndexFromNode(e.target);
             }
         });
 
-        this.registerFocusSection(sectionId, itemsContainer, {
-            orientation: 'horizontal',
-            leaveUp: prevId, // Remove header ref
+        // =====================================================================
+        // FOCUS SECTION REGISTRATION
+        // =====================================================================
+        // Register the focus section on the row wrapper (rowEl) using 'grid'
+        // orientation. This tells FocusManager to use spatial navigation for
+        // Up/Down keys (enabling moving between the header button and cards),
+        // while we intercept Left/Right moves on cards to shift the sliding window.
+        // =====================================================================
+        this.registerFocusSection(sectionId, rowEl, {
+            orientation: 'grid',
+            leaveUp: prevId,
             leaveDown: nextId,
             leaveLeft: 'sidebar',
-            onMove: (direction) => {
-                const nextNode = virtualRow.handleMove(direction);
-                if (nextNode) {
-                    focusManager.focusElement(nextNode);
-                    return true;
+            selector: '.favorites-header-focusable, .media-card', // Allow focusing both header button and cards
+            onMove: (direction, currentFocused) => {
+                // If focus is currently on the header button, block horizontal navigation 
+                // to the right (since nothing is there), but let vertical moves and left 
+                // moves (exiting to the sidebar) flow spatially.
+                if (currentFocused && currentFocused.classList.contains('favorites-header-focusable')) {
+                    if (direction === 'right' || direction === 'Right') {
+                        return true;
+                    }
+                    return false;
                 }
+
+                // For media cards, intercept horizontal navigation to slide the row track
+                if (direction === 'left' || direction === 'right' || direction === 'Left' || direction === 'Right') {
+                    const nextNode = virtualRow.handleMove(direction);
+                    if (nextNode) {
+                        focusManager.focusElement(nextNode);
+                        return true;
+                    }
+                }
+
+                // Let vertical movement (Up to header, Down to next row) fall back to spatial navigation
                 return false;
             },
             onEnter: (fromElement, options) => {
-                // Only intercept for vertical entry. Horizontal entry (e.g. from sidebar) should use memory.
+                // Only intercept for vertical entry. Pre-render window to ensure elements exist.
                 if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
                     virtualRow._updateWindow(virtualRow.currentIndex);
-                    return virtualRow.domNodes.get(virtualRow.currentIndex);
                 }
-                return null;
+                return null; // Return null so FocusManager performs default spatial navigation
             },
             onRestoreIndex: (index) => {
                 return virtualRow.focusByIndex(index);

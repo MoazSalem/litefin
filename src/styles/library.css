@@ -499,6 +499,16 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
    ========================================================================== */
 
 .library-grid {
+    /* 
+     * =========================================================================
+     * DYNAMIC FLEX GRID BASE STRETCH
+     * =========================================================================
+     * Set default width to 100% to stretch across available viewport area.
+     * This avoids shrink-wrapping around a small number of items (which would 
+     * center them), while keeping the entire grid container aligned and scalable.
+     * =========================================================================
+     */
+    width: 100%;
     /* Flexbox wrap lets us control card width per view mode */
     display: flex;
     flex-wrap: wrap;
@@ -510,13 +520,12 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     padding-bottom: 0;
     margin: 0 auto;
 }
-
 /* ── View mode: Poster (default) ─────────────────────────────────── */
 /* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. 
-   Calculated: 5 * 320px + 4 * 20px = 1680px block width. */
+   Calculated: 5 * 320px + 4 * 20px = 1680px block width. 
+   Removed static min-width to prevent screen overflow on narrower displays. */
 .library-grid:not([class*="view-"]) {
     max-width: 1720px;
-    min-width: 1700px;
 }
 
 .library-grid:not([class*="view-"]) .media-card {
@@ -569,10 +578,10 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* ── View mode: Small Poster ─────────────────────────────────────── */
 /* Tighter portrait cards (160px) — exactly 9 per 1080p row. 
-   Calculated: 9 * 160px + 8 * 20px = 1600px block width. */
+   Calculated: 9 * 160px + 8 * 20px = 1600px block width. 
+   Removed static min-width to support fluid responsiveness. */
 .library-grid.view-small-poster {
     max-width: 1664px;
-    min-width: 1470px;
 }
 
 .library-grid.view-small-poster .media-card {
@@ -598,10 +607,10 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* ── View mode: Thumb ────────────────────────────────────────────── */
 /* 16:9 landscape cards (390px wide) — exactly 4 per 1080p row. 
-   Calculated: 4 * 390px + 3 * 30px = 1650px block width. */
+   Calculated: 4 * 390px + 3 * 30px = 1650px block width. 
+   Removed min-width to avoid horizontal clipping when sidebar is open. */
 .library-grid.view-thumb {
     max-width: 1680px;
-    min-width: 1670px;
 }
 
 .library-grid.view-thumb .media-card {
@@ -628,10 +637,10 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* ── View mode: Banner ───────────────────────────────────────────── */
 /* Horizontal banners (540px wide) — exactly 3 per 1080p row. 
-   Calculated: 3 * 545px + 2 * 20px = 1675px block width. */
+   Calculated: 3 * 545px + 2 * 20px = 1675px block width. 
+   Removed min-width to prevent overflow while centering on wider viewports. */
 .library-grid.view-banner {
     max-width: 1695px; 
-    min-width: 1685px;
 }
 
 .library-grid.view-banner .media-card {
@@ -905,6 +914,53 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* Reset media-card styles for Grid context */
 /* --- Media Fallback Styles moved to components.css --- */
+
+/* 
+ * =============================================================================
+ * DYNAMIC GRID LAYOUT ENGINE (FLUID COLUMNS)
+ * =============================================================================
+ * When the grid is set to "dynamic" mode, the column count is driven by the
+ * custom CSS property `--grid-columns` (e.g. set inline as 4, 6, 8, etc.).
+ *
+ * Defined at the end of the view-mode styles so its width and margin properties
+ * override static mode dimensions correctly due to CSS source ordering.
+ * =============================================================================
+ */
+.library-grid.mode-dynamic {
+    /* Custom property for the horizontal/vertical spacing between cards */
+    --grid-card-margin: 20px;
+    
+    /* 
+     * Pull the container right to offset the margin-right on the last child card.
+     * This ensures the grid bounds align perfectly with the parent container boundaries
+     * and prevents off-screen overhangs that trigger scroll layout bugs on Tizen 4.
+     */
+    margin-right: calc(-1 * var(--grid-card-margin)) !important;
+    width: calc(100% + var(--grid-card-margin)) !important;
+    max-width: none !important;
+    min-width: 0 !important;
+}
+
+.library-grid.mode-dynamic .media-card {
+    /* 
+     * Force layout containment to isolate paint operations and optimize 
+     * scrolling performance during focus transitions on low-spec TV hardware.
+     */
+    flex: 0 0 auto !important;
+    
+    /* 
+     * Divide 100% by the number of columns, then subtract the card margin.
+     * Card + margin-right will sum exactly to 100% / columns.
+     */
+    width: calc((100% / var(--grid-columns)) - var(--grid-card-margin)) !important;
+    min-width: 0 !important; /* Overrides static banner min-width */
+    margin-right: var(--grid-card-margin) !important;
+    margin-left: 0 !important;
+    margin-bottom: var(--grid-card-margin) !important;
+    
+    contain: layout style paint !important;
+}
+
 
 /* Premium Hover/Focus Polish for larger cards.
  * We use a deeper, more breathable shadow for the 320px cards. */

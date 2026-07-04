@@ -14,6 +14,7 @@
 
 import { SubtitleParser } from './SubtitleParser.js';
 import ASSRenderer from './ASSRenderer.js';
+import LibassWasmRenderer from './LibassWasmRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
@@ -755,13 +756,14 @@ export default class SubtitleManager {
 
             // Start preloading container fonts or custom font in parallel with the subtitle fetch
             const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
+            const loadContainerFontsEnabled = PlayerSettings.get('subtitleAssLoadContainerFonts') !== false;
             let fontsPromise;
 
             if (overrideAssFonts) {
                 // If override is enabled, load the custom override font in parallel
                 const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
                 fontsPromise = fontId ? FontLoader.loadFont(fontId) : Promise.resolve(false);
-            } else {
+            } else if (loadContainerFontsEnabled) {
                 // Otherwise, download container fonts in parallel.
                 // We pass a promise that extracts the ASS font names once the subtitle fetch finishes.
                 const assFontnamesPromise = subtitleFetchPromise.then(content => this._extractAssFontnames(content));
@@ -773,6 +775,8 @@ export default class SubtitleManager {
                     this._authToken,
                     assFontnamesPromise
                 );
+            } else {
+                fontsPromise = Promise.resolve([]);
             }
 
             // ================================================================
@@ -791,23 +795,52 @@ export default class SubtitleManager {
                 return;
             }
 
-            // Lazy init renderer
+            // Select and initialize ASS subtitle rendering backend
+            const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+            let TargetRendererClass;
+            if (preferredEngine === 'libass-wasm') {
+                TargetRendererClass = LibassWasmRenderer;
+            } else {
+                TargetRendererClass = ASSRenderer;
+            }
+
+            // Check if existing renderer needs to be swapped out
+            if (this._assRenderer && !(this._assRenderer instanceof TargetRendererClass)) {
+                this._assRenderer.destroy();
+                this._assRenderer = null;
+            }
+
             if (!this._assRenderer) {
-                // Find video dimensions for virtual element if needed
                 let width = 1920;
                 let height = 1080;
+                let videoFrameRate = 24;
                 const videoStream = this._mediaStreams.find(s => s.Type === 'Video');
                 if (videoStream && videoStream.Width && videoStream.Height) {
                     width = videoStream.Width;
                     height = videoStream.Height;
                 }
+                if (videoStream && videoStream.RealFrameRate) {
+                    videoFrameRate = videoStream.RealFrameRate;
+                }
 
-                this._assRenderer = new ASSRenderer({
-                    container: this._container,
-                    video: this._videoElement,
-                    width,
-                    height
-                });
+                try {
+                    this._assRenderer = new TargetRendererClass({
+                        container: this._container,
+                        video: this._videoElement,
+                        width,
+                        height,
+                        videoFrameRate
+                    });
+                } catch (initErr) {
+                    log.warn(`Failed to initialize ${TargetRendererClass.name}, falling back to ASSRenderer (libjass):`, initErr);
+                    TargetRendererClass = ASSRenderer;
+                    this._assRenderer = new TargetRendererClass({
+                        container: this._container,
+                        video: this._videoElement,
+                        width,
+                        height
+                    });
+                }
             }
 
             // Apply current subtitle font override
@@ -819,28 +852,6 @@ export default class SubtitleManager {
                 fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             } else {
                 this._hasContainerFonts = Array.isArray(loadedFontsResult) && loadedFontsResult.length > 0;
-                if (this._hasContainerFonts) {
-                    // Container fonts are registered under their real filenames via @font-face.
-                    // We intentionally leave fontFamily = null here so _preProcessAssContent
-                    // will NOT touch the Fontname field in any Style: line — each style keeps
-                    // its original name, which libjass then resolves against the registered
-                    // @font-face entries. Overriding with a single family (e.g. fonts[0])
-                    // would incorrectly clobber every style with one font.
-                } else {
-                    // Fallback to custom override font if no container fonts found
-                    const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
-                    if (fontId) {
-                        await FontLoader.loadFont(fontId);
-                        
-                        // Check if stale after loading fallback system font
-                        if (isStale()) {
-                            log.info('[ASSRenderer Setup] Aborting load: session is stale after fallback font load');
-                            return;
-                        }
-                    }
-                    fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
-                    fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
-                }
             }
 
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');

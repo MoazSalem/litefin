@@ -123,8 +123,11 @@ class HeroCarousel {
 
         if (!useTextTitle && logoItemId && logoTag) {
             const logoParams = imageService.getParams('hero-logo');
+            const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+            const dpr = window.devicePixelRatio || 1;
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: logoParams.maxWidth,
+                fillWidth: Math.round(400 * dpr),
+                fillHeight: Math.round((isCompact ? 110 : 130) * dpr),
                 quality: logoParams.quality,
                 tag: logoTag
             });
@@ -315,6 +318,38 @@ class HeroCarousel {
 
         // Start auto-scroll
         this._startAutoScroll();
+
+        // =========================================================================
+        // Apple HIG: Dynamic Visual Weight Adaptation for Hero Logos
+        // =========================================================================
+        // Calculate the natural aspect ratio of the loaded hero logo image.
+        // Cap the height dynamically to keep the layout visually balanced:
+        // - Tall/square logos get more height (up to 130px) to remain legible.
+        // - Wide/short logos shrink in container height to eliminate vertical gaps.
+        // =========================================================================
+        const logos = this._container.querySelectorAll('.hero-logo');
+        logos.forEach((img) => {
+            const adjustHeight = () => {
+                const container = img.closest('.hero-logo-container');
+                if (container) {
+                    const aspect = img.naturalWidth / img.naturalHeight || 1;
+                    const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+                    const maxW = 400; // max-width of .hero-logo in CSS
+                    const maxHeight = isCompact ? 110 : 130;
+                    const minHeight = isCompact ? 50 : 60;
+
+                    const targetHeight = maxW / aspect;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                    container.style.height = `${containerHeight}px`;
+                }
+            };
+
+            if (img.complete) {
+                adjustHeight();
+            } else {
+                img.onload = adjustHeight;
+            }
+        });
 
         // ────────────────────────────────────────────────────────────────────
         // BlurHash Background Placeholders for Hero Carousel items

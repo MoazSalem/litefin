@@ -83,7 +83,7 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
 
 
 .server-section {
-    max-width: 600px;
+    max-width: 850px;
     margin: 0 auto;
     text-align: left;
 }
@@ -97,27 +97,83 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
     margin-right: 12px;
 }
 
-.server-url-input {
+/* Segmented inputs row for server details (Apple HIG inspired) */
+.server-fields-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     flex: 1;
+}
+
+/* Horizontal spacing between the segmented input elements */
+.server-fields-group > *:not(:last-child) {
+    margin-right: 12px;
+}
+
+/* Base styles for protocol, host, and port input boxes */
+.server-protocol-input,
+.server-host-input,
+.server-port-input {
     background: var(--jf-background-alt, #1a1a1a);
     border: 4px solid transparent;
-    /* Prepare for border */
     padding: 18px 26px;
-    /* Adjust padding for border */
     font-size: 1.75rem;
     border-radius: var(--jf-border-radius);
     color: var(--jf-text-primary, #fff);
     -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-
     will-change: transform;
+    box-sizing: border-box;
 }
 
-.server-url-input:focus,
-.server-url-input.focused {
+/* Premium active focus states for segmented URL segments */
+.server-protocol-input:focus,
+.server-protocol-input.focused,
+.server-host-input:focus,
+.server-host-input.focused,
+.server-port-input:focus,
+.server-port-input.focused {
     border-color: var(--jf-accent);
     background-color: var(--jf-input-bg, #2a2a2a);
     outline: none;
+}
+
+/* Protocol dropdown styling (Apple HIG select layout) */
+.server-protocol-input {
+    width: 160px;
+    text-align: left;
+    padding-left: 20px;
+    padding-right: 40px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba%28255,255,255,0.4%29' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.server-protocol-input option {
+    background-color: var(--jf-background-alt, #1a1a1a);
+    color: var(--jf-text-primary, #fff);
+}
+
+/* Main host field consumes the bulk of horizontal space */
+.server-host-input {
+    flex: 1;
+}
+
+/* Port input box layout styling */
+.server-port-input {
+    width: 140px;
+    text-align: center;
+}
+
+/* Separator between host and port inputs */
+.port-separator {
+    font-size: 2rem;
+    color: var(--jf-text-secondary, #ccc);
+    margin: 0 4px;
 }
 
 .connect-btn {

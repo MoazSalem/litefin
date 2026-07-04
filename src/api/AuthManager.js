@@ -272,8 +272,14 @@ class AuthManager {
         // Validate token with a server round-trip
         try {
             log.info('Validating token by fetching current user...');
-            // Use an 8s timeout instead of 30s to quickly detect offline hosts on boot
-            const user = await api.getCurrentUser({ timeout: 8000 });
+            // Fire getPublicInfo in parallel with getCurrentUser — they're independent
+            const userPromise = api.getCurrentUser({ timeout: 8000 });
+            const serverInfoPromise = api
+                .getPublicInfo()
+                .then((info) => state.set('server:info', info))
+                .catch((e) => log.warn('Failed to fetch server info on restore — isEmby() may behave incorrectly:', e));
+
+            const user = await userPromise;
             log.info('Token valid, user:', user?.Name);
 
             // Sync the stored session with fresh user data from the server
@@ -284,6 +290,9 @@ class AuthManager {
                 primaryImageTag: user.PrimaryImageTag || null
             });
 
+            // Ensure server info is set before proceeding (likely already resolved)
+            await serverInfoPromise;
+
             // Publish authenticated state
             state.set('user:data', user);
             state.set('user:authenticated', true);
@@ -291,19 +300,12 @@ class AuthManager {
             state.set('server:offline', false);
             state.set('user:sessionCount', this._loadSessions().length);
 
-            // Report capabilities to make this user visible as "online" in the dashboard
-            log.info('Reporting capabilities to server...');
-            try {
-                await api.reportCapabilities({
-                    ...SUPPORTED_CAPABILITIES,
-                    DeviceProfile: buildJellyfinProfile()
-                });
-                log.info('✓ Capabilities reported on restore — user is online');
-            } catch (e) {
-                log.error('✗ Failed to report capabilities on restore:', e);
-            }
+            // Defer capabilities reporting and WebSocket open — non-critical for first paint
+            api.reportCapabilities({
+                ...SUPPORTED_CAPABILITIES,
+                DeviceProfile: buildJellyfinProfile()
+            }).catch((e) => log.error('✗ Failed to report capabilities on restore:', e));
 
-            // Open WebSocket for real-time dashboard presence
             api.openWebSocket();
 
             return true;
@@ -604,6 +606,9 @@ class AuthManager {
     async switchUser(userId) {
         log.info(`Switching to user ${userId}...`);
 
+        // Invalidate homepage data cache — it belongs to the previous user/server
+        state.delete('home:pageCache');
+
         const sessions = this._loadSessions();
         const session = sessions.find((s) => s.userId === userId);
 
@@ -681,6 +686,9 @@ class AuthManager {
     async logout() {
         log.info('Logging out current user...');
 
+        // Invalidate homepage data cache — user-specific data no longer applies
+        state.delete('home:pageCache');
+
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
         const sessions = this._loadSessions();
         const session = sessions.find((s) => s.userId === activeUserId);
@@ -695,13 +703,23 @@ class AuthManager {
 
             log.info('Notifying server of logout...');
             try {
+                /*
+                 * Construct appropriate headers for the logout request.
+                 * If we are connected to an Emby server, we must supply
+                 * the token in the dedicated 'X-Emby-Token' header.
+                 */
+                const headers = {
+                    Authorization: authHeader,
+                    'Content-Type': 'application/json'
+                };
+
+                if (api.isEmby()) {
+                    headers['X-Emby-Token'] = session.accessToken;
+                }
+
                 await fetch(url, {
                     method: 'POST',
-                    headers: {
-                        // Use the standard Authorization header — X-Emby-Authorization is deprecated
-                        'Authorization': authHeader,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: headers
                 });
                 log.info('Server notified of logout');
             } catch (e) {

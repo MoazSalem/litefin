@@ -1,4 +1,5 @@
 import { logger } from './Logger.js';
+import { state } from '../core/StateManager.js';
 
 const log = logger.create('FontLoader');
 
@@ -32,12 +33,11 @@ class FontLoader {
             kitty: 'Kitty',
             inter: 'Inter',
             proxima: 'Proxima Nova',
-            /* ---------------------------------------------------------
-               Baloo Bhaijaan 2 - Rounded high-quality font
-               --------------------------------------------------------- */
             baloo: 'Baloo Bhaijaan 2',
             opendyslexic: 'OpenDyslexic',
-            atkinson: 'Atkinson Hyperlegible'
+            atkinson: 'Atkinson Hyperlegible',
+            'poiret-one': 'Poiret One',
+            'zen-kaku-gothic-new': 'Zen Kaku Gothic New'
         };
 
         // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls
@@ -62,6 +62,21 @@ class FontLoader {
         }
         this._blobUrls.clear();
         log.debug('Container font blob URLs cleared.');
+    }
+
+    /**
+     * =========================================================================
+     * getContainerFontUrls
+     * =========================================================================
+     * Returns a flat array of all active container-embedded font blob URLs currently
+     * stored in the session cache. This allows the WASM subtitle renderer
+     * (libass-wasm / SubtitlesOctopus) to resolve and draw custom typesetting
+     * files directly.
+     * =========================================================================
+     * @returns {string[]} Array of active blob URLs
+     */
+    getContainerFontUrls() {
+        return Array.from(this._blobUrls);
     }
 
     /**
@@ -287,17 +302,29 @@ class FontLoader {
 
         if (fontAttachments.length === 0) return [];
 
+        /*
+         * Dynamically select the token query parameter key name.
+         * Emby does not return a 'ProductName' in its public (unauthenticated)
+         * System Info response, whereas Jellyfin does.
+         */
+        const serverInfo = state.get('server:info') || {};
+        const isEmbyInstance = !!(
+            serverInfo.ServerName &&
+            (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby'))
+        );
+        const authKey = isEmbyInstance ? 'api_key' : 'ApiKey';
+
         // Download all font attachments in parallel.
         // This avoids the major sequential bottleneck when a media container has multiple fonts.
         const downloadPromises = fontAttachments.map(async (font, idx) => {
-            const uniqueIndex = font.Index !== undefined ? font.Index : (idx + 1);
+            const uniqueIndex = font.Index !== undefined ? font.Index : idx + 1;
             let url;
             if (font.DeliveryUrl) {
                 url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;
                 const sep = url.includes('?') ? '&' : '?';
-                url += `${sep}ApiKey=${encodeURIComponent(authToken)}`;
+                url += `${sep}${authKey}=${encodeURIComponent(authToken)}`;
             } else {
-                url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?ApiKey=${encodeURIComponent(authToken)}`;
+                url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?${authKey}=${encodeURIComponent(authToken)}`;
             }
 
             try {

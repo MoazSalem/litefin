@@ -9,7 +9,7 @@
 
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
-import { detectTizenVersion } from '../../api/profiles/TizenProfile.js';
+import { detectTizenVersion, getDeviceCapabilities } from '../../api/profiles/TizenProfile.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('TizenAVPlayer');
@@ -18,6 +18,7 @@ const log = logger.create('TizenAVPlayer');
 // Used to gate hardware-specific workarounds (e.g. subtitle pause/resume cycle
 // is only needed on Tizen 2.4–3.x; Tizen 4.0+ handles it natively).
 const TIZEN_VERSION = detectTizenVersion();
+const DEVICE_CAPS = getDeviceCapabilities();
 
 // ============================================================================
 // TizenAVPlayer Class
@@ -254,8 +255,13 @@ export class TizenAVPlayer {
                         }
                     }
                     
-                    // 2. Legacy 4K Mode (Required for some older Tizen TVs to accept 4K HLS)
-                    if (!isDirectPlay && (options.mediaSource?.Bitrate > 20000000 || options.mediaSource?.Width > 1920)) {
+                    // 2. Legacy 4K Mode — DEPRECATED on Tizen 5.0+
+                    //    SET_MODE_4K is deprecated since Tizen 5.0. On 5.0+, FIXED_MAX_RESOLUTION
+                    //    in ADAPTIVE_INFO (set below) replaces it and handles 4K/8K dynamically.
+                    //    On Tizen < 5.0, set it only when the device is UHD-capable AND the
+                    //    content is 4K+ (or likely 4K+ based on bitrate when resolution unknown).
+                    if (!isDirectPlay && TIZEN_VERSION < 5.0 && DEVICE_CAPS.uhd &&
+                        (options.mediaSource?.Height > 1080 || options.mediaSource?.Width > 1920 || options.mediaSource?.Bitrate > 20000000)) {
                         try {
                             this._avplay.setStreamingProperty("SET_MODE_4K", "TRUE");
                         } catch (e) {
@@ -266,15 +272,32 @@ export class TizenAVPlayer {
                     // 3. ABR Quality Kickstart (HLS/Adaptive Only)
                     if (!isDirectPlay) {
                         try {
+                            // Derive FIXED_MAX_RESOLUTION from device capabilities + content resolution.
+                            // Per Samsung docs, only needed when the manifest doesn't describe resolutions,
+                            // but we set it unconditionally as a safety cap so AVPlay never requests
+                            // segments beyond what the device can decode.
+                            const contentWidth = options.mediaSource?.Width || 0;
+                            const contentHeight = options.mediaSource?.Height || 0;
+                            let fixedMaxRes;
+                            if (contentWidth > 0 && contentHeight > 0) {
+                                const w = Math.min(contentWidth, DEVICE_CAPS.screenWidth);
+                                const h = Math.min(contentHeight, DEVICE_CAPS.screenHeight);
+                                fixedMaxRes = `${w}x${h}`;
+                            } else {
+                                // No content resolution info — tell AVPlay the device's max so ABR
+                                // doesn't limit itself (common with 8K manifests missing resolution data).
+                                fixedMaxRes = `${DEVICE_CAPS.screenWidth}x${DEVICE_CAPS.screenHeight}`;
+                            }
+
                             const props = [
-                                'FIXED_MAX_RESOLUTION=3840x2160', // Correctly cased 'x' per modern Tizen docs, though 'X' works on some.
+                                `FIXED_MAX_RESOLUTION=${fixedMaxRes}`,
                                 'STARTBITRATE=HIGHEST', // Force hardware to skip ramp-up delay
                                 'USER_AGENT=JellyfinTizenClient', // Modern way to set UA in 5.0+
                                 `INITIAL_BUFFER_DURATION=${bufferPlaySec * 1000}`,
                                 `RESUME_BUFFER_DURATION=${bufferResumeSec * 1000}`
                             ].join('|');
                             this._avplay.setStreamingProperty("ADAPTIVE_INFO", props);
-                            log.info('Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin, FIXED_MAX_RESOLUTION=3840x2160');
+                            log.info(`Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin, FIXED_MAX_RESOLUTION=${fixedMaxRes}`);
                         } catch (e) {
                              log.warn('Failed to set hls-specific properties:', e.message || e);
                         }
@@ -582,12 +605,10 @@ export class TizenAVPlayer {
                         (this._pendingSubtitleIndex === null || this._pendingSubtitleIndex === -1)) {
                         const seekMs = this._pendingSeekMs;
                         this._pendingSeekMs = null;
-                        try {
-                            log.info(`Resume seek to ${seekMs}ms (post first frame, no subtitle pending)`);
-                            this._avplay.seekTo(seekMs);
-                        } catch (e) {
+                        log.info(`Resume seek to ${seekMs}ms (post first frame, no subtitle pending)`);
+                        this._safeSeekTo(seekMs, null, (e) => {
                             log.warn('Resume seek failed:', e);
-                        }
+                        });
                     }
                 }
 
@@ -654,12 +675,10 @@ export class TizenAVPlayer {
                             if (this._pendingSeekMs !== null) {
                                 const stuckSeekMs = this._pendingSeekMs;
                                 this._pendingSeekMs = null;
-                                try {
-                                    log.warn(`[SubtitleSeek] Subtitle timed out — flushing deferred seek to ${stuckSeekMs}ms`);
-                                    this._avplay.seekTo(stuckSeekMs);
-                                } catch (e) {
+                                log.warn(`[SubtitleSeek] Subtitle timed out — flushing deferred seek to ${stuckSeekMs}ms`);
+                                this._safeSeekTo(stuckSeekMs, null, (e) => {
                                     log.warn('[SubtitleSeek] Deferred seek after subtitle timeout failed:', e);
-                                }
+                                });
                             }
                         }
                     }
@@ -724,6 +743,15 @@ export class TizenAVPlayer {
     _applyPendingTracks() {
         if (!this._avplay || !this._isPrepared) return;
 
+        // Per Samsung docs, getTotalTrackInfo() is valid in PLAYING and PAUSED.
+        // READY is only valid when using synchronous prepare() — we use prepareAsync().
+        let guardState = 'UNKNOWN';
+        try { guardState = this._avplay.getState(); } catch (_) {}
+        if (guardState !== 'PLAYING' && guardState !== 'PAUSED') {
+            log.debug(`_applyPendingTracks deferred — AVPlay state is '${guardState}', not PLAYING/PAUSED`);
+            return;
+        }
+
         const trackInfo = this._avplay.getTotalTrackInfo() || [];
         
         // If track info is completely empty, older Tizen might still be parsing headers.
@@ -734,28 +762,33 @@ export class TizenAVPlayer {
         }
 
         if (this._pendingAudioIndex !== null) {
-            const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
-            if (tizenAudioIndex !== null) {
-                try {
-                    this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
-                    this._pendingAudioIndex = null;
-                } catch (e) {
-                    // If Tizen returns InvalidStateError, the engine isn't ready for track switching.
-                    // Keep the index pending so the oncurrentplaytime loop can retry once stable.
-                    if (e.name === 'InvalidStateError' || e.code === 11) {
-                         log.debug(`Postponing audio track ${tizenAudioIndex} (InvalidStateError)`);
-                    } else {
-                        log.warn('Failed to apply audio track:', e);
+            // For HLS/DASH, setSelectTrack('AUDIO', ...) is only valid in PLAYING state
+            // per Samsung docs. Defer if not playing yet — oncurrentplaytime will retry.
+            let avplayState = 'UNKNOWN';
+            try { avplayState = this._avplay.getState(); } catch (_) {}
+            if (avplayState !== 'PLAYING') {
+                log.debug(`Audio track selection deferred — AVPlay state is '${avplayState}', not PLAYING`);
+            } else {
+                const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
+                if (tizenAudioIndex !== null) {
+                    try {
+                        this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                        this._pendingAudioIndex = null;
+                    } catch (e) {
+                        if (e.name === 'InvalidStateError' || e.code === 11) {
+                             log.debug(`Postponing audio track ${tizenAudioIndex} (InvalidStateError)`);
+                        } else {
+                            log.warn('Failed to apply audio track:', e);
+                            this._pendingAudioIndex = null;
+                        }
+                    }
+                } else {
+                    const totalTracks = this._avplay.getTotalTrackInfo() || [];
+                    if (totalTracks.some(t => t.type === 'AUDIO')) {
+                        log.warn(`Could not map pending audio index ${this._pendingAudioIndex}`);
                         this._pendingAudioIndex = null;
                     }
                 }
-            } else {
-                const totalTracks = this._avplay.getTotalTrackInfo() || [];
-                if (totalTracks.some(t => t.type === 'AUDIO')) {
-                    log.warn(`Could not map pending audio index ${this._pendingAudioIndex}`);
-                    this._pendingAudioIndex = null;
-                }
-                // Else: AVPlay hasn't parsed audio tracks yet. Remain pending.
             }
         }
 
@@ -775,38 +808,24 @@ export class TizenAVPlayer {
                 }
             } else {
                 // ================================================================
-                // IMPROVEMENT C: PLAYING state gate before setSelectTrack.
+                // IMPROVEMENT C: State gate before setSelectTrack('TEXT', ...).
                 //
-                // Some Tizen firmwares (especially 2.4–3.0, and some 4.x units)
-                // silently ignore setSelectTrack('TEXT', ...) if the player is in
-                // anything other than the PLAYING state at the moment of the call.
+                // Per Samsung docs, setSelectTrack('TEXT', ...) is valid in PLAYING
+                // and PAUSED for HLS/DASH (READY is Smooth Streaming only). We defer
+                // to oncurrentplaytime if not in a valid state.
                 //
-                // This function is called from both onbufferingcomplete (state=READY)
-                // and oncurrentplaytime (state=PLAYING).  We attempt the switch only
-                // when we're verified PLAYING; otherwise we leave _pendingSubtitleIndex
-                // set so the oncurrentplaytime loop retries on the next tick.
-                //
-                // Exception: if we are in READY state and the eager pre-play path
-                // (Improvement A) is running, we still try — on modern Tizen that works.
-                // We detect READY by checking !this._isTizenPlaying.
+                // The _delayedSubtitleIndex post-stabilization path provides a retry
+                // for firmware where early calls silently no-op.
                 // ================================================================
                 let avplayState = 'UNKNOWN';
                 try { avplayState = this._avplay.getState(); } catch (_) {}
 
-                // Allow attempt from READY state (pre-play Improvement A path)
-                // or from PLAYING state (normal oncurrentplaytime path).
-                // Bail out from PAUSED — the pause/resume cycle in setSubtitleStreamIndex
-                // already handles that scenario via _delayedSubtitleIndex.
-                const isReadyOrPlaying = avplayState === 'PLAYING' || avplayState === 'READY';
+                const isValidForText = avplayState === 'PLAYING' || avplayState === 'PAUSED';
 
-                if (!isReadyOrPlaying) {
-                    log.debug(`Subtitle track selection deferred — AVPlay state is '${avplayState}', not READY/PLAYING`);
+                if (!isValidForText) {
+                    log.debug(`Subtitle track selection deferred — AVPlay state is '${avplayState}', not PLAYING/PAUSED`);
                     // Leave _pendingSubtitleIndex set for the next oncurrentplaytime retry.
                 } else {
-                    // Pre-first-frame: try the raw setSelectTrack. This works on
-                    // Tizen 5.5+ where tracks activate during READY/buffering. On Tizen 5.0
-                    // it silently no-ops, but _delayedSubtitleIndex stays set so the
-                    // post-stabilization path will catch it later.
                     const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
                     if (tizenSubIndex !== null) {
                         try {
@@ -838,6 +857,15 @@ export class TizenAVPlayer {
                                 if (!this._avplay || !this._isPrepared || !this._isPlaying) return;
                                 if (this._activeTizenSubtitleIndex !== _confirmedTizenIndex) return;
 
+                                // Per Samsung docs, setSelectTrack('TEXT', ...) is only valid in
+                                // PLAYING or PAUSED for HLS. Skip if state has changed.
+                                let confirmState = 'UNKNOWN';
+                                try { confirmState = this._avplay.getState(); } catch (_) {}
+                                if (confirmState !== 'PLAYING' && confirmState !== 'PAUSED') {
+                                    log.debug(`[SubtitleConfirm] Skipped — AVPlay state is '${confirmState}', not PLAYING/PAUSED`);
+                                    return;
+                                }
+
                                 try {
                                     log.info(`[SubtitleConfirm] Re-applying TEXT track ${_confirmedTizenIndex} at +4s to ensure hardware compliance`);
                                     this._avplay.setSelectTrack('TEXT', _confirmedTizenIndex);
@@ -860,17 +888,26 @@ export class TizenAVPlayer {
                                 const seekMs = this._pendingSeekMs;
                                 const seekSubIndex = tizenSubIndex; // capture for post-seek closure
                                 this._pendingSeekMs = null; // consume now to prevent double-apply
-                                try {
-                                    log.info(`[SubtitleSeek] Subtitle confirmed — seeking to resume position ${seekMs}ms`);
-                                    this._avplay.seekTo(seekMs);
 
-                                    // Re-apply the subtitle track 200ms after seekTo.
-                                    // seekTo() can internally reset the active TEXT track on some
-                                    // Tizen firmware. The 200ms window gives the decoder time to
-                                    // stabilize before we re-assert the selection.
-                                    setTimeout(() => {
+                                log.info(`[SubtitleSeek] Subtitle confirmed — seeking to resume position ${seekMs}ms`);
+
+                                // Re-apply the subtitle track in the seekTo success callback.
+                                // seekTo() can internally reset the active TEXT track on some
+                                // Tizen firmware. Using the success callback instead of a raw
+                                // timer ensures we only re-apply after seek completes.
+                                this._safeSeekTo(
+                                    seekMs,
+                                    () => {
                                         if (!this._avplay || !this._isPrepared || !this._isPlaying) return;
                                         if (this._activeTizenSubtitleIndex !== seekSubIndex) return;
+
+                                        let seekState = 'UNKNOWN';
+                                        try { seekState = this._avplay.getState(); } catch (_) {}
+                                        if (seekState !== 'PLAYING' && seekState !== 'PAUSED') {
+                                            log.debug(`[SubtitleSeek] Skipped — AVPlay state is '${seekState}', not PLAYING/PAUSED`);
+                                            return;
+                                        }
+
                                         try {
                                             log.info(`[SubtitleSeek] Post-seek re-apply of TEXT track ${seekSubIndex}`);
                                             this._avplay.setSelectTrack('TEXT', seekSubIndex);
@@ -879,10 +916,11 @@ export class TizenAVPlayer {
                                         } catch (e) {
                                             log.warn('[SubtitleSeek] Post-seek subtitle re-apply failed:', e.message || e);
                                         }
-                                    }, 200);
-                                } catch (e) {
-                                    log.warn('[SubtitleSeek] Deferred resume seek failed:', e.message || e);
-                                }
+                                    },
+                                    (e) => {
+                                        log.warn('[SubtitleSeek] Deferred resume seek failed:', e);
+                                    }
+                                );
                             }
                         } catch (e) {
                             // If Tizen returns InvalidStateError, keep trying in the loop.
@@ -1032,13 +1070,17 @@ export class TizenAVPlayer {
                     // If a specific track was already successfully applied eagerly during READY state,
                     // the proactive silence just muted it. Unmute it to restore visibility.
                     if (this._activeTizenSubtitleIndex !== null && this._activeTizenSubtitleIndex !== -1) {
-                        try {
-                            // Re-assert the track selection. This acts as a pipeline flush
-                            // for backwards seeks where AVPlay's internal text buffer gets corrupted.
-                            this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
-                        } catch(e) {}
-                        this._avplay.setSilentSubtitle(false);
-                        log.debug('Restored silence state (unmuted) for active TEXT track');
+                        // Per Samsung docs, setSelectTrack('TEXT', ...) is only valid in
+                        // PLAYING or PAUSED for HLS. play() may not have transitioned yet.
+                        let postPlayState = 'UNKNOWN';
+                        try { postPlayState = this._avplay.getState(); } catch (_) {}
+                        if (postPlayState === 'PLAYING' || postPlayState === 'PAUSED') {
+                            try {
+                                this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
+                            } catch(e) {}
+                            this._avplay.setSilentSubtitle(false);
+                            log.debug('Restored silence state (unmuted) for active TEXT track');
+                        }
                     }
                 } catch (silenceErr) {
                     // Non-fatal — older firmware may throw in early PLAYING phase.
@@ -1064,6 +1106,32 @@ export class TizenAVPlayer {
      */
     _stopPositionTracking() {
         // No-op (handled by native events)
+    }
+
+    /**
+     * Wrapper around avplay.seekTo that uses success/error callbacks.
+     * Per Samsung docs, no other AVPlay API may be called while seekTo
+     * is in progress — the callbacks signal when it's safe.
+     * @private
+     * @param {number} ms - Target position in milliseconds
+     * @param {Function} [onSuccess] - Called when seek completes
+     * @param {Function} [onError] - Called if seek fails
+     */
+    _safeSeekTo(ms, onSuccess, onError) {
+        if (!this._avplay) {
+            if (onError) onError(new Error('No avplay instance'));
+            return;
+        }
+        try {
+            this._avplay.seekTo(
+                ms,
+                () => { if (onSuccess) onSuccess(); },
+                () => { if (onError) onError(new Error('seekTo failed')); }
+            );
+        } catch (e) {
+            log.warn('_safeSeekTo threw synchronously:', e);
+            if (onError) onError(e);
+        }
     }
 
     /**
@@ -1391,8 +1459,6 @@ export class TizenAVPlayer {
             if (options.suppressWaitingEvent) {
                 this._suppressWaitingEvent = true;
                 
-                // Clear the suppression flag after a safe timeout, or it will be
-                // cleared naturally by onbufferingcomplete / oncurrentplaytime
                 if (this._suppressWaitingTimeout) clearTimeout(this._suppressWaitingTimeout);
                 this._suppressWaitingTimeout = setTimeout(() => {
                     this._suppressWaitingEvent = false;
@@ -1403,75 +1469,87 @@ export class TizenAVPlayer {
             if (this._currentPlayOptions?.transcodingOffsetTicks) {
                 targetTicks = Math.max(0, positionTicks - this._currentPlayOptions.transcodingOffsetTicks);
             }
-            const positionMs = Math.floor(targetTicks / 10000);
-            this._avplay.seekTo(positionMs);
+            let positionMs = Math.floor(targetTicks / 10000);
+
+            // ── LIVE DVR Range Validation ────────────────────────────────────────
+            // For live streams, clamp the seek position to the available DVR range.
+            if (this._currentPlayOptions?.mediaSource?.IsLive) {
+                try {
+                    const liveDuration = this._avplay.getStreamingProperty('GET_LIVE_DURATION');
+                    if (liveDuration) {
+                        const parts = liveDuration.split('|');
+                        const dvrStart = parseInt(parts[0], 10);
+                        const dvrEnd = parseInt(parts[1], 10);
+                        if (!isNaN(dvrStart) && !isNaN(dvrEnd)) {
+                            const clamped = Math.max(dvrStart, Math.min(positionMs, dvrEnd));
+                            if (clamped !== positionMs) {
+                                log.warn(`seek(): Live DVR clamp ${positionMs}ms → ${clamped}ms (range: ${dvrStart}-${dvrEnd})`);
+                                positionMs = clamped;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    log.debug('seek(): GET_LIVE_DURATION not available, skipping DVR clamp');
+                }
+            }
 
             // ========================================================================
             // Post-Seek State Management and Automatic Playback Resume
             // ========================================================================
-            //
-            // After executing seekTo(), the AVPlay hardware pipeline begins fetching
-            // and buffering frames from the new position. If we were already playing
-            // (either logically _isPlaying or native _isTizenPlaying), AVPlay transitions
-            // internally into a buffering/READY state, requiring a subsequent .play()
-            // call to resume clock execution.
-            //
-            // We cache if the player was active before seek to initiate our safety timer.
-            // We set _isTizenPlaying to false so that the double-gate checks or unpause
-            // mechanisms know to re-assert play() once buffering completes.
-            //
             const wasPlayingBeforeSeek = this._isTizenPlaying || this._isPlaying;
             if (this._isTizenPlaying) {
                 this._isTizenPlaying = false;
                 log.debug('seek(): reset _isTizenPlaying for post-seek resume');
             }
 
-            // Emit a seek event so SyncPlayManager can react (e.g. broadcast to group, suppress echo).
             this.onEvent({ type: 'seek' });
 
-            // Manual timeupdate for paused state (native oncurrentplaytime is only fired when playing)
             const currentTime = targetTicks / 10000000;
             this.onEvent({ type: 'timeupdate', data: { time: currentTime } });
 
-            // ========================================================================
-            // ── Post-Seek Safety Resume Net ──────────────────────────────────────────
-            // ========================================================================
-            //
-            // On certain Tizen firmware models and network states, calling seekTo() can
-            // shift the media pipeline into the READY state without triggering the standard
-            // onbufferingstart / onbufferingcomplete native events. This happens particularly
-            // if the seek target is close to the current location or the chunk was already
-            // fully loaded in memory (such as fast skips triggered by plugins like intro-skipper).
-            //
-            // If those events do not fire, the player gets permanently stuck in the READY
-            // state (paused natively) because the JavaScript state machine never gets the trigger
-            // to execute _checkNativePlay().
-            //
-            // To address this at the core, we implement a 250ms safety timer. If the player
-            // is logically supposed to be playing (_isPlaying is true) but hasn't successfully
-            // resumed native play (_isTizenPlaying remains false) within 250ms, we force
-            // a safety check that triggers _checkNativePlay() to resume playback natively.
-            //
-            // ────────────────────────────────────────────────────────────────────────
-            if (wasPlayingBeforeSeek) {
-                if (this._seekSafetyTimeoutId !== null) {
-                    clearTimeout(this._seekSafetyTimeoutId);
-                }
-                this._seekSafetyTimeoutId = setTimeout(() => {
-                    this._seekSafetyTimeoutId = null;
-                    
-                    // Verify if the session is still active and logically intended to play
-                    if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
-                        log.info('seek(): safety timeout fired, re-asserting native playback after skip/seek');
-                        
-                        // Force buffering complete flag to true as a failsafe since the TV is stable
-                        this._bufferingComplete = true;
-                        
-                        // Re-gate and execute play() natively
-                        this._checkNativePlay();
+            // ── Execute seek with callbacks ──────────────────────────────────────
+            // Per Samsung docs, no other AVPlay API may be called while seekTo is
+            // in progress. The safety timer and any subtitle re-apply must wait for
+            // the success callback.
+            this._safeSeekTo(
+                positionMs,
+                () => {
+                    // ── Post-Seek Safety Resume Net ──────────────────────────────
+                    // On certain Tizen firmware, seekTo can leave the pipeline stuck
+                    // in READY without firing buffering events. This safety timer
+                    // re-asserts play() if the native layer hasn't resumed after 250ms.
+                    if (wasPlayingBeforeSeek) {
+                        if (this._seekSafetyTimeoutId !== null) {
+                            clearTimeout(this._seekSafetyTimeoutId);
+                        }
+                        this._seekSafetyTimeoutId = setTimeout(() => {
+                            this._seekSafetyTimeoutId = null;
+                            if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
+                                log.info('seek(): safety timeout fired, re-asserting native playback after skip/seek');
+                                this._bufferingComplete = true;
+                                this._checkNativePlay();
+                            }
+                        }, 250);
                     }
-                }, 250);
-            }
+                },
+                (e) => {
+                    log.warn('seek(): seekTo failed, safety net still armed:', e);
+                    // Even on error, arm the safety net as a fallback.
+                    if (wasPlayingBeforeSeek) {
+                        if (this._seekSafetyTimeoutId !== null) {
+                            clearTimeout(this._seekSafetyTimeoutId);
+                        }
+                        this._seekSafetyTimeoutId = setTimeout(() => {
+                            this._seekSafetyTimeoutId = null;
+                            if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
+                                log.info('seek(): error fallback safety timer fired');
+                                this._bufferingComplete = true;
+                                this._checkNativePlay();
+                            }
+                        }, 250);
+                    }
+                }
+            );
         } catch (e) {
             log.error('Seek failed:', e);
         }
@@ -1554,8 +1632,24 @@ export class TizenAVPlayer {
 
             if (index >= 0 && index < audioTracks.length) {
                 const track = audioTracks[index];
+
+                // Per Samsung docs, setSelectTrack('AUDIO', ...) is only valid in
+                // PLAYING state for HLS/DASH. Defer via _pendingAudioIndex if not.
+                let avplayState = 'UNKNOWN';
+                try { avplayState = this._avplay.getState(); } catch (_) {}
+                if (avplayState !== 'PLAYING') {
+                    log.debug(`Audio track ${track.index} deferred — AVPlay state is '${avplayState}', not PLAYING`);
+                    const jellyfinStreamIndex = this._currentPlayOptions?.mediaSource?.MediaStreams
+                        ?.filter(s => s.Type === 'Audio')?.[index]?.Index;
+                    if (jellyfinStreamIndex !== undefined) {
+                        this._pendingAudioIndex = jellyfinStreamIndex;
+                    }
+                    this._currentAudioStreamIndex = index;
+                    return;
+                }
+
                 this._avplay.setSelectTrack('AUDIO', track.index);
-                this._currentAudioStreamIndex = index; // Update state
+                this._currentAudioStreamIndex = index;
             } else {
                 log.error('Invalid audio index:', index, 'max:', audioTracks.length - 1);
             }
@@ -1576,6 +1670,18 @@ export class TizenAVPlayer {
         if (this._currentPlayOptions && this._currentPlayOptions.playMethod !== 'DirectPlay') {
             this._currentSubtitleStreamIndex = index;
             return Promise.resolve();
+        }
+
+        // Per Samsung docs, setSilentSubtitle and setSelectTrack('TEXT', ...) are only
+        // valid in PLAYING or PAUSED state for HLS. If the AVPlay session hasn't started
+        // yet (state = NONE/IDLE/READY), defer via _pendingSubtitleIndex.
+        let initState = 'UNKNOWN';
+        try { initState = this._avplay.getState(); } catch (_) {}
+        if (initState !== 'PLAYING' && initState !== 'PAUSED') {
+            log.debug(`setSubtitleStreamIndex deferred — AVPlay state is '${initState}', not PLAYING/PAUSED`);
+            this._pendingSubtitleIndex = index;
+            this._currentSubtitleStreamIndex = index;
+            return;
         }
 
         // ================================================================
@@ -1652,9 +1758,9 @@ export class TizenAVPlayer {
                     let avplayState = 'UNKNOWN';
                     try { avplayState = this._avplay.getState(); } catch (e) {}
 
-                    // Tizen 4.0+ firmwares ignore setSelectTrack when PAUSED/buffering.
-                    // If we didn't force the pause ourselves for the legacy workaround, defer it.
-                    if (!needsPauseForSubSwitch && avplayState !== 'PLAYING' && avplayState !== 'READY') {
+                    // Per Samsung docs, setSelectTrack('TEXT', ...) is valid in PLAYING
+                    // and PAUSED for HLS. Defer if in READY/IDLE/NONE.
+                    if (!needsPauseForSubSwitch && avplayState !== 'PLAYING' && avplayState !== 'PAUSED') {
                         this._pendingSubtitleIndex = index;
                         this._currentSubtitleStreamIndex = index;
                         log.debug(`setSubtitleStreamIndex: Player state is ${avplayState}. Deferring TEXT track ${tizenSubIndex}.`);
@@ -1721,13 +1827,19 @@ export class TizenAVPlayer {
     _applySubtitlePosition() {
         if (!this._avplay || !this._isPrepared) return;
 
+        // Per Samsung docs, setSubtitlePosition() is only valid in PLAYING or PAUSED.
+        let guardState = 'UNKNOWN';
+        try { guardState = this._avplay.getState(); } catch (_) {}
+        if (guardState !== 'PLAYING' && guardState !== 'PAUSED') {
+            log.debug(`Subtitle offset deferred — AVPlay state is '${guardState}', not PLAYING/PAUSED`);
+            return;
+        }
+
         try {
-            // Convert seconds to milliseconds for AVPlay API
             const offsetMs = Math.round(this._subtitleOffset * 1000);
             this._avplay.setSubtitlePosition(offsetMs);
             log.debug(`Subtitle offset applied: ${this._subtitleOffset}s (${offsetMs}ms)`);
         } catch (e) {
-            // setSubtitlePosition may fail if not in PLAYING/PAUSED state
             log.warn('Failed to apply subtitle offset:', e);
         }
     }

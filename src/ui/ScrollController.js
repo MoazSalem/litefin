@@ -244,9 +244,9 @@ class ScrollController {
             if (isVertical) {
                 if (scrollMode === 'gpu' && track) {
                     // Update transform coordinates on GPU compositor track.
-                    track.style.transform = `translate3d(0px, -${targetScroll}px, 0px)`;
-                    track.style.webkitTransform = `translate3d(0px, -${targetScroll}px, 0px)`;
-                    container.scrollTop = 0;
+                    track.style.transform = `translate3d(0px, -0px, 0px)`;
+                    track.style.webkitTransform = `translate3d(0px, -0px, 0px)`;
+                    container.scrollTop = targetScroll;
                 } else {
                     container.scrollTop = targetScroll;
                 }
@@ -488,7 +488,7 @@ class ScrollController {
         // focus transition on Tizen hardware.
         // ----------------------------------------------------------------
         if (element.id === 'hero-carousel-container' || element.closest('#hero-carousel-container')) {
-            if (pageContent && this.getVerticalScroll(pageContent) > 0) {
+            if (pageContent) {
                 this.smoothScrollTo(pageContent, 0, options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL);
             }
             return;
@@ -562,11 +562,15 @@ class ScrollController {
             const isHero = row.classList.contains('details-main-split');
 
             if (isHero) {
-                // Force scroll to absolute top for hero sections
-                if (this.getVerticalScroll(pageContent) > 0) {
-                    this.smoothScrollTo(pageContent, 0);
-                }
-                // Disable further row logic and generic vertical scroll
+                // ============================================================
+                // Force scroll to absolute top for hero/title split sections.
+                // We call smoothScrollTo(0) directly without checking if scroll is
+                // already > 0. This ensures that any active scroll animation in
+                // progress (e.g. from pressing down to rows below) gets cancelled/
+                // retargeted back to 0 immediately upon focus returning up.
+                // ============================================================
+                this.smoothScrollTo(pageContent, 0);
+                // Disable further row-based alignment logic and generic vertical scroll
                 useRowScroll = false;
                 activePageContent = null;
             }

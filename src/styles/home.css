@@ -26,9 +26,23 @@
     pointer-events: none;
 }
 
-/* Align skeleton cards with the row titles and loaded cards (60px padding) */
+/* 
+ * =========================================================================
+ * Skeleton Spacing & Alignment
+ * =========================================================================
+ * To prevent layout shifting and visual jumps when real data loads:
+ *
+ * 1. Classic Layout:
+ *    - Real cards start at left: 60px (sidePadding) + margin-left: 12px = 72px.
+ *    - Skeletons use margin-left: 0, so we set padding-left: 72px on the track.
+ *
+ * 2. Modern Layout:
+ *    - Real cards start at left: 60px (sidePadding) + margin-left: 0 = 60px.
+ *    - Skeletons use margin-left: 0, so we set padding-left: 60px on the track.
+ * =========================================================================
+ */
 .media-row--skeleton .row-items-track {
-    padding-left: 48px;
+    padding-left: 72px;
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
@@ -37,7 +51,7 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 
 [dir="rtl"] .media-row--skeleton .row-items-track {
     padding-left: 0;
-    padding-right: 48px;
+    padding-right: 72px;
 }
 
 [dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
@@ -45,6 +59,10 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
     padding-right: 60px;
 }
 
+/*
+ * ── Classic Skeleton Dimensions ──────────────────────────────────────────
+ * Classic cards use static variables computed from classic scale factors.
+ */
 .media-row--skeleton .media-card {
     width: var(--skeleton-card-width, 240px) !important;
     margin-right: var(--skeleton-card-margin, 24px) !important;
@@ -53,6 +71,27 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 
 .media-row--skeleton .media-card.landscape {
     width: var(--skeleton-card-width, 400px) !important;
+}
+
+/*
+ * ── Modern Skeleton Dimensions ───────────────────────────────────────────
+ * Modern cards use dynamically calculated variables (--card-width,
+ * --card-expanded-width, --card-margin) that scale with user settings.
+ * We override classic skeletons with high-specificity modern selectors.
+ */
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card {
+    width: var(--card-width) !important;
+    height: var(--card-height) !important;
+    margin-right: var(--card-margin) !important;
+    margin-left: 0 !important;
+}
+
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape {
+    width: var(--card-expanded-width) !important;
+}
+
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
+    width: var(--card-square-width) !important;
 }
 
 /* Skeleton rows fade out naturally when replaced (the real row fades in) */
@@ -306,5 +345,67 @@ html[data-layout-tier="ultra-legacy"] .media-card.focused .card-overlay-label {
     /* Scale only, no translate */
     -webkit-transform: scale(1.05);
     transform: scale(1.05);
+}
+
+/* ============================================================================
+   Favorites Page Clickable Header Styles (Independent)
+   ============================================================================ */
+.favorites-row-header {
+    margin-top: 15px;
+    margin-bottom: 5px;
+    padding-top: 5px;
+    /* Indent the container to 60px sidePadding minus 16px button padding = 44px */
+    margin-left: 44px;
+    margin-right: 44px;
+}
+
+.favorites-header-focusable {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--jf-text-primary);
+    padding: 6px 16px;
+    border-radius: var(--jf-border-radius);
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s ease-out, background-color 0.2s ease-out;
+    background-color: transparent;
+    border: 3px solid transparent;
+    outline: none;
+    transform-origin: left center;
+}
+
+.favorites-header-focusable svg,
+.favorites-header-focusable i {
+    margin-right: 8px;
+}
+
+/* Arrow margin specifically */
+.favorites-header-focusable .favorites-header-arrow {
+    margin-left: 12px;
+    transition: transform 0.2s ease-out;
+}
+
+.favorites-header-focusable:focus,
+.favorites-header-focusable.focused,
+.favorites-header-focusable:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: scale(1.08); /* Apple-style pop */
+    border-color: var(--jf-focus-border-color);
+    overflow: hidden !important;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
+}
+
+.favorites-header-focusable:focus .favorites-header-arrow,
+.favorites-header-focusable.focused .favorites-header-arrow {
+    transform: translateX(4px);
+}
+
+[data-theme="light"] .favorites-header-focusable:focus,
+[data-theme="light"] .favorites-header-focusable.focused {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: #000;
 }
 

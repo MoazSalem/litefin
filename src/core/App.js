@@ -20,6 +20,8 @@ import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from './syncplay/SyncPlayGroupMenu.js';
 import { exitDialog } from '../ui/ExitDialog.js';
+import { pinDialog } from '../ui/PinDialog.js';
+import { pinManager } from '../utils/PinManager.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -49,6 +51,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { smartHubManager } from '../tizen/SmartHubManager.js';
 import { remoteButtonManager } from './RemoteButtonManager.js';
+import { screensaverManager } from './ScreensaverManager.js';
 
 const log = logger.create('App');
 
@@ -123,12 +126,13 @@ class App {
         //      CSS variables are already present on <html> when the polyfill scans the DOM.
         cssVarsPolyfill.init();
 
-        // 3.5. Initialize translations
-        // Ensures language dictionaries are loaded before the UI renders
+        // 3.5. Initialize translations + auth session in parallel
+        // i18n and auth are completely independent — overlapping them saves a round-trip
         const appLanguage = storage.getItem('app_language') || 'en-us';
-        await i18n.init(appLanguage);
+        const i18nPromise = i18n.init(appLanguage);
+        const authPromise = auth.init();
 
-        // 3.6. Initialize Layout Direction (RTL/LTR)
+        // 3.6. Initialize Layout Direction (RTL/LTR) — only needs appLanguage string, not i18n data
         const layoutDirection = storage.getItem('layout_direction') || 'auto';
         let isRtl = false;
 
@@ -142,8 +146,8 @@ class App {
 
         document.documentElement.setAttribute('dir', isRtl ? 'rtl' : 'ltr');
 
-        // 4. Try to restore auth session
-        await auth.init();
+        // Wait for both to complete — they've been running in parallel
+        await Promise.all([i18nPromise, authPromise]);
 
         // 4.5. Initialize Smart Hub Preview (Tizen 4+ only — gracefully no-ops on older
         //      hardware or other platforms. Must run after auth.init() so the manager can
@@ -152,20 +156,42 @@ class App {
             smartHubManager.init();
         }
 
-        // 4.6. Initialize Plugin Manager and Screensaver if user is authenticated (session restores).
+        // ====================================================================
+        // 4.6. Plugin Manager Initialization
+        // ====================================================================
+        // Initialize Plugin Manager if a user session was successfully restored.
+        // However, if we have multiple cached user profiles or the active profile
+        // is protected by a PIN, the app will route the user to the "Who's Watching"
+        // selection screen. In that scenario, we must defer initialization until
+        // a profile is explicitly selected and unlocked, preventing unauthorized
+        // background API requests from firing on the selection screen.
         if (state.get('user:authenticated')) {
-            pluginManager
-                .init({
-                    api,
-                    focusManager,
-                    toast: null // Toast component reference wired up once UI is ready
-                })
-                .catch((err) => log.error('pluginManager.init failed:', err));
+            // Count of saved user profiles on the server
+            const sessionCount = state.get('user:sessionCount', 0);
+
+            // Retrieve current active user profile ID
+            const activeUserId = auth.getCurrentUser()?.Id;
+
+            // Verify if the active user profile has a local PIN lock enabled
+            const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
+
+            // Defer if user needs to go through profiles selection or PIN verification
+            if (sessionCount > 1 || activeHasPin) {
+                log.info('Deferring plugin manager initialization: profiles screen or PIN gate is active');
+            } else {
+                log.info('No profile switcher active: initializing plugin manager immediately');
+                pluginManager
+                    .init({
+                        api,
+                        focusManager,
+                        toast: null // Toast component reference wired up once UI is ready
+                    })
+                    .catch((err) => log.error('pluginManager.init failed:', err));
+            }
         }
 
         // Initialize ScreensaverManager (runs on all pages, handles its own auth checks)
         // Must be initialized after StorageService so it can read delay preferences.
-        const { screensaverManager } = await import('./ScreensaverManager.js');
         screensaverManager.init();
 
         /*
@@ -378,6 +404,12 @@ class App {
                 return;
             }
 
+            // PIN entry dialog — Back cancels it (aborts the gated action).
+            if (pinDialog && pinDialog.isVisible) {
+                pinDialog.close(true);
+                return;
+            }
+
             const currentPage = router.getCurrentPage();
 
             // 1. Try page-specific back handler
@@ -461,6 +493,12 @@ class App {
          */
         eventBus.on('auth:switchToProfiles', () => {
             log.info('Switching to profiles screen (other sessions remain)');
+
+            // Wrecks active plugin instances and clears server plugin detection cache
+            // before redirecting to the user selection view, ensuring no background
+            // plugins continue fetching endpoints during the profile select flow.
+            pluginManager.destroy();
+
             router.reset('/profiles');
         });
 
@@ -511,7 +549,8 @@ class App {
                 subtitleStreamIndex,
                 backdropUrl,
                 fromSlideshow,
-                fromBrowse
+                fromBrowse,
+                ghostMode
             }) => {
                 log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
@@ -598,6 +637,18 @@ class App {
                 const queryParts = [];
                 if (fromSlideshow) queryParts.push('fromSlideshow=true');
                 if (fromBrowse) queryParts.push('fromBrowse=true');
+                if (ghostMode) queryParts.push('ghostMode=true');
+
+                // Determine referrer context to handle exit routing cleanly.
+                // If we are playing from a details screen or the Live TV guide,
+                // we want to ensure we navigate back to the correct view on exit.
+                const currentPath = router.getCurrentPath?.() || '';
+                if (currentPath.startsWith('/details/')) {
+                    queryParts.push('fromDetails=true');
+                } else if (currentPath.startsWith('/livetv')) {
+                    queryParts.push('fromGuide=true');
+                }
+
                 const queryParam = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
 
                 // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
@@ -621,11 +672,23 @@ class App {
                     return;
                 }
 
-                // If we came from a slideshow or a browse-page Play key, we PUSH the
-                // player so we can go BACK to the originating page exactly where we
-                // left off. For DetailsPage launches we REPLACE to prevent history bloat.
+                // If we came from a slideshow, a browse-page Play key, or the Live TV guide,
+                // we PUSH the player so we can go BACK to the originating page exactly where
+                // we left off. The Live TV case is critical: replacing /livetv in history
+                // destroys the saved tab, EPG scroll position, and focused program, so
+                // pressing Back from the player lands the user on a blank suggestions tab
+                // with no focus (stuck). Pushing the player keeps /livetv alive in history.
+                //
+                // For DetailsPage launches we still REPLACE to prevent history bloat.
+                //
+                // Standard web exception:
+                // We disable this optimization on standard web browsers to prevent breaking
+                // the browser's native back button behavior and page reload flow.
+                const isFromLiveTv = currentPath.startsWith('/livetv');
+                const shouldReplace = !fromSlideshow && !fromBrowse && !isFromLiveTv && !platformInfo.isWeb;
+
                 router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${queryParam}`, {
-                    replace: !fromSlideshow && !fromBrowse
+                    replace: shouldReplace
                 });
             }
         );
@@ -770,17 +833,25 @@ class App {
                 const isOffline = state.get('server:offline');
                 const isAuthenticated = state.get('user:authenticated');
                 const sessionCount = state.get('user:sessionCount', 0);
+                // If the restored profile is PIN-locked, never silently auto-resume
+                // it — force the profile picker so ProfilesPage._switchToUser runs
+                // the PIN gate before any content is shown.
+                const activeUserId = auth.getCurrentUser()?.Id;
+                const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
-                } else if (isAuthenticated && sessionCount > 1) {
-                    // Multiple users are stored — make them choose who's watching
-                    log.info(`Initial route: ${sessionCount} sessions stored, navigating to ProfilesPage`);
+                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin)) {
+                    // Multiple users stored, or the restored profile is PIN-locked —
+                    // make them pick a profile (which enforces any PIN).
+                    log.info(
+                        `Initial route: navigating to ProfilesPage (sessions=${sessionCount}, pinLocked=${activeHasPin})`
+                    );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Single user — skip the profiles screen and go straight home
+                    // Single user, no PIN — skip the profiles screen and go straight home
                     log.info('Initial route: Authenticated (single user), navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {

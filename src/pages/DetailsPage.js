@@ -108,6 +108,9 @@ class DetailsPage extends Page {
                                 <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}">
                                     ${detailsIcons.reset}
                                 </button>
+                                <button class="btn btn-icon ghost-btn hidden" tabindex="-1" aria-label="${i18n.t('GhostMode') || 'Ghost Mode'}">
+                                    ${detailsIcons.ghost}
+                                </button>
                                 <!-- Trailer button — shown only when item has local or remote trailers.
                                      Visibility is set dynamically by _updateTrailerButton() after load. -->
                                 <button class="btn btn-icon trailer-btn hidden" tabindex="-1" aria-label="${i18n.t('WatchTrailer') || 'Watch Trailer'}">
@@ -284,18 +287,29 @@ class DetailsPage extends Page {
     }
 
     _setupFocus() {
-        // Register Action Buttons
+        // ====================================================================
+        // Details Page Primary Actions Focus Registration
+        // ====================================================================
+        // We register the actions section using a 'grid' orientation instead
+        // of 'horizontal'. Under Apple's Human Interface Guidelines (HIG) and TV
+        // navigation best practices, controls must be predictable and reachable.
+        // On smaller displays or layouts with wrapped buttons, a strict horizontal
+        // orientation forces users to navigate linearly and skips wrapped elements
+        // when pressing vertical keys (UP/DOWN).
+        // Using 'grid' delegates movement to the SpatialNavigator, allowing the D-pad
+        // to move naturally between wrapped rows of action buttons.
+        // ====================================================================
         this.registerFocusSection('details-actions', this.$('#actions'), {
-            orientation: 'horizontal',
-            leaveUp: null, // Top of page
-            leaveDown: null, // Will be updated dynamically
+            orientation: 'grid',
+            leaveUp: null, // Boundary at the top of the page
+            leaveDown: null, // Dynamically chained based on sibling visibility
             leaveLeft: 'sidebar',
-            // PRIORITIZE: Always land on Resume (if visible) or Play when entering this row
-            // This prevents "random" landing on Favorite/Subtitle buttons when coming from below
+            // Landing priority: always favor primary action (Play or Resume)
+            // when entering this section to keep interaction flow consistent.
             defaultFocusSelector: '.resume-btn:not(.hidden), .play-btn'
         });
 
-        // Default to actions row (will be overridden in _loadDetails for Season items)
+        // Set the primary actions row as the initial active focus section
         this.setActiveSection('details-actions');
     }
 
@@ -336,6 +350,13 @@ class DetailsPage extends Page {
         if (resetBtn) {
             resetBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._resetProgress()));
             resetBtn.addEventListener('click', (e) => handleActivate(e, () => this._resetProgress()));
+        }
+
+        // Ghost button
+        const ghostBtn = this.$('.ghost-btn');
+        if (ghostBtn) {
+            ghostBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._play({ ghostMode: true })));
+            ghostBtn.addEventListener('click', (e) => handleActivate(e, () => this._play({ ghostMode: true })));
         }
 
         // Trailer button
@@ -452,6 +473,11 @@ class DetailsPage extends Page {
                 }
             }
 
+            // Fire user fetch in parallel with item fetch — they're independent.
+            // The user object is only needed for the context menu (admin checks),
+            // not for the initial render, so it does not block text/poster display.
+            const userPromise = state.get('user:data') ? Promise.resolve(state.get('user:data')) : api.getCurrentUser();
+
             const item = await api.getItem(this._itemId, {
                 // We request comprehensive fields to avoid redundant refetching.
                 // CanDelete is essential for implementing the 'Delete Media' feature.
@@ -460,40 +486,26 @@ class DetailsPage extends Page {
                 Fields: requestedFields.join(',')
             });
             this._item = item;
-            //log.debug('Item loaded:', item);
 
-            // ── Restore persisted version selection ─────────────────────────────────
-            // We key by itemId so each item independently remembers its last version.
-            // Only restore if the saved ID still exists in the current MediaSources list
-            // (the server may have removed a version since the last visit).
-            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
-            if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
-                this._selectedMediaSourceId = savedSourceId;
-                log.info('Restored persisted media source:', savedSourceId);
-            } else {
-                // Reset — either first visit or the saved source no longer exists
-                this._selectedMediaSourceId = null;
-            }
-
-            // Reset stream selections on every fresh item load (they are version-specific)
-            this._selectedAudioIndex = undefined;
-            this._selectedSubtitleIndex = undefined;
-
-            // ────────────────────────────────────────────────────────────────────────
-            // 3. Fetch User and Library Context
-            // ────────────────────────────────────────────────────────────────────────
-            this._currentUser = await api.getCurrentUser();
-            log.debug('Current user loaded:', this._currentUser);
-
-            // 2. Render all text content immediately (Metadata, Hero Info)
+            // 2. Render all text content immediately — only needs this._item
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
-
-            // Show/hide the trailer button based on what the item exposes.
-            // We can do this immediately — both LocalTrailerCount and RemoteTrailers
-            // are present in the initial getItem response without extra API calls.
             this._updateTrailerButton();
+
+            // ── Restore persisted version selection ─────────────────────────────────
+            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
+            if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
+                this._selectedMediaSourceId = savedSourceId;
+            } else {
+                this._selectedMediaSourceId = null;
+            }
+
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
+
+            // Await user data (likely already resolved from state cache)
+            this._currentUser = await userPromise;
 
             // 3. Fire image loading in the background (fire-and-forget).
             // The poster and backdrop are not used for layout — they are decorative
@@ -582,10 +594,8 @@ class DetailsPage extends Page {
                     }
                 }
 
-                // 6. NOW hide loading - page is scrolled and focused correctly
-                requestAnimationFrame(() => {
-                    this.setLoading(false);
-                });
+                // 6. NOW hide loading — page is scrolled and focused correctly
+                this.setLoading(false);
             });
         } catch (error) {
             log.error('Failed to load', error);
@@ -1639,15 +1649,54 @@ class DetailsPage extends Page {
 
         if (logoItemId && logoTag) {
             const params = imageService.getParams('details-logo');
+            const titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+            const isLogoOnly = titleStyle === 'logo-only';
+            const baseWidth = isLogoOnly ? 360 : 280;
+            const baseHeight = isLogoOnly ? 140 : 100;
+            const dpr = window.devicePixelRatio || 1;
+
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: params.maxWidth,
+                fillWidth: Math.round(baseWidth * dpr),
+                fillHeight: Math.round(baseHeight * dpr),
                 quality: params.quality,
                 tag: logoTag
             });
             const img = new Image();
+            if (item.Type === 'Season' || item.Type === 'Episode') {
+                const targetId = item.SeriesId;
+                if (targetId) {
+                    img.classList.add('clickable-logo');
+                    img.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        log.info('Logo clicked, navigating to series details:', targetId);
+                        router.navigate(`/details/${targetId}`);
+                    };
+                }
+            }
+
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
+                    // =========================================================================
+                    // Apple HIG: Dynamic Visual Weight Adaptation (Sleek Proportional Spacing)
+                    // =========================================================================
+                    // Calculate the natural aspect ratio of the loaded logo image.
+                    // By dividing the max width by the aspect ratio, we find the target height.
+                    // We cap the height dynamically to keep the layout visually balanced:
+                    // - Tall/square logos get more height (up to 140px) to remain legible.
+                    // - Wide/short logos shrink in container height to eliminate top whitespace.
+                    // =========================================================================
+                    const aspect = img.naturalWidth / img.naturalHeight || 1;
+                    const maxW = isLogoOnly ? 360 : 280;
+                    const targetHeight = maxW / aspect;
+                    const minHeight = isLogoOnly ? 60 : 50;
+                    const maxHeight = isLogoOnly ? 140 : 100;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+
+                    // Apply the computed height dynamically
+                    logoContainer.style.height = `${containerHeight}px`;
+
                     logoContainer.innerHTML = '';
                     logoContainer.appendChild(img);
                     img.classList.add('loaded');
@@ -1733,7 +1782,10 @@ class DetailsPage extends Page {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating && shouldShowScore(item) ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}` : '';
+        const starRating =
+            item.CommunityRating && shouldShowScore(item)
+                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
+                : '';
         const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';
@@ -1818,8 +1870,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                  ? item.OriginalTitle
-                  : ''
+                    ? item.OriginalTitle
+                    : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -1860,7 +1912,10 @@ class DetailsPage extends Page {
                 ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
                 : `${seasonPrefix}${episodePrefix} - ${item.SeriesName}`;
 
-            heroHtml += `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+            const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
+            const colorClass = useSecondaryColor ? 'secondary-color' : '';
+
+            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
         }
 
         // Finish appending standard metadata row and secondary date labels.
@@ -2059,6 +2114,20 @@ class DetailsPage extends Page {
             }
         }
 
+        // Ghost Mode button visibility
+        const ghostBtn = this.$('.ghost-btn');
+        if (ghostBtn) {
+            const isSyncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
+            const isPlayable = item.Type !== 'Photo' && !isSyncPlayActive;
+            if (isPlayable) {
+                ghostBtn.classList.remove('hidden');
+                ghostBtn.setAttribute('tabindex', '0');
+            } else {
+                ghostBtn.classList.add('hidden');
+                ghostBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
         // Photo overrides for Action Buttons
         if (item.Type === 'Photo') {
             if (playBtn) {
@@ -2117,7 +2186,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => {});
+        requestAnimationFrame(() => { });
 
         // Watched button
         if (watchedBtn) {
@@ -2229,7 +2298,7 @@ class DetailsPage extends Page {
     async _loadNextUp() {
         try {
             let response;
-            
+
             // Check if the current server is Emby. Emby ignores the SeriesId parameter
             // on the /Shows/NextUp endpoint, so we fall back to querying the first
             // unplayed episode of the series via /Items, which matches NextUp logic.
@@ -2241,7 +2310,7 @@ class DetailsPage extends Page {
                     IncludeItemTypes: 'Episode',
                     Limit: 1,
                     Filters: 'IsUnplayed',
-                    SortBy: 'SortName',
+                    SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
                     Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                 });
@@ -2249,7 +2318,7 @@ class DetailsPage extends Page {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
                 response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
             }
-            
+
             this._nextUp = response.Items || [];
 
             if (this._nextUp.length > 0) {
@@ -2683,7 +2752,7 @@ class DetailsPage extends Page {
             if (siblings.length > 0) {
                 // Find index of the current active episode in the siblings list
                 const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
-                
+
                 // Pass siblings and focused index down to renderer
                 this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
             }
@@ -2700,19 +2769,20 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                      this._item.SeasonName.toLowerCase().startsWith('season ')
-                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                          : /^\d+$/.test(this._item.SeasonName)
+                    this._item.SeasonName.toLowerCase().startsWith('season ')
+                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                        : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                  ])
+                ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
             // -------------------------------------------------------------
-            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode', {
-                isCurrentEpisode: ep.Id === this._itemId
-            }),
+            renderCard: (ep) =>
+                this._renderMediaCard(ep, true, 'episode', {
+                    isCurrentEpisode: ep.Id === this._itemId
+                }),
             focusSectionName: 'more-from-season-section',
             currentIndex: currentEpisodeIndex
         });
@@ -2827,7 +2897,7 @@ class DetailsPage extends Page {
         });
     }
 
-    async _play({ resume = false, isShufflePlay = false } = {}) {
+    async _play({ resume = false, isShufflePlay = false, ghostMode = false } = {}) {
         let itemToPlay = this._item;
 
         // If it's a Live TV Program, play the parent Channel instead
@@ -2948,7 +3018,7 @@ class DetailsPage extends Page {
                             Recursive: true,
                             IncludeItemTypes: 'Episode',
                             Limit: 1,
-                            SortBy: 'SortName',
+                            SortBy: 'ParentIndexNumber,IndexNumber',
                             Fields: fields
                         });
                         if (firstEp && firstEp.Items && firstEp.Items.length > 0) {
@@ -2999,7 +3069,7 @@ class DetailsPage extends Page {
                                 IncludeItemTypes: 'Episode',
                                 Limit: 1,
                                 Filters: 'IsUnplayed',
-                                SortBy: 'SortName',
+                                SortBy: 'ParentIndexNumber,IndexNumber',
                                 Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                             });
                         } else {
@@ -3072,11 +3142,12 @@ class DetailsPage extends Page {
 
         eventBus.emit('player:play', {
             item: itemToPlay,
-            resume,
+            resume: ghostMode ? false : resume,
             mediaSourceId: this._selectedMediaSourceId,
             audioStreamIndex: this._selectedAudioIndex,
             subtitleStreamIndex: this._selectedSubtitleIndex,
-            backdropUrl
+            backdropUrl,
+            ghostMode
         });
     }
 

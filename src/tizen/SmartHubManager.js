@@ -39,11 +39,13 @@
  */
 
 import { api } from '../api/ApiClient.js';
+import { auth } from '../api/index.js';
 import { tizenAdapter } from './TizenAdapter.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { logger } from '../utils/Logger.js';
+import { pinManager } from '../utils/PinManager.js';
 
 const log = logger.create('SmartHubManager');
 
@@ -84,6 +86,19 @@ class SmartHubManager {
 
         /** @type {Object|null} - Last successfully built preview JSON (in-memory cache). */
         this._cachedJson = null;
+
+        /**
+         * @type {Object|null} - A deep-link target held back because the active
+         * profile is PIN-locked. Replayed once the profile is unlocked.
+         */
+        this._pendingDeepLink = null;
+
+        /**
+         * @type {boolean} - True once the active profile has been unlocked this
+         * run (a real auth:login fired). Restoring a session at startup does NOT
+         * set this, so a PIN-locked profile stays gated until the user enters it.
+         */
+        this._unlocked = false;
     }
 
     // ========================================================================
@@ -127,8 +142,27 @@ class SmartHubManager {
         }
 
         // Wire into auth events for ongoing session management.
-        eventBus.on('auth:login', () => this._startRefreshCycle());
-        eventBus.on('auth:logout', () => this._stopRefreshCycle());
+        eventBus.on('auth:login', () => {
+            // A real login/switch means the active profile is now unlocked.
+            this._unlocked = true;
+            this._startRefreshCycle();
+
+            // Replay any deep link that was held back for the PIN gate. Deferred
+            // so it runs AFTER ProfilesPage._switchToUser's own navigate('/home'),
+            // otherwise that would clobber our details navigation.
+            if (this._pendingDeepLink) {
+                const target = this._pendingDeepLink;
+                this._pendingDeepLink = null;
+                log.info('Replaying held deep link after PIN unlock');
+                setTimeout(() => this._navigateToItem(target), 0);
+            }
+        });
+        eventBus.on('auth:logout', () => {
+            // Re-lock: the next entry into a PIN profile must re-prompt.
+            this._unlocked = false;
+            this._pendingDeepLink = null;
+            this._stopRefreshCycle();
+        });
     }
 
     /**
@@ -173,28 +207,52 @@ class SmartHubManager {
                     return;
                 }
 
-                /* Establish /home as the Back-key destination before navigating
-                 * to the content. Use replace:true so the router doesn't record
-                 * an empty "previous page" entry before home. */
-                router.navigate('/home', { replace: true });
-
-                if (actionData.type === 'episode') {
-                    /* For episodes, push the parent series into history so the
-                     * user can navigate back up the series → season → episode
-                     * hierarchy naturally via the Back key. */
-                    if (actionData.seriesid) {
-                        router.navigate(`/details/${actionData.seriesid}`);
-                    }
-                    router.navigate(`/details/${actionData.id}`);
-                } else {
-                    /* Movies — navigate straight to the details page. */
-                    router.navigate(`/details/${actionData.id}`);
+                /* PIN gate: a deep link would otherwise jump straight into the
+                 * restored profile's content, bypassing the per-profile PIN. If
+                 * the active profile is PIN-locked and hasn't been unlocked this
+                 * run, hold the target and send the user to the profile picker;
+                 * the auth:login handler replays it once the PIN is entered. */
+                const activeUserId = auth.getCurrentUser()?.Id;
+                if (activeUserId && pinManager.hasPin(activeUserId) && !this._unlocked) {
+                    log.info('Deep link held — active profile is PIN-locked; routing to profile picker');
+                    this._pendingDeepLink = actionData;
+                    router.navigate('/profiles', { replace: true });
+                    return;
                 }
 
+                this._navigateToItem(actionData);
                 return; // Payload consumed — stop searching data entries.
             }
         } catch (e) {
             log.error('Deep link handling threw an exception:', e);
+        }
+    }
+
+    /**
+     * Navigate to a deep-link target, establishing /home as the Back-key base
+     * first (Samsung Return Key Policy). Episodes also push the parent series so
+     * Back walks the series → episode hierarchy.
+     *
+     * @param {{ id: string, type?: string, seriesid?: string }} actionData
+     * @private
+     */
+    _navigateToItem(actionData) {
+        /* Establish /home as the Back-key destination before navigating
+         * to the content. Use replace:true so the router doesn't record
+         * an empty "previous page" entry before home. */
+        router.navigate('/home', { replace: true });
+
+        if (actionData.type === 'episode') {
+            /* For episodes, push the parent series into history so the
+             * user can navigate back up the series → season → episode
+             * hierarchy naturally via the Back key. */
+            if (actionData.seriesid) {
+                router.navigate(`/details/${actionData.seriesid}`);
+            }
+            router.navigate(`/details/${actionData.id}`);
+        } else {
+            /* Movies — navigate straight to the details page. */
+            router.navigate(`/details/${actionData.id}`);
         }
     }
 

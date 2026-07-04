@@ -61,6 +61,13 @@ const log = logger.create('HomePage');
 const IMAGE_PREWARM_PER_ROW = 10;
 
 /**
+ * How long (in ms) to cache homepage data for instant back-navigation.
+ * 5 minutes — stale enough that users see fresh data on re-visit,
+ * fresh enough that back/forward navigation feels instant.
+ */
+const PAGE_CACHE_TTL = 5 * 60 * 1000;
+
+/**
  * Card width definitions (matching home.css) — used by VirtualCardRow internally.
  * Landscape: 400px, Portrait: 240px, gap: 24px.
  * Kept here for reference; VirtualCardRow reads these from its own constructor options.
@@ -553,16 +560,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -638,48 +645,76 @@ class HomePage extends Page {
         try {
             log.info(`Starting progressive render pipeline for user ${preAuth.uid}`);
 
-            // ─── Step 1: Load core dependencies ──────────────────────────────
-            // Libraries are shared across multiple descriptors, so we fetch them
-            // once upfront before building the descriptor list.
-            await api.getCurrentUser(); // Validate session
-            const viewsResponse = await api.getUserViews();
-            this._libraries = viewsResponse.Items || [];
+            // ─── Step 0: Try to restore from cached data ────────────────────
+            // On back-navigation, avoid all network calls and render from cache.
+            const cache = this._getValidCache();
 
-            if (!this._isMounted) return;
+            if (cache) {
+                log.info('Restoring homepage from cache');
+                this._restoreFromCache(cache);
 
-            // ─── Step 1b: Prune stale libThumb:* cache keys ──────────────────
-            // If a library was removed from Jellyfin, its cached thumbnail URL
-            // stays in localStorage forever. We run a quick Set-lookup against
-            // the IDs we just fetched and evict any orphaned keys via StorageService
-            // (which correctly updates the in-memory cache, not just disk).
-            const currentLibraryIds = new Set(this._libraries.map((l) => l.Id));
-            storage
-                .keys()
-                .filter((k) => k.startsWith('libThumb:'))
-                .forEach((k) => {
-                    const id = k.replace('libThumb:', '');
-                    if (!currentLibraryIds.has(id)) {
-                        log.info(`Pruning stale libThumb for removed library: ${id}`);
-                        storage.removeItem(k);
-                    }
-                });
+                // Re-initialize the hero carousel from cached items — no API call needed.
+                // The enableHero preference is re-checked so the user's current setting
+                // is always honoured even after a settings change between navigations.
+                const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
+                if (enableHero && cache.heroItems && cache.heroItems.length > 0) {
+                    this._initHeroCarouselFromItems(cache.heroItems);
+                }
+            } else {
+                // ─── Step 1: Load core dependencies ──────────────────────────────
+                // Libraries are shared across multiple descriptors, so we fetch them
+                // once upfront before building the descriptor list.
+                const viewsResponse = await api.getUserViews();
+                this._libraries = viewsResponse.Items || [];
 
-            // ─── Step 2: Optional dynamic library thumbnails ──────────────────
-            const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
-            if ((thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0) {
-                await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
                 if (!this._isMounted) return;
-            }
 
-            // ─── Step 2b: Hero Carousel ──────────────────────────────────────
-            const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
-            if (enableHero) {
-                await this._loadHeroCarousel();
+                // ─── Step 1b: Prune stale libThumb:* cache keys ──────────────────
+                // If a library was removed from Jellyfin, its cached thumbnail URL
+                // stays in localStorage forever. We run a quick Set-lookup against
+                // the IDs we just fetched and evict any orphaned keys via StorageService
+                // (which correctly updates the in-memory cache, not just disk).
+                const currentLibraryIds = new Set(this._libraries.map((l) => l.Id));
+                storage
+                    .keys()
+                    .filter((k) => k.startsWith('libThumb:'))
+                    .forEach((k) => {
+                        const id = k.replace('libThumb:', '');
+                        if (!currentLibraryIds.has(id)) {
+                            log.info(`Pruning stale libThumb for removed library: ${id}`);
+                            storage.removeItem(k);
+                        }
+                    });
+
+                // ─── Step 2: Library thumbnails + Hero Carousel ──────────────────
+                const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+                const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
+                const needsThumbs = (thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0;
+
+                if (needsThumbs && enableHero) {
+                    // Both are independent API calls — fire in parallel
+                    await Promise.all([
+                        this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode),
+                        this._loadHeroCarousel()
+                    ]);
+                } else {
+                    if (needsThumbs) {
+                        await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
+                    }
+                    if (enableHero) {
+                        await this._loadHeroCarousel();
+                    }
+                }
                 if (!this._isMounted) return;
             }
 
             // ─── Step 3: Build descriptors ────────────────────────────────────
             const descriptors = this._getRowDescriptors();
+
+            // If restored from cache, replace fetchFns with cached item arrays
+            if (cache) {
+                this._applyCachedRowData(descriptors, cache.rows);
+            }
 
             // Validate focus target exists in the generated descriptors
             const lastFocusedObj = state.get('home:lastFocusedItem');
@@ -723,13 +758,22 @@ class HomePage extends Page {
                 this.setLoading(false);
             }
 
-            // ─── Step 6: Render groups sequentially by priority ───────────────
-            for (const priority of priorities) {
-                const group = priorityGroups.get(priority);
+            // ─── Step 6: Render groups — priority 0 first, then rest in parallel ──
+            // Priority 0 (My Media) renders first since data is already in memory.
+            // Remaining priorities are independent, so they fire in parallel.
+            const p0Group = priorityGroups.get(0);
+            if (p0Group) {
+                await Promise.all(p0Group.map((descriptor) => this._loadAndRenderRow(descriptor)));
+                if (!this._isMounted) return;
+            }
 
-                // Fire all rows in this priority group in parallel
-                await Promise.all(group.map((descriptor) => this._loadAndRenderRow(descriptor)));
-
+            const remainingPriorities = priorities.filter((p) => p !== 0);
+            if (remainingPriorities.length > 0) {
+                await Promise.all(
+                    remainingPriorities.map((p) =>
+                        Promise.all(priorityGroups.get(p).map((d) => this._loadAndRenderRow(d)))
+                    )
+                );
                 if (!this._isMounted) return;
             }
 
@@ -748,6 +792,11 @@ class HomePage extends Page {
             // (e.g. all rows failed or there was no target row), initialize now.
             if (!this._focusInitialized) {
                 this._tryInitializeFocus(this.$('#home-rows'));
+            }
+
+            // ─── Cache data for instant back-navigation ─────────────────────
+            if (!cache) {
+                this._savePageCache();
             }
 
             // ── Reveal page with focus already in place ───────────────────────
@@ -1442,25 +1491,70 @@ class HomePage extends Page {
             // HERO CAROUSEL DATA FILTERS RESOLUTION
             // =================================================================
             // Check if the user has enabled the "Ignore Watched Content" preference.
-            // If active, we append the 'IsUnplayed' item filter to the request so that
-            // the Jellyfin backend returns only unplayed Movies and Series for the banner.
+            // The Jellyfin 'IsUnplayed' server-side filter works for Movies but not
+            // for Series (where play state is tracked per-episode). When the filter
+            // is active we make separate requests: Movies with the server-side
+            // 'IsUnplayed' filter, and Series fetched normally then filtered
+            // client-side by checking UserData.Played.
             const ignoreWatched = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
-            const filters = ignoreWatched ? 'HasBackdrop,IsUnplayed' : 'HasBackdrop';
+            const fields =
+                'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds';
+            const imageTypes = 'Primary,Backdrop,Logo';
 
-            // Fetch random items with backdrops from user libraries.
-            const response = await api.getItems({
-                SortBy: 'Random',
-                Recursive: true,
-                Limit: limit,
-                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds',
-                EnableImageTypes: 'Primary,Backdrop,Logo',
-                IncludeItemTypes: 'Movie,Series',
-                Filters: filters
-            });
+            let items = [];
 
-            if (!this._isMounted) return;
+            if (ignoreWatched) {
+                // Fetch unplayed movies (IsUnplayed works correctly for Movies)
+                const moviesResponse = await api.getItems({
+                    SortBy: 'Random',
+                    Recursive: true,
+                    Limit: limit,
+                    Fields: fields,
+                    EnableImageTypes: imageTypes,
+                    IncludeItemTypes: 'Movie',
+                    Filters: 'HasBackdrop,IsUnplayed'
+                });
 
-            const items = response.Items || [];
+                if (!this._isMounted) return;
+
+                const movies = moviesResponse.Items || [];
+
+                // Fetch series and filter client-side (IsUnplayed doesn't work for Series)
+                const seriesResponse = await api.getItems({
+                    SortBy: 'Random',
+                    Recursive: true,
+                    Limit: limit,
+                    Fields: `${fields},UserData`,
+                    EnableImageTypes: imageTypes,
+                    IncludeItemTypes: 'Series',
+                    Filters: 'HasBackdrop'
+                });
+
+                if (!this._isMounted) return;
+
+                const series = (seriesResponse.Items || []).filter(
+                    (item) => !item.UserData || item.UserData.Played !== true
+                );
+
+                // Combine and randomly pick 'limit' items
+                const combined = [...movies, ...series];
+                items = combined.sort(() => Math.random() - 0.5).slice(0, limit);
+            } else {
+                // No filter — single fetch for both types
+                const response = await api.getItems({
+                    SortBy: 'Random',
+                    Recursive: true,
+                    Limit: limit,
+                    Fields: fields,
+                    EnableImageTypes: imageTypes,
+                    IncludeItemTypes: 'Movie,Series',
+                    Filters: 'HasBackdrop'
+                });
+
+                if (!this._isMounted) return;
+
+                items = response.Items || [];
+            }
             if (items.length === 0) {
                 log.info('No hero items found, skipping carousel.');
                 return;
@@ -1975,6 +2069,144 @@ class HomePage extends Page {
                 }
             })
         );
+    }
+
+    // =========================================================================
+    // Page Data Cache (instant back-navigation)
+    // =========================================================================
+
+    /**
+     * Returns the cached homepage data if it exists and hasn't expired.
+     * @returns {Object|null} Cache object or null
+     */
+    _getValidCache() {
+        // Respect user preference — caching can be disabled via settings
+        if (storage.getItem('pref:homeScreenCache') === 'false') {
+            state.delete('home:pageCache');
+            return null;
+        }
+
+        const cache = state.get('home:pageCache');
+        if (!cache || !cache.rows || !cache.libraries) return null;
+
+        // Never serve cache from a different user or server
+        if (cache.serverUrl !== api._serverUrl || cache.userId !== api._userId) {
+            state.delete('home:pageCache');
+            return null;
+        }
+
+        if (Date.now() - cache.timestamp > PAGE_CACHE_TTL) {
+            state.delete('home:pageCache');
+            return null;
+        }
+
+        return cache;
+    }
+
+    /**
+     * Restores libraries and thumbnails from cache, skipping network calls.
+     * @param {Object} cache
+     */
+    _restoreFromCache(cache) {
+        this._libraries = cache.libraries;
+
+        if (cache.thumbUrls) {
+            for (const lib of this._libraries) {
+                const url = cache.thumbUrls[lib.Id];
+                if (url) lib._dynamicThumbUrl = url;
+            }
+        }
+    }
+
+    /**
+     * Initializes the HeroCarousel component from a pre-fetched items array.
+     * Extracted from _loadHeroCarousel() so it can be reused during cache restoration
+     * without making any network calls — the items are already in memory.
+     *
+     * @param {Array} items - Previously fetched hero carousel items
+     */
+    _initHeroCarouselFromItems(items) {
+        try {
+            // Build the carousel instance from the cached items list
+            this._hero = new HeroCarousel({ items });
+
+            const placeholder = this.$('#home-hero-placeholder');
+            if (placeholder) {
+                // Read style prefs fresh — user may have changed them since the cache was written
+                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
+                const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+
+                // Reset any stale classes before applying current style
+                placeholder.className = '';
+                placeholder.classList.add(`style-${carouselStyle}`);
+                if (isCompact) {
+                    placeholder.classList.add('style-compact');
+                }
+
+                // Inject the carousel markup and wire up its event listeners
+                placeholder.innerHTML = this._hero.render();
+                this._hero.init(placeholder.firstElementChild);
+
+                log.info('Hero carousel restored from cache.');
+            }
+        } catch (e) {
+            log.error('Failed to initialize Hero Carousel from cache', e);
+        }
+    }
+
+    /**
+     * Replaces each descriptor's fetchFn to return cached items instantly.
+     * @param {RowDescriptor[]} descriptors
+     * @param {Object<string, Array>} rowCache - Row ID -> items map
+     */
+    _applyCachedRowData(descriptors, rowCache) {
+        for (const desc of descriptors) {
+            const cachedItems = rowCache[desc.id];
+            if (cachedItems) {
+                desc.fetchFn = () => Promise.resolve(cachedItems);
+            }
+        }
+    }
+
+    /**
+     * Saves the current homepage data to the state cache,
+     * so that back-navigation renders instantly without network calls.
+     * Hero carousel items are also persisted so the carousel can be
+     * re-initialized on restoration without any network calls.
+     */
+    _savePageCache() {
+        // Respect user preference
+        if (storage.getItem('pref:homeScreenCache') === 'false') return;
+
+        const rows = {};
+        for (const [id, entry] of this._rowRegistry) {
+            if (entry.virtualRow && entry.virtualRow.items && entry.virtualRow.items.length > 0) {
+                rows[id] = entry.virtualRow.items;
+            }
+        }
+
+        const thumbUrls = {};
+        for (const lib of this._libraries) {
+            if (lib._dynamicThumbUrl) {
+                thumbUrls[lib.Id] = lib._dynamicThumbUrl;
+            }
+        }
+
+        // Snapshot the hero carousel items so restoration skips the API call entirely.
+        // HeroCarousel stores its items array on the instance as ._items.
+        const heroItems = this._hero ? this._hero._items : [];
+
+        state.set('home:pageCache', {
+            libraries: this._libraries,
+            thumbUrls,
+            rows,
+            heroItems,
+            serverUrl: api._serverUrl,
+            userId: api._userId,
+            timestamp: Date.now()
+        });
+
+        log.info('Homepage data cached for instant back-navigation');
     }
 
     // =========================================================================

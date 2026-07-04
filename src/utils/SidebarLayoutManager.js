@@ -133,9 +133,10 @@ class SidebarLayoutManager {
         const orderedLibs = this._applyOrder(libraryItems, config ? config.libraryItems : null);
 
         const result = [];
+        const hideHeader = storage.getItem('pref:hideSidebarLibraryHeader') === 'true';
         orderedStatic.forEach((item) => {
             if (item.id === 'librariesContainer') {
-                if (headerItem && orderedLibs.length > 0) {
+                if (headerItem && orderedLibs.length > 0 && !hideHeader) {
                     result.push({ ...headerItem, hidden: false });
                 }
                 // Even if "librariesContainer" was somehow marked hidden, we respect its children's own hide states

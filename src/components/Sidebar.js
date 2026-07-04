@@ -29,6 +29,16 @@ class Sidebar extends Component {
         this.expanded = false;
         this.libraries = [];
         this.activePath = '';
+
+        /**
+         * Tracks whether the current expansion was triggered by mouse hover.
+         * This is the key to preventing the sidebar from getting stuck open:
+         * when the mouse leaves, we collapse unconditionally if hover caused
+         * the expansion — the .focused class from FocusManager is irrelevant
+         * in that scenario and should NOT block the collapse.
+         * @type {boolean}
+         */
+        this._expandedByMouse = false;
     }
 
     render() {
@@ -175,6 +185,11 @@ class Sidebar extends Component {
         };
         eventBus.on('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
 
+        this._onHideLibraryHeaderChanged = () => {
+            this._loadLibraries();
+        };
+        eventBus.on('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
+
         // ── Sidebar Layout customization ──────────────────────────────────────
         // Hot-reload the sidebar layout when the user saves changes in Settings.
         this._onSidebarLayoutChanged = () => {
@@ -282,6 +297,10 @@ class Sidebar extends Component {
 
         if (this._onTransparentCollapsedChanged) {
             eventBus.off('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+        }
+
+        if (this._onHideLibraryHeaderChanged) {
+            eventBus.off('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
         }
     }
 
@@ -397,6 +416,20 @@ class Sidebar extends Component {
         // MutationObserver to watch for focus changes (used to expand/collapse sidebar)
         if (!this._focusObserver) {
             this._focusObserver = new MutationObserver((mutations) => {
+                // ── Feedback-loop guard ───────────────────────────────────────
+                // The MutationObserver watches the entire sidebar subtree, which
+                // includes this.el itself. When _expand() toggles 'expanded' /
+                // 'collapsed' / 'has-focus' on the root nav element, that class
+                // change fires this callback. If we don't bail here, the callback
+                // sees a .focused child item and immediately re-expands, undoing
+                // the collapse — the visible "fading then returning" bug.
+                //
+                // Rule: only react to class changes on *child* elements (the
+                // sidebar items). Mutations on the root element are always caused
+                // by _expand() itself and must be ignored to break the loop.
+                const hasChildMutation = mutations.some((m) => m.target !== this.el);
+                if (!hasChildMutation) return;
+
                 const focusedItem = this.el.querySelector('.focused');
                 const hasFocus = !!focusedItem;
 
@@ -409,13 +442,20 @@ class Sidebar extends Component {
                 // to ensure it snaps to the correct position before we expand.
                 this._updateIndicator(focusedItem);
 
-                // Then handle expansion
-                if (hasFocus) {
-                    this._expand(true);
-                } else {
-                    this._expand(false);
+                // Then handle expansion — but ONLY via D-pad/keyboard focus paths.
+                // When the mouse is hovering, hover already opened the sidebar and
+                // we must NOT let the MutationObserver re-expand it on mouseleave
+                // (which clears .focused). The _expandedByMouse flag separates
+                // the two independent open mechanisms cleanly.
+                if (!this._expandedByMouse) {
+                    if (hasFocus) {
+                        this._expand(true);
+                    } else {
+                        this._expand(false);
+                    }
                 }
             });
+
 
             this._focusObserver.observe(this.el, {
                 attributes: true,
@@ -424,14 +464,32 @@ class Sidebar extends Component {
             });
         }
 
-        // Toggle handling - Mouse
-        this.el.addEventListener('mouseenter', () => this._expand(true));
-        this.el.addEventListener('mouseleave', () => {
-            // Only collapse if we don't have focus
-            if (!this.el.querySelector('.focused')) {
-                this._expand(false);
-            }
+        // ── Mouse hover expand/collapse ───────────────────────────────────
+        // mouseenter always expands; mouseleave always collapses — no guards.
+        //
+        // Why no guards? The previous `.focused` check caused the sidebar to
+        // get stuck open after any click (FocusManager stamps .focused on the
+        // clicked item, leaving the check permanently true). The `_expandedByMouse`
+        // flag was a better attempt but still fails on double-click: a spurious
+        // mouseleave event (triggered mid-click by page transitions) clears the
+        // flag, putting the MutationObserver back in control with .focused set.
+        //
+        // The correct mental model:
+        //   • Mouse physically leaving the sidebar = always collapse. Period.
+        //   • D-pad entering the sidebar = MutationObserver handles expand/collapse.
+        //   • Both paths are mutually exclusive in practice (D-pad users don't hover).
+        this.el.addEventListener('mouseenter', () => {
+            this._expandedByMouse = true;
+            this._expand(true);
         });
+        this.el.addEventListener('mouseleave', () => {
+            // Always collapse when the mouse leaves — no .focused guard, no flag check.
+            // If the user is navigating via D-pad, this event never fires so D-pad
+            // behaviour is completely unaffected.
+            this._expandedByMouse = false;
+            this._expand(false);
+        });
+
 
         // Logo click handler
         this._bindItem(this.el.querySelector('#sidebar-logo-header'), () => {
@@ -489,10 +547,39 @@ class Sidebar extends Component {
         this.el.classList.toggle('expanded', expanded);
         this.el.classList.toggle('collapsed', !expanded);
 
-        // Notify layout manager or app to push content?
-        // Actually CSS transitions on #page-container should handle it if we toggle a class on body
-        // But for now, let's keep it overlapping or simple push.
-        // User requested: "push page content to the right"
+        // ====================================================================
+        // COLLAPSE VISUAL RESET
+        // ====================================================================
+        // When collapsing, we must ensure all focus indicators and focus state
+        // classes are immediately removed from the sidebar DOM elements.
+        // --------------------------------------------------------------------
+        if (!expanded) {
+            // Hide the sliding focus indicator wrapper
+            this.el.classList.remove('has-focus');
+
+            // Strip the .focused class from all sidebar items (static and library ones).
+            // This is critical when double-clicking or clicking the already-active
+            // sidebar button: since the router doesn't navigate to a different hash,
+            // the focus never shifts to a page element, leaving the sidebar item
+            // permanently marked as focused. Removing it here restores the clean,
+            // unselected collapsed state visually.
+            this.el.querySelectorAll('.focused').forEach((el) => {
+                el.classList.remove('focused');
+            });
+
+            // ====================================================================
+            // NATIVE BROWSER FOCUS DEFEAT
+            // ====================================================================
+            // When mouse-clicking a sidebar item, the browser applies native focus
+            // to the clicked button element. When the sidebar collapses, this native
+            // focus remains, triggering theme selectors like `.sidebar-item:focus`
+            // (often with !important). Blurring it removes the native :focus state.
+            // --------------------------------------------------------------------
+            if (this.el.contains(document.activeElement)) {
+                document.activeElement.blur();
+            }
+        }
+
 
         const pageContainer = document.getElementById('page-container');
         if (pageContainer) {
@@ -513,7 +600,8 @@ class Sidebar extends Component {
             // Remove any previously rendered libraries and headers to allow clean reloading
             sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach((el) => el.remove());
 
-            if (items.length > 0) {
+            const hideHeader = storage.getItem('pref:hideSidebarLibraryHeader') === 'true';
+            if (items.length > 0 && !hideHeader) {
                 // Determine header label based on layout block ('My Media')
                 const header = document.createElement('div');
                 header.className = 'sidebar-section-header';

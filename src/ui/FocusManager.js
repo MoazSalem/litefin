@@ -97,11 +97,13 @@ class FocusManager {
         // PREVENT DEFAULT on all handled keys to avoid browser/native double-handling
         eventBus.on('key:up', (e) => {
             if (this._suspended) return;
+            if (this._focusedElement && this._focusedElement.tagName === 'SELECT') return;
             e?.preventDefault();
             this._handleKey('up');
         });
         eventBus.on('key:down', (e) => {
             if (this._suspended) return;
+            if (this._focusedElement && this._focusedElement.tagName === 'SELECT') return;
             e?.preventDefault();
             this._handleKey('down');
         });
@@ -134,6 +136,11 @@ class FocusManager {
             // mouse click sequence and trigger the wrong focused element.
             // By ignoring Enter keys right after a mousedown, the cursor acts exactly like a real mouse.
             if (Date.now() - lastMouseDownTime < 500) {
+                return;
+            }
+
+            // Bypass FocusManager activation for SELECT elements to allow native options dropdown to open
+            if (this._focusedElement && this._focusedElement.tagName === 'SELECT') {
                 return;
             }
 
@@ -798,6 +805,11 @@ class FocusManager {
         // FocusManager handles all input internally via EventBus.
         // this._focusedElement.focus({ preventScroll: true });
 
+        // NATIVE SELECT FOCUS: natively focus SELECT elements so they can capture Enter/OK natively on TV
+        if (this._focusedElement.tagName === 'SELECT') {
+            this._focusedElement.focus({ preventScroll: true });
+        }
+
         this._updateFocusMemory();
         eventBus.emit('focus:changed', element);
     }
@@ -835,13 +847,21 @@ class FocusManager {
             return;
         }
 
-        // 0. Default Focus Selector (config-driven, replaces hardcoded section checks)
-        // If a section specifies defaultFocusSelector, always focus that element on entry.
-        // Example: sidebar uses '#sidebar-home' to always land on Home.
         if (config.defaultFocusSelector) {
             const defaultEl = focusables.find((el) => el.matches(config.defaultFocusSelector));
             const target = defaultEl || focusables[0];
-            this.focusElement(target, { skipScroll: true });
+            // ================================================================
+            // FIX: Honor Scroll Configuration for Default Focus Selection
+            // ================================================================
+            // Previously, this forced { skipScroll: true }, which disabled all
+            // scrolling for elements focused via defaultFocusSelector. This caused
+            // sections like the action buttons on the Details page (which use a
+            // default selector to target Resume/Play on entry) to never scroll
+            // the page back to the top when entered from below.
+            // We now correctly forward instantScroll and preserve the ability to
+            // scroll the target into view.
+            // ================================================================
+            this.focusElement(target, { instantScroll: !!options.instantScroll });
             return;
         }
 

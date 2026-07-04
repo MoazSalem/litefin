@@ -93,6 +93,14 @@ async function webpackNormal() {
     console.info('Normal build complete');
 }
 
+/** Build task for the normal oblong Tizen variant using icon_oblong.png */
+async function webpackNormalOblong() {
+    console.info('Building Normal Oblong bundle (Chromium 63, Partialy transpilied, oblong icon)...');
+    // Run webpack config for normal-oblong
+    await spawnAsync(`${WP} --config-name normal-oblong`);
+    console.info('Normal Oblong build complete');
+}
+
 async function webpackDebug() {
     // Debug build: same as ES6 but with source maps — for on-device debugging via sdb
     console.info('Building Debug bundle (ES6 + source maps)...');
@@ -122,6 +130,8 @@ async function webpackAll() {
     console.info('Building all bundles sequentially to prevent OOM...');
     await webpackES6();
     await webpackNormal();
+    // Build the new normal-oblong package
+    await webpackNormalOblong();
     await webpackLegacy();
     await webpackUltraLegacy();
     console.info('All builds complete');
@@ -373,6 +383,19 @@ async function packageNormal() {
     await createWgt(buildDir, wgtName);
 }
 
+/** Packaging task for the normal oblong Tizen variant */
+async function packageNormalOblong() {
+    const buildDir = 'dist/normal-oblong';
+    // Use normal-oblong naming suffix for the Tizen wgt package file
+    const wgtName = `Litefin-${version}-normal-oblong.wgt`;
+
+    // Copy digital signature files
+    copySignatures(buildDir);
+    console.info(`Creating ${wgtName}...`);
+    // Create the widget archive
+    await createWgt(buildDir, wgtName);
+}
+
 async function packageTest() {
     const buildDir = 'dist/normal';
     const wgtName = `litefin.wgt`; // test output
@@ -491,7 +514,7 @@ async function syncVersion() {
 // ============================================================================
 
 // Build and package all versions (default for npm run package)
-// Produces 4 WGT (Tizen) + 4 IPK (WebOS) in parallel
+// Produces 5 WGT (Tizen) + 4 IPK (WebOS) in parallel
 const buildPackage = gulp.series(
     syncVersion,
     cleanDist,
@@ -501,6 +524,7 @@ const buildPackage = gulp.series(
         // Tizen WGT
         packageES6,
         packageNormal,
+        packageNormalOblong,
         packageLegacy,
         packageUltraLegacy,
         // WebOS IPK
@@ -514,6 +538,7 @@ const buildPackage = gulp.series(
 // Individual Tizen build+package tasks
 const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageES6);
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
+const buildPackageNormalOblong = gulp.series(syncVersion, cleanDist, webpackNormalOblong, packageNormalOblong);
 const buildPackageTest = gulp.series(syncVersion, cleanDist, webpackNormal, packageTest);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
 const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy, packageUltraLegacy);
@@ -535,6 +560,7 @@ const buildPackageWebosUltraLegacy = gulp.series(
 const build = gulp.series(syncVersion, cleanDist, webpackAll);
 const buildES6 = gulp.series(syncVersion, cleanDist, webpackES6);
 const buildNormal = gulp.series(syncVersion, cleanDist, webpackNormal);
+const buildNormalOblong = gulp.series(syncVersion, cleanDist, webpackNormalOblong);
 const buildLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy);
 const buildUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy);
 const buildDebug = gulp.series(syncVersion, webpackDebug);
@@ -546,6 +572,7 @@ export {
     cleanIpk,
     webpackES6,
     webpackNormal,
+    webpackNormalOblong,
     webpackLegacy,
     webpackUltraLegacy,
     webpackDebug,
@@ -553,6 +580,7 @@ export {
     // Tizen WGT packaging
     packageES6,
     packageNormal,
+    packageNormalOblong,
     packageTest,
     packageLegacy,
     packageUltraLegacy,
@@ -566,6 +594,7 @@ export {
     buildPackage,
     buildPackageES6,
     buildPackageNormal,
+    buildPackageNormalOblong,
     buildPackageTest,
     buildPackageLegacy,
     buildPackageUltraLegacy,
@@ -579,6 +608,7 @@ export {
     build,
     buildES6,
     buildNormal,
+    buildNormalOblong,
     buildLegacy,
     buildUltraLegacy,
     buildDebug

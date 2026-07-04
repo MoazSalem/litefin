@@ -17,7 +17,7 @@
     box-sizing: border-box;
     -webkit-box-sizing: border-box;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.7); /* Darker backdrop to compensate for lack of blur */
+    background: rgba(var(--jf-overlay-bg-rgb, 0, 0, 0), var(--osd-track-menu-bg-opacity, 0.85)); /* Darker backdrop to compensate for lack of blur */
 
     z-index: 9999;
     opacity: 0;
