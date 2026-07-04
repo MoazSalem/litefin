@@ -153,6 +153,11 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
     -webkit-appearance: none;
 }
 
+.server-protocol-input option {
+    background-color: var(--jf-background-alt, #1a1a1a);
+    color: var(--jf-text-primary, #fff);
+}
+
 /* Main host field consumes the bulk of horizontal space */
 .server-host-input {
     flex: 1;

@@ -20,7 +20,6 @@ html[data-layout-login="modern"] .server-input-container {
     display: flex;
     flex-direction: column;
     position: relative;
-    max-width: 700px;
 }
 
 html[data-layout-login="modern"] .server-input-container > *:not(:last-child) {
@@ -82,6 +81,11 @@ html[data-layout-login="modern"] .server-protocol-input {
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
+}
+
+html[data-layout-login="modern"] .server-protocol-input option {
+    background-color: var(--jf-surface, #0f0f0f);
+    color: var(--jf-text-primary, #fff);
 }
 
 /* Port input sizing */

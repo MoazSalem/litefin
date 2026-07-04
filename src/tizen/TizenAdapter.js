@@ -199,13 +199,29 @@ class TizenAdapter {
             this._lastInputTime = Date.now();
             const keyCode = e.keyCode;
 
-            // Block Tizen's default spatial navigation unless user is typing in an input field.
+            const activeElem = document.activeElement;
+            const isEditingInput =
+                activeElem &&
+                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA') &&
+                !(activeElem.readOnly || activeElem.hasAttribute('readonly'));
+
+            // Intercept Back (Tizen/WebOS) or Escape (Web) to exit editing mode
+            if (isEditingInput && (keyCode === 10009 || keyCode === 461 || keyCode === 27)) {
+                e.preventDefault();
+                activeElem.readOnly = true;
+                activeElem.setAttribute('readonly', 'true');
+                activeElem.blur();
+                return;
+            }
+
+            // Block Tizen's default spatial navigation unless user is typing in an input field or interacting with a select.
             // Failing to prevent default allows the TV to natively jump its internal hardware focus
             // instantly before JS calculates the virtual row, triggering ghost focusin loops.
-            const activeElem = document.activeElement;
             const isTextInput =
                 activeElem &&
-                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA');
+                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') ||
+                 activeElem.tagName === 'TEXTAREA' ||
+                 activeElem.tagName === 'SELECT');
 
             if (!isTextInput) {
                 if (

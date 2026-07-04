@@ -97,11 +97,13 @@ class FocusManager {
         // PREVENT DEFAULT on all handled keys to avoid browser/native double-handling
         eventBus.on('key:up', (e) => {
             if (this._suspended) return;
+            if (this._focusedElement && this._focusedElement.tagName === 'SELECT') return;
             e?.preventDefault();
             this._handleKey('up');
         });
         eventBus.on('key:down', (e) => {
             if (this._suspended) return;
+            if (this._focusedElement && this._focusedElement.tagName === 'SELECT') return;
             e?.preventDefault();
             this._handleKey('down');
         });
@@ -134,6 +136,11 @@ class FocusManager {
             // mouse click sequence and trigger the wrong focused element.
             // By ignoring Enter keys right after a mousedown, the cursor acts exactly like a real mouse.
             if (Date.now() - lastMouseDownTime < 500) {
+                return;
+            }
+
+            // Bypass FocusManager activation for SELECT elements to allow native options dropdown to open
+            if (this._focusedElement && this._focusedElement.tagName === 'SELECT') {
                 return;
             }
 
@@ -797,6 +804,11 @@ class FocusManager {
         // NATIVE FOCUS DISABLED: eliminates scroll rebounding/fighting on Tizen
         // FocusManager handles all input internally via EventBus.
         // this._focusedElement.focus({ preventScroll: true });
+
+        // NATIVE SELECT FOCUS: natively focus SELECT elements so they can capture Enter/OK natively on TV
+        if (this._focusedElement.tagName === 'SELECT') {
+            this._focusedElement.focus({ preventScroll: true });
+        }
 
         this._updateFocusMemory();
         eventBus.emit('focus:changed', element);
