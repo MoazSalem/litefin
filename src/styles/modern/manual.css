@@ -35,10 +35,9 @@ html[data-layout-login="modern"] .input-container {
 html[data-layout-login="modern"] .text-input.tv-input {
     background: var(--jf-surface, #0f0f0f);
     border: 4px solid transparent;
-    padding: 21px 21px 21px 69px;
+    padding: 21px 21px 21px ;
     border-radius: 14px;
     font-size: 1.6rem;
-    width: 100%;
     box-sizing: border-box;
     color: var(--jf-text-primary);
     /* PERFORMANCE: Replaced transition: all. */

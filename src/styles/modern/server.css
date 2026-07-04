@@ -28,35 +28,89 @@ html[data-layout-login="modern"] .server-input-container > *:not(:last-child) {
     margin-bottom: 24px;
 }
 
-html[data-layout-login="modern"] .server-url-input {
+/* Modern Segmented Layout for Server Form Fields */
+html[data-layout-login="modern"] .server-fields-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    gap: 16px;
+}
+
+
+/* Adjust padding on the host field to offset for the link icon prefix */
+html[data-layout-login="modern"] .server-host-input {
+        padding-left: 69px !important;
+}
+
+/* Base styles for modern inputs */
+html[data-layout-login="modern"] .server-protocol-input,
+html[data-layout-login="modern"] .server-host-input,
+html[data-layout-login="modern"] .server-port-input {
     background: var(--jf-surface, #0f0f0f);
     border: 4px solid transparent;
-    padding: 21px 21px 21px 69px;
+    padding: 21px;
     border-radius: 14px;
     font-size: 1.6rem;
-    width: 100%;
     box-sizing: border-box;
     color: var(--jf-text-primary);
-    /* PERFORMANCE: Replaced expensive 'transition: all' with targeted layout-friendly properties. */
     transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-html[data-layout-login="modern"] .server-url-input:focus,
-html[data-layout-login="modern"] .server-url-input.focused {
+/* Premium active focus states for modern segmented elements */
+html[data-layout-login="modern"] .server-protocol-input:focus,
+html[data-layout-login="modern"] .server-protocol-input.focused,
+html[data-layout-login="modern"] .server-host-input:focus,
+html[data-layout-login="modern"] .server-host-input.focused,
+html[data-layout-login="modern"] .server-port-input:focus,
+html[data-layout-login="modern"] .server-port-input.focused {
     border-color: var(--jf-accent, #448aff);
     background: var(--jf-card-bg-hover, #151515);
+    outline: none;
 }
 
-html[data-layout-login="modern"] .server-input-container::before {
+/* Protocol select styling with custom arrow */
+html[data-layout-login="modern"] .server-protocol-input {
+    width: 160px;
+    text-align: left;
+    padding-left: 24px;
+    padding-right: 44px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba%28255,255,255,0.4%29' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 20px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+/* Port input sizing */
+html[data-layout-login="modern"] .server-port-input {
+    width: 140px;
+    text-align: center;
+}
+
+/* Host input wrapper coordinates the premium SVG link icon */
+html[data-layout-login="modern"] .host-input-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+html[data-layout-login="modern"] .host-input-wrapper::before {
     content: '';
     position: absolute;
     left: 24px;
-    top: 26px;
+    top: 30px;
     width: 28px;
     height: 28px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.2)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'%3E%3C/path%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'%3E%3C/path%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba%28255,255,255,0.2%29' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'%3E%3C/path%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'%3E%3C/path%3E%3C/svg%3E");
     background-repeat: no-repeat;
     z-index: 5;
+}
+
+/* Disable old container-wide icon to prevent duplication */
+html[data-layout-login="modern"] .server-input-container::before {
+    display: none;
 }
 
 html[data-layout-login="modern"] .connect-btn {
