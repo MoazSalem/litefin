@@ -886,6 +886,8 @@
     "Portuguese": "Portuguese",
     "PreferEpisodeImages": "Prefer Episode Images",
     "PreferEpisodeImagesDescription": "Use episode thumbnails instead of series images for Next Up and Continue Watching rows.",
+    "PreferExternalSubtitles": "Prefer External Subtitles",
+    "PreferExternalSubtitlesDescription": "When subtitles 'Always' mode is enabled, prefer external subtitle tracks (SRT/VTT) over embedded ones even if the language is undetermined.",
     "PreferredAudioLanguage": "Preferred Audio Language",
     "PreferredAudioLanguageDescription": "Default language for audio tracks",
     "PreferredSubtitleLanguage": "Preferred Subtitle Language",

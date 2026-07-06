@@ -3392,6 +3392,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferExternalSubtitles">${i18n.t('PreferExternalSubtitles') || 'Prefer External Subtitles'}</span>
+                        <span class="setting-description" data-i18n="PreferExternalSubtitlesDescription">${i18n.t('PreferExternalSubtitlesDescription') || 'When subtitles are enabled, prefer external subtitle tracks (SRT/VTT) over embedded ones even if the language is undetermined.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('preferExternalSubtitles') ? 'active' : ''}" 
+                                 id="subtitle-prefer-external-toggle" 
+                                 data-setting="preferExternalSubtitles"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="DisableAssRendering">${i18n.t('DisableAssRendering')}</span>
                         <span class="setting-description" data-i18n="DisableAssRenderingDescription">${i18n.t('DisableAssRenderingDescription')}</span>
                     </div>
@@ -6337,6 +6351,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('rememberTracksForSession', newValue);
                 rememberTracksToggle.classList.toggle('active', newValue);
                 log.info(`Remember Tracks For Session set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Prefer External Subtitles
+        const preferExternalToggle = this.$('#subtitle-prefer-external-toggle');
+        if (preferExternalToggle) {
+            preferExternalToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('preferExternalSubtitles') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('preferExternalSubtitles', newValue);
+                preferExternalToggle.classList.toggle('active', newValue);
+                log.info(`Prefer External Subtitles set to: ${newValue}`);
             });
         }
 

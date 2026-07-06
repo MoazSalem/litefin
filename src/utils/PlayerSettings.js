@@ -116,6 +116,9 @@ const DEFAULTS = {
     // Remember tracks for session (automatically carry active audio and subtitle to next episode)
     rememberTracksForSession: true,
 
+    // Prefer external subtitle tracks over internal ones
+    preferExternalSubtitles: false,
+
     // Subtitle text size ('small', 'medium', 'large', 'larger', 'extralarge', 'custom')
     subtitleSize: 'medium',
 

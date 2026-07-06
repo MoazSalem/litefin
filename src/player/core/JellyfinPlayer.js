@@ -827,11 +827,57 @@ export class JellyfinPlayer extends EventEmitter {
                             if (!forced) forced = subtitleStreams.find(s => s.IsForced);
                             if (forced) chosenIndex = forced.Index;
                         } else if (subtitleMode === 'Always') {
-                            let best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
-                            if (!best) best = subtitleStreams.find(s => s.Language === prefLang);
-                            if (!best) best = subtitleStreams.find(s => s.IsDefault || s.IsForced);
-                            if (!best && subtitleStreams.length > 0) best = subtitleStreams[0];
-                            if (best) chosenIndex = best.Index;
+                            let best = undefined;
+
+                            // -----------------------------------------------------------------
+                            // Preference check: If 'preferExternalSubtitles' is enabled,
+                            // attempt to isolate and choose external subtitle streams first.
+                            // -----------------------------------------------------------------
+                            if (PlayerSettings.get('preferExternalSubtitles')) {
+                                const externalStreams = subtitleStreams.filter(s => s.IsExternal);
+                                if (externalStreams.length > 0) {
+                                    // 1. Search for external stream matching preferred language (default/forced first)
+                                    best = externalStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                                    
+                                    // 2. Search for external stream matching preferred language generally
+                                    if (!best) {
+                                        best = externalStreams.find(s => s.Language === prefLang);
+                                    }
+                                    
+                                    // 3. Search for external stream with undetermined/unknown/empty language codes
+                                    if (!best) {
+                                        best = externalStreams.find(s => {
+                                            const lang = (s.Language || '').toLowerCase();
+                                            return !lang || lang === 'und' || lang === 'unknown' || lang === 'none';
+                                        });
+                                    }
+                                }
+                            }
+
+                            // -----------------------------------------------------------------
+                            // Fallback path: If 'preferExternalSubtitles' is disabled or no
+                            // matching external tracks were resolved, run standard selection.
+                            // -----------------------------------------------------------------
+                            if (!best) {
+                                // Prefer internal/external matching user preferred language (default/forced first)
+                                best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                                // Fallback to matching user preferred language generally
+                                if (!best) {
+                                    best = subtitleStreams.find(s => s.Language === prefLang);
+                                }
+                                // Fallback to default or forced subtitle tracks in general
+                                if (!best) {
+                                    best = subtitleStreams.find(s => s.IsDefault || s.IsForced);
+                                }
+                                // Fallback to the first available track in the list
+                                if (!best && subtitleStreams.length > 0) {
+                                    best = subtitleStreams[0];
+                                }
+                            }
+
+                            if (best) {
+                                chosenIndex = best.Index;
+                            }
                         } else if (subtitleMode === 'Smart') {
                             // Smart = Show if audio is NOT in the preferred subtitle language.
                             if (prefLang !== 'none' && audioLang !== prefLang && audioLang !== 'und') {
