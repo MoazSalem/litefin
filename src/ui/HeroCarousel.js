@@ -402,11 +402,17 @@ class HeroCarousel {
      * Clean up resources
      */
     destroy() {
+        // Pause timer
         this._stopAutoScroll();
-        // Cancel any in-flight indicator animation frame
+        
+        // Cancel any in-flight indicator animation frame or timeout
         if (this._indicatorRafId) {
             cancelAnimationFrame(this._indicatorRafId);
             this._indicatorRafId = null;
+        }
+        if (this._indicatorTimeoutId) {
+            clearTimeout(this._indicatorTimeoutId);
+            this._indicatorTimeoutId = null;
         }
         if (this._onFocusChanged) {
             eventBus.off('focus:changed', this._onFocusChanged);
@@ -487,23 +493,39 @@ class HeroCarousel {
     _resetIndicatorAnimation() {
         if (!this._container) return;
 
+        // Retrieve all dot indicators
         const dots = this._container.querySelectorAll('.hero-dot');
         const currentDot = dots[this._currentIndex];
         if (!currentDot) return;
 
-        // Cancel any pending restart to avoid double-firing on rapid transitions
+        // --------------------------------------------------------------------
+        // Cleanup existing timers or animation frames to prevent double-firing
+        // --------------------------------------------------------------------
         if (this._indicatorRafId) {
             cancelAnimationFrame(this._indicatorRafId);
+            this._indicatorRafId = null;
+        }
+        if (this._indicatorTimeoutId) {
+            clearTimeout(this._indicatorTimeoutId);
+            this._indicatorTimeoutId = null;
         }
 
-        // Frame N: remove the active class (stops the CSS animation)
+        // --------------------------------------------------------------------
+        // Stop current animation immediately by removing the active class
+        // --------------------------------------------------------------------
         currentDot.classList.remove('active');
 
-        // Frame N+1: add it back — the animation restarts cleanly with no reflow
-        this._indicatorRafId = requestAnimationFrame(() => {
-            this._indicatorRafId = null;
+        // --------------------------------------------------------------------
+        // Re-add the class on a macro-task boundary (setTimeout) instead of
+        // requestAnimationFrame. On Tizen/TV WebKit platforms, if the element
+        // is off-screen or during scrolling, requestAnimationFrame can be
+        // coalesced or skipped, leaving the progress bar stuck at width 0.
+        // A short setTimeout guarantees the browser registers the removal.
+        // --------------------------------------------------------------------
+        this._indicatorTimeoutId = setTimeout(() => {
+            this._indicatorTimeoutId = null;
             currentDot.classList.add('active');
-        });
+        }, 40); // 40ms is a safe window (~2-3 frames) to ensure rendering pipeline updates
     }
 
     /**
