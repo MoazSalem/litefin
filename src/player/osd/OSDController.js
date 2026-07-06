@@ -1530,16 +1530,25 @@ export default class OSDController extends Component {
                 const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
                 /*
                  * ====================================================================
-                 * HIDDEN WIDGET GUARD:
-                 * If the widget that previously claimed Row -1 has since been hidden
-                 * (e.g. Skip Outro was pressed, ended the episode, and the new episode
-                 * loaded before focus could be restored), the focusedEl is either gone
-                 * or lives inside a container that lost its .visible class.
-                 * In that case we must NOT fire the button — instead snap focus back
-                 * to Play/Pause and execute it so the OK press is never silently eaten.
+                 * HIDDEN WIDGET & OVERLAY VISIBILITY GUARD
+                 * ====================================================================
+                 * If the overlay widget (such as Skip Outro or Up Next dialog) that
+                 * claimed focus has since been hidden (e.g., episode transitioned or
+                 * dismissed), the focused element might either be detached or hidden.
+                 * We must only route the click action if the element remains connected
+                 * to the active DOM tree and resides inside a visible overlay context.
+                 *
+                 * Built-in overlay widgets (like Up Next, Subtitle Offset, and Playback
+                 * Info) are checked along with plugin widgets using their active classes.
+                 * If the target is invalid, we fall back to controls recovery.
                  * ====================================================================
                  */
-                if (focusedEl && focusedEl.closest('.plugin-widget.visible')) {
+                if (focusedEl && focusedEl.isConnected && (
+                    focusedEl.closest('.plugin-widget.visible') ||
+                    focusedEl.closest('.upnext-dialog.visible') ||
+                    focusedEl.closest('.osd-offset-popup.visible') ||
+                    focusedEl.closest('.playback-info-popup.visible')
+                )) {
                     focusedEl.click();
                     return true;
                 }
@@ -1631,15 +1640,20 @@ export default class OSDController extends Component {
                     const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
                     /*
                      * ====================================================================
-                     * HIDDEN WIDGET GUARD:
-                     * A widget may have been cleaned up (episode ended, next episode
-                     * loaded) leaving focus stranded at Row -1 with no visible button.
-                     * Only fire the click when the element is still inside a .visible
-                     * plugin-widget container — otherwise reset to controls row and
-                     * execute play/pause so the press is never silently swallowed.
+                     * HIDDEN WIDGET & OVERLAY VISIBILITY GUARD
+                     * ====================================================================
+                     * Only dispatch the synthetic click action if the focused element is
+                     * connected to the DOM and resides inside a visible overlay widget.
+                     * This ensures built-in overlays (Up Next, Subtitle Offset, and
+                     * Playback Info) handle Enter key clicks correctly on TV adapters.
                      * ====================================================================
                      */
-                    if (focusedEl && focusedEl.closest('.plugin-widget.visible')) {
+                    if (focusedEl && focusedEl.isConnected && (
+                        focusedEl.closest('.plugin-widget.visible') ||
+                        focusedEl.closest('.upnext-dialog.visible') ||
+                        focusedEl.closest('.osd-offset-popup.visible') ||
+                        focusedEl.closest('.playback-info-popup.visible')
+                    )) {
                         focusedEl.click();
                         return true;
                     }
@@ -2945,13 +2959,39 @@ export default class OSDController extends Component {
             this._currentFocusIndex = playNowIdx !== -1 ? playNowIdx : 0;
             this._updateFocus();
         } else {
+            /* 
+             * ========================================================================
+             * DIALOG FOCUS ESCAPE RECOVERY
+             * ========================================================================
+             * Before hiding the Up Next dialog, determine if focus is currently held
+             * inside it. If the dialog has active focus, hiding it would leave the D-pad
+             * focus row stranded in Row -1 (Overlay row) with no active targets, causing
+             * subsequent key events (such as the Back button or Enter) to route into
+             * fallback exit actions that exit/close the entire player page.
+             *
+             * If focus was inside the dialog, we restore it back to the controls row.
+             * ========================================================================
+             */
+            const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+            const wasDialogFocused = focusedEl && this.upNextDialog.$el?.contains(focusedEl);
+
             this.upNextDialog.hide();
+            
             // Only clear activeMenu if the dialog was the active one —
             // don't accidentally clobber a settings menu that might be open.
             if (this.activeMenu === this.upNextDialog) {
                 this.activeMenu = null;
             }
             this._cacheFocusableElements();
+
+            // Restore focus back to Play/Pause on the primary OSD playback controls
+            if (wasDialogFocused) {
+                this.show();
+                this._currentFocusRow = 1;
+                const playIdx = this._findActionIndex('togglePlay');
+                this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+                this._updateFocus();
+            }
         }
     }
 
