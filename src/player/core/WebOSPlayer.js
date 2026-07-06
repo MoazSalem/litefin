@@ -752,7 +752,12 @@ export class WebOSPlayer {
             if (resumeSeconds >= 5) {
                 // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
                 if (video.readyState >= 3 && video.seekable.length > 0) {
-                    this._seekWithRetry(resumeSeconds);
+                    // Don't start a retry loop if _onPlaying's drift detection already started one
+                    if (!this._robustSeekPending) {
+                        this._seekWithRetry(resumeSeconds);
+                    } else {
+                        log.debug('WebOSPlayer: Robust resume already pending from _onPlaying, skipping');
+                    }
                 } else {
                     setTimeout(tryApply, 300);
                 }
@@ -762,7 +767,11 @@ export class WebOSPlayer {
         tryApply();
     }
 
-    _seekWithRetry(time, attempts = 5) {
+    _seekWithRetry(time, maxRetries = 3) {
+        if (this._robustSeekPending) {
+            log.debug('WebOSPlayer: Seek already pending, skipping concurrent retry');
+            return;
+        }
         this._robustSeekPending = true;
         let tries = 0;
         const video = this._videoElement;
@@ -781,6 +790,8 @@ export class WebOSPlayer {
                 video.currentTime = time;
             } catch (e) {}
 
+            // Wait 3 seconds per attempt — longer intervals prevent the next
+            // currentTime assignment from canceling a still-pending seek on WebOS.
             setTimeout(() => {
                 if (this._cancelRobustResume) return;
 
@@ -789,16 +800,16 @@ export class WebOSPlayer {
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
                     if (!video.paused) this._onPlaying();
-                } else if (tries < attempts) {
+                } else if (tries < maxRetries) {
                     log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
                     attempt();
                 } else {
-                    log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
+                    log.warn('WebOSPlayer: Seek failed after', maxRetries, 'retries');
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
                     if (!video.paused) this._onPlaying();
                 }
-            }, 500);
+            }, 3000);
         };
         attempt();
     }

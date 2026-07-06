@@ -417,17 +417,18 @@ export class HtmlVideoPlayer {
         video.src = options.url;
         video.autoplay = options.autoPlay !== false;
 
-        // Seek if starting from position
-        if (options.playerStartPositionTicks) {
-            const startSeconds = options.playerStartPositionTicks / 10000000;
-            if (video.duration >= startSeconds || !MediaHelper.isValidDuration(video.duration)) {
-                video.currentTime = startSeconds;
-            }
-        }
-
         return new Promise((resolve, reject) => {
             const onLoadedMetadata = () => {
                 video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                // Seek if starting from position — do it here after metadata
+                // is loaded, not immediately after setting src (which is
+                // silently ignored on webOS before the container is parsed).
+                if (options.playerStartPositionTicks) {
+                    const startSeconds = options.playerStartPositionTicks / 10000000;
+                    if (video.duration >= startSeconds || !MediaHelper.isValidDuration(video.duration)) {
+                        video.currentTime = startSeconds;
+                    }
+                }
                 // Apply initially requested tracks once native tracks are populated
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
                     this.setAudioStreamIndex(options.audioStreamIndex);
@@ -450,7 +451,10 @@ export class HtmlVideoPlayer {
                     // Attempt unmuted playback.
                     const playPromise = video.play();
                     if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                        playPromise.then(resolve).catch((err) => {
+                        playPromise.then(() => {
+                            this._applyPlaybackResume(video, options);
+                            resolve();
+                        }).catch((err) => {
                             if (err.name === 'NotAllowedError') {
                                 log.warn('Autoplay blocked — retrying muted (remote launch).');
                                 video.muted = true;
@@ -458,10 +462,12 @@ export class HtmlVideoPlayer {
                                 if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
                                     retryPromise.then(() => {
                                         this._scheduleUnmuteOnInteraction(video);
+                                        this._applyPlaybackResume(video, options);
                                         resolve();
                                     }).catch(reject);
                                 } else {
                                     this._scheduleUnmuteOnInteraction(video);
+                                    this._applyPlaybackResume(video, options);
                                     resolve();
                                 }
                             } else {
@@ -469,6 +475,7 @@ export class HtmlVideoPlayer {
                             }
                         });
                     } else {
+                        this._applyPlaybackResume(video, options);
                         resolve();
                     }
                 }
@@ -688,6 +695,33 @@ export class HtmlVideoPlayer {
         document.addEventListener('click', unmute, { capture: true, once: true });
 
         log.info('Scheduled unmute on next user interaction (keydown/click).');
+    }
+
+    /**
+     * Post-play resume seek fallback.
+     * If the initial currentTime set in loadedmetadata was ignored (common on
+     * webOS when the decoder hasn't fully initialized), try again after play()
+     * resolves and give it a second chance with a short delay.
+     * @private
+     * @param {HTMLVideoElement} video
+     * @param {Object} options
+     */
+    _applyPlaybackResume(video, options) {
+        if (!options.playerStartPositionTicks) return;
+        const targetSec = options.playerStartPositionTicks / 10000000;
+        if (targetSec < 5) return;
+        if (Math.abs(video.currentTime - targetSec) < 2) return;
+
+        log.info('HtmlVideoPlayer: Re-applying resume seek to', targetSec, 's');
+        video.currentTime = targetSec;
+
+        // Give it one more chance after a delay in case the first was too early
+        setTimeout(() => {
+            if (Math.abs(video.currentTime - targetSec) >= 2) {
+                log.warn('HtmlVideoPlayer: Resume seek still not applied, retrying once more');
+                video.currentTime = targetSec;
+            }
+        }, 2000);
     }
 
     /**
