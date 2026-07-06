@@ -281,10 +281,14 @@
         // Immediately restore theme to prevent flash of wrong color
         (function() {
             try {
+                // Read user's chosen theme mode from local storage
                 var savedTheme = localStorage.getItem('litefin:theme') || 'ambient';
+                
+                // Stamp the theme mode tag on documentElement for CSS styling
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
-                // Theme variables for early loading (must match CSS)
+                // Theme variables for early loading (must match CSS definitions)
+                // These provide standard values before Webpack bundle is loaded.
                 var themes = {
                     'ambient': { accent: '#af52de', bg: '#0a0b0c', text: '#ffffff', textSec: '#999999' },
                     'tinted': { accent: '#af52de', bg: '#0f0a14', text: '#ffffff', textSec: '#999999' },
@@ -293,8 +297,17 @@
                     'classic-light': { accent: '#af52de', bg: '#f5f5f5', text: '#101010', textSec: '#666666' }
                 };
 
+                // Fall back to ambient if savedTheme is not found in the dictionary
                 var currentTheme = themes[savedTheme] || themes['ambient'];
-                document.documentElement.style.setProperty('--jf-accent', currentTheme.accent);
+                
+                // Read user's custom accent color from local storage
+                var savedThemeColor = localStorage.getItem('litefin:themeColor');
+                
+                // Fall back to the default theme accent color if the saved one is invalid
+                var accentColor = (savedThemeColor && savedThemeColor.indexOf('#') === 0) ? savedThemeColor : currentTheme.accent;
+
+                // Stamp the critical variables directly onto root stylesheet
+                document.documentElement.style.setProperty('--jf-accent', accentColor);
                 document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
                 document.documentElement.style.setProperty('--jf-text-primary', currentTheme.text);
                 document.documentElement.style.setProperty('--jf-text-secondary', currentTheme.textSec);
