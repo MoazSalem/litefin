@@ -2991,6 +2991,16 @@ export default class OSDController extends Component {
                 const playIdx = this._findActionIndex('togglePlay');
                 this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
                 this._updateFocus();
+
+                // Lock out inputs for 350ms to absorb keyboard-synthesized click events on the newly focused play button
+                this._focusRestoreLockout = true;
+                if (this._focusRestoreLockoutTimer) {
+                    clearTimeout(this._focusRestoreLockoutTimer);
+                }
+                this._focusRestoreLockoutTimer = setTimeout(() => {
+                    this._focusRestoreLockout = false;
+                    this._focusRestoreLockoutTimer = null;
+                }, 350);
             }
         }
     }
