@@ -3062,52 +3062,45 @@ export default class OSDController extends Component {
 
         // -------------------------------------------------------------------
         // Calculate the "show at" threshold
-        // Priority: start of the last chapter (semantic) → time-based fallback
+        // Based on the user's preferred trigger mode setting
         // -------------------------------------------------------------------
-        let showAtTicks;
+        const triggerMode = PlayerSettings.get('nextUpTriggerMode') || 'default';
+        let showAtTicks = null;
 
-        /*
-         * If the player exposes chapters, use the last chapter's start position
-         * as the trigger point. This is semantically correct — the last chapter
-         * is typically the "credits" or "epilogue" section, which is exactly
-         * when viewers are ready to move on to the next episode.
-         */
-        const chapters = this._player?.getChapters ? this._player.getChapters() : [];
-
-        if (chapters && chapters.length >= 2) {
-            // At least two chapters: use the LAST chapter's start position.
-            // We require ≥2 so we don't trigger on a single dummy chapter at 0.
-            const lastChapter = chapters[chapters.length - 1];
-            const lastChapterTicks = lastChapter.StartPositionTicks || 0;
-
+        if (triggerMode === 'default') {
             /*
-             * =========================================================================
-             * CHAPTER SANITY CHECK & THRESHOLD
-             * =========================================================================
-             * To avoid popping up the dialog too early during normal content, we 
-             * enforce that the last chapter (credits/outro) must start at or after 
-             * 90% of the total episode duration.
-             *
-             * If the final chapter starts BEFORE this 90% mark (i.e. it's an unusually 
-             * long final chapter or incorrectly placed marker), we discard it and 
-             * fall back to the standard time-based countdown trigger (e.g. 30 seconds).
-             * =========================================================================
+             * Default behavior:
+             * Priority: start of the last chapter (semantic) -> time-based fallback
              */
-            const minChapterOffsetTicks = durationTicks * 0.9;
-            const MIN_REMAINING = 5 * TICKS_PER_SECOND;
-            if (lastChapterTicks >= minChapterOffsetTicks && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
-                showAtTicks = lastChapterTicks;
+            const chapters = this._player?.getChapters ? this._player.getChapters() : [];
+            if (chapters && chapters.length >= 2) {
+                const lastChapter = chapters[chapters.length - 1];
+                const lastChapterTicks = lastChapter.StartPositionTicks || 0;
+                const minChapterOffsetTicks = durationTicks * 0.9;
+                const MIN_REMAINING = 5 * TICKS_PER_SECOND;
+                if (lastChapterTicks >= minChapterOffsetTicks && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
+                    showAtTicks = lastChapterTicks;
+                }
             }
         }
 
         if (showAtTicks == null) {
-            // No usable chapters — fall back to "X seconds remaining" method
+            // Either 'time_fallback', 'seconds_20', 'seconds_30', or 'default' with no usable chapters
             let showAtSeconds = 30;
-            if (durationTicks >= 50 * TICKS_PER_MINUTE) {
-                showAtSeconds = 40;
-            } else if (durationTicks >= 40 * TICKS_PER_MINUTE) {
-                showAtSeconds = 35;
+            
+            if (triggerMode === 'seconds_20') {
+                showAtSeconds = 20;
+            } else if (triggerMode === 'seconds_30') {
+                showAtSeconds = 30;
+            } else {
+                // 'time_fallback' or 'default' fallback
+                if (durationTicks >= 50 * TICKS_PER_MINUTE) {
+                    showAtSeconds = 40;
+                } else if (durationTicks >= 40 * TICKS_PER_MINUTE) {
+                    showAtSeconds = 35;
+                }
             }
+            
             showAtTicks = durationTicks - showAtSeconds * TICKS_PER_SECOND;
         }
 

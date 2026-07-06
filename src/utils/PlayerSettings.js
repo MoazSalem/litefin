@@ -412,6 +412,9 @@ const DEFAULTS = {
     // Up Next dialog scale multiplier (e.g. 0.75, 1.0, 1.25, 1.5)
     nextUpDialogScale: 1.0,
 
+    // Up Next dialog trigger point mode ('default', 'time_fallback', 'seconds_20', 'seconds_30')
+    nextUpTriggerMode: 'default',
+
     // Show trickplay (sprite-sheet) thumbnail previews when scrubbing through videos.
     // Disable to skip all trickplay calculations and image fetches entirely.
     enableTrickplay: true,

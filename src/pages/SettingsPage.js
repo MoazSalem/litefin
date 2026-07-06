@@ -882,7 +882,7 @@ class SettingsPage extends Page {
             )}
                     </div>
                 </div>
-                
+            
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
 
@@ -2626,6 +2626,27 @@ class SettingsPage extends Page {
                                 id="toggle-next-up-dialog" 
                                 tabindex="0">
                         </button>
+                    </div>
+                </div>
+
+                
+                <!-- Up Next Dialog Trigger Options -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelNextUpTriggerMode">${i18n.t('LabelNextUpTriggerMode') || 'Up Next Trigger Point'}</span>
+                        <span class="setting-description" data-i18n="NextUpTriggerModeDescription">${i18n.t('NextUpTriggerModeDescription') || 'Choose when the next episode card should appear.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'next-up-dialog-trigger-select',
+            [
+                { value: 'default', label: i18n.t('OptionTriggerDefault') || 'Chapters (if available) / Time-based' },
+                { value: 'time_fallback', label: i18n.t('OptionTriggerTimeFallback') || 'Time-based only' },
+                { value: 'seconds_20', label: i18n.t('OptionTrigger20s') || 'Last 20 seconds' },
+                { value: 'seconds_30', label: i18n.t('OptionTrigger30s') || 'Last 30 seconds' }
+            ],
+            PlayerSettings.get('nextUpTriggerMode') || 'default'
+        )}
                     </div>
                 </div>
 
@@ -6414,6 +6435,7 @@ class SettingsPage extends Page {
             'osd-logo-size-select': { type: 'player', key: 'osdLogoSize' },
             'next-up-dialog-style-select': { type: 'player', key: 'nextUpDialogStyle' },
             'next-up-dialog-scale-select': { type: 'player', key: 'nextUpDialogScale' },
+            'next-up-dialog-trigger-select': { type: 'player', key: 'nextUpTriggerMode' },
 
             // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
             'segment-action-intro-select': { type: 'player', key: 'skipActionIntro' },
