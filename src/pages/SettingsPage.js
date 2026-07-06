@@ -2030,19 +2030,6 @@ class SettingsPage extends Page {
                 </div>
 
                 <h3 class="setting-section-title" data-i18n="HomeLayoutOrder" style="margin-top: 40px;">${i18n.t('HomeLayoutOrder') || 'Home Screen Layout'}</h3>
-                
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="UnlockMyMediaOrder">${i18n.t('UnlockMyMediaOrder') || 'Unlock My Media Order'}</span>
-                        <span class="setting-description" data-i18n="UnlockMyMediaOrderDescription">${i18n.t('UnlockMyMediaOrderDescription') || 'Allow "My Media" to be moved from the top position. WARNING: This may cause focus layout breaks on older devices.'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:unlockMyMediaOrder') === 'true' ? 'active' : ''}" 
-                                 id="toggle-unlock-my-media-order" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
 
                 <!-- 
                      Loaded dynamically via _setupHomeLayoutUI. 
@@ -7082,18 +7069,7 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Unlock My Media Order
-        const unlockMyMediaOrderToggle = this.$('#toggle-unlock-my-media-order');
-        if (unlockMyMediaOrderToggle) {
-            unlockMyMediaOrderToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:unlockMyMediaOrder') === 'true';
-                const newValue = !currentValue;
-                storage.setItem('pref:unlockMyMediaOrder', newValue.toString());
-                unlockMyMediaOrderToggle.classList.toggle('active', newValue);
-                this._setupHomeLayoutUI();
-                log.info(`Unlock My Media Order set to: ${newValue}`);
-            });
-        }
+
 
         // Initial Visibility Check for Background Opacity
         const bgContainer = document.getElementById('subtitle-bg-opacity-container');
