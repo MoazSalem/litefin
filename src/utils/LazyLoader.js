@@ -16,10 +16,42 @@ const log = logger.create('LazyLoader');
 class LazyLoader {
     constructor() {
         this.observer = null;
+        
+        // Track the native scroll debounce timer context
+        this._scrollTimeout = null;
+        
+        // Queue elements that intersect during active scrolling animations or events
+        this._pendingLoads = new Map();
+        
         this._init();
     }
 
     _init() {
+        // Capture native scroll events in the capture phase to track all scrollable nodes
+        window.addEventListener('scroll', () => {
+            if (this._scrollTimeout) {
+                clearTimeout(this._scrollTimeout);
+            }
+            // Debounce check: scrolling is considered stopped after 150ms of silence
+            this._scrollTimeout = setTimeout(() => {
+                this._scrollTimeout = null;
+                // If no scroll animations are still active, process all queued loads
+                if (!this._isScrolling()) {
+                    this._processPendingLoads();
+                }
+            }, 150);
+        }, true);
+
+        // Listen for ScrollController finishing its transitions
+        eventBus.on('scroll:finished', () => {
+            // Tiny buffer allows subsequent animation frames to settle or register
+            setTimeout(() => {
+                if (!this._isScrolling()) {
+                    this._processPendingLoads();
+                }
+            }, 50);
+        });
+
         // Legacy TV Focus-Driven Lazy Load
         // Since IntersectionObserver fails on Tizen/WebOS hardware layers (especially for grids),
         // we use D-Pad focus events to aggressively preload the grid as the user navigates.
@@ -47,24 +79,27 @@ class LazyLoader {
             this.observer = new IntersectionObserver(
                 (entries, observer) => {
                     entries.forEach((entry) => {
+                        const target = entry.target;
+                        
                         if (entry.isIntersecting) {
-                            const target = entry.target;
+                            const type = target.hasAttribute('data-lazy-row') ? 'row' : 'image';
 
-                            // Case 1: Lazy Row (Load all children when it enters view)
-                            // NOTE: VirtualCardRow calls forceLoad() eagerly on all windowed
-                            // home-screen cards, so this path mainly fires for non-virtual rows
-                            // (e.g. library grids, details cast rows).
-                            if (target.hasAttribute('data-lazy-row')) {
-                                this._loadRow(target);
+                            // Defer loading if a scroll or animation is actively running
+                            if (this._isScrolling()) {
+                                this._pendingLoads.set(target, type);
+                            } else {
+                                // Load immediately if the user is stationary
+                                if (type === 'row') {
+                                    this._loadRow(target);
+                                } else {
+                                    this._loadImage(target);
+                                    this._batchPreloadImages(target);
+                                }
                             }
-                            // Case 2: Individual Image (Grid)
-                            else if (target.dataset.src) {
-                                this._loadImage(target);
-
-                                // AGGRESSIVE PRELOAD: Load next 20 images in grid sequence
-                                // Simulates "Page Loading" - once we hit a new section, load a full screen ahead
-                                this._batchPreloadImages(target);
-                            }
+                        } else {
+                            // OPTIMIZATION: If the element exits viewport before scroll stops,
+                            // remove it from queue so we never allocate decoders/requests for it.
+                            this._pendingLoads.delete(target);
                         }
                     });
                 },
@@ -80,6 +115,41 @@ class LazyLoader {
         } else {
             log.warn('IntersectionObserver not supported. Fallback to immediate load.');
         }
+    }
+
+    /**
+     * Check if a scrolling action or transition is active on the screen
+     * @returns {boolean}
+     * @private
+     */
+    _isScrolling() {
+        // Inspect exposed ScrollController state to see if active transitions exist
+        if (window.__scrollController && window.__scrollController.isAnimating) {
+            return true;
+        }
+        return this._scrollTimeout !== null;
+    }
+
+    /**
+     * Process all queued intersections once scrolling has come to a stop
+     * @private
+     */
+    _processPendingLoads() {
+        if (this._pendingLoads.size === 0) return;
+
+        log.info(`Processing ${this._pendingLoads.size} pending lazy loads after scroll stop.`);
+        
+        // Execute batch loads for all queued elements
+        this._pendingLoads.forEach((type, target) => {
+            if (type === 'row') {
+                this._loadRow(target);
+            } else {
+                this._loadImage(target);
+                this._batchPreloadImages(target);
+            }
+        });
+        
+        this._pendingLoads.clear();
     }
 
     /**

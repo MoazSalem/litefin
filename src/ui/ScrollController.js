@@ -21,6 +21,7 @@
  */
 
 import { storage } from '../utils/StorageService.js';
+import { eventBus } from '../core/EventBus.js';
 
 // ============================================================================
 // Constants — all tunable values in one place for easy TV hardware tweaking
@@ -100,6 +101,27 @@ class ScrollController {
         // scroll container changes.
         // ====================================================================
         this._offsetCache = new WeakMap();
+
+        // Expose to window for lazy-load checking to bypass circular imports
+        window.__scrollController = this;
+    }
+
+    /**
+     * Check if there are active scroll animations in progress
+     * @returns {boolean}
+     */
+    get isAnimating() {
+        return this._verticalScrollAnimationId !== null || this._horizontalScrollAnimationId !== null;
+    }
+
+    /**
+     * Emit scroll:finished event if no scroll animation remains active
+     * @private
+     */
+    _checkScrollFinished() {
+        if (this._verticalScrollAnimationId === null && this._horizontalScrollAnimationId === null) {
+            eventBus.emit('scroll:finished');
+        }
     }
 
     // ========================================================================
@@ -257,6 +279,7 @@ class ScrollController {
             } else {
                 container.scrollLeft = targetScroll;
             }
+            this._checkScrollFinished();
             return;
         }
 
@@ -291,6 +314,7 @@ class ScrollController {
                 if (container.scrollLeft !== 0) {
                     container.scrollLeft = 0;
                 }
+                this._checkScrollFinished();
                 return;
             } catch (nativeError) {
                 // Log warning and fall through to standard JS RAF smooth scroll fallback.
@@ -394,6 +418,7 @@ class ScrollController {
                 }
                 this[animIdKey] = null;
                 this[stateKey] = null;
+                this._checkScrollFinished();
             }
         };
 
@@ -420,6 +445,7 @@ class ScrollController {
             }
             this._horizontalScrollState = null;
         }
+        this._checkScrollFinished();
     }
 
     /**
