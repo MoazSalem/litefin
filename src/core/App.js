@@ -149,6 +149,13 @@ class App {
         // Wait for both to complete — they've been running in parallel
         await Promise.all([i18nPromise, authPromise]);
 
+        // Load UI font if it requires server fallback font
+        if (state.get('user:authenticated') && layoutManager.getUiFont() === 'fallback-font') {
+            import('../utils/FontLoader.js').then((module) => {
+                module.default.loadFont('fallback-font');
+            });
+        }
+
         // 4.5. Initialize Smart Hub Preview (Tizen 4+ only — gracefully no-ops on older
         //      hardware or other platforms. Must run after auth.init() so the manager can
         //      read the restored auth state and start the refresh cycle immediately.)
@@ -506,6 +513,14 @@ class App {
         // (covers fresh logins, not session restores which are handled in init())
         eventBus.on('auth:login', () => {
             log.info('User logged in - initializing plugin manager');
+
+            // If the UI font is fallback-font, load it now that we are authenticated
+            if (layoutManager.getUiFont() === 'fallback-font') {
+                import('../utils/FontLoader.js').then((module) => {
+                    module.default.loadFont('fallback-font');
+                });
+            }
+
             pluginManager
                 .init({
                     api,

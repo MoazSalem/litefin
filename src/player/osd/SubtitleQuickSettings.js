@@ -151,6 +151,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 visible: !isASS,
                 options: [
                     { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
+                    { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },
@@ -381,6 +382,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 visible: isASS,
                 options: [
                     { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
+                    { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },

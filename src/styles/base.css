@@ -603,6 +603,10 @@ html[data-ui-font="zen-kaku-gothic-new"] {
     --jf-font-family: 'Zen Kaku Gothic New', sans-serif;
 }
 
+html[data-ui-font="fallback-font"] {
+    --jf-font-family: 'Jellyfin Fallback Font', sans-serif;
+}
+
 html {
     /* Apply global font-family here so it inherits downwards to * */
     font-family: var(--jf-font-family);

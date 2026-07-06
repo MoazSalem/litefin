@@ -506,6 +506,13 @@ class LayoutManager {
         if (font && font !== 'default') document.documentElement.setAttribute('data-ui-font', font);
         else document.documentElement.removeAttribute('data-ui-font');
         if (save) storage.setItem('litefin:uiFont', font);
+
+        // Load the fallback font dynamically if selected
+        if (font === 'fallback-font') {
+            import('../utils/FontLoader.js').then((module) => {
+                module.default.loadFont('fallback-font');
+            });
+        }
     }
 
     getRoundedCorners() {

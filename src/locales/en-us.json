@@ -685,6 +685,7 @@
     "IncludeCurrentEpisodeInMoreFromSeasonDescription": "Include the currently playing/opened episode in the 'More From Season' row on the details page, and focus on it.",
     "Indigo": "Indigo",
     "Information": "Information",
+    "JellyfinFallbackFont": "Jellyfin Fallback Font",
     "InitialSidebarFocus": "Initial Sidebar Focus",
     "InitialSidebarFocusDescription": "Select which item gets focused first when opening the sidebar.",
     "InstalledPlugins": "Installed Plugins",

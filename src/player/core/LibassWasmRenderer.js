@@ -141,16 +141,25 @@ export default class LibassWasmRenderer {
             }
             const processedContent = this._lastProcessedResult;
 
-            const fonts = FontLoader.getContainerFontUrls();
-            log.info(`Initializing SubtitlesOctopus with ${fonts.length} container font(s)`);
-
             const availableFonts = getAvailableFonts();
+            const fallbackUrl = FontLoader.getFallbackFontUrl();
+            if (fallbackUrl) {
+                availableFonts['jellyfin fallback font'] = fallbackUrl;
+            }
+
             const overrideFontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const targetFontFamily = (this._fontFamily && this._fontFamily !== 'null')
                 ? this._fontFamily
                 : (overrideFontFamily || 'Roboto');
 
             const fallbackFontUrl = availableFonts[targetFontFamily.toLowerCase()] || getAbsoluteUrl('js/default.woff2');
+
+            const fonts = FontLoader.getContainerFontUrls();
+            // Only add fallbackUrl to fonts if it is not already being used as the primary fallbackFont
+            if (fallbackUrl && fallbackUrl !== fallbackFontUrl) {
+                fonts.push(fallbackUrl);
+            }
+            log.info(`Initializing SubtitlesOctopus with ${fonts.length} font(s)`);
 
             const dropAnimations = PlayerSettings.get('subtitleAssDropAnimations') === true;
             const prescaleFactor = parseFloat(PlayerSettings.get('subtitleAssPrescaleFactor')) || 0.8;

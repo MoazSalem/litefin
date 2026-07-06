@@ -381,6 +381,7 @@ class SettingsPage extends Page {
                         value: 'system',
                         label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
                     },
+                    { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'roboto', label: i18n.t('FontRoboto') },
                     { value: 'google', label: i18n.t('FontGoogleSans') },
@@ -2054,6 +2055,25 @@ class SettingsPage extends Page {
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Sidebar">${i18n.t('Sidebar') || 'Sidebar'}</h2>
 
+                <!-- Sidebar Mode Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarMode">${i18n.t('SidebarMode') || 'Sidebar Mode'}</span>
+                        <span class="setting-description" data-i18n="SidebarModeDescription">${i18n.t('SidebarModeDescription') || 'Choose how the sidebar behaves when collapsed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'sidebar-mode-select',
+            [
+                { value: 'shown', label: i18n.t('AlwaysShown') || 'Always Shown' },
+                { value: 'hidden', label: i18n.t('AlwaysHidden') || 'Always Hidden' },
+                { value: 'mixed', label: i18n.t('MixedMode') || 'Hidden in Details' }
+            ],
+            storage.getItem('pref:sidebarMode') || 'shown'
+        )}
+                    </div>
+                </div>
+
                 <!-- Default Focus Section -->
                 <h3 class="setting-section-title" data-i18n="SidebarOptions">${i18n.t('SidebarOptions') || 'Sidebar Options'}</h3>
 
@@ -2142,25 +2162,6 @@ class SettingsPage extends Page {
                                   id="toggle-transparent-collapsed-sidebar" 
                                   tabindex="0">
                         </button>
-                    </div>
-                </div>
-                
-                <!-- Sidebar Mode Section -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="SidebarMode">${i18n.t('SidebarMode') || 'Sidebar Mode'}</span>
-                        <span class="setting-description" data-i18n="SidebarModeDescription">${i18n.t('SidebarModeDescription') || 'Choose how the sidebar behaves when collapsed.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-            'sidebar-mode-select',
-            [
-                { value: 'shown', label: i18n.t('AlwaysShown') || 'Always Shown' },
-                { value: 'hidden', label: i18n.t('AlwaysHidden') || 'Always Hidden' },
-                { value: 'mixed', label: i18n.t('MixedMode') || 'Hidden in Details' }
-            ],
-            storage.getItem('pref:sidebarMode') || 'shown'
-        )}
                     </div>
                 </div>
 
@@ -3521,6 +3522,7 @@ class SettingsPage extends Page {
                     value: '',
                     label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
                 },
+                { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
                 { value: 'poppins', label: i18n.t('FontPoppins') || 'Poppins' },
                 { value: 'roboto', label: i18n.t('FontRoboto') || 'Roboto' },
                 { value: 'google', label: i18n.t('FontGoogleSans') || 'Google Sans' },
@@ -3887,7 +3889,8 @@ class SettingsPage extends Page {
                     label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New'
                 },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
-                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
+                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' },
+                { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' }
             ],
             PlayerSettings.get('subtitleFontAss')
         )}
