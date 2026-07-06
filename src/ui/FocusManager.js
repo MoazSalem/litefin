@@ -370,7 +370,11 @@ class FocusManager {
             // Example: '#sidebar-home' to always land on the Home button.
             defaultFocusSelector: options.defaultFocusSelector || null,
             // Custom selector
-            selector: options.selector || FOCUSABLE_SELECTOR
+            selector: options.selector || FOCUSABLE_SELECTOR,
+            // Column count for mathematical grid navigation — when set alongside
+            // orientation: 'grid', _move() uses index math instead of SpatialNavigator
+            // to compute the next focusable, eliminating getBoundingClientRect loops.
+            columns: options.columns || null
         };
 
         this._sections.set(name, config);
@@ -599,8 +603,60 @@ class FocusManager {
             } else if (direction === 'down') {
                 if (currentIndex < focusables.length - 1) nextElement = focusables[currentIndex + 1];
             }
+        } else if (config.orientation === 'grid' && config.columns) {
+            // ================================================================
+            // PURE MATHEMATICAL GRID NAVIGATION
+            // ================================================================
+            // When columns are explicitly defined, we compute the next focusable
+            // index purely using index math. This completely bypasses calling
+            // SpatialNavigator.findNext(), avoiding its layout-thrashing loops
+            // (calling getBoundingClientRect() on 300+ elements per keypress).
+            // ================================================================
+            const columns = config.columns;
+            const isRtl = document.documentElement.dir === 'rtl';
+            
+            // Map visual directions to logical layout directions
+            let logicalDirection = direction;
+            if (isRtl) {
+                if (direction === 'left') logicalDirection = 'right';
+                else if (direction === 'right') logicalDirection = 'left';
+            }
+
+            if (logicalDirection === 'left') {
+                // Navigate left only if not at the start of a grid row
+                if (currentIndex % columns !== 0 && currentIndex > 0) {
+                    nextElement = focusables[currentIndex - 1];
+                }
+            } else if (logicalDirection === 'right') {
+                // Navigate right only if not at the end of a grid row
+                if ((currentIndex + 1) % columns !== 0 && currentIndex < focusables.length - 1) {
+                    nextElement = focusables[currentIndex + 1];
+                }
+            } else if (direction === 'up') {
+                // Navigate up by jumping back one full row length
+                if (currentIndex >= columns) {
+                    nextElement = focusables[currentIndex - columns];
+                }
+            } else if (direction === 'down') {
+                // Navigate down by jumping forward one full row length
+                if (currentIndex + columns < focusables.length) {
+                    nextElement = focusables[currentIndex + columns];
+                } else {
+                    // Handover to last row's end item if columns are partially filled
+                    const lastRowStart = Math.floor((focusables.length - 1) / columns) * columns;
+                    const currentRow = Math.floor(currentIndex / columns);
+                    const targetRow = currentRow + 1;
+                    
+                    if (targetRow * columns < focusables.length || lastRowStart > currentIndex) {
+                        const lastElementIndex = focusables.length - 1;
+                        if (Math.floor(lastElementIndex / columns) === targetRow) {
+                            nextElement = focusables[lastElementIndex];
+                        }
+                    }
+                }
+            }
         } else {
-            // 'grid' or default — delegate to SpatialNavigator
+            // 'grid' or default fallback — delegate to SpatialNavigator
             nextElement = this._spatial.findNext(this._focusedElement, focusables, direction);
         }
 

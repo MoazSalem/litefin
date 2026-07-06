@@ -129,6 +129,57 @@ class ScrollController {
     // ========================================================================
 
     /**
+     * ========================================================================
+     * OFFSET CACHE PRE-WARMING
+     * ========================================================================
+     * Batch-computes and caches the offsetTop for a list of elements relative
+     * to a scroll container. Called once after a grid renders inside a single
+     * requestAnimationFrame to ensure the styles are committed before we read.
+     *
+     * This eliminates the forced synchronous layout reflows that would otherwise
+     * occur when getCumulativeOffsetTop() is called per D-pad keypress for
+     * elements whose offsetParent chain resolves normally (not via transform).
+     *
+     * Elements inside CSS transform containers (e.g. .row-items-track) are NOT
+     * safe to cache because their values are scroll-relative — we skip those
+     * automatically by checking if the chain reaches the relativeTo container.
+     *
+     * @param {NodeList|Array} elements - Grid card elements to pre-warm
+     * @param {HTMLElement} relativeTo - The scroll container (.page-content)
+     */
+    prewarmOffsetCache(elements, relativeTo) {
+        if (!elements || !relativeTo) return;
+
+        let warmedCount = 0;
+
+        // Walk every element's offsetParent chain and store the cumulative top.
+        // All reads are batched in this single call, so the browser only needs
+        // one layout pass to satisfy all the offsetTop queries.
+        for (let i = 0; i < elements.length; i++) {
+            const el = elements[i];
+
+            // Skip if already cached (can happen on append/pagination)
+            if (this._offsetCache.has(el)) continue;
+
+            let top = 0;
+            let current = el;
+
+            // Walk offsetParent chain
+            while (current && current !== relativeTo && current !== document.body) {
+                top += current.offsetTop || 0;
+                current = current.offsetParent;
+            }
+
+            // Only cache if the chain completed — elements inside transformed
+            // containers will exit early and must NOT be cached (stale values).
+            if (current === relativeTo) {
+                this._offsetCache.set(el, { container: relativeTo, value: top });
+                warmedCount++;
+            }
+        }
+    }
+
+    /**
      * Smooth scroll with easeOutQuad easing and retarget support.
      *
      * Uses a time-based animation with proper easing curve.
@@ -853,9 +904,29 @@ class ScrollController {
             } else if (activePageContent) {
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);
-                const elementHeight = element.offsetHeight;
                 const viewHeight = activePageContent.clientHeight;
                 const currentScroll = this.getVerticalScroll(activePageContent);
+
+                // ============================================================
+                // PERF: CACHE ELEMENT HEIGHT PER SECTION
+                // ============================================================
+                // In grid sections, all cards have the same height. Reading
+                // element.offsetHeight forces a synchronous layout reflow on
+                // every keypress since the value lives in the layout engine.
+                // We cache the first successful read on the config object so
+                // subsequent D-pad moves are free integer comparisons.
+                // ============================================================
+                let elementHeight;
+                if (config._cachedCardHeight) {
+                    // Re-use the cached value — no layout read needed
+                    elementHeight = config._cachedCardHeight;
+                } else {
+                    // First time: read and cache
+                    elementHeight = element.offsetHeight;
+                    if (config && elementHeight > 0) {
+                        config._cachedCardHeight = elementHeight;
+                    }
+                }
 
                 // Comfort margins for top and bottom visibility
                 const topMargin = GENERIC_SCROLL_MARGIN;

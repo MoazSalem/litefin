@@ -152,7 +152,14 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
     /* NO per-card GPU layers by default — creating a compositor layer for every
        card on the page (50-100+) exhausts Tizen VRAM and slows the GPU compositor.
        The parent .media-row already has translateZ(0) which batches the whole row
-       composited layer. Individual cards ride that layer "for free". */
+       composited layer. Individual cards ride that layer "for free".
+
+       CSS CONTAINMENT: 'contain: layout style' tells the engine that nothing
+       outside this card affects its layout/style and vice versa. On Tizen this
+       dramatically cuts the scope of each Recalculate Style pass when .focused
+       is added/removed — instead of re-evaluating the entire page stacking
+       context, the engine isolates to just this card's subtree. */
+    contain: layout style;
 }
 
 /* Landscape styling for "Continue Watching" & "Next Up" */
@@ -161,12 +168,13 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
     /* Larger for TV (was 280px) */
 }
 
-/* Focus scales the whole unit — ONLY promoted card gets its own GPU layer */
+/* Focus scales the whole unit — the scale() transform implicitly promotes the
+   card to a compositing layer. NO will-change here: toggling will-change on
+   every D-pad keypress forces Tizen to Layerize (create/destroy a GPU layer)
+   on every focus move — measured at 191ms in performance captures. The browser
+   handles promotion automatically via the scale stacking context. */
 .media-card:focus,
 .media-card.focused {
-    /* Promote the one focused card to its own compositor layer for the scale.
-       All other cards share the parent .media-row layer without any overhead. */
-    will-change: transform;
     -webkit-transform: scale(1.05);
     transform: scale(1.05);
     z-index: 1;
@@ -249,8 +257,12 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
     opacity: 1;
     transition: opacity 250ms ease-out;
     pointer-events: none;
-    filter: blur(16px);
-    transform: scale(1.15); /* Scale up to crop out blurred edge bleeding artifacts */
+    /* PERFORMANCE: filter: blur() removed — CSS filter forces a compositor layer
+       per element. With 50-100 blurhash canvases in a library grid this adds
+       100 GPU layers, directly contributing to the persistent Layerize overhead.
+       The scaled 20×20 canvas is still a smooth colour field without the blur;
+       the shimmer overlays it and the image fades in over the top anyway. */
+    transform: scale(1.08); /* Slight scale to clip the pixel-scaled canvas edges */
 }
 
 .media-card .card-image .blurhash-canvas.fade-out {

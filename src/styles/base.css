@@ -765,9 +765,15 @@ body.app-splash-active .page-loading .loading-spinner {
             rgba(255, 255, 255, 0) 100%);
     -webkit-animation: webkit-shimmer-gpu 1.5s infinite linear;
     animation: shimmer-gpu 1.5s infinite linear;
-    will-change: transform;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
+    /* PERFORMANCE: NO will-change here.
+       With 50-100 unloaded cards visible in a library grid, each skeleton
+       shimmer having will-change: transform pre-allocates a separate GPU
+       compositor layer. At 100 cards that’s 100 layers just for shimmers,
+       which is what causes the ~200ms Layerize spike during initial scroll.
+       The translateX() animation is already GPU-composited by Chromium without
+       the hint — it only needs will-change when the browser CANNOT infer it
+       from the animation descriptor. Since we use CSS @keyframes with transform,
+       the compositor already knows to handle this off the main thread. */
     pointer-events: none;
 }
 
@@ -791,6 +797,20 @@ body.app-splash-active .page-loading .loading-spinner {
     }
 }
 
+
+/* ============================================================================
+   SHIMMER OFF-SCREEN PAUSE
+   ============================================================================
+   When the LazyLoader's _shimmerObserver detects a .skeleton-shimmer element
+   is outside the viewport, it adds 'shimmer-hidden'. This pauses the CSS
+   animation — a paused transform animation requires ZERO GPU compositor layers,
+   unlike a running one. Only the on-screen shimmers (visible rows) animate;
+   all off-screen ones are frozen and cost nothing on the compositor.
+   ============================================================================ */
+.skeleton-shimmer.shimmer-hidden::after {
+    -webkit-animation-play-state: paused;
+    animation-play-state: paused;
+}
 
 .loading-spinner {
     width: 48px;

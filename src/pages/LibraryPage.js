@@ -10,6 +10,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
@@ -2180,6 +2181,22 @@ class LibraryPage extends Page {
 
         // Lazy Load Images
         lazyLoader.observe(grid);
+
+        // ====================================================================
+        // PERF: PRE-WARM SCROLL CONTROLLER OFFSET CACHE
+        // ====================================================================
+        // By pre-warming the offsets for all grid cards in a single layout pass
+        // right after render, subsequent offsetTop reads during D-pad moves
+        // will hit the WeakMap cache instantly as O(1) reads rather than forcing
+        // synchronous layout/style recalculation flushes.
+        // ====================================================================
+        requestAnimationFrame(() => {
+            const cards = grid.querySelectorAll('.media-card');
+            const pageContent = document.querySelector('.page-content');
+            if (cards.length && pageContent) {
+                scrollController.prewarmOffsetCache(cards, pageContent);
+            }
+        });
 
         // Calculate expected alpha visibility (avoids DOM race conditions with _updateHeaderVisibility)
         const collectionType = this.state.libraryInfo?.CollectionType;
