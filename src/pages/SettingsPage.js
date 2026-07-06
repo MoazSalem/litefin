@@ -120,6 +120,11 @@ class SettingsPage extends Page {
                 icon: settingsIcons.account
             },
             {
+                id: 'backup',
+                label: i18n.t('BackupRestore') || 'Backup & Restore',
+                icon: settingsIcons.backup
+            },
+            {
                 id: 'about',
                 label: i18n.t('About'),
                 icon: settingsIcons.about
@@ -189,6 +194,8 @@ class SettingsPage extends Page {
                 return this._renderDebugTab();
             case 'plugins':
                 return this._renderPluginsTab();
+            case 'backup':
+                return this._renderBackupTab();
             default:
                 return this._renderAppearanceTab();
         }
@@ -4174,7 +4181,7 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="CheckForUpdatesDesc">${i18n.t('CheckForUpdatesDesc') || 'Trigger a manual check for new releases on GitHub.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-secondary setting-btn focusable" id="btn-check-updates" tabindex="0" data-i18n="CheckForUpdatesNow" data-focusable="true" style="width: auto; min-width: 160px;">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-check-updates" tabindex="0" data-i18n="CheckForUpdatesNow" data-focusable="true" style="width: auto; min-width: 120px;">
                             ${i18n.t('CheckForUpdatesNow')}
                         </button>
                     </div>
@@ -4194,6 +4201,390 @@ class SettingsPage extends Page {
             </div>
         `;
     }
+
+    _renderBackupTab() {
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title" data-i18n="BackupRestore">${i18n.t('BackupRestore') || 'Backup & Restore'}</h2>
+                
+                <p class="setting-section-description" style="
+                    font-size: 0.95rem;
+                    color: var(--text-color-secondary, rgba(255,255,255,0.6));
+                    margin: -12px 0 24px 0;
+                    line-height: 1.5;
+                ">
+                    ${i18n.t('BackupDescription') || 'Synchronize your application settings and preferences across all your devices by backing them up to your Jellyfin server.'}
+                </p>
+
+                <!-- Status Card -->
+                <div class="setting-item" style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 30px; display: block;">
+                    <div id="backup-status-container" style="display: flex; flex-direction: column; gap: 8px;">
+                        <span class="setting-name" style="font-weight: 500; font-size: 1.1rem; color: var(--text-color);">${i18n.t('BackupStatus') || 'Backup Status'}</span>
+                        <span class="setting-description" id="backup-status-message" style="font-size: 0.9rem; color: var(--text-color-secondary); margin-top: 4px;">
+                            ${i18n.t('LoadingStatus') || 'Checking server for settings backup...'}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Backup Actions -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('LabelBackUp') || 'Back Up App Settings'}</span>
+                        <span class="setting-description">${i18n.t('BackUpNowDescription') || 'Uploads your current preferences and player settings to the Jellyfin server.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-primary btn-small focusable" id="btn-backup-now" tabindex="0" data-focusable="true" style="width: auto; min-width: 140px;">
+                            ${i18n.t('ButtonBackUp') || 'Back Up Now'}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="setting-item-restore" style="display: none;">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('LabelRestore') || 'Restore App Settings'}</span>
+                        <span class="setting-description">${i18n.t('RestoreSettingsDescription') || 'Restore settings from the server backup and reload the application.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-restore-now" tabindex="0" data-focusable="true" style="width: auto; min-width: 140px;">
+                            ${i18n.t('ButtonRestore') || 'Restore Settings'}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="setting-item-delete" style="display: none;">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('LabelDelete') || 'Delete Backup'}</span>
+                        <span class="setting-description">${i18n.t('DeleteBackupDescription') || 'Completely remove the settings backup from the Jellyfin server.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-danger btn-small focusable" id="btn-delete-backup" tabindex="0" data-focusable="true" style="width: auto; min-width: 140px;">
+                            ${i18n.t('ButtonDelete') || 'Delete'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Checks the Jellyfin server for an existing settings backup and updates
+     * the status card and button visibilities accordingly.
+     * @private
+     */
+    async _updateBackupStatusDisplay() {
+        const msgEl = this.$('#backup-status-message');
+        const restoreItem = this.$('#setting-item-restore');
+        const deleteItem = this.$('#setting-item-delete');
+
+        if (!msgEl) return;
+
+        try {
+            msgEl.innerText = i18n.t('CheckingBackupStatus') || 'Checking server for settings backup...';
+            // Perform authenticated GET request to server backup endpoint
+            const backup = await api.get('/Litefin/Backup');
+
+            if (backup && backup.DateCreated) {
+                // If a backup metadata record exists, format and display it
+                const dateStr = new Date(backup.DateCreated).toLocaleString();
+                msgEl.innerText = `Backup found: Created on ${dateStr} by ${backup.Username}.`;
+                this.serverBackup = backup;
+
+                // Reveal restore and delete actions
+                if (restoreItem) restoreItem.style.display = '';
+                if (deleteItem) deleteItem.style.display = '';
+            } else {
+                // Backup returned but has no valid metadata (should not happen, but safe fallback)
+                msgEl.innerText = i18n.t('NoBackupFound') || 'No settings backup found on the server.';
+                this.serverBackup = null;
+                if (restoreItem) restoreItem.style.display = 'none';
+                if (deleteItem) deleteItem.style.display = 'none';
+            }
+        } catch (error) {
+            // Handle 404 Not Found cleanly: it simply means the user has not backed up yet
+            if (error.status === 404) {
+                msgEl.innerText = i18n.t('NoBackupFound') || 'No settings backup found on the server.';
+                this.serverBackup = null;
+                if (restoreItem) restoreItem.style.display = 'none';
+                if (deleteItem) deleteItem.style.display = 'none';
+            } else {
+                // Handle server connection error or missing server-side backup plugin
+                log.error('Failed to get backup status:', error);
+                msgEl.innerText = i18n.t('BackupPluginError') || 'Server backup plugin is not available. Please ensure the Litefin backup plugin is installed on your Jellyfin server.';
+
+                // Keep action items hidden
+                if (restoreItem) restoreItem.style.display = 'none';
+                if (deleteItem) deleteItem.style.display = 'none';
+
+                // Disable backup creation button to prevent broken requests
+                const btnBackupNow = this.$('#btn-backup-now');
+                if (btnBackupNow) {
+                    btnBackupNow.disabled = true;
+                    btnBackupNow.style.opacity = '0.5';
+                    btnBackupNow.style.pointerEvents = 'none';
+                }
+            }
+        }
+
+        // Re-index focusable elements on the page as elements changed visibility
+        focusManager.invalidateCache('settings-content');
+        this._setupFocus();
+    }
+
+    /**
+     * Serializes local storage preferences and uploads them to the server.
+     * @private
+     */
+    async _handleBackupNow() {
+        const btn = this.$('#btn-backup-now');
+        const originalText = btn ? btn.innerText : 'Back Up Now';
+        if (btn) {
+            btn.innerText = i18n.t('BackingUp') || 'Backing Up...';
+            btn.disabled = true;
+        }
+
+        try {
+            const backupData = {};
+            const keys = storage.keys();
+
+            // Sensitive layout/connection parameters to exclude from settings backup
+            const excludedKeys = [
+                'litefin:serverUrl',
+                'litefin:deviceId',
+                'litefin:activeUserId',
+                'litefin:serverSessions',
+                'litefin:sessions',
+                'litefin:serverNames',
+                'litefin:accessToken',
+                'litefin:userId',
+                'app_platform'
+            ];
+
+            // Gather all user configuration options from memory cache/localStorage
+            for (const key of keys) {
+                // Exclude device specific configurations, credentials and other server cached items
+                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:')) {
+                    const value = storage.getItem(key);
+                    if (value !== null) {
+                        backupData[key] = value;
+                    }
+                }
+            }
+
+            // POST serialized JSON settings to the server
+            await api.post('/Litefin/Backup', {
+                Settings: JSON.stringify(backupData)
+            });
+
+            // Reload backup metadata status
+            await this._updateBackupStatusDisplay();
+        } catch (error) {
+            log.error('Backup failed:', error);
+            const msgEl = this.$('#backup-status-message');
+            if (msgEl) {
+                msgEl.innerText = i18n.t('BackupFailed') || 'Backup failed. Please verify plugin connectivity.';
+            }
+        } finally {
+            if (btn) {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+    }
+
+    /**
+     * Displays confirmation dialog before overwriting current preferences.
+     * @private
+     */
+    _showRestoreConfirmation() {
+        const prevFocus = focusManager.getFocused();
+        const prevSection = focusManager.getActiveSection();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'restore-settings-dialog';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        overlay.innerHTML = `
+            <div class="settings-modal exit-dialog-modal" role="dialog" aria-modal="true" aria-label="${i18n.t('RestoreSettings') || 'Restore Settings'}">
+                <div class="modal-header">
+                    <h2>${i18n.t('RestoreSettings') || 'Restore Settings'}</h2>
+                </div>
+                <div class="modal-content" style="padding: 0 24px 24px; color: var(--text-color); font-size: 1.1rem; text-align: center;">
+                    ${i18n.t('RestoreSettingsWarning') || 'Restoring settings will overwrite all your current preferences. The app will reload to apply the changes. Do you want to continue?'}
+                </div>
+                <div class="modal-actions" id="restore-dialog-actions" style="margin-top: 0; justify-content: center; gap: 16px;">
+                    <button class="modal-action-btn" id="restore-dialog-no" tabindex="0">
+                        ${i18n.t('ButtonCancel') || 'Cancel'}
+                    </button>
+                    <button class="modal-action-btn danger-btn" id="restore-dialog-yes" tabindex="0">
+                        ${i18n.t('Restore') || 'Restore'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const closeDialog = () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 300);
+            focusManager.unregister('restore-dialog-actions');
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        focusManager.register('restore-dialog-actions', overlay.querySelector('#restore-dialog-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first' // Safely defaults cursor to the Cancel button
+        });
+
+        focusManager.setActiveSection('restore-dialog-actions');
+
+        overlay.querySelector('#restore-dialog-no').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+        };
+
+        overlay.querySelector('#restore-dialog-yes').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+            this._handleRestoreNow();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeDialog();
+        };
+    }
+
+    /**
+     * Restores application preferences from server metadata.
+     * @private
+     */
+    async _handleRestoreNow() {
+        if (!this.serverBackup || !this.serverBackup.Settings) return;
+
+        try {
+            const restoredData = JSON.parse(this.serverBackup.Settings);
+
+            const excludedKeys = [
+                'litefin:serverUrl',
+                'litefin:deviceId',
+                'litefin:activeUserId',
+                'litefin:serverSessions',
+                'litefin:sessions',
+                'litefin:serverNames',
+                'litefin:accessToken',
+                'litefin:userId',
+                'app_platform'
+            ];
+
+            // Wipes all configuration profiles (playback, theme, layouts)
+            PlayerSettings.resetAll();
+            storage.clearByPrefix('pref:');
+            storage.removeItem('app_language');
+            storage.removeItem('layout_direction');
+            storage.removeItem('image_preset');
+            storage.removeItem('image_details_preset');
+
+            // Clear all non-sensitive litefin: keys currently set in storage
+            const keysToClear = storage.keys().filter(key =>
+                key.startsWith('litefin:') && !excludedKeys.includes(key)
+            );
+            for (const key of keysToClear) {
+                storage.removeItem(key);
+            }
+
+            // Apply all restored settings into storage cache
+            for (const [key, value] of Object.entries(restoredData)) {
+                storage.setItem(key, value);
+            }
+
+            // Force app cold boot reload to re-apply the newly restored settings
+            this._triggerHardReload();
+        } catch (error) {
+            log.error('Restore failed:', error);
+        }
+    }
+
+    /**
+     * Displays deletion warning prompt.
+     * @private
+     */
+    _showDeleteBackupConfirmation() {
+        const prevFocus = focusManager.getFocused();
+        const prevSection = focusManager.getActiveSection();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'delete-backup-dialog';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        overlay.innerHTML = `
+            <div class="settings-modal exit-dialog-modal" role="dialog" aria-modal="true" aria-label="${i18n.t('DeleteBackup') || 'Delete Backup'}">
+                <div class="modal-header">
+                    <h2>${i18n.t('DeleteBackup') || 'Delete Backup'}</h2>
+                </div>
+                <div class="modal-content" style="padding: 0 24px 24px; color: var(--text-color); font-size: 1.1rem; text-align: center;">
+                    ${i18n.t('DeleteBackupWarning') || 'Are you sure you want to permanently delete your settings backup from the server?'}
+                </div>
+                <div class="modal-actions" id="delete-backup-actions" style="margin-top: 0; justify-content: center; gap: 16px;">
+                    <button class="modal-action-btn" id="delete-backup-no" tabindex="0">
+                        ${i18n.t('ButtonCancel') || 'Cancel'}
+                    </button>
+                    <button class="modal-action-btn danger-btn" id="delete-backup-yes" tabindex="0">
+                        ${i18n.t('Delete') || 'Delete'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const closeDialog = () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 300);
+            focusManager.unregister('delete-backup-actions');
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        focusManager.register('delete-backup-actions', overlay.querySelector('#delete-backup-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first' // Focuses cancel by default
+        });
+
+        focusManager.setActiveSection('delete-backup-actions');
+
+        overlay.querySelector('#delete-backup-no').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+        };
+
+        overlay.querySelector('#delete-backup-yes').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+            this._handleDeleteBackup();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeDialog();
+        };
+    }
+
+    /**
+     * Delete server settings backup.
+     * @private
+     */
+    async _handleDeleteBackup() {
+        try {
+            await api.delete('/Litefin/Backup');
+            // Re-fetch and display empty status
+            await this._updateBackupStatusDisplay();
+        } catch (error) {
+            log.error('Delete backup failed:', error);
+        }
+    }
+
 
     _renderDebugTab() {
         const logsEnabled = debugOverlay.isLogsEnabled;
@@ -4419,6 +4810,8 @@ class SettingsPage extends Page {
         // so the user gets immediate feedback without having to navigate away.
         if (this.activeTab === 'debug') {
             this._updateStorageUsageDisplay();
+        } else if (this.activeTab === 'backup') {
+            this._updateBackupStatusDisplay();
         }
     }
 
@@ -4447,6 +4840,30 @@ class SettingsPage extends Page {
                 this._setLayout(btn.dataset.layout);
             });
         });
+
+        // ==========================================
+        // BACKUP & RESTORE EVENTS
+        // ==========================================
+        const btnBackupNow = this.$('#btn-backup-now');
+        if (btnBackupNow) {
+            btnBackupNow.addEventListener('click', async () => {
+                await this._handleBackupNow();
+            });
+        }
+
+        const btnRestoreNow = this.$('#btn-restore-now');
+        if (btnRestoreNow) {
+            btnRestoreNow.addEventListener('click', () => {
+                this._showRestoreConfirmation();
+            });
+        }
+
+        const btnDeleteBackup = this.$('#btn-delete-backup');
+        if (btnDeleteBackup) {
+            btnDeleteBackup.addEventListener('click', () => {
+                this._showDeleteBackupConfirmation();
+            });
+        }
 
         // ==========================================
         // PROFILE PIN (Account tab)
@@ -6867,6 +7284,8 @@ class SettingsPage extends Page {
                 this._setupHomeLayoutUI();
             } else if (tabId === 'sidebar') {
                 this._setupSidebarLayoutUI();
+            } else if (tabId === 'backup') {
+                this._updateBackupStatusDisplay();
             }
 
             // Populate the live storage usage display whenever the debug tab is opened.
