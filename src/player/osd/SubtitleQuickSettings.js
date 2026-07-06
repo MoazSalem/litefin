@@ -368,10 +368,17 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'fontAss',
                 type: 'select',
-                label: i18n.t('AssFontFamily'),
-                labelKey: 'AssFontFamily',
+                // Check if overrideAssFonts is active. If so, label it as ASS Format Font Family.
+                // If inactive, it acts as a Fallback Font for ASS format files.
+                label: overrideAssFonts
+                    ? (i18n.t('AssFontFamily') || 'ASS Format Font Family')
+                    : (i18n.t('FallbackFontForAssFormat') || 'Fallback Font for ASS Format'),
+                // Update the key used for localization lookup
+                labelKey: overrideAssFonts ? 'AssFontFamily' : 'FallbackFontForAssFormat',
                 key: 'subtitleFontAss',
-                visible: isASS && overrideAssFonts,
+                // Keep the font configuration selector visible whenever ASS rendering is active,
+                // regardless of whether overrideAssFonts is turned on or off.
+                visible: isASS,
                 options: [
                     { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },

@@ -365,6 +365,7 @@
     "AssDropAnimations": "Drop ASS Animations",
     "AssDropAnimationsDescription": "Skip animated effects for better performance on slow TVs, might cause some subtitles to render incorrectly",
     "AssFontFamily": "ASS Format Font Family",
+    "FallbackFontForAssFormat": "Fallback Font for ASS Format",
     "AssPrescaleFactor": "Subtitle Canvas Scale",
     "AssPrescaleFactorDescription": "Lower = better performance but softer text (1.0 = full resolution).",
     "AssRenderer": "ASS Subtitle Renderer",
