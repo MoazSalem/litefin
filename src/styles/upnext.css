@@ -9,7 +9,8 @@
    ============================================================================ */
 
 .upnext-dialog {
-    font-size: 1.25rem;
+    --upnext-scale: 1.0;
+    font-size: calc(1.25rem * var(--upnext-scale));
     
     /*
      * Position: absolute within .osd-overlays (which fills the full player).
@@ -358,5 +359,91 @@
         width: 5.5em;
         height: 3.125em;
     }
+}
+
+/* ============================================================================
+   Compact Style Layout (Skip-Intro Button Style Mimicry)
+   ============================================================================ */
+
+/* 
+ * Positioned and styled to float in the same bottom-right or bottom-left corner
+ * as the Apple HIG inspired "Skip Intro" button overlay.
+ */
+.upnext-dialog.upnext-style-compact {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    max-width: none;
+    width: auto;
+    bottom: 28%; /* Aligns with skip-intro bottom clearance */
+    right: 6%;   /* Aligns with skip-intro right spacing */
+    overflow: visible !important;
+    font-size: calc(0.95rem * var(--upnext-scale, 1.0));
+}
+
+[dir="rtl"] .upnext-dialog.upnext-style-compact {
+    right: auto;
+    left: 6%;    /* Aligns with skip-intro left spacing in RTL */
+}
+
+/* Compact button style - inherits skip-btn theme variables */
+.upnext-dialog.upnext-style-compact .upnext-btn-play {
+    display: flex;
+    align-items: center;
+    width: auto !important;
+    height: auto !important;
+    min-width: unset !important;
+    padding: 0.7em 1.8em !important;
+    border-radius: var(--jf-border-radius-lg) !important;
+    -webkit-border-radius: var(--jf-border-radius-lg) !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    color: var(--jf-text-primary, #fff) !important;
+    border: 2px solid var(--jf-osd-btn-border) !important;
+    font-size: 1.3em;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    cursor: default;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease,
+        transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform: translateZ(0);
+}
+
+.upnext-dialog.upnext-style-compact .upnext-btn-play.focused,
+.upnext-dialog.upnext-style-compact .upnext-btn-play:focus {
+    background: var(--jf-osd-btn-focus-bg) !important;
+    border: 2px solid var(--jf-osd-btn-focus-border) !important;
+    outline: none !important;
+    color: var(--jf-osd-btn-focus-color) !important;
+    transform: scale(1.05);
+}
+
+.upnext-dialog.upnext-style-compact .upnext-compact-arrow {
+    display: inline-block;
+    font-size: 0.8em;
+    margin-left: 0.8em !important;
+    flex-shrink: 0;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.upnext-dialog.upnext-style-compact .upnext-btn-play.focused .upnext-compact-arrow,
+.upnext-dialog.upnext-style-compact .upnext-btn-play:focus .upnext-compact-arrow {
+    transform: translateX(4px);
+}
+
+[dir="rtl"] .upnext-dialog.upnext-style-compact .upnext-compact-arrow {
+    margin-left: 0 !important;
+    margin-right: 0.8em !important;
+}
+
+[dir="rtl"] .upnext-dialog.upnext-style-compact .upnext-btn-play.focused .upnext-compact-arrow,
+[dir="rtl"] .upnext-dialog.upnext-style-compact .upnext-btn-play:focus .upnext-compact-arrow {
+    transform: translateX(-4px);
 }
 

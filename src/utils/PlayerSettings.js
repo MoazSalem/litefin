@@ -403,6 +403,12 @@ const DEFAULTS = {
      */
     enableNextUpDialog: true,
 
+    // Up Next dialog layout style ('normal', 'no_image', 'compact')
+    nextUpDialogStyle: 'normal',
+
+    // Up Next dialog scale multiplier (e.g. 0.75, 1.0, 1.25, 1.5)
+    nextUpDialogScale: 1.0,
+
     // Show trickplay (sprite-sheet) thumbnail previews when scrubbing through videos.
     // Disable to skip all trickplay calculations and image fetches entirely.
     enableTrickplay: true,

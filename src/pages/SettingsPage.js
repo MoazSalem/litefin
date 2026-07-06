@@ -834,6 +834,47 @@ class SettingsPage extends Page {
             )}
                     </div>
                 </div>
+
+                
+                <!-- Up Next Dialog Style Options -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelNextUpDialogStyle">${i18n.t('LabelNextUpDialogStyle') || 'Up Next Style'}</span>
+                        <span class="setting-description" data-i18n="NextUpDialogStyleDescription">${i18n.t('NextUpDialogStyleDescription') || 'Choose the layout style of the next episode dialog.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'next-up-dialog-style-select',
+                [
+                    { value: 'normal', label: i18n.t('OptionStyleNormal') || 'Normal' },
+                    { value: 'no_image', label: i18n.t('OptionStyleNoImage') || 'No Image' },
+                    { value: 'compact', label: i18n.t('OptionStyleCompact') || 'Compact' }
+                ],
+                PlayerSettings.get('nextUpDialogStyle') || 'normal'
+            )}
+                    </div>
+                </div>
+
+                <!-- Up Next Dialog Scale Options -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelNextUpDialogScale">${i18n.t('LabelNextUpDialogScale') || 'Up Next Scale'}</span>
+                        <span class="setting-description" data-i18n="NextUpDialogScaleDescription">${i18n.t('NextUpDialogScaleDescription') || 'Adjust the overall scaling factor of the next episode dialog.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'next-up-dialog-scale-select',
+                [
+                    { value: 0.5, label: i18n.t('ExtraSmall') || 'Extra Small' },
+                    { value: 0.75, label: i18n.t('Small') || 'Small' },
+                    { value: 1.0, label: i18n.t('Medium') || 'Medium' },
+                    { value: 1.25, label: i18n.t('Large') || 'Large' },
+                    { value: 1.5, label: i18n.t('ExtraLarge') || 'Extra Large' }
+                ],
+                PlayerSettings.get('nextUpDialogScale') || 1.0
+            )}
+                    </div>
+                </div>
                 
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
@@ -5940,6 +5981,8 @@ class SettingsPage extends Page {
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
             'osd-logo-size-select': { type: 'player', key: 'osdLogoSize' },
+            'next-up-dialog-style-select': { type: 'player', key: 'nextUpDialogStyle' },
+            'next-up-dialog-scale-select': { type: 'player', key: 'nextUpDialogScale' },
 
             // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
             'segment-action-intro-select': { type: 'player', key: 'skipActionIntro' },
