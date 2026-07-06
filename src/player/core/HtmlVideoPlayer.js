@@ -414,7 +414,20 @@ export class HtmlVideoPlayer {
             video.crossOrigin = crossOrigin;
         }
 
-        video.src = options.url;
+        // ====================================================================
+        // MEDIA FRAGMENT INJECTION:
+        // We append the media fragment `#t=seconds` to the stream URL.
+        // This instructs standard HTML5 engines to begin loading and buffering
+        // segments from the target seek position natively.
+        // ====================================================================
+        let url = options.url;
+        const seconds = (options.playerStartPositionTicks || 0) / 10000000;
+        if (seconds > 0) {
+            log.info(`HtmlVideoPlayer: Appending media fragment #t=${seconds} for native seek`);
+            url += `#t=${seconds}`;
+        }
+
+        video.src = url;
         video.autoplay = options.autoPlay !== false;
 
         return new Promise((resolve, reject) => {
@@ -425,8 +438,21 @@ export class HtmlVideoPlayer {
                 // silently ignored on webOS before the container is parsed).
                 if (options.playerStartPositionTicks) {
                     const startSeconds = options.playerStartPositionTicks / 10000000;
-                    if (video.duration >= startSeconds || !MediaHelper.isValidDuration(video.duration)) {
-                        video.currentTime = startSeconds;
+
+                    // ========================================================
+                    // FALLBACK SEEK GATING:
+                    // Check if the media fragment has already seeked the video
+                    // to the requested offset. If it has, we skip programmatic
+                    // seeking to avoid duplicate seeks/stutters.
+                    // ========================================================
+                    const hasAppliedMediaFragment = Math.abs(video.currentTime - startSeconds) < 2;
+                    if (!hasAppliedMediaFragment) {
+                        log.info('HtmlVideoPlayer: Media fragment seek (#t=) failed or not applied, falling back to programmatic seek');
+                        if (video.duration >= startSeconds || !MediaHelper.isValidDuration(video.duration)) {
+                            video.currentTime = startSeconds;
+                        }
+                    } else {
+                        log.info('HtmlVideoPlayer: Media fragment seek (#t=) successfully applied natively');
                     }
                 }
                 // Apply initially requested tracks once native tracks are populated
@@ -710,7 +736,16 @@ export class HtmlVideoPlayer {
         if (!options.playerStartPositionTicks) return;
         const targetSec = options.playerStartPositionTicks / 10000000;
         if (targetSec < 5) return;
-        if (Math.abs(video.currentTime - targetSec) < 2) return;
+
+        // ====================================================================
+        // PLAYHEAD DRIFT CHECK:
+        // If the video timeline shows the playhead is already positioned
+        // close to the target, skip re-applying the seek.
+        // ====================================================================
+        if (Math.abs(video.currentTime - targetSec) < 2) {
+            log.info('HtmlVideoPlayer: Playhead is already at target resume position. Skipping fallback resume seek.');
+            return;
+        }
 
         log.info('HtmlVideoPlayer: Re-applying resume seek to', targetSec, 's');
         video.currentTime = targetSec;

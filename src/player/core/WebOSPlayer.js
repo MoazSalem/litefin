@@ -345,13 +345,25 @@ export class WebOSPlayer {
         video.removeAttribute('src');
         video.load();
 
+        // ====================================================================
+        // MEDIA FRAGMENT RESUME:
+        // Append `#t=seconds` to the url for HLS streaming to hint the native HLS demuxer
+        // to download chunks starting from the resume position immediately.
+        // ====================================================================
+        let url = options.url;
+        const seconds = (options.playerStartPositionTicks || 0) / 10000000;
+        if (seconds > 0) {
+            log.info(`WebOSPlayer: Appending media fragment #t=${seconds} to native HLS URL`);
+            url += `#t=${seconds}`;
+        }
+
         // Use a <source> element with the MIME type hint so WebOS picks the
         // right codec path — without it, some versions skip the native HLS path.
         while (video.firstChild) {
             video.removeChild(video.firstChild);
         }
         const source = document.createElement('source');
-        source.src  = options.url;
+        source.src  = url;
         source.type = 'application/vnd.apple.mpegURL';
         video.appendChild(source);
 
@@ -431,6 +443,19 @@ export class WebOSPlayer {
             video.removeChild(video.firstChild);
         }
 
+        // ====================================================================
+        // MEDIA FRAGMENT RESUME:
+        // We append the media fragment `#t=seconds` to the direct play URL.
+        // This instructs the WebOS media pipeline to start demuxing/decoding
+        // from the resume position right from the first packet load.
+        // ====================================================================
+        let url = options.url;
+        const seconds = (options.playerStartPositionTicks || 0) / 10000000;
+        if (seconds > 0) {
+            log.info(`WebOSPlayer: Appending media fragment #t=${seconds} to native DirectPlay URL`);
+            url += `#t=${seconds}`;
+        }
+
         // ── Dolby Vision hint path ───────────────────────────────────────────
         // Detect DoVi from the media stream metadata passed down via options.
         const videoStream = options.mediaSource?.MediaStreams?.find(s => s.Type === 'Video');
@@ -451,21 +476,21 @@ export class WebOSPlayer {
             if (canPlayDv) {
                 log.info('WebOSPlayer: DoVi content detected — using dvh1 codec hint to activate DV decoder pipeline');
                 const source = document.createElement('source');
-                source.src  = options.url;
+                source.src  = url;
                 source.type = dvHint;
                 video.appendChild(source);
             } else {
                 // canPlayType rejected the codec — fall back to raw src so
                 // the native pipeline still gets a chance to probe it.
                 log.warn('WebOSPlayer: DoVi detected but canPlayType("dvh1") returned false — falling back to raw src (dev browser?)');
-                video.src = options.url;
+                video.src = url;
             }
         } else {
             // Standard path: direct src assignment for all non-DoVi containers.
             // Using <source> with MIME types like 'video/x-matroska' causes the
             // Chromium layer to silently reject the source before the media
             // pipeline sees it, so we avoid it here.
-            video.src = options.url;
+            video.src = url;
         }
 
         video.load();
@@ -741,6 +766,17 @@ export class WebOSPlayer {
         // Safety guard: do not seek beyond the end
         if (MediaHelper.isValidDuration(video.duration) && resumeSeconds > video.duration - 10) {
             log.warn('WebOSPlayer: Resume position near end of video, ignoring', resumeSeconds);
+            this._robustSeekTarget = null;
+            return;
+        }
+
+        // ====================================================================
+        // MEDIA FRAGMENT CHECK:
+        // If the media fragment seek already succeeded natively and the video
+        // is close to the resume target, we skip the robust seek retry loop.
+        // ====================================================================
+        if (Math.abs(video.currentTime - resumeSeconds) < 2) {
+            log.info('WebOSPlayer: Robust resume target already reached (via media fragment). Skipping retry loop.');
             this._robustSeekTarget = null;
             return;
         }
