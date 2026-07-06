@@ -810,14 +810,21 @@ class PlayerPage extends Page {
         if (streams.length === 0) return undefined;
 
         // 1. Try exact match: Match both Language and Display Title/Title
+        // ---------------------------------------------------------------------
+        // Fall back to 'und' (undetermined) for empty/missing language attributes,
+        // matching our stored preference format.
+        // ---------------------------------------------------------------------
         const exactMatch = streams.find(
-            (s) => (s.Language || 'none') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
+            (s) => (s.Language || 'und') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
         );
         // If exact match found, return its index
         if (exactMatch) return exactMatch.Index;
 
         // 2. Fall back to Language only match
-        const langMatch = streams.find((s) => (s.Language || 'none') === targetLang);
+        // ---------------------------------------------------------------------
+        // Find streams matching the language preference when exact titles differ.
+        // ---------------------------------------------------------------------
+        const langMatch = streams.find((s) => (s.Language || 'und') === targetLang);
         // If language match found, return its index
         if (langMatch) return langMatch.Index;
 
@@ -1788,7 +1795,9 @@ class PlayerPage extends Page {
                 (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
             );
             if (activeAudioTrack) {
-                storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'none');
+                // Save undetermined ('und') instead of 'none' if language is missing
+                // to distinguish undefined languages from disabled tracks.
+                storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'und');
                 storage.setItem(
                     'session:lastAudioTitle',
                     activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
@@ -1819,7 +1828,9 @@ class PlayerPage extends Page {
                         (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
                     );
                     if (activeSubtitleTrack) {
-                        storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
+                        // Use undetermined ('und') for tracks with empty/undefined language
+                        // to prevent them from matching the 'none' check (which disables subtitles).
+                        storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
                         storage.setItem(
                             'session:lastSubtitleTitle',
                             activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
