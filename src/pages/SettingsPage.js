@@ -7346,31 +7346,44 @@ class SettingsPage extends Page {
      * @private
      */
     _handleResetAll() {
+        // =====================================================================
         // 1. Clear player settings
+        // =====================================================================
+        // Wipes all configuration profiles related to playback, audio,
+        // subtitles, and streaming performance.
         PlayerSettings.resetAll();
 
+        // =====================================================================
         // 2. Clear app preferences
+        // =====================================================================
+        // Clears all custom views, reordered lists, image quality settings,
+        // and subtitle customization profiles.
         storage.clearByPrefix('pref:');
 
+        // =====================================================================
         // 3. Clear layout/theme preferences
-        storage.removeItem('litefin:layout');
-        storage.removeItem('litefin:themeMode');
-        storage.removeItem('litefin:theme');
-        storage.removeItem('litefin:themeColor');
-        storage.removeItem('litefin:uiFont');
-        storage.removeItem('litefin:roundedCorners');
-        storage.removeItem('litefin:textScale');
-        storage.removeItem('litefin:osdButtonBorders');
+        // =====================================================================
+        // Wipes all appearance configurations, including theme colors, fonts,
+        // Low VRAM switches, border stylings, loaders, and OSD preferences.
+        // Using clearByPrefix ensures that newly added layout/theme options
+        // are dynamically swept and reset to default without manual updates.
+        storage.clearByPrefix('litefin:');
 
+        // =====================================================================
         // 4. Clear other app settings
+        // =====================================================================
         storage.removeItem('app_language');
         storage.removeItem('layout_direction');
 
-        // 5. Clear image presets
+        // =====================================================================
+        // 5. Clear legacy/fallback image presets
+        // =====================================================================
         storage.removeItem('image_preset');
         storage.removeItem('image_details_preset');
 
+        // =====================================================================
         // 6. Clear debug settings
+        // =====================================================================
         storage.clearByPrefix('debug_');
 
         // 7. Hard reload to apply defaults everywhere and re-initialize i18n correctly.
