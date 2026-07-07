@@ -3470,7 +3470,11 @@ class DetailsPage extends Page {
             }
         }
 
-        const optionsHtml = options
+        const optionsHtml = options.length === 0 ? `
+            <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
+                ${i18n.t('NoOptionsAvailable') || 'No options available'}
+            </div>
+        ` : options
             .map((opt, i) => {
                 return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
@@ -3524,7 +3528,15 @@ class DetailsPage extends Page {
         });
 
         // Set active immediately
-        focusManager.setActiveSection(optionsSection);
+        if (options.length === 0) {
+            focusManager.setActiveSection(actionsSection);
+            setTimeout(() => {
+                const cancelBtn = overlay.querySelector('#btn-modal-cancel');
+                if (cancelBtn) focusManager.focusElement(cancelBtn);
+            }, 50);
+        } else {
+            focusManager.setActiveSection(optionsSection);
+        }
 
         // Helper to close menu
         this._closeMoreMenu = () => {

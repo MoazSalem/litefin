@@ -1,6 +1,7 @@
 import { logger } from './Logger.js';
 import { state } from '../core/StateManager.js';
 import { api } from '../api/index.js';
+import { storage } from './StorageService.js';
 
 const log = logger.create('FontLoader');
 
@@ -106,11 +107,12 @@ class FontLoader {
      * Force load a font to ensure it's ready before use.
      * Uses document.fonts.load() or a hidden DOM element to trigger download.
      * @param {string} fontId
+     * @param {boolean} [forceReload=false]
      * @returns {Promise<boolean>}
      */
-    async loadFont(fontId) {
+    async loadFont(fontId, forceReload = false) {
         if (!fontId || !this._fontMap[fontId]) return false;
-        if (this._loadedStaticFonts.has(fontId)) return true;
+        if (this._loadedStaticFonts.has(fontId) && !forceReload) return true;
 
         /*
          * -------------------------------------------------------------
@@ -136,8 +138,15 @@ class FontLoader {
                     return false;
                 }
 
-                // Retrieve the first font name from the list
-                const fontName = fonts[0].Name;
+                // Retrieve the user selected font name, falling back to the first font from the server list
+                const userSelectedFont = storage.getItem('pref:jellyfinFallbackFont');
+                let fontName = '';
+                if (userSelectedFont && fonts.some(f => f.Name === userSelectedFont)) {
+                    fontName = userSelectedFont;
+                } else {
+                    fontName = fonts[0].Name;
+                }
+                
                 if (!fontName) {
                     log.warn('Invalid fallback font name in server response');
                     return false;

@@ -9,6 +9,7 @@
 
 import Page from './Page.js';
 import { auth, api } from '../api/index.js';
+import { state } from '../core/StateManager.js';
 import { getDeviceCapabilities, clearCapabilitiesCache } from '../api/DeviceProfile.js';
 import { router } from '../core/Router.js';
 import { layoutManager } from '../ui/LayoutManager.js';
@@ -408,6 +409,20 @@ class SettingsPage extends Page {
                 ],
                 layoutManager.getUiFont()
             )}
+                    </div>
+                </div>
+            
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="JellyfinFallbackFontSelection">${i18n.t('JellyfinFallbackFontSelection') || 'Jellyfin Fallback Font File'}</span>
+                        <span class="setting-description" data-i18n="JellyfinFallbackFontSelectionDescription">${i18n.t('JellyfinFallbackFontSelectionDescription') || 'Select which font file on the server to use as the fallback font'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'jellyfin-fallback-font-select',
+                            [],
+                            storage.getItem('pref:jellyfinFallbackFont') || ''
+                        )}
                     </div>
                 </div>
 
@@ -6088,7 +6103,11 @@ class SettingsPage extends Page {
                     <h2>${title}</h2>
                 </div>
                 <div class="modal-options">
-                    ${options
+                    ${options.length === 0 ? `
+                        <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
+                            ${i18n.t('NoOptionsAvailable') || 'No options available'}
+                        </div>
+                    ` : options
                 .map((opt) => {
                     let badge = '';
                     if (opt.completeness !== undefined) {
@@ -6107,8 +6126,8 @@ class SettingsPage extends Page {
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                            <span style="margin-right: 12px;">${i18n.ensureBiDi(opt.label)}</span>
-                            ${badge}
+                             <span style="margin-right: 12px;">${i18n.ensureBiDi(opt.label)}</span>
+                             ${badge}
                         </button>
                     `;
                 })
@@ -6159,12 +6178,20 @@ class SettingsPage extends Page {
         });
 
         // Set Focus
-        focusManager.setActiveSection('modal-options');
-        setTimeout(() => {
-            const selected =
-                overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn');
-            if (selected) focusManager.focusElement(selected);
-        }, 50);
+        if (options.length === 0) {
+            focusManager.setActiveSection('modal-actions');
+            setTimeout(() => {
+                const cancelBtn = overlay.querySelector('#btn-modal-cancel');
+                if (cancelBtn) focusManager.focusElement(cancelBtn);
+            }, 50);
+        } else {
+            focusManager.setActiveSection('modal-options');
+            setTimeout(() => {
+                const selected =
+                    overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn');
+                if (selected) focusManager.focusElement(selected);
+            }, 50);
+        }
     }
 
     _closeSelectionModal() {
@@ -6354,6 +6381,7 @@ class SettingsPage extends Page {
             'card-label-scale-select': { key: 'pref:cardLabelScale', type: 'local' },
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
+            'jellyfin-fallback-font-select': { key: 'pref:jellyfinFallbackFont', type: 'local', triggerEvent: true },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
             'details-image-quality-select': { key: 'detailsImageQuality', type: 'details-service' },
             'max-resolution-select': { key: 'maxResolution', type: 'player' },
@@ -6471,13 +6499,39 @@ class SettingsPage extends Page {
         };
 
         this.$$('.select-btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const id = btn.dataset.id;
-                const options = JSON.parse(btn.dataset.options);
+                let options = [];
+                try {
+                    options = JSON.parse(btn.dataset.options);
+                } catch (_) {}
                 const currentValue = btn.dataset.value;
                 const settingConfig = settingsMap[id];
                 const title =
                     btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || i18n.t('SelectOption');
+
+                if (id === 'jellyfin-fallback-font-select') {
+                    btn.classList.add('disabled');
+                    try {
+                        const fontsList = await api.get('/FallbackFont/Fonts');
+                        console.log('Jellyfin Fallback Fonts response:', fontsList);
+                        log.info('Jellyfin Fallback Fonts response:', fontsList);
+                        
+                        if (fontsList && fontsList.length > 0) {
+                            options = fontsList.map((f) => ({
+                                value: f.Name,
+                                label: f.Name
+                            }));
+                            btn.dataset.options = JSON.stringify(options);
+                        } else {
+                            options = [];
+                        }
+                    } catch (err) {
+                        log.warn('Failed to load fallback fonts list on click:', err);
+                    } finally {
+                        btn.classList.remove('disabled');
+                    }
+                }
 
                 this._renderSelectionModal(title, options, currentValue, (newValue) => {
                     // Update button UI
@@ -6529,6 +6583,10 @@ class SettingsPage extends Page {
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
                             layoutManager.setUiFont(newValue);
+                        } else if (id === 'jellyfin-fallback-font-select') {
+                            // SPECIAL CASE: Reload fallback font on change
+                            storage.setItem('pref:jellyfinFallbackFont', newValue);
+                            FontLoader.loadFont('fallback-font', true);
                         } else if (id === 'text-scale-select') {
                             // SPECIAL CASE: Text Scale handled by LayoutManager
                             layoutManager.setTextScale(parseFloat(newValue));
