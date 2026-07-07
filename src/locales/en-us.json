@@ -1213,5 +1213,7 @@
     "SelectBackup": "Select Backup",
     "BackupName": "Backup Name (Optional)",
     "NewBackup": "Create New Backup",
-    "Overwrite": "Overwrite"
+    "Overwrite": "Overwrite",
+    "AppLayout": "App Layout",
+    "AppControls": "App Controls"
 }

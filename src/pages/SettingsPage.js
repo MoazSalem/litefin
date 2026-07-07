@@ -1259,6 +1259,9 @@ class SettingsPage extends Page {
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Layout">${i18n.t('Layout') || 'Layout'}</h2>
 
+                <h3 class="setting-section-title" data-i18n="AppLayout">${i18n.t('AppLayout') || 'App Layout'}</h3>
+
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="MediaRowsLayout">${i18n.t('MediaRowsLayout') || 'Media Rows Layout'}</span>
@@ -1276,7 +1279,8 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
+                <!-- Force Expandable Posters option: hidden unless media rows layout is modern/expanding posters -->
+                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'modern' ? '' : 'hidden'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
                         <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
@@ -2070,6 +2074,8 @@ class SettingsPage extends Page {
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Sidebar">${i18n.t('Sidebar') || 'Sidebar'}</h2>
+ 
+                <h3 class="setting-section-title" data-i18n="SidebarOptions">${i18n.t('SidebarOptions') || 'Sidebar Options'}</h3>
 
                 <!-- Sidebar Mode Section -->
                 <div class="setting-item">
@@ -2091,7 +2097,6 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- Default Focus Section -->
-                <h3 class="setting-section-title" data-i18n="SidebarOptions">${i18n.t('SidebarOptions') || 'Sidebar Options'}</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -2277,6 +2282,9 @@ class SettingsPage extends Page {
             <div class="settings-tab-content">
                 <!-- Premium Section Title Header -->
                 <h2 class="content-title" data-i18n="Controls">${i18n.t('Controls') || 'Controls'}</h2>
+
+                <h3 class="setting-section-title" data-i18n="AppControls">${i18n.t('AppControls') || 'App Controls'}</h3>
+
 
                 <!-- Application Behavior -->
                 <div class="setting-item">
@@ -4345,7 +4353,7 @@ class SettingsPage extends Page {
         backups.forEach((b) => {
             const dateStr = new Date(b.DateCreated).toLocaleString();
             const device = b.DeviceName || 'Unknown Device';
-            
+
             const platformMap = {
                 'web': 'Web',
                 'tizen': 'Tizen',
@@ -4543,7 +4551,7 @@ class SettingsPage extends Page {
             // Reset inputs and reload status
             if (inputNameEl) inputNameEl.value = '';
             await this._updateBackupStatusDisplay();
-            
+
             if (this.backupsList && this.backupsList.length > 0) {
                 this._selectedBackupId = this.backupsList[0].Id;
                 this._updateBackupTabUI();
