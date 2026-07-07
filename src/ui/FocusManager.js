@@ -992,6 +992,12 @@ class FocusManager {
         if (this._focusedElement) {
             // Dispatch click
             this._focusedElement.click();
+
+            // Native focus is required to invoke the TV OS virtual keyboard (IME) on text fields
+            if (this._focusedElement.tagName === 'INPUT' || this._focusedElement.tagName === 'TEXTAREA') {
+                this._focusedElement.focus();
+            }
+
             eventBus.emit('focus:activated', this._focusedElement);
         }
     }

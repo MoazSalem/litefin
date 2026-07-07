@@ -1188,7 +1188,7 @@
     "Zoom": "Zoom",
     "BackupRestore": "Backup & Restore",
     "BackupDescription": "Synchronize your application settings and preferences across all your devices by backing them up to your Jellyfin server.",
-    "BackupStatus": "Backup Status",
+    "SelectedBackup": "Selected Backup",
     "LoadingStatus": "Checking server for settings backup...",
     "CheckingBackupStatus": "Checking server for settings backup...",
     "BackupPluginError": "Server backup plugin is not available. Please ensure the Litefin plugin is installed on your Jellyfin server.",
@@ -1209,5 +1209,9 @@
     "LabelRestore": "Restore App Settings",
     "ButtonRestore": "Restore Settings",
     "LabelDelete": "Delete Backup",
-    "ButtonDelete": "Delete"
+    "ButtonDelete": "Delete",
+    "SelectBackup": "Select Backup",
+    "BackupName": "Backup Name (Optional)",
+    "NewBackup": "Create New Backup",
+    "Overwrite": "Overwrite"
 }

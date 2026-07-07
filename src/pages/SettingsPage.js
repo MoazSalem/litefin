@@ -419,10 +419,10 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'jellyfin-fallback-font-select',
-                            [],
-                            storage.getItem('pref:jellyfinFallbackFont') || ''
-                        )}
+                'jellyfin-fallback-font-select',
+                [],
+                storage.getItem('pref:jellyfinFallbackFont') || ''
+            )}
                     </div>
                 </div>
 
@@ -4230,7 +4230,7 @@ class SettingsPage extends Page {
 
     _renderBackupTab() {
         return `
-            <div class="settings-tab-content">
+            <div class="settings-tab-content" id="backup-tab-content">
                 <h2 class="content-title" data-i18n="BackupRestore">${i18n.t('BackupRestore') || 'Backup & Restore'}</h2>
                 
                 <p class="setting-section-description" style="
@@ -4242,122 +4242,251 @@ class SettingsPage extends Page {
                     ${i18n.t('BackupDescription') || 'Synchronize your application settings and preferences across all your devices by backing them up to your Jellyfin server.'}
                 </p>
 
-                <!-- Status Card -->
-                <div class="setting-item" style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 30px; display: block;">
-                    <div id="backup-status-container" style="display: flex; flex-direction: column; gap: 8px;">
-                        <span class="setting-name" style="font-weight: 500; font-size: 1.1rem; color: var(--text-color);">${i18n.t('BackupStatus') || 'Backup Status'}</span>
-                        <span class="setting-description" id="backup-status-message" style="font-size: 0.9rem; color: var(--text-color-secondary); margin-top: 4px;">
-                            ${i18n.t('LoadingStatus') || 'Checking server for settings backup...'}
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Backup Actions -->
+                <!-- Status / Dropdown Item -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">${i18n.t('LabelBackUp') || 'Back Up App Settings'}</span>
-                        <span class="setting-description">${i18n.t('BackUpNowDescription') || 'Uploads your current preferences and player settings to the Jellyfin server.'}</span>
+                        <span class="setting-name" id="backup-select-label">${i18n.t('SelectedBackup') || 'Selected Backup'}</span>
+                        <span class="setting-description" id="backup-status-message">Checking server for settings backup...</span>
                     </div>
-                    <div class="setting-control">
-                        <button class="btn btn-primary btn-small focusable" id="btn-backup-now" tabindex="0" data-focusable="true" style="width: auto; min-width: 140px;">
-                            ${i18n.t('ButtonBackUp') || 'Back Up Now'}
-                        </button>
+                    <div class="setting-control" id="backup-select-container">
+                        <span style="opacity: 0.6;">${i18n.t('LoadingStatus') || 'Checking server for settings backup...'}</span>
                     </div>
                 </div>
 
-                <div class="setting-item" id="setting-item-restore" style="display: none;">
+                <!-- Backup Name Input Container (Hidden by default, shown only when 'New Backup' is selected) -->
+                <div class="setting-item" id="setting-item-backup-name" style="display: none; margin-top: 20px;">
                     <div class="setting-label">
-                        <span class="setting-name">${i18n.t('LabelRestore') || 'Restore App Settings'}</span>
-                        <span class="setting-description">${i18n.t('RestoreSettingsDescription') || 'Restore settings from the server backup and reload the application.'}</span>
+                        <span class="setting-name">${i18n.t('BackupName') || 'Backup Name (Optional)'}</span>
+                        <span class="setting-description">Provide a custom label to easily distinguish this backup.</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-secondary btn-small focusable" id="btn-restore-now" tabindex="0" data-focusable="true" style="width: auto; min-width: 140px;">
-                            ${i18n.t('ButtonRestore') || 'Restore Settings'}
-                        </button>
+                        <input id="input-backup-name" type="text" class="focusable" tabindex="0" data-focusable="true" placeholder="e.g. Living Room TV" style="
+                            background: rgba(255, 255, 255, 0.05);
+                            border: 1px solid rgba(255, 255, 255, 0.1);
+                            color: #fff;
+                            padding: 10px 14px;
+                            border-radius: 6px;
+                            font-size: 1rem;
+                            width: 250px;
+                        "/>
                     </div>
                 </div>
 
-                <div class="setting-item" id="setting-item-delete" style="display: none;">
-                    <div class="setting-label">
-                        <span class="setting-name">${i18n.t('LabelDelete') || 'Delete Backup'}</span>
-                        <span class="setting-description">${i18n.t('DeleteBackupDescription') || 'Completely remove the settings backup from the Jellyfin server.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="btn btn-danger btn-small focusable" id="btn-delete-backup" tabindex="0" data-focusable="true" style="width: auto; min-width: 140px;">
-                            ${i18n.t('ButtonDelete') || 'Delete'}
-                        </button>
-                    </div>
+                <!-- Dynamic Action Area -->
+                <div id="backup-actions-container">
+                    <!-- Populated dynamically -->
                 </div>
             </div>
         `;
     }
 
     /**
-     * Checks the Jellyfin server for an existing settings backup and updates
+     * Checks the Jellyfin server for existing settings backups and updates
      * the status card and button visibilities accordingly.
      * @private
      */
     async _updateBackupStatusDisplay() {
         const msgEl = this.$('#backup-status-message');
-        const restoreItem = this.$('#setting-item-restore');
-        const deleteItem = this.$('#setting-item-delete');
-
         if (!msgEl) return;
 
         try {
             msgEl.innerText = i18n.t('CheckingBackupStatus') || 'Checking server for settings backup...';
-            // Perform authenticated GET request to server backup endpoint
-            const backup = await api.get('/Litefin/Backup');
+            // Perform authenticated GET request to server backup endpoint (returns array)
+            const backups = await api.get('/Litefin/Backup');
 
-            if (backup && backup.DateCreated) {
-                // If a backup metadata record exists, format and display it
-                const dateStr = new Date(backup.DateCreated).toLocaleString();
-                msgEl.innerText = `Backup found: Created on ${dateStr} by ${backup.Username}.`;
-                this.serverBackup = backup;
+            this.backupsList = backups || [];
 
-                // Reveal restore and delete actions
-                if (restoreItem) restoreItem.style.display = '';
-                if (deleteItem) deleteItem.style.display = '';
+            // Sort by newest first
+            this.backupsList.sort((a, b) => new Date(b.DateCreated) - new Date(a.DateCreated));
+
+            if (this.backupsList.length > 0) {
+                msgEl.innerText = `Found ${this.backupsList.length} settings backup(s) on the server.`;
             } else {
-                // Backup returned but has no valid metadata (should not happen, but safe fallback)
                 msgEl.innerText = i18n.t('NoBackupFound') || 'No settings backup found on the server.';
-                this.serverBackup = null;
-                if (restoreItem) restoreItem.style.display = 'none';
-                if (deleteItem) deleteItem.style.display = 'none';
             }
+
+            if (!this._selectedBackupId) {
+                this._selectedBackupId = 'new';
+            }
+
+            // Update dropdown and action buttons
+            this._updateBackupTabUI();
         } catch (error) {
-            // Handle 404 Not Found cleanly: it simply means the user has not backed up yet
-            if (error.status === 404) {
-                msgEl.innerText = i18n.t('NoBackupFound') || 'No settings backup found on the server.';
-                this.serverBackup = null;
-                if (restoreItem) restoreItem.style.display = 'none';
-                if (deleteItem) deleteItem.style.display = 'none';
-            } else {
-                // Handle server connection error or missing server-side backup plugin
-                log.error('Failed to get backup status:', error);
-                msgEl.innerText = i18n.t('BackupPluginError') || 'Server backup plugin is not available. Please ensure the Litefin backup plugin is installed on your Jellyfin server.';
+            log.error('Failed to get backups list:', error);
+            msgEl.innerText = i18n.t('BackupPluginError') || 'Server backup plugin is not available. Please ensure the Litefin backup plugin is installed on your Jellyfin server.';
 
-                // Keep action items hidden
-                if (restoreItem) restoreItem.style.display = 'none';
-                if (deleteItem) deleteItem.style.display = 'none';
+            // Render disabled state
+            const selectContainer = this.$('#backup-select-container');
+            const actionsContainer = this.$('#backup-actions-container');
+            if (selectContainer) selectContainer.innerHTML = '';
+            if (actionsContainer) actionsContainer.innerHTML = '';
+        }
+    }
 
-                // Disable backup creation button to prevent broken requests
-                const btnBackupNow = this.$('#btn-backup-now');
-                if (btnBackupNow) {
-                    btnBackupNow.disabled = true;
-                    btnBackupNow.style.opacity = '0.5';
-                    btnBackupNow.style.pointerEvents = 'none';
-                }
+    /**
+     * Re-renders the backups select dropdown and dynamic buttons based on current state.
+     * @private
+     */
+    _updateBackupTabUI() {
+        const selectContainer = this.$('#backup-select-container');
+        const actionsContainer = this.$('#backup-actions-container');
+        const nameInputContainer = this.$('#setting-item-backup-name');
+        if (!selectContainer || !actionsContainer) return;
+
+        const currentUserId = api.userId;
+        const currentSelectedVal = this._selectedBackupId || 'new';
+
+        // Build options list
+        const options = [
+            { value: 'new', label: i18n.t('NewBackup') || 'Create New Backup' }
+        ];
+
+        const backups = this.backupsList || [];
+        backups.forEach((b) => {
+            const dateStr = new Date(b.DateCreated).toLocaleString();
+            const device = b.DeviceName || 'Unknown Device';
+            
+            const platformMap = {
+                'web': 'Web',
+                'tizen': 'Tizen',
+                'webos': 'WebOS'
+            };
+            const platformDisplay = platformMap[b.Platform] || b.Platform || 'Unknown';
+            const infoSuffix = b.Platform ? `${dateStr}, ${platformDisplay}` : dateStr;
+
+            // If b.Name is empty or matches/starts with the device name (legacy server-side fallback),
+            // display: DeviceName - Username (Date, Platform)
+            const isFallback = !b.Name || b.Name.trim() === "" || b.Name.startsWith(device);
+            const displayName = isFallback
+                ? `${device} - ${b.Username} (${infoSuffix})`
+                : `${b.Name} - ${b.Username} (${infoSuffix})`;
+
+            options.push({
+                value: b.Id,
+                label: displayName
+            });
+        });
+
+        // Render the dropdown button using the helper method
+        selectContainer.innerHTML = this._renderDropdown('litefin-backup-select', options, currentSelectedVal);
+
+        // Bind click handler for selection modal
+        const selectBtn = selectContainer.querySelector('.select-btn');
+        if (selectBtn) {
+            selectBtn.addEventListener('click', () => {
+                const title = i18n.t('SelectBackup') || 'Select Backup';
+                this._renderSelectionModal(title, options, currentSelectedVal, (newValue) => {
+                    this._selectedBackupId = newValue;
+                    this._updateBackupTabUI();
+
+                    setTimeout(() => {
+                        const btn = this.$('#litefin-backup-select-btn');
+                        if (btn) focusManager.focusElement(btn);
+                    }, 50);
+                });
+            });
+        }
+
+        // Show/hide name input and render corresponding action buttons
+        if (currentSelectedVal === 'new') {
+            if (nameInputContainer) nameInputContainer.style.display = '';
+
+            actionsContainer.innerHTML = `
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('LabelBackUp') || 'Back Up App Settings'}</span>
+                        <span class="setting-description">${i18n.t('BackUpNowDescription') || 'Uploads your current preferences and player settings to the Jellyfin server.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-primary btn-small focusable" id="btn-backup-now" tabindex="0" data-focusable="true">
+                            ${i18n.t('ButtonBackUp') || 'Back Up Now'}
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            const btnBackup = actionsContainer.querySelector('#btn-backup-now');
+            if (btnBackup) {
+                btnBackup.onclick = () => this._handleBackupNow();
+            }
+        } else {
+            if (nameInputContainer) nameInputContainer.style.display = 'none';
+
+            const selectedBackup = backups.find(b => b.Id === currentSelectedVal);
+            if (!selectedBackup) {
+                this._selectedBackupId = 'new';
+                this._updateBackupTabUI();
+                return;
+            }
+
+            const isOwner = selectedBackup.UserId === currentUserId;
+
+            // Render action rows: Restore is always visible. Overwrite and Delete are only visible/rendered if the current user is the owner
+            let html = `
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('LabelRestore') || 'Restore App Settings'}</span>
+                        <span class="setting-description">${i18n.t('RestoreSettingsDescription') || 'Restore settings from the server backup and reload the application.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-restore-now" tabindex="0" data-focusable="true">
+                            ${i18n.t('ButtonRestore') || 'Restore Settings'}
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            if (isOwner) {
+                html += `
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span class="setting-name">Overwrite Backup</span>
+                            <span class="setting-description">Update this backup snapshot with your current device settings.</span>
+                        </div>
+                        <div class="setting-control">
+                            <button class="btn btn-secondary btn-small focusable" id="btn-overwrite-now" tabindex="0" data-focusable="true">
+                                ${i18n.t('Overwrite') || 'Overwrite'}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span class="setting-name">${i18n.t('LabelDelete') || 'Delete Backup'}</span>
+                            <span class="setting-description">${i18n.t('DeleteBackupDescription') || 'Completely remove the settings backup from the Jellyfin server.'}</span>
+                        </div>
+                        <div class="setting-control">
+                            <button class="btn btn-danger btn-small focusable" id="btn-delete-backup" tabindex="0" data-focusable="true">
+                                ${i18n.t('ButtonDelete') || 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            actionsContainer.innerHTML = html;
+
+            const btnRestore = actionsContainer.querySelector('#btn-restore-now');
+            const btnOverwrite = actionsContainer.querySelector('#btn-overwrite-now');
+            const btnDelete = actionsContainer.querySelector('#btn-delete-backup');
+
+            if (btnRestore) {
+                btnRestore.onclick = () => this._showRestoreConfirmation(selectedBackup);
+            }
+            if (btnOverwrite && isOwner) {
+                btnOverwrite.onclick = () => this._showOverwriteConfirmation(selectedBackup);
+            }
+            if (btnDelete && isOwner) {
+                btnDelete.onclick = () => this._showDeleteBackupConfirmation(selectedBackup);
             }
         }
 
-        // Re-index focusable elements on the page as elements changed visibility
+        // Re-index focusable elements
         focusManager.invalidateCache('settings-content');
         this._setupFocus();
     }
 
     /**
-     * Serializes local storage preferences and uploads them to the server.
+     * Serializes local storage preferences and uploads them as a new backup.
      * @private
      */
     async _handleBackupNow() {
@@ -4387,7 +4516,6 @@ class SettingsPage extends Page {
 
             // Gather all user configuration options from memory cache/localStorage
             for (const key of keys) {
-                // Exclude device specific configurations, credentials and other server cached items
                 if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:')) {
                     const value = storage.getItem(key);
                     if (value !== null) {
@@ -4396,13 +4524,30 @@ class SettingsPage extends Page {
                 }
             }
 
+            const inputNameEl = this.$('#input-backup-name');
+            const customName = inputNameEl ? inputNameEl.value.trim() : '';
+
             // POST serialized JSON settings to the server
+            const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
+            const platform = platformInfo.platformString || 'web';
+
             await api.post('/Litefin/Backup', {
-                Settings: JSON.stringify(backupData)
+                Settings: JSON.stringify(backupData),
+                Name: customName,
+                DeviceId: api.deviceId,
+                DeviceName: api.deviceName || 'Web Client',
+                AppVersion: appVersion,
+                Platform: platform
             });
 
-            // Reload backup metadata status
+            // Reset inputs and reload status
+            if (inputNameEl) inputNameEl.value = '';
             await this._updateBackupStatusDisplay();
+            
+            if (this.backupsList && this.backupsList.length > 0) {
+                this._selectedBackupId = this.backupsList[0].Id;
+                this._updateBackupTabUI();
+            }
         } catch (error) {
             log.error('Backup failed:', error);
             const msgEl = this.$('#backup-status-message');
@@ -4418,10 +4563,137 @@ class SettingsPage extends Page {
     }
 
     /**
+     * Displays confirmation dialog before overwriting a backup.
+     * @private
+     */
+    _showOverwriteConfirmation(backupRecord) {
+        const prevFocus = focusManager.getFocused();
+        const prevSection = focusManager.getActiveSection();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'overwrite-backup-dialog';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        overlay.innerHTML = `
+            <div class="settings-modal exit-dialog-modal" role="dialog" aria-modal="true" aria-label="${i18n.t('Overwrite') || 'Overwrite'}">
+                <div class="modal-header">
+                    <h2>${i18n.t('Overwrite') || 'Overwrite Backup'}</h2>
+                </div>
+                <div class="modal-content" style="padding: 0 24px 24px; color: var(--text-color); font-size: 1.1rem; text-align: center;">
+                    Are you sure you want to overwrite this backup snapshot? This will replace the stored settings with your current preferences.
+                </div>
+                <div class="modal-actions" id="overwrite-dialog-actions" style="margin-top: 0; justify-content: center; gap: 16px;">
+                    <button class="modal-action-btn" id="overwrite-dialog-no" tabindex="0">
+                        ${i18n.t('ButtonCancel') || 'Cancel'}
+                    </button>
+                    <button class="modal-action-btn danger-btn" id="overwrite-dialog-yes" tabindex="0">
+                        ${i18n.t('Overwrite') || 'Overwrite'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const closeDialog = () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 300);
+            focusManager.unregister('overwrite-dialog-actions');
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        focusManager.register('overwrite-dialog-actions', overlay.querySelector('#overwrite-dialog-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first'
+        });
+
+        focusManager.setActiveSection('overwrite-dialog-actions');
+
+        overlay.querySelector('#overwrite-dialog-no').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+        };
+
+        overlay.querySelector('#overwrite-dialog-yes').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+            this._handleOverwriteBackup(backupRecord);
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeDialog();
+        };
+    }
+
+    /**
+     * Overwrites an existing backup.
+     * @private
+     */
+    async _handleOverwriteBackup(backupRecord) {
+        const btn = this.$('#btn-overwrite-now');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+        }
+
+        try {
+            const backupData = {};
+            const keys = storage.keys();
+
+            const excludedKeys = [
+                'litefin:serverUrl',
+                'litefin:deviceId',
+                'litefin:activeUserId',
+                'litefin:serverSessions',
+                'litefin:sessions',
+                'litefin:serverNames',
+                'litefin:accessToken',
+                'litefin:userId',
+                'app_platform'
+            ];
+
+            for (const key of keys) {
+                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:')) {
+                    const value = storage.getItem(key);
+                    if (value !== null) {
+                        backupData[key] = value;
+                    }
+                }
+            }
+
+            const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
+            const platform = platformInfo.platformString || 'web';
+
+            // POST serialized JSON settings to the server, including the existing backup ID to overwrite
+            await api.post('/Litefin/Backup', {
+                Id: backupRecord.Id,
+                Settings: JSON.stringify(backupData),
+                Name: backupRecord.Name,
+                DeviceId: api.deviceId,
+                DeviceName: api.deviceName || 'Web Client',
+                AppVersion: appVersion,
+                Platform: platform
+            });
+
+            // Reload status
+            await this._updateBackupStatusDisplay();
+        } catch (error) {
+            log.error('Overwrite backup failed:', error);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.style.opacity = '';
+            }
+        }
+    }
+
+    /**
      * Displays confirmation dialog before overwriting current preferences.
      * @private
      */
-    _showRestoreConfirmation() {
+    _showRestoreConfirmation(backupRecord) {
         const prevFocus = focusManager.getFocused();
         const prevSection = focusManager.getActiveSection();
 
@@ -4474,7 +4746,7 @@ class SettingsPage extends Page {
         overlay.querySelector('#restore-dialog-yes').onclick = (e) => {
             e.stopPropagation();
             closeDialog();
-            this._handleRestoreNow();
+            this._handleRestoreNow(backupRecord);
         };
 
         overlay.onclick = (e) => {
@@ -4486,11 +4758,11 @@ class SettingsPage extends Page {
      * Restores application preferences from server metadata.
      * @private
      */
-    async _handleRestoreNow() {
-        if (!this.serverBackup || !this.serverBackup.Settings) return;
+    async _handleRestoreNow(backupRecord) {
+        if (!backupRecord || !backupRecord.Settings) return;
 
         try {
-            const restoredData = JSON.parse(this.serverBackup.Settings);
+            const restoredData = JSON.parse(backupRecord.Settings);
 
             const excludedKeys = [
                 'litefin:serverUrl',
@@ -4536,7 +4808,7 @@ class SettingsPage extends Page {
      * Displays deletion warning prompt.
      * @private
      */
-    _showDeleteBackupConfirmation() {
+    _showDeleteBackupConfirmation(backupRecord) {
         const prevFocus = focusManager.getFocused();
         const prevSection = focusManager.getActiveSection();
 
@@ -4589,7 +4861,7 @@ class SettingsPage extends Page {
         overlay.querySelector('#delete-backup-yes').onclick = (e) => {
             e.stopPropagation();
             closeDialog();
-            this._handleDeleteBackup();
+            this._handleDeleteBackup(backupRecord);
         };
 
         overlay.onclick = (e) => {
@@ -4601,10 +4873,12 @@ class SettingsPage extends Page {
      * Delete server settings backup.
      * @private
      */
-    async _handleDeleteBackup() {
+    async _handleDeleteBackup(backupRecord) {
         try {
-            await api.delete('/Litefin/Backup');
-            // Re-fetch and display empty status
+            await api.delete(`/Litefin/Backup/${backupRecord.Id}`);
+
+            // Reset choice and update list
+            this._selectedBackupId = 'new';
             await this._updateBackupStatusDisplay();
         } catch (error) {
             log.error('Delete backup failed:', error);
@@ -6504,7 +6778,7 @@ class SettingsPage extends Page {
                 let options = [];
                 try {
                     options = JSON.parse(btn.dataset.options);
-                } catch (_) {}
+                } catch (_) { }
                 const currentValue = btn.dataset.value;
                 const settingConfig = settingsMap[id];
                 const title =
@@ -6516,7 +6790,7 @@ class SettingsPage extends Page {
                         const fontsList = await api.get('/FallbackFont/Fonts');
                         console.log('Jellyfin Fallback Fonts response:', fontsList);
                         log.info('Jellyfin Fallback Fonts response:', fontsList);
-                        
+
                         if (fontsList && fontsList.length > 0) {
                             options = fontsList.map((f) => ({
                                 value: f.Name,
