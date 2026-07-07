@@ -512,7 +512,12 @@ class CardRenderer {
             let width = item.Width;
             let height = item.Height;
             let isHdr = false;
+            let isDovi = false;
 
+            /*
+             * Extract video streams from media source metadata to inspect the encoding range properties.
+             * This allows us to detect advanced color formats like Dolby Vision (DoVi) and HDR.
+             */
             if (item.MediaSources && item.MediaSources.length > 0) {
                 const source = item.MediaSources[0];
                 if (source.Width) width = source.Width;
@@ -523,8 +528,21 @@ class CardRenderer {
                         if (videoStream.Width) width = videoStream.Width;
                         if (videoStream.Height) height = videoStream.Height;
                         const videoRange = videoStream.VideoRange || videoStream.VideoRangeType;
-                        if (videoRange && videoRange.toLowerCase().includes('hdr')) {
-                            isHdr = true;
+                        if (videoRange) {
+                            const rangeLower = videoRange.toLowerCase();
+                            /*
+                             * Check for standard High Dynamic Range (HDR) naming
+                             */
+                            if (rangeLower.includes('hdr')) {
+                                isHdr = true;
+                            }
+                            /*
+                             * Dolby Vision is represented as 'DOVI' (or similar variants) by the server.
+                             * We match against 'dovi' or the full 'dolby vision' name.
+                             */
+                            if (rangeLower.includes('dovi') || rangeLower.includes('dolby vision')) {
+                                isDovi = true;
+                            }
                         }
                     }
                 }
@@ -535,6 +553,9 @@ class CardRenderer {
                 const maxDim = Math.max(width || 0, height || 0);
                 const minDim = Math.min(width || 0, height || 0);
 
+                /*
+                 * Resolve resolution boundaries based on dimensions
+                 */
                 if (maxDim >= 3840 || minDim >= 2160) {
                     resolutionLabel = '4K';
                 } else if (maxDim >= 1920 || minDim >= 1080) {
@@ -545,8 +566,19 @@ class CardRenderer {
                     resolutionLabel = 'SD';
                 }
 
-                if (isHdr) {
-                    resolutionLabel = resolutionLabel ? `${resolutionLabel} HDR` : 'HDR';
+                /*
+                 * Determine the dynamic range suffix for the badge label.
+                 * Dolby Vision (DV) takes precedence as the premium format.
+                 */
+                let rangeLabel = '';
+                if (isDovi) {
+                    rangeLabel = 'DV';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                }
+
+                if (rangeLabel) {
+                    resolutionLabel = resolutionLabel ? `${resolutionLabel} ${rangeLabel}` : rangeLabel;
                 }
 
                 if (resolutionLabel) {
