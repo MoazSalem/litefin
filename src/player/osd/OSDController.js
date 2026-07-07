@@ -678,6 +678,13 @@ export default class OSDController extends Component {
             }
         });
 
+        if (PlayerSettings.get('osdButtonsLocation') === 'below') {
+            const bottomEl = this._osdEl.querySelector('.osd-bottom');
+            if (bottomEl) {
+                bottomEl.classList.add('buttons-below');
+            }
+        }
+
         this.updatePlayPauseButton();
 
         return this._osdEl;
@@ -1762,64 +1769,112 @@ export default class OSDController extends Component {
         }
 
         if (direction === 'up') {
-            if (this._currentFocusRow === 2) {
-                this._currentFocusRow = 1;
-                // Always target Play/Pause when moving UP from the seekbar
-                const playIdx = this._findActionIndex('togglePlay');
-                if (playIdx !== -1) {
-                    this._currentFocusIndex = playIdx;
-                }
-            } else if (this._currentFocusRow === 1) {
-                // If plugin widgets are visible in the overlay row, go there directly.
-                // The overlay row is visually ABOVE the controls, so Up from controls = overlay.
-                // Only fall through to header (Row 0) when no overlay widgets are present.
-                if (this._cachedOverlayRow.length > 0) {
-                    this._currentFocusRow = -1;
-                    /*
-                     * When the Up Next dialog is visible, land on "Play Now" specifically
-                     * rather than blindly using index 0 (which may be the skip-outro button
-                     * or any other widget at the front of the overlay DOM order).
-                     */
-                    if (this.upNextDialog?.isVisible && this.upNextDialog.$el) {
-                        const playNow = this.upNextDialog.$el.querySelector('.upnext-btn-play');
-                        const idx = playNow ? this._cachedOverlayRow.indexOf(playNow) : -1;
-                        this._currentFocusIndex = idx !== -1 ? idx : 0;
+            const buttonsBelow = PlayerSettings.get('osdButtonsLocation') === 'below';
+            if (buttonsBelow) {
+                if (this._currentFocusRow === 1) {
+                    this._currentFocusRow = 2; // Controls -> Seekbar
+                } else if (this._currentFocusRow === 2) {
+                    // Seekbar -> Overlay or Header
+                    if (this._cachedOverlayRow.length > 0) {
+                        this._currentFocusRow = -1;
+                        if (this.upNextDialog?.isVisible && this.upNextDialog.$el) {
+                            const playNow = this.upNextDialog.$el.querySelector('.upnext-btn-play');
+                            const idx = playNow ? this._cachedOverlayRow.indexOf(playNow) : -1;
+                            this._currentFocusIndex = idx !== -1 ? idx : 0;
+                        } else {
+                            this._currentFocusIndex = 0;
+                        }
                     } else {
+                        this._currentFocusRow = 0;
+                    }
+                } else if (this._currentFocusRow === -1) {
+                    this._currentFocusRow = 0;
+                } else if (this._currentFocusRow === 0) {
+                    if (this._cachedOverlayRow.length > 0) {
+                        this._currentFocusRow = -1;
                         this._currentFocusIndex = 0;
                     }
-                } else {
-                    this._currentFocusRow = 0;
                 }
-            } else if (this._currentFocusRow === -1) {
-                // Overlay → Header (back button). Completes the chain:
-                // Seekbar ↑ Controls ↑ Overlay ↑ Header
-                // From Header the user can then right/left into subtitle offset / playback info.
-                this._currentFocusRow = 0;
-            } else if (this._currentFocusRow === 0) {
-                // Header → overlay (for subtitle offset / playback info panels
-                // which are also in the overlay row but triggered via menu buttons)
-                if (this._cachedOverlayRow.length > 0) {
-                    this._currentFocusRow = -1;
-                    this._currentFocusIndex = 0;
+            } else {
+                if (this._currentFocusRow === 2) {
+                    this._currentFocusRow = 1;
+                    // Always target Play/Pause when moving UP from the seekbar
+                    const playIdx = this._findActionIndex('togglePlay');
+                    if (playIdx !== -1) {
+                        this._currentFocusIndex = playIdx;
+                    }
+                } else if (this._currentFocusRow === 1) {
+                    // If plugin widgets are visible in the overlay row, go there directly.
+                    // The overlay row is visually ABOVE the controls, so Up from controls = overlay.
+                    // Only fall through to header (Row 0) when no overlay widgets are present.
+                    if (this._cachedOverlayRow.length > 0) {
+                        this._currentFocusRow = -1;
+                        /*
+                         * When the Up Next dialog is visible, land on "Play Now" specifically
+                         * rather than blindly using index 0 (which may be the skip-outro button
+                         * or any other widget at the front of the overlay DOM order).
+                         */
+                        if (this.upNextDialog?.isVisible && this.upNextDialog.$el) {
+                            const playNow = this.upNextDialog.$el.querySelector('.upnext-btn-play');
+                            const idx = playNow ? this._cachedOverlayRow.indexOf(playNow) : -1;
+                            this._currentFocusIndex = idx !== -1 ? idx : 0;
+                        } else {
+                            this._currentFocusIndex = 0;
+                        }
+                    } else {
+                        this._currentFocusRow = 0;
+                    }
+                } else if (this._currentFocusRow === -1) {
+                    // Overlay → Header (back button). Completes the chain:
+                    // Seekbar ↑ Controls ↑ Overlay ↑ Header
+                    // From Header the user can then right/left into subtitle offset / playback info.
+                    this._currentFocusRow = 0;
+                } else if (this._currentFocusRow === 0) {
+                    // Header → overlay (for subtitle offset / playback info panels
+                    // which are also in the overlay row but triggered via menu buttons)
+                    if (this._cachedOverlayRow.length > 0) {
+                        this._currentFocusRow = -1;
+                        this._currentFocusIndex = 0;
+                    }
                 }
             }
         } else if (direction === 'down') {
-            if (this._currentFocusRow === -1) {
-                // Return from overlay row straight to Controls, landing on Play/Pause
-                this._currentFocusRow = 1;
-                const playIdx = this._findActionIndex('togglePlay');
-                this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
-            } else if (this._currentFocusRow === 0) {
-                // Mirror of Up from Row 1: if overlay widgets are visible, stop there first.
-                // Header ↓ Overlay ↓ Controls (symmetric with Controls ↑ Overlay ↑ Header)
-                if (this._cachedOverlayRow.length > 0) {
-                    this._currentFocusRow = -1;
-                    this._currentFocusIndex = 0;
-                } else {
-                    this._currentFocusRow = 1;
+            const buttonsBelow = PlayerSettings.get('osdButtonsLocation') === 'below';
+            if (buttonsBelow) {
+                if (this._currentFocusRow === 0) {
+                    if (this._cachedOverlayRow.length > 0) {
+                        this._currentFocusRow = -1;
+                        this._currentFocusIndex = 0;
+                    } else {
+                        this._currentFocusRow = 2; // Header -> Seekbar
+                    }
+                } else if (this._currentFocusRow === -1) {
+                    this._currentFocusRow = 2; // Overlay -> Seekbar
+                } else if (this._currentFocusRow === 2) {
+                    this._currentFocusRow = 1; // Seekbar -> Controls
+                    const playIdx = this._findActionIndex('togglePlay');
+                    if (playIdx !== -1) {
+                        this._currentFocusIndex = playIdx;
+                    }
                 }
-            } else if (this._currentFocusRow === 1) {
-                this._currentFocusRow = 2;
+            } else {
+                if (this._currentFocusRow === -1) {
+                    // Return from overlay row straight to Controls, landing on Play/Pause
+                    this._currentFocusRow = 1;
+                    const playIdx = this._findActionIndex('togglePlay');
+                    this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+                } else if (this._currentFocusRow === 0) {
+                    // Mirror of Up from Row 1: if overlay widgets are visible, stop there first.
+                    // Header ↓ Overlay ↓ Controls (symmetric with Controls ↑ Overlay ↑ Header)
+                    if (this._cachedOverlayRow.length > 0) {
+                        this._currentFocusRow = -1;
+                        this._currentFocusIndex = 0;
+                    } else {
+                        this._currentFocusRow = 1;
+                    }
+                } else if (this._currentFocusRow === 1) {
+                    this._currentFocusRow = 2;
+                }
             }
         } else if (direction === 'left') {
             if (this._currentFocusRow === -1) {

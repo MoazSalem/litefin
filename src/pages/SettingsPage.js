@@ -714,8 +714,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelOsdTrackMenuBgOpacity">${i18n.t('LabelOsdTrackMenuBgOpacity') || 'OSD Track Menu Opacity'}</span>
@@ -1310,6 +1308,23 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonsLocation">${i18n.t('OsdButtonsLocation') || 'OSD Buttons Location'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonsLocationDescription">${i18n.t('OsdButtonsLocationDescription') || 'Choose the location of playback control buttons relative to the seek bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-buttons-location-select',
+            [
+                { value: 'above', label: i18n.t('OsdButtonsAbove') || 'Above Seek Bar' },
+                { value: 'below', label: i18n.t('OsdButtonsBelow') || 'Below Seek Bar' }
+            ],
+            PlayerSettings.get('osdButtonsLocation') || 'above'
+        )}
+                    </div>
+                </div>
+
                 <!-- Media Rows Section -->
                 <h3 class="setting-section-title" data-i18n="MediaRows">${i18n.t('MediaRows')}</h3>
 
@@ -1593,7 +1608,7 @@ class SettingsPage extends Page {
 
                 <!--
                   =============================================================================
-                  Apple Human Interface Guidelines: Layout Settings - Secondary Title Contrast
+                  Layout Settings - Secondary Title Contrast
                   =============================================================================
                   Allows TV users to toggle the color scheme of the secondary details title 
                   (episode number and show name) between the primary accent color and the 
@@ -6733,6 +6748,7 @@ class SettingsPage extends Page {
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
             'osd-logo-size-select': { type: 'player', key: 'osdLogoSize' },
+            'osd-buttons-location-select': { type: 'player', key: 'osdButtonsLocation' },
             'next-up-dialog-style-select': { type: 'player', key: 'nextUpDialogStyle' },
             'next-up-dialog-scale-select': { type: 'player', key: 'nextUpDialogScale' },
             'next-up-dialog-trigger-select': { type: 'player', key: 'nextUpTriggerMode' },

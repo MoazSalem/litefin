@@ -490,7 +490,10 @@ const DEFAULTS = {
     osdLogoSize: 'medium',
 
     // Background opacity of the track menus (0-100)
-    osdTrackMenuBgOpacity: 85
+    osdTrackMenuBgOpacity: 85,
+
+    // Position of playback control buttons relative to seek bar ('above', 'below')
+    osdButtonsLocation: 'above'
 };
 
 /**

@@ -403,8 +403,8 @@ body.lyrics-active .audio-player-center {
     -webkit-justify-content: space-between;
     justify-content: space-between;
     font-size: 14px;
-    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
-    margin-top: 8px;
+    color: var(--jf-text-primary);
+    margin-top: 2px;
 }
 
 /* Control Buttons */

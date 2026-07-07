@@ -645,14 +645,18 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     min-width: 5em;
     /* Enough for 00:00:00 with tabular-nums */
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    height: 36px; /* Match seek bar container height for perfect vertical centering */
+    line-height: 1;
 }
 
 .osd-time-current {
-    text-align: right;
+    justify-content: flex-end;
 }
 
 .osd-time-total {
-    text-align: left;
+    justify-content: flex-start;
 }
 
 .osd-slider-container {
@@ -1915,6 +1919,23 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
 .osd-btn#osdFavoriteBtn.active:hover .icon-favorite.icon-filled,
 .osd-btn#osdFavoriteBtn.active.magic-hover .icon-favorite.icon-filled {
     display: inline-block !important;
+}
+
+/* ============================================================================
+   OSD BUTTONS BELOW SEEKBAR LAYOUT
+   ============================================================================ */
+.osd-bottom.buttons-below {
+    display: flex;
+    flex-direction: column;
+}
+.osd-bottom.buttons-below .osd-controls-row {
+    order: 2;
+    margin-top: 1.8em !important;
+    margin-bottom: 0 !important;
+}
+.osd-bottom.buttons-below .osd-slider-row {
+    order: 1;
+    margin-top: 0 !important;
 }
 
 
