@@ -826,21 +826,44 @@ export class WebOSPlayer {
                 video.currentTime = time;
             } catch (e) {}
 
-            // Wait 3 seconds per attempt — longer intervals prevent the next
-            // currentTime assignment from canceling a still-pending seek on WebOS.
+            // ----------------------------------------------------------------
+            // Wait 3 seconds per attempt before checking the result.
+            //
+            // We use a generous 10-second acceptance window (matching
+            // JellyfinPlayer's own resume-verification threshold) rather than a
+            // tight 2-second window. Two things widen the apparent gap:
+            //
+            //   1. WebOS hardware seeks to the nearest keyframe, not the exact
+            //      requested timestamp — typically landing 1-5 s away.
+            //
+            //   2. The video keeps playing during the 3-second wait interval,
+            //      so by the time we sample currentTime it has advanced another
+            //      ~3 s past the seek landing point.
+            //
+            // Combined worst-case drift: 5 s (keyframe) + 3 s (playback) = 8 s.
+            // A 10-second window safely covers this while still correctly
+            // identifying genuine failures (video stuck at 0, target at 420 s).
+            // ----------------------------------------------------------------
             setTimeout(() => {
                 if (this._cancelRobustResume) return;
 
-                if (Math.abs(video.currentTime - time) < 2) {
-                    log.debug('WebOSPlayer: Seek successful on attempt', tries);
+                // Measure how far currentTime landed from our requested target.
+                const drift = Math.abs(video.currentTime - time);
+
+                if (drift < 10) {
+                    // Within 10 s of target — seek landed on a keyframe boundary
+                    // and the video has been playing forward. Accept as success.
+                    log.debug(`WebOSPlayer: Seek accepted on attempt ${tries} (drift ${drift.toFixed(2)} s from target ${time} s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
                     if (!video.paused) this._onPlaying();
                 } else if (tries < maxRetries) {
-                    log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
+                    // Still far from target — video may not have seeked yet.
+                    log.debug(`WebOSPlayer: Seek still off (current: ${video.currentTime.toFixed(2)} s, target: ${time} s, drift: ${drift.toFixed(2)} s) — retrying, attempt ${tries + 1}`);
                     attempt();
                 } else {
-                    log.warn('WebOSPlayer: Seek failed after', maxRetries, 'retries');
+                    // All retries exhausted and still far from target — genuine failure.
+                    log.warn(`WebOSPlayer: Seek failed after ${maxRetries} retries (final drift: ${drift.toFixed(2)} s from target ${time} s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
                     if (!video.paused) this._onPlaying();
@@ -1677,13 +1700,28 @@ export class WebOSPlayer {
     _onPlaying() {
         if (this._robustSeekTarget !== null && this._robustSeekTarget !== undefined) {
             const target = this._robustSeekTarget;
-            // If we drifted past the target
-            if (Math.abs(this.getCurrentTime() - target) > 2) {
-                log.info(`WebOSPlayer: Detected position drift (current: ${this.getCurrentTime()}, expected: ${target}), applying robust seek`);
+            const current = this.getCurrentTime();
+            const drift   = Math.abs(current - target);
+
+            // ----------------------------------------------------------------
+            // Drift gate: use a 10-second window (matching JellyfinPlayer's
+            // resume-verification threshold) instead of a tight 2-second one.
+            //
+            // WebOS hardware seeks to the nearest keyframe, which can be up to
+            // 5 s away from the requested time. If the video is already within
+            // 10 s of the target when 'playing' fires, the seek (or media-
+            // fragment hint) worked — no retry needed.
+            //
+            // We only escalate to _seekWithRetry when the position is truly
+            // far off (e.g. video still stuck at 0 s when target is 420 s).
+            // ----------------------------------------------------------------
+            if (drift > 10) {
+                log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)} s, expected: ${target} s, drift: ${drift.toFixed(2)} s) — applying robust seek`);
                 this._seekWithRetry(target);
-                return; // suppress this playing event
+                return; // suppress this playing event until seek resolves
             } else {
-                // No drift, we are good.
+                // Close enough — keyframe boundary or minor offset. Accept.
+                log.debug(`WebOSPlayer: Resume target reached (current: ${current.toFixed(2)} s, target: ${target} s, drift: ${drift.toFixed(2)} s). Clearing seek guard.`);
                 this._robustSeekTarget = null;
             }
         }

@@ -739,21 +739,38 @@ export class HtmlVideoPlayer {
 
         // ====================================================================
         // PLAYHEAD DRIFT CHECK:
-        // If the video timeline shows the playhead is already positioned
-        // close to the target, skip re-applying the seek.
+        // If the playhead is already within 10 s of the target, the earlier
+        // seek (either the #t= fragment or the currentTime set in loadedmetadata)
+        // already worked. Skip the re-seek to avoid a disruptive backward stutter.
+        //
+        // We use 10 s (matching WebOS and JellyfinPlayer's own resume-verification
+        // threshold) rather than 2 s, because:
+        //   1. The browser seeks to the nearest keyframe, not the exact timestamp,
+        //      which can land up to 5 s away.
+        //   2. play() may take 1-3+ seconds to resolve on a slow buffer, so the
+        //      video may have already played forward from the seek landing point
+        //      by the time this guard runs.
         // ====================================================================
-        if (Math.abs(video.currentTime - targetSec) < 2) {
-            log.info('HtmlVideoPlayer: Playhead is already at target resume position. Skipping fallback resume seek.');
+        const drift = Math.abs(video.currentTime - targetSec);
+        if (drift < 10) {
+            log.info(`HtmlVideoPlayer: Playhead within ${drift.toFixed(2)} s of target — skipping fallback resume seek.`);
             return;
         }
 
         log.info('HtmlVideoPlayer: Re-applying resume seek to', targetSec, 's');
         video.currentTime = targetSec;
 
-        // Give it one more chance after a delay in case the first was too early
+        // Give it one more chance after a 2-second delay in case the first
+        // assignment was too early (buffer not yet ready).
+        //
+        // Use a 10-second acceptance window here too — after a successful seek
+        // to 420 s and a 2-second wait, the video is at ~422 s. The old
+        // threshold of >= 2 always fired on a working seek, causing a pointless
+        // backward-seek stutter every single time.
         setTimeout(() => {
-            if (Math.abs(video.currentTime - targetSec) >= 2) {
-                log.warn('HtmlVideoPlayer: Resume seek still not applied, retrying once more');
+            const retryDrift = Math.abs(video.currentTime - targetSec);
+            if (retryDrift >= 10) {
+                log.warn(`HtmlVideoPlayer: Resume seek still far off (drift: ${retryDrift.toFixed(2)} s) — retrying once more`);
                 video.currentTime = targetSec;
             }
         }, 2000);
