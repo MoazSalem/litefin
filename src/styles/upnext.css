@@ -362,14 +362,14 @@
 }
 
 /* ============================================================================
-   Compact Style Layout (Skip-Intro Button Style Mimicry)
+   Button Style Layout (Skip-Intro Button Style Mimicry)
    ============================================================================ */
 
 /* 
  * Positioned and styled to float in the same bottom-right or bottom-left corner
  * as the Apple HIG inspired "Skip Intro" button overlay.
  */
-.upnext-dialog.upnext-style-compact {
+.upnext-dialog.upnext-style-button {
     background: transparent;
     border: none;
     border-radius: 0;
@@ -383,13 +383,13 @@
     font-size: calc(0.95rem * var(--upnext-scale, 1.0));
 }
 
-[dir="rtl"] .upnext-dialog.upnext-style-compact {
+[dir="rtl"] .upnext-dialog.upnext-style-button {
     right: auto;
     left: 6%;    /* Aligns with skip-intro left spacing in RTL */
 }
 
-/* Compact button style - inherits skip-btn theme variables */
-.upnext-dialog.upnext-style-compact .upnext-btn-play {
+/* Button layout play button style - inherits skip-btn theme variables */
+.upnext-dialog.upnext-style-button .upnext-btn-play {
     display: flex;
     align-items: center;
     width: auto !important;
@@ -415,8 +415,8 @@
     transform: translateZ(0);
 }
 
-.upnext-dialog.upnext-style-compact .upnext-btn-play.focused,
-.upnext-dialog.upnext-style-compact .upnext-btn-play:focus {
+.upnext-dialog.upnext-style-button .upnext-btn-play.focused,
+.upnext-dialog.upnext-style-button .upnext-btn-play:focus {
     background: var(--jf-osd-btn-focus-bg) !important;
     border: 2px solid var(--jf-osd-btn-focus-border) !important;
     outline: none !important;
@@ -424,26 +424,45 @@
     transform: scale(1.05);
 }
 
-.upnext-dialog.upnext-style-compact .upnext-compact-arrow {
-    display: inline-block;
-    font-size: 0.8em;
-    margin-left: 0.8em !important;
-    flex-shrink: 0;
-    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+.upnext-dialog.upnext-style-button .upnext-countdown {
+    margin-inline-start: 0.35em;
 }
 
-.upnext-dialog.upnext-style-compact .upnext-btn-play.focused .upnext-compact-arrow,
-.upnext-dialog.upnext-style-compact .upnext-btn-play:focus .upnext-compact-arrow {
-    transform: translateX(4px);
+/* ============================================================================
+   Compact Style Layout (Minimalist Two-Button Overlay)
+   ============================================================================ */
+
+.upnext-dialog.upnext-style-compact {
+    font-size: calc(1.05rem * var(--upnext-scale, 1.0));
+    max-width: min(22em, 35vw);
+    bottom: 13.5em;
+    right: 2.4em;
 }
 
-[dir="rtl"] .upnext-dialog.upnext-style-compact .upnext-compact-arrow {
-    margin-left: 0 !important;
-    margin-right: 0.8em !important;
+[dir="rtl"] .upnext-dialog.upnext-style-compact {
+    right: auto;
+    left: 2.4em;
 }
 
-[dir="rtl"] .upnext-dialog.upnext-style-compact .upnext-btn-play.focused .upnext-compact-arrow,
-[dir="rtl"] .upnext-dialog.upnext-style-compact .upnext-btn-play:focus .upnext-compact-arrow {
-    transform: translateX(-4px);
+.upnext-dialog.upnext-style-compact .upnext-content-row {
+    padding: 0.8em 1.0em 0.4em 1.0em;
+}
+
+.upnext-dialog.upnext-style-compact .upnext-actions {
+    padding: 0.4em 1.0em 0.8em 1.0em;
+}
+
+.upnext-dialog.upnext-style-compact .upnext-title {
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.upnext-dialog.upnext-style-compact .upnext-countdown {
+    font-size: 0.76em;
+}
+
+.upnext-dialog.upnext-style-compact .upnext-btn {
+    padding: 0.45em 0.9em !important;
+    font-size: 0.86em;
 }
 

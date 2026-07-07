@@ -118,7 +118,7 @@ export default class UpNextDialog extends BaseMenu {
 
         // Locate the countdown text wrapper inside our card template
         const countdownEl = this.$el.querySelector('.upnext-countdown');
-        
+
         // Ensure the element is found before manipulating it
         if (countdownEl) {
             // Read active style to determine formatting
@@ -128,8 +128,8 @@ export default class UpNextDialog extends BaseMenu {
             // =================================================================
             // Read active preference to see if automatic queue traversal is active.
             if (PlayerSettings.get('enableNextEpisodeAutoPlay')) {
-                // If it is compact, we wrap it in parentheses for the button label context, e.g. " (15s)"
-                if (style === 'compact') {
+                // If it is button, we wrap it in parentheses for the button label context, e.g. " (15s)"
+                if (style === 'button') {
                     countdownEl.textContent = ` (${secondsRemaining}s)`;
                 } else {
                     // Autoplay is enabled: show the standard live countdown text
@@ -155,14 +155,14 @@ export default class UpNextDialog extends BaseMenu {
         const style = PlayerSettings.get('nextUpDialogStyle') || 'normal';
         let html = '';
 
-        if (style === 'compact') {
+        if (style === 'button') {
             /*
-             * Compact Style:
+             * Button Style:
              * Renders as a single skip-intro style pill button with localized CTA text,
              * countdown, and arrow micro-animation.
              */
             html = `
-                <div class="upnext-dialog upnext-style-compact" id="upNextDialog">
+                <div class="upnext-dialog upnext-style-button" id="upNextDialog">
                     <button
                         class="upnext-btn upnext-btn-play"
                         tabindex="0"
@@ -170,8 +170,36 @@ export default class UpNextDialog extends BaseMenu {
                     >
                         <span class="upnext-compact-label">${i18n.t('StartNextEpisode') || 'Start Next Episode'}</span>
                         <span class="upnext-countdown"></span>
-                        <span class="upnext-compact-arrow">➔</span>
                     </button>
+                </div>
+            `;
+        } else if (style === 'compact') {
+            /*
+             * Compact Style:
+             * Renders Play Now and Hide buttons with only the episode name, as compact as possible.
+             */
+            html = `
+                <div class="upnext-dialog upnext-style-compact" id="upNextDialog">
+                    <div class="upnext-content-row">
+                        <div class="upnext-info">
+                            <span class="upnext-title"></span>
+                            <div class="upnext-meta">
+                                <span class="upnext-countdown"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="upnext-actions">
+                        <button
+                            class="upnext-btn upnext-btn-play"
+                            tabindex="0"
+                            data-upnext-action="play"
+                        >${i18n.t('ButtonPlay')}</button>
+                        <button
+                            class="upnext-btn upnext-btn-hide"
+                            tabindex="0"
+                            data-upnext-action="hide"
+                        >${i18n.t('ButtonHide')}</button>
+                    </div>
                 </div>
             `;
         } else if (style === 'no_image') {
@@ -250,7 +278,7 @@ export default class UpNextDialog extends BaseMenu {
             const temp = document.createElement('div');
             temp.innerHTML = html.trim();
             this.$el = temp.firstElementChild;
-            
+
             // Set customization scale CSS property variable
             const scale = PlayerSettings.get('nextUpDialogScale') || 1.0;
             this.$el.style.setProperty('--upnext-scale', scale);
@@ -264,7 +292,7 @@ export default class UpNextDialog extends BaseMenu {
                     this._triggerPlayNow();
                 });
             }
-            
+
             const hideBtn = this.$el.querySelector('[data-upnext-action="hide"]');
             if (hideBtn) {
                 hideBtn.addEventListener('click', () => {
@@ -417,16 +445,37 @@ export default class UpNextDialog extends BaseMenu {
         // ---- Episode title --------------------------------------------------
         const titleEl = this.$el.querySelector('.upnext-title');
         if (titleEl) {
-            // For episodes use "Episode N – Name", fallback to raw Name
-            const epNum = item.IndexNumber ? `E${item.IndexNumber}` : '';
-            const epName = item.Name || '';
-            titleEl.textContent = epNum && epName ? `${epNum} – ${epName}` : epName;
+            const style = PlayerSettings.get('nextUpDialogStyle') || 'normal';
+            const pad = (num) => String(num || 0).padStart(2, '0');
+            const season = item.ParentIndexNumber != null ? `S${pad(item.ParentIndexNumber)}` : '';
+            const ep = item.IndexNumber != null ? `E${pad(item.IndexNumber)}` : '';
+            const badgePrefix = season && ep ? `${season}${ep}` : (season || ep);
+
+            if ((style === 'no_image' || style === 'compact') && badgePrefix) {
+                titleEl.textContent = `${badgePrefix} - ${item.Name || ''}`;
+            } else {
+                titleEl.textContent = item.Name || '';
+            }
+        }
+        // ---- Compact Label (button style CTA) -------------------------------
+        const compactLabelEl = this.$el.querySelector('.upnext-compact-label');
+        if (compactLabelEl) {
+            const pad = (num) => String(num || 0).padStart(2, '0');
+            const season = item.ParentIndexNumber != null ? `S${pad(item.ParentIndexNumber)}` : '';
+            const ep = item.IndexNumber != null ? `E${pad(item.IndexNumber)}` : '';
+            const badgePrefix = season && ep ? `${season}${ep}` : (season || ep);
+
+            if (badgePrefix) {
+                compactLabelEl.textContent = `${i18n.t('ButtonStart') || 'Start'} ${badgePrefix}`;
+            } else {
+                compactLabelEl.textContent = i18n.t('StartNextEpisode') || 'Start Next Episode';
+            }
         }
 
         // ---- Series name (parent series title) ------------------------------
         const seriesEl = this.$el.querySelector('.upnext-series');
         if (seriesEl) {
-            seriesEl.textContent = item.SeriesName || '';
+            seriesEl.style.display = 'none';
         }
 
         // ---- Episode badge (e.g. "S02E05") ----------------------------------
@@ -526,8 +575,8 @@ export default class UpNextDialog extends BaseMenu {
         if (!this.$el) return;
 
         const buttons = this.$el.querySelectorAll('.upnext-btn');
-        
-        // Force focus index to 0 if there is only 1 button (e.g., compact mode)
+
+        // Force focus index to 0 if there is only 1 button (e.g., button mode)
         if (buttons.length === 1) {
             this._focusedButton = 0;
         }

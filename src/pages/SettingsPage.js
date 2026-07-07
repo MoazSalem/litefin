@@ -856,7 +856,8 @@ class SettingsPage extends Page {
                 [
                     { value: 'normal', label: i18n.t('OptionStyleNormal') || 'Normal' },
                     { value: 'no_image', label: i18n.t('OptionStyleNoImage') || 'No Image' },
-                    { value: 'compact', label: i18n.t('OptionStyleCompact') || 'Compact' }
+                    { value: 'compact', label: i18n.t('OptionStyleCompact') || 'Compact' },
+                    { value: 'button', label: i18n.t('OptionStyleButton') || 'Button' }
                 ],
                 PlayerSettings.get('nextUpDialogStyle') || 'normal'
             )}

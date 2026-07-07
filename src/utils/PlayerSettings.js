@@ -406,7 +406,7 @@ const DEFAULTS = {
      */
     enableNextUpDialog: true,
 
-    // Up Next dialog layout style ('normal', 'no_image', 'compact')
+    // Up Next dialog layout style ('normal', 'no_image', 'compact', 'button')
     nextUpDialogStyle: 'normal',
 
     // Up Next dialog scale multiplier (e.g. 0.75, 1.0, 1.25, 1.5)
