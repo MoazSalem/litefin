@@ -6,7 +6,7 @@ Litefin is a high-performance, native Jellyfin client designed specifically for 
 
 To ensure maximum compatibility across a wide range of hardware generations—from aging legacy sets to the latest smart TVs—Litefin utilizes a targeted build pipeline. This results in 8 distinct builds (4 per platform):
 
-1. **ES6 Build**: Targets modern TVs (Tizen 6.5+, web-OS 6.0+). No transpilation, utilizing pure ES6+ for maximum performance.
+1. **Modern Build**: Targets modern TVs (Tizen 6.5+, web-OS 6.0+). No transpilation, utilizing pure ES6+ for maximum performance.
 2. **Normal Build**: The standard target for modern-mid tier devices (Tizen 5.0+, web-OS 4.0+). Transpiled for Chromium 69+.
 3. **Legacy Build**: Targets older hardware (Tizen 3.0+). Transpiled for Chromium 47 (ES5).
 4. **Ultra Legacy Build**: Support for extremely old hardware reaching back to Chromium 38 levels, utilizing extensive polyfills and layout fallbacks.

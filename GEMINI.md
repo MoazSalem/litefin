@@ -41,7 +41,7 @@ Litefin follows a modular architecture centered around a custom component-based 
 
 ### The 8x Build Strategy
 Litefin generates 8 distinct bundles to optimize for different hardware generations:
-- **ES6**: 2021+ Models (Native ES6+)
+- **Modern**: 2021+ Models (Native ES6+)
 - **Normal**: 2019+ Models (Chromium 69+)
 - **Legacy**: 2017+ Models (Chromium 47 / ES5)
 - **Ultra Legacy**: Pre-2017 Models (Chromium 38 / Heavy Polyfills)

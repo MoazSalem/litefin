@@ -9,11 +9,11 @@ Litefin is a Vanilla JS (ES6+) Jellyfin client for Samsung Tizen and LG webOS TV
 ### Build
 
 ```bash
-npm run build          # All variants (ES6 + Normal + Legacy + Ultra-Legacy)
-npm run build:es6      # Tizen 6.5+ / webOS 6.0+ (no transpilation)
+npm run build          # All variants (Modern + Normal + Legacy + Ultra-Legacy)
+npm run build:modern   # Tizen 6.5+ / webOS 6.0+ (no transpilation)
 npm run build:normal   # Tizen 5.0+ (Chromium 63, partial transpilation)
 npm run build:legacy   # Tizen 3.0+ (Chromium 47, full ES5 transpilation)
-npm run build:debug    # ES6 + source maps (on-device debugging)
+npm run build:debug    # Modern + source maps (on-device debugging)
 npm run dev            # Watch mode (Normal variant)
 npm run serve          # Webpack dev server (Debug variant)
 ```
@@ -31,9 +31,9 @@ npm run format:check   # Prettier check only
 
 ```bash
 npm run package                    # All 8 variants (4 WGT + 4 IPK)
-npm run package:es6                # Tizen WGT only
+npm run package:modern             # Tizen WGT only
 npm run package:webos              # webOS IPK only
-npm run package:webos-es6          # webOS IPK (ES6)
+npm run package:webos-modern       # webOS IPK (Modern)
 npm run package:test               # Normal build as litefin.wgt
 ```
 

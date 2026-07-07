@@ -103,17 +103,23 @@ function getPlugins(tier, options = {}) {
 }
 
 // ============================================================================
-// ES6 build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Modern build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Formerly referred to as the "ES6" build tier. Renamed to "Modern" to ensure
+// non-technical users can easily distinguish this as the appropriate package
+// for newer/modern television models.
 // ============================================================================
-const es6Config = {
-    name: 'es6',
+const modernConfig = {
+    // Unique identifier for this configuration used in the CLI build command
+    name: 'modern',
+    // Output production bundle optimization
     mode: 'production',
     performance: { hints: false },
     // No source maps — keeps the bundle lean for production deployment
     entry: './src/index.js',
 
     output: {
-        path: path.resolve(__dirname, 'dist/es6'),
+        // Output directly into the user-friendly modern folder within dist
+        path: path.resolve(__dirname, 'dist/modern'),
         filename: 'js/[name].js',
         clean: true
     },
@@ -554,4 +560,4 @@ const normalOblongConfig = {
 
 // Export all configs. Run a specific one with --config-name <name>.
 // e.g. npx webpack --config webpack.config.cjs --config-name debug
-module.exports = [es6Config, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];
+module.exports = [modernConfig, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];

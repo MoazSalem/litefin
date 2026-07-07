@@ -17,7 +17,7 @@ The build system outputs 8 distinct variants to cover the compatibility matrix:
 
 | Variant | Target Hardware | Engine Compliance |
 | :--- | :--- | :--- |
-| **ES6** | 2021+ Models | Pure ES6+ / No Transpilation |
+| **Modern** | 2021+ Models | Pure ES6+ / No Transpilation |
 | **Normal** | 2019+ Models | Chromium 69+ |
 | **Legacy** | 2017+ Models | Chromium 47 Core / ES5 |
 | **Ultra Legacy** | Pre-2017 Models | Chromium 38 Core / Extensive Polyfills |

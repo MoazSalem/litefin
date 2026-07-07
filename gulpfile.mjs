@@ -81,10 +81,11 @@ function cleanIpk() {
 /** Base webpack command shared by every build */
 const WP = 'npx webpack --config webpack.config.cjs';
 
-async function webpackES6() {
-    console.info('Building ES6 bundle (No Transpilation)...');
-    await spawnAsync(`${WP} --config-name es6`);
-    console.info('ES6 build complete');
+async function webpackModern() {
+    // Compiles the modern bundle targeting ES6+ environments directly
+    console.info('Building Modern bundle (No Transpilation)...');
+    await spawnAsync(`${WP} --config-name modern`);
+    console.info('Modern build complete');
 }
 
 async function webpackNormal() {
@@ -128,7 +129,7 @@ async function webpackUltraLegacy() {
 
 async function webpackAll() {
     console.info('Building all bundles sequentially to prevent OOM...');
-    await webpackES6();
+    await webpackModern();
     await webpackNormal();
     // Build the new normal-oblong package
     await webpackNormalOblong();
@@ -274,9 +275,9 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
      * When `buildPackage` runs, all Tizen and WebOS packaging tasks execute in
      * parallel via gulp.parallel(). The Tizen tasks call copySignatures(buildDir)
      * which writes author-signature.xml / signature1.xml directly into the shared
-     * buildDir (e.g. dist/es6/). If our cpSync above runs AFTER those files land,
+     * buildDir (e.g. dist/modern/). If our cpSync above runs AFTER those files land,
      * they get dragged into the IPK — which is why `npm run package` produces a
-     * larger IPK than `npm run package:webos-es6` (where no signatures are written).
+     * larger IPK than `npm run package:webos-modern` (where no signatures are written).
      *
      * Deleting them here from the staging copy is the safest fix; it mirrors what
      * we already do for config.xml and does not touch the original buildDir.
@@ -365,9 +366,10 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
 // Package tasks - each produces a single versioned file
 // ============================================================================
 
-async function packageES6() {
-    const buildDir = 'dist/es6';
-    const wgtName = `Litefin-${version}-es6.wgt`; // No transpilation
+async function packageModern() {
+    // Targeting modern TVs with native support and zero transpilation overhead
+    const buildDir = 'dist/modern';
+    const wgtName = `Litefin-${version}-modern.wgt`; // No transpilation
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -424,9 +426,10 @@ async function packageWebos() {
     await createIpk(buildDir, '.', ipkName);
 }
 
-async function packageWebosES6() {
-    const buildDir = 'dist/es6';
-    const ipkName = `Litefin-${version}-es6-webos.ipk`;
+async function packageWebosModern() {
+    // Generate the modern target package for WebOS 6.0+ devices
+    const buildDir = 'dist/modern';
+    const ipkName = `Litefin-${version}-modern-webos.ipk`;
 
     console.info(`Creating ${ipkName}...`);
     await createIpk(buildDir, '.', ipkName);
@@ -522,13 +525,13 @@ const buildPackage = gulp.series(
     webpackAll,
     gulp.parallel(
         // Tizen WGT
-        packageES6,
+        packageModern,
         packageNormal,
         packageNormalOblong,
         packageLegacy,
         packageUltraLegacy,
         // WebOS IPK
-        packageWebosES6,
+        packageWebosModern,
         packageWebos,
         packageWebosLegacy,
         packageWebosUltraLegacy
@@ -536,7 +539,7 @@ const buildPackage = gulp.series(
 );
 
 // Individual Tizen build+package tasks
-const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageES6);
+const buildPackageModern = gulp.series(syncVersion, cleanDist, webpackModern, packageModern);
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
 const buildPackageNormalOblong = gulp.series(syncVersion, cleanDist, webpackNormalOblong, packageNormalOblong);
 const buildPackageTest = gulp.series(syncVersion, cleanDist, webpackNormal, packageTest);
@@ -546,7 +549,7 @@ const buildPackageDebug = gulp.series(syncVersion, webpackDebug, packageDebug);
 
 // Individual WebOS build+package tasks
 const buildPackageWebos = gulp.series(syncVersion, cleanDist, cleanIpk, webpackNormal, packageWebos);
-const buildPackageWebosES6 = gulp.series(syncVersion, cleanDist, cleanIpk, webpackES6, packageWebosES6);
+const buildPackageWebosModern = gulp.series(syncVersion, cleanDist, cleanIpk, webpackModern, packageWebosModern);
 const buildPackageWebosLegacy = gulp.series(syncVersion, cleanDist, cleanIpk, webpackLegacy, packageWebosLegacy);
 const buildPackageWebosUltraLegacy = gulp.series(
     syncVersion,
@@ -558,7 +561,7 @@ const buildPackageWebosUltraLegacy = gulp.series(
 
 // Just build (no packaging)
 const build = gulp.series(syncVersion, cleanDist, webpackAll);
-const buildES6 = gulp.series(syncVersion, cleanDist, webpackES6);
+const buildModern = gulp.series(syncVersion, cleanDist, webpackModern);
 const buildNormal = gulp.series(syncVersion, cleanDist, webpackNormal);
 const buildNormalOblong = gulp.series(syncVersion, cleanDist, webpackNormalOblong);
 const buildLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy);
@@ -570,7 +573,7 @@ export {
     cleanDist,
     cleanWgt,
     cleanIpk,
-    webpackES6,
+    webpackModern,
     webpackNormal,
     webpackNormalOblong,
     webpackLegacy,
@@ -578,7 +581,7 @@ export {
     webpackDebug,
     webpackAll,
     // Tizen WGT packaging
-    packageES6,
+    packageModern,
     packageNormal,
     packageNormalOblong,
     packageTest,
@@ -587,12 +590,12 @@ export {
     packageDebug,
     // WebOS IPK packaging
     packageWebos,
-    packageWebosES6,
+    packageWebosModern,
     packageWebosLegacy,
     packageWebosUltraLegacy,
     // Tizen build+package
     buildPackage,
-    buildPackageES6,
+    buildPackageModern,
     buildPackageNormal,
     buildPackageNormalOblong,
     buildPackageTest,
@@ -601,12 +604,12 @@ export {
     buildPackageDebug,
     // WebOS build+package
     buildPackageWebos,
-    buildPackageWebosES6,
+    buildPackageWebosModern,
     buildPackageWebosLegacy,
     buildPackageWebosUltraLegacy,
     // Build only
     build,
-    buildES6,
+    buildModern,
     buildNormal,
     buildNormalOblong,
     buildLegacy,
