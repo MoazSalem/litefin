@@ -895,13 +895,13 @@ class CardRenderer {
                             options.showMeta
                                 ? `
                         <div class="card-title-row">
-                            <div class="card-title">${titleText}</div>
+                            <div class="card-title"><span>${titleText}</span></div>
                             ${badgeContainer}
                         </div>
                         `
-                                : `<div class="card-title">${titleText}</div>`
+                                : `<div class="card-title"><span>${titleText}</span></div>`
                         }
-                        ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
+                        ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                         ${metaHtml}
                     </div>
                     `
@@ -916,13 +916,13 @@ class CardRenderer {
                         options.showMeta
                             ? `
                     <div class="card-title-row">
-                        <div class="card-title">${titleText}</div>
+                        <div class="card-title"><span>${titleText}</span></div>
                         ${badgeContainer}
                     </div>
                     `
-                            : `<div class="card-title">${titleText}</div>`
+                            : `<div class="card-title"><span>${titleText}</span></div>`
                     }
-                    ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
+                    ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                     ${metaHtml}
                 </div>
                 `

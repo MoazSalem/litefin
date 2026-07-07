@@ -1783,3 +1783,46 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-info {
 html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
     display: block;
 }
+
+/* ==========================================================================
+   Card Text Marquee Scrolling (Loop Overflowing Titles/Subtitles)
+   ========================================================================== */
+.card-title,
+.card-subtitle {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.card-title span,
+.card-subtitle span {
+    display: inline-block;
+    white-space: nowrap;
+    will-change: transform;
+    /* Use dynamic spring-like transitions for reset focus animations */
+    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* When the card is focused, disable truncation and apply alternate animation */
+.media-card.focused .card-title.marquee-active,
+.media-card.focused .card-subtitle.marquee-active {
+    text-overflow: clip;
+}
+
+.media-card.focused .card-title.marquee-active span,
+.media-card.focused .card-subtitle.marquee-active span {
+    animation: card-text-marquee var(--marquee-duration, 4s) linear infinite alternate;
+}
+
+/* Alternate keyframes for smooth scrolling back-and-forth */
+@keyframes card-text-marquee {
+    0%, 20% {
+        transform: translate3d(0, 0, 0);
+    }
+    80%, 100% {
+        transform: translate3d(var(--scroll-dist, 0px), 0, 0);
+    }
+}
+

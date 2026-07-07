@@ -757,6 +757,8 @@
     "LoginPageLayout": "Login Page Layout",
     "LoginPageLayoutDescription": "Choose the layout mode for the login pages (Requires restart).",
     "Logo": "Logo",
+    "LoopOverflowingText": "Loop Overflowing Text",
+    "LoopOverflowingTextDescription": "Loop title and subtitle text horizontally on focus if they are too long to fit.",
     "Low": "Low",
     "ManualLogin": "Manual Login",
     "MaxDaysForNextUpDescription": "Set the maximum amount of days a show should stay in the 'Next Up' list without watching it.",

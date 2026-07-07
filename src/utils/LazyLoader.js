@@ -10,6 +10,7 @@
 import { logger } from './Logger.js';
 import { eventBus } from '../core/EventBus.js';
 import BlurHashDecoder from './BlurHashDecoder.js';
+import { storage } from './StorageService.js';
 
 const log = logger.create('LazyLoader');
 
@@ -70,6 +71,22 @@ class LazyLoader {
         eventBus.on('focus:changed', (target) => {
             if (!target || !target.classList) return;
 
+            // Reset any previous active marquees
+            // ----------------------------------------------------------------
+            // MARQUEE CLEANUP: Ensure any previously animating text elements
+            // are reset to their default static states. This drops animation
+            // loops and releases Compositor layers when they are off focus.
+            // ----------------------------------------------------------------
+            document.querySelectorAll('.marquee-active').forEach((el) => {
+                el.classList.remove('marquee-active');
+                const span = el.querySelector('span');
+                if (span) {
+                    span.style.removeProperty('transform');
+                }
+                el.style.removeProperty('--scroll-dist');
+                el.style.removeProperty('--marquee-duration');
+            });
+
             // If it's a media card
             if (target.classList.contains('media-card')) {
                 const img = target.querySelector('img[data-src]');
@@ -82,6 +99,38 @@ class LazyLoader {
                 // The focus ring appears instantly; images preload before the next frame.
                 const preloadTarget = img || target;
                 requestAnimationFrame(() => this._batchPreloadImages(preloadTarget));
+
+                // ----------------------------------------------------------------
+                // DYNAMIC TEXT MARQUEE SCROLL DETECTOR
+                // ----------------------------------------------------------------
+                // Calculates text overflow dynamically on card focus. If the inner
+                // span's scrollWidth exceeds the parent clientWidth, a scrolling
+                // keyframe animation is applied using HSL/CSS custom variables.
+                // ----------------------------------------------------------------
+                if (storage.getItem('pref:loopOverflowingText') !== 'false') {
+                    const textElements = target.querySelectorAll('.card-title, .card-subtitle');
+                    textElements.forEach((el) => {
+                        const span = el.querySelector('span');
+                        if (!span) return;
+
+                        const scrollW = span.scrollWidth;
+                        const clientW = el.clientWidth;
+
+                        // Check if text exceeds horizontal boundaries of the card
+                        if (scrollW > clientW) {
+                            const scrollDist = scrollW - clientW;
+                            const extraSpacing = 30; // 30px visual buffer/margin before looping back
+                            const totalScroll = scrollDist + extraSpacing;
+                            
+                            // Adjust scrolling duration dynamically based on length (30px/sec speed)
+                            const duration = Math.max(3, totalScroll / 30);
+
+                            el.style.setProperty('--scroll-dist', `-${totalScroll}px`);
+                            el.style.setProperty('--marquee-duration', `${duration}s`);
+                            el.classList.add('marquee-active');
+                        }
+                    });
+                }
             }
         });
 

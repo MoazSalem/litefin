@@ -1542,6 +1542,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LoopOverflowingText">${i18n.t('LoopOverflowingText') || 'Loop Overflowing Text'}</span>
+                        <span class="setting-description" data-i18n="LoopOverflowingTextDescription">${i18n.t('LoopOverflowingTextDescription') || 'Loop title and subtitle text horizontally on focus if they are too long to fit.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:loopOverflowingText') !== 'false' ? 'active' : ''}" 
+                                id="toggle-loop-overflowing-text" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
 
                 <!-- Details Page Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
@@ -7160,6 +7173,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:confirmExit', newValue);
                 confirmExitToggle.classList.toggle('active', newValue);
                 log.info(`Confirm Exit set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Loop Overflowing Text
+        const loopOverflowingTextToggle = this.$('#toggle-loop-overflowing-text');
+        if (loopOverflowingTextToggle) {
+            loopOverflowingTextToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:loopOverflowingText') !== 'false';
+                const newValue = !currentValue;
+                storage.setItem('pref:loopOverflowingText', newValue.toString());
+                loopOverflowingTextToggle.classList.toggle('active', newValue);
+                log.info(`Loop Overflowing Text set to: ${newValue}`);
             });
         }
 
