@@ -66,7 +66,7 @@ export default class OSDController extends Component {
         this._autoHideTimer = null;
         this._updateTimer = null;
         this._isDraggingSeekbar = false;
-        
+
         // Seek Session
         this._seekTargetTicks = null;
         this._seekStartTime = null;
@@ -205,21 +205,21 @@ export default class OSDController extends Component {
 
     _syncPlayButtonState() {
         if (!this._osdEl) return;
-        
+
         import('../../plugins/PluginManager.js').then(({ pluginManager }) => {
             const btn = this._osdEl.querySelector('#osdSyncPlayBtn');
             if (!btn) return;
-            
+
             const isInstalled = pluginManager.isEnabled('syncplay');
-            
+
             if (isInstalled) {
                 btn.classList.remove('hidden');
                 btn.setAttribute('tabindex', '0');
-                
+
                 // Check if actively in a group
                 const syncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
                 btn.classList.toggle('syncplay-active', syncPlayActive);
-                
+
                 // Update icon content (Filled/Outline variants handled by CSS based on syncplay-active class)
                 btn.innerHTML = `
                     <div class="osd-syncplay-icon-wrap">
@@ -231,7 +231,7 @@ export default class OSDController extends Component {
                 btn.classList.add('hidden');
                 btn.setAttribute('tabindex', '-1');
             }
-            
+
             this._cacheFocusableElements();
         });
     }
@@ -243,7 +243,7 @@ export default class OSDController extends Component {
         this.subtitleOffset = new SubtitleOffset(this);
         this.subtitleQuickSettings = new SubtitleQuickSettings(this);
         this.playbackInfo = new PlaybackInfo(this);
-        
+
         // Player Settings Sub-menus
         this.aspectRatioMenu = new AspectRatioMenu(this);
         this.playbackSpeedMenu = new PlaybackSpeedMenu(this);
@@ -288,11 +288,11 @@ export default class OSDController extends Component {
             this.descriptionModal,
             this.syncPlayNotification
         ];
-}
+    }
 
     // Public API for components
     get player() { return this._player; }
-    get api() { return this._api; } 
+    get api() { return this._api; }
 
     // Proxy track indices for compatibility with menus
     get currentAudioIndex() { return this._currentAudioIndex; }
@@ -305,7 +305,7 @@ export default class OSDController extends Component {
     // Lifecycle
     onMounted() {
         this._startUpdates();
-        
+
         // Sync tracks initially
         this.syncTracks();
 
@@ -335,7 +335,7 @@ export default class OSDController extends Component {
 
         // Initial cache
         this._cacheFocusableElements();
-        
+
         // Pin the initial focus index to the actual play/pause button position.
         // The constructor defaults _currentFocusIndex=2 as a static guess, but that
         // drifts whenever buttons are disabled/enabled (prev track, chapter nav, etc.).
@@ -377,7 +377,7 @@ export default class OSDController extends Component {
             this._player.removeAllListeners('durationchange');
             this._player.removeAllListeners('loadedmetadata');
         }
-        
+
         if (this.container) {
             this.container.removeEventListener('mousemove', this._onMouseMove);
         }
@@ -423,19 +423,19 @@ export default class OSDController extends Component {
                             <button class="osd-btn" data-action="fastForward" tabindex="0">${osdIcons.fastForward}</button>
                             <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${osdIcons.chapterNext}</button>
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${osdIcons.skipNext}</button>
+                            
+                        </div>
+                        <div class="osd-ends-at" id="osdEndsAt"></div>
+                        <div class="osd-spacer"></div>
+                        <div class="osd-controls-right">
+                            <button class="osd-btn" data-action="subtitles" tabindex="0">${osdIcons.closedCaption}</button>
+                            <button class="osd-btn" data-action="audio" tabindex="0">${osdIcons.audiotrack}</button>
                             <!-- Queue modal button (always available) -->
                             <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${osdIcons.queue}</button>
                             <!-- Lyrics modal button -->
                             <button class="osd-btn osd-btn-disabled hidden" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${osdIcons.lyrics}</button>
                             <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
                             <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${osdIcons.viewList}</button>
-                        </div>
-                        <div class="osd-ends-at" id="osdEndsAt"></div>
-                        <div class="osd-spacer"></div>
-                        <div class="osd-controls-right">
-                            <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${osdIcons.favorite}</button>
-                            <button class="osd-btn" data-action="subtitles" tabindex="0">${osdIcons.closedCaption}</button>
-                            <button class="osd-btn" data-action="audio" tabindex="0">${osdIcons.audiotrack}</button>
                             <!-- SyncPlay group management — only the icon; menu opens on click -->
                             <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">
                                 <div class="osd-syncplay-icon-wrap">
@@ -444,6 +444,7 @@ export default class OSDController extends Component {
                                 </div>
                             </button>
                             <button class="osd-btn" data-action="description" id="osdInfoBtn" tabindex="0" aria-label="Description">${osdIcons.info}</button>
+                            <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${osdIcons.favorite}</button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${osdIcons.settings}</button>
                         </div>
                     </div>
@@ -485,7 +486,7 @@ export default class OSDController extends Component {
         this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
 
         /* Cache trickplay tooltip sub-elements to avoid repeated queries during seek */
-        this._cachedThumbEl    = this._osdEl.querySelector('#osdTrickplayThumb');
+        this._cachedThumbEl = this._osdEl.querySelector('#osdTrickplayThumb');
         this._cachedTooltipTextEl = this._osdEl.querySelector('#osdSeekTooltipText');
 
         // Bind slider
@@ -689,17 +690,38 @@ export default class OSDController extends Component {
             const leftControls = this._osdEl.querySelector('.osd-controls-left');
             const rightControls = this._osdEl.querySelector('.osd-controls-right');
             const bottomEl = this._osdEl.querySelector('.osd-bottom');
-            
+
             if (leftControls && rightControls && bottomEl) {
                 bottomEl.classList.add('osd-layout-centered');
-                
+
                 const queueBtn = leftControls.querySelector('#osdQueueBtn');
                 const lyricsBtn = leftControls.querySelector('#osdLyricsBtn');
                 const chaptersBtn = leftControls.querySelector('#osdChaptersBtn');
-                
+
                 if (lyricsBtn) rightControls.insertBefore(lyricsBtn, rightControls.firstChild);
                 if (queueBtn) rightControls.insertBefore(queueBtn, rightControls.firstChild);
                 if (chaptersBtn) rightControls.insertBefore(chaptersBtn, rightControls.firstChild);
+            }
+        }
+
+        if (PlayerSettings.get('osdHideFavorite') === true) {
+            const favoriteBtn = this._osdEl.querySelector('#osdFavoriteBtn');
+            if (favoriteBtn) {
+                favoriteBtn.remove();
+            }
+        }
+
+        if (PlayerSettings.get('osdHideInfo') === true) {
+            const infoBtn = this._osdEl.querySelector('#osdInfoBtn');
+            if (infoBtn) {
+                infoBtn.remove();
+            }
+        }
+
+        if (PlayerSettings.get('osdHideBackButton') === true) {
+            const backBtn = this._osdEl.querySelector('.osd-back-btn');
+            if (backBtn) {
+                backBtn.remove();
             }
         }
 
@@ -825,7 +847,7 @@ export default class OSDController extends Component {
     showAndFocusPlayPause() {
         const wasHidden = !this._isOsdVisible;
         this.show();
-        
+
         if (wasHidden) {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
@@ -875,7 +897,7 @@ export default class OSDController extends Component {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
             this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
-            
+
             /*
              * ========================================================================
              * GHOST CLICK LOCKOUT WINDOW:
@@ -936,10 +958,10 @@ export default class OSDController extends Component {
 
     _updateNavigationButtons() {
         if (!this._osdEl) return;
-        
+
         const hasPrev = playQueue.hasPrevious();
         const hasNext = playQueue.hasNext();
-        
+
         const prevBtn = this._osdEl.querySelector('[data-action="previousTrack"]');
         if (prevBtn) {
             if (hasPrev) {
@@ -982,7 +1004,7 @@ export default class OSDController extends Component {
         if (!this._isAudio) return;
         const btn = this._osdEl.querySelector('#osdLyricsBtn');
         if (!btn) return;
-        
+
         if (available) {
             btn.classList.remove('osd-btn-disabled', 'hidden');
             btn.tabIndex = 0;
@@ -990,7 +1012,7 @@ export default class OSDController extends Component {
             btn.classList.add('osd-btn-disabled', 'hidden');
             btn.tabIndex = -1;
         }
-        
+
         // Re-cache focusable elements since DOM structure changed
         this._cacheFocusableElements();
     }
@@ -1014,7 +1036,7 @@ export default class OSDController extends Component {
         if (!chapters.length || duration <= 0) {
             // If we have chapters but duration is 0, we MUST retry once we get duration
             if (chapters.length > 0 && duration === 0) {
-                 log.debug('Chapters found but duration is 0, will retry when duration changes');
+                log.debug('Chapters found but duration is 0, will retry when duration changes');
             }
             container.innerHTML = '';
             return;
@@ -1217,12 +1239,12 @@ export default class OSDController extends Component {
     closeMenu() {
         if (this.activeMenu) {
             const menu = this.activeMenu;
-            menu.hide(); 
+            menu.hide();
             this.activeMenu = null;
-            
+
             // Refresh cache before restoring focus
             this._cacheFocusableElements();
-            
+
             this.show(); // Restore OSD visibility
             // The menu.hide() call internally updates OSD focus row/index 
             // and calls _updateFocus()
@@ -1234,7 +1256,7 @@ export default class OSDController extends Component {
             this.activeMenu = this.playbackInfo;
             this.playbackInfo.toggle(true);
             this._cacheFocusableElements();
-            
+
             // Force focus to overlay (Close button usually index 0)
             this._currentFocusRow = -1;
             const closeIdx = this._cachedOverlayRow.findIndex(el => el.classList.contains('playback-info-close'));
@@ -1246,12 +1268,12 @@ export default class OSDController extends Component {
             }
             this.playbackInfo.toggle(false);
             this._cacheFocusableElements();
-            
+
             // Ensure OSD is visible when returning from menu
             this.show();
 
             // Restore focus to Controls (Row 1) -> Play/Pause
-            this._currentFocusRow = 1; 
+            this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
             this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
 
@@ -1275,7 +1297,7 @@ export default class OSDController extends Component {
             this.activeMenu = this.subtitleOffset; // Enable key delegation
             this.subtitleOffset.toggle(true);
             this._cacheFocusableElements();
-            
+
             // Force focus to overlay (Slider usually index 1, Close index 0)
             this._currentFocusRow = -1;
             // Default to slider for better UX? Or close? User said "can't reach seekbar".
@@ -1289,7 +1311,7 @@ export default class OSDController extends Component {
             }
             this.subtitleOffset.toggle(false);
             this._cacheFocusableElements();
-            
+
             // Ensure OSD is visible when returning from menu
             this.show();
 
@@ -1317,7 +1339,7 @@ export default class OSDController extends Component {
 
     toggleSubtitleQuickSettings(force) {
         if (force === undefined) {
-             force = !this.subtitleQuickSettings.isVisible;
+            force = !this.subtitleQuickSettings.isVisible;
         }
 
         if (force) {
@@ -1336,7 +1358,7 @@ export default class OSDController extends Component {
 
     toggleAspectRatioMenu(force) {
         if (force === undefined) {
-             force = !this.aspectRatioMenu.isVisible;
+            force = !this.aspectRatioMenu.isVisible;
         }
 
         if (force) {
@@ -1354,7 +1376,7 @@ export default class OSDController extends Component {
 
     toggleSettings(force) {
         if (force === undefined) {
-             force = !this.settingsMenu.isVisible;
+            force = !this.settingsMenu.isVisible;
         }
 
         if (force) {
@@ -1372,7 +1394,7 @@ export default class OSDController extends Component {
 
     togglePlaybackModeMenu(force) {
         if (force === undefined) {
-             force = !this.playbackModeMenu.isVisible;
+            force = !this.playbackModeMenu.isVisible;
         }
 
         if (force) {
@@ -1472,7 +1494,7 @@ export default class OSDController extends Component {
         // MEDIA KEYS (Play, Pause, stop, etc) are handled by PlayerPage.js
         // to ensure server reporting is preserved and to avoid double-firing.
         // The OSD is notified via direct method calls or internal state updates.
-        
+
         this.on('key:options', (e) => {
             e?.preventDefault();
             this._executeAction('settings');
@@ -1502,7 +1524,7 @@ export default class OSDController extends Component {
         // Delegate to modal menu first (TrackMenu, SettingsMenu)
         if (this.isModalOpen) {
             if (this.activeMenu.handleKey(key)) return true;
-            
+
             // If a modal is open, we consume all directional/enter/back keys 
             // even if the menu didn't explicitly handle it (to prevent OSD background move)
             if (['up', 'down', 'left', 'right', 'enter', 'back'].includes(key)) return true;
@@ -1724,24 +1746,24 @@ export default class OSDController extends Component {
 
         // Media keys
         if (key === 'play' || key === 'playPause') {
-             this.show(); // Always show/reset timer
-             
-             // Only force focus to Play button if OSD was previously hidden
-             if (wasHidden) {
-                 this._currentFocusRow = 1;
-                 const playIdx = this._findActionIndex('togglePlay');
-                 if (playIdx !== -1) this._currentFocusIndex = playIdx;
-                 this._updateFocus();
-             }
+            this.show(); // Always show/reset timer
 
-             if (key === 'playPause') {
-                 this._executeAction('togglePlay');
-             } else {
-                 if (this._player.unpause) this._player.unpause();
-                 else if (this._player.play) this._player.play();
-                 this.updatePlayPauseButton();
-             }
-             return true;
+            // Only force focus to Play button if OSD was previously hidden
+            if (wasHidden) {
+                this._currentFocusRow = 1;
+                const playIdx = this._findActionIndex('togglePlay');
+                if (playIdx !== -1) this._currentFocusIndex = playIdx;
+                this._updateFocus();
+            }
+
+            if (key === 'playPause') {
+                this._executeAction('togglePlay');
+            } else {
+                if (this._player.unpause) this._player.unpause();
+                else if (this._player.play) this._player.play();
+                this.updatePlayPauseButton();
+            }
+            return true;
         }
         if (key === 'pause') {
             this.show();
@@ -1757,8 +1779,8 @@ export default class OSDController extends Component {
             this._executeAction('rewind');
             return true;
         }
-        
-        return false; 
+
+        return false;
     }
 
     _navigate(direction) {
@@ -1768,12 +1790,12 @@ export default class OSDController extends Component {
 
         const wasHidden = !this._isOsdVisible;
         const seekWithArrows = PlayerSettings.get('seekWithArrows') !== false;
-        
+
         // First D-pad press always reveals OSD if hidden
         // User requested single-press move: trigger show AND allow navigation to proceed.
         if (wasHidden) {
             this.show();
-            
+
             if (seekWithArrows && (direction === 'left' || direction === 'right')) {
                 // Focus the seekbar so subsequent presses continue seeking
                 this._currentFocusRow = 2;
@@ -1802,11 +1824,13 @@ export default class OSDController extends Component {
                         } else {
                             this._currentFocusIndex = 0;
                         }
-                    } else {
+                    } else if (this._cachedHeaderRow.length > 0) {
                         this._currentFocusRow = 0;
                     }
                 } else if (this._currentFocusRow === -1) {
-                    this._currentFocusRow = 0;
+                    if (this._cachedHeaderRow.length > 0) {
+                        this._currentFocusRow = 0;
+                    }
                 } else if (this._currentFocusRow === 0) {
                     if (this._cachedOverlayRow.length > 0) {
                         this._currentFocusRow = -1;
@@ -1839,14 +1863,16 @@ export default class OSDController extends Component {
                         } else {
                             this._currentFocusIndex = 0;
                         }
-                    } else {
+                    } else if (this._cachedHeaderRow.length > 0) {
                         this._currentFocusRow = 0;
                     }
                 } else if (this._currentFocusRow === -1) {
                     // Overlay → Header (back button). Completes the chain:
                     // Seekbar ↑ Controls ↑ Overlay ↑ Header
                     // From Header the user can then right/left into subtitle offset / playback info.
-                    this._currentFocusRow = 0;
+                    if (this._cachedHeaderRow.length > 0) {
+                        this._currentFocusRow = 0;
+                    }
                 } else if (this._currentFocusRow === 0) {
                     // Header → overlay (for subtitle offset / playback info panels
                     // which are also in the overlay row but triggered via menu buttons)
@@ -1937,7 +1963,7 @@ export default class OSDController extends Component {
                 this._enterOverlaysFromHeader();
             }
         }
-        
+
         this._updateFocus();
         return true;
     }
@@ -1992,7 +2018,7 @@ export default class OSDController extends Component {
                 return true;
             }
         }
-        
+
         if (this._isOsdVisible) {
             this.hide();
         } else {
@@ -2111,7 +2137,7 @@ export default class OSDController extends Component {
     // ===================================
     // Actions & Logic
     // ===================================
-    
+
     _executeAction(action) {
         // ====================================================================
         // ACTIVE TRACK SWITCH GUARD
@@ -2150,7 +2176,7 @@ export default class OSDController extends Component {
                 return;
             }
         }
-        
+
         this._lastActionName = action;
         this._lastActionTime = now;
 
@@ -2167,12 +2193,12 @@ export default class OSDController extends Component {
                 this.hide();
                 this.emit('exit');
                 break;
-            case 'togglePlay': 
+            case 'togglePlay':
                 if (this._player.togglePlay) this._player.togglePlay();
                 this.updatePlayPauseButton();
                 break;
             case 'rewind': {
-                const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack; 
+                const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack;
                 this._performDebouncedSeek(-skipBackMs * 10000);
                 this.resetAutoHide();
                 break;
@@ -2199,7 +2225,7 @@ export default class OSDController extends Component {
                 }
                 break;
             case 'nextTrack': this.emit('next'); break;
-            case 'subtitles': 
+            case 'subtitles':
                 /*
                  * ============================================================================
                  * SUBTITLES OVERLAY TOGGLE
@@ -2214,10 +2240,10 @@ export default class OSDController extends Component {
                 } else {
                     log.info('Opening subtitles menu.');
                     this.activeMenu = this.subtitleMenu;
-                    this.subtitleMenu.open('subtitles'); 
+                    this.subtitleMenu.open('subtitles');
                 }
                 break;
-            case 'audio': 
+            case 'audio':
                 /*
                  * ============================================================================
                  * AUDIO OVERLAY TOGGLE
@@ -2232,10 +2258,10 @@ export default class OSDController extends Component {
                 } else {
                     log.info('Opening audio menu.');
                     this.activeMenu = this.audioMenu;
-                    this.audioMenu.open('audio'); 
+                    this.audioMenu.open('audio');
                 }
                 break;
-            case 'settings': 
+            case 'settings':
                 /*
                  * ============================================================================
                  * QUICK SETTINGS MENU TOGGLE
@@ -2250,10 +2276,10 @@ export default class OSDController extends Component {
                 } else {
                     log.info('Opening settings menu.');
                     this.activeMenu = this.settingsMenu;
-                    this.settingsMenu.open(); 
+                    this.settingsMenu.open();
                 }
                 break;
-            case 'favorite': 
+            case 'favorite':
                 // Toggle favorite
                 this._toggleFavorite();
                 break;
@@ -2332,7 +2358,7 @@ export default class OSDController extends Component {
             if (wasFavorite) await this._api.unmarkFavorite(this._currentItem.Id);
             else await this._api.markFavorite(this._currentItem.Id);
             this._currentItem.UserData.IsFavorite = !wasFavorite;
-            
+
             const btn = this._osdEl.querySelector('#osdFavoriteBtn');
             if (btn) {
                 btn.classList.remove('pulse-trigger');
@@ -2342,13 +2368,13 @@ export default class OSDController extends Component {
             }
 
             this._updateFavoriteButton(this._currentItem);
-        } catch (e) { 
-            log.error('Fav toggle failed. API:', !!this._api, 'Item:', !!this._currentItem, 'Error:', e); 
+        } catch (e) {
+            log.error('Fav toggle failed. API:', !!this._api, 'Item:', !!this._currentItem, 'Error:', e);
         }
     }
 
     _performDebouncedSeek(offsetTicks) {
-         try {
+        try {
             this.show();
             this.resetAutoHide();
 
@@ -2367,7 +2393,7 @@ export default class OSDController extends Component {
              */
             const seekDuration = (Date.now() - this._seekStartTime) / 1000;
             let speedMultiplier = 1;
-            
+
             if (seekDuration >= 12) speedMultiplier = 10;      // Warp Speed: 10x
             else if (seekDuration >= 8) speedMultiplier = 5;   // Very Fast: 5x
             else if (seekDuration >= 6) speedMultiplier = 4;   // Fast: 4x
@@ -2390,31 +2416,31 @@ export default class OSDController extends Component {
             };
             this._updateTimeDisplay(previewPlayer, true); // true = skipHeavy
             this._updatePositionSlider(previewPlayer);
-            
-             // Cache the tooltip to avoid querySelector thrashing at 30fps
-             if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
-             const tooltip = this._cachedTooltipEl;
 
-             if (tooltip) {
-                 const speedIndicator = speedMultiplier > 1 ? ` (${speedMultiplier}x)` : '';
-                 const forceHours = duration >= 3600 * 10000000;
-                 const timeText = this._formatTime(this._seekTargetTicks, forceHours) + speedIndicator;
+            // Cache the tooltip to avoid querySelector thrashing at 30fps
+            if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
+            const tooltip = this._cachedTooltipEl;
 
-                 /* Update the text span (always shown) */
-                 if (this._cachedTooltipTextEl) {
-                     this._cachedTooltipTextEl.textContent = timeText;
-                 } else {
-                     /* Fallback: element without child structure (shouldn't happen) */
-                     tooltip.textContent = timeText;
-                 }
+            if (tooltip) {
+                const speedIndicator = speedMultiplier > 1 ? ` (${speedMultiplier}x)` : '';
+                const forceHours = duration >= 3600 * 10000000;
+                const timeText = this._formatTime(this._seekTargetTicks, forceHours) + speedIndicator;
 
-                 tooltip.classList.add('visible');
-                 const percent = duration > 0 ? (this._seekTargetTicks / duration) * 100 : 0;
-                 tooltip.style.left = percent + '%';
+                /* Update the text span (always shown) */
+                if (this._cachedTooltipTextEl) {
+                    this._cachedTooltipTextEl.textContent = timeText;
+                } else {
+                    /* Fallback: element without child structure (shouldn't happen) */
+                    tooltip.textContent = timeText;
+                }
 
-                 /* Update trickplay thumbnail (only if enabled and data is available) */
-                 this._updateTrickplayTooltip(this._seekTargetTicks);
-             }
+                tooltip.classList.add('visible');
+                const percent = duration > 0 ? (this._seekTargetTicks / duration) * 100 : 0;
+                tooltip.style.left = percent + '%';
+
+                /* Update trickplay thumbnail (only if enabled and data is available) */
+                this._updateTrickplayTooltip(this._seekTargetTicks);
+            }
 
             this._seekDebounceTimer = setTimeout(() => {
                 try {
@@ -2442,7 +2468,7 @@ export default class OSDController extends Component {
             log.error('Seek error (non-critical):', err);
         }
     }
-    
+
     updatePlayPauseButton() {
         if (!this._osdPlayPauseBtnEl || !this._player) return;
 
@@ -2457,14 +2483,14 @@ export default class OSDController extends Component {
 
     _startUpdates() {
         if (this._updateTimer) return;
-        
+
         log.debug('Starting OSD update loop (Interval:', this._config.updateInterval, 'ms)');
         this._updateTimer = setInterval(() => this._updateState(), this._config.updateInterval);
     }
 
     _stopUpdates() {
         if (!this._updateTimer) return;
-        
+
         log.debug('Stopping OSD update loop');
         clearInterval(this._updateTimer);
         this._updateTimer = null;
@@ -2503,11 +2529,11 @@ export default class OSDController extends Component {
 
             this._updateTimeDisplay(this._player);
             this._updateClock();
-            
+
             if (!this._isDraggingSeekbar) {
                 this._updatePositionSlider(this._player);
             }
-            
+
             this.updatePlayPauseButton();
         } catch (e) {
             log.error('Error in OSD update loop:', e);
@@ -2539,7 +2565,7 @@ export default class OSDController extends Component {
         const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
         const isRemaining = timeDisplayMode === 'remaining';
         const durationDisplayTicks = isRemaining ? (duration - current) : duration;
-        
+
         const totalStr = (isRemaining ? '-' : '') + this._formatTime(durationDisplayTicks, forceHours);
         if (this._osdTotalTimeEl.textContent !== totalStr) {
             this._osdTotalTimeEl.textContent = totalStr;
@@ -2573,7 +2599,7 @@ export default class OSDController extends Component {
         const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
 
         const percent = duration > 0 ? (current / duration) * 100 : 0;
-        
+
         // Only update DOM if value changed significantly (save paint cycles)
         const currentVal = parseFloat(this._osdPositionSliderEl.value);
         if (Math.abs(currentVal - percent) > 0.01) {
@@ -2608,15 +2634,15 @@ export default class OSDController extends Component {
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
-        if (hours > 0 || forceHours) return `${hours}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
-        return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        if (hours > 0 || forceHours) return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
     _handlePositionSliderInput(e) {
         if (this._suppressSliderChange) {
             if (this._player) this._updatePositionSlider(this._player);
             return;
         }
-        
+
         this._isDraggingSeekbar = true;
         this.resetAutoHide();
 
@@ -2679,7 +2705,7 @@ export default class OSDController extends Component {
 
         /* Force input logic to fire */
         this._handlePositionSliderInput({ target: this._osdPositionSliderEl });
-        
+
         /* Also show the tooltip since we are dragging */
         this._handlePositionSliderMouseMove(e);
     }
@@ -2698,7 +2724,7 @@ export default class OSDController extends Component {
             const duration = this._player.getDurationTicks();
             const percent = e.target.value / 100;
             const targetTicks = duration * percent;
-            
+
             // Optimistic update
             this._updatePositionSlider({
                 getCurrentPositionTicks: () => targetTicks,
@@ -2721,7 +2747,7 @@ export default class OSDController extends Component {
         // Calculate relative position to the slider
         let percent = (e.clientX - rect.left) / rect.width;
         percent = Math.max(0, Math.min(1, percent));
-        
+
         const targetTicks = duration * percent;
 
         if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
@@ -2746,7 +2772,7 @@ export default class OSDController extends Component {
 
     _handlePositionSliderMouseLeave(e) {
         if (this._isDraggingSeekbar || this._seekTargetTicks !== null) return; // Scrubbing handles its own hide logic
-        
+
         const tooltip = this._cachedTooltipEl || this._osdEl.querySelector('#osdSeekTooltip');
         if (tooltip) {
             tooltip.classList.remove('visible');
@@ -2756,13 +2782,13 @@ export default class OSDController extends Component {
 
     _onMediaStreamsChange(e) {
         if (e.audioStreamIndex !== undefined) {
-             this._currentAudioIndex = e.audioStreamIndex;
+            this._currentAudioIndex = e.audioStreamIndex;
         }
         if (e.subtitleStreamIndex !== undefined) {
-             this._currentSubtitleIndex = e.subtitleStreamIndex;
+            this._currentSubtitleIndex = e.subtitleStreamIndex;
         }
         if (e.secondarySubtitleStreamIndex !== undefined) {
-             this._currentSecondarySubtitleIndex = e.secondarySubtitleStreamIndex;
+            this._currentSecondarySubtitleIndex = e.secondarySubtitleStreamIndex;
         }
     }
 
@@ -2774,7 +2800,7 @@ export default class OSDController extends Component {
         this._seekTargetTicks = null;
         this._seekStartTime = null;
         this._isDraggingSeekbar = false;
-        
+
         const tooltip = this._osdEl.querySelector('#osdSeekTooltip');
         if (tooltip) tooltip.classList.remove('visible');
     }
@@ -2793,48 +2819,48 @@ export default class OSDController extends Component {
         this._clearSeekState();
 
         if (e && e.positionTicks !== undefined) {
-             // Optimistic update for UI responsiveness
-             const tempPlayer = {
-                 getCurrentPositionTicks: () => e.positionTicks,
-                 getDurationTicks: () => this._player.getDurationTicks ? this._player.getDurationTicks() : 0
-             };
-             this._updateTimeDisplay(tempPlayer);
-             this._updatePositionSlider(tempPlayer);
+            // Optimistic update for UI responsiveness
+            const tempPlayer = {
+                getCurrentPositionTicks: () => e.positionTicks,
+                getDurationTicks: () => this._player.getDurationTicks ? this._player.getDurationTicks() : 0
+            };
+            this._updateTimeDisplay(tempPlayer);
+            this._updatePositionSlider(tempPlayer);
 
-             /*
-              * If the user seeks BEFORE the Up Next trigger threshold, reset the
-              * shown/hidden flags so the dialog can re-trigger when they naturally
-              * reach the outro again.
-              *
-              * Use the cached _upNextShowAtTicks (computed from the last chapter or
-              * time-based method) so seeks WITHIN the outro region don't reset the
-              * flags and cause the dialog to reappear with a focus-stealing
-              * toggleUpNext(true) call.
-              *
-              * Fall back to 45 s remaining if _upNextShowAtTicks is not yet set
-              * (e.g. the user seeks before playback reaches the threshold calculation).
-              */
-             const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
-             if (duration > 0) {
-                 const threshold = this._upNextShowAtTicks ?? (duration - 45 * 10_000_000);
-                 if (e.positionTicks < threshold) {
-                     // Genuinely before the outro region — allow the dialog to re-trigger
-                     if (this._upNextShown || this._upNextHiddenByUser) {
-                         log.debug('[UpNext] Seek reset — dialog will re-trigger near end');
-                         this._upNextShown = false;
-                         this._upNextHiddenByUser = false;
-                         // Hide the dialog if it's still visible
-                         if (this.upNextDialog?.isVisible) {
-                             this.upNextDialog.hide();
-                             if (this.activeMenu === this.upNextDialog) {
-                                 this.activeMenu = null;
-                             }
-                             this._cacheFocusableElements();
-                         }
-                     }
-                 }
-                 // Seeking within the outro: keep flags as-is, no retrigger
-             }
+            /*
+             * If the user seeks BEFORE the Up Next trigger threshold, reset the
+             * shown/hidden flags so the dialog can re-trigger when they naturally
+             * reach the outro again.
+             *
+             * Use the cached _upNextShowAtTicks (computed from the last chapter or
+             * time-based method) so seeks WITHIN the outro region don't reset the
+             * flags and cause the dialog to reappear with a focus-stealing
+             * toggleUpNext(true) call.
+             *
+             * Fall back to 45 s remaining if _upNextShowAtTicks is not yet set
+             * (e.g. the user seeks before playback reaches the threshold calculation).
+             */
+            const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+            if (duration > 0) {
+                const threshold = this._upNextShowAtTicks ?? (duration - 45 * 10_000_000);
+                if (e.positionTicks < threshold) {
+                    // Genuinely before the outro region — allow the dialog to re-trigger
+                    if (this._upNextShown || this._upNextHiddenByUser) {
+                        log.debug('[UpNext] Seek reset — dialog will re-trigger near end');
+                        this._upNextShown = false;
+                        this._upNextHiddenByUser = false;
+                        // Hide the dialog if it's still visible
+                        if (this.upNextDialog?.isVisible) {
+                            this.upNextDialog.hide();
+                            if (this.activeMenu === this.upNextDialog) {
+                                this.activeMenu = null;
+                            }
+                            this._cacheFocusableElements();
+                        }
+                    }
+                }
+                // Seeking within the outro: keep flags as-is, no retrigger
+            }
         }
     }
 
@@ -3049,7 +3075,7 @@ export default class OSDController extends Component {
             const wasDialogFocused = focusedEl && this.upNextDialog.$el?.contains(focusedEl);
 
             this.upNextDialog.hide();
-            
+
             // Only clear activeMenu if the dialog was the active one —
             // don't accidentally clobber a settings menu that might be open.
             if (this.activeMenu === this.upNextDialog) {
@@ -3160,7 +3186,7 @@ export default class OSDController extends Component {
         if (showAtTicks == null) {
             // Either 'time_fallback', 'seconds_20', 'seconds_30', or 'default' with no usable chapters
             let showAtSeconds = 30;
-            
+
             if (triggerMode === 'seconds_20') {
                 showAtSeconds = 20;
             } else if (triggerMode === 'seconds_30') {
@@ -3173,7 +3199,7 @@ export default class OSDController extends Component {
                     showAtSeconds = 35;
                 }
             }
-            
+
             showAtTicks = durationTicks - showAtSeconds * TICKS_PER_SECOND;
         }
 
@@ -3318,7 +3344,7 @@ export default class OSDController extends Component {
     setMetadata(item) {
         this._currentItem = item;
         this._isAudio = (item?.MediaType === 'Audio' || item?.Type === 'AudioBook');
-        
+
         const titleEl = this._osdEl.querySelector('#osdTitle');
         const secondaryEl = this._osdEl.querySelector('#osdTitleSecondary');
         const logoEl = this._osdEl.querySelector('#osdLogo');
@@ -3405,7 +3431,7 @@ export default class OSDController extends Component {
                     fillHeight: Math.round(maxImgHeight * dpr),
                     tag: item.ImageTags?.Logo || item.SeriesImageTags?.Logo || item.ParentLogoImageTag
                 });
-                
+
                 logoEl.onload = () => {
                     // Only switch if this is still the active item
                     if (this._currentItem && (this._currentItem.Id === item.Id)) {
@@ -3413,7 +3439,7 @@ export default class OSDController extends Component {
                         if (titleEl) titleEl.classList.add('hidden');
                     }
                 };
-                
+
                 logoEl.onerror = () => {
                     if (titleEl) titleEl.classList.remove('hidden');
                     logoEl.classList.add('hidden');
@@ -3437,8 +3463,8 @@ export default class OSDController extends Component {
          * setMediaSourceId() call will re-initialise it once the source is known.
          */
         const mediaSourceId = this._currentMediaSourceId || null;
-        const serverUrl     = this._player?.serverUrl  || '';
-        const authToken     = this._player?.authToken  || '';
+        const serverUrl = this._player?.serverUrl || '';
+        const authToken = this._player?.authToken || '';
         this._trickplay.init(item, mediaSourceId, serverUrl, authToken);
     }
 
@@ -3505,10 +3531,10 @@ export default class OSDController extends Component {
             if (item.IndexNumber !== undefined) {
                 const s = item.ParentIndexNumber || 1;
                 const e = item.IndexNumber;
-                secondary += ` S${String(s).padStart(2,'0')}E${String(e).padStart(2,'0')}`;
+                secondary += ` S${String(s).padStart(2, '0')}E${String(e).padStart(2, '0')}`;
             }
             if (item.Name) secondary += ` - ${item.Name}`;
-            
+
             if (item.ProductionYear && !hideYear) {
                 secondary += ` (${item.ProductionYear})`;
             }
@@ -3531,12 +3557,12 @@ export default class OSDController extends Component {
             secondary: secondary
         };
     }
-    
+
     _updateFavoriteButton(item) {
         const btn = this._osdEl.querySelector('#osdFavoriteBtn');
         if (!btn || !item?.UserData) return;
         const isFavorite = item.UserData.IsFavorite;
-        
+
         if (isFavorite) {
             btn.classList.add('active');
         } else {
@@ -3584,13 +3610,13 @@ export default class OSDController extends Component {
          * background-position is a negative pixel offset to shift the sheet
          * so only the target tile is visible within the element's fixed w/h.
          */
-        el.style.backgroundImage    = `url(${thumb.url})`;
-        el.style.backgroundSize     = `${thumb.spriteWidth}px ${thumb.spriteHeight}px`;
+        el.style.backgroundImage = `url(${thumb.url})`;
+        el.style.backgroundSize = `${thumb.spriteWidth}px ${thumb.spriteHeight}px`;
         el.style.backgroundPosition = `${thumb.backgroundX}px ${thumb.backgroundY}px`;
-        el.style.backgroundRepeat   = 'no-repeat';
-        el.style.width              = `${thumb.thumbWidth}px`;
-        el.style.height             = `${thumb.thumbHeight}px`;
-        el.style.display            = 'block';
+        el.style.backgroundRepeat = 'no-repeat';
+        el.style.width = `${thumb.thumbWidth}px`;
+        el.style.height = `${thumb.thumbHeight}px`;
+        el.style.display = 'block';
 
         /* Switch tooltip to flex layout so thumb sits above the time text */
         if (this._cachedTooltipEl) {

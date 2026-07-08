@@ -327,7 +327,7 @@ html[data-osd-progress-color="theme-inverted"] {
 }
 
 .player-osd .osd-bottom > * + * {
-    margin-top: 1.8em;
+    margin-top: 1.0em;
 }
 
 /* Controls Row (above slider) */
@@ -366,7 +366,7 @@ html[data-osd-progress-color="theme-inverted"] {
 }
 
 .player-osd .osd-ends-at {
-    margin-left: 2.4em;
+    margin-left: 1.4em;
     /* Increased spacing to separate from buttons */
     font-size: 1.2em;
     /* 1em * 1.2 */
@@ -1930,7 +1930,7 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
 }
 .osd-bottom.buttons-below .osd-controls-row {
     order: 2;
-    margin-top: 1.8em !important;
+    margin-top: 1.0em !important;
     margin-bottom: 0 !important;
 }
 .osd-bottom.buttons-below .osd-slider-row {

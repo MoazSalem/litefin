@@ -496,7 +496,12 @@ const DEFAULTS = {
     osdButtonsLocation: 'above',
 
     // Layout configuration of player OSD buttons ('left', 'centered')
-    osdLayout: 'left'
+    osdLayout: 'left',
+
+    // Toggle states for showing/hiding specific player buttons
+    osdHideFavorite: true,
+    osdHideInfo: true,
+    osdHideBackButton: true
 };
 
 /**

@@ -1307,6 +1307,26 @@ class SettingsPage extends Page {
         )}
                     </div>
                 </div>
+             
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdLayout">${i18n.t('OsdLayout') || 'OSD Layout'}</span>
+                        <span class="setting-description" data-i18n="OsdLayoutDescription">${i18n.t('OsdLayoutDescription') || 'Choose the layout alignment of player playback and menu control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-layout-select',
+            [
+                { value: 'left', label: i18n.t('OsdLayoutLeft') || 'Left Aligned (Default)' },
+                { value: 'centered', label: i18n.t('OsdLayoutCentered') || 'Centered' }
+            ],
+            PlayerSettings.get('osdLayout') || 'left'
+        )}
+                    </div>
+                </div>
+
+                <!-- Player OSD Section -->
+                <h3 class="setting-section-title" data-i18n="PlayerOSD">${i18n.t('PlayerOSD')}</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1327,18 +1347,40 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdLayout">${i18n.t('OsdLayout') || 'OSD Layout'}</span>
-                        <span class="setting-description" data-i18n="OsdLayoutDescription">${i18n.t('OsdLayoutDescription') || 'Choose the layout alignment of player playback and menu control buttons.'}</span>
+                        <span class="setting-name" data-i18n="LabelOsdHideFavorite">${i18n.t('LabelOsdHideFavorite') || 'Hide Favorite Button'}</span>
+                        <span class="setting-description" data-i18n="OsdHideFavoriteDescription">${i18n.t('OsdHideFavoriteDescription') || 'Hide the favorite heart button from the playback overlay.'}</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown(
-            'osd-layout-select',
-            [
-                { value: 'left', label: i18n.t('OsdLayoutLeft') || 'Left Aligned (Default)' },
-                { value: 'centered', label: i18n.t('OsdLayoutCentered') || 'Centered' }
-            ],
-            PlayerSettings.get('osdLayout') || 'left'
-        )}
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideFavorite') === true ? 'active' : ''}" 
+                                id="toggle-osd-hide-favorite" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdHideInfo">${i18n.t('LabelOsdHideInfo') || 'Hide Info Button'}</span>
+                        <span class="setting-description" data-i18n="OsdHideInfoDescription">${i18n.t('OsdHideInfoDescription') || 'Hide the playback details / description button from the playback overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideInfo') === true ? 'active' : ''}" 
+                                id="toggle-osd-hide-info" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdHideBackButton">${i18n.t('LabelOsdHideBackButton') || 'Hide Back Button'}</span>
+                        <span class="setting-description" data-i18n="OsdHideBackButtonDescription">${i18n.t('OsdHideBackButtonDescription') || 'Hide the back arrow button from the player header.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideBackButton') === true ? 'active' : ''}" 
+                                id="toggle-osd-hide-back-button" 
+                                tabindex="0">
+                        </button>
                     </div>
                 </div>
 
@@ -7155,6 +7197,42 @@ class SettingsPage extends Page {
                 PlayerSettings.set('disableAssStyling', newValue);
                 forceTextToggle.classList.toggle('active', newValue);
                 log.info(`Force Text Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for OSD Hide Favorite
+        const hideFavoriteToggle = this.$('#toggle-osd-hide-favorite');
+        if (hideFavoriteToggle) {
+            hideFavoriteToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHideFavorite') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHideFavorite', newValue);
+                hideFavoriteToggle.classList.toggle('active', newValue);
+                log.info(`Hide Favorite Button set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for OSD Hide Info
+        const hideInfoToggle = this.$('#toggle-osd-hide-info');
+        if (hideInfoToggle) {
+            hideInfoToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHideInfo') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHideInfo', newValue);
+                hideInfoToggle.classList.toggle('active', newValue);
+                log.info(`Hide Info Button set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for OSD Hide Back Button
+        const hideBackButtonToggle = this.$('#toggle-osd-hide-back-button');
+        if (hideBackButtonToggle) {
+            hideBackButtonToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHideBackButton') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHideBackButton', newValue);
+                hideBackButtonToggle.classList.toggle('active', newValue);
+                log.info(`Hide Back Button set to: ${newValue}`);
             });
         }
 
