@@ -501,7 +501,10 @@ const DEFAULTS = {
     // Toggle states for showing/hiding specific player buttons
     osdHideFavorite: true,
     osdHideInfo: true,
-    osdHideBackButton: true
+    osdHideBackButton: true,
+
+    // Combine skip (seek, chapter, track) buttons into single buttons with multi-click actions
+    osdCombineSkipButtons: false
 };
 
 /**

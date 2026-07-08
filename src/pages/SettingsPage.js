@@ -1384,6 +1384,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdCombineSkipButtons">${i18n.t('LabelOsdCombineSkipButtons') || 'Combine Navigation Buttons'}</span>
+                        <span class="setting-description" data-i18n="OsdCombineSkipButtonsDescription">${i18n.t('OsdCombineSkipButtonsDescription') || 'Combine seek, chapter, and file skip buttons. Click once to seek, twice for chapters, three times for files.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdCombineSkipButtons') === true ? 'active' : ''}" 
+                                id="toggle-osd-combine-skip-buttons" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Media Rows Section -->
                 <h3 class="setting-section-title" data-i18n="MediaRows">${i18n.t('MediaRows')}</h3>
 
@@ -7233,6 +7246,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('osdHideBackButton', newValue);
                 hideBackButtonToggle.classList.toggle('active', newValue);
                 log.info(`Hide Back Button set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for OSD Combine Skip Buttons
+        const combineSkipButtonsToggle = this.$('#toggle-osd-combine-skip-buttons');
+        if (combineSkipButtonsToggle) {
+            combineSkipButtonsToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdCombineSkipButtons') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('osdCombineSkipButtons', newValue);
+                combineSkipButtonsToggle.classList.toggle('active', newValue);
+                log.info(`Combine Skip Buttons set to: ${newValue}`);
             });
         }
 

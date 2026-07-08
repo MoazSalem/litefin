@@ -430,12 +430,12 @@ export default class OSDController extends Component {
                         <div class="osd-controls-right">
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${osdIcons.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${osdIcons.audiotrack}</button>
+                            <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
+                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${osdIcons.viewList}</button>
                             <!-- Queue modal button (always available) -->
                             <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${osdIcons.queue}</button>
                             <!-- Lyrics modal button -->
                             <button class="osd-btn osd-btn-disabled hidden" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${osdIcons.lyrics}</button>
-                            <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
-                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${osdIcons.viewList}</button>
                             <!-- SyncPlay group management — only the icon; menu opens on click -->
                             <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">
                                 <div class="osd-syncplay-icon-wrap">
@@ -725,6 +725,27 @@ export default class OSDController extends Component {
             }
         }
 
+        if (PlayerSettings.get('osdCombineSkipButtons') === true) {
+            const rewindBtn = this._osdEl.querySelector('[data-action="rewind"]');
+            const fastForwardBtn = this._osdEl.querySelector('[data-action="fastForward"]');
+            if (rewindBtn) {
+                rewindBtn.innerHTML = osdIcons.chapterPrevious;
+            }
+            if (fastForwardBtn) {
+                fastForwardBtn.innerHTML = osdIcons.chapterNext;
+            }
+
+            const prevBtn = this._osdEl.querySelector('#osdPrevBtn');
+            const prevChapterBtn = this._osdEl.querySelector('#osdPrevChapterBtn');
+            const nextChapterBtn = this._osdEl.querySelector('#osdNextChapterBtn');
+            const nextBtn = this._osdEl.querySelector('#osdNextBtn');
+
+            if (prevBtn) prevBtn.remove();
+            if (prevChapterBtn) prevChapterBtn.remove();
+            if (nextChapterBtn) nextChapterBtn.remove();
+            if (nextBtn) nextBtn.remove();
+        }
+
         this.updatePlayPauseButton();
 
         return this._osdEl;
@@ -983,6 +1004,18 @@ export default class OSDController extends Component {
                 nextBtn.setAttribute('tabindex', '-1');
             }
         }
+
+        const queueBtn = this._osdEl.querySelector('#osdQueueBtn');
+        if (queueBtn) {
+            const queueLength = playQueue.getQueue ? playQueue.getQueue().length : 0;
+            if (queueLength <= 1) {
+                queueBtn.classList.add('hidden');
+                queueBtn.setAttribute('tabindex', '-1');
+            } else {
+                queueBtn.classList.remove('hidden');
+                queueBtn.setAttribute('tabindex', '0');
+            }
+        }
     }
 
     _updateChapterButtons() {
@@ -1110,14 +1143,14 @@ export default class OSDController extends Component {
             prevChapterBtn?.setAttribute('tabindex', '0');
             nextChapterBtn?.classList.remove('osd-btn-disabled');
             nextChapterBtn?.setAttribute('tabindex', '0');
-            chaptersModalBtn?.classList.remove('osd-btn-disabled');
+            chaptersModalBtn?.classList.remove('hidden', 'osd-btn-disabled');
             chaptersModalBtn?.setAttribute('tabindex', '0');
         } else {
             prevChapterBtn?.classList.add('osd-btn-disabled');
             prevChapterBtn?.setAttribute('tabindex', '-1');
             nextChapterBtn?.classList.add('osd-btn-disabled');
             nextChapterBtn?.setAttribute('tabindex', '-1');
-            chaptersModalBtn?.classList.add('osd-btn-disabled');
+            chaptersModalBtn?.classList.add('hidden', 'osd-btn-disabled');
             chaptersModalBtn?.setAttribute('tabindex', '-1');
         }
     }
@@ -2156,6 +2189,46 @@ export default class OSDController extends Component {
             log.info('OSDController: Ignoring action during active track switch:', action);
             return;
         }
+
+        if (PlayerSettings.get('osdCombineSkipButtons') === true) {
+            if (action === 'fastForward') {
+                this._forwardClicks = (this._forwardClicks || 0) + 1;
+                if (this._forwardTimeout) clearTimeout(this._forwardTimeout);
+                this._forwardTimeout = setTimeout(() => {
+                    const count = this._forwardClicks;
+                    this._forwardClicks = 0;
+                    this._forwardTimeout = null;
+
+                    let targetAction = 'fastForward';
+                    if (count === 2) targetAction = 'nextChapter';
+                    else if (count >= 3) targetAction = 'nextTrack';
+
+                    this._executeActionDirect(targetAction);
+                }, 350);
+                return;
+            }
+            if (action === 'rewind') {
+                this._rewindClicks = (this._rewindClicks || 0) + 1;
+                if (this._rewindTimeout) clearTimeout(this._rewindTimeout);
+                this._rewindTimeout = setTimeout(() => {
+                    const count = this._rewindClicks;
+                    this._rewindClicks = 0;
+                    this._rewindTimeout = null;
+
+                    let targetAction = 'rewind';
+                    if (count === 2) targetAction = 'previousChapter';
+                    else if (count >= 3) targetAction = 'previousTrack';
+
+                    this._executeActionDirect(targetAction);
+                }, 350);
+                return;
+            }
+        }
+
+        this._executeActionDirect(action);
+    }
+
+    _executeActionDirect(action) {
 
         if (action !== 'fastForward' && action !== 'rewind') {
             log.info('Execute Action:', action);
