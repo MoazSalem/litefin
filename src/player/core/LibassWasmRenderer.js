@@ -88,6 +88,15 @@ export default class LibassWasmRenderer {
         this._lastProcessedHash = null;
         this._lastProcessedResult = null;
 
+        /* rAF smooth-render state (virtual/Tizen AVPlay mode only) */
+        this._rafId = null;
+        this._lastTickTime = 0;
+        this._lastTickWallTime = 0;
+        this._playbackRate = 1.0;
+        this._seekPending = false;
+        /* throttle: skip setCurrentTime if time moved < 20ms */
+        this._MIN_TICK_DELTA = 0.020;
+
         this._videoProxy = {
             currentTime: 0,
             paused: false,
@@ -104,8 +113,25 @@ export default class LibassWasmRenderer {
         this._lastTime = timeSeconds;
         if (this._isVirtual && this._octopus) {
             const offsetTime = timeSeconds - this._delaySeconds;
+
+            // Handle pending seek — do a clean reset without pushing -1 to the worker
+            if (this._seekPending) {
+                this._seekPending = false;
+                this._octopus.lastRenderTime = -999999;
+            }
+
+            // Gate: skip if the time hasn't moved enough (avoids flooding the worker)
+            if (Math.abs(offsetTime - this._videoProxy.currentTime) < this._MIN_TICK_DELTA) {
+                return;
+            }
+
             this._videoProxy.currentTime = offsetTime;
             this._octopus.setCurrentTime(offsetTime);
+            this._lastTickTime = offsetTime;
+            this._lastTickWallTime = performance.now();
+
+            // Start the smooth rAF render loop if not already running
+            this._startSmoothRender();
         }
     }
 
@@ -184,7 +210,7 @@ export default class LibassWasmRenderer {
                 prescaleHeightLimit: 1080,
                 maxRenderHeight: maxHeight,
                 resizeVariation: 0.2,
-                renderAhead: this._isVirtual ? 30 : 50
+                renderAhead: this._isVirtual ? 100 : 50
             };
 
             this._octopus = new SubtitlesOctopus(options);
@@ -280,14 +306,20 @@ export default class LibassWasmRenderer {
     }
 
     clear() {
-        if (this._octopus && this._isVirtual) {
-            log.info('Clearing SubtitlesOctopus canvas overlay on seek');
-            this._octopus.lastRenderTime = -999999;
-            this._octopus.setCurrentTime(-1);
+        if (!this._isVirtual) return;
+        // Immediately wipe the canvas so the user sees a blank frame
+        if (this._canvas) {
+            const ctx = this._canvas.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
         }
+        // Flag the next tick() to reset the worker state cleanly instead of
+        // calling setCurrentTime(-1) which floods the worker and causes freezes.
+        this._seekPending = true;
+        log.info('SubtitlesOctopus canvas cleared on seek (deferred reset)');
     }
 
     destroy() {
+        this._stopSmoothRender();
         window.removeEventListener('resize', this._onWindowResize);
         this._teardownOctopus();
         this._removeDOM();
@@ -345,6 +377,47 @@ export default class LibassWasmRenderer {
                 log.warn('Error disposing SubtitlesOctopus instance:', err);
             }
             this._octopus = null;
+        }
+    }
+
+    /**
+     * Start a requestAnimationFrame loop that smoothly advances the subtitle
+     * render time between coarse tick() calls. Without this the canvas only
+     * updates every ~250ms (Tizen timeupdate throttle) causing visible stutter.
+     * @private
+     */
+    _startSmoothRender() {
+        if (this._rafId !== null) return;
+        const SMOOTH_INTERVAL = 0.033;
+        const MAX_ADVANCE = 0.100;
+        const loop = () => {
+            if (!this._octopus || !this._isVirtual || this._seekPending) {
+                this._rafId = null;
+                return;
+            }
+            const elapsed = Math.min(
+                (performance.now() - this._lastTickWallTime) / 1000,
+                MAX_ADVANCE
+            );
+            const estimatedTime = this._lastTickTime + (elapsed * this._playbackRate);
+            const currentProxyTime = this._videoProxy.currentTime;
+            if (Math.abs(estimatedTime - currentProxyTime) >= SMOOTH_INTERVAL) {
+                this._videoProxy.currentTime = estimatedTime;
+                this._octopus.setCurrentTime(estimatedTime);
+            }
+            this._rafId = requestAnimationFrame(loop);
+        };
+        this._rafId = requestAnimationFrame(loop);
+    }
+
+    /**
+     * Cancel the smooth render loop.
+     * @private
+     */
+    _stopSmoothRender() {
+        if (this._rafId !== null) {
+            cancelAnimationFrame(this._rafId);
+            this._rafId = null;
         }
     }
 
