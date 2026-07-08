@@ -595,6 +595,49 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+        // ── HtmlVideoPlayer: DirectPlay resume seek failed ─────────────────────
+        //
+        // When the HtmlVideoPlayer backend fails to seek to the resume position
+        // during DirectPlay (common on WebOS Chromium where #t= fragments are
+        // ignored and programmatic seeks to unbuffered positions silently fail),
+        // the backend emits resumeseekfailed. We restart playback in Remux mode
+        // so the server streams from the target position, making the seek reliable.
+        if (event.type === 'resumeseekfailed') {
+            const targetTicks = event.data?.targetPositionTicks;
+            const currentPosTicks = this.getCurrentPositionTicks();
+            const effectiveTicks = targetTicks || currentPosTicks;
+
+            log.warn('resumeseekfailed: DirectPlay resume failed at', (currentPosTicks / 10000000).toFixed(2),
+                's. Restarting with Remux at target', (effectiveTicks / 10000000).toFixed(2), 's');
+
+            if (this._currentPlayOptions && !this._isRestarting) {
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    startPositionTicks: effectiveTicks,
+                    playbackMode: 'remux'
+                };
+
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions = restartOptions;
+                this._isRestarting = true;
+
+                this.emit(PlayerEvent.RESTARTING);
+
+                (async () => {
+                    try {
+                        await this.stop();
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await this.play(restartOptions);
+                    } catch (e) {
+                        log.error('resumeseekfailed restart failed:', e);
+                    } finally {
+                        this._isRestarting = false;
+                    }
+                })();
+            }
+            return;
+        }
+
         // Re-emit events from backend
         this.emit(event.type, event.data);
     }

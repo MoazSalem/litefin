@@ -421,40 +421,94 @@ export class HtmlVideoPlayer {
         // segments from the target seek position natively.
         // ====================================================================
         let url = options.url;
-        const seconds = (options.playerStartPositionTicks || 0) / 10000000;
-        if (seconds > 0) {
-            log.info(`HtmlVideoPlayer: Appending media fragment #t=${seconds} for native seek`);
-            url += `#t=${seconds}`;
+        const resumeSeconds = (options.playerStartPositionTicks || 0) / 10000000;
+        if (resumeSeconds > 0) {
+            log.info(`HtmlVideoPlayer: Appending media fragment #t=${resumeSeconds} for native seek`);
+            url += `#t=${resumeSeconds}`;
         }
 
+        // ====================================================================
+        // RESUME SEEK TIMING FIX:
+        // When resuming, disable autoplay so the browser does not start playback
+        // before we have a chance to seek. Autoplay causes the browser to call
+        // play() internally after canplay, and on WebOS Chromium this overrides
+        // any pending currentTime assignment — the seek to the unbuffered resume
+        // position is silently discarded and playback starts from 0.
+        //
+        // Instead, we seek at canplay and wait for the seeked event to confirm
+        // the seek took effect before calling play().
+        // ====================================================================
+        if (resumeSeconds > 0) {
+            video.autoplay = false;
+        } else {
+            video.autoplay = options.autoPlay !== false;
+        }
         video.src = url;
-        video.autoplay = options.autoPlay !== false;
 
         return new Promise((resolve, reject) => {
+            let seekCompleted = false;
+            let seekResolved = false;
+            let seekTimeout = null;
+
+            const resolveOnce = (value) => {
+                if (!seekResolved) {
+                    seekResolved = true;
+                    resolve(value);
+                }
+            };
+
+            const startPlayback = () => {
+                if (options.autoPlay === false) {
+                    log.info('Native path: Skipping initial play() due to autoPlay=false');
+                    video.pause();
+                    resolveOnce();
+                    return;
+                }
+
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => {
+                            this._applyPlaybackResume(video, options);
+                            resolveOnce();
+                        })
+                        .catch((err) => {
+                            if (err.name === 'NotAllowedError') {
+                                log.warn('Autoplay blocked — retrying muted (remote launch).');
+                                video.muted = true;
+                                const retryPromise = video.play();
+                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
+                                    retryPromise
+                                        .then(() => {
+                                            this._scheduleUnmuteOnInteraction(video);
+                                            this._applyPlaybackResume(video, options);
+                                            resolveOnce();
+                                        })
+                                        .catch(reject);
+                                } else {
+                                    this._scheduleUnmuteOnInteraction(video);
+                                    this._applyPlaybackResume(video, options);
+                                    resolveOnce();
+                                }
+                            } else {
+                                reject(err);
+                            }
+                        });
+                } else {
+                    this._applyPlaybackResume(video, options);
+                    resolveOnce();
+                }
+            };
+
             const onLoadedMetadata = () => {
                 video.removeEventListener('loadedmetadata', onLoadedMetadata);
-                // Seek if starting from position — do it here after metadata
-                // is loaded, not immediately after setting src (which is
-                // silently ignored on webOS before the container is parsed).
-                if (options.playerStartPositionTicks) {
-                    const startSeconds = options.playerStartPositionTicks / 10000000;
 
-                    // ========================================================
-                    // FALLBACK SEEK GATING:
-                    // Check if the media fragment has already seeked the video
-                    // to the requested offset. If it has, we skip programmatic
-                    // seeking to avoid duplicate seeks/stutters.
-                    // ========================================================
-                    const hasAppliedMediaFragment = Math.abs(video.currentTime - startSeconds) < 2;
-                    if (!hasAppliedMediaFragment) {
-                        log.info('HtmlVideoPlayer: Media fragment seek (#t=) failed or not applied, falling back to programmatic seek');
-                        if (video.duration >= startSeconds || !MediaHelper.isValidDuration(video.duration)) {
-                            video.currentTime = startSeconds;
-                        }
-                    } else {
-                        log.info('HtmlVideoPlayer: Media fragment seek (#t=) successfully applied natively');
-                    }
+                // Check if the media fragment naturally landed us at the target
+                if (resumeSeconds > 0 && Math.abs(video.currentTime - resumeSeconds) < 2) {
+                    log.info('HtmlVideoPlayer: Media fragment seek (#t=) successfully applied natively');
+                    seekCompleted = true;
                 }
+
                 // Apply initially requested tracks once native tracks are populated
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
                     this.setAudioStreamIndex(options.audioStreamIndex);
@@ -468,42 +522,39 @@ export class HtmlVideoPlayer {
                 video.removeEventListener('canplay', onCanPlay);
                 video.removeEventListener('error', onError);
 
-                if (options.autoPlay === false) {
-                    log.info('Native path: Skipping initial play() due to autoPlay=false');
-                    // Explicitly ensure paused since 'autoplay' attr was set to false
-                    video.pause();
-                    resolve();
+                // If we need to resume and haven't landed at the target yet,
+                // perform a seek-then-play: set currentTime and wait for seeked.
+                if (resumeSeconds > 0 && !seekCompleted) {
+                    log.info('HtmlVideoPlayer: Seeking to resume position', resumeSeconds, 's at canplay');
+
+                    const onSeeked = () => {
+                        video.removeEventListener('seeked', onSeeked);
+                        if (seekTimeout) clearTimeout(seekTimeout);
+                        seekCompleted = true;
+
+                        const drift = Math.abs(video.currentTime - resumeSeconds);
+                        log.debug(`HtmlVideoPlayer: Seek completed (current: ${video.currentTime.toFixed(2)} s, target: ${resumeSeconds} s, drift: ${drift.toFixed(2)} s)`);
+                        startPlayback();
+                    };
+
+                    video.addEventListener('seeked', onSeeked);
+
+                    // Initiate the seek
+                    video.currentTime = resumeSeconds;
+
+                    // Failsafe: if seek never completes (e.g. server doesn't support
+                    // Range requests), proceed anyway after 10s
+                    seekTimeout = setTimeout(() => {
+                        video.removeEventListener('seeked', onSeeked);
+                        if (!seekCompleted) {
+                            log.warn('HtmlVideoPlayer: Seek timed out after 10s — starting playback from current position');
+                            seekCompleted = true;
+                            startPlayback();
+                        }
+                    }, 10000);
                 } else {
-                    // Attempt unmuted playback.
-                    const playPromise = video.play();
-                    if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                        playPromise.then(() => {
-                            this._applyPlaybackResume(video, options);
-                            resolve();
-                        }).catch((err) => {
-                            if (err.name === 'NotAllowedError') {
-                                log.warn('Autoplay blocked — retrying muted (remote launch).');
-                                video.muted = true;
-                                const retryPromise = video.play();
-                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
-                                    retryPromise.then(() => {
-                                        this._scheduleUnmuteOnInteraction(video);
-                                        this._applyPlaybackResume(video, options);
-                                        resolve();
-                                    }).catch(reject);
-                                } else {
-                                    this._scheduleUnmuteOnInteraction(video);
-                                    this._applyPlaybackResume(video, options);
-                                    resolve();
-                                }
-                            } else {
-                                reject(err);
-                            }
-                        });
-                    } else {
-                        this._applyPlaybackResume(video, options);
-                        resolve();
-                    }
+                    // No resume needed, or media fragment already put us at target
+                    startPlayback();
                 }
             };
 
@@ -770,8 +821,15 @@ export class HtmlVideoPlayer {
         setTimeout(() => {
             const retryDrift = Math.abs(video.currentTime - targetSec);
             if (retryDrift >= 10) {
-                log.warn(`HtmlVideoPlayer: Resume seek still far off (drift: ${retryDrift.toFixed(2)} s) — retrying once more`);
-                video.currentTime = targetSec;
+                log.warn(`HtmlVideoPlayer: Resume seek failed (current: ${video.currentTime.toFixed(2)} s, target: ${targetSec} s, drift: ${retryDrift.toFixed(2)} s) — signaling fallback to Remux`);
+
+                // Emit event so JellyfinPlayer can restart playback using Remux/DirectStream
+                // mode. In Remux mode the server streams from the target position, making
+                // seeks work where DirectPlay + #t= fragment fails on WebOS Chromium.
+                this.onEvent({
+                    type: 'resumeseekfailed',
+                    data: { targetPositionTicks: options.playerStartPositionTicks }
+                });
             }
         }, 2000);
     }
