@@ -106,8 +106,7 @@ export function getDeviceCapabilities() {
         video.canPlayType('video/mp4; codecs="mp2v.20.2"') !== '' ||
         video.canPlayType('video/mpeg') !== '' ||
         video.canPlayType('video/mp2t; codecs="mp2v.20.2"') !== '';
-    const browserMpegts =
-        video.canPlayType('video/mp2t') !== '';
+    const browserMpegts = video.canPlayType('video/mp2t') !== '';
     const browserMp2 = false; // HTML5 browsers do not support MP2 in media streams natively (probes are unreliable)
 
     _cachedCapabilities = {
@@ -200,7 +199,8 @@ export function buildJellyfinProfile(options = {}) {
     const supportsMpeg2Video = isHtml5 ? caps.browserMpeg2video : true;
     const supportsMpegts = isHtml5 ? caps.browserMpegts : true;
     const mp2Setting = PlayerSettings.get('enableMp2') || 'auto';
-    const supportsMp2 = mp2Setting === 'enable' ? true : mp2Setting === 'disable' ? false : (isHtml5 ? caps.browserMp2 : true);
+    const supportsMp2 =
+        mp2Setting === 'enable' ? true : mp2Setting === 'disable' ? false : isHtml5 ? caps.browserMp2 : true;
 
     const hevcSetting = PlayerSettings.get('enableHEVC');
     const enableHEVC = hevcSetting === 'enable' ? true : hevcSetting === 'disable' ? false : caps.hevc;
@@ -259,14 +259,8 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.ac3) baseAudioCodecs.push('ac3');
     baseAudioCodecs.push('aac', 'mp3');
     if (supportsMp2) baseAudioCodecs.push('mp2', 'mp1l2');
-    baseAudioCodecs.push(
-        'vorbis',
-        'pcm',
-        'wav',
-        'pcm_s16le',
-        'pcm_s24le'
-    );
-    
+    baseAudioCodecs.push('vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le');
+
     // =========================================================================
     // AAC-LATM Broadcast Codec Gating
     // =========================================================================
@@ -448,21 +442,7 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     // =========================================================================
-    // HLS Transcode Audio Configuration (Version-Gated)
-    //
-    // There are two completely separate audio decoder paths on Samsung TVs:
-    //   1. Hardware passthrough (for local/DLNA/progressive HTTP files) — supports AC3, DTS, etc.
-    //   2. AVPlay HLS media extractor (for HLS streams) — this is more restrictive.
-    //
-    // Tizen 5.x (2019-2020 TVs):
-    //   AVPlay's HLS parser only accepts AAC in MPEG-TS segments. AC3/EAC3 in the TS
-    //   container causes PLAYER_ERROR_NOT_SUPPORTED_FORMAT during buffering — the same
-    //   crash we saw with multichannel AAC. The ONLY safe option for HLS transcodes
-    //   on Tizen 5.x is stereo AAC (2 channels), which is universally reliable.
-    //
-    // Tizen 6+ (2021+ TVs):
-    //   The updated AVPlay properly supports AC3/EAC3 in HLS/TS, so we can request
-    //   surround-sound AC3/EAC3 and AVPlay will decode it natively.
+    // HLS Transcode Audio Configuration
     //
     // The user can choose their preferred transcode target codec via
     // PlayerSettings.get('transcodeAudioCodec'). This allows choosing EAC3
@@ -470,53 +450,35 @@ export function buildJellyfinProfile(options = {}) {
     // EAC3 is the default. AAC is the safe last-resort for problem hardware.
     // =========================================================================
     const transAudioCodecsArr = [];
-    let transMaxAudioChannels;
+    const transMaxAudioChannels = maxAudioChannels;
 
-    // Read the user's preferred transcode audio codec setting.
-    // The options are: 'auto', 'prefer_ac3', 'prefer_aac', 'force_eac3', 'force_ac3', 'force_aac'.
     const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
 
-    if (caps.tizenVersion >= 6) {
-        // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use surround sound if preferred.
-        if (preferredTranscodeCodec === 'auto') {
-            // Auto (Prefer E-AC3) -> default to eac3 first, fallback to ac3.
-            if (caps.eac3) transAudioCodecsArr.push('eac3');
-            if (caps.ac3) transAudioCodecsArr.push('ac3');
-            if (supportsMp2) transAudioCodecsArr.push('mp2');
-            transAudioCodecsArr.push('aac');
-        } else if (preferredTranscodeCodec === 'prefer_ac3') {
-            // Prefer AC3 (Dolby Digital) -> ac3 first, fallback to eac3.
-            if (caps.ac3) transAudioCodecsArr.push('ac3');
-            if (caps.eac3) transAudioCodecsArr.push('eac3');
-            if (supportsMp2) transAudioCodecsArr.push('mp2');
-            transAudioCodecsArr.push('aac');
-        } else if (preferredTranscodeCodec === 'prefer_aac') {
-            // Prefer AAC -> use aac.
-            transAudioCodecsArr.push('aac');
-            if (caps.eac3) transAudioCodecsArr.push('eac3');
-            if (caps.ac3) transAudioCodecsArr.push('ac3');
-            if (supportsMp2) transAudioCodecsArr.push('mp2');
-        } else if (preferredTranscodeCodec === 'force_eac3') {
-            // Force E-AC3 -> only eac3.
-            transAudioCodecsArr.push('eac3');
-        } else if (preferredTranscodeCodec === 'force_ac3') {
-            // Force AC3 -> only ac3.
-            transAudioCodecsArr.push('ac3');
-        } else if (preferredTranscodeCodec === 'force_mp3') {
-            // Force MP3 -> only mp3.
-            transAudioCodecsArr.push('mp3');    
-        } else {
-            // Force AAC -> only aac.
-            transAudioCodecsArr.push('aac');
-        }
-        transMaxAudioChannels = maxAudioChannels;
-    } else {
-        // Tizen 5.x: strict AAC-only HLS path. Must also cap at 2 channels —
-        // multichannel AAC in TS also crashes AVPlay on Tizen 5.0.
-        transAudioCodecsArr.push('aac');
+    if (preferredTranscodeCodec === 'auto') {
+        // EAC3 in HLS/TS produces no audio on Tizen < 6 AVPlay (silent playback).
+        // The HTML5 backend handles it fine, and Tizen 6+ AVPlay decodes it natively.
+        if (caps.eac3 && (isHtml5 || caps.tizenVersion >= 6)) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
         if (supportsMp2) transAudioCodecsArr.push('mp2');
-        // Cap at 2 (integer) — multichannel AAC in TS crashes AVPlay on Tizen 5.x
-        transMaxAudioChannels = 2;
+        transAudioCodecsArr.push('aac');
+    } else if (preferredTranscodeCodec === 'prefer_ac3') {
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (supportsMp2) transAudioCodecsArr.push('mp2');
+        transAudioCodecsArr.push('aac');
+    } else if (preferredTranscodeCodec === 'prefer_aac') {
+        transAudioCodecsArr.push('aac');
+        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        if (supportsMp2) transAudioCodecsArr.push('mp2');
+    } else if (preferredTranscodeCodec === 'force_eac3') {
+        transAudioCodecsArr.push('eac3');
+    } else if (preferredTranscodeCodec === 'force_ac3') {
+        transAudioCodecsArr.push('ac3');
+    } else if (preferredTranscodeCodec === 'force_mp3') {
+        transAudioCodecsArr.push('mp3');
+    } else {
+        transAudioCodecsArr.push('aac');
     }
 
     if (enableDts) transAudioCodecsArr.push('dts', 'dca');
