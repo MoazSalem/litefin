@@ -652,11 +652,11 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 }
 
 .osd-time-current {
-    justify-content: flex-end;
+    justify-content: flex-start;
 }
 
 .osd-time-total {
-    justify-content: flex-start;
+    justify-content: flex-end;
 }
 
 .osd-slider-container {
@@ -1936,6 +1936,36 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
 .osd-bottom.buttons-below .osd-slider-row {
     order: 1;
     margin-top: 0 !important;
+}
+
+/* ============================================================================
+   OSD CENTERED LAYOUT
+   ============================================================================ */
+.osd-bottom.osd-layout-centered .osd-controls-row {
+    position: relative !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    min-height: 86.4px !important;
+}
+.osd-bottom.osd-layout-centered .osd-ends-at {
+    margin-left: 0.6em !important;
+}
+.osd-bottom.osd-layout-centered .osd-controls-left {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+.osd-bottom.osd-layout-centered .osd-controls-right {
+    display: flex !important;
+    align-items: center !important;
+}
+.osd-bottom.osd-layout-centered .osd-spacer {
+    display: none !important;
 }
 
 

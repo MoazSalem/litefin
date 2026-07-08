@@ -1325,6 +1325,23 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdLayout">${i18n.t('OsdLayout') || 'OSD Layout'}</span>
+                        <span class="setting-description" data-i18n="OsdLayoutDescription">${i18n.t('OsdLayoutDescription') || 'Choose the layout alignment of player playback and menu control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'osd-layout-select',
+            [
+                { value: 'left', label: i18n.t('OsdLayoutLeft') || 'Left Aligned (Default)' },
+                { value: 'centered', label: i18n.t('OsdLayoutCentered') || 'Centered' }
+            ],
+            PlayerSettings.get('osdLayout') || 'left'
+        )}
+                    </div>
+                </div>
+
                 <!-- Media Rows Section -->
                 <h3 class="setting-section-title" data-i18n="MediaRows">${i18n.t('MediaRows')}</h3>
 
@@ -6762,6 +6779,7 @@ class SettingsPage extends Page {
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
             'osd-logo-size-select': { type: 'player', key: 'osdLogoSize' },
             'osd-buttons-location-select': { type: 'player', key: 'osdButtonsLocation' },
+            'osd-layout-select': { type: 'player', key: 'osdLayout' },
             'next-up-dialog-style-select': { type: 'player', key: 'nextUpDialogStyle' },
             'next-up-dialog-scale-select': { type: 'player', key: 'nextUpDialogScale' },
             'next-up-dialog-trigger-select': { type: 'player', key: 'nextUpTriggerMode' },

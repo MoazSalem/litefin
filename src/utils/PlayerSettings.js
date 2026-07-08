@@ -493,7 +493,10 @@ const DEFAULTS = {
     osdTrackMenuBgOpacity: 85,
 
     // Position of playback control buttons relative to seek bar ('above', 'below')
-    osdButtonsLocation: 'above'
+    osdButtonsLocation: 'above',
+
+    // Layout configuration of player OSD buttons ('left', 'centered')
+    osdLayout: 'left'
 };
 
 /**

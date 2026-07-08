@@ -685,6 +685,24 @@ export default class OSDController extends Component {
             }
         }
 
+        if (PlayerSettings.get('osdLayout') === 'centered') {
+            const leftControls = this._osdEl.querySelector('.osd-controls-left');
+            const rightControls = this._osdEl.querySelector('.osd-controls-right');
+            const bottomEl = this._osdEl.querySelector('.osd-bottom');
+            
+            if (leftControls && rightControls && bottomEl) {
+                bottomEl.classList.add('osd-layout-centered');
+                
+                const queueBtn = leftControls.querySelector('#osdQueueBtn');
+                const lyricsBtn = leftControls.querySelector('#osdLyricsBtn');
+                const chaptersBtn = leftControls.querySelector('#osdChaptersBtn');
+                
+                if (lyricsBtn) rightControls.insertBefore(lyricsBtn, rightControls.firstChild);
+                if (queueBtn) rightControls.insertBefore(queueBtn, rightControls.firstChild);
+                if (chaptersBtn) rightControls.insertBefore(chaptersBtn, rightControls.firstChild);
+            }
+        }
+
         this.updatePlayPauseButton();
 
         return this._osdEl;
