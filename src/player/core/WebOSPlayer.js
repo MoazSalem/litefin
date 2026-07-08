@@ -370,10 +370,6 @@ export class WebOSPlayer {
         video.load();
 
         return new Promise((resolve, reject) => {
-            /**
-             * Wait for 'canplay' before calling video.play() so we don't
-             * trigger an Autoplay Policy error before the manifest is parsed.
-             */
             const onCanPlay = () => {
                 video.removeEventListener('canplay', onCanPlay);
                 video.removeEventListener('error', onLoadError);
@@ -381,19 +377,7 @@ export class WebOSPlayer {
                 // Attempt tracks after metadata is loaded
                 this._applyInitialTracks(options);
 
-                const playPromise = video.play();
-                if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                    playPromise
-                        .then(() => {
-                            this._applyRobustResume(video, options.playerStartPositionTicks);
-                            resolve();
-                        })
-                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
-                } else {
-                    // Older browsers (Chrome < 50) don't return a Promise from play()
-                    this._applyRobustResume(video, options.playerStartPositionTicks);
-                    resolve();
-                }
+                this._resumeSeekThenPlay(video, options, resolve, reject);
             };
 
             const onLoadError = () => {
@@ -505,18 +489,7 @@ export class WebOSPlayer {
                 // player, so doing it here (before play()) ensures the array is ready.
                 this._applyInitialTracks(options);
 
-                const playPromise = video.play();
-                if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                    playPromise
-                        .then(() => {
-                            this._applyRobustResume(video, options.playerStartPositionTicks);
-                            resolve();
-                        })
-                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
-                } else {
-                    this._applyRobustResume(video, options.playerStartPositionTicks);
-                    resolve();
-                }
+                this._resumeSeekThenPlay(video, options, resolve, reject);
             };
 
             const onError = () => {
@@ -866,11 +839,85 @@ export class WebOSPlayer {
                     log.warn(`WebOSPlayer: Seek failed after ${maxRetries} retries (final drift: ${drift.toFixed(2)} s from target ${time} s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
+
+                    // Emit event so JellyfinPlayer can restart with Remux mode
+                    this.onEvent({
+                        type: 'resumeseekfailed',
+                        data: { targetPositionTicks: Math.round(time * 10000000) }
+                    });
+
                     if (!video.paused) this._onPlaying();
                 }
             }, 3000);
         };
         attempt();
+    }
+
+    /**
+     * Resume seek-then-play helper.
+     *
+     * Called from both _playNativeHls and _playNativeDirect canplay handlers.
+     * Seeks to the resume target BEFORE calling play(), and waits for the seeked
+     * event to confirm the seek took effect. On WebOS Chromium, calling play()
+     * first and then seeking to an unbuffered position silently discards the
+     * seek — the native media pipeline starts playback from 0 and ignores the
+     * currentTime assignment.
+     *
+     * @private
+     * @param {HTMLVideoElement} video
+     * @param {Object}           options  - Play options
+     * @param {Function}         resolve  - Promise resolve
+     * @param {Function}         reject   - Promise reject
+     */
+    _resumeSeekThenPlay(video, options, resolve, reject) {
+        const resumeSeconds = this._robustSeekTarget;
+        if (resumeSeconds !== null && resumeSeconds !== undefined && resumeSeconds > 0) {
+            log.info('WebOSPlayer: Applying resume seek at canplay for', resumeSeconds, 's');
+
+            let seekCompleted = false;
+            let seekTimeout = null;
+
+            const onSeeked = () => {
+                video.removeEventListener('seeked', onSeeked);
+                if (seekTimeout) clearTimeout(seekTimeout);
+                seekCompleted = true;
+                log.debug('WebOSPlayer: Seek completed before play');
+                this._doPlayWithResume(video, options, resolve, reject);
+            };
+
+            video.addEventListener('seeked', onSeeked);
+            video.currentTime = resumeSeconds;
+
+            seekTimeout = setTimeout(() => {
+                video.removeEventListener('seeked', onSeeked);
+                if (!seekCompleted) {
+                    log.warn('WebOSPlayer: Seek at canplay timed out — starting playback from current position');
+                    this._doPlayWithResume(video, options, resolve, reject);
+                }
+            }, 10000);
+        } else {
+            this._doPlayWithResume(video, options, resolve, reject);
+        }
+    }
+
+    /**
+     * Play the video and apply the robust resume safety net.
+     * Extracted so both _resumeSeekThenPlay and the no-seek path converge.
+     * @private
+     */
+    _doPlayWithResume(video, options, resolve, reject) {
+        const playPromise = video.play();
+        if (playPromise !== undefined && typeof playPromise.then === 'function') {
+            playPromise
+                .then(() => {
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                })
+                .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+        } else {
+            this._applyRobustResume(video, options.playerStartPositionTicks);
+            resolve();
+        }
     }
 
     /**
