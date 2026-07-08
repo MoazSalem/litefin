@@ -527,22 +527,27 @@ class CardRenderer {
                     if (videoStream) {
                         if (videoStream.Width) width = videoStream.Width;
                         if (videoStream.Height) height = videoStream.Height;
-                        const videoRange = videoStream.VideoRange || videoStream.VideoRangeType;
-                        if (videoRange) {
-                            const rangeLower = videoRange.toLowerCase();
-                            /*
-                             * Check for standard High Dynamic Range (HDR) naming
-                             */
-                            if (rangeLower.includes('hdr')) {
-                                isHdr = true;
-                            }
-                            /*
-                             * Dolby Vision is represented as 'DOVI' (or similar variants) by the server.
-                             * We match against 'dovi' or the full 'dolby vision' name.
-                             */
-                            if (rangeLower.includes('dovi') || rangeLower.includes('dolby vision')) {
-                                isDovi = true;
-                            }
+                        const videoRange = videoStream.VideoRange || videoStream.VideoRangeType || '';
+                        const profile = videoStream.Profile || '';
+                        const title = videoStream.Title || videoStream.DisplayTitle || '';
+                        const codec = videoStream.Codec || '';
+
+                        // Combine stream attributes into normalized check strings
+                        const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
+
+                        /*
+                         * Check for standard High Dynamic Range (HDR) naming
+                         */
+                        if (checkString.includes('hdr')) {
+                            isHdr = true;
+                        }
+                        /*
+                         * Dolby Vision can be identified by:
+                         * - 'dovi' or 'dolby vision' in range/profile/title
+                         * - Codec identifiers starting with 'dv' (e.g. dvh1, dvhe)
+                         */
+                        if (checkString.includes('dovi') || checkString.includes('dolby vision') || codec.toLowerCase().startsWith('dv')) {
+                            isDovi = true;
                         }
                     }
                 }
