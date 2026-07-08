@@ -489,7 +489,9 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.ac3) directAudioCodecsArr.push('ac3');
     directAudioCodecsArr.push('aac', 'mp3');
     if (enableDts) directAudioCodecsArr.push('dts', 'dca');
-    if (enableTrueHd) directAudioCodecsArr.push('truehd');
+    // truehd intentionally excluded — it cannot be remuxed into MP4 (DirectStream
+    // container), so listing it here makes the server fall back to full transcode.
+    // HDMI passthrough for TrueHD is still handled via DirectPlay (baseAudioCodecs).
     let directAudioCodecs = directAudioCodecsArr.join(',');
 
     // -------------------------------------------------------------------------
@@ -631,12 +633,16 @@ export function buildJellyfinProfile(options = {}) {
     );
 
     // 3. Progressive HTTP video transcoding profile (one for each codec in transAudioCodecsArr)
+    // NOTE: Uses fmp4TransVideoCodecs (MP4-compatible codecs) not transVideoCodecs
+    // (TS-compatible codecs). The server matches these profiles for DirectStream — if HEVC
+    // is missing from VideoCodec here, the server rejects DirectStream for HEVC sources and
+    // falls back to full transcode. MP4 containers carry HEVC fine on any Tizen version.
     for (const audioCodec of transAudioCodecsArr) {
         transcodingProfiles.push({
             Container: 'mp4',
             Type: 'Video',
             AudioCodec: audioCodec,
-            VideoCodec: transVideoCodecs,
+            VideoCodec: fmp4TransVideoCodecs,
             Context: 'Streaming',
             Protocol: 'http'
         });
