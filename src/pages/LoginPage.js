@@ -664,18 +664,6 @@ class LoginPage extends Page {
             });
         }
 
-        // -------------------------------------------------------------
-        // Protocol Select Event Handlers
-        // -------------------------------------------------------------
-        this._serverProtocol?.addEventListener('change', () => {
-            // Remove native browser focus from select
-            this._serverProtocol.blur();
-            // Automatically focus the host field for smooth spatial navigation
-            if (this._serverHost) {
-                focusManager.focusElement(this._serverHost);
-            }
-        });
-
         // Enter key on inputs - just trigger click
         // On TV, Enter usually triggers click automatically on inputs/buttons
         // But we add specific click handler to unlock
@@ -1683,10 +1671,13 @@ class LoginPage extends Page {
             if (this._serverHost) this._serverHost.value = parsedUrl.host;
             if (this._serverPort) this._serverPort.value = parsedUrl.port;
 
-            log.info(`Selected server ${server.name} (${server.address}) - initiating auto-connect`);
+            // Focus the Connect button so user can proceed immediately
+            const connectBtn = this.$('.connect-btn');
+            if (connectBtn) {
+                connectBtn.focus();
+            }
 
-            // Automatically connect to the selected server immediately
-            this._connectToServer();
+            log.info(`Selected server ${server.name} (${server.address})`);
         }
     }
 

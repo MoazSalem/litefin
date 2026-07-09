@@ -202,27 +202,11 @@ class WebOSAdapter {
                 this._setCursorActive(false);
             }
 
+            // Block WebOS default spatial navigation/scrolling unless user is typing in an input field.
             const activeElem = document.activeElement;
-            const isEditingInput =
-                activeElem &&
-                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA') &&
-                !(activeElem.readOnly || activeElem.hasAttribute('readonly'));
-
-            // Intercept Back (Tizen/WebOS) or Escape (Web) to exit editing mode
-            if (isEditingInput && (keyCode === 10009 || keyCode === 461 || keyCode === 27)) {
-                e.preventDefault();
-                activeElem.readOnly = true;
-                activeElem.setAttribute('readonly', 'true');
-                activeElem.blur();
-                return;
-            }
-
-            // Block WebOS default spatial navigation/scrolling unless user is typing in an input field or interacting with a select.
             const isTextInput =
                 activeElem &&
-                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') ||
-                 activeElem.tagName === 'TEXTAREA' ||
-                 activeElem.tagName === 'SELECT');
+                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA');
 
             if (!isTextInput) {
                 if (
