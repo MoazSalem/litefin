@@ -42,6 +42,7 @@ The framework consists of five core modules that work together:
 ```
 
 **Design Philosophy:**
+
 - **No virtual DOM** — Components use direct DOM manipulation with string-based HTML rendering. This keeps the bundle tiny and avoids framework churn.
 - **Singleton services** — `eventBus`, `state`, `router` are global singletons for decoupled communication.
 - **Lifecycle-driven** — Components follow a predictable lifecycle: `constructor → render → mount → [updates] → destroy`.
@@ -58,26 +59,26 @@ The base class for all UI elements. Every visual element — buttons, modals, gr
 ### Constructor
 
 ```js
-constructor(options = {})
+constructor((options = {}));
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `container` | `HTMLElement` | Parent element to mount into |
-| `props` | `Object` | Initial props (immutable from parent) |
+| Option      | Type          | Description                           |
+| ----------- | ------------- | ------------------------------------- |
+| `container` | `HTMLElement` | Parent element to mount into          |
+| `props`     | `Object`      | Initial props (immutable from parent) |
 
 **Properties set by constructor:**
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `this.el` | `HTMLElement` | Root DOM element of the component |
-| `this.container` | `HTMLElement` | Parent element for mounting |
-| `this.props` | `Object` | Immutable props from parent |
-| `this._state` | `Object` | Internal mutable state |
-| `this._subscriptions` | `Array` | Event subscriptions for auto-cleanup |
-| `this._children` | `Array` | Child components for auto-cleanup |
-| `this._boundMethods` | `Map` | Cache of bound method references |
-| `this._isMounted` | `boolean` | Tracks mounted state |
+| Property              | Type          | Description                          |
+| --------------------- | ------------- | ------------------------------------ |
+| `this.el`             | `HTMLElement` | Root DOM element of the component    |
+| `this.container`      | `HTMLElement` | Parent element for mounting          |
+| `this.props`          | `Object`      | Immutable props from parent          |
+| `this._state`         | `Object`      | Internal mutable state               |
+| `this._subscriptions` | `Array`       | Event subscriptions for auto-cleanup |
+| `this._children`      | `Array`       | Child components for auto-cleanup    |
+| `this._boundMethods`  | `Map`         | Cache of bound method references     |
+| `this._isMounted`     | `boolean`     | Tracks mounted state                 |
 
 ### Lifecycle
 
@@ -112,12 +113,14 @@ onBeforeDestroy() ← Lifecycle hook — save state, release resources
 ### Methods
 
 #### `render()`
+
 ```js
-render()
+render();
 // @returns {string|HTMLElement}
 ```
 
 Override this to return the component's HTML. Can return either:
+
 - A **string** of HTML (most common)
 - An **`HTMLElement`** node
 
@@ -130,12 +133,14 @@ class Greeting extends Component {
 ```
 
 #### `mount(container)`
+
 ```js
-mount(container) 
+mount(container);
 // @param {HTMLElement} [container] - Optional override for constructor's container
 ```
 
 Mounts the component into the DOM:
+
 1. Calls `render()` to get HTML
 2. Parses string HTML into DOM nodes
 3. Appends to `container`
@@ -143,8 +148,9 @@ Mounts the component into the DOM:
 5. Calls `onMounted()`
 
 #### `update(newProps)`
+
 ```js
-update(newProps = {})
+update((newProps = {}));
 // @param {Object} [newProps] - Props to merge into this.props
 ```
 
@@ -155,8 +161,9 @@ Re-renders the component's inner HTML if mounted. Merges `newProps` into `this.p
 > **Note:** `update()` only replaces inner HTML of `this.el`. For full re-renders (replacing `this.el` itself), destroy and re-mount.
 
 #### `setState(newState)`
+
 ```js
-setState(newState)
+setState(newState);
 // @param {Object} newState - State to merge into this._state
 ```
 
@@ -178,11 +185,13 @@ class Counter extends Component {
 ```
 
 #### `destroy()`
+
 ```js
-destroy()
+destroy();
 ```
 
 Cleans up the component:
+
 1. Calls `onBeforeDestroy()` lifecycle hook
 2. Destroys all child components
 3. Unsubscribes all event subscriptions
@@ -194,18 +203,19 @@ Cleans up the component:
 
 Override these in subclasses:
 
-| Hook | When It's Called | Common Use |
-|------|-----------------|------------|
-| `onMounted()` | After element is in DOM | Bind DOM events, register focus sections, start observers, load async data |
-| `onUpdated()` | After `update()` replaces innerHTML | Re-bind event listeners lost during innerHTML replacement |
-| `onBeforeDestroy()` | Start of `destroy()` | Save state to localStorage, release resources |
-| `onDestroyed()` | End of `destroy()` | Final cleanup, emit events |
+| Hook                | When It's Called                    | Common Use                                                                 |
+| ------------------- | ----------------------------------- | -------------------------------------------------------------------------- |
+| `onMounted()`       | After element is in DOM             | Bind DOM events, register focus sections, start observers, load async data |
+| `onUpdated()`       | After `update()` replaces innerHTML | Re-bind event listeners lost during innerHTML replacement                  |
+| `onBeforeDestroy()` | Start of `destroy()`                | Save state to localStorage, release resources                              |
+| `onDestroyed()`     | End of `destroy()`                  | Final cleanup, emit events                                                 |
 
 ### Helper Methods
 
 #### `$(selector)`
+
 ```js
-$(selector)
+$(selector);
 // @param {string} selector - CSS selector
 // @returns {HTMLElement|null}
 ```
@@ -220,8 +230,9 @@ onMounted() {
 ```
 
 #### `$$(selector)`
+
 ```js
-$$(selector)
+$$(selector);
 // @param {string} selector - CSS selector
 // @returns {NodeList}
 ```
@@ -229,8 +240,9 @@ $$(selector)
 Shorthand for `this.el.querySelectorAll(selector)`.
 
 #### `on(event, handler)`
+
 ```js
-on(event, handler)
+on(event, handler);
 // @param {string} event - EventBus event name
 // @param {Function} handler - Event handler
 // @returns {Function} Unsubscribe function (also stored for auto-cleanup)
@@ -248,8 +260,9 @@ onMounted() {
 ```
 
 #### `emit(event, ...args)`
+
 ```js
-emit(event, ...args)
+emit(event, ...args);
 // @param {string} event - EventBus event name
 // @param {...any} args - Arguments to pass to handlers
 ```
@@ -261,8 +274,9 @@ this.emit('player:play', { item: currentItem });
 ```
 
 #### `addChild(child)`
+
 ```js
-addChild(child)
+addChild(child);
 // @param {Component} child - Child component to track for cleanup
 ```
 
@@ -277,8 +291,9 @@ onMounted() {
 ```
 
 #### `bound(methodName)`
+
 ```js
-bound(methodName)
+bound(methodName);
 // @param {string} methodName - Name of method to bind
 // @returns {Function} Bound method (cached)
 ```
@@ -383,13 +398,13 @@ export default MovieCard;
 
 ### Additional Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `this.params` | `Object` | Route parameters (e.g., `{ id: '123' }` for `/details/:id`) |
-| `this.title` | `string` | Page title (set in `document.title`) |
-| `this._focusSections` | `Array` | Registered focus section names (auto-cleaned) |
-| `this.ready` | `Promise` | Resolves when page is fully loaded and rendered |
-| `this._routePattern` | `string` | The route pattern that matched (set by Router) |
+| Property              | Type      | Description                                                 |
+| --------------------- | --------- | ----------------------------------------------------------- |
+| `this.params`         | `Object`  | Route parameters (e.g., `{ id: '123' }` for `/details/:id`) |
+| `this.title`          | `string`  | Page title (set in `document.title`)                        |
+| `this._focusSections` | `Array`   | Registered focus section names (auto-cleaned)               |
+| `this.ready`          | `Promise` | Resolves when page is fully loaded and rendered             |
+| `this._routePattern`  | `string`  | The route pattern that matched (set by Router)              |
 
 ### Lifecycle for Pages
 
@@ -415,24 +430,26 @@ Page constructor
 
 ### Key Differences from Component
 
-| Feature | Component | Page |
-|---------|-----------|------|
-| Navigation state | ❌ | ✅ — `getNavigationState()`, `setNavigationState()` |
-| Focus sections | ❌ | ✅ — `registerFocusSection()` |
-| Route params | ❌ | ✅ — `this.params` |
-| Back navigation | ❌ | ✅ — `onBack()` |
-| Loading state | ❌ | ✅ — `setLoading()` |
-| Ready promise | ❌ | ✅ — `this.ready`, `markReady()` |
+| Feature          | Component | Page                                                |
+| ---------------- | --------- | --------------------------------------------------- |
+| Navigation state | ❌        | ✅ — `getNavigationState()`, `setNavigationState()` |
+| Focus sections   | ❌        | ✅ — `registerFocusSection()`                       |
+| Route params     | ❌        | ✅ — `this.params`                                  |
+| Back navigation  | ❌        | ✅ — `onBack()`                                     |
+| Loading state    | ❌        | ✅ — `setLoading()`                                 |
+| Ready promise    | ❌        | ✅ — `this.ready`, `markReady()`                    |
 
 ### Methods
 
 #### `init(params)`
+
 ```js
-init(params = {})
+init((params = {}));
 // @param {Object} params - Route parameters
 ```
 
 Called by the Router after constructing the page. This is NOT overridden directly — instead, override `onInit()`. The `init` method:
+
 1. Sets `this.params`
 2. Finds and stores `this.container` (`#page-container` or `#app`)
 3. Calls `this.mount()`
@@ -442,8 +459,9 @@ Called by the Router after constructing the page. This is NOT overridden directl
 7. Restores scroll/focus for synchronous pages
 
 #### `onInit()`
+
 ```js
-onInit()
+onInit();
 ```
 
 Override this for page-specific initialization logic. This is where you fetch data and render content.
@@ -466,8 +484,9 @@ class HomePage extends Page {
 ```
 
 #### `onBack()`
+
 ```js
-onBack()
+onBack();
 // @returns {boolean} True if handled, false for default router back
 ```
 
@@ -483,11 +502,13 @@ class PlayerPage extends Page {
 ```
 
 #### `markReady()`
+
 ```js
-markReady()
+markReady();
 ```
 
 Call when the page's async data is fully loaded. This:
+
 1. Resolves `this.ready` Promise
 2. Emits `app:hideSplash` to remove the initial splash screen
 
@@ -499,8 +520,9 @@ async onInit() {
 ```
 
 #### `registerFocusSection(name, container, options)`
+
 ```js
-registerFocusSection(name, container, options)
+registerFocusSection(name, container, options);
 // @param {string} name - Section name
 // @param {HTMLElement} container - Section container element
 // @param {Object} options - FocusManager options
@@ -521,38 +543,42 @@ onMounted() {
 ```
 
 #### `setActiveSection(...args)`
+
 ```js
-setActiveSection(...args)
+setActiveSection(...args);
 ```
 
 Shorthand for `focusManager.setActiveSection(...)`.
 
 #### `setLoading(show)`
+
 ```js
-setLoading(show)
+setLoading(show);
 // @param {boolean} show - Whether to show loading state
 ```
 
 Shows or hides a loading spinner inside the page. Creates a `.page-loading` element if needed.
 
 #### `showError(message)` / `hideError()`
+
 ```js
-showError(message)
+showError(message);
 // @param {string} message - Error message
 
-hideError()
+hideError();
 ```
 
 Show or hide an error message in the `.page-error` element.
 
 #### `getNavigationState()` / `setNavigationState(state)`
+
 ```js
 // Override to save page-specific state (filters, sort, scroll)
-getNavigationState()
+getNavigationState();
 // @returns {Object|null}
 
 // Override to restore page-specific state
-setNavigationState(state)
+setNavigationState(state);
 // @param {Object} state - Previously captured state
 ```
 
@@ -577,15 +603,17 @@ class LibraryPage extends Page {
 ```
 
 #### `_renderMediaCard(item, isLandscape, type, contextType)`
+
 ```js
-_renderMediaCard(item, isLandscape = false, type = 'poster', contextType = null)
+_renderMediaCard(item, (isLandscape = false), (type = 'poster'), (contextType = null));
 ```
 
 Renders a standardized media card using `CardRenderer`. Convenience method available in all pages.
 
 #### `restoreScrollFocusWhenReady()`
+
 ```js
-restoreScrollFocusWhenReady()
+restoreScrollFocusWhenReady();
 ```
 
 Call from async pages after content is fully loaded to trigger scroll/focus restoration.
@@ -626,11 +654,15 @@ class LibraryPage extends Page {
             <div class="library-page">
                 <h1>${this._state.libraryName || 'Library'}</h1>
                 <div class="library-grid" id="lib-grid">
-                    ${items.map(item => `
+                    ${items
+                        .map(
+                            (item) => `
                         <div class="media-card" data-item-id="${item.Id}">
                             ${item.Name}
                         </div>
-                    `).join('')}
+                    `
+                        )
+                        .join('')}
                 </div>
             </div>
         `;
@@ -696,6 +728,7 @@ import { eventBus } from './EventBus.js';
 ### API
 
 #### `eventBus.on(event, callback)`
+
 ```js
 const unsubscribe = eventBus.on('user:login', (user) => {
     console.log('Logged in:', user);
@@ -708,6 +741,7 @@ Subscribe to an event. **Naming convention:** `namespace:action` (e.g., `player:
 > **Prefer `this.on(event, handler)` in Component subclasses** — it auto-unsubscribes on destroy.
 
 #### `eventBus.once(event, callback)`
+
 ```js
 eventBus.once('app:ready', () => {
     console.log('App initialized (fires only once)');
@@ -718,6 +752,7 @@ eventBus.once('app:ready', () => {
 Subscribe to an event that fires only once, then auto-removes.
 
 #### `eventBus.off(event, callback)`
+
 ```js
 eventBus.off('user:login', myHandler);
 ```
@@ -725,6 +760,7 @@ eventBus.off('user:login', myHandler);
 Remove a specific handler from an event.
 
 #### `eventBus.emit(event, ...args)`
+
 ```js
 eventBus.emit('player:play', { item: movie, resume: false });
 ```
@@ -732,12 +768,14 @@ eventBus.emit('player:play', { item: movie, resume: false });
 Emit an event to all subscribers with optional arguments.
 
 #### `eventBus.clear(event)`
+
 ```js
 eventBus.clear('user:login'); // Remove all handlers for one event
-eventBus.clear();             // Remove ALL handlers for ALL events
+eventBus.clear(); // Remove ALL handlers for ALL events
 ```
 
 #### `eventBus.listenerCount(event)`
+
 ```js
 const count = eventBus.listenerCount('player:play');
 // @returns {number}
@@ -745,26 +783,26 @@ const count = eventBus.listenerCount('player:play');
 
 ### Common Events (Reference)
 
-| Event | Payload | Emitted By |
-|-------|---------|------------|
-| `app:ready` | — | `App.js` |
-| `app:hideSplash` | — | `Page.markReady()` |
-| `app:hidden` / `app:visible` | — | `App.js` (visibility change) |
-| `app:exitRequested` | — | `App.js` (back with no history) |
-| `app:beforeExit` | — | `App.js` (close/background) |
-| `auth:login` | — | AuthManager |
-| `auth:logout` | — | AuthManager |
-| `auth:expired` | — | AuthManager |
-| `auth:switchToProfiles` | — | AuthManager |
-| `router:navigate` | `{ path, params }` | Router |
-| `router:notFound` | `{ path }` | Router |
-| `player:play` | `{ item, resume, mediaSourceId, ... }` | App.js |
-| `key:back` | — | App.js / Platform Adapters |
-| `focus:changed` | Element | FocusManager |
-| `state:{key}` | `newValue, oldValue` | StateManager (for each state change) |
-| `remote:playnow` | `{ itemIds, startIndex, startPositionTicks }` | WebSocketHandler |
-| `syncplay:enabled` / `syncplay:disabled` | — | SyncPlayManager |
-| `prefChanged:{key}` | New value | Settings pages |
+| Event                                    | Payload                                       | Emitted By                           |
+| ---------------------------------------- | --------------------------------------------- | ------------------------------------ |
+| `app:ready`                              | —                                             | `App.js`                             |
+| `app:hideSplash`                         | —                                             | `Page.markReady()`                   |
+| `app:hidden` / `app:visible`             | —                                             | `App.js` (visibility change)         |
+| `app:exitRequested`                      | —                                             | `App.js` (back with no history)      |
+| `app:beforeExit`                         | —                                             | `App.js` (close/background)          |
+| `auth:login`                             | —                                             | AuthManager                          |
+| `auth:logout`                            | —                                             | AuthManager                          |
+| `auth:expired`                           | —                                             | AuthManager                          |
+| `auth:switchToProfiles`                  | —                                             | AuthManager                          |
+| `router:navigate`                        | `{ path, params }`                            | Router                               |
+| `router:notFound`                        | `{ path }`                                    | Router                               |
+| `player:play`                            | `{ item, resume, mediaSourceId, ... }`        | App.js                               |
+| `key:back`                               | —                                             | App.js / Platform Adapters           |
+| `focus:changed`                          | Element                                       | FocusManager                         |
+| `state:{key}`                            | `newValue, oldValue`                          | StateManager (for each state change) |
+| `remote:playnow`                         | `{ itemIds, startIndex, startPositionTicks }` | WebSocketHandler                     |
+| `syncplay:enabled` / `syncplay:disabled` | —                                             | SyncPlayManager                      |
+| `prefChanged:{key}`                      | New value                                     | Settings pages                       |
 
 ---
 
@@ -783,14 +821,16 @@ import { state } from './StateManager.js';
 ### API
 
 #### `state.get(key, defaultValue)`
+
 ```js
-state.get('user:authenticated');          // false
-state.get('user:data');                   // { Name: 'John', ... }
-state.get('server:url');                  // 'http://192.168.1.100:8096'
-state.get('nonexistent', 'fallback');     // 'fallback'
+state.get('user:authenticated'); // false
+state.get('user:data'); // { Name: 'John', ... }
+state.get('server:url'); // 'http://192.168.1.100:8096'
+state.get('nonexistent', 'fallback'); // 'fallback'
 ```
 
 #### `state.set(key, value, silent)`
+
 ```js
 state.set('app:layout', 'modern');
 state.set('user:authenticated', true);
@@ -798,21 +838,25 @@ state.set('user:data', { Name: 'Jane' }, true); // silent — no subscriber noti
 ```
 
 #### `state.update(key, updater)`
+
 ```js
 state.update('player:position', (oldPos) => oldPos + 1);
 ```
 
 #### `state.delete(key)`
+
 ```js
 state.delete('temp:cache');
 ```
 
 #### `state.has(key)`
+
 ```js
 if (state.has('user:data')) { ... }
 ```
 
 #### `state.subscribe(key, callback)`
+
 ```js
 const unsubscribe = state.subscribe('app:layout', (newVal, oldVal) => {
     console.log(`Layout changed from ${oldVal} to ${newVal}`);
@@ -822,6 +866,7 @@ const unsubscribe = state.subscribe('app:layout', (newVal, oldVal) => {
 #### `state.unsubscribe(key, callback)`
 
 #### `state.getAll()`
+
 ```js
 console.log(state.getAll()); // { 'app:layout': 'modern', 'user:authenticated': true, ... }
 ```
@@ -830,19 +875,19 @@ console.log(state.getAll()); // { 'app:layout': 'modern', 'user:authenticated': 
 
 ### Common State Keys (Reference)
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `app:layout` | `'classic'` or `'modern'` | Current layout mode |
-| `user:authenticated` | `boolean` | Whether user is logged in |
-| `user:data` | `Object` | Current user object |
-| `user:sessionCount` | `number` | Number of stored sessions |
-| `server:url` | `string` | Server base URL |
-| `server:connected` | `boolean` | Server connection status |
-| `server:offline` | `boolean` | Whether server is unreachable |
-| `router:currentPath` | `string` | Current route path |
-| `router:currentParams` | `Object` | Current route params |
-| `player:contextType` | `string` | Playback context type |
-| `player:contextId` | `string` | Playback context ID |
+| Key                    | Type                      | Description                   |
+| ---------------------- | ------------------------- | ----------------------------- |
+| `app:layout`           | `'classic'` or `'modern'` | Current layout mode           |
+| `user:authenticated`   | `boolean`                 | Whether user is logged in     |
+| `user:data`            | `Object`                  | Current user object           |
+| `user:sessionCount`    | `number`                  | Number of stored sessions     |
+| `server:url`           | `string`                  | Server base URL               |
+| `server:connected`     | `boolean`                 | Server connection status      |
+| `server:offline`       | `boolean`                 | Whether server is unreachable |
+| `router:currentPath`   | `string`                  | Current route path            |
+| `router:currentParams` | `Object`                  | Current route params          |
+| `player:contextType`   | `string`                  | Playback context type         |
+| `player:contextId`     | `string`                  | Playback context ID           |
 
 ### State Change Events
 
@@ -870,6 +915,7 @@ import { router } from './core/Router.js';
 ### API
 
 #### `router.register(pattern, PageClass)`
+
 ```js
 router.register('/home', HomePage);
 router.register('/library/:id', LibraryPage);
@@ -878,13 +924,16 @@ router.register('/player/:id/:resume', PlayerPage);
 
 // Can also register plain objects (for redirects):
 router.register('/', {
-    init: () => { router.navigate('/home', { replace: true }); }
+    init: () => {
+        router.navigate('/home', { replace: true });
+    }
 });
 ```
 
 Route patterns use `:param` syntax for dynamic segments.
 
 #### `router.navigate(path, options)`
+
 ```js
 // Standard navigation (adds to history)
 router.navigate('/details/movie-123');
@@ -896,13 +945,14 @@ router.navigate('/home', { replace: true });
 router.navigate('/library/movies', { state: { filter: 'genre:action' } });
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `replace` | `boolean` | `false` | Replace current history entry |
-| `state` | `Object` | `null` | Additional state for the new page |
-| `isBack` | `boolean` | `false` | Flag as back navigation (restores state) |
+| Option    | Type      | Default | Description                              |
+| --------- | --------- | ------- | ---------------------------------------- |
+| `replace` | `boolean` | `false` | Replace current history entry            |
+| `state`   | `Object`  | `null`  | Additional state for the new page        |
+| `isBack`  | `boolean` | `false` | Flag as back navigation (restores state) |
 
 #### `router.back()`
+
 ```js
 const couldGoBack = router.back(); // @returns {boolean}
 ```
@@ -910,6 +960,7 @@ const couldGoBack = router.back(); // @returns {boolean}
 Navigates to the previous page in history. Returns `false` if there's no history.
 
 #### `router.reset(path)`
+
 ```js
 router.reset('/home');
 ```
@@ -917,24 +968,28 @@ router.reset('/home');
 Clears all history and navigates to a path (with `replace: true`).
 
 #### `router.getCurrentPath()`
+
 ```js
 const path = router.getCurrentPath();
 // @returns {string} e.g., '/details/movie-123'
 ```
 
 #### `router.getCurrentPage()`
+
 ```js
 const page = router.getCurrentPage();
 // @returns {Page|null}
 ```
 
 #### `router.canGoBack()`
+
 ```js
 if (router.canGoBack()) { ... }
 // @returns {boolean}
 ```
 
 #### `router.reload()`
+
 ```js
 router.reload();
 ```
@@ -966,18 +1021,23 @@ This is primarily used internally by `Router` and `Page`, but can be leveraged f
 ### Key Methods
 
 #### `captureState(pageInstance)`
+
 Called by Router before destroying the current page. Captures:
+
 - Scroll position
 - Focus section and element (by index, selector, or data attributes)
 - Page-specific state via `pageInstance.getNavigationState()`
 
 #### `restorePageState(pageInstance, state)`
+
 Restores page-specific state (filters, sort) via `pageInstance.setNavigationState()`.
 
 #### `restoreScrollFocus(pageInstance, state)`
+
 Restores scroll position and focus after the page's `ready` Promise resolves.
 
 #### `restoreState(pageInstance, state, callback)`
+
 Legacy method that calls both `restorePageState` and `restoreScrollFocus`.
 
 ### Focus Restoration Strategy
@@ -1023,11 +1083,11 @@ class FavoriteButton extends Component {
     async toggle() {
         // API call...
         this.isFavorite = !this.isFavorite;
-        
+
         // Direct DOM manipulation (more performant than full re-render for small changes)
         this.el.classList.toggle('active');
         this.el.innerHTML = this._getIcon();
-        
+
         this.onChange(this.isFavorite);
     }
 }
@@ -1042,6 +1102,7 @@ class FavoriteButton extends Component {
 Demonstrates complex patterns: async data loading, event subscriptions, FocusManager integration, and multiple lifecycle hooks.
 
 **Key patterns demonstrated:**
+
 - **Delegated event binding** via `_bindItem()` to handle Magic Remote quirks
 - **MutationObserver** to track focus changes for auto-expand/collapse
 - **Dynamic children** — library items fetched async and inserted into DOM
@@ -1057,6 +1118,7 @@ Demonstrates complex patterns: async data loading, event subscriptions, FocusMan
 A reusable grid component for displaying media items with "See More" functionality.
 
 **Key patterns demonstrated:**
+
 - **Generic component** — accepts config with `id`, `title`, `items`, `limit`, callbacks
 - **Event delegation** — single click/mousedown listener on the grid container handles all card clicks
 - **Lazy loading** — integrates with `LazyLoader` for image lazy loading
@@ -1079,6 +1141,7 @@ The Toast notification system does NOT extend `Component`. It's a plain class th
 A complex UI element implemented as a plain class (not extending `Component`).
 
 **Key patterns:**
+
 - **Render then init pattern** — `render()` produces HTML, `init()` wires up events after DOM insertion
 - **FocusManager integration** — registers a focus section with directional movement (prev/next slide)
 - **EventBus subscriptions** — listens for `focus:changed` to pause/resume auto-scroll
@@ -1097,14 +1160,17 @@ class ChaptersModal extends BaseMenu {
         super(osdController);
         this.isModal = true; // Full-screen overlay
     }
-    
+
     show() {
         this._render();
         super.show();
     }
-    
+
     handleKey(key) {
-        if (key === 'Back') { this.hide(); return true; }
+        if (key === 'Back') {
+            this.hide();
+            return true;
+        }
         return false;
     }
 }
@@ -1116,21 +1182,21 @@ class ChaptersModal extends BaseMenu {
 
 ### 1. Component vs. Plain Class
 
-| Use `Component` | Use a Plain Class |
-|----------------|-------------------|
+| Use `Component`                          | Use a Plain Class                 |
+| ---------------------------------------- | --------------------------------- |
 | Reusable UI element (button, card, grid) | Singleton utility (Toast, Logger) |
-| Part of a page's hierarchy | Backend service (API, Storage) |
-| Has lifecycle events | Manager class (FocusManager) |
-| Needs auto-cleanup | Always-present overlay |
+| Part of a page's hierarchy               | Backend service (API, Storage)    |
+| Has lifecycle events                     | Manager class (FocusManager)      |
+| Needs auto-cleanup                       | Always-present overlay            |
 
 ### 2. State Management
 
-| Approach | When to Use |
-|----------|-------------|
-| `this._state` + `setState()` | Component-local state (form inputs, toggle states) |
-| `state.set()` / `state.get()` | App-wide state (auth, layout, server info) |
-| `this.props` | Immutable values passed from parent |
-| DOM directly (classList, innerHTML) | Simple visual toggles without full re-render |
+| Approach                            | When to Use                                        |
+| ----------------------------------- | -------------------------------------------------- |
+| `this._state` + `setState()`        | Component-local state (form inputs, toggle states) |
+| `state.set()` / `state.get()`       | App-wide state (auth, layout, server info)         |
+| `this.props`                        | Immutable values passed from parent                |
+| DOM directly (classList, innerHTML) | Simple visual toggles without full re-render       |
 
 ### 3. Event Patterns
 
@@ -1143,7 +1209,7 @@ class ChaptersModal extends BaseMenu {
 
 - **Use event delegation** for lists/grids (single listener on container)
 - **`onmousedown` + `onclick`** for TV compatibility (Magic Remote sends both)
-- **400ms debounce** to prevent double-activation on WebOS
+- **40ms debounce** (`KEY_DEBOUNCE_MS` in FocusManager) to prevent double-activation on WebOS
 - **Attach listeners in `onMounted()`** after DOM is inserted
 
 ### 5. Focus Management (TV Remote)
@@ -1185,32 +1251,32 @@ Always clean up in `destroy()` / `onDestroyed()`:
 
 ## Quick Reference
 
-| Need | Import |
-|------|--------|
-| Base class | `import Component from '../core/Component.js'` |
-| Base page | `import Page from '../pages/Page.js'` |
-| Events | `import { eventBus } from '../core/EventBus.js'` |
-| State | `import { state } from '../core/StateManager.js'` |
-| Router | `import { router } from '../core/Router.js'` |
+| Need             | Import                                                         |
+| ---------------- | -------------------------------------------------------------- |
+| Base class       | `import Component from '../core/Component.js'`                 |
+| Base page        | `import Page from '../pages/Page.js'`                          |
+| Events           | `import { eventBus } from '../core/EventBus.js'`               |
+| State            | `import { state } from '../core/StateManager.js'`              |
+| Router           | `import { router } from '../core/Router.js'`                   |
 | Navigation state | `import { navigationState } from '../core/NavigationState.js'` |
-| Logger | `import { logger } from '../utils/Logger.js'` |
-| Focus manager | `import { focusManager } from '../ui/FocusManager.js'` |
-| Card rendering | `import CardRenderer from '../utils/CardRenderer.js'` |
-| API | `import { api, auth } from '../api/index.js'` |
+| Logger           | `import { logger } from '../utils/Logger.js'`                  |
+| Focus manager    | `import { focusManager } from '../ui/FocusManager.js'`         |
+| Card rendering   | `import CardRenderer from '../utils/CardRenderer.js'`          |
+| API              | `import { api, auth } from '../api/index.js'`                  |
 
 ---
 
 ## File Locations
 
-| File | Purpose |
-|------|---------|
-| `src/core/Component.js` | Base component class |
-| `src/core/EventBus.js` | Global event system |
-| `src/core/StateManager.js` | Observable state |
-| `src/core/Router.js` | Hash-based router |
-| `src/core/NavigationState.js` | Navigation history state |
-| `src/pages/Page.js` | Base page class |
-| `src/utils/Logger.js` | Logging utility |
-| `src/ui/FocusManager.js` | TV remote focus management |
-| `src/utils/CardRenderer.js` | Media card HTML generation |
-| `src/ui/LayoutManager.js` | App layout management |
+| File                          | Purpose                    |
+| ----------------------------- | -------------------------- |
+| `src/core/Component.js`       | Base component class       |
+| `src/core/EventBus.js`        | Global event system        |
+| `src/core/StateManager.js`    | Observable state           |
+| `src/core/Router.js`          | Hash-based router          |
+| `src/core/NavigationState.js` | Navigation history state   |
+| `src/pages/Page.js`           | Base page class            |
+| `src/utils/Logger.js`         | Logging utility            |
+| `src/ui/FocusManager.js`      | TV remote focus management |
+| `src/utils/CardRenderer.js`   | Media card HTML generation |
+| `src/ui/LayoutManager.js`     | App layout management      |

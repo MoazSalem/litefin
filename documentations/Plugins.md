@@ -6,14 +6,27 @@ Litefin features a modular plugin system that allows extending the application's
 
 The plugin system is built around three main components:
 
-1.  **PluginManager**: The central hub that loads bundled plugins, manages their lifecycle (init/destroy), and broadcasts app events.
-2.  **PluginAPI**: A sandboxed interface provided to each plugin. Plugins should only interact with Litefin through this API to ensure stability and compatibility.
-3.  **ServerPluginClient**: A specialized client that detects and communicates with server-side Jellyfin plugins (like Intro Skipper).
+1.  **PluginManager** (`src/plugins/PluginManager.js`): The central hub that loads bundled plugins, manages their lifecycle (init/enable/disable/destroy), and broadcasts app events.
+2.  **PluginAPI** (`src/plugins/PluginAPI.js`): A sandboxed interface provided to each plugin. Plugins should only interact with Litefin through this API to ensure stability and compatibility.
+3.  **ServerPluginClient** (`src/plugins/ServerPluginClient.js`): A specialized client that detects and communicates with server-side Jellyfin plugins (like Intro Skipper) via hybrid detection strategy (admin `/Plugins` query + endpoint probing for non-admin users).
+
+## Bundled Plugins
+
+Litefin ships with 4 bundled plugins registered in `PluginManager.js`:
+
+| Plugin ID         | Description                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| `skip-intro`      | Skip buttons for TV show intros and recaps via server-side Intro Skipper                          |
+| `syncplay`        | Real-time synchronized group playback via WebSockets                                              |
+| `local-intros`    | Play custom local video files before media content                                                |
+| `mdblist-ratings` | Fetch and display IMDb, Rotten Tomatoes, Metacritic, Trakt, TMDB, and Letterboxd ratings on cards |
 
 ## Creating a Plugin
 
 ### 1. Directory Structure
+
 Create a new directory for your plugin in `src/plugins/installed/`:
+
 ```
 src/plugins/installed/my-plugin/
 ├── index.js      (Main entry point)
@@ -21,6 +34,7 @@ src/plugins/installed/my-plugin/
 ```
 
 ### 2. Plugin Implementation
+
 Your `index.js` must export a default object that implements the plugin interface:
 
 ```javascript
@@ -56,6 +70,10 @@ export default {
         });
     },
 
+    onPlayerStart(item, api) {
+        api.log.info('Playback started:', item.Name);
+    },
+
     destroy(api) {
         api.log.info('Plugin shutting down');
     }
@@ -63,15 +81,20 @@ export default {
 ```
 
 ### 3. Lifecycle Hooks
+
 - `init(api)`: Called when the plugin is loaded and enabled.
-- `onPlayerStart(item, api)`: Triggered when a new media item starts playing.
-- `onTimeUpdate(pos, dur, api)`: High-frequency update during playback.
+- `prepareItemPlayback(item, playbackContext, api)`: Called before playback starts, allowing the plugin to modify the playback context or item.
+- `onPlayerStart(item, player, osd, api)`: Triggered when a new media item starts playing.
+- `onTimeUpdate(pos, dur, api)`: High-frequency update during playback (via `notifyTimeUpdate`).
 - `onPlayerStop(api)`: Cleanup when playback ends.
 - `onPageLoad(pageId, pageEl, api)`: Triggered when a non-player page (e.g., 'home', 'details') is loaded.
 - `onPageUnload(pageId, api)`: Triggered when a page is closed.
 - `destroy(api)`: Final cleanup (automatic subscriptions are cleaned up by the API).
 
+Additional PluginManager methods: `getPlugin(pluginId)`, `isEnabled(pluginId)`, `getPluginIds()`, `getPluginList()`, `setPluginEnabled(pluginId, enabled)`, `checkServerDependency(pluginId)`, `handleWidgetKey(key, focusedEl)`.
+
 ### 4. Registration
+
 Register your plugin in `src/plugins/PluginManager.js` by adding it to the `BUNDLED_PLUGINS` array:
 
 ```javascript
@@ -92,17 +115,19 @@ Litefin uses a **Hybrid Detection Strategy** to find server-side plugins:
 2.  **Non-Admin Users**: Since regular users cannot view the plugin list, Litefin performs **Endpoint Probing**. It attempts to call a characteristic endpoint of the server plugin. A successful response confirms the plugin is present.
 
 ### Adding a Server Probe
+
 If your Litefin plugin depends on a new server plugin, register a probe in `src/plugins/ServerPluginClient.js`:
 
 ```javascript
 const KNOWN_PROBES = {
     'my-server-plugin': {
-        probeEndpoint: (itemId) => `/Items/${itemId}/MyPluginData`,
+        probeEndpoint: (itemId) => `/Items/${itemId}/MyPluginData`
     }
 };
 ```
 
 ### Using Server Data in a Plugin
+
 Once a `serverDependency` is declared, your plugin's `init()` will only be called if the server plugin is detected. You can then use the `api.serverPlugins` client:
 
 ```javascript
@@ -113,7 +138,9 @@ async onPlayerStart(item, api) {
 ```
 
 ## Security & Sandbox
-Plugins are **sandboxed** via the `PluginAPI`. 
+
+Plugins are **sandboxed** via the `PluginAPI`.
+
 - **DO NOT** import internal Litefin modules directly (e.g., `src/core/Router.js`).
-- **DO** use `api.on()`, `api.showToast()`, and `api.getStorage()` for all operations.
+- **DO** use `api.on()` (auto-unsubscribed), `api.showToast()`, `api.getStorage()`, `api.addOSDWidget()`, and `api.serverPlugins` for all operations.
 - This ensures your plugin doesn't break if Litefin's internal directory structure changes.
