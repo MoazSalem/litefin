@@ -275,8 +275,8 @@ class PlayerPage extends Page {
 
             // Sync the active item to the instance that PlayQueue just minted.
             // This prevents duplicate-fetch bugs with plugins like Local Intros.
-            // Rather than replacing the item completely (which discards metadata fields 
-            // like MediaSources or Chapters that weren't returned by collection or episode 
+            // Rather than replacing the item completely (which discards metadata fields
+            // like MediaSources or Chapters that weren't returned by collection or episode
             // query lists), we merge the fetched details onto the queue instance in-place.
             const queueItem = playQueue.getCurrentItem();
             if (queueItem && queueItem.Id === this._item.Id) {
@@ -738,6 +738,25 @@ class PlayerPage extends Page {
         this._player.on('restarting', () => {
             log.info('Player restarting (quality change), showing loading');
             this._showLoading(true);
+
+            // Report playback stopped for the old session BEFORE the restart
+            // replaces it. Otherwise the server keeps the old ffmpeg/remux
+            // process running indefinitely — the restart suppresses STOP
+            // events from JellyfinPlayer.stop(), so no stop report is sent.
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            if (mediaSource?.PlaySessionId && this._item && !this._item.isIntro) {
+                // Use sync XHR (isSync=true) to guarantee the stop signal
+                // reaches the server before the new session starts.
+                this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
+                    log.warn('Failed to report playback stopped during restart:', err);
+                });
+            }
+
+            // Reset start-report guard so the upcoming 'playing' event
+            // reports playbackStart for the new session and updates the
+            // cached media source / play method for accurate stop reporting.
+            this._hasReportedStart = false;
         });
 
         this._player.on('playing', () => {
@@ -839,6 +858,11 @@ class PlayerPage extends Page {
         // Reset playback ended state before beginning new playback session.
         // This ensures subsequent video loads or queue transitions start clean.
         this._isPlaybackEnded = false;
+
+        // Clear cached play method so we never bleed the previous item's value
+        // into the new session (relevant for queue auto-advance where onInit
+        // is not called between items).
+        this._cachedPlayMethod = null;
 
         // === Plugin System ===
         // Allow plugins to perform late-stage preparation before playback actually
@@ -967,10 +991,10 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
-            // Build player options. If a specific media source version was pre-selected 
-            // on the details screen (e.g. 720p vs 1080p), ensure we pass the target 
-            // mediaSourceId down as a fallback even if the client-side metadata matching 
-            // did not resolve (for example if the media sources array was empty or lost 
+            // Build player options. If a specific media source version was pre-selected
+            // on the details screen (e.g. 720p vs 1080p), ensure we pass the target
+            // mediaSourceId down as a fallback even if the client-side metadata matching
+            // did not resolve (for example if the media sources array was empty or lost
             // during page transitions).
             const playOptions = {
                 item: item, // Pass full item which might have Chapters
@@ -1157,7 +1181,7 @@ class PlayerPage extends Page {
             const isSingle = !album || album.trim().toLowerCase() === trackName.trim().toLowerCase();
 
             // Format album portion if not a single, prepending a bullet character for spacing.
-            const albumStr = (!isSingle && album) ? ` • ${album}` : '';
+            const albumStr = !isSingle && album ? ` • ${album}` : '';
 
             // Format year portion if available, prepending a bullet character for spacing.
             const yearStr = this._item.ProductionYear ? ` • ${this._item.ProductionYear}` : '';
@@ -1956,10 +1980,15 @@ class PlayerPage extends Page {
         }
 
         // 3. Report progress periodically (every 10 seconds approx)
-        const now = Date.now();
-        if (!this._lastReportTime || now - this._lastReportTime > 10000) {
-            this._reportPlaybackProgress();
-            this._lastReportTime = now;
+        // Skip progress reporting until playback start has been reported — prevents
+        // sending payloads before _currentPlayMethod is resolved, which would send
+        // a null/undefined PlayMethod and cause the dashboard to show "Direct Play".
+        if (this._hasReportedStart) {
+            const now = Date.now();
+            if (!this._lastReportTime || now - this._lastReportTime > 10000) {
+                this._reportPlaybackProgress();
+                this._lastReportTime = now;
+            }
         }
 
         // 4. Forward tick to plugin manager for widget visibility evaluation
@@ -2319,7 +2348,12 @@ class PlayerPage extends Page {
         // PlayMethod enum has no 'Remux' value and returns HTTP 400 if we send it.
         // Map it to 'DirectStream' which is the closest server-side equivalent.
         const rawPlayMethod = this._player?._currentPlayMethod || this._cachedPlayMethod;
-        const serverPlayMethod = rawPlayMethod === 'Remux' ? 'DirectStream' : rawPlayMethod;
+        // If both sources are falsy (e.g. race condition before _currentPlayMethod is resolved),
+        // derive a reasonable default from the media source. Never send null — the dashboard
+        // may default to showing "Direct Play" for null/unknown methods.
+        const fallbackPlayMethod = mediaSource?.TranscodingUrl ? 'DirectStream' : 'DirectPlay';
+        const resolvedPlayMethod = rawPlayMethod || fallbackPlayMethod;
+        const serverPlayMethod = resolvedPlayMethod === 'Remux' ? 'DirectStream' : resolvedPlayMethod;
 
         // Build base state
         const state = {
@@ -2503,12 +2537,12 @@ class PlayerPage extends Page {
             // This prevents minor timing differences between player backend and server
             // from leaving the item unmarked as watched and failing scrobble sync.
             if (this._isPlaybackEnded) {
-                const durationTicks = this._player?.getDurationTicks?.() ||
-                    mediaSource?.RunTimeTicks ||
-                    this._item?.RunTimeTicks ||
-                    0;
+                const durationTicks =
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
                 if (durationTicks > 0) {
-                    log.info(`Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`);
+                    log.info(
+                        `Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`
+                    );
                     rawPosition = durationTicks;
                 }
             }
@@ -2610,6 +2644,15 @@ class PlayerPage extends Page {
                 log.info('Reporting playback stopped (async), position:', positionTicks);
                 await api.reportPlaybackStopped(data);
             }
+
+            // 4. Clear server-side resume point if playback completed naturally
+            // This prevents stale caches on the server that require a restart to clear.
+            if (this._isPlaybackEnded && this._item?.Id && !this._item.isIntro) {
+                log.info('Playback completed naturally — deleting server resume point');
+                api.deletePlaybackProgress(this._item.Id).catch((err) => {
+                    log.warn('Failed to delete playback progress:', err);
+                });
+            }
         } catch (error) {
             log.warn('Failed to report playback stopped:', error);
         }
@@ -2620,6 +2663,12 @@ class PlayerPage extends Page {
      * Called when app is about to close or go to background
      */
     _handleAppExit() {
+        // Skip if already in the process of stopping playback
+        if (this._isExiting) {
+            log.info('App exit while already exiting — skipping duplicate stop report');
+            return;
+        }
+
         // Skip reporting on exit if running in private/ghost mode
         if (this._isGhostMode) {
             log.info('Ghost Mode is active: skipping app exit playback stopped report');
@@ -2638,15 +2687,21 @@ class PlayerPage extends Page {
             return;
         }
 
-        // Use synchronous-ish reporting (fire and forget, no await)
-        // App may close before async completes
+        // Stop the backend player immediately to free resources and tear down
+        // the media pipeline (video element, HLS.js, AVPlay, WebOSPlayer, etc.)
+        if (this._player?.stop) {
+            this._player.stop().catch((err) => {
+                log.warn('Failed to stop player on exit:', err);
+            });
+        }
+
+        // Use centralized reporting which handles LiveStreamId close, full
+        // payload construction, isPlaybackEnded position override, keepalive,
+        // and deletePlaybackProgress for completed items.
+        // Use synchronous XHR (isSync=true) for the same reason as _stopAndExit
+        // — the app context may be destroyed before an async fetch completes.
         if (this._item) {
-            api.reportPlaybackStopped({
-                ItemId: this._item.Id,
-                PlaySessionId: playSessionId,
-                MediaSourceId: mediaSource?.Id,
-                PositionTicks: positionTicks
-            }).catch((err) => {
+            this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
                 log.warn('Failed to report on exit:', err);
             });
         }
@@ -2720,10 +2775,12 @@ class PlayerPage extends Page {
             }
 
             // Report stopped with captured values.
-            // We do NOT await this request so the player page closes and navigates instantly.
-            // Since reportPlaybackStopped uses fetch with keepalive: true, the request is
-            // guaranteed to complete in the background even if the page is destroyed.
-            this._reportPlaybackStopped(mediaSource, positionTicks, false).catch((err) => {
+            // We use synchronous XHR (isSync=true) so the request completes BEFORE the
+            // page navigates and gets destroyed. fetch with keepalive:true is unreliable
+            // on webOS/Tizen where the page context may be torn down before the fetch
+            // finishes — causing the stop signal to never reach the server and transcoding
+            // to continue indefinitely.
+            this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
                 log.warn('Background stop report failed:', err);
             });
         } catch (error) {
@@ -2753,7 +2810,8 @@ class PlayerPage extends Page {
         // to the initial entry point.
         // ----------------------------------------------------------------
         const isTvChannel = this._item?.Type === 'TvChannel';
-        const shouldNavigateTv = isTvChannel && (this.params.fromGuide === 'true' || this.params.fromDetails === 'true');
+        const shouldNavigateTv =
+            isTvChannel && (this.params.fromGuide === 'true' || this.params.fromDetails === 'true');
 
         if (
             this._item &&

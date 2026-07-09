@@ -95,7 +95,6 @@ export class ApiClient {
         return !!(info.ServerName && (!info.ProductName || info.ProductName.toLowerCase().includes('emby')));
     }
 
-
     // ========================================================================
     // Configuration Methods
     // ========================================================================
@@ -166,8 +165,8 @@ export class ApiClient {
         if (this.isEmby()) {
             /*
              * Emby auth header format uses the 'Emby' scheme.
-             * It requires 'UserId' (if authenticated) but does NOT carry the 
-             * 'Token' inside the Authorization header itself. Instead, the token 
+             * It requires 'UserId' (if authenticated) but does NOT carry the
+             * 'Token' inside the Authorization header itself. Instead, the token
              * is transmitted in the separate 'X-Emby-Token' request header.
              */
             const parts = [
@@ -333,14 +332,20 @@ export class ApiClient {
         try {
             // Create abort controller for timeout
             // Support per-request timeout override via options.timeout
-            const timeout = options.timeout || REQUEST_TIMEOUT;
+            // IMPORTANT: keepalive requests (e.g. reportPlaybackStopped) must NOT
+            // have an AbortSignal — the Fetch spec throws a TypeError when both
+            // keepalive:true and signal are present. We skip the timeout entirely
+            // for keepalive requests since they complete in the background anyway.
+            const timeout = options.timeout || (options.keepalive ? 0 : REQUEST_TIMEOUT);
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-            fetchOptions.signal = controller.signal;
+            const timeoutId = timeout ? setTimeout(() => controller.abort(), timeout) : null;
+            if (timeout) {
+                fetchOptions.signal = controller.signal;
+            }
 
-            log.debug(`Fetching ${url} (timeout: ${timeout}ms)...`);
+            log.debug(`Fetching ${url} (timeout: ${timeout || 'none'}ms)...`);
             const response = await fetch(url, fetchOptions);
-            clearTimeout(timeoutId);
+            if (timeoutId) clearTimeout(timeoutId);
 
             // Handle error responses
             if (!response.ok) {
@@ -1159,11 +1164,11 @@ export class ApiClient {
         // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
-        
+
         // Map fill constraints (contain style aspect preservation)
         if (options.fillWidth) params.append('fillWidth', options.fillWidth);
         if (options.fillHeight) params.append('fillHeight', options.fillHeight);
-        
+
         // Map quality and unique content tags
         if (options.quality) params.append('quality', options.quality);
         if (options.tag) params.append('tag', options.tag);
@@ -1182,11 +1187,11 @@ export class ApiClient {
         // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
-        
+
         // Map fill constraints (contain style aspect preservation)
         if (options.fillWidth) params.append('fillWidth', options.fillWidth);
         if (options.fillHeight) params.append('fillHeight', options.fillHeight);
-        
+
         // Map quality settings
         if (options.quality) params.append('quality', options.quality);
 
