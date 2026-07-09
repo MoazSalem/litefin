@@ -559,13 +559,14 @@ class CardRenderer {
                 const minDim = Math.min(width || 0, height || 0);
 
                 /*
-                 * Resolve resolution boundaries based on dimensions
+                 * Resolve resolution boundaries based on dimensions.
+                 * We use relaxed bounds to account for cropped widescreen formats (e.g. 3834x1632 for 4K, 1920x800 for 1080p).
                  */
-                if (maxDim >= 3840 || minDim >= 2160) {
+                if (maxDim >= 3000 || minDim >= 2000) {
                     resolutionLabel = '4K';
-                } else if (maxDim >= 1920 || minDim >= 1080) {
+                } else if (maxDim >= 1600 || minDim >= 900) {
                     resolutionLabel = '1080p';
-                } else if (maxDim >= 1280 || minDim >= 720) {
+                } else if (maxDim >= 1000 || minDim >= 600) {
                     resolutionLabel = '720p';
                 } else if (maxDim > 0) {
                     resolutionLabel = 'SD';
