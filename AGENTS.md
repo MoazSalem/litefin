@@ -16,6 +16,10 @@ npm run build:legacy   # Tizen 3.0+ (Chromium 47, full ES5 transpilation)
 npm run build:debug    # Modern + source maps (on-device debugging)
 npm run dev            # Watch mode (Normal variant)
 npm run serve          # Webpack dev server (Debug variant)
+npm run serve:modern   # Webpack dev server (Modern variant)
+npm run serve:normal   # Webpack dev server (Normal variant)
+npm run serve:legacy   # Webpack dev server (Legacy variant)
+npm run serve:ultra-legacy # Webpack dev server (Ultra-Legacy variant)
 ```
 
 ### Lint & Format
