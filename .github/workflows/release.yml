@@ -36,7 +36,7 @@ jobs:
         id: manifest
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          IPK_FILE="Litefin-${VERSION}-legacy-webos.ipk"
+          IPK_FILE="Litefin-${VERSION}-webOS-Legacy.ipk"
           SHA256=$(sha256sum "$IPK_FILE" | cut -d ' ' -f 1)
           
           cat <<EOF > manifest.json

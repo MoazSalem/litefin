@@ -369,7 +369,7 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
 async function packageModern() {
     // Targeting modern TVs with native support and zero transpilation overhead
     const buildDir = 'dist/modern';
-    const wgtName = `Litefin-${version}-modern.wgt`; // No transpilation
+    const wgtName = `Litefin-${version}-Tizen-Modern.wgt`; // No transpilation
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -378,7 +378,7 @@ async function packageModern() {
 
 async function packageNormal() {
     const buildDir = 'dist/normal';
-    const wgtName = `Litefin-${version}.wgt`; // Default, no suffix
+    const wgtName = `Litefin-${version}-Tizen-Normal.wgt`; // Default Tizen Normal build
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -389,7 +389,7 @@ async function packageNormal() {
 async function packageNormalOblong() {
     const buildDir = 'dist/normal-oblong';
     // Use normal-oblong naming suffix for the Tizen wgt package file
-    const wgtName = `Litefin-${version}-normal-oblong.wgt`;
+    const wgtName = `Litefin-${version}-Tizen-Normal-Oblong.wgt`;
 
     // Copy digital signature files
     copySignatures(buildDir);
@@ -400,7 +400,7 @@ async function packageNormalOblong() {
 
 async function packageTest() {
     const buildDir = 'dist/normal';
-    const wgtName = `litefin.wgt`; // test output
+    const wgtName = `Litefin-Tizen-Test.wgt`; // test output
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -410,7 +410,7 @@ async function packageTest() {
 async function packageDebug() {
     // Debug build ships with source maps — use only for on-device debugging
     const buildDir = 'dist/debug';
-    const wgtName = `Litefin-${version}-debug.wgt`;
+    const wgtName = `Litefin-${version}-Tizen-Debug.wgt`;
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -418,9 +418,9 @@ async function packageDebug() {
 }
 
 async function packageWebos() {
-    // Default normal build shipped as WebOS IPK — matches Tizen's default WGT naming
+    // Default normal build shipped as WebOS IPK
     const buildDir = 'dist/normal';
-    const ipkName = `Litefin-${version}-webos.ipk`;
+    const ipkName = `Litefin-${version}-webOS-Normal.ipk`;
 
     console.info(`Creating ${ipkName}...`);
     await createIpk(buildDir, '.', ipkName);
@@ -429,7 +429,7 @@ async function packageWebos() {
 async function packageWebosModern() {
     // Generate the modern target package for WebOS 6.0+ devices
     const buildDir = 'dist/modern';
-    const ipkName = `Litefin-${version}-modern-webos.ipk`;
+    const ipkName = `Litefin-${version}-webOS-Modern.ipk`;
 
     console.info(`Creating ${ipkName}...`);
     await createIpk(buildDir, '.', ipkName);
@@ -437,7 +437,7 @@ async function packageWebosModern() {
 
 async function packageWebosLegacy() {
     const buildDir = 'dist/legacy';
-    const ipkName = `Litefin-${version}-legacy-webos.ipk`;
+    const ipkName = `Litefin-${version}-webOS-Legacy.ipk`;
 
     console.info(`Creating ${ipkName}...`);
     await createIpk(buildDir, '.', ipkName);
@@ -445,7 +445,7 @@ async function packageWebosLegacy() {
 
 async function packageWebosUltraLegacy() {
     const buildDir = 'dist/ultra-legacy';
-    const ipkName = `Litefin-${version}-ultra-legacy-webos.ipk`;
+    const ipkName = `Litefin-${version}-webOS-Ultra-Legacy.ipk`;
 
     /*
      * Ultra-legacy WebOS targets old webOS 1.x/2.x hardware that does not
@@ -458,7 +458,7 @@ async function packageWebosUltraLegacy() {
 
 async function packageLegacy() {
     const buildDir = 'dist/legacy';
-    const wgtName = `Litefin-${version}-legacy.wgt`;
+    const wgtName = `Litefin-${version}-Tizen-Legacy.wgt`;
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -467,7 +467,7 @@ async function packageLegacy() {
 
 async function packageUltraLegacy() {
     const buildDir = 'dist/ultra-legacy';
-    const wgtName = `Litefin-${version}-ultra-legacy.wgt`;
+    const wgtName = `Litefin-${version}-Tizen-Ultra-Legacy.wgt`;
 
     /*
      * Ultra-legacy targets Tizen 2.3 / Chrome 38 hardware where the background
@@ -539,13 +539,13 @@ const buildPackage = gulp.series(
 );
 
 // Individual Tizen build+package tasks
-const buildPackageModern = gulp.series(syncVersion, cleanDist, webpackModern, packageModern);
-const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
-const buildPackageNormalOblong = gulp.series(syncVersion, cleanDist, webpackNormalOblong, packageNormalOblong);
-const buildPackageTest = gulp.series(syncVersion, cleanDist, webpackNormal, packageTest);
-const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
-const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy, packageUltraLegacy);
-const buildPackageDebug = gulp.series(syncVersion, webpackDebug, packageDebug);
+const buildPackageModern = gulp.series(syncVersion, cleanDist, cleanWgt, webpackModern, packageModern);
+const buildPackageNormal = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormal, packageNormal);
+const buildPackageNormalOblong = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormalOblong, packageNormalOblong);
+const buildPackageTest = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormal, packageTest);
+const buildPackageLegacy = gulp.series(syncVersion, cleanDist, cleanWgt, webpackLegacy, packageLegacy);
+const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, cleanWgt, webpackUltraLegacy, packageUltraLegacy);
+const buildPackageDebug = gulp.series(syncVersion, cleanWgt, webpackDebug, packageDebug);
 
 // Individual WebOS build+package tasks
 const buildPackageWebos = gulp.series(syncVersion, cleanDist, cleanIpk, webpackNormal, packageWebos);

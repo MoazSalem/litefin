@@ -36,8 +36,8 @@ Litefin follows a modular architecture centered around a custom component-based 
 - **Watch Mode (Normal Variant)**: `npm run dev`
 - **Linting**: `npm run lint` / `npm run lint:fix`
 - **Formatting**: `npm run format`
-- **Package Tizen (`.wgt`)**: `npm run package`
-- **Package webOS (`.ipk`)**: `npm run package:webos`
+- **Package Tizen (`.wgt`)**: `npm run package` (Generates all packages)
+- **Package webOS (`.ipk`)**: `npm run package:webos-normal` (Or others)
 
 ### The 8x Build Strategy
 Litefin generates 8 distinct bundles to optimize for different hardware generations:

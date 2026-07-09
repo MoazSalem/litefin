@@ -31,10 +31,10 @@ npm run format:check   # Prettier check only
 
 ```bash
 npm run package                    # All 8 variants (4 WGT + 4 IPK)
-npm run package:modern             # Tizen WGT only
-npm run package:webos              # webOS IPK only
+npm run package:tizen-modern       # Tizen WGT (Modern)
+npm run package:webos-normal       # webOS IPK (Normal)
 npm run package:webos-modern       # webOS IPK (Modern)
-npm run package:test               # Normal build as litefin.wgt
+npm run package:tizen-test         # Normal build as Litefin-Tizen-Test.wgt
 ```
 
 ### Clean
