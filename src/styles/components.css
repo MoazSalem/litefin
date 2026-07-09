@@ -1887,3 +1887,27 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
     }
 }
 
+/*
+ * ── Ultra-Legacy Overrides: Modal Overlay Centering (Chrome <47 / Tizen 2.x) ──
+ * Older browser engines lacking flexbox display defaults will stick modals to the 
+ * top-left. We force the overlay block to relative and align settings-modals 
+ * using an absolute offset centering strategy.
+ */
+html[data-layout-tier="ultra-legacy"] .modal-overlay {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .settings-modal {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    -webkit-transform: translate(-50%, -50%) !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+}
+

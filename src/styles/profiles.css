@@ -437,3 +437,49 @@ html[data-layout-tier="ultra-legacy"] .profiles-add-icon {
     line-height: 160px; /* Force vertical centering based on card height */
     text-align: center;
 }
+
+/* Centering profiles container shell */
+html[data-layout-tier="ultra-legacy"] .profiles-page {
+    display: block !important;
+    text-align: center !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100vh !important;
+    padding-top: 18vh !important;
+}
+
+/* Profiles Grid styling to layout user cards horizontally */
+html[data-layout-tier="ultra-legacy"] .profiles-grid {
+    display: block !important;
+    text-align: center !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .profiles-profile-item {
+    display: inline-block !important;
+    vertical-align: top !important;
+    text-align: center !important;
+    margin: 20px 28px !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .profiles-card {
+    display: inline-block !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .profiles-card-name {
+    display: block !important;
+    margin-top: 18px !important;
+    width: 100% !important;
+}
+
+/* Centering actions row at the bottom */
+html[data-layout-tier="ultra-legacy"] .profiles-bottom {
+    display: block !important;
+    text-align: center !important;
+    margin-top: 64px !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .profiles-sign-out-btn,
+html[data-layout-tier="ultra-legacy"] .profiles-switch-server-btn {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
