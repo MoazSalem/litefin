@@ -1814,19 +1814,45 @@ export class ApiClient {
 export function testServer(address, timeout = 1000, parentSignal = null) {
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
+        let resolved = false;
 
-        // Hard-kill the request at the OS level after `timeout` ms.
-        // This is the key fix — unlike AbortController, xhr.timeout works on
-        // Chromium 29+ and actually terminates the underlying TCP connection.
-        xhr.timeout = timeout;
-
+        // Clean-up and resolution helper to prevent multiple resolutions
         function done(result) {
+            if (resolved) return;
+            resolved = true;
+
+            // Clear our manual backup abort timer to free up system memory
+            if (abortTimer) {
+                clearTimeout(abortTimer);
+                abortTimer = null;
+            }
+
             // Cleanup the parent signal listener before resolving
             if (parentSignal && onParentAbort) {
                 parentSignal.removeEventListener('abort', onParentAbort);
             }
             resolve(result);
         }
+
+        // ====================================================================
+        // MANUAL ABORT BACKUP TIMER (CHROME < 29 COMPATIBILITY)
+        // ====================================================================
+        // Older Chromium versions (like Chrome 26 on WebOS 1.x / Tizen 2.x)
+        // do not natively support xhr.timeout or throw errors when trying to set it.
+        // We set up a manual setTimeout to trigger xhr.abort() after the timeout period.
+        // This stops the request and frees up the browser's limited connection pool.
+        // ====================================================================
+        let abortTimer = setTimeout(() => {
+            try {
+                xhr.abort();
+            } catch (_) {}
+            done(null);
+        }, timeout);
+
+        // Native timeout setting (supported natively in Chromium 29+)
+        try {
+            xhr.timeout = timeout;
+        } catch (_) {}
 
         // If the parent discovery scan was cancelled, abort this probe too
         const onParentAbort = () => {
@@ -1837,7 +1863,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         if (parentSignal) {
             // Already cancelled before we even started
             if (parentSignal.aborted) {
-                resolve(null);
+                done(null);
                 return;
             }
             parentSignal.addEventListener('abort', onParentAbort, { once: true });
@@ -1846,6 +1872,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) return;
 
+            // Non-200 responses (e.g. server offline, not found) resolve as null
             if (xhr.status !== 200) {
                 done(null);
                 return;
