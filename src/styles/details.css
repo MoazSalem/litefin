@@ -1074,3 +1074,44 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .btn-icon-text.active .icon svg {
     fill: currentColor;
 }
+
+
+/*
+ * ── Chrome 26 Quirks Overrides: Details Page Split Layout ────────────────────
+ * Forces a horizontal columns layout for the main info panel and action rows
+ * using the 2009 webkit-box model and classic inline-block fallbacks on Chrome 26.
+ */
+html[data-layout-quirks="c26"] .details-main-split {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-align: start !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+html[data-layout-quirks="c26"] .details-info-col {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-box-flex: 1 !important;
+    width: 0 !important; /* Forces the box model to compute and stretch columns correctly */
+}
+
+/* Fix metadata items wrapping */
+html[data-layout-quirks="c26"] .details-meta-row {
+    display: block !important;
+}
+
+html[data-layout-quirks="c26"] .meta-item {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+/* Fix action buttons horizontal alignment */
+html[data-layout-quirks="c26"] .details-actions {
+    display: block !important;
+}
+
+html[data-layout-quirks="c26"] .details-actions > * {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}

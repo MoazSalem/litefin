@@ -1888,12 +1888,12 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
 }
 
 /*
- * ── Ultra-Legacy Overrides: Modal Overlay Centering (Chrome <47 / Tizen 2.x) ──
+ * ── Chrome 26 Quirks Overrides: Modals & Media Fallbacks ────────────────────
  * Older browser engines lacking flexbox display defaults will stick modals to the 
  * top-left. We force the overlay block to relative and align settings-modals 
  * using an absolute offset centering strategy.
  */
-html[data-layout-tier="ultra-legacy"] .modal-overlay {
+html[data-layout-quirks="c26"] .modal-overlay {
     display: block !important;
     position: fixed !important;
     top: 0 !important;
@@ -1902,12 +1902,20 @@ html[data-layout-tier="ultra-legacy"] .modal-overlay {
     height: 100% !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .settings-modal {
+html[data-layout-quirks="c26"] .settings-modal {
     position: absolute !important;
     top: 50% !important;
     left: 50% !important;
     -webkit-transform: translate(-50%, -50%) !important;
     transform: translate(-50%, -50%) !important;
     margin: 0 !important;
+}
+
+/* Vertical and horizontal centering for fallback text inside media cards */
+html[data-layout-quirks="c26"] .media-fallback {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-box-align: center !important;
+    -webkit-box-pack: center !important;
 }
 

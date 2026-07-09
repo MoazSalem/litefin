@@ -429,8 +429,8 @@
 
 
 /* Perfect centering for icons/initials without flexbox */
-html[data-layout-tier="ultra-legacy"] .profiles-card-initial,
-html[data-layout-tier="ultra-legacy"] .profiles-add-icon {
+html[data-layout-quirks="c26"] .profiles-card-initial,
+html[data-layout-quirks="c26"] .profiles-add-icon {
     display: block;
     width: 100%;
     height: 100%;
@@ -439,7 +439,7 @@ html[data-layout-tier="ultra-legacy"] .profiles-add-icon {
 }
 
 /* Centering profiles container shell */
-html[data-layout-tier="ultra-legacy"] .profiles-page {
+html[data-layout-quirks="c26"] .profiles-page {
     display: block !important;
     text-align: center !important;
     position: relative !important;
@@ -449,37 +449,37 @@ html[data-layout-tier="ultra-legacy"] .profiles-page {
 }
 
 /* Profiles Grid styling to layout user cards horizontally */
-html[data-layout-tier="ultra-legacy"] .profiles-grid {
+html[data-layout-quirks="c26"] .profiles-grid {
     display: block !important;
     text-align: center !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .profiles-profile-item {
+html[data-layout-quirks="c26"] .profiles-profile-item {
     display: inline-block !important;
     vertical-align: top !important;
     text-align: center !important;
     margin: 20px 28px !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .profiles-card {
+html[data-layout-quirks="c26"] .profiles-card {
     display: inline-block !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .profiles-card-name {
+html[data-layout-quirks="c26"] .profiles-card-name {
     display: block !important;
     margin-top: 18px !important;
     width: 100% !important;
 }
 
 /* Centering actions row at the bottom */
-html[data-layout-tier="ultra-legacy"] .profiles-bottom {
+html[data-layout-quirks="c26"] .profiles-bottom {
     display: block !important;
     text-align: center !important;
     margin-top: 64px !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .profiles-sign-out-btn,
-html[data-layout-tier="ultra-legacy"] .profiles-switch-server-btn {
+html[data-layout-quirks="c26"] .profiles-sign-out-btn,
+html[data-layout-quirks="c26"] .profiles-switch-server-btn {
     display: inline-block !important;
     vertical-align: middle !important;
 }

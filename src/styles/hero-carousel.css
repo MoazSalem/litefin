@@ -1034,3 +1034,20 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
 }
 
 
+/*
+ * ── Chrome 26 Quirks Overrides: Carousel Indicators ────────────────────
+ * Older rendering engines lack support for display: flex. We fall back to 
+ * inline-block spacing for the carousel navigation dots so they sit in a 
+ * horizontal row rather than stacking vertically.
+ */
+html[data-layout-quirks="c26"] .hero-indicators {
+    display: block !important;
+    white-space: nowrap !important;
+}
+
+html[data-layout-quirks="c26"] .hero-dot {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+

@@ -692,18 +692,18 @@ html[data-layout-tier="ultra-legacy"] .user-card {
 
 
 /*
- * ── Ultra-Legacy Overrides: Centering & Discovery Header ────────────────────
+ * ── Chrome 26 Quirks Overrides: Centering & Discovery Header ────────────────────
  * Fixes top-left layout alignment by utilizing absolute translate centering,
  * and uses the 2009 webkit-box model to align the discovered server headers.
  */
-html[data-layout-tier="ultra-legacy"] .login-page {
+html[data-layout-quirks="c26"] .login-page {
     display: block !important;
     position: relative !important;
     width: 100% !important;
     height: 100vh !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .login-container {
+html[data-layout-quirks="c26"] .login-container {
     position: absolute !important;
     top: 50% !important;
     left: 50% !important;
@@ -712,7 +712,7 @@ html[data-layout-tier="ultra-legacy"] .login-container {
     margin: 0 !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .discovered-header {
+html[data-layout-quirks="c26"] .discovered-header {
     display: -webkit-box !important;
     -webkit-box-orient: horizontal !important;
     -webkit-box-align: center !important;
@@ -721,19 +721,19 @@ html[data-layout-tier="ultra-legacy"] .discovered-header {
 }
 
 /* Center the discovery scanning network status (spinner + text) */
-html[data-layout-tier="ultra-legacy"] .discovery-status {
+html[data-layout-quirks="c26"] .discovery-status {
     display: block !important;
     text-align: center !important;
     width: 100% !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .discovery-status > * {
+html[data-layout-quirks="c26"] .discovery-status > * {
     display: inline-block !important;
     vertical-align: middle !important;
 }
 
 /* Force discovered server list items to stretch and push version badges to the end */
-html[data-layout-tier="ultra-legacy"] .server-item {
+html[data-layout-quirks="c26"] .server-item {
     display: -webkit-box !important;
     -webkit-box-orient: horizontal !important;
     -webkit-box-align: center !important;
@@ -741,28 +741,28 @@ html[data-layout-tier="ultra-legacy"] .server-item {
     box-sizing: border-box !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .server-name {
+html[data-layout-quirks="c26"] .server-name {
     -webkit-box-flex: 1 !important;
 }
 
 /* Fallback letter centering for user avatar placeholders without flexbox support */
-html[data-layout-tier="ultra-legacy"] .user-avatar-placeholder {
+html[data-layout-quirks="c26"] .user-avatar-placeholder {
     display: block !important;
     text-align: center !important;
     line-height: 170px !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .selected-user .user-avatar-placeholder {
+html[data-layout-quirks="c26"] .selected-user .user-avatar-placeholder {
     line-height: 140px !important;
 }
 
 /* Center the quick-connect block content and description margins */
-html[data-layout-tier="ultra-legacy"] .quick-connect-section:not(.hidden) {
+html[data-layout-quirks="c26"] .quick-connect-section:not(.hidden) {
     display: block !important;
     text-align: center !important;
 }
 
-html[data-layout-tier="ultra-legacy"] .quick-connect-instructions {
+html[data-layout-quirks="c26"] .quick-connect-instructions {
     margin-left: auto !important;
     margin-right: auto !important;
 }
