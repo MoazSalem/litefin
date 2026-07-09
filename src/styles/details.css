@@ -1106,12 +1106,68 @@ html[data-layout-quirks="c26"] .meta-item {
     vertical-align: middle !important;
 }
 
-/* Fix action buttons horizontal alignment */
+/* Fix action buttons horizontal alignment and exclude hidden buttons from display overrides */
 html[data-layout-quirks="c26"] .details-actions {
     display: block !important;
 }
 
-html[data-layout-quirks="c26"] .details-actions > * {
+html[data-layout-quirks="c26"] .details-actions > :not(.hidden) {
     display: inline-block !important;
     vertical-align: middle !important;
+}
+
+/* Disable transitions on details buttons to prevent layout and render lag on TV engines */
+html[data-layout-quirks="c26"] .details-actions .btn,
+html[data-layout-quirks="c26"] .details-actions .btn-icon {
+    -webkit-transition: none !important;
+    transition: none !important;
+}
+
+/* Force outline icons and hide filled icons across all states to prevent focus rendering glitches on Chrome 26 */
+html[data-layout-quirks="c26"] .details-actions .btn .icon-outline,
+html[data-layout-quirks="c26"] .details-actions .btn-icon .icon-outline,
+html[data-layout-quirks="c26"] .details-actions .btn:focus .icon-outline,
+html[data-layout-quirks="c26"] .details-actions .btn.focused .icon-outline,
+html[data-layout-quirks="c26"] .details-actions .btn-icon:focus .icon-outline,
+html[data-layout-quirks="c26"] .details-actions .btn-icon.focused .icon-outline {
+    display: inline-block !important;
+}
+
+html[data-layout-quirks="c26"] .details-actions .btn .icon-filled,
+html[data-layout-quirks="c26"] .details-actions .btn-icon .icon-filled,
+html[data-layout-quirks="c26"] .details-actions .btn:focus .icon-filled,
+html[data-layout-quirks="c26"] .details-actions .btn.focused .icon-filled,
+html[data-layout-quirks="c26"] .details-actions .btn-icon:focus .icon-filled,
+html[data-layout-quirks="c26"] .details-actions .btn-icon.focused .icon-filled {
+    display: none !important;
+}
+
+/* Fix rich metadata rows horizontal and vertical alignment */
+html[data-layout-quirks="c26"] .rich-meta-row {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-align: center !important; /* Center vertically to align label text and chips */
+    width: 100% !important;
+    padding: 10px 0 !important;
+}
+
+html[data-layout-quirks="c26"] .meta-label {
+    display: block !important;
+    width: 120px !important;
+    line-height: normal !important;
+    margin: 0 !important;
+    -webkit-box-sizing: border-box !important;
+    box-sizing: border-box !important;
+}
+
+html[data-layout-quirks="c26"] .meta-value-list {
+    display: block !important;
+    -webkit-box-flex: 1 !important;
+    width: 0 !important;
+}
+
+html[data-layout-quirks="c26"] .meta-chip {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    margin: 4px 8px 4px 0 !important; /* Proper spacing, no vertical overlap */
 }

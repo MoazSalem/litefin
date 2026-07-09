@@ -1488,3 +1488,25 @@ html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):no
     /* Set margin to isolate from rating numeric score values */
     margin-right: 4px;
 }
+
+/*
+ * ── Chrome 26 Quirks Overrides: Media Card Badges Centering ──────────────────
+ * Uses the 2009 webkit-box model to align and center checkmark icons and episode 
+ * numbers inside round card badges, bypassing broken flex alignments.
+ */
+html[data-layout-quirks="c26"] .count-badge,
+html[data-layout-quirks="c26"] .played-badge {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-pack: center !important;
+    -webkit-box-align: center !important;
+}
+
+html[data-layout-quirks="c26"] .count-badge {
+    line-height: 39px !important;
+}
+
+html[data-layout-quirks="c26"] .played-badge svg {
+    display: block !important;
+    margin: 0 !important;
+}

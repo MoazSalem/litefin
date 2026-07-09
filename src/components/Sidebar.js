@@ -760,9 +760,24 @@ class Sidebar extends Component {
             const isExpanding = !this.el.classList.contains('expanded');
             const forceInstant = options.instant || isExpanding;
 
-            const sidebarRect = this.el.getBoundingClientRect();
-            const targetRect = target.getBoundingClientRect();
-            const y = targetRect.top - sidebarRect.top;
+            const contentContainer = this.el.querySelector('.sidebar-content');
+            const scrollTop = contentContainer ? contentContainer.scrollTop : 0;
+
+            // Compute offsetTop cumulatively relative to the main sidebar nav container.
+            // Bypasses getBoundingClientRect() which yields unstable values during active CSS transform animations.
+            let y = 0;
+            let current = target;
+            while (current && current !== this.el && current !== document.body) {
+                y += current.offsetTop || 0;
+                current = current.offsetParent;
+            }
+
+            // Compensate for the internal scroll position of the sidebar links list container
+            if (contentContainer && contentContainer.contains(target)) {
+                y -= scrollTop;
+            }
+
+            const targetHeight = target.offsetHeight || 72;
 
             if (forceInstant) {
                 // Force an instant snap
@@ -770,7 +785,7 @@ class Sidebar extends Component {
                 indicator.style.transition = 'none';
                 indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
-                indicator.style.height = `${targetRect.height}px`;
+                indicator.style.height = `${targetHeight}px`;
                 // Force reflow to ensure the style is applied before transition is re-enabled
                 indicator.offsetHeight;
                 indicator.style.webkitTransition = '';
@@ -778,7 +793,7 @@ class Sidebar extends Component {
             } else {
                 indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
-                indicator.style.height = `${targetRect.height}px`;
+                indicator.style.height = `${targetHeight}px`;
             }
 
             if (!this.el.classList.contains('has-focus')) {
