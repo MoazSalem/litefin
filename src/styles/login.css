@@ -180,12 +180,18 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
 /*
  * ── Ultra-Legacy Overrides: Login buttons (Chrome <47 / Tizen 2.x) ──────────
  */
+html[data-layout-tier="ultra-legacy"] .login-actions {
+    display: block !important;
+    text-align: center !important;
+}
+
 html[data-layout-tier="ultra-legacy"] .login-actions .btn {
-    display: block;
+    display: inline-block !important;
     text-align: center;
     font-size: 0; /* Collapse whitespace between inline-blocks */
     white-space: nowrap;
     line-height: normal;
+    vertical-align: middle;
 }
 
 html[data-layout-tier="ultra-legacy"] .login-actions .btn::before {
@@ -449,8 +455,14 @@ body.app-splash-active .loading-section .loading-spinner {
 /*
  * ── Ultra-Legacy Overrides: User item (Chrome <47 / Tizen 2.x) ────────────
  */
+html[data-layout-tier="ultra-legacy"] .users-grid {
+    display: block !important;
+    text-align: center !important;
+}
+
 html[data-layout-tier="ultra-legacy"] .user-item {
-    display: block;
+    display: inline-block !important;
+    vertical-align: top !important;
     text-align: center;
 }
 
@@ -678,3 +690,115 @@ html[data-layout-tier="ultra-legacy"] .user-card {
     50%       { opacity: 1;   }
 }
 
+
+/*
+ * ── Ultra-Legacy Overrides: Centering & Discovery Header ────────────────────
+ * Fixes top-left layout alignment by utilizing absolute translate centering,
+ * and uses the 2009 webkit-box model to align the discovered server headers.
+ */
+html[data-layout-tier="ultra-legacy"] .login-page {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100vh !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-container {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    -webkit-transform: translate(-50%, -50%) !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .discovered-header {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-align: center !important;
+    -webkit-box-pack: justify !important;
+    width: 100% !important;
+}
+
+/* Center the discovery scanning network status (spinner + text) */
+html[data-layout-tier="ultra-legacy"] .discovery-status {
+    display: block !important;
+    text-align: center !important;
+    width: 100% !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .discovery-status > * {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+/* Force discovered server list items to stretch and push version badges to the end */
+html[data-layout-tier="ultra-legacy"] .server-item {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-align: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .server-name {
+    -webkit-box-flex: 1 !important;
+}
+
+/* Fallback letter centering for user avatar placeholders without flexbox support */
+html[data-layout-tier="ultra-legacy"] .user-avatar-placeholder {
+    display: block !important;
+    text-align: center !important;
+    line-height: 170px !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .selected-user .user-avatar-placeholder {
+    line-height: 140px !important;
+}
+
+/* Center the quick-connect block content and description margins */
+html[data-layout-tier="ultra-legacy"] .quick-connect-section:not(.hidden) {
+    display: block !important;
+    text-align: center !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .quick-connect-instructions {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/*
+ * ── Ultra-Legacy Overrides: Server input fields (Chrome <47 / Tizen 2.x) ────
+ * Older Chromium engines do not support the modern standard Flexbox layout model.
+ * We force a fallback using the 2009 webkit-box model so that protocol, host, 
+ * separator, port inputs, and the connect button stay aligned in a single row.
+ */
+html[data-layout-tier="ultra-legacy"] .server-input-container {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal;
+    -webkit-box-align: center;
+    width: 100%;
+}
+
+html[data-layout-tier="ultra-legacy"] .server-fields-group {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal;
+    -webkit-box-align: center;
+    -webkit-box-flex: 1;
+    margin-right: 12px;
+}
+
+html[data-layout-tier="ultra-legacy"] .server-fields-group > * {
+    display: block;
+}
+
+html[data-layout-tier="ultra-legacy"] .server-host-input {
+    -webkit-box-flex: 1;
+    width: 0; /* Essential for webkit-box-flex to calculate distributing space */
+}
+
+html[data-layout-tier="ultra-legacy"] .connect-btn {
+    height: 70px; /* Match input height explicitly */
+    box-sizing: border-box;
+    display: block;
+}
