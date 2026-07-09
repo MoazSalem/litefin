@@ -94,7 +94,19 @@ function getProbedCodecs() {
 function getWebOSVersion() {
     const userAgent = navigator.userAgent.toLowerCase();
     const match = /(?:chrome|crios|crmo)\/([0-9.]+)/.exec(userAgent);
-    if (!match) return 0;
+    if (!match) {
+        // Ancient WebOS 1.x/2.x platforms use pure WebKit without Chrome in UserAgent.
+        // Fall back to parsing the AppleWebKit version number:
+        //   AppleWebKit/538.2 -> WebOS 2.x
+        //   AppleWebKit/537.41 -> WebOS 1.x
+        const webkitMatch = /applewebkit\/([0-9.]+)/.exec(userAgent);
+        if (webkitMatch) {
+            const webkitVersion = parseFloat(webkitMatch[1]);
+            if (webkitVersion >= 538) return 2;
+            if (webkitVersion >= 537) return 1;
+        }
+        return 1; // Minimum safe fallback instead of 0
+    }
 
     const versionMajor = parseInt(match[1].split('.')[0], 10);
 

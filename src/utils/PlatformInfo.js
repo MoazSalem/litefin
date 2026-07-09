@@ -100,9 +100,10 @@ class PlatformInfo {
             else if (tizenVer >= 3)
                 chromeVersion = 47; // Tizen 3/4 support Flexbox
             else chromeVersion = 34; // Tizen 2.x
-        } else if (/Tizen|WebO?S|NetCast|LG[ -]?Browser/i.test(navigator.userAgent)) {
-            // Ancient Tizen (2.4) and WebOS (1.x/2.x) use pure WebKit without Chrome branding
-            chromeVersion = 34;
+        } else if (/Tizen|Web[O0]?S|NetCast|LG[ -]?Browser/i.test(navigator.userAgent)) {
+            // Ancient Tizen (2.4) and WebOS (1.x/2.x) use pure WebKit without Chrome branding.
+            // Setting this to 26 ensures quirks mode (data-layout-quirks="c26") is enabled.
+            chromeVersion = 26;
         } else {
             chromeVersion = 999; // Assume modern if totally unknown (e.g. Firefox/Safari Desktop)
         }
