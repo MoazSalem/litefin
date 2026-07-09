@@ -363,3 +363,26 @@ body.sidebar-mode-hidden #sidebar-container {
 body.sidebar-mode-hidden #page-container {
     left: 0;
 }
+
+
+/*
+ * ── Chrome 26 Quirks Overrides: Global Page Scroll Constraints ───────────────
+ * Forces the base .page container into a vertical 2009 box model, and sets 
+ * .page-content to box-flex: 1 with height: 0. This forces the browser to 
+ * subtract header heights and constrain the content panel's vertical height, 
+ * enabling standard internal scrolling (overflow-y: auto) on Chrome 26.
+ */
+html[data-layout-quirks="c26"] .page {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    width: 100% !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+}
+
+html[data-layout-quirks="c26"] .page-content {
+    display: block !important;
+    -webkit-box-flex: 1 !important;
+    height: 0 !important; /* Constrains height to force overflow triggers */
+    overflow-y: auto !important;
+}

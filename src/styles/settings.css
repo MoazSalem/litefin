@@ -1145,7 +1145,8 @@ html[data-layout-tier="ultra-legacy"] .color-option {
  * using the 2009 webkit-box model. Also fixes menu button alignment and spacing.
  */
 html[data-layout-quirks="c26"] .settings-page {
-    display: block !important;
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
     width: 100% !important;
     height: 100vh !important;
 }
@@ -1154,20 +1155,22 @@ html[data-layout-quirks="c26"] .settings-split-view {
     display: -webkit-box !important;
     -webkit-box-orient: horizontal !important;
     width: 100% !important;
-    height: 100% !important;
+    height: 100vh !important;
 }
 
 html[data-layout-quirks="c26"] .settings-sidebar {
     display: block !important;
     width: 350px !important;
-    height: 100% !important;
+    height: 100vh !important;
+    overflow-y: auto !important;
 }
 
-html[data-layout-quirks="c26"] .settings-content-panel {
+html[data-layout-quirks="c26"] .settings-content-panel.page-content {
     display: block !important;
     -webkit-box-flex: 1 !important;
     width: 0 !important;
-    height: 100% !important;
+    height: 100vh !important; /* Forces 100vh constraint to allow overflow-y scrolling */
+    overflow-y: auto !important;
 }
 
 html[data-layout-quirks="c26"] .settings-menu-btn {
