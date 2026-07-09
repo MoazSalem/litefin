@@ -231,8 +231,16 @@ class LayoutManager {
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
         document.documentElement.setAttribute('data-platform', platformInfo.platformString);
 
+        // Apply dedicated rendering quirk class/attribute for devices on ancient layout engines
+        // (Chrome < 32) such as early LG WebOS 1.x and ancient Samsung Tizen 2.x firmware.
+        // This isolates structural layout workarounds (e.g. table-layout / floats / ancient display-box)
+        // from the standard ultra-legacy styling layers.
+        if (platformInfo.isAncientChrome) {
+            document.documentElement.setAttribute('data-layout-quirks', 'c26');
+        }
+
         log.info(
-            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}", tier="${platformInfo.layoutTier}", platform="${platformInfo.platformString}"`
+            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}", tier="${platformInfo.layoutTier}", platform="${platformInfo.platformString}", quirks="${platformInfo.isAncientChrome ? 'c26' : 'none'}"`
         );
     }
 
@@ -463,6 +471,49 @@ class LayoutManager {
         }
 
         dynamicCss += `\n        }`;
+
+        // ====================================================================
+        // ANCIENT WEBVIEW GRADIENT & COLOR OVERRIDES (CHROME < 32 / TIZEN 2.x)
+        // ====================================================================
+        // css-vars-ponyfill has severe performance and parsing limitations
+        // on ancient WebKit/Chromium engines when dealing with nested values,
+        // complex radial-gradients, and background-image assignments.
+        // We write static values and prefixed gradients directly to bypass it.
+        // ====================================================================
+        if (platformInfo.isAncientChrome) {
+            // Resolve the exact background color for the current theme mode
+            const resolvedBg = this._themeMode === THEME_MODES.TINTED 
+                ? themeUtils.getTintedColors(this._themeColor).background 
+                : (this._themeMode === THEME_MODES.AMBIENT ? '#0a0b0c' 
+                : (this._themeMode === THEME_MODES.BLACK ? '#000000' 
+                : (this._themeMode === THEME_MODES.CLASSIC_LIGHT ? '#f5f5f5' : '#101010')));
+
+            // Write static background-color rule directly to body
+            dynamicCss += `\n/* Direct theme overrides for Chrome < 32 */\n`;
+            dynamicCss += `html[data-layout-quirks="c26"] body {
+                background-color: ${resolvedBg} !important;
+            }\n`;
+
+            if (this._themeMode === THEME_MODES.AMBIENT) {
+                // Apply vendor-prefixed -webkit-radial-gradient using the calculated accent RGB values
+                // coordinates are mapped directly to match the modern CSS radial-gradient spots.
+                dynamicCss += `html[data-layout-quirks="c26"][data-theme-mode="ambient"] body {
+                    background-image: 
+                        -webkit-radial-gradient(85% 15%, circle, rgba(${accents.accentRgb}, 0.30) 0%, rgba(${accents.accentRgb}, 0.10) 35%, transparent 70%),
+                        -webkit-radial-gradient(15% 85%, circle, rgba(${accents.accentRgb}, 0.30) 0%, rgba(${accents.accentRgb}, 0.10) 35%, transparent 70%) !important;
+                    background-attachment: fixed !important;
+                    background-size: cover !important;
+                }
+                html[data-layout-quirks="c26"][data-theme-mode="ambient"] .page {
+                    background: transparent !important;
+                }\n`;
+            } else {
+                // Ensure dynamic gradients from other sessions are cleared
+                dynamicCss += `html[data-layout-quirks="c26"] body {
+                    background-image: none !important;
+                }\n`;
+            }
+        }
 
         // Create or update the dynamic style element
         if (!this._dynamicStyleEl) {

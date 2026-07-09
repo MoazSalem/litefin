@@ -25,6 +25,10 @@ class PlatformInfo {
          * Stamped onto <html data-layout-tier> by LayoutManager.init().
          */
         this._layoutTier = 'modern'; // Safe default
+
+        // Cache browser engine version to apply specific rendering patches on ancient devices
+        // (specifically targeting Tizen 2.x and early webOS TV releases running Chrome < 32)
+        this._chromeVersion = 999;
     }
 
     /**
@@ -115,6 +119,11 @@ class PlatformInfo {
         } else {
             this._layoutTier = 'ultra-legacy';
         }
+
+        // Cache the parsed chrome version number to the instance variable
+        // to enable custom engine quirk checks down the line
+        this._chromeVersion = chromeVersion;
+
         log.info(`Layout tier: ${this._layoutTier} (Chrome ${chromeVersion === 999 ? 'unknown' : chromeVersion})`);
     }
 
@@ -170,6 +179,24 @@ class PlatformInfo {
      */
     get layoutTier() {
         return this._layoutTier;
+    }
+
+    /**
+     * Expose the detected Chrome browser version.
+     * @returns {number} Chrome version number or 999 for modern browser environments.
+     */
+    get chromeVersion() {
+        return this._chromeVersion;
+    }
+
+    /**
+     * Checks if the device runs an ancient Chromium build (pre-Chrome 32).
+     * This layout tier requires heavy fallback layouts, box-flex styling, 
+     * and specific CSS overrides for WebOS 1.0 and Tizen 2.x platforms.
+     * @returns {boolean} True if Chromium engine is < 32.
+     */
+    get isAncientChrome() {
+        return this._chromeVersion < 32;
     }
 }
 
