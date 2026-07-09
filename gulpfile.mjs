@@ -228,12 +228,12 @@ async function createWgt(buildDir, outputName, includeServices = true) {
 
         archive.pipe(output);
 
-        // Tizen packages should not include LG WebOS's appinfo.json.
+        // Tizen packages should not include LG WebOS's appinfo.json, webOS SDK scripts, or large launcher icons.
         // We use glob with an ignore rule instead of deleting the file from disk,
         // because WebOS packaging tasks are running in parallel against the exact same buildDir.
         archive.glob('**/*', {
             cwd: buildDir,
-            ignore: ['appinfo.json']
+            ignore: ['appinfo.json', 'js/webOSTV.js', 'assets/icon-130.png']
         });
 
         // Only include the background-service directory when the build target
@@ -287,22 +287,19 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
         path.join(stagingDir, 'author-signature.xml'),
         path.join(stagingDir, 'signature1.xml'),
         path.join(stagingDir, 'tile_1920x1080.png'),
+        path.join(stagingDir, 'assets/icon.png'),
         path.join(stagingDir, 'icon.png')
     ];
     await del(tizenOnlyFiles.filter(f => existsSync(f)));
 
     /*
-     * Copy WebOS-specific icon and splash assets from the project root.
-     * These are intentionally NOT part of the shared webpack CopyPlugin output
-     * so they never end up inside Tizen WGT packages.
-     *   icon-80.png       → 80×80 icon (required by WebOS)
-     *   icon-130.png      → 130×130 large icon (required by WebOS)
-     *   splash.png        → splash/background image referenced in appinfo.json
+     * Copy WebOS-specific splash assets from the project root.
+     * The icon-80.png and icon-130.png are already compiled into assets/ by webpack,
+     * and appinfo.json has been updated to point to assets/icon-80.png and assets/icon-130.png.
+     * Therefore, we only need to copy splash.png from the project root assets/ folder.
      */
     const webosAssets = [
-        { src: 'icon-80.png', dest: path.join(stagingDir, 'icon-80.png') },
-        { src: 'icon-130.png', dest: path.join(stagingDir, 'icon-130.png') },
-        { src: 'splash.png', dest: path.join(stagingDir, 'assets', 'splash.png') }
+        { src: 'assets/splash.png', dest: path.join(stagingDir, 'assets', 'splash.png') }
     ];
 
     for (const asset of webosAssets) {

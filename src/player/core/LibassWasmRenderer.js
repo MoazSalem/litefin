@@ -178,7 +178,7 @@ export default class LibassWasmRenderer {
                 ? this._fontFamily
                 : (overrideFontFamily || 'Roboto');
 
-            const fallbackFontUrl = availableFonts[targetFontFamily.toLowerCase()] || getAbsoluteUrl('js/default.woff2');
+            const fallbackFontUrl = availableFonts[targetFontFamily.toLowerCase()] || getAbsoluteUrl('assets/fonts/default.woff2');
 
             const fonts = FontLoader.getContainerFontUrls();
             // Only add fallbackUrl to fonts if it is not already being used as the primary fallbackFont

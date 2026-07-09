@@ -146,7 +146,7 @@ export class LogoScreensaver {
 
             this._elem = document.createElement('img');
             this._elem.className = 'logo-screensaver-image';
-            this._elem.src = 'assets/icon.png';
+            this._elem.src = 'assets/icon-80.png';
             container.appendChild(this._elem);
         } else {
             this._elem = container.querySelector('.logo-screensaver-image');

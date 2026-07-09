@@ -35,14 +35,14 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
  * 
  * @param {string} tier - The build tier ('modern' or 'legacy')
  * @param {object} [options] - Additional options to configure build output
- * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'icon.png')
+ * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'assets/icon.png')
  */
 function getPlugins(tier, options = {}) {
     // Determine the build tier, falling back to 'modern' by default
     const buildTier = tier || 'modern';
     
-    // Retrieve the source icon path, defaulting to standard icon.png
-    const iconSrc = options.iconSrc || 'icon.png';
+    // Retrieve the source icon path, defaulting to standard icon.png in assets/
+    const iconSrc = options.iconSrc || 'assets/icon.png';
 
     // Build files pattern list for CopyWebpackPlugin
     const patterns = [
@@ -50,8 +50,11 @@ function getPlugins(tier, options = {}) {
         { from: 'config.xml', to: 'config.xml' },
         // Copy WebOS app info to root of build directory
         { from: 'appinfo.json', to: 'appinfo.json' },
-        // Copy selected icon file as icon.png to root of build directory
-        { from: iconSrc, to: 'icon.png' },
+        // Copy selected icon file as assets/icon.png to built directory
+        { from: iconSrc, to: 'assets/icon.png' },
+        // Copy WebOS icons from root assets/ to build assets/
+        { from: 'assets/icon-80.png', to: 'assets/icon-80.png' },
+        { from: 'assets/icon-130.png', to: 'assets/icon-130.png' },
         // Copy general assets (images, resources, etc.)
         { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
         // Copy translation localization files
@@ -79,7 +82,7 @@ function getPlugins(tier, options = {}) {
             },
             {
                 from: 'node_modules/@jellyfin/libass-wasm/dist/js/default.woff2',
-                to: 'js/default.woff2',
+                to: 'assets/fonts/default.woff2',
                 noErrorOnMissing: true
             }
         );
@@ -554,8 +557,8 @@ const normalOblongConfig = {
         ]
     },
 
-    // Load plugins with the modern tier configuration, selecting icon_oblong.png
-    plugins: getPlugins('modern', { iconSrc: 'icon_oblong.png' })
+    // Load plugins with the modern tier configuration, selecting icon_oblong.png from assets/
+    plugins: getPlugins('modern', { iconSrc: 'assets/icon_oblong.png' })
 };
 
 // Export all configs. Run a specific one with --config-name <name>.
