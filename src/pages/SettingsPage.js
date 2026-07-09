@@ -4451,7 +4451,8 @@ class SettingsPage extends Page {
 
         const backups = this.backupsList || [];
         backups.forEach((b) => {
-            const dateStr = new Date(b.DateCreated).toLocaleString();
+            const d = new Date(b.DateCreated);
+            const dateStr = `${d.toLocaleDateString()}, ${i18n.formatLocalTime(d)}`;
             const device = b.DeviceName || 'Unknown Device';
 
             const platformMap = {
