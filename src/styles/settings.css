@@ -1137,3 +1137,93 @@ html[data-layout-tier="ultra-legacy"] .color-option {
     /* Restore normal font size for any children if needed (none here currently) */
     font-size: 1rem;
 }
+
+
+/*
+ * ── Chrome 26 Quirks Overrides: Settings Split View & Sidebar ────────────────
+ * Forces the settings split-view sidebar and content panels to layout horizontally 
+ * using the 2009 webkit-box model. Also fixes menu button alignment and spacing.
+ */
+html[data-layout-quirks="c26"] .settings-page {
+    display: block !important;
+    width: 100% !important;
+    height: 100vh !important;
+}
+
+html[data-layout-quirks="c26"] .settings-split-view {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+html[data-layout-quirks="c26"] .settings-sidebar {
+    display: block !important;
+    width: 350px !important;
+    height: 100% !important;
+}
+
+html[data-layout-quirks="c26"] .settings-content-panel {
+    display: block !important;
+    -webkit-box-flex: 1 !important;
+    width: 0 !important;
+    height: 100% !important;
+}
+
+html[data-layout-quirks="c26"] .settings-menu-btn {
+    display: block !important;
+    text-align: left !important;
+    width: 310px !important; /* Forces full width of the sidebar (350px minus 40px margin) */
+    height: 60px !important;
+    padding: 16px 24px !important; /* Center content vertically (60px - 32px padding = 28px content height) */
+    margin: 4px 20px !important;
+    box-sizing: border-box !important;
+    -webkit-box-sizing: border-box !important;
+    overflow: hidden !important; /* Contain floated children */
+}
+
+html[data-layout-quirks="c26"] .settings-menu-btn .menu-icon svg {
+    width: auto;
+}
+
+html[data-layout-quirks="c26"] .settings-menu-btn .menu-icon {
+    display: block !important;
+    float: left !important;
+    width: 28px !important;
+    height: 28px !important;
+    margin-right: 16px !important;
+    margin-left: 0 !important;
+}
+
+html[data-layout-quirks="c26"] .settings-menu-btn .menu-label {
+    display: block !important;
+    float: left !important;
+    height: 28px !important;
+    line-height: 28px !important;
+}
+
+/* Align setting label and controls on opposite sides using horizontal box model */
+html[data-layout-quirks="c26"] .setting-item {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-align: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+html[data-layout-quirks="c26"] .setting-label {
+    -webkit-box-flex: 1 !important;
+}
+
+html[data-layout-quirks="c26"] .setting-control {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-align: center !important;
+    -webkit-box-pack: end !important;
+    margin-left: 20px !important;
+}
+
+html[data-layout-quirks="c26"] .setting-control > * {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
