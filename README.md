@@ -71,9 +71,15 @@ If Litefin is useful to you, please consider supporting the development:
   <table border="0">
     <tr>
       <td align="center" width="120">
+        <a href="https://github.com/meric426">
+          <img src="https://github.com/meric426.png?s=100" width="80" alt="Martin Ericson" />
+          <br />
+          <b>Martin Ericson</b>
+        </a>
+      </td>
+      <td align="center" width="120">
         <a href="https://github.com/DatAres37">
           <img src="https://github.com/DatAres37.png?s=100" width="80" alt="DatAres37" />
-          <br />
           <br />
           <b>DatAres37</b>
         </a>
@@ -82,8 +88,21 @@ If Litefin is useful to you, please consider supporting the development:
         <a href="https://github.com/danitesler">
           <img src="https://github.com/danitesler.png?s=100" width="80" alt="Dani Tesler" />
           <br />
-          <br />
           <b>Dani Tesler</b>
+        </a>
+      </td>
+      <td align="center" width="120">
+        <a href="https://github.com/witks">
+          <img src="https://github.com/witks.png?s=100" width="80" alt="witks" />
+          <br />
+          <b>witek</b>
+        </a>
+      </td>
+       <td align="center" width="120">
+        <a href="https://github.com/h3xler">
+          <img src="https://github.com/h3xler.png?s=100" width="80" alt="h3xler" />
+          <br />
+          <b>h3xler</b>
         </a>
       </td>
       </tr>
