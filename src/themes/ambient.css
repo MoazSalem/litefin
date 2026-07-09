@@ -259,6 +259,21 @@ body.player-active[data-theme-mode="ambient"] .settings-sidebar {
     border-right: none !important;
 }
 
+/* 
+ * ============================================================================
+ * MODERN LOGIN PAGE OVERRIDES FOR AMBIENT IMMERSION
+ * ============================================================================
+ * Removes solid backgrounds from .login-header and .login-section containers
+ * in the modern login layout so that the body's dynamic dynamic gradients 
+ * bleed through the layout cleanly.
+ */
+html[data-layout-login="modern"] .login-header,
+html[data-layout-login="modern"] .login-section {
+    background: transparent !important;
+    background-image: none !important;
+    border-right-color: rgba(255, 255, 255, 0.05) !important;
+}
+
 
 
 

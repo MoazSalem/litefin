@@ -20,7 +20,6 @@ html[data-layout-login="modern"] .server-input-container {
     display: flex;
     flex-direction: column;
     position: relative;
-    max-width: 700px;
 }
 
 html[data-layout-login="modern"] .server-input-container > *:not(:last-child) {

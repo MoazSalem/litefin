@@ -951,14 +951,13 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${
-                                            user.PrimaryImageTag
-                                                ? api.getUserImageUrl(user.Id, {
-                                                      maxWidth: imageService.getParams('avatar').maxWidth,
-                                                      quality: imageService.getParams('avatar').quality
-                                                  })
-                                                : ''
-                                        }"
+                                        src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -973,14 +972,13 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${
-                                        user.PrimaryImageTag
-                                            ? api.getUserImageUrl(user.Id, {
-                                                  maxWidth: imageService.getParams('avatar').maxWidth,
-                                                  quality: imageService.getParams('avatar').quality
-                                              })
-                                            : ''
-                                    }"
+                                    src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
@@ -1589,13 +1587,10 @@ class LoginPage extends Page {
         if (server && this._serverInput) {
             this._serverInput.value = server.address;
 
-            // Focus the Connect button so user can proceed immediately
-            const connectBtn = this.$('.connect-btn');
-            if (connectBtn) {
-                connectBtn.focus();
-            }
+            log.info(`Selected server ${server.name} (${server.address}) - initiating auto-connect`);
 
-            log.info(`Selected server ${server.name} (${server.address})`);
+            // Automatically connect to the selected server immediately
+            this._connectToServer();
         }
     }
 

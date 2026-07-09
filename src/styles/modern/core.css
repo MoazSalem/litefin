@@ -43,6 +43,12 @@ html[data-layout-login="modern"] .login-header {
     box-sizing: border-box;
 }
 
+[data-theme-mode="ambient"] html[data-layout-login="modern"] .login-header {
+    background: transparent !important;
+    background-image: none !important;
+    border-right-color: rgba(255, 255, 255, 0.05) !important;
+}
+
 html[data-layout-login="modern"] .login-logo-container {
     justify-content: flex-start;
     margin-bottom: 24px;
@@ -80,6 +86,11 @@ html[data-layout-login="modern"] .login-section {
     margin: 0;
     background: var(--jf-background);
     box-sizing: border-box;
+}
+
+[data-theme-mode="ambient"] html[data-layout-login="modern"] .login-section {
+    background: transparent !important;
+    background-image: none !important;
 }
 
 html[data-layout-login="modern"] .section-title {
