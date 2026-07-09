@@ -23,6 +23,9 @@ import { pinDialog } from '../ui/PinDialog.js';
 
 const log = logger.create('Login');
 
+// Default Jellyfin port when user omits one
+const DEFAULT_PORT = 8096;
+
 // Login states — each maps to a data-section attribute on its panel
 const STATE = {
     SERVER: 'server',
@@ -108,7 +111,7 @@ class LoginPage extends Page {
                                 type="url"
                                 id="server-url"
                                 class="text-input tv-input server-url-input"
-                                placeholder="https://your-server.com"
+                                placeholder="192.168.x.x"
                                 autocomplete="off"
                                 readonly
                                 tabindex="0"
@@ -285,7 +288,7 @@ class LoginPage extends Page {
                                 type="url"
                                 id="server-url"
                                 class="text-input tv-input server-url-input"
-                                placeholder="https://192.168.x.x:8096"
+                                placeholder="192.168.x.x"
                                 autocomplete="off"
                                 readonly
                                 tabindex="0"
@@ -879,6 +882,40 @@ class LoginPage extends Page {
         }, 150);
     }
 
+    /**
+     * Normalize a user-typed server address.
+     * - If no protocol is given, defaults to http://
+     * - If no port is given, defaults to 8096
+     * - If the user typed their own protocol/port, those are respected
+     * @param {string} input - Raw user input
+     * @returns {string} Normalized server URL
+     */
+    _normalizeServerUrl(input) {
+        let url = input.trim();
+        if (!url) return '';
+
+        // Prepend default protocol if none provided
+        if (!url.includes('://')) {
+            url = `http://${url}`;
+        }
+
+        try {
+            const parsed = new URL(url);
+            if (!parsed.port) {
+                parsed.port = String(DEFAULT_PORT);
+            }
+            // URL.toString() always appends a trailing / — strip it
+            let result = parsed.toString();
+            if (result.endsWith('/')) {
+                result = result.slice(0, -1);
+            }
+            return result;
+        } catch {
+            // If URL parsing fails, return as-is (validation will catch it)
+            return url;
+        }
+    }
+
     async _connectToServer() {
         const url = this._serverInput.value.trim();
 
@@ -891,8 +928,7 @@ class LoginPage extends Page {
         this._hideError('server-error');
 
         try {
-            // Add https if no protocol
-            const serverUrl = url.includes('://') ? url : `https://${url}`;
+            const serverUrl = this._normalizeServerUrl(url);
             this._serverUrl = serverUrl;
 
             // Connect to server
@@ -951,13 +987,14 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                        src="${
+                                            user.PrimaryImageTag
+                                                ? api.getUserImageUrl(user.Id, {
+                                                      maxWidth: imageService.getParams('avatar').maxWidth,
+                                                      quality: imageService.getParams('avatar').quality
+                                                  })
+                                                : ''
+                                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -972,13 +1009,14 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                    src="${
+                                        user.PrimaryImageTag
+                                            ? api.getUserImageUrl(user.Id, {
+                                                  maxWidth: imageService.getParams('avatar').maxWidth,
+                                                  quality: imageService.getParams('avatar').quality
+                                              })
+                                            : ''
+                                    }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
