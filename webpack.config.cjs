@@ -116,7 +116,11 @@ const modernConfig = {
     name: 'modern',
     // Output production bundle optimization
     mode: 'production',
-    performance: { hints: false },
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // No source maps — keeps the bundle lean for production deployment
     entry: './src/index.js',
 
@@ -209,6 +213,11 @@ const debugConfig = {
 const normalConfig = {
     name: 'normal',
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // No source maps — production build
     entry: './src/index.js',
 
@@ -272,6 +281,11 @@ const normalConfig = {
 const legacyConfig = {
     name: 'legacy',
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     entry: ['url-search-params-polyfill', './src/index.js'],
 
     output: {
@@ -348,6 +362,11 @@ const ultraLegacyConfig = {
     name: 'ultra-legacy',
     target: ['web', 'es5'],
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     entry: [
         /*
          * POLYFILL LOAD ORDER — CRITICAL for Chrome 32 / Tizen 2.x:
@@ -496,6 +515,11 @@ const normalOblongConfig = {
     name: 'normal-oblong',
     // Run in production mode for optimization
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // The main app entry point
     entry: './src/index.js',
 
