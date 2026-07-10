@@ -73,8 +73,11 @@ class DetailsPage extends Page {
     }
 
     render() {
+        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        const layoutClass = detailsLayout === 'posterRight' ? 'layout-poster-right' : 'layout-poster-left';
+
         return `
-            <div class="page details-page">
+            <div class="page details-page ${layoutClass}">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="backdrop">
                     <div class="backdrop-gradient"></div>

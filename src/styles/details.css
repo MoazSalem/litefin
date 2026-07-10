@@ -105,10 +105,20 @@
     -webkit-box-sizing: border-box;
 }
 
+/* Poster Right Aligned Layout Mode */
+.details-page.layout-poster-right .details-main-split {
+    flex-direction: row-reverse;
+}
+
+.details-page.layout-poster-right .hero-poster {
+    margin-right: 0;
+    margin-left: 40px;
+}
+
 .hero-poster {
     width: 420px;
     flex-shrink: 0;
-    margin-right: 60px;
+    margin-right: 40px;
     background-color: var(--jf-card-bg); /* Use base card bg while loading */
     border-radius: var(--jf-border-radius);
     -webkit-border-radius: var(--jf-border-radius);
@@ -650,7 +660,6 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     font-size: 1.5rem;
     line-height: 1.5;
     color: var(--jf-text-secondary);
-    max-width: 1200px;
     margin-bottom: 12px;
     /* Text rendering opt */
     text-rendering: optimizeLegibility;

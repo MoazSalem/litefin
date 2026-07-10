@@ -1234,5 +1234,9 @@
     "NewBackup": "Create New Backup",
     "Overwrite": "Overwrite",
     "AppLayout": "App Layout",
-    "AppControls": "App Controls"
+    "AppControls": "App Controls",
+    "LabelDetailsLayout": "Details Page Layout",
+    "DetailsLayoutDescription": "Choose the layout mode for the item details page.",
+    "OptionDetailsLayoutPosterLeft": "Poster Left Aligned (Default)",
+    "OptionDetailsLayoutPosterRight": "Poster Right Aligned"
 }

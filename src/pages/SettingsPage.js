@@ -1325,6 +1325,23 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDetailsLayout">${i18n.t('LabelDetailsLayout') || 'Details Page Layout'}</span>
+                        <span class="setting-description" data-i18n="DetailsLayoutDescription">${i18n.t('DetailsLayoutDescription') || 'Choose the layout mode for the item details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'details-layout-select',
+            [
+                { value: 'posterLeft', label: i18n.t('OptionDetailsLayoutPosterLeft') || 'Poster Left Aligned (Default)' },
+                { value: 'posterRight', label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned' }
+            ],
+            storage.getItem('pref:detailsLayout') || 'posterLeft'
+        )}
+                    </div>
+                </div>
+
                 <!-- Player OSD Section -->
                 <h3 class="setting-section-title" data-i18n="PlayerOSD">${i18n.t('PlayerOSD')}</h3>
 
@@ -1631,6 +1648,8 @@ class SettingsPage extends Page {
                 <!-- Details Page Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
+
+
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -6862,6 +6881,7 @@ class SettingsPage extends Page {
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
+            'details-layout-select': { key: 'pref:detailsLayout', type: 'local' },
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
