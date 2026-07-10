@@ -305,6 +305,16 @@ class PlayerPage extends Page {
             this._onAppBeforeExit = () => this._handleAppExit();
             eventBus.on('app:beforeExit', this._onAppBeforeExit);
 
+            // Pause playback when app goes to background (e.g. user switches TV input).
+            // We do NOT stop the player or report stopped — the session stays alive so
+            // the user can resume when they return without losing their position.
+            this._onAppHidden = () => this._handleAppHidden();
+            eventBus.on('app:hidden', this._onAppHidden);
+
+            // When returning to foreground the player is still paused and ready.
+            this._onAppVisible = () => this._handleAppVisible();
+            eventBus.on('app:visible', this._onAppVisible);
+
             // ================================================================
             // REMOTE CONTROL HANDLERS
             // ================================================================
@@ -2707,6 +2717,47 @@ class PlayerPage extends Page {
         }
     }
 
+    /**
+     * Handle app going to background — pause playback and tell the server.
+     * The player and session remain alive so the user can resume on return.
+     * This is intentionally different from _handleAppExit() which fully stops
+     * the session (only used on actual app close via beforeunload).
+     */
+    _handleAppHidden() {
+        // Don't pause if we're already in the process of stopping playback
+        if (this._isExiting) return;
+
+        log.info('App backgrounded, pausing playback');
+
+        // Pause the backend player (preserves video frame, keeps session alive)
+        if (this._player?.pause && !this._isPaused) {
+            this._player.pause();
+            this._isPaused = true;
+
+            // Tell the server playback was paused so the progress is saved
+            this._reportPlaybackProgress('pause').catch((err) => {
+                log.warn('Failed to report pause on background:', err);
+            });
+
+            // Update the OSD to reflect the paused state
+            if (this._osd) {
+                this._osd.updatePlayPauseButton();
+            }
+        }
+    }
+
+    /**
+     * Handle app returning to foreground — the player is still paused and
+     * ready. We do NOT auto-resume; the user presses play to continue.
+     */
+    _handleAppVisible() {
+        if (this._isExiting) return;
+
+        log.info('App foregrounded, player paused state preserved');
+        // The player remains paused. When the user presses play, the normal
+        // togglePlay/unpause flow resumes from the current position.
+    }
+
     // ========================================================================
     // Navigation
     // ========================================================================
@@ -2882,6 +2933,16 @@ class PlayerPage extends Page {
         if (this._onAppBeforeExit) {
             eventBus.off('app:beforeExit', this._onAppBeforeExit);
             this._onAppBeforeExit = null;
+        }
+
+        // Remove background/foreground listeners
+        if (this._onAppHidden) {
+            eventBus.off('app:hidden', this._onAppHidden);
+            this._onAppHidden = null;
+        }
+        if (this._onAppVisible) {
+            eventBus.off('app:visible', this._onAppVisible);
+            this._onAppVisible = null;
         }
 
         // Remove remote control event listeners
