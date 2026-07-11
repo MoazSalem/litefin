@@ -164,6 +164,7 @@ export const PlayerEvent = {
     ERROR: 'error',
     WAITING: 'waiting',
     PLAYING: 'playing',
+    SEEKED: 'seeked',
     FULLSCREEN_CHANGE: 'fullscreenchange',
     STATE_CHANGE: 'statechange',
     RESTARTING: 'restarting'
@@ -396,10 +397,13 @@ export class JellyfinPlayer extends EventEmitter {
      * @private
      */
     _handleBackendEvent(event) {
-        // Clear seeking flag on relevant events
+        // Clear seeking flag only on actual seek completion or playback resume.
+        // Do NOT clear on TIME_UPDATE — the backend emits a synthetic timeupdate
+        // synchronously during seek(), before the native seek completes. Clearing
+        // _isSeeking here allows stale pre-seek native timeupdate events to
+        // overwrite the correct subtitle cues set by seek().
         if (event.type === PlayerEvent.SEEKED || 
-            event.type === PlayerEvent.PLAYING || 
-            (event.type === PlayerEvent.TIME_UPDATE && this._isSeeking)) {
+            event.type === PlayerEvent.PLAYING) {
             this._isSeeking = false;
         }
 
@@ -471,8 +475,10 @@ export class JellyfinPlayer extends EventEmitter {
         // Handle timeupdate — tick the SubtitleManager to update cues
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
             try {
-                // SubtitleManager handles both primary and secondary subtitle ticking
-                if (this._subtitleManager) {
+                // Skip subtitle tick during active seek to prevent stale pre-seek
+                // native timeupdate events from overwriting the correct subtitle
+                // cues that were already set by seek()'s direct tick call.
+                if (this._subtitleManager && !this._isSeeking) {
                     this._subtitleManager.tick(event.data.time);
                 }
             } catch (e) {
@@ -1473,6 +1479,13 @@ export class JellyfinPlayer extends EventEmitter {
         if (this._subtitleManager) {
             // Fancy explanation: reset active state caches and flush any DOM / canvas subtitle layers
             this._subtitleManager.resetActiveCues();
+
+            // Tick subtitles to the target position BEFORE delegating to the backend.
+            // The backend emits a synthetic timeupdate synchronously, and subsequent
+            // native timeupdate events may carry stale pre-seek positions. Ticking
+            // here ensures the correct cue is applied immediately, before any backend
+            // events or stale native events can interfere.
+            this._subtitleManager.tick(positionTicks / 10000000);
         }
 
         // Delegate the core seek execution to our underlying player backend (AVPlay, HTML5, WebOS)

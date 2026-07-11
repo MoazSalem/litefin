@@ -1196,6 +1196,11 @@ export class HtmlVideoPlayer {
             this._onPlaying();
         }
         this._clearStallCheck();
+
+        // Always emit seeked so JellyfinPlayer can clear _isSeeking.
+        // Without this, paused-state seeks never clear the seeking flag
+        // (since _onPlaying is only called when !video.paused).
+        this.onEvent({ type: 'seeked' });
     }
 
     /** @private */
