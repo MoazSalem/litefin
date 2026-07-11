@@ -75,7 +75,7 @@ export function getDeviceCapabilities() {
     if (typeof tizen !== 'undefined' && tizen.systeminfo) {
         try {
             deviceId = tizen.systeminfo.getCapability('http://tizen.org/system/tizenid') || '';
-        } catch (e) {}
+        } catch (e) { }
     }
 
     if (!deviceId) {
@@ -259,7 +259,7 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.ac3) baseAudioCodecs.push('ac3');
     baseAudioCodecs.push('aac', 'mp3');
     if (supportsMp2) baseAudioCodecs.push('mp2', 'mp1l2');
-    baseAudioCodecs.push('vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le');
+    baseAudioCodecs.push('vorbis', 'pcm', 'wav');
 
     // =========================================================================
     // AAC-LATM Broadcast Codec Gating
@@ -758,13 +758,13 @@ export function buildJellyfinProfile(options = {}) {
                  */
                 ...(!isHtml5
                     ? [
-                          {
-                              Condition: 'Equals',
-                              Property: 'IsInterlaced',
-                              Value: 'false',
-                              IsRequired: true
-                          }
-                      ]
+                        {
+                            Condition: 'Equals',
+                            Property: 'IsInterlaced',
+                            Value: 'false',
+                            IsRequired: true
+                        }
+                    ]
                     : []),
                 ...hdrCondition
             ]
@@ -797,19 +797,19 @@ export function buildJellyfinProfile(options = {}) {
         // -----------------------------------------------------------------------
         ...(!isHtml5
             ? [
-                  {
-                      Type: 'Video',
-                      Container: 'ts,mpegts',
-                      Conditions: [
-                          {
-                              Condition: 'Equals',
-                              Property: 'IsInterlaced',
-                              Value: 'false',
-                              IsRequired: false
-                          }
-                      ]
-                  }
-              ]
+                {
+                    Type: 'Video',
+                    Container: 'ts,mpegts',
+                    Conditions: [
+                        {
+                            Condition: 'Equals',
+                            Property: 'IsInterlaced',
+                            Value: 'false',
+                            IsRequired: false
+                        }
+                    ]
+                }
+            ]
             : [])
     ];
 
