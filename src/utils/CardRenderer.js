@@ -231,8 +231,12 @@ class CardRenderer {
                     `;
                 }
             } else {
+                // Playlist/Collection Dynamic Thumb (pre-fetched from inner items)
+                if (item._dynamicThumbUrl && (item.Type === 'Playlist' || item.Type === 'BoxSet')) {
+                    imageUrl = item._dynamicThumbUrl;
+                }
                 // Movies/Series Landscape: Thumb -> Backdrop -> Primary
-                if (item.ImageTags?.Thumb) {
+                else if (item.ImageTags?.Thumb) {
                     imageUrl = api.getImageUrl(itemId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,

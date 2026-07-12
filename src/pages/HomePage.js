@@ -1864,25 +1864,22 @@ class HomePage extends Page {
                                     });
                                 }
                             } else if (lib.CollectionType === 'playlists') {
-                                // Playlists themselves usually only have a 4-item grid (Primary) and no Backdrop.
-                                // To get a true landscape backdrop for the home page, we fetch the items
-                                // inside the playlist and grab a backdrop from one of them.
+                                // Playlists: use Primary images from items inside each playlist
                                 try {
                                     const pResponse = await api.getPlaylistItems(item.Id, {
                                         Limit: 20,
-                                        Fields: 'BackdropImageTags'
+                                        Fields: 'ImageTags'
                                     });
 
                                     const pItems = pResponse?.Items || [];
-                                    // Shuffle locally so the backdrop changes across reloads
                                     const shuffled = pItems.sort(() => 0.5 - Math.random());
 
                                     for (const pItem of shuffled) {
-                                        if (pItem.BackdropImageTags?.length > 0) {
-                                            resolvedUrl = api.getImageUrl(pItem.Id, 'Backdrop', {
+                                        if (pItem.ImageTags?.Primary) {
+                                            resolvedUrl = api.getImageUrl(pItem.Id, 'Primary', {
                                                 maxWidth,
                                                 quality,
-                                                tag: pItem.BackdropImageTags[0]
+                                                tag: pItem.ImageTags.Primary
                                             });
                                             break;
                                         }
@@ -1891,36 +1888,65 @@ class HomePage extends Page {
                                     log.warn(`Failed to fetch items for playlist ${item.Id} for dynamic thumb`, e);
                                 }
 
-                                // Fallback to the playlist's own primary/backdrop if we couldn't find one inside
                                 if (!resolvedUrl) {
-                                    if (item.BackdropImageTags?.length > 0) {
-                                        resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
-                                            maxWidth,
-                                            quality,
-                                            tag: item.BackdropImageTags[0]
-                                        });
-                                    } else if (item.ImageTags?.Primary) {
+                                    if (item.ImageTags?.Primary) {
                                         resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                             maxWidth,
                                             quality,
                                             tag: item.ImageTags.Primary
                                         });
+                                    } else if (item.BackdropImageTags?.length > 0) {
+                                        resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                            maxWidth,
+                                            quality,
+                                            tag: item.BackdropImageTags[0]
+                                        });
                                     }
                                 }
                             } else if (lib.CollectionType === 'boxsets') {
-                                // Collections: Backdrop → Primary
-                                if (item.BackdropImageTags?.length > 0) {
-                                    resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
-                                        maxWidth,
-                                        quality,
-                                        tag: item.BackdropImageTags[0]
+                                // Collections: use Primary images from items inside each collection
+                                try {
+                                    const cResponse = await api.getItems({
+                                        ParentId: item.Id,
+                                        SortBy: 'Random',
+                                        Recursive: true,
+                                        Limit: 20,
+                                        Fields: 'ImageTags',
+                                        ImageTypeLimit: 1,
+                                        EnableImageTypes: 'Primary'
                                     });
-                                } else if (item.ImageTags?.Primary) {
-                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
-                                        maxWidth,
-                                        quality,
-                                        tag: item.ImageTags.Primary
-                                    });
+
+                                    const cItems = cResponse?.Items || [];
+                                    const shuffled = cItems.sort(() => 0.5 - Math.random());
+
+                                    for (const cItem of shuffled) {
+                                        if (cItem.ImageTags?.Primary) {
+                                            resolvedUrl = api.getImageUrl(cItem.Id, 'Primary', {
+                                                maxWidth,
+                                                quality,
+                                                tag: cItem.ImageTags.Primary
+                                            });
+                                            break;
+                                        }
+                                    }
+                                } catch (e) {
+                                    log.warn(`Failed to fetch items for collection ${item.Id} for dynamic thumb`, e);
+                                }
+
+                                if (!resolvedUrl) {
+                                    if (item.ImageTags?.Primary) {
+                                        resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                            maxWidth,
+                                            quality,
+                                            tag: item.ImageTags.Primary
+                                        });
+                                    } else if (item.BackdropImageTags?.length > 0) {
+                                        resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                            maxWidth,
+                                            quality,
+                                            tag: item.BackdropImageTags[0]
+                                        });
+                                    }
                                 }
                             } else if (
                                 lib.CollectionType === 'photos' ||

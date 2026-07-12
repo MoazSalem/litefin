@@ -12,6 +12,7 @@ import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { imageService } from '../utils/ImageService.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
@@ -1537,6 +1538,15 @@ class LibraryPage extends Page {
                 this.state.items = result?.Items || [];
                 this.state.totalRecordCount = result?.TotalRecordCount || 0;
 
+                // Enrich individual playlist/collection items with Primary images from their contents
+                const collectionType = this.state.libraryInfo?.CollectionType;
+                if (
+                    (collectionType === 'playlists' || collectionType === 'boxsets') &&
+                    this.state.items.length > 0
+                ) {
+                    await this._enrichCollectionItems(this.state.items, collectionType);
+                }
+
                 this._renderGrid(this.state.items);
                 this._updatePaginationUI();
             } else {
@@ -1948,6 +1958,51 @@ class LibraryPage extends Page {
             leaveLeft: 'sidebar',
             enterTo: 'active-element' // Focus the selected char
         });
+    }
+
+    async _enrichCollectionItems(items, collectionType) {
+        const isPlaylist = collectionType === 'playlists';
+        await Promise.all(
+            items.map(async (item) => {
+                try {
+                    let innerItems;
+                    if (isPlaylist) {
+                        const resp = await api.getPlaylistItems(item.Id, {
+                            Limit: 20,
+                            Fields: 'ImageTags'
+                        });
+                        innerItems = resp?.Items || [];
+                    } else {
+                        const resp = await api.getItems({
+                            ParentId: item.Id,
+                            SortBy: 'Random',
+                            Recursive: true,
+                            Limit: 20,
+                            Fields: 'ImageTags',
+                            ImageTypeLimit: 1,
+                            EnableImageTypes: 'Primary'
+                        });
+                        innerItems = resp?.Items || [];
+                    }
+
+                    const shuffled = innerItems.sort(() => 0.5 - Math.random());
+                    const { maxWidth, quality } = imageService.getParams('card-backdrop');
+
+                    for (const inner of shuffled) {
+                        if (inner.ImageTags?.Primary) {
+                            item._dynamicThumbUrl = api.getImageUrl(inner.Id, 'Primary', {
+                                maxWidth,
+                                quality,
+                                tag: inner.ImageTags.Primary
+                            });
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    log.warn(`Failed to fetch dynamic thumb for ${item.Name}`, e);
+                }
+            })
+        );
     }
 
     _renderGrid(items) {
