@@ -17,6 +17,8 @@
 import JASSUB from 'jassub';
 import FontLoader from '../../utils/FontLoader.js';
 import { logger } from '../../utils/Logger.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
+import { installWebOSRVFCPolyfill } from '../../utils/webos-rvfc-polyfill.js';
 // Fetch player setting definitions to dynamically control subtitle preferences,
 // including the toggle to allow online font fetching via external APIs.
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
@@ -57,6 +59,16 @@ export default class JassubRenderer {
         // Video element reference (null on Tizen AVPlay mode)
         this._videoElement = video || null;
         this._isVirtual = !video;
+
+        /*
+         * Install the requestVideoFrameCallback polyfill on webOS.
+         * webOS video runs in a hardware overlay, so native RVFC never fires
+         * its callbacks. This must happen before JASSUB constructor binds the
+         * video element's rvfc to drive its render loop.
+         */
+        if (platformInfo.isWebOS && this._videoElement) {
+            installWebOSRVFCPolyfill(this._videoElement);
+        }
 
         // Video dimensions used for letterbox sizing calculations
         this._videoWidth = width || 1920;
