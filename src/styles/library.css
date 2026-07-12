@@ -84,10 +84,10 @@
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
-    background-color: rgba(40, 40, 40, 0.8);
-    /* Match Resume/Icon btn in details */
-    color: var(--jf-text-primary);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    background: var(--jf-action-btn-bg);
+    background-clip: padding-box;
+    border: 2px solid var(--jf-action-btn-border) !important;
+    color: var(--jf-action-btn-color);
     font-size: 20px;
     font-weight: 600;
     cursor: pointer;
@@ -181,9 +181,9 @@
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
-    background-color: rgba(40, 40, 40, 0.8);
-    color: var(--jf-text-primary);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    background: var(--jf-action-btn-bg);
+    border: 2px solid var(--jf-action-btn-border) !important;
+    color: var(--jf-action-btn-color);
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
@@ -1090,9 +1090,9 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     padding: 20px 48px;
     margin: 0 20px;
     /* Spacing for Tizen */
-    background-color: rgba(60, 60, 60, 0.8);
-    color: var(--text-primary);
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: var(--jf-action-btn-bg);
+    border: 2px solid var(--jf-action-btn-border) !important;
+    color: var(--jf-action-btn-color);
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
@@ -1152,11 +1152,6 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     /* gap: 20px; GAP NOT SUPPORTED IN TIZEN 4 (Chrome 56) */
     transform: scale(0.9);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Spacer helpers for Flexbox gap polyfill */
-.library-modal>* {
-    margin-bottom: 20px;
 }
 
 .library-modal> :last-child {
@@ -1493,8 +1488,9 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
 }
 
 /* Actions Footer */
-.modal-actions {
-    padding: 30px 40px;
+.modal-actions-library {
+    padding: 0px 30px;
+    padding-top: 20px;
     background: rgba(0, 0, 0, 0.2);
     display: flex;
     justify-content: flex-end;

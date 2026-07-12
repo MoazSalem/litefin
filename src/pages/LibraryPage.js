@@ -3223,7 +3223,7 @@ class LibraryPage extends Page {
                     </div>
                 </div>
 
-                <div class="modal-actions" id="vm-actions" style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
+                <div class="modal-actions-library" id="vm-actions" style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
                     <button class="modal-action-btn close" id="btn-vm-close">${i18n.t('ButtonClose')}</button>
                     <button class="modal-action-btn apply" id="btn-vm-apply" !important;">${i18n.t('ButtonApply') || 'Apply'}</button>
                 </div>
@@ -3353,7 +3353,7 @@ class LibraryPage extends Page {
                     </div>
                 </div>
 
-                <div class="modal-actions">
+                <div class="modal-actions-library">
                     <button class="modal-action-btn close" id="btn-sort-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
                     <button class="modal-action-btn apply" id="btn-sort-apply" data-i18n="ButtonApply">${i18n.t('ButtonApply')}</button>
                 </div>
@@ -3432,7 +3432,7 @@ class LibraryPage extends Page {
             leaveDown: 'sort-actions'
         });
 
-        this.registerFocusSection('sort-actions', overlay.querySelector('.modal-actions'), {
+        this.registerFocusSection('sort-actions', overlay.querySelector('.modal-actions-library'), {
             orientation: 'horizontal',
             onMove: (direction) => {
                 if (direction === 'up') {
@@ -3603,7 +3603,7 @@ class LibraryPage extends Page {
                     </div>
                 </div>
 
-                <div class="modal-actions">
+                <div class="modal-actions-library">
                     <button class="modal-action-btn clear" id="btn-filter-clear" data-i18n="ButtonClear">${i18n.t('ButtonClear')}</button>
                     <button class="modal-action-btn close" id="btn-filter-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
                     <button class="modal-action-btn apply" id="btn-filter-apply" data-i18n="ButtonApply">${i18n.t('ButtonApply')}</button>
@@ -3885,7 +3885,7 @@ class LibraryPage extends Page {
             scroll: true // Enable automatic scrolling for TV navigation
         });
 
-        this.registerFocusSection('filter-actions', overlay.querySelector('.modal-actions'), {
+        this.registerFocusSection('filter-actions', overlay.querySelector('.modal-actions-library'), {
             orientation: 'horizontal',
             onMove: (direction) => {
                 if (direction === 'up') {
