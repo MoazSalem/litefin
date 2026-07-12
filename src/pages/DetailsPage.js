@@ -22,6 +22,7 @@ import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
+import AddToTargetModal from '../components/AddToTargetModal.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -3466,6 +3467,14 @@ class DetailsPage extends Page {
                 }
             }
 
+            // ── Add to Playlist / Collection ────────────────────────────────────
+            // Show for any media item that can be added to a group
+            const nonPlayableTypes = ['Person', 'CollectionFolder', 'UserView', 'Folder', 'Genre', 'Studio', 'Year'];
+            if (this._item?.Id && !nonPlayableTypes.includes(this._item.Type)) {
+                options.push({ id: 'add-to-playlist', label: i18n.t('AddToPlaylist') });
+                options.push({ id: 'add-to-collection', label: i18n.t('AddToCollection') || 'Add to Collection' });
+            }
+
             // ── Delete Media Permission Check ────────────────────────────────────
             // Only show delete option if the item explicitly reports CanDelete=true
             if (this._item.CanDelete) {
@@ -3673,6 +3682,20 @@ class DetailsPage extends Page {
                     setTimeout(() => overlay.remove(), 300);
 
                     SubtitleEditorModal.show(itemId, this, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                } else if (id === 'add-to-playlist' || id === 'add-to-collection') {
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister('details-more-menu');
+                    focusManager.unregister('details-more-menu-actions');
+                    setTimeout(() => overlay.remove(), 300);
+
+                    const mode = id === 'add-to-collection' ? 'collection' : 'playlist';
+                    AddToTargetModal.show(this, itemId, mode, {
                         prevFocus: this._prevFocus,
                         prevSection: this._prevSection,
                         fromMoreOptions: true,

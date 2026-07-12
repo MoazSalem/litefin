@@ -1538,13 +1538,9 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     will-change: transform;
 }
 
-/*
- * ── MODAL ACTION APPLY STATE ─────────────────────────────────────────────────
- * Styles positive action buttons (e.g. Apply) using dynamic button variables.
- */
 .modal-action-btn.apply {
-    background-color: var(--jf-btn-primary-bg) !important;
-    color: var(--jf-btn-primary-color) !important;
+    background-color: hsla(0, 0%, 100%, .1);
+    color: var(--jf-text-primary);
 }
 
 .modal-action-btn.clear,

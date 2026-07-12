@@ -288,9 +288,9 @@
 
 /* "Play Now" — Dynamic theme styling */
 .upnext-btn-play {
-    background: var(--jf-btn-primary-bg);
-    color: var(--jf-btn-primary-color);
-    border: 0.125em solid var(--jf-btn-primary-border) !important;
+    background: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.80);
+    border: 0.125em solid var(--jf-action-btn-border)!important;
 }
 
 .upnext-btn-play:hover {

@@ -815,6 +815,63 @@ export class ApiClient {
         });
     }
 
+    /**
+     * Create a new playlist and optionally add items to it.
+     * POST /Playlists
+     * @param {string} name     - Playlist name
+     * @param {boolean} isPublic - Whether the playlist is publicly visible
+     * @param {string[]} itemIds - Item IDs to add to the new playlist
+     * @returns {Promise<Object>} Created playlist object with Id
+     */
+    async createPlaylist(name, isPublic, itemIds) {
+        return this.post('/Playlists', {
+            Name: name,
+            IsPublic: isPublic,
+            Ids: itemIds,
+            UserId: this._userId
+        });
+    }
+
+    /**
+     * Add one or more items to an existing playlist.
+     * POST /Playlists/{playlistId}/Items?ids=...
+     * @param {string} playlistId - Target playlist ID
+     * @param {string[]} itemIds  - Item IDs to add
+     * @returns {Promise<void>}
+     */
+    async addToPlaylist(playlistId, itemIds) {
+        const qs = itemIds.map((id) => `Ids=${encodeURIComponent(id)}`).join('&');
+        return this.post(`/Playlists/${playlistId}/Items?${qs}&UserId=${encodeURIComponent(this._userId)}`);
+    }
+
+    /**
+     * Create a new collection (BoxSet) and optionally add items to it.
+     * POST /Collections?userId=...&name=...&ids=...
+     * @param {string} name     - Collection name
+     * @param {string[]} itemIds - Item IDs to add to the new collection
+     * @returns {Promise<Object>} Created collection object with Id
+     */
+    async createCollection(name, itemIds) {
+        const qs = itemIds.map((id) => `Ids=${encodeURIComponent(id)}`).join('&');
+        return this.post(
+            `/Collections?UserId=${encodeURIComponent(this._userId)}&Name=${encodeURIComponent(name)}&${qs}`
+        );
+    }
+
+    /**
+     * Add one or more items to an existing collection (BoxSet).
+     * POST /Collections/{collectionId}/Items?ids=...
+     * @param {string} collectionId - Target collection ID
+     * @param {string[]} itemIds    - Item IDs to add
+     * @returns {Promise<void>}
+     */
+    async addToCollection(collectionId, itemIds) {
+        const qs = itemIds.map((id) => `Ids=${encodeURIComponent(id)}`).join('&');
+        return this.post(
+            `/Collections/${collectionId}/Items?${qs}&UserId=${encodeURIComponent(this._userId)}`
+        );
+    }
+
     async getSimilar(itemId, params = {}) {
         const defaults = {
             UserId: this._userId,
