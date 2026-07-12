@@ -572,11 +572,11 @@ class App {
 
                 let itemToPlay = item;
 
-                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, Playlist, BoxSet without movies/episodes),
+                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, BoxSet without movies/episodes),
                 // the API cannot play it directly. We must resolve it to the first playable audio track.
                 if (
                     item &&
-                    ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Playlist', 'Artist', 'Person'].includes(item.Type)
+                    ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Artist', 'Person'].includes(item.Type)
                 ) {
                     try {
                         const tracks = await api.getItems({
@@ -598,6 +598,26 @@ class App {
                         }
                     } catch (e) {
                         log.error('Failed to resolve audio container tracks:', e);
+                        return;
+                    }
+                }
+
+                // Playlist items are containers with no direct MediaSource.
+                // Resolve to the first item and tag context so PlayQueue builds the full list.
+                if (item && item.Type === 'Playlist' && itemToPlay === item) {
+                    try {
+                        const result = await api.getPlaylistItems(item.Id, { Limit: 1 });
+                        if (result.Items && result.Items.length > 0) {
+                            itemToPlay = result.Items[0];
+                            itemToPlay.contextType = 'playlist';
+                            itemToPlay.contextId = item.Id;
+                            log.info('Resolved Playlist to first item:', itemToPlay.Name);
+                        } else {
+                            log.warn('Playlist is empty:', item.Id);
+                            return;
+                        }
+                    } catch (e) {
+                        log.error('Failed to resolve playlist:', e);
                         return;
                     }
                 }

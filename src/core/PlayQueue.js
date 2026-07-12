@@ -8,8 +8,6 @@
  * - Cross-season episode fetching
  * - BoxSet/Collection sequencing
  *
- * Current limitations:
- * - No Shuffle/Repeat support yet (sequential only)
  * ============================================================================
  */
 

@@ -2383,9 +2383,9 @@ class PlayerPage extends Page {
             // Playback rate (1.0 = normal speed)
             PlaybackRate: Number(this._player?.getPlaybackRate?.()) || 1.0,
 
-            // Queue modes (litefin doesn't support playlists yet)
-            RepeatMode: 'RepeatNone',
-            ShuffleMode: 'Sorted'
+            // Queue modes — read actual state from PlayQueue
+            RepeatMode: playQueue.getRepeatMode(),
+            ShuffleMode: playQueue.getShuffleMode() ? 'Shuffled' : 'Sorted'
         };
 
         // Only include stream indices if they are valid numbers (strings or undefined cause 400 errors)

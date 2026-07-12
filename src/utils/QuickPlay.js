@@ -79,8 +79,9 @@ export async function quickPlayItem(itemOrId) {
             resume = false;
         }
         // Direct-playable video/audio types fall through unchanged. Audio
-        // containers (MusicAlbum, Playlist, …) also fall through — the global
+        // containers (MusicAlbum, …) also fall through — the global
         // player:play handler in App.js resolves those to their first track.
+        // Playlist items are likewise resolved via getPlaylistItems() in App.js.
     } catch (e) {
         log.error(`Failed to resolve a playable item for ${item.Type}:`, e?.message || e);
         return false;
