@@ -1167,20 +1167,7 @@ class SettingsPage extends Page {
                                  tabindex="0">
                         </button>
                     </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="HomeScreenCache">${i18n.t('HomeScreenCache') || 'Enable Home Screen Caching'}</span>
-                        <span class="setting-description" data-i18n="HomeScreenCacheDescription">${i18n.t('HomeScreenCacheDescription') || 'Cache home screen data between pages to make back-navigation instant. Turn off if you frequently switch users or servers.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:homeScreenCache') !== 'false' ? 'active' : ''}"
-                                id="toggle-home-screen-cache"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
+                </div>           
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1216,6 +1203,32 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="toggle-switch ${storage.getItem('pref:disableFocusRestore') === 'true' ? 'active' : ''}"
                                 id="toggle-disable-focus-restore"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HomeScreenCache">${i18n.t('HomeScreenCache') || 'Disable Home Screen Caching'}</span>
+                        <span class="setting-description" data-i18n="HomeScreenCacheDescription">${i18n.t('HomeScreenCacheDescription') || 'Skip caching home screen data between pages. The home screen will reload from the server on every visit. Saves memory at the cost of slower back-navigation.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:homeScreenCache') === 'false' ? 'active' : ''}"
+                                id="toggle-home-screen-cache"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDisableLibraryCache">${i18n.t('LabelDisableLibraryCache') || 'Disable Library Cache'}</span>
+                        <span class="setting-description" data-i18n="DisableLibraryCacheDescription">${i18n.t('DisableLibraryCacheDescription') || 'Skip caching library content (items, filters, sort) when navigating away. The library will reload from the server on every visit. Saves memory at the cost of slower navigation.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:disableLibraryCache') === 'true' ? 'active' : ''}"
+                                id="toggle-disable-library-cache"
                                 tabindex="0">
                         </button>
                     </div>
@@ -5760,15 +5773,15 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Home Screen Caching
+        // Toggle Disable Home Screen Caching
         const homeCacheBtn = this.$('#toggle-home-screen-cache');
         if (homeCacheBtn) {
             homeCacheBtn.addEventListener('click', () => {
-                const isEnabled = storage.getItem('pref:homeScreenCache') !== 'false';
-                const newValue = !isEnabled;
-                storage.setItem('pref:homeScreenCache', newValue.toString());
+                const isDisabled = storage.getItem('pref:homeScreenCache') === 'false';
+                const newValue = !isDisabled;
+                storage.setItem('pref:homeScreenCache', newValue ? 'false' : 'true');
                 homeCacheBtn.classList.toggle('active', newValue);
-                log.info(`Home screen caching set to: ${newValue}`);
+                log.info(`Disable home screen caching set to: ${newValue}`);
             });
         }
 
@@ -5817,6 +5830,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:disableFocusRestore', newValue.toString());
                 focusRestoreBtn.classList.toggle('active', newValue);
                 log.info(`Disable focus restoration set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Disable Library Cache
+        const libraryCacheBtn = this.$('#toggle-disable-library-cache');
+        if (libraryCacheBtn) {
+            libraryCacheBtn.addEventListener('click', () => {
+                const isDisabled = storage.getItem('pref:disableLibraryCache') === 'true';
+                const newValue = !isDisabled;
+                storage.setItem('pref:disableLibraryCache', newValue.toString());
+                libraryCacheBtn.classList.toggle('active', newValue);
+                log.info(`Disable library cache set to: ${newValue}`);
             });
         }
 

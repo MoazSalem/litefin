@@ -320,13 +320,7 @@ class LibraryPage extends Page {
         const cacheKey = this._getCacheKey();
 
         // State Rehydration Check
-        let savedState = null;
-
-        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
-            savedState = state.get(cacheKey);
-        } else {
-            state.delete(cacheKey);
-        }
+        const savedState = state.get(cacheKey);
 
         if (savedState) {
             // Merge cached state properties
@@ -401,8 +395,9 @@ class LibraryPage extends Page {
             // 3. Restore Focus
             requestAnimationFrame(() => {
                 let restoredFocus = false;
-                const targetId = savedState.focusItemId;
-                const sectionId = savedState.focusSectionId;
+                const targetId = storage.getItem('pref:disableFocusRestore') === 'true' ? null : savedState.focusItemId;
+                const sectionId =
+                    storage.getItem('pref:disableFocusRestore') === 'true' ? null : savedState.focusSectionId;
 
                 if (targetId && sectionId) {
                     const sectionConfig = focusManager.getSectionConfig(sectionId);
@@ -705,11 +700,11 @@ class LibraryPage extends Page {
     }
 
     _saveState(focusSectionId, focusItemId) {
-        if (storage.getItem('pref:disableFocusRestore') === 'true') return;
+        if (storage.getItem('pref:disableLibraryCache') === 'true') return;
         state.set(this._getCacheKey(), {
             stateData: this.state,
-            focusSectionId,
-            focusItemId
+            focusSectionId: storage.getItem('pref:disableFocusRestore') === 'true' ? null : focusSectionId,
+            focusItemId: storage.getItem('pref:disableFocusRestore') === 'true' ? null : focusItemId
         });
     }
 
