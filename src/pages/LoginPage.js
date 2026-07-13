@@ -884,9 +884,10 @@ class LoginPage extends Page {
 
     /**
      * Normalize a user-typed server address.
-     * - If no protocol is given, defaults to http://
-     * - If no port is given, defaults to 8096
-     * - If the user typed their own protocol/port, those are respected
+     * Rules:
+     *   - Bare hostname/IP (no protocol) → prepend http://, append :8096
+     *   - Full URL with protocol (http:// or https://) → use as-is, no port added
+     *   - If user typed their own port, it is always respected
      * @param {string} input - Raw user input
      * @returns {string} Normalized server URL
      */
@@ -894,26 +895,32 @@ class LoginPage extends Page {
         let url = input.trim();
         if (!url) return '';
 
-        // Prepend default protocol if none provided
-        if (!url.includes('://')) {
+        const hasProtocol = url.includes('://');
+
+        if (!hasProtocol) {
+            // Bare hostname/IP — add default protocol and port
             url = `http://${url}`;
+            try {
+                const parsed = new URL(url);
+                if (!parsed.port) {
+                    parsed.port = String(DEFAULT_PORT);
+                }
+                let result = parsed.toString();
+                if (result.endsWith('/')) {
+                    result = result.slice(0, -1);
+                }
+                return result;
+            } catch {
+                return url;
+            }
         }
 
-        try {
-            const parsed = new URL(url);
-            if (!parsed.port) {
-                parsed.port = String(DEFAULT_PORT);
-            }
-            // URL.toString() always appends a trailing / — strip it
-            let result = parsed.toString();
-            if (result.endsWith('/')) {
-                result = result.slice(0, -1);
-            }
-            return result;
-        } catch {
-            // If URL parsing fails, return as-is (validation will catch it)
-            return url;
+        // User typed a full URL with protocol — respect their choice, no port added
+        let result = url;
+        if (result.endsWith('/')) {
+            result = result.slice(0, -1);
         }
+        return result;
     }
 
     async _connectToServer() {
