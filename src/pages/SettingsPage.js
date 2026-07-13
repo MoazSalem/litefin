@@ -2311,17 +2311,28 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Clickable Logo Section -->
+                <!-- Litefin Logo Section -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="SidebarLogoSettings">${i18n.t('SidebarLogoSettings') || 'Clickable Logo'}</span>
-                        <span class="setting-description" data-i18n="SidebarLogoSettingsDescription">${i18n.t('SidebarLogoSettingsDescription') || 'Allow the top Litefin logo to be selected to open settings.'}</span>
+                        <span class="setting-name" data-i18n="LabelLogoSettings">${i18n.t('LabelLogoSettings') || 'Litefin Logo'}</span>
+                        <span class="setting-description" data-i18n="LogoSettingsDescription">${i18n.t('LogoSettingsDescription') || 'Choose how the top sidebar logo behaves and what buttons are visible.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:logoSettings') === 'true' ? 'active' : ''}" 
-                                 id="toggle-sidebar-logo-settings" 
-                                 tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'sidebar-logo-settings-select',
+                            [
+                                { value: 'visible', label: i18n.t('OptionLogoSettingsVisible') || 'Visible' },
+                                { value: 'settings', label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings' },
+                                { value: 'home', label: i18n.t('OptionLogoSettingsHome') || 'Visible as Home' },
+                                { value: 'hidden', label: i18n.t('OptionLogoSettingsHidden') || 'Hidden' }
+                            ],
+                            (() => {
+                                let val = storage.getItem('pref:logoSettings') || 'visible';
+                                if (val === 'true') return 'settings';
+                                if (val === 'false') return 'visible';
+                                return val;
+                            })()
+                        )}
                     </div>
                 </div>
 
@@ -7061,7 +7072,8 @@ class SettingsPage extends Page {
             'osd-seekbar-progress-color-select': { key: 'litefin:osdSeekBarProgressColor', type: 'local' },
             'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' },
             'collapsed-sidebar-color-select': { key: 'pref:collapsedSidebarColor', type: 'local', triggerEvent: true },
-            'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true }
+            'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true },
+            'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -7512,18 +7524,6 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Sidebar Clickable Logo
-        const logoSettingsToggle = this.$('#toggle-sidebar-logo-settings');
-        if (logoSettingsToggle) {
-            logoSettingsToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:logoSettings') === 'true';
-                const newValue = !currentValue;
-                storage.setItem('pref:logoSettings', newValue.toString());
-                logoSettingsToggle.classList.toggle('active', newValue);
-                eventBus.emit('prefChanged:logoSettings', newValue);
-                log.info(`Clickable Logo set to: ${newValue}`);
-            });
-        }
 
         // Toggle Switch for Disable Sidebar Animation
         const disableAnimationToggle = this.$('#toggle-disable-sidebar-animation');

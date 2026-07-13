@@ -149,7 +149,7 @@ class Sidebar extends Component {
         // Sidebar Logo clickability configuration
         this._updateLogoSettings();
         this._onLogoSettingsChanged = () => this._updateLogoSettings();
-        eventBus.on('prefChanged:logoSettings', this._onLogoSettingsChanged);
+        eventBus.on('pref:logoSettings', this._onLogoSettingsChanged);
 
         this._updateAnimationMode();
         this._onAnimationModeChanged = () => this._updateAnimationMode();
@@ -284,7 +284,7 @@ class Sidebar extends Component {
         }
 
         if (this._onLogoSettingsChanged) {
-            eventBus.off('prefChanged:logoSettings', this._onLogoSettingsChanged);
+            eventBus.off('pref:logoSettings', this._onLogoSettingsChanged);
         }
 
         if (this._onAnimationModeChanged) {
@@ -346,21 +346,45 @@ class Sidebar extends Component {
     }
 
     _updateLogoSettings() {
-        const isEnabled = storage.getItem('pref:logoSettings') === 'true';
+        let logoPref = storage.getItem('pref:logoSettings') || 'visible';
+        // Migrate old boolean values
+        if (logoPref === 'true') {
+            logoPref = 'settings';
+        } else if (logoPref === 'false') {
+            logoPref = 'visible';
+        }
+
         const logoHeader = this.el.querySelector('#sidebar-logo-header');
         const settingsBtn = this.el.querySelector('#sidebar-settings');
+        const homeBtn = this.el.querySelector('#sidebar-home');
 
         if (logoHeader) {
-            logoHeader.classList.toggle('sidebar-item', isEnabled);
-            logoHeader.setAttribute('data-focusable', isEnabled.toString());
-            logoHeader.setAttribute('tabindex', isEnabled ? '0' : '-1');
+            // Determine if logo is visible
+            const isLogoVisible = logoPref !== 'hidden';
+            logoHeader.style.display = isLogoVisible ? '' : 'none';
 
-            if (isEnabled) {
+            // Clickable status for logo
+            const isClickable = logoPref === 'settings' || logoPref === 'home';
+            logoHeader.classList.toggle('sidebar-item', isClickable);
+            logoHeader.setAttribute('data-focusable', isClickable.toString());
+            logoHeader.setAttribute('tabindex', isClickable ? '0' : '-1');
+
+            if (logoPref === 'settings') {
                 logoHeader.dataset.path = '/settings';
-                if (settingsBtn) settingsBtn.classList.add('hidden');
+            } else if (logoPref === 'home') {
+                logoHeader.dataset.path = '/home';
             } else {
                 delete logoHeader.dataset.path;
-                if (settingsBtn) settingsBtn.classList.remove('hidden');
+            }
+
+            // Show/hide settings button
+            if (settingsBtn) {
+                settingsBtn.classList.toggle('hidden', logoPref === 'settings');
+            }
+
+            // Show/hide home button
+            if (homeBtn) {
+                homeBtn.classList.toggle('hidden', logoPref === 'home');
             }
 
             // Invalidate cache since focusability of a header element changed
