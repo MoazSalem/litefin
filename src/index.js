@@ -45,6 +45,91 @@ if (typeof AbortController === 'undefined') {
     };
 }
 
+// ----------------------------------------------------------------------------
+// WeakSet + WeakMap polyfill — required by hls.js on ancient WebKit
+// (e.g., WebOS WebKit/538.2, Tizen 3.0) that predates ES2015 WeakSet/WeakMap.
+// Hls.js v1.x uses WeakSet internally for tracking buffered segments.
+// Must run before hls.js is loaded (dynamically imported by WebOSPlayer).
+// ----------------------------------------------------------------------------
+if (typeof WeakSet === 'undefined') {
+    /**
+     * Minimal WeakSet polyfill.
+     * Uses an array internally — weak-ref semantics are approximated since
+     * true WeakRef is unavailable on these targets. The consumer (hls.js)
+     * only calls add/has/delete during the playback session lifecycle.
+     */
+    window.WeakSet = function (iterable) {
+        this._items = [];
+        if (iterable && typeof iterable.forEach === 'function') {
+            var self = this;
+            iterable.forEach(function (v) {
+                self.add(v);
+            });
+        }
+    };
+    window.WeakSet.prototype.add = function (value) {
+        if (this._items.indexOf(value) === -1) {
+            this._items.push(value);
+        }
+        return this;
+    };
+    window.WeakSet.prototype.has = function (value) {
+        return this._items.indexOf(value) !== -1;
+    };
+    window.WeakSet.prototype.delete = function (value) {
+        var idx = this._items.indexOf(value);
+        if (idx !== -1) {
+            this._items.splice(idx, 1);
+            return true;
+        }
+        return false;
+    };
+}
+
+if (typeof WeakMap === 'undefined') {
+    /**
+     * Minimal WeakMap polyfill.
+     * Array-based key-value storage — get/set/has/delete surface used
+     * by hls.js and other ES2015-era dependencies.
+     */
+    window.WeakMap = function (iterable) {
+        this._keys = [];
+        this._values = [];
+        if (iterable && typeof iterable.forEach === 'function') {
+            var self = this;
+            iterable.forEach(function (pair) {
+                self.set(pair[0], pair[1]);
+            });
+        }
+    };
+    window.WeakMap.prototype.set = function (key, value) {
+        var idx = this._keys.indexOf(key);
+        if (idx !== -1) {
+            this._values[idx] = value;
+        } else {
+            this._keys.push(key);
+            this._values.push(value);
+        }
+        return this;
+    };
+    window.WeakMap.prototype.get = function (key) {
+        var idx = this._keys.indexOf(key);
+        return idx !== -1 ? this._values[idx] : undefined;
+    };
+    window.WeakMap.prototype.has = function (key) {
+        return this._keys.indexOf(key) !== -1;
+    };
+    window.WeakMap.prototype.delete = function (key) {
+        var idx = this._keys.indexOf(key);
+        if (idx !== -1) {
+            this._keys.splice(idx, 1);
+            this._values.splice(idx, 1);
+            return true;
+        }
+        return false;
+    };
+}
+
 // Import core modules
 import { app } from './core/App.js';
 import { logger } from './utils/Logger.js';
