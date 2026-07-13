@@ -1873,6 +1873,18 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideGhostMode">${i18n.t('LabelHideGhostMode') || 'Hide Ghost Mode Button'}</span>
+                        <span class="setting-description" data-i18n="HideGhostModeDescription">${i18n.t('HideGhostModeDescription') || 'Hide the ghost mode (incognito play) button on the item details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideGhostMode') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-ghost-mode" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="HomeScreen">${i18n.t('HomeScreen')}</h3>
@@ -2338,20 +2350,20 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'sidebar-logo-settings-select',
-                            [
-                                { value: 'visible', label: i18n.t('OptionLogoSettingsVisible') || 'Visible' },
-                                { value: 'settings', label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings' },
-                                { value: 'home', label: i18n.t('OptionLogoSettingsHome') || 'Visible as Home' },
-                                { value: 'hidden', label: i18n.t('OptionLogoSettingsHidden') || 'Hidden' }
-                            ],
-                            (() => {
-                                let val = storage.getItem('pref:logoSettings') || 'visible';
-                                if (val === 'true') return 'settings';
-                                if (val === 'false') return 'visible';
-                                return val;
-                            })()
-                        )}
+            'sidebar-logo-settings-select',
+            [
+                { value: 'visible', label: i18n.t('OptionLogoSettingsVisible') || 'Visible' },
+                { value: 'settings', label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings' },
+                { value: 'home', label: i18n.t('OptionLogoSettingsHome') || 'Visible as Home' },
+                { value: 'hidden', label: i18n.t('OptionLogoSettingsHidden') || 'Hidden' }
+            ],
+            (() => {
+                let val = storage.getItem('pref:logoSettings') || 'visible';
+                if (val === 'true') return 'settings';
+                if (val === 'false') return 'visible';
+                return val;
+            })()
+        )}
                     </div>
                 </div>
 
@@ -5578,6 +5590,30 @@ class SettingsPage extends Page {
             });
         }
 
+        // =====================================================================
+        // TOGGLE HIDE GHOST MODE BUTTON
+        // =====================================================================
+        // Registers the click event handler for the Ghost Mode visibility toggle.
+        // Reading/writing via the browser storage abstraction ensures the details page
+        // can dynamically render actions based on the stored preference state.
+        // Activates classes instantly for premium Apple HIG feedback.
+        // =====================================================================
+        const hideGhostModeBtn = this.$('#toggle-hide-ghost-mode');
+        if (hideGhostModeBtn) {
+            hideGhostModeBtn.addEventListener('click', () => {
+                // Fetch the current setting value from persistent storage, defaulting to false.
+                const isHidden = storage.getItem('pref:hideGhostMode') === 'true';
+                const newValue = !isHidden;
+
+                // Write updated state back to database storage.
+                storage.setItem('pref:hideGhostMode', newValue.toString());
+
+                // Instantly update the visual active state using the iOS-style slider transition.
+                hideGhostModeBtn.classList.toggle('active', newValue);
+                log.info(`Hide Ghost Mode Button set to: ${newValue}`);
+            });
+        }
+
         // ==========================================
         // TOGGLE FORCE EXPANDABLE POSTERS (MODERN)
         // ==========================================
@@ -7210,7 +7246,7 @@ class SettingsPage extends Page {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
                             document.body.classList.toggle('sidebar-mode-collapsed', newValue === 'collapsed');
-                            
+
                             if (newValue === 'collapsed') {
                                 // Enable Show Collapsed Library Icons
                                 storage.setItem('pref:showCollapsedLibraryIcons', 'true');

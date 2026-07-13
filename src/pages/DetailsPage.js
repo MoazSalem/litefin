@@ -2158,8 +2158,16 @@ class DetailsPage extends Page {
         // Ghost Mode button visibility
         const ghostBtn = this.$('.ghost-btn');
         if (ghostBtn) {
+            // Check if SyncPlay is currently active.
             const isSyncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
-            const isPlayable = item.Type !== 'Photo' && !isSyncPlayActive;
+            
+            // Check if user has toggled the preference option to hide the button entirely.
+            const isHiddenByPref = storage.getItem('pref:hideGhostMode') === 'true';
+            
+            // Determine playability (non-photos and not in sync play, and not hidden by user preference).
+            const isPlayable = item.Type !== 'Photo' && !isSyncPlayActive && !isHiddenByPref;
+            
+            // Toggle visibility classes and keyboard accessibility index dynamically.
             if (isPlayable) {
                 ghostBtn.classList.remove('hidden');
                 ghostBtn.setAttribute('tabindex', '0');

@@ -612,6 +612,8 @@
     "fromJellyfin": "from Jellyfin",
     "FullScreen": "Full Screen",
     "GhostMode": "Ghost Mode",
+    "LabelHideGhostMode": "Hide Ghost Mode Button",
+    "HideGhostModeDescription": "Hide the ghost mode (incognito play) button on the item details page.",
     "Gold": "Gold",
     "GoToAlbum": "Go to Album",
     "GoToSeries": "Go to Series",
