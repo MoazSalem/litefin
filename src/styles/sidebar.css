@@ -564,6 +564,14 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     overflow-x: hidden;
 }
 
+.sidebar.align-center .sidebar-content {
+    justify-content: center !important;
+}
+
+.sidebar.align-bottom .sidebar-content {
+    justify-content: flex-end !important;
+}
+
 .sidebar-libraries {
     display: flex;
     flex-direction: column;

@@ -2259,6 +2259,25 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Sidebar Items Alignment Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSidebarItemsAlign">${i18n.t('LabelSidebarItemsAlign') || 'Sidebar Items Alignment'}</span>
+                        <span class="setting-description" data-i18n="SidebarItemsAlignDescription">${i18n.t('SidebarItemsAlignDescription') || 'Choose the vertical alignment of items inside the sidebar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'sidebar-items-align-select',
+            [
+                { value: 'top', label: i18n.t('OptionSidebarItemsAlignTop') || 'Top' },
+                { value: 'center', label: i18n.t('OptionSidebarItemsAlignCenter') || 'Center' },
+                { value: 'bottom', label: i18n.t('OptionSidebarItemsAlignBottom') || 'Bottom' }
+            ],
+            storage.getItem('pref:sidebarItemsAlign') || 'top'
+        )}
+                    </div>
+                </div>
+
                 <!-- Default Focus Section -->
 
                 <div class="setting-item">
@@ -7073,7 +7092,8 @@ class SettingsPage extends Page {
             'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' },
             'collapsed-sidebar-color-select': { key: 'pref:collapsedSidebarColor', type: 'local', triggerEvent: true },
             'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true },
-            'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true }
+            'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true },
+            'sidebar-items-align-select': { key: 'pref:sidebarItemsAlign', type: 'local', triggerEvent: true }
         };
 
         this.$$('.select-btn').forEach((btn) => {

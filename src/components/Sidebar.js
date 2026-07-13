@@ -151,6 +151,10 @@ class Sidebar extends Component {
         this._onLogoSettingsChanged = () => this._updateLogoSettings();
         eventBus.on('pref:logoSettings', this._onLogoSettingsChanged);
 
+        this._updateSidebarItemsAlign();
+        this._onSidebarItemsAlignChanged = () => this._updateSidebarItemsAlign();
+        eventBus.on('pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged);
+
         this._updateAnimationMode();
         this._onAnimationModeChanged = () => this._updateAnimationMode();
         eventBus.on('prefChanged:disableSidebarAnimation', this._onAnimationModeChanged);
@@ -304,6 +308,10 @@ class Sidebar extends Component {
         if (this._onHideLibraryHeaderChanged) {
             eventBus.off('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
         }
+
+        if (this._onSidebarItemsAlignChanged) {
+            eventBus.off('pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged);
+        }
     }
 
     /**
@@ -343,6 +351,8 @@ class Sidebar extends Component {
      */
     setMode(mode) {
         this.el.classList.toggle('hidden', mode === 'hidden');
+        // Re-evaluate alignment once visibility changes (resolving clientHeight 0 state)
+        setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
 
     _updateLogoSettings() {
@@ -574,6 +584,10 @@ class Sidebar extends Component {
         this.el.classList.toggle('expanded', expanded);
         this.el.classList.toggle('collapsed', !expanded);
 
+        // Recheck items alignment since library visibility changes between collapsed and expanded states
+        this._updateSidebarItemsAlign();
+        setTimeout(() => this._updateSidebarItemsAlign(), 0);
+
         // ====================================================================
         // COLLAPSE VISUAL RESET
         // ====================================================================
@@ -669,6 +683,9 @@ class Sidebar extends Component {
              */
             this._applySidebarLayout();
 
+            // Re-evaluate alignment now that libraries are loaded and overflow metrics are active
+            setTimeout(() => this._updateSidebarItemsAlign(), 0);
+
             // Invalidate focus manager cache to discover dynamically added libraries
             focusManager.resetDOMCache();
         } catch (e) {
@@ -735,6 +752,7 @@ class Sidebar extends Component {
         this.activePath = path;
         this._updateActiveState();
         this._updateTransparentCollapsed();
+        setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
 
     _updateTransparentCollapsed() {
@@ -746,6 +764,34 @@ class Sidebar extends Component {
         this.el.classList.toggle('transparent-expanded', expandedColorPref === 'transparent');
         this.el.classList.toggle('semi-transparent-expanded', expandedColorPref === 'semi');
         this.el.classList.toggle('black-expanded', expandedColorPref === 'black');
+    }
+
+    _updateSidebarItemsAlign() {
+        const alignPref = storage.getItem('pref:sidebarItemsAlign') || 'top';
+        const scrollContainer = this.el.querySelector('.sidebar-content');
+
+        let shouldAlign = false;
+        if (alignPref !== 'top' && scrollContainer) {
+            // Check if all sidebar items fit inside the scrollable view without overflow
+            const hasOverflow = scrollContainer.scrollHeight > scrollContainer.clientHeight;
+            shouldAlign = !hasOverflow;
+        }
+
+        const prevCenter = this.el.classList.contains('align-center');
+        const prevBottom = this.el.classList.contains('align-bottom');
+
+        this.el.classList.toggle('align-center', alignPref === 'center' && shouldAlign);
+        this.el.classList.toggle('align-bottom', alignPref === 'bottom' && shouldAlign);
+
+        const focused = this.el.querySelector('.sidebar-item.focused');
+        if (focused) {
+            // Update immediately for engines that reflow synchronously
+            this._updateIndicator(focused, { instant: true });
+            // And defer a 50ms update to ensure the TV rendering layout paint has fully settled
+            setTimeout(() => {
+                this._updateIndicator(focused, { instant: true });
+            }, 50);
+        }
     }
 
     _updateActiveState() {
