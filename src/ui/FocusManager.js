@@ -540,6 +540,14 @@ class FocusManager {
         }
     }
 
+    clearMemory(sectionName) {
+        if (sectionName) {
+            this._focusMemory.delete(sectionName);
+        } else {
+            this._focusMemory.clear();
+        }
+    }
+
     /**
      * Core movement logic
      * @param {string} direction

@@ -559,6 +559,14 @@ class LibraryPage extends Page {
     }
 
     _setupFocus() {
+        // Clear stale focus memory from previously viewed libraries since all
+        // library instances share section names like 'library-grid'
+        focusManager.clearMemory('library-grid');
+        focusManager.clearMemory('row-0');
+        focusManager.clearMemory('library-tabs');
+        focusManager.clearMemory('library-controls');
+        focusManager.clearMemory('empty-state-btn');
+
         const collectionType = this.state.libraryInfo?.CollectionType;
         const autoFocusFirstItem = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
 
