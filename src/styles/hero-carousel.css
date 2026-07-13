@@ -1050,4 +1050,9 @@ html[data-layout-quirks="c26"] .hero-dot {
     vertical-align: middle !important;
 }
 
+/* Position hero details at the bottom of the slide on Chrome 26, matching margins/overlaps */
+html[data-layout-quirks="c26"] .hero-content {
+    padding-top: 80px;
+}
+
 

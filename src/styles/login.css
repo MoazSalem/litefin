@@ -756,6 +756,26 @@ html[data-layout-quirks="c26"] .selected-user .user-avatar-placeholder {
     line-height: 140px !important;
 }
 
+html[data-layout-quirks="c26"] .selected-user {
+    display: block !important;
+    text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+html[data-layout-quirks="c26"] .selected-user .user-avatar,
+html[data-layout-quirks="c26"] .selected-user .user-avatar-placeholder,
+html[data-layout-quirks="c26"] .selected-user .login-user-avatar {
+    display: block !important;
+    margin: 0 auto !important;
+}
+
+html[data-layout-quirks="c26"] .selected-user .user-name,
+html[data-layout-quirks="c26"] .selected-user .login-user-name {
+    display: block !important;
+    text-align: center !important;
+}
+
 /* Center the quick-connect block content and description margins */
 html[data-layout-quirks="c26"] .quick-connect-section:not(.hidden) {
     display: block !important;
@@ -801,4 +821,5 @@ html[data-layout-tier="ultra-legacy"] .connect-btn {
     height: 70px; /* Match input height explicitly */
     box-sizing: border-box;
     display: block;
+    margin-left: 20px;
 }

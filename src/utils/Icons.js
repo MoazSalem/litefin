@@ -760,6 +760,21 @@ function addClassToSvg(svgString, className) {
 }
 
 /**
+ * Read the layout quirks mode from the document element.
+ * Set during LayoutManager.init() as data-layout-quirks attribute on <html>.
+ * Returns 'c26' on ancient WebKit browsers (WebOS 1.x, Tizen 2.x) or null otherwise.
+ * Wrapped in try/catch for safety if called before DOM is ready.
+ * @returns {string|null}
+ */
+function _getLayoutQuirks() {
+    try {
+        return document.documentElement.getAttribute('data-layout-quirks');
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * Resolves the final SVG markup based on the user's icon variant preferences.
  * Supports object-based definitions with separate outlined/filled templates.
  * Also keeps full backward compatibility with legacy raw HTML string templates.
@@ -790,6 +805,14 @@ function resolveIcon(iconEntry) {
             return iconEntry.filled;
         } else {
             // dynamic: return both, adding the required class to each SVG independently.
+            //
+            // On ancient WebKit (data-layout-quirks="c26"), the CSS outline↔filled
+            // swap on focus breaks — the `.icon-outline` gets display:none but the
+            // `.icon-filled` never shows, leaving the button blank.  Fall back to
+            // outlined-only to prevent the swap from running.
+            if (_getLayoutQuirks() === 'c26') {
+                return iconEntry.outlined;
+            }
             const outlineSvg = addClassToSvg(iconEntry.outlined, 'icon-outline');
             const filledSvg = addClassToSvg(iconEntry.filled, 'icon-filled');
             return outlineSvg + '\n' + filledSvg;
