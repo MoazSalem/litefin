@@ -2250,6 +2250,7 @@ class SettingsPage extends Page {
             'sidebar-mode-select',
             [
                 { value: 'shown', label: i18n.t('AlwaysShown') || 'Always Shown' },
+                { value: 'collapsed', label: i18n.t('AlwaysCollapsed') || 'Always Collapsed' },
                 { value: 'hidden', label: i18n.t('AlwaysHidden') || 'Always Hidden' },
                 { value: 'mixed', label: i18n.t('MixedMode') || 'Hidden in Details' }
             ],
@@ -7176,6 +7177,22 @@ class SettingsPage extends Page {
                         } else if (id === 'sidebar-mode-select') {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
+                            document.body.classList.toggle('sidebar-mode-collapsed', newValue === 'collapsed');
+                            
+                            if (newValue === 'collapsed') {
+                                // Enable Show Collapsed Library Icons
+                                storage.setItem('pref:showCollapsedLibraryIcons', 'true');
+                                const collIconsToggle = this.$('#toggle-show-collapsed-library-icons');
+                                if (collIconsToggle) collIconsToggle.classList.add('active');
+                                eventBus.emit('prefChanged:showCollapsedLibraryIcons', true);
+
+                                // Enable Hide Sidebar Library Header
+                                storage.setItem('pref:hideSidebarLibraryHeader', 'true');
+                                const hideHeaderToggle = this.$('#toggle-hide-sidebar-library-header');
+                                if (hideHeaderToggle) hideHeaderToggle.classList.add('active');
+                                eventBus.emit('prefChanged:hideSidebarLibraryHeader', true);
+                            }
+
                             focusManager.invalidateCache('sidebar');
                             focusManager.invalidateCache('home');
                         } else if (id === 'icon-style-select') {

@@ -99,6 +99,36 @@
     /* Shift to reveal full sidebar */
 }
 
+/* Always Collapsed Sidebar Mode Overrides */
+body.sidebar-mode-collapsed .sidebar.expanded,
+body.sidebar-mode-collapsed .sidebar:hover {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.expanded .logo-text,
+body.sidebar-mode-collapsed .sidebar:hover .logo-text,
+body.sidebar-mode-collapsed .sidebar.expanded .item-text,
+body.sidebar-mode-collapsed .sidebar:hover .item-text {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+body.sidebar-mode-collapsed .sidebar .logo-icon,
+body.sidebar-mode-collapsed .sidebar .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+/* Rounded square focus indicator overrides for Always Collapsed mode */
+body.sidebar-mode-collapsed .sidebar-focus-indicator {
+    width: 56px !important;
+    height: 56px !important;
+    left: 272px !important;
+    margin-top: 8px !important;
+    border-radius: 14px !important;
+}
+
 /* Instant Mode: Remove all transitions when disabled in settings */
 .sidebar.no-animation,
 .sidebar.no-animation *,

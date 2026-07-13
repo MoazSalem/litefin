@@ -541,6 +541,9 @@ class Sidebar extends Component {
     }
 
     _expand(expanded) {
+        if (storage.getItem('pref:sidebarMode') === 'collapsed') {
+            expanded = false;
+        }
         if (this.expanded === expanded) return;
         this.expanded = expanded;
 

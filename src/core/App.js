@@ -348,6 +348,12 @@ class App {
                 document.body.classList.remove('sidebar-mode-hidden');
             }
 
+            if (sidebarMode === 'collapsed') {
+                document.body.classList.add('sidebar-mode-collapsed');
+            } else {
+                document.body.classList.remove('sidebar-mode-collapsed');
+            }
+
             this.sidebar.setMode('visible');
         }
     }
