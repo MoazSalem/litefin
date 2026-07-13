@@ -1186,8 +1186,13 @@ class HomePage extends Page {
             if (!this._isMounted) return;
 
             // ─── Try restoring focus from back-navigation ─────────────────────
-            const lastFocusedObj = state.get('home:lastFocusedItem');
-            const legacyLastFocusedId = state.get('home:lastFocusedItemId');
+            let lastFocusedObj = null;
+            let legacyLastFocusedId = null;
+
+            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                lastFocusedObj = state.get('home:lastFocusedItem');
+                legacyLastFocusedId = state.get('home:lastFocusedItemId');
+            }
 
             let restoredFocus = false;
 
@@ -1257,6 +1262,10 @@ class HomePage extends Page {
                         scrollController.smoothScrollTo(scrollContainer, pendingNav.scrollTop, 0, 'vertical');
                     }
                 }
+            } else if (storage.getItem('pref:disableFocusRestore') === 'true') {
+                // Clean up any stale saved state from before the toggle was turned on
+                state.delete('home:lastFocusedItem');
+                state.delete('home:lastFocusedItemId');
             }
 
             // ─── Default: focus the first card in the first rendered row ──────
@@ -1319,13 +1328,15 @@ class HomePage extends Page {
             e.stopPropagation();
 
             // Save focused item + its row ID for exact focus restoration on back-nav
-            const sectionEl = card.closest('section[data-row-id]');
-            const rowId = sectionEl ? sectionEl.getAttribute('data-row-id') : null;
+            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                const sectionEl = card.closest('section[data-row-id]');
+                const rowId = sectionEl ? sectionEl.getAttribute('data-row-id') : null;
 
-            state.set('home:lastFocusedItem', {
-                itemId: card.dataset.itemId,
-                rowId // Stable ID (not fragile DOM index)
-            });
+                state.set('home:lastFocusedItem', {
+                    itemId: card.dataset.itemId,
+                    rowId
+                });
+            }
 
             // Navigate based on context type
             const ctxType = card.dataset.contextType;
@@ -1400,11 +1411,13 @@ class HomePage extends Page {
         if (['Person', 'MusicArtist', 'Artist', 'AlbumArtist'].includes(type)) return;
 
         // Persist focus for back-nav restoration, mirroring handleActivate().
-        const sectionEl = card.closest('section[data-row-id]');
-        state.set('home:lastFocusedItem', {
-            itemId,
-            rowId: sectionEl ? sectionEl.getAttribute('data-row-id') : null
-        });
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            const sectionEl = card.closest('section[data-row-id]');
+            state.set('home:lastFocusedItem', {
+                itemId,
+                rowId: sectionEl ? sectionEl.getAttribute('data-row-id') : null
+            });
+        }
 
         log.info(`Play key: quick-playing focused card ${itemId} (${type || 'unknown'})`);
         quickPlayItem(itemId);

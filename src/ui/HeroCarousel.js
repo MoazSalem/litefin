@@ -404,7 +404,7 @@ class HeroCarousel {
     destroy() {
         // Pause timer
         this._stopAutoScroll();
-        
+
         // Cancel any in-flight indicator animation frame or timeout
         if (this._indicatorRafId) {
             cancelAnimationFrame(this._indicatorRafId);

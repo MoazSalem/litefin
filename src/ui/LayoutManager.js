@@ -75,8 +75,6 @@ class LayoutManager {
         // Card label text scale multiplier
         this._cardLabelScale = 1.0;
 
-
-
         // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
         this._lowVramMode = false;
 
@@ -578,8 +576,6 @@ class LayoutManager {
         return this._cardLabelScale;
     }
 
-
-
     /**
      * Get the active button style configuration
      * @returns {string} One of: 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb'
@@ -597,7 +593,18 @@ class LayoutManager {
      */
     setButtonStyle(style, save = true) {
         // Validation check for allowed styles to avoid any UI/rendering inconsistencies
-        if (!['theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+        if (
+            ![
+                'theme-default',
+                'theme-inverted',
+                'monochrome-bw',
+                'monochrome-wb',
+                'white-accent',
+                'black-accent',
+                'accent-white',
+                'accent-black'
+            ].includes(style)
+        ) {
             log.warn(`Invalid button style type specified: "${style}"`);
             return;
         }
@@ -709,7 +716,19 @@ class LayoutManager {
     }
 
     setOsdButtonStyle(style, save = true) {
-        if (!['follow-global', 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+        if (
+            ![
+                'follow-global',
+                'theme-default',
+                'theme-inverted',
+                'monochrome-bw',
+                'monochrome-wb',
+                'white-accent',
+                'black-accent',
+                'accent-white',
+                'accent-black'
+            ].includes(style)
+        ) {
             log.warn(`Invalid OSD button style specified: "${style}"`);
             return;
         }
@@ -745,7 +764,9 @@ class LayoutManager {
     }
 
     setOsdButtonShape(shape, save = true) {
-        if (!['circle', 'rounded-square', 'squircle', 'organic-leaf', 'hexagon', 'outline', 'icon-only'].includes(shape)) {
+        if (
+            !['circle', 'rounded-square', 'squircle', 'organic-leaf', 'hexagon', 'outline', 'icon-only'].includes(shape)
+        ) {
             log.warn(`Invalid OSD button shape specified: "${shape}"`);
             return;
         }
@@ -825,8 +846,6 @@ class LayoutManager {
         log.info(`OSD seek bar progress color updated: ${color}`);
         eventBus.emit('osdSeekBarProgressColor:changed', { color });
     }
-
-
 
     /**
      * Enable or disable Low VRAM Mode

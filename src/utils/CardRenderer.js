@@ -550,7 +550,11 @@ class CardRenderer {
                          * - 'dovi' or 'dolby vision' in range/profile/title
                          * - Codec identifiers starting with 'dv' (e.g. dvh1, dvhe)
                          */
-                        if (checkString.includes('dovi') || checkString.includes('dolby vision') || codec.toLowerCase().startsWith('dv')) {
+                        if (
+                            checkString.includes('dovi') ||
+                            checkString.includes('dolby vision') ||
+                            codec.toLowerCase().startsWith('dv')
+                        ) {
                             isDovi = true;
                         }
                     }

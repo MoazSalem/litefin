@@ -234,11 +234,11 @@ class ThemeSongPlayer {
         // Under Apple's HIG principles, sound levels should default to a comfortable,
         // ambient level (30% or 0.3) rather than blasting at 100%.
         const targetVolume = parseFloat(storage.getItem('pref:themeSongVolume') || '0.3');
-        
+
         // Calculate the total number of updates needed to complete the transition
         // based on the configured step size (e.g. 1500ms / 30ms = 50 steps).
         const steps = this.FADE_IN_DURATION / this.FADE_INTERVAL_STEP;
-        
+
         // Compute the amount of volume to add during each step interval
         const volumeIncrement = targetVolume / steps;
         let currentStep = 0;
@@ -251,7 +251,7 @@ class ThemeSongPlayer {
             }
 
             currentStep++;
-            
+
             // Slowly increase the volume level up to the target cap
             const nextVolume = Math.min(targetVolume, currentStep * volumeIncrement);
             this._audio.volume = nextVolume;

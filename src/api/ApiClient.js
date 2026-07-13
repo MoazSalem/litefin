@@ -867,9 +867,7 @@ export class ApiClient {
      */
     async addToCollection(collectionId, itemIds) {
         const qs = itemIds.map((id) => `Ids=${encodeURIComponent(id)}`).join('&');
-        return this.post(
-            `/Collections/${collectionId}/Items?${qs}&UserId=${encodeURIComponent(this._userId)}`
-        );
+        return this.post(`/Collections/${collectionId}/Items?${qs}&UserId=${encodeURIComponent(this._userId)}`);
     }
 
     async getSimilar(itemId, params = {}) {

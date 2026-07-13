@@ -607,7 +607,7 @@ class FocusManager {
             // ================================================================
             const columns = config.columns;
             const isRtl = document.documentElement.dir === 'rtl';
-            
+
             // Map visual directions to logical layout directions
             let logicalDirection = direction;
             if (isRtl) {
@@ -639,7 +639,7 @@ class FocusManager {
                     const lastRowStart = Math.floor((focusables.length - 1) / columns) * columns;
                     const currentRow = Math.floor(currentIndex / columns);
                     const targetRow = currentRow + 1;
-                    
+
                     if (targetRow * columns < focusables.length || lastRowStart > currentIndex) {
                         const lastElementIndex = focusables.length - 1;
                         if (Math.floor(lastElementIndex / columns) === targetRow) {
@@ -859,6 +859,7 @@ class FocusManager {
     }
 
     _updateFocusMemory() {
+        if (storage.getItem('pref:disableFocusRestore') === 'true') return;
         if (!this._activeSection || !this._focusedElement) return;
         const config = this._sections.get(this._activeSection);
 
@@ -879,6 +880,14 @@ class FocusManager {
     _restoreFocus(sectionName, fromElement = null, options = {}) {
         const config = this._sections.get(sectionName);
         if (!config) return;
+
+        if (storage.getItem('pref:disableFocusRestore') === 'true') {
+            const focusables = this._getFocusables(sectionName);
+            if (focusables.length) {
+                this.focusElement(focusables[0], { instantScroll: !!options.instantScroll });
+            }
+            return;
+        }
 
         const focusables = this._getFocusables(sectionName);
         const memory = this._focusMemory.get(sectionName);

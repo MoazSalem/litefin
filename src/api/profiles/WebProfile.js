@@ -107,8 +107,7 @@ export function getDeviceCapabilities() {
         video.canPlayType('video/mp4; codecs="mp2v.20.2"') !== '' ||
         video.canPlayType('video/mpeg') !== '' ||
         video.canPlayType('video/mp2t; codecs="mp2v.20.2"') !== '';
-    mpegts =
-        video.canPlayType('video/mp2t') !== '';
+    mpegts = video.canPlayType('video/mp2t') !== '';
 
     // MP2 audio detection via HTML5 audio canPlayType
     mp2 = false; // HTML5 browsers do not support MP2 in media streams natively (probes are unreliable)

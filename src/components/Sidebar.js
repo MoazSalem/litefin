@@ -456,7 +456,6 @@ class Sidebar extends Component {
                 }
             });
 
-
             this._focusObserver.observe(this.el, {
                 attributes: true,
                 subtree: true,
@@ -489,7 +488,6 @@ class Sidebar extends Component {
             this._expandedByMouse = false;
             this._expand(false);
         });
-
 
         // Logo click handler
         this._bindItem(this.el.querySelector('#sidebar-logo-header'), () => {
@@ -579,7 +577,6 @@ class Sidebar extends Component {
                 document.activeElement.blur();
             }
         }
-
 
         const pageContainer = document.getElementById('page-container');
         if (pageContainer) {

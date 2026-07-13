@@ -28,31 +28,35 @@ class LazyLoader {
          * spike in Segment 1 of the profile.
          * ---------------------------------------------------------------- */
         this._shimmerObserver = null;
-        
+
         // Track the native scroll debounce timer context
         this._scrollTimeout = null;
-        
+
         // Queue elements that intersect during active scrolling animations or events
         this._pendingLoads = new Map();
-        
+
         this._init();
     }
 
     _init() {
         // Capture native scroll events in the capture phase to track all scrollable nodes
-        window.addEventListener('scroll', () => {
-            if (this._scrollTimeout) {
-                clearTimeout(this._scrollTimeout);
-            }
-            // Debounce check: scrolling is considered stopped after 150ms of silence
-            this._scrollTimeout = setTimeout(() => {
-                this._scrollTimeout = null;
-                // If no scroll animations are still active, process all queued loads
-                if (!this._isScrolling()) {
-                    this._processPendingLoads();
+        window.addEventListener(
+            'scroll',
+            () => {
+                if (this._scrollTimeout) {
+                    clearTimeout(this._scrollTimeout);
                 }
-            }, 150);
-        }, true);
+                // Debounce check: scrolling is considered stopped after 150ms of silence
+                this._scrollTimeout = setTimeout(() => {
+                    this._scrollTimeout = null;
+                    // If no scroll animations are still active, process all queued loads
+                    if (!this._isScrolling()) {
+                        this._processPendingLoads();
+                    }
+                }, 150);
+            },
+            true
+        );
 
         // Listen for ScrollController finishing its transitions
         eventBus.on('scroll:finished', () => {
@@ -121,7 +125,7 @@ class LazyLoader {
                             const scrollDist = scrollW - clientW;
                             const extraSpacing = 30; // 30px visual buffer/margin before looping back
                             const totalScroll = scrollDist + extraSpacing;
-                            
+
                             // Adjust scrolling duration dynamically based on length (30px/sec speed)
                             const duration = Math.max(3, totalScroll / 30);
 
@@ -140,7 +144,7 @@ class LazyLoader {
                 (entries, observer) => {
                     entries.forEach((entry) => {
                         const target = entry.target;
-                        
+
                         if (entry.isIntersecting) {
                             const type = target.hasAttribute('data-lazy-row') ? 'row' : 'image';
 
@@ -215,8 +219,6 @@ class LazyLoader {
         }
     }
 
-
-
     /**
      * Check if a scrolling action or transition is active on the screen
      * @returns {boolean}
@@ -238,7 +240,7 @@ class LazyLoader {
         if (this._pendingLoads.size === 0) return;
 
         log.info(`Processing ${this._pendingLoads.size} pending lazy loads after scroll stop.`);
-        
+
         // Execute batch loads for all queued elements
         this._pendingLoads.forEach((type, target) => {
             if (type === 'row') {
@@ -248,7 +250,7 @@ class LazyLoader {
                 this._batchPreloadImages(target);
             }
         });
-        
+
         this._pendingLoads.clear();
     }
 

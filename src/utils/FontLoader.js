@@ -141,17 +141,17 @@ class FontLoader {
                 // Retrieve the user selected font name, falling back to the first font from the server list
                 const userSelectedFont = storage.getItem('pref:jellyfinFallbackFont');
                 let fontName = '';
-                if (userSelectedFont && fonts.some(f => f.Name === userSelectedFont)) {
+                if (userSelectedFont && fonts.some((f) => f.Name === userSelectedFont)) {
                     fontName = userSelectedFont;
                 } else {
                     fontName = fonts[0].Name;
                 }
-                
+
                 if (!fontName) {
                     log.warn('Invalid fallback font name in server response');
                     return false;
                 }
-                
+
                 const serverInfo = state.get('server:info') || {};
                 const isEmbyInstance = !!(
                     serverInfo.ServerName &&
@@ -161,7 +161,7 @@ class FontLoader {
                 const url = `${api.serverUrl}/FallbackFont/Fonts/${encodeURIComponent(fontName)}?${authKey}=${encodeURIComponent(token)}`;
 
                 log.debug(`Downloading Jellyfin fallback font binary from: ${url}`);
-                
+
                 // Download the font binary to create a clean blob URL, preventing FS errors in WASM worker
                 const response = await fetch(url);
                 if (!response.ok) {
@@ -169,7 +169,7 @@ class FontLoader {
                 }
                 const buffer = await response.arrayBuffer();
                 const blob = new Blob([buffer], { type: response.headers.get('content-type') || 'font/ttf' });
-                
+
                 // Revoke the old fallback font URL if it exists to avoid memory leaks
                 if (this._fallbackFontUrl) {
                     try {
@@ -178,7 +178,7 @@ class FontLoader {
                         /* ignore */
                     }
                 }
-                
+
                 const blobUrl = URL.createObjectURL(blob);
                 this._fallbackFontUrl = blobUrl;
 

@@ -382,7 +382,10 @@ class SettingsPage extends Page {
                         value: 'system',
                         label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
                     },
-                    { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
+                    {
+                        value: 'fallback-font',
+                        label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font'
+                    },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'roboto', label: i18n.t('FontRoboto') },
                     { value: 'google', label: i18n.t('FontGoogleSans') },
@@ -1205,6 +1208,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDisableFocusRestore">${i18n.t('LabelDisableFocusRestore') || 'Disable Focus Restoration'}</span>
+                        <span class="setting-description" data-i18n="DisableFocusRestoreDescription">${i18n.t('DisableFocusRestoreDescription') || 'Skip saving and restoring the last focused item when navigating between pages to reduce memory usage. Focus will reset to the first item on each page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:disableFocusRestore') === 'true' ? 'active' : ''}"
+                                id="toggle-disable-focus-restore"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Extra Section -->
                 <h3 class="setting-section-title" data-i18n="Extra">${i18n.t('Extra')}</h3>
 
@@ -1334,8 +1350,14 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
             'details-layout-select',
             [
-                { value: 'posterLeft', label: i18n.t('OptionDetailsLayoutPosterLeft') || 'Poster Left Aligned (Default)' },
-                { value: 'posterRight', label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned' }
+                {
+                    value: 'posterLeft',
+                    label: i18n.t('OptionDetailsLayoutPosterLeft') || 'Poster Left Aligned (Default)'
+                },
+                {
+                    value: 'posterRight',
+                    label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned'
+                }
             ],
             storage.getItem('pref:detailsLayout') || 'posterLeft'
         )}
@@ -2550,7 +2572,9 @@ class SettingsPage extends Page {
             { value: 'disable', label: i18n.t('ForceStateDisable') || 'Force Disable' }
         ];
 
-        const audioSettingsHtml = currentBackend !== 'tizen' ? `
+        const audioSettingsHtml =
+            currentBackend !== 'tizen'
+                ? `
                 <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
 
                 <div class="setting-item">
@@ -2573,11 +2597,12 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         <button class="btn btn-option" id="btn-audio-normalization" tabindex="0">
-                            ${currentAudioNormalization === 'Off' ? (i18n.t('Off') || 'Off') : currentAudioNormalization === 'TrackGain' ? (i18n.t('LabelTrackGain') || 'Track Gain') : (i18n.t('LabelAlbumGain') || 'Album Gain')}
+                            ${currentAudioNormalization === 'Off' ? i18n.t('Off') || 'Off' : currentAudioNormalization === 'TrackGain' ? i18n.t('LabelTrackGain') || 'Track Gain' : i18n.t('LabelAlbumGain') || 'Album Gain'}
                         </button>
                     </div>
                 </div>
-                ` : '';
+                `
+                : '';
 
         return `
             <div class="settings-tab-content">
@@ -2749,8 +2774,14 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
             'next-up-dialog-trigger-select',
             [
-                { value: 'default', label: i18n.t('OptionTriggerDefault') || 'Chapters (if available) / Time-based' },
-                { value: 'time_fallback', label: i18n.t('OptionTriggerTimeFallback') || 'Time-based only' },
+                {
+                    value: 'default',
+                    label: i18n.t('OptionTriggerDefault') || 'Chapters (if available) / Time-based'
+                },
+                {
+                    value: 'time_fallback',
+                    label: i18n.t('OptionTriggerTimeFallback') || 'Time-based only'
+                },
                 { value: 'seconds_20', label: i18n.t('OptionTrigger20s') || 'Last 20 seconds' },
                 { value: 'seconds_30', label: i18n.t('OptionTrigger30s') || 'Last 30 seconds' }
             ],
@@ -3697,7 +3728,10 @@ class SettingsPage extends Page {
                     value: '',
                     label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
                 },
-                { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
+                {
+                    value: 'fallback-font',
+                    label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font'
+                },
                 { value: 'poppins', label: i18n.t('FontPoppins') || 'Poppins' },
                 { value: 'roboto', label: i18n.t('FontRoboto') || 'Roboto' },
                 { value: 'google', label: i18n.t('FontGoogleSans') || 'Google Sans' },
@@ -4065,7 +4099,10 @@ class SettingsPage extends Page {
                 },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
                 { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' },
-                { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' }
+                {
+                    value: 'fallback-font',
+                    label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font'
+                }
             ],
             PlayerSettings.get('subtitleFontAss')
         )}
@@ -4472,7 +4509,9 @@ class SettingsPage extends Page {
             this._updateBackupTabUI();
         } catch (error) {
             log.error('Failed to get backups list:', error);
-            msgEl.innerText = i18n.t('BackupPluginError') || 'Server backup plugin is not available. Please ensure the Litefin backup plugin is installed on your Jellyfin server.';
+            msgEl.innerText =
+                i18n.t('BackupPluginError') ||
+                'Server backup plugin is not available. Please ensure the Litefin backup plugin is installed on your Jellyfin server.';
 
             // Render disabled state
             const selectContainer = this.$('#backup-select-container');
@@ -4496,9 +4535,7 @@ class SettingsPage extends Page {
         const currentSelectedVal = this._selectedBackupId || 'new';
 
         // Build options list
-        const options = [
-            { value: 'new', label: i18n.t('NewBackup') || 'Create New Backup' }
-        ];
+        const options = [{ value: 'new', label: i18n.t('NewBackup') || 'Create New Backup' }];
 
         const backups = this.backupsList || [];
         backups.forEach((b) => {
@@ -4507,16 +4544,16 @@ class SettingsPage extends Page {
             const device = b.DeviceName || 'Unknown Device';
 
             const platformMap = {
-                'web': 'Web',
-                'tizen': 'Tizen',
-                'webos': 'WebOS'
+                web: 'Web',
+                tizen: 'Tizen',
+                webos: 'WebOS'
             };
             const platformDisplay = platformMap[b.Platform] || b.Platform || 'Unknown';
             const infoSuffix = b.Platform ? `${dateStr}, ${platformDisplay}` : dateStr;
 
             // If b.Name is empty or matches/starts with the device name (legacy server-side fallback),
             // display: DeviceName - Username (Date, Platform)
-            const isFallback = !b.Name || b.Name.trim() === "" || b.Name.startsWith(device);
+            const isFallback = !b.Name || b.Name.trim() === '' || b.Name.startsWith(device);
             const displayName = isFallback
                 ? `${device} - ${b.Username} (${infoSuffix})`
                 : `${b.Name} - ${b.Username} (${infoSuffix})`;
@@ -4572,7 +4609,7 @@ class SettingsPage extends Page {
         } else {
             if (nameInputContainer) nameInputContainer.style.display = 'none';
 
-            const selectedBackup = backups.find(b => b.Id === currentSelectedVal);
+            const selectedBackup = backups.find((b) => b.Id === currentSelectedVal);
             if (!selectedBackup) {
                 this._selectedBackupId = 'new';
                 this._updateBackupTabUI();
@@ -4945,9 +4982,9 @@ class SettingsPage extends Page {
             storage.removeItem('image_details_preset');
 
             // Clear all non-sensitive litefin: keys currently set in storage
-            const keysToClear = storage.keys().filter(key =>
-                key.startsWith('litefin:') && !excludedKeys.includes(key)
-            );
+            const keysToClear = storage
+                .keys()
+                .filter((key) => key.startsWith('litefin:') && !excludedKeys.includes(key));
             for (const key of keysToClear) {
                 storage.removeItem(key);
             }
@@ -5044,7 +5081,6 @@ class SettingsPage extends Page {
             log.error('Delete backup failed:', error);
         }
     }
-
 
     _renderDebugTab() {
         const logsEnabled = debugOverlay.isLogsEnabled;
@@ -5769,6 +5805,18 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getOnlyBlurHashBackdrop();
                 layoutManager.setOnlyBlurHashBackdrop(newValue);
                 onlyBlurhashBackdropBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Disable Focus Restoration
+        const focusRestoreBtn = this.$('#toggle-disable-focus-restore');
+        if (focusRestoreBtn) {
+            focusRestoreBtn.addEventListener('click', () => {
+                const isDisabled = storage.getItem('pref:disableFocusRestore') === 'true';
+                const newValue = !isDisabled;
+                storage.setItem('pref:disableFocusRestore', newValue.toString());
+                focusRestoreBtn.classList.toggle('active', newValue);
+                log.info(`Disable focus restoration set to: ${newValue}`);
             });
         }
 
@@ -6537,26 +6585,28 @@ class SettingsPage extends Page {
                     <h2>${title}</h2>
                 </div>
                 <div class="modal-options">
-                    ${options.length === 0 ? `
+                    ${options.length === 0
+                ? `
                         <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
                             ${i18n.t('NoOptionsAvailable') || 'No options available'}
                         </div>
-                    ` : options
-                .map((opt) => {
-                    let badge = '';
-                    if (opt.completeness !== undefined) {
-                        const percentage = Math.floor(opt.completeness);
-                        let innerBadge = '';
-                        if (percentage === 0) {
-                            innerBadge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
-                        } else if (percentage < 85) {
-                            innerBadge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
-                        } else {
-                            innerBadge = `<span class="track-badge lang-badge badge-success">100%</span>`;
+                    `
+                : options
+                    .map((opt) => {
+                        let badge = '';
+                        if (opt.completeness !== undefined) {
+                            const percentage = Math.floor(opt.completeness);
+                            let innerBadge = '';
+                            if (percentage === 0) {
+                                innerBadge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
+                            } else if (percentage < 85) {
+                                innerBadge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
+                            } else {
+                                innerBadge = `<span class="track-badge lang-badge badge-success">100%</span>`;
+                            }
+                            badge = `<span class="track-badges">${innerBadge}</span>`;
                         }
-                        badge = `<span class="track-badges">${innerBadge}</span>`;
-                    }
-                    return `
+                        return `
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
@@ -6564,8 +6614,9 @@ class SettingsPage extends Page {
                              ${badge}
                         </button>
                     `;
-                })
-                .join('')}
+                    })
+                    .join('')
+            }
                 </div>
                 <div class="modal-actions">
                     <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="ButtonCancel">${i18n.t('ButtonCancel')}</button>
@@ -7416,11 +7467,12 @@ class SettingsPage extends Page {
                     (value) => {
                         PlayerSettings.set('audioNormalization', value);
                         // Update the button text to reflect the new selection
-                        const label = value === 'Off'
-                            ? (i18n.t('Off') || 'Off')
-                            : value === 'TrackGain'
-                                ? (i18n.t('LabelTrackGain') || 'Track Gain')
-                                : (i18n.t('LabelAlbumGain') || 'Album Gain');
+                        const label =
+                            value === 'Off'
+                                ? i18n.t('Off') || 'Off'
+                                : value === 'TrackGain'
+                                    ? i18n.t('LabelTrackGain') || 'Track Gain'
+                                    : i18n.t('LabelAlbumGain') || 'Album Gain';
                         audioNormBtn.textContent = label;
                         log.info(`Audio Normalization set to: ${value}`);
                     }
@@ -7586,7 +7638,7 @@ class SettingsPage extends Page {
         // Apple HIG Guidelines: Tactile Toggle Event Handling - Secondary Title Color
         // =====================================================================
         // Registers click handler for the secondary details title color switch.
-        // Reading current state from localStorage key, toggles value, and persists 
+        // Reading current state from localStorage key, toggles value, and persists
         // to storage so that subsequent detail page renders adapt dynamically.
         // Provides instant visual styling feedback by toggling the 'active' class.
         // =====================================================================
@@ -7667,8 +7719,6 @@ class SettingsPage extends Page {
                 versionChecker.checkUpdate(true);
             });
         }
-
-
 
         // Initial Visibility Check for Background Opacity
         const bgContainer = document.getElementById('subtitle-bg-opacity-container');

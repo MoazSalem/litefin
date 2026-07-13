@@ -61,82 +61,83 @@ class FavoritesPage extends Page {
             if (!userId) throw new Error('User not authenticated');
 
             // Parallel fetch of all favorite types, including music and live tv, plus user library views
-            const [movies, shows, seasons, episodes, channels, people, artists, albums, songs, viewsResponse] = await Promise.all([
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'Movie',
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear'
-                }),
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'Series',
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear,UnplayedItemCount,UserData'
-                }),
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'Season',
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio,ParentTitle,ProductionYear,UnplayedItemCount,UserData'
-                }),
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'Episode',
-                    SortBy: 'DateCreated',
-                    SortOrder: 'Descending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber'
-                }),
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'TvChannel',
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio'
-                }),
-                api.get('/Persons', {
-                    Filters: 'IsFavorite',
-                    UserId: userId,
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio'
-                }),
-                // --- Music Types --- (Note: artists use the dedicated /Artists endpoint
-                // because the /Items endpoint with IsFavorite + MusicArtist filtering
-                // doesn't work properly — /Artists has explicit favorite support)
-                api.getFavoriteArtists(),
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'MusicAlbum',
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists'
-                }),
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'Audio',
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
-                }),
-                api.getUserViews()
-            ]);
+            const [movies, shows, seasons, episodes, channels, people, artists, albums, songs, viewsResponse] =
+                await Promise.all([
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'Movie',
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear'
+                    }),
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'Series',
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio,ProductionYear,UnplayedItemCount,UserData'
+                    }),
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'Season',
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio,ParentTitle,ProductionYear,UnplayedItemCount,UserData'
+                    }),
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'Episode',
+                        SortBy: 'DateCreated',
+                        SortOrder: 'Descending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber'
+                    }),
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'TvChannel',
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio'
+                    }),
+                    api.get('/Persons', {
+                        Filters: 'IsFavorite',
+                        UserId: userId,
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio'
+                    }),
+                    // --- Music Types --- (Note: artists use the dedicated /Artists endpoint
+                    // because the /Items endpoint with IsFavorite + MusicArtist filtering
+                    // doesn't work properly — /Artists has explicit favorite support)
+                    api.getFavoriteArtists(),
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'MusicAlbum',
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists'
+                    }),
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'Audio',
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
+                    }),
+                    api.getUserViews()
+                ]);
 
             // =========================================================================
             // RESOLVE USER LIBRARIES FOR CLICKABLE HEADERS
             // =========================================================================
-            // Parse through the user's active root libraries (views) returned by 
+            // Parse through the user's active root libraries (views) returned by
             // the server, mapping each CollectionType to its corresponding Library ID.
             // This mapping enables header buttons to route to the correct library view.
             // =========================================================================
@@ -218,7 +219,14 @@ class FavoritesPage extends Page {
             this.restoreScrollFocusWhenReady();
 
             requestAnimationFrame(() => {
-                const lastFocusedObj = state.get('favorites:lastFocusedItem');
+                let lastFocusedObj = null;
+
+                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                    lastFocusedObj = state.get('favorites:lastFocusedItem');
+                } else {
+                    state.delete('favorites:lastFocusedItem');
+                }
+
                 let restoredFocus = false;
 
                 if (lastFocusedObj) {
@@ -269,7 +277,7 @@ class FavoritesPage extends Page {
         // =====================================================================
         // HTML RENDERING WITH FOCUSABLE HEADER
         // =====================================================================
-        // Renders the section header as a button with class 
+        // Renders the section header as a button with class
         // 'favorites-header-focusable' to style it completely independently
         // of library page layouts.
         // =====================================================================
@@ -375,10 +383,12 @@ class FavoritesPage extends Page {
             const card = e.target.closest('.media-card');
             if (card && card.dataset.itemId) {
                 // Save clicked item for exact focus restoration
-                state.set('favorites:lastFocusedItem', {
-                    itemId: card.dataset.itemId,
-                    sectionId: sectionId
-                });
+                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                    state.set('favorites:lastFocusedItem', {
+                        itemId: card.dataset.itemId,
+                        sectionId: sectionId
+                    });
+                }
 
                 if (type === 'person' || type === 'artist') {
                     // Both Persons and Music Artists navigate to the PersonPage
@@ -411,8 +421,8 @@ class FavoritesPage extends Page {
             leaveLeft: 'sidebar',
             selector: '.favorites-header-focusable, .media-card', // Allow focusing both header button and cards
             onMove: (direction, currentFocused) => {
-                // If focus is currently on the header button, block horizontal navigation 
-                // to the right (since nothing is there), but let vertical moves and left 
+                // If focus is currently on the header button, block horizontal navigation
+                // to the right (since nothing is there), but let vertical moves and left
                 // moves (exiting to the sidebar) flow spatially.
                 if (currentFocused && currentFocused.classList.contains('favorites-header-focusable')) {
                     if (direction === 'right' || direction === 'Right') {

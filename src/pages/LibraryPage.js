@@ -276,7 +276,7 @@ class LibraryPage extends Page {
                 // =============================================================
                 // TRANSLATABLE TYPE-SPECIFIC FAVORITE HEADERS
                 // =============================================================
-                // Maps the includeItemTypes query filter parameters to localized 
+                // Maps the includeItemTypes query filter parameters to localized
                 // singular or plural display values (e.g. Movies, TV Shows, etc.).
                 // =============================================================
                 let typeLabel = '';
@@ -320,7 +320,14 @@ class LibraryPage extends Page {
         const cacheKey = this._getCacheKey();
 
         // State Rehydration Check
-        const savedState = state.get(cacheKey);
+        let savedState = null;
+
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            savedState = state.get(cacheKey);
+        } else {
+            state.delete(cacheKey);
+        }
+
         if (savedState) {
             // Merge cached state properties
             Object.assign(this.state, savedState.stateData);
@@ -690,6 +697,7 @@ class LibraryPage extends Page {
     }
 
     _saveState(focusSectionId, focusItemId) {
+        if (storage.getItem('pref:disableFocusRestore') === 'true') return;
         state.set(this._getCacheKey(), {
             stateData: this.state,
             focusSectionId,
@@ -1359,10 +1367,10 @@ class LibraryPage extends Page {
                     collectionType === 'tvshows'
                         ? 'Series'
                         : collectionType === 'movies'
-                            ? 'Movie'
-                            : collectionType === 'music'
-                                ? 'MusicAlbum'
-                                : 'Movie,Series';
+                          ? 'Movie'
+                          : collectionType === 'music'
+                            ? 'MusicAlbum'
+                            : 'Movie,Series';
 
                 const rowPromises = allGenres.map(async (genre) => {
                     const params = {
@@ -1540,10 +1548,7 @@ class LibraryPage extends Page {
 
                 // Enrich individual playlist/collection items with Primary images from their contents
                 const collectionType = this.state.libraryInfo?.CollectionType;
-                if (
-                    (collectionType === 'playlists' || collectionType === 'boxsets') &&
-                    this.state.items.length > 0
-                ) {
+                if ((collectionType === 'playlists' || collectionType === 'boxsets') && this.state.items.length > 0) {
                     await this._enrichCollectionItems(this.state.items, collectionType);
                 }
 
@@ -2222,8 +2227,8 @@ class LibraryPage extends Page {
                         this.state.viewType === 'Upcoming'
                             ? 'upcoming'
                             : this.state.viewType === 'Albums'
-                                ? 'music'
-                                : 'library',
+                              ? 'music'
+                              : 'library',
                     // Only show rich meta row in list view (rating, score, runtime)
                     showMeta: !isLandscape && this.state.viewMode === 'list',
                     isGrid: true,
@@ -2404,8 +2409,8 @@ class LibraryPage extends Page {
         const nextUpTarget = this._isSubView()
             ? null
             : isHorizontalLayout || isGenresView
-                ? 'library-tabs'
-                : 'library-controls';
+              ? 'library-tabs'
+              : 'library-controls';
 
         rows.forEach((row, rowIndex) => {
             const headerId = `header-${rowIndex}`;
@@ -2580,22 +2585,22 @@ class LibraryPage extends Page {
                 onEnter:
                     isHorizontalRow && virtualRow
                         ? (fromElement, options) => {
-                            if (
-                                fromElement &&
-                                options &&
-                                (options.direction === 'up' || options.direction === 'down')
-                            ) {
-                                virtualRow._updateWindow(virtualRow.currentIndex);
-                                return virtualRow.domNodes.get(virtualRow.currentIndex);
-                            }
-                            return null;
-                        }
+                              if (
+                                  fromElement &&
+                                  options &&
+                                  (options.direction === 'up' || options.direction === 'down')
+                              ) {
+                                  virtualRow._updateWindow(virtualRow.currentIndex);
+                                  return virtualRow.domNodes.get(virtualRow.currentIndex);
+                              }
+                              return null;
+                          }
                         : null,
                 onRestoreIndex:
                     isHorizontalRow && virtualRow
                         ? (index) => {
-                            return virtualRow.focusByIndex(index);
-                        }
+                              return virtualRow.focusByIndex(index);
+                          }
                         : null
             });
         });
@@ -3232,8 +3237,8 @@ class LibraryPage extends Page {
                     tempMode === 'list'
                         ? 'view-mode-options'
                         : tempGridMode === 'dynamic'
-                            ? 'columns-options'
-                            : 'grid-mode-options',
+                          ? 'columns-options'
+                          : 'grid-mode-options',
                 selector: 'button'
             });
         };
@@ -3247,8 +3252,8 @@ class LibraryPage extends Page {
                     <h3 class="section-subtitle" style="font-size: 1.2rem; opacity: 0.7; margin-bottom: 12px;">Layout Style</h3>
                     <div class="view-mode-options" id="view-mode-options" style="display: flex; gap: 10px; margin-bottom: 10px;">
                         ${modes
-                .map(
-                    (m) => `
+                            .map(
+                                (m) => `
                             <button class="view-mode-option-btn ${m.value === tempMode ? 'selected' : ''}"
                                     data-mode="${m.value}"
                                     tabindex="0">
@@ -3256,8 +3261,8 @@ class LibraryPage extends Page {
                                 <span class="vm-label">${i18n.t(m.label)}</span>
                             </button>
                         `
-                )
-                .join('')}
+                            )
+                            .join('')}
                     </div>
                 </div>
 
@@ -3372,8 +3377,8 @@ class LibraryPage extends Page {
                         <h2 class="modal-title" data-i18n="HeaderSortBy">${i18n.t('HeaderSortBy')}</h2>
                         <div class="modal-options">
                             ${sortOptions
-                .map(
-                    (opt) => `
+                                .map(
+                                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentSort ? 'selected' : ''}" 
                                         data-type="sort" 
                                         data-value="${opt.value}"
@@ -3382,8 +3387,8 @@ class LibraryPage extends Page {
                                     <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
                                 </button>
                             `
-                )
-                .join('')}
+                                )
+                                .join('')}
                         </div>
                     </div>
 
@@ -3392,8 +3397,8 @@ class LibraryPage extends Page {
                         <h2 class="modal-title" data-i18n="HeaderSortOrder">${i18n.t('HeaderSortOrder')}</h2>
                         <div class="modal-options">
                             ${orderOptions
-                .map(
-                    (opt) => `
+                                .map(
+                                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentOrder ? 'selected' : ''}" 
                                         data-type="order" 
                                         data-value="${opt.value}"
@@ -3402,8 +3407,8 @@ class LibraryPage extends Page {
                                     <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
                                 </button>
                             `
-                )
-                .join('')}
+                                )
+                                .join('')}
                         </div>
                     </div>
                 </div>
@@ -3640,16 +3645,16 @@ class LibraryPage extends Page {
                     <!-- Left Sidebar -->
                     <div class="filter-sidebar" id="filter-sidebar">
                         ${validSections
-                .map(
-                    (s) => `
+                            .map(
+                                (s) => `
                             <button class="filter-category-btn ${s.id === activeSectionId ? 'active' : ''}" 
                                     data-id="${s.id}" tabindex="0"
                                     data-i18n="${s.title}">
                                 ${i18n.t(s.title)}
                             </button>
                         `
-                )
-                .join('')}
+                            )
+                            .join('')}
                     </div>
 
                     <!-- Right Main Content -->
@@ -4010,8 +4015,8 @@ class LibraryPage extends Page {
                 </div>
                 <div class="modal-options page-content" id="modal-options">
                     ${options
-                .map(
-                    (opt) => `
+                        .map(
+                            (opt) => `
                         <button class="modal-option-btn ${opt.selected ? 'selected' : ''}" 
                                 data-value="${opt.value}" 
                                 tabindex="0">
@@ -4019,8 +4024,8 @@ class LibraryPage extends Page {
                             <span class="check-icon">✓</span>
                         </button>
                     `
-                )
-                .join('')}
+                        )
+                        .join('')}
                 </div>
                 <button class="modal-close-btn" id="modal-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
             </div>

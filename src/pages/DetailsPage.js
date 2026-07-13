@@ -548,7 +548,14 @@ class DetailsPage extends Page {
             // which was called in onInit. If not, we handle initial landing here.
             requestAnimationFrame(() => {
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
-                const lastFocusedObj = state.get(stateKey);
+                let lastFocusedObj = null;
+
+                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                    lastFocusedObj = state.get(stateKey);
+                } else {
+                    state.delete(stateKey);
+                }
+
                 let restoredFocus = false;
 
                 if (lastFocusedObj) {
@@ -956,10 +963,12 @@ class DetailsPage extends Page {
                 // Save focus context so Back navigation returns to the same card
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
                 if (card.dataset.itemId) {
-                    state.set(stateKey, {
-                        itemId: card.dataset.itemId,
-                        sectionId: 'details-playlist-items'
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: 'details-playlist-items'
+                        });
+                    }
                     router.navigate(`/details/${card.dataset.itemId}`);
                 }
             }
@@ -1010,10 +1019,12 @@ class DetailsPage extends Page {
             onClick: (card) => {
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
                 if (card.dataset.itemId) {
-                    state.set(stateKey, {
-                        itemId: card.dataset.itemId,
-                        sectionId: 'details-songs'
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: 'details-songs'
+                        });
+                    }
                     // Start playback directly for songs?
                     // Or navigate to song details?
                     // Jellyfin usually plays. Litefin usually navigates.
@@ -1264,16 +1275,20 @@ class DetailsPage extends Page {
                 // to prevent child DetailsPages from consuming parent state
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
                 if (card.dataset.itemId) {
-                    state.set(stateKey, {
-                        itemId: card.dataset.itemId,
-                        sectionId: focusSectionName
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: focusSectionName
+                        });
+                    }
                 } else if (card.dataset.id) {
                     // Fallback for some cards that might use data-id
-                    state.set(stateKey, {
-                        itemId: card.dataset.id,
-                        sectionId: focusSectionName
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.id,
+                            sectionId: focusSectionName
+                        });
+                    }
                 }
 
                 if (onClick) {
@@ -1874,8 +1889,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                    ? item.OriginalTitle
-                    : ''
+                  ? item.OriginalTitle
+                  : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -2190,7 +2205,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => { });
+        requestAnimationFrame(() => {});
 
         // Watched button
         if (watchedBtn) {
@@ -2411,10 +2426,12 @@ class DetailsPage extends Page {
                 onClick: (card) => {
                     const stateKey = `details:lastFocusedItem:${this._itemId}`;
                     if (card.dataset.itemId) {
-                        state.set(stateKey, {
-                            itemId: card.dataset.itemId,
-                            sectionId: 'details-episodes'
-                        });
+                        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                            state.set(stateKey, {
+                                itemId: card.dataset.itemId,
+                                sectionId: 'details-episodes'
+                            });
+                        }
                         router.navigate(`/details/${card.dataset.itemId}`);
                     }
                 }
@@ -2773,12 +2790,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                    this._item.SeasonName.toLowerCase().startsWith('season ')
-                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                        : /^\d+$/.test(this._item.SeasonName)
+                      this._item.SeasonName.toLowerCase().startsWith('season ')
+                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                          : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                ])
+                  ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
@@ -3482,19 +3499,22 @@ class DetailsPage extends Page {
             }
         }
 
-        const optionsHtml = options.length === 0 ? `
+        const optionsHtml =
+            options.length === 0
+                ? `
             <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
                 ${i18n.t('NoOptionsAvailable') || 'No options available'}
             </div>
-        ` : options
-            .map((opt, i) => {
-                return `
+        `
+                : options
+                      .map((opt, i) => {
+                          return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-            })
-            .join('');
+                      })
+                      .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">

@@ -12,6 +12,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { storage } from '../utils/StorageService.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
@@ -92,7 +93,13 @@ class SearchPage extends Page {
         this._setupFocus();
 
         // State Rehydration Check
-        const searchState = state.get('search:state');
+        let searchState = null;
+
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            searchState = state.get('search:state');
+        } else {
+            state.delete('search:state');
+        }
 
         if (!searchState) {
             // Initial Focus Sequence (Only if NOT restoring state)
@@ -228,12 +235,12 @@ class SearchPage extends Page {
 
     /**
      * Overrides the default page-level loading state mechanism.
-     * 
+     *
      * By default, Page.js adds a 'loading' class to the page container, which
      * hides all other child elements (via opacity: 0) to prevent interaction.
      * For live search, this causes a jarring UI flash/pulse on every keystroke
      * because the input box itself disappears.
-     * 
+     *
      * Instead, we manually toggle the visibility of the search spinner element,
      * keeping the search input field and any existing results fully visible.
      *
@@ -627,12 +634,14 @@ class SearchPage extends Page {
     _saveStateAndNavigate(sectionId, card) {
         if (!card.dataset.itemId) return;
 
-        state.set('search:state', {
-            query: this._query,
-            results: this._results,
-            focusItemId: card.dataset.itemId,
-            focusSectionId: sectionId
-        });
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            state.set('search:state', {
+                query: this._query,
+                results: this._results,
+                focusItemId: card.dataset.itemId,
+                focusSectionId: sectionId
+            });
+        }
 
         const itemType = card.dataset.contextType || card.dataset.type || 'Movie';
         let route = `/details/${card.dataset.itemId}`;

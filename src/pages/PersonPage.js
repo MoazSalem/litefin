@@ -11,6 +11,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
+import { storage } from '../utils/StorageService.js';
 import MediaGrid from '../components/MediaGrid.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
@@ -149,7 +150,14 @@ class PersonPage extends Page {
             // Focus Nav restored or default
             requestAnimationFrame(() => {
                 const stateKey = `person:lastFocusedItem:${this._personId}`;
-                const lastFocusedObj = state.get(stateKey);
+                let lastFocusedObj = null;
+
+                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                    lastFocusedObj = state.get(stateKey);
+                } else {
+                    state.delete(stateKey);
+                }
+
                 let restoredFocus = false;
 
                 if (lastFocusedObj) {
@@ -760,10 +768,12 @@ class PersonPage extends Page {
         if (!card.dataset.itemId) return;
 
         const stateKey = `person:lastFocusedItem:${this._personId}`;
-        state.set(stateKey, {
-            itemId: card.dataset.itemId,
-            sectionId: sectionId
-        });
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            state.set(stateKey, {
+                itemId: card.dataset.itemId,
+                sectionId: sectionId
+            });
+        }
 
         router.navigate(`/details/${card.dataset.itemId}`);
     }

@@ -574,10 +574,7 @@ class App {
 
                 // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, BoxSet without movies/episodes),
                 // the API cannot play it directly. We must resolve it to the first playable audio track.
-                if (
-                    item &&
-                    ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Artist', 'Person'].includes(item.Type)
-                ) {
+                if (item && ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Artist', 'Person'].includes(item.Type)) {
                     try {
                         const tracks = await api.getItems({
                             ParentId: item.Id,
