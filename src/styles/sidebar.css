@@ -55,6 +55,37 @@
     box-shadow: none !important;
 }
 
+/* Semi-transparent collapsed sidebar with glassmorphic blur */
+.sidebar.semi-transparent-collapsed:not(.expanded):not(:hover) {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+/* Transparent expanded sidebar */
+.sidebar.transparent-expanded.expanded,
+.sidebar.transparent-expanded:hover {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+/* Semi-transparent expanded sidebar */
+.sidebar.semi-transparent-expanded.expanded,
+.sidebar.semi-transparent-expanded:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+/* Black collapsed sidebar */
+.sidebar.black-collapsed:not(.expanded):not(:hover) {
+    background: #000000 !important;
+}
+
+/* Black expanded sidebar */
+.sidebar.black-expanded.expanded,
+.sidebar.black-expanded:hover {
+    background: #000000 !important;
+}
+
 /* Fully hidden state */
 .sidebar.hidden {
     -webkit-transform: translate3d(-100%, 0, 0);

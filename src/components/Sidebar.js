@@ -175,7 +175,7 @@ class Sidebar extends Component {
         eventBus.on('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
 
         // ---------------------------------------------------------------------
-        // COLLAPSED SIDEBAR TRANSPARENT BACKGROUND CONFIGURATION
+        // COLLAPSED SIDEBAR BACKGROUND CONFIGURATION
         // ---------------------------------------------------------------------
         this.activePath = router.getCurrentPath() || '';
         this._updateTransparentCollapsed();
@@ -183,7 +183,8 @@ class Sidebar extends Component {
         this._onTransparentCollapsedChanged = () => {
             this._updateTransparentCollapsed();
         };
-        eventBus.on('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+        eventBus.on('pref:collapsedSidebarColor', this._onTransparentCollapsedChanged);
+        eventBus.on('pref:expandedSidebarColor', this._onTransparentCollapsedChanged);
 
         this._onHideLibraryHeaderChanged = () => {
             this._loadLibraries();
@@ -296,7 +297,8 @@ class Sidebar extends Component {
         }
 
         if (this._onTransparentCollapsedChanged) {
-            eventBus.off('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+            eventBus.off('pref:collapsedSidebarColor', this._onTransparentCollapsedChanged);
+            eventBus.off('pref:expandedSidebarColor', this._onTransparentCollapsedChanged);
         }
 
         if (this._onHideLibraryHeaderChanged) {
@@ -709,9 +711,14 @@ class Sidebar extends Component {
     }
 
     _updateTransparentCollapsed() {
-        const transparentCollapsed = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
-        const isSettings = (this.activePath || '').startsWith('/settings');
-        this.el.classList.toggle('transparent-collapsed', transparentCollapsed && !isSettings);
+        const colorPref = storage.getItem('pref:collapsedSidebarColor') || 'theme';
+        const expandedColorPref = storage.getItem('pref:expandedSidebarColor') || 'theme';
+        this.el.classList.toggle('transparent-collapsed', colorPref === 'transparent');
+        this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');
+        this.el.classList.toggle('black-collapsed', colorPref === 'black');
+        this.el.classList.toggle('transparent-expanded', expandedColorPref === 'transparent');
+        this.el.classList.toggle('semi-transparent-expanded', expandedColorPref === 'semi');
+        this.el.classList.toggle('black-expanded', expandedColorPref === 'black');
     }
 
     _updateActiveState() {

@@ -162,6 +162,34 @@
     box-shadow: none !important;
 }
 
+/* User preference overrides for ambient theme mode */
+[data-theme-mode="ambient"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    background: transparent !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.semi-transparent-collapsed:not(.expanded):not(:hover) {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.black-collapsed:not(.expanded):not(:hover) {
+    background: #000000 !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.transparent-expanded.expanded,
+[data-theme-mode="ambient"] .sidebar.transparent-expanded:hover {
+    background: transparent !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.semi-transparent-expanded.expanded,
+[data-theme-mode="ambient"] .sidebar.semi-transparent-expanded:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.black-expanded.expanded,
+[data-theme-mode="ambient"] .sidebar.black-expanded:hover {
+    background: #000000 !important;
+}
+
 [data-theme-mode="ambient"] .settings-sidebar {
     /* 1. Fully transparent split-view menu so background gradient shines through */
     background: transparent !important;

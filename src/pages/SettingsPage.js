@@ -1371,10 +1371,12 @@ class SettingsPage extends Page {
                     value: 'posterRight',
                     label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned'
                 },
-                {   value: 'backdropMinimal', 
+                {
+                    value: 'backdropMinimal',
                     label: i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
                 },
-                {   value: 'backdropLeft', 
+                {
+                    value: 'backdropLeft',
                     label: i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
                 }
             ],
@@ -2268,6 +2270,46 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Collapsed Sidebar Color Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelCollapsedSidebarColor">${i18n.t('LabelCollapsedSidebarColor') || 'Collapsed Sidebar Color'}</span>
+                        <span class="setting-description" data-i18n="CollapsedSidebarColorDescription">${i18n.t('CollapsedSidebarColorDescription') || 'Choose the background transparency or style for the collapsed sidebar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'collapsed-sidebar-color-select',
+            [
+                { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
+                { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
+                { value: 'semi', label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent' },
+                { value: 'transparent', label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent' }
+            ],
+            storage.getItem('pref:collapsedSidebarColor') || 'theme'
+        )}
+                    </div>
+                </div>
+
+                <!-- Expanded Sidebar Color Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelExpandedSidebarColor">${i18n.t('LabelExpandedSidebarColor') || 'Expanded Sidebar Color'}</span>
+                        <span class="setting-description" data-i18n="ExpandedSidebarColorDescription">${i18n.t('ExpandedSidebarColorDescription') || 'Choose the background transparency or style for the expanded sidebar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'expanded-sidebar-color-select',
+            [
+                { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
+                { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
+                { value: 'semi', label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent' },
+                { value: 'transparent', label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent' }
+            ],
+            storage.getItem('pref:expandedSidebarColor') || 'theme'
+        )}
+                    </div>
+                </div>
+
                 <!-- Clickable Logo Section -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -2330,21 +2372,7 @@ class SettingsPage extends Page {
                                   tabindex="0">
                         </button>
                     </div>
-                </div>
-
-                <!-- Transparent Collapsed Sidebar Section -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="TransparentCollapsedSidebar">${i18n.t('TransparentCollapsedSidebar') || 'Transparent Collapsed Sidebar'}</span>
-                        <span class="setting-description" data-i18n="TransparentCollapsedSidebarDescription">${i18n.t('TransparentCollapsedSidebarDescription') || 'Make the collapsed sidebar background transparent for all themes.'}</span>
-                    </div>
-                    <div class="setting-control">
-                          <button class="toggle-switch ${storage.getItem('pref:transparentCollapsedSidebar') === 'true' ? 'active' : ''}" 
-                                  id="toggle-transparent-collapsed-sidebar" 
-                                  tabindex="0">
-                        </button>
-                    </div>
-                </div>
+                </div
 
                 <h3 class="setting-section-title" data-i18n="SidebarLayoutOrder" style="margin-top: 40px;">${i18n.t('SidebarLayoutOrder') || 'Sidebar Layout'}</h3>
                 <!-- Loaded dynamically via _setupSidebarLayoutUI -->
@@ -7030,7 +7058,9 @@ class SettingsPage extends Page {
             'osd-unfocused-button-style-select': { key: 'litefin:osdUnfocusedButtonStyle', type: 'local' },
             'osd-seekbar-thumb-color-select': { key: 'litefin:osdSeekBarThumbColor', type: 'local' },
             'osd-seekbar-progress-color-select': { key: 'litefin:osdSeekBarProgressColor', type: 'local' },
-            'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' }
+            'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' },
+            'collapsed-sidebar-color-select': { key: 'pref:collapsedSidebarColor', type: 'local', triggerEvent: true },
+            'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -7168,6 +7198,7 @@ class SettingsPage extends Page {
                             if (settingConfig.triggerEvent) {
                                 eventBus.emit(settingConfig.key, newValue);
                             }
+
 
                             if (
                                 settingConfig.key === 'pref:mediaRowsLayout' ||
@@ -7556,18 +7587,6 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Transparent Collapsed Sidebar
-        const transparentCollapsedSidebarToggle = this.$('#toggle-transparent-collapsed-sidebar');
-        if (transparentCollapsedSidebarToggle) {
-            transparentCollapsedSidebarToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
-                const newValue = !currentValue;
-                storage.setItem('pref:transparentCollapsedSidebar', newValue.toString());
-                transparentCollapsedSidebarToggle.classList.toggle('active', newValue);
-                eventBus.emit('prefChanged:transparentCollapsedSidebar', newValue);
-                log.info(`Transparent Collapsed Sidebar set to: ${newValue}`);
-            });
-        }
 
         // Toggle Switch for Hide Sidebar Library Header
         const hideSidebarLibraryHeaderToggle = this.$('#toggle-hide-sidebar-library-header');
