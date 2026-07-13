@@ -91,7 +91,10 @@ const DEFAULTS = {
     enableFlacInVideo: false,
 
     // Audio normalization mode ('Off', 'TrackGain', 'AlbumGain')
-    audioNormalization: 'Off',
+    audioNormalization: 'TrackGain',
+
+    // Disable VBR audio encoding (force CBR)
+    disableVbrAudio: false,
 
     // =========================================================================
     // VIDEO SETTINGS

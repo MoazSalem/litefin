@@ -675,7 +675,8 @@ export function buildJellyfinProfile(options = {}) {
             // 'waiting' events. BreakOnNonKeyFrames is never safe on this platform.
             // Exception: fMP4 is already forced-IDR by the muxer; and remux mode
             // passes the stream through as-is so we must not override it either.
-            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false // always false for TS on WebOS
+            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false, // always false for TS on WebOS
+            EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
         });
     }
 
@@ -747,7 +748,8 @@ export function buildJellyfinProfile(options = {}) {
                     ? PlayerSettings.get('html5SegmentLength') || 2
                     : PlayerSettings.get('webosSegmentLength') || 6,
                 // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
-                BreakOnNonKeyFrames: false
+                BreakOnNonKeyFrames: false,
+                EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
             });
         }
     }

@@ -2538,6 +2538,7 @@ class SettingsPage extends Page {
         const currentBackend = PlayerSettings.get('playerBackend') || 'auto';
         const skipForward = PlayerSettings.get('skipForwardLength') || 30000;
         const skipBack = PlayerSettings.get('skipBackLength') || 10000;
+        const currentAudioNormalization = PlayerSettings.get('audioNormalization') || 'TrackGain';
 
         const caps = getDeviceCapabilities();
         const supportStatus = (supported) =>
@@ -2548,6 +2549,35 @@ class SettingsPage extends Page {
             { value: 'enable', label: i18n.t('ForceStateEnable') || 'Force Enable' },
             { value: 'disable', label: i18n.t('ForceStateDisable') || 'Force Disable' }
         ];
+
+        const audioSettingsHtml = currentBackend !== 'tizen' ? `
+                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDisableVbrAudioEncoding">${i18n.t('LabelDisableVbrAudioEncoding') || 'Disable VBR audio encoding'}</span>
+                        <span class="setting-description" data-i18n="DisableVbrAudioEncodingHelp">${i18n.t('DisableVbrAudioEncodingHelp') || 'Prevent the server from encoding audio with VBR for this client.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('disableVbrAudio') ? 'active' : ''}" 
+                                id="toggle-disable-vbr-audio" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSelectAudioNormalization">${i18n.t('LabelSelectAudioNormalization') || 'Audio Normalization'}</span>
+                        <span class="setting-description" data-i18n="SelectAudioNormalizationHelp">${i18n.t('SelectAudioNormalizationHelp') || 'Track gain adjusts each track to play at the same loudness. Album gain preserves the dynamic range of an album.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-option" id="btn-audio-normalization" tabindex="0">
+                            ${currentAudioNormalization === 'Off' ? (i18n.t('Off') || 'Off') : currentAudioNormalization === 'TrackGain' ? (i18n.t('LabelTrackGain') || 'Track Gain') : (i18n.t('LabelAlbumGain') || 'Album Gain')}
+                        </button>
+                    </div>
+                </div>
+                ` : '';
 
         return `
             <div class="settings-tab-content">
@@ -2606,6 +2636,8 @@ class SettingsPage extends Page {
         )}
                     </div>
                 </div>
+
+                ${audioSettingsHtml}
 
                 <h3 class="setting-section-title" data-i18n="PlaybackBehavior">${i18n.t('PlaybackBehavior')}</h3>
 
@@ -7353,6 +7385,46 @@ class SettingsPage extends Page {
                 disableAnimationToggle.classList.toggle('active', newValue);
                 eventBus.emit('prefChanged:disableSidebarAnimation', newValue);
                 log.info(`Disable Sidebar Animation set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Disable VBR Audio Encoding
+        const disableVbrToggle = this.$('#toggle-disable-vbr-audio');
+        if (disableVbrToggle) {
+            disableVbrToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('disableVbrAudio');
+                const newValue = !currentValue;
+                PlayerSettings.set('disableVbrAudio', newValue);
+                disableVbrToggle.classList.toggle('active', newValue);
+                log.info(`Disable VBR Audio Encoding set to: ${newValue}`);
+            });
+        }
+
+        // Button for Audio Normalization - opens a modal with Off/TrackGain/AlbumGain
+        const audioNormBtn = this.$('#btn-audio-normalization');
+        if (audioNormBtn) {
+            audioNormBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('audioNormalization') || 'TrackGain';
+                this._renderSelectionModal(
+                    i18n.t('LabelSelectAudioNormalization') || 'Audio Normalization',
+                    [
+                        { value: 'Off', label: i18n.t('Off') || 'Off' },
+                        { value: 'TrackGain', label: i18n.t('LabelTrackGain') || 'Track Gain' },
+                        { value: 'AlbumGain', label: i18n.t('LabelAlbumGain') || 'Album Gain' }
+                    ],
+                    currentValue,
+                    (value) => {
+                        PlayerSettings.set('audioNormalization', value);
+                        // Update the button text to reflect the new selection
+                        const label = value === 'Off'
+                            ? (i18n.t('Off') || 'Off')
+                            : value === 'TrackGain'
+                                ? (i18n.t('LabelTrackGain') || 'Track Gain')
+                                : (i18n.t('LabelAlbumGain') || 'Album Gain');
+                        audioNormBtn.textContent = label;
+                        log.info(`Audio Normalization set to: ${value}`);
+                    }
+                );
             });
         }
 

@@ -608,7 +608,7 @@ export function buildJellyfinProfile(options = {}) {
             // immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it sees LATM in the PMT.
             // Setting this to false forces CBR AAC with ADTS framing on AVPlay.
             // HTML5/MSE players handle LATM fine, so keep VBR enabled there.
-            EnableAudioVbrEncoding: isHtml5
+            EnableAudioVbrEncoding: isHtml5 ? !PlayerSettings.get('disableVbrAudio') : false
         });
     }
 
@@ -681,7 +681,7 @@ export function buildJellyfinProfile(options = {}) {
                     : PlayerSettings.get('tizenSegmentLength') || 6,
                 // fMP4 segments MUST align to IDR boundaries — never cut on subtitle cue points.
                 BreakOnNonKeyFrames: false,
-                EnableAudioVbrEncoding: isHtml5
+                EnableAudioVbrEncoding: isHtml5 ? !PlayerSettings.get('disableVbrAudio') : false
             });
         }
     }

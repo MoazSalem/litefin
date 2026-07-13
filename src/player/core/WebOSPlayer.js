@@ -136,6 +136,10 @@ export class WebOSPlayer {
         this._robustSeekPending  = false;
         this._cancelRobustResume = false;
 
+        // ---- Audio normalization (Web Audio API) ----
+        this._audioContext = null;
+        this._gainNode = null;
+
         log.info('WebOSPlayer constructed');
     }
 
@@ -315,7 +319,76 @@ export class WebOSPlayer {
             await this._playNativeDirect(video, options);
         }
 
+        this._applyAudioNormalization(options);
         this._currentSrc = options.url;
+    }
+
+    /**
+     * Apply audio normalization (TrackGain / AlbumGain) using the Web Audio API.
+     * Only applies to audio-only items. The gain value comes from the server
+     * metadata (NormalizationGain / albumNormalizationGain).
+     * @private
+     * @param {Object} options - Play options (item, mediaSource)
+     */
+    _applyAudioNormalization(options) {
+        log.info('Audio normalization: entered, mode=' + PlayerSettings.get('audioNormalization') + ' itemType=' + (options.item?.MediaType || options.item?.Type || 'unknown'));
+
+        const mode = PlayerSettings.get('audioNormalization');
+        if (mode === 'Off') {
+            log.info('Audio normalization: mode is Off, skipping');
+            return;
+        }
+
+        const isAudioItem = options.item?.MediaType === 'Audio' || options.item?.Type === 'AudioBook';
+        if (!isAudioItem) {
+            log.info('Audio normalization: not an audio item, skipping');
+            return;
+        }
+
+        const video = this._videoElement;
+        if (!video) {
+            log.info('Audio normalization: no video element');
+            return;
+        }
+
+        let normalizationGain;
+        if (mode === 'TrackGain') {
+            normalizationGain = options.item?.NormalizationGain
+                ?? options.mediaSource?.albumNormalizationGain;
+        } else if (mode === 'AlbumGain') {
+            normalizationGain = options.mediaSource?.albumNormalizationGain
+                ?? options.item?.NormalizationGain;
+        }
+
+        if (normalizationGain == null) {
+            log.info('Audio normalization: no gain value available');
+            return;
+        }
+
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) {
+                log.warn('Audio normalization: Web Audio API not available');
+                return;
+            }
+
+            if (!this._audioContext) {
+                this._audioContext = new AudioContext();
+            }
+
+            const source = this._audioContext.createMediaElementSource(video);
+            const gainNode = this._audioContext.createGain();
+            const gainValue = Math.pow(10, normalizationGain / 20);
+            gainNode.gain.value = gainValue;
+
+            source.connect(gainNode);
+            gainNode.connect(this._audioContext.destination);
+
+            this._gainNode = gainNode;
+            log.info(`Audio normalization: applied ${mode} gain of ${gainValue} (${normalizationGain} dB)`);
+        } catch (e) {
+            log.error('Audio normalization: failed to create gain node', e);
+        }
     }
 
     /**
@@ -1007,6 +1080,24 @@ export class WebOSPlayer {
                 parent.appendChild(video);
                 log.debug('stop(): video element cycled out/in DOM to flush GPU surface');
             }
+        }
+
+        // Clean up audio normalization
+        if (this._gainNode) {
+            try {
+                this._gainNode.disconnect();
+            } catch (e) {
+                // ignore
+            }
+            this._gainNode = null;
+        }
+        if (this._audioContext) {
+            try {
+                this._audioContext.close();
+            } catch (e) {
+                // ignore
+            }
+            this._audioContext = null;
         }
 
         this._currentSrc         = null;

@@ -432,7 +432,8 @@ export function buildJellyfinProfile(options = {}) {
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '2',
             SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
-            BreakOnNonKeyFrames: playbackMode !== 'remux'
+            BreakOnNonKeyFrames: playbackMode !== 'remux',
+            EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
         });
     }
 
@@ -448,7 +449,8 @@ export function buildJellyfinProfile(options = {}) {
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '2',
             SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
-            BreakOnNonKeyFrames: playbackMode !== 'remux'
+            BreakOnNonKeyFrames: playbackMode !== 'remux',
+            EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
         });
     }
 
