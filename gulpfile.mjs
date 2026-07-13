@@ -1,6 +1,15 @@
 import gulp from 'gulp';
 import { deleteAsync as del } from 'del';
-import { readFileSync, writeFileSync, createWriteStream, copyFileSync, existsSync, renameSync, cpSync, mkdirSync } from 'fs';
+import {
+    readFileSync,
+    writeFileSync,
+    createWriteStream,
+    copyFileSync,
+    existsSync,
+    renameSync,
+    cpSync,
+    mkdirSync
+} from 'fs';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import archiver from 'archiver';
@@ -12,8 +21,7 @@ import path from 'path';
  * We still bump maxBuffer to 10 MB as a safety net.
  */
 const _execAsync = promisify(exec);
-const execAsync = (cmd, opts = {}) =>
-    _execAsync(cmd, { maxBuffer: 10 * 1024 * 1024, ...opts });
+const execAsync = (cmd, opts = {}) => _execAsync(cmd, { maxBuffer: 10 * 1024 * 1024, ...opts });
 
 /*
  * For webpack builds we use spawn() with stdio: 'inherit'.
@@ -290,7 +298,7 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
         path.join(stagingDir, 'assets/icon.png'),
         path.join(stagingDir, 'icon.png')
     ];
-    await del(tizenOnlyFiles.filter(f => existsSync(f)));
+    await del(tizenOnlyFiles.filter((f) => existsSync(f)));
 
     /*
      * Copy WebOS-specific splash assets from the project root.
@@ -298,9 +306,7 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
      * and appinfo.json has been updated to point to assets/icon-80.png and assets/icon-130.png.
      * Therefore, we only need to copy splash.png from the project root assets/ folder.
      */
-    const webosAssets = [
-        { src: 'assets/splash.png', dest: path.join(stagingDir, 'assets', 'splash.png') }
-    ];
+    const webosAssets = [{ src: 'assets/splash.png', dest: path.join(stagingDir, 'assets', 'splash.png') }];
 
     for (const asset of webosAssets) {
         if (existsSync(asset.src)) {
@@ -331,7 +337,7 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
 
         // Only pass the services directory to ares-package when this build
         // variant actually ships the background service.
-        const servicesArg = (includeServices && existsSync('services')) ? '"services"' : '';
+        const servicesArg = includeServices && existsSync('services') ? '"services"' : '';
         const { stdout, stderr } = await execAsync(
             `npx ares-package --no-minify "${stagingDir}" ${servicesArg} -o "${ipkOutDir}"`
         );
@@ -538,7 +544,13 @@ const buildPackage = gulp.series(
 // Individual Tizen build+package tasks
 const buildPackageModern = gulp.series(syncVersion, cleanDist, cleanWgt, webpackModern, packageModern);
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormal, packageNormal);
-const buildPackageNormalOblong = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormalOblong, packageNormalOblong);
+const buildPackageNormalOblong = gulp.series(
+    syncVersion,
+    cleanDist,
+    cleanWgt,
+    webpackNormalOblong,
+    packageNormalOblong
+);
 const buildPackageTest = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormal, packageTest);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, cleanWgt, webpackLegacy, packageLegacy);
 const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, cleanWgt, webpackUltraLegacy, packageUltraLegacy);
@@ -554,6 +566,36 @@ const buildPackageWebosUltraLegacy = gulp.series(
     cleanIpk,
     webpackUltraLegacy,
     packageWebosUltraLegacy
+);
+
+// Combined Tizen + WebOS build+package tasks
+const buildPackageCombinedModern = gulp.series(
+    syncVersion,
+    cleanDist,
+    gulp.parallel(cleanWgt, cleanIpk),
+    webpackModern,
+    gulp.parallel(packageModern, packageWebosModern)
+);
+const buildPackageCombinedNormal = gulp.series(
+    syncVersion,
+    cleanDist,
+    gulp.parallel(cleanWgt, cleanIpk),
+    webpackNormal,
+    gulp.parallel(packageNormal, packageWebos)
+);
+const buildPackageCombinedLegacy = gulp.series(
+    syncVersion,
+    cleanDist,
+    gulp.parallel(cleanWgt, cleanIpk),
+    webpackLegacy,
+    gulp.parallel(packageLegacy, packageWebosLegacy)
+);
+const buildPackageCombinedUltraLegacy = gulp.series(
+    syncVersion,
+    cleanDist,
+    gulp.parallel(cleanWgt, cleanIpk),
+    webpackUltraLegacy,
+    gulp.parallel(packageUltraLegacy, packageWebosUltraLegacy)
 );
 
 // Just build (no packaging)
@@ -604,6 +646,11 @@ export {
     buildPackageWebosModern,
     buildPackageWebosLegacy,
     buildPackageWebosUltraLegacy,
+    // Combined Tizen + WebOS build+package
+    buildPackageCombinedModern,
+    buildPackageCombinedNormal,
+    buildPackageCombinedLegacy,
+    buildPackageCombinedUltraLegacy,
     // Build only
     build,
     buildModern,
