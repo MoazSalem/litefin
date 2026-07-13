@@ -99,11 +99,51 @@
     /* Shift to reveal full sidebar */
 }
 
-/* Always Collapsed Sidebar Mode Overrides */
 body.sidebar-mode-collapsed .sidebar.expanded,
 body.sidebar-mode-collapsed .sidebar:hover {
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
+    background: #000000 !important;
+}
+
+/* Ambient Theme Specific Overrides for Always Collapsed Mode */
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar:hover {
+    background: transparent !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
+    background: transparent !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
+    background: #000000 !important;
 }
 
 body.sidebar-mode-collapsed .sidebar.expanded .logo-text,
@@ -112,6 +152,12 @@ body.sidebar-mode-collapsed .sidebar.expanded .item-text,
 body.sidebar-mode-collapsed .sidebar:hover .item-text {
     opacity: 0 !important;
     visibility: hidden !important;
+}
+
+/* Ensure focused item text/icon uses high-contrast text color when focused in collapsed state */
+body.sidebar-mode-collapsed .sidebar-item.focused,
+body.sidebar-mode-collapsed .sidebar-item:focus {
+    color: var(--jf-primary-btn-color) !important;
 }
 
 body.sidebar-mode-collapsed .sidebar .logo-icon,
