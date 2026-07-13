@@ -75,7 +75,12 @@ class DetailsPage extends Page {
 
     render() {
         const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
-        const layoutClass = detailsLayout === 'posterRight' ? 'layout-poster-right' : 'layout-poster-left';
+        let layoutClass = 'layout-poster-left';
+        if (detailsLayout === 'posterRight') {
+            layoutClass = 'layout-poster-right';
+        } else if (detailsLayout === 'backdropMinimal') {
+            layoutClass = 'layout-backdrop-minimal';
+        }
 
         return `
             <div class="page details-page ${layoutClass}">
@@ -1668,10 +1673,18 @@ class DetailsPage extends Page {
 
         if (logoItemId && logoTag) {
             const params = imageService.getParams('details-logo');
-            const titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+            let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+            const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+            if (detailsLayout === 'backdropMinimal') {
+                titleStyle = 'logo-only';
+            }
             const isLogoOnly = titleStyle === 'logo-only';
-            const baseWidth = isLogoOnly ? 360 : 280;
-            const baseHeight = isLogoOnly ? 140 : 100;
+            let baseWidth = isLogoOnly ? 360 : 280;
+            let baseHeight = isLogoOnly ? 140 : 100;
+            if (detailsLayout === 'backdropMinimal') {
+                baseWidth = 540;
+                baseHeight = 220;
+            }
             const dpr = window.devicePixelRatio || 1;
 
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
@@ -1707,10 +1720,15 @@ class DetailsPage extends Page {
                     // - Wide/short logos shrink in container height to eliminate top whitespace.
                     // =========================================================================
                     const aspect = img.naturalWidth / img.naturalHeight || 1;
-                    const maxW = isLogoOnly ? 360 : 280;
+                    let maxW = isLogoOnly ? 360 : 280;
+                    let minHeight = isLogoOnly ? 60 : 50;
+                    let maxHeight = isLogoOnly ? 140 : 100;
+                    if (detailsLayout === 'backdropMinimal') {
+                        maxW = 540;
+                        minHeight = 100;
+                        maxHeight = 220;
+                    }
                     const targetHeight = maxW / aspect;
-                    const minHeight = isLogoOnly ? 60 : 50;
-                    const maxHeight = isLogoOnly ? 140 : 100;
                     const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
 
                     // Apply the computed height dynamically
@@ -1841,9 +1859,11 @@ class DetailsPage extends Page {
         } else {
             metaHtml += addedHtml + airedHtml;
         }
-        // Retrieve the user's preferred title display style from localized preferences.
-        // Default style is 'both' (displaying both text title and logo icon).
-        const titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+        let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        if (detailsLayout === 'backdropMinimal') {
+            titleStyle = 'logo-only';
+        }
 
         // Retrieve and check for logo references using Jellyfin image tags.
         // Determines if a localized image tag or series/parent image tag is available.

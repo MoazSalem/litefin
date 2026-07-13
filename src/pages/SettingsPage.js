@@ -1370,6 +1370,9 @@ class SettingsPage extends Page {
                 {
                     value: 'posterRight',
                     label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned'
+                },
+                {   value: 'backdropMinimal', 
+                    label: i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (No Poster)'
                 }
             ],
             storage.getItem('pref:detailsLayout') || 'posterLeft'
@@ -1704,7 +1707,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
+                <div class="setting-item ${storage.getItem('pref:detailsLayout') === 'backdropMinimal' ? 'hidden' : ''}" id="details-title-style-container">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
                         <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
@@ -5322,6 +5325,22 @@ class SettingsPage extends Page {
         } else if (this.activeTab === 'backup') {
             this._updateBackupStatusDisplay();
         }
+
+        // Initial visibility check for Details Page Title Style setting based on current layout setting
+        const currentDetailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        this._updateDetailsTitleStyleVisibility(currentDetailsLayout);
+    }
+
+    _updateDetailsTitleStyleVisibility(layout) {
+        const container = this.$('#details-title-style-container');
+        if (container) {
+            if (layout === 'backdropMinimal') {
+                container.classList.add('hidden');
+            } else {
+                container.classList.remove('hidden');
+            }
+            focusManager.invalidateCache('settings-content');
+        }
     }
 
     _bindEvents() {
@@ -7138,6 +7157,10 @@ class SettingsPage extends Page {
                             this._triggerHardReload();
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
+
+                            if (settingConfig.key === 'pref:detailsLayout') {
+                                this._updateDetailsTitleStyleVisibility(newValue);
+                            }
 
                             if (settingConfig.triggerEvent) {
                                 eventBus.emit(settingConfig.key, newValue);

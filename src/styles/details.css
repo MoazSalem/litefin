@@ -58,8 +58,8 @@
     right: 0;
     bottom: 0;
     background: linear-gradient(to bottom,
-            rgba(16, 16, 16, 0.6) 0%,
-            var(--jf-background) 100%);
+            rgba(16, 16, 16, 0.45) 0%,
+            var(--jf-background) 125%);
     /* PERFORMANCE: Isolate gradient from main layout */
     transform: translateZ(0);
 }
@@ -113,6 +113,73 @@
 .details-page.layout-poster-right .hero-poster {
     margin-right: 0;
     margin-left: 40px;
+}
+
+/* Cinematic Backdrop Minimal Layout Mode */
+.details-page.layout-backdrop-minimal .hero-poster {
+    display: none !important;
+}
+
+.details-page.layout-backdrop-minimal .details-main-split {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 16vh;
+    margin-bottom: 20px;
+}
+
+.details-page.layout-backdrop-minimal .details-info-col {
+    width: 100%;
+    align-items: center;
+    padding-bottom: 0;
+}
+
+.details-page.layout-backdrop-minimal .hero-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-minimal .details-title-logo {
+    justify-content: center;
+    max-width: 600px;
+    height: 220px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-minimal .details-title {
+    text-align: center;
+    max-width: 90%;
+    font-size: 4rem;
+}
+
+.details-page.layout-backdrop-minimal .details-original-title {
+    text-align: center;
+}
+
+.details-page.layout-backdrop-minimal .details-meta-row {
+    justify-content: center;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-minimal .details-actions {
+    justify-content: center;
+    width: 100%;
+    margin-top: 12px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-minimal .details-overview {
+    width: 100%;
+    text-align: left;
+    margin-top: 24px;
+}
+
+.details-page.layout-backdrop-minimal .details-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
 }
 
 .hero-poster {
