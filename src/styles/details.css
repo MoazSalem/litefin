@@ -182,6 +182,73 @@
     mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
 }
 
+/* Cinematic Backdrop Left Aligned Layout Mode */
+.details-page.layout-backdrop-left .hero-poster {
+    display: none !important;
+}
+
+.details-page.layout-backdrop-left .details-main-split {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding-top: 16vh;
+    margin-bottom: 20px;
+}
+
+.details-page.layout-backdrop-left .details-info-col {
+    width: 100%;
+    align-items: flex-start;
+    padding-bottom: 0;
+}
+
+.details-page.layout-backdrop-left .hero-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-left .details-title-logo {
+    justify-content: flex-start;
+    max-width: 600px;
+    height: 220px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-left .details-title {
+    text-align: left;
+    max-width: 90%;
+    font-size: 4rem;
+}
+
+.details-page.layout-backdrop-left .details-original-title {
+    text-align: left;
+}
+
+.details-page.layout-backdrop-left .details-meta-row {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-left .details-actions {
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: 12px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-left .details-overview {
+    width: 100%;
+    text-align: left;
+    margin-top: 24px;
+}
+
+.details-page.layout-backdrop-left .details-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+}
+
 .hero-poster {
     width: 420px;
     flex-shrink: 0;
@@ -487,8 +554,6 @@
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     border: 3px solid transparent;
     background-clip: padding-box;
-    /* Add bottom spacing to prevent overlapping when buttons wrap dynamically */
-    margin-bottom: 12px;
 }
 
 

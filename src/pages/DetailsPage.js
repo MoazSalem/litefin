@@ -80,6 +80,8 @@ class DetailsPage extends Page {
             layoutClass = 'layout-poster-right';
         } else if (detailsLayout === 'backdropMinimal') {
             layoutClass = 'layout-backdrop-minimal';
+        } else if (detailsLayout === 'backdropLeft') {
+            layoutClass = 'layout-backdrop-left';
         }
 
         return `
@@ -1675,13 +1677,13 @@ class DetailsPage extends Page {
             const params = imageService.getParams('details-logo');
             let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
             const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
-            if (detailsLayout === 'backdropMinimal') {
+            if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
                 titleStyle = 'logo-only';
             }
             const isLogoOnly = titleStyle === 'logo-only';
             let baseWidth = isLogoOnly ? 360 : 280;
             let baseHeight = isLogoOnly ? 140 : 100;
-            if (detailsLayout === 'backdropMinimal') {
+            if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
                 baseWidth = 540;
                 baseHeight = 220;
             }
@@ -1723,7 +1725,7 @@ class DetailsPage extends Page {
                     let maxW = isLogoOnly ? 360 : 280;
                     let minHeight = isLogoOnly ? 60 : 50;
                     let maxHeight = isLogoOnly ? 140 : 100;
-                    if (detailsLayout === 'backdropMinimal') {
+                    if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
                         maxW = 540;
                         minHeight = 100;
                         maxHeight = 220;
@@ -1861,7 +1863,7 @@ class DetailsPage extends Page {
         }
         let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
         const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
-        if (detailsLayout === 'backdropMinimal') {
+        if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
             titleStyle = 'logo-only';
         }
 

@@ -1258,5 +1258,6 @@
     "DetailsLayoutDescription": "Choose the layout mode for the item details page.",
     "OptionDetailsLayoutPosterLeft": "Poster Left Aligned (Default)",
     "OptionDetailsLayoutPosterRight": "Poster Right Aligned",
-    "OptionDetailsLayoutBackdropMinimal": "Cinematic Backdrop (Centered)"
+    "OptionDetailsLayoutBackdropMinimal": "Cinematic Backdrop (Centered)",
+    "OptionDetailsLayoutBackdropLeft": "Cinematic Backdrop (Left Aligned)"
 }

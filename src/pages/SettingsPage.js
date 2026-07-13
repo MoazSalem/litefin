@@ -1372,7 +1372,10 @@ class SettingsPage extends Page {
                     label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned'
                 },
                 {   value: 'backdropMinimal', 
-                    label: i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (No Poster)'
+                    label: i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
+                },
+                {   value: 'backdropLeft', 
+                    label: i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
                 }
             ],
             storage.getItem('pref:detailsLayout') || 'posterLeft'
@@ -1707,7 +1710,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:detailsLayout') === 'backdropMinimal' ? 'hidden' : ''}" id="details-title-style-container">
+                <div class="setting-item ${storage.getItem('pref:detailsLayout') === 'backdropMinimal' || storage.getItem('pref:detailsLayout') === 'backdropLeft' ? 'hidden' : ''}" id="details-title-style-container">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
                         <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
@@ -5334,7 +5337,7 @@ class SettingsPage extends Page {
     _updateDetailsTitleStyleVisibility(layout) {
         const container = this.$('#details-title-style-container');
         if (container) {
-            if (layout === 'backdropMinimal') {
+            if (layout === 'backdropMinimal' || layout === 'backdropLeft') {
                 container.classList.add('hidden');
             } else {
                 container.classList.remove('hidden');
