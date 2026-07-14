@@ -60,13 +60,14 @@ export default class LibassWasmRenderer {
      * @param {number} [options.height] - Video height (required if video not provided)
      * @param {number} [options.videoFrameRate] - Video framerate (for render sync)
      */
-    constructor({ container, video, width, height, videoFrameRate }) {
+    constructor({ container, video, width, height, videoFrameRate, getTime }) {
         this._container = container;
         this._videoElement = video || null;
         this._isVirtual = !video;
         this._videoWidth = width || 1920;
         this._videoHeight = height || 1080;
         this._videoFrameRate = videoFrameRate || 24;
+        this._getTime = typeof getTime === 'function' ? getTime : null;
 
         this._fontFamily = null;
         this._fontClass = null;
@@ -107,6 +108,26 @@ export default class LibassWasmRenderer {
 
         log.info('LibassWasmRenderer initialized' +
             (this._isVirtual ? ' (AVPlay/Manual mode)' : ' (HTML5/Auto mode)'));
+    }
+
+    /**
+     * Get the current playback time from the platform's native time source.
+     * Priority: injected callback > AVPlay direct > fallback interpolation.
+     * @returns {number} Current time in seconds, or -1 if unavailable.
+     * @private
+     */
+    _getPlatformTime() {
+        if (typeof this._getTime === 'function') {
+            return this._getTime();
+        }
+        try {
+            const avplay = window.webapis?.avplay || window.tizen?.avplay;
+            if (avplay && typeof avplay.getCurrentTime === 'function') {
+                const timeMs = Number(avplay.getCurrentTime());
+                if (!isNaN(timeMs) && timeMs >= 0) return timeMs / 1000;
+            }
+        } catch (e) {}
+        return -1;
     }
 
     tick(timeSeconds) {
@@ -381,9 +402,18 @@ export default class LibassWasmRenderer {
     }
 
     /**
-     * Start a requestAnimationFrame loop that smoothly advances the subtitle
-     * render time between coarse tick() calls. Without this the canvas only
-     * updates every ~250ms (Tizen timeupdate throttle) causing visible stutter.
+     * Start a requestAnimationFrame loop that keeps the proxy's currentTime
+     * in sync with AVPlay's real playback position at display refresh rate.
+     *
+     * This ONLY updates the proxy — Octopus's internal oneshotRender() rAF
+     * loop reads self.video.currentTime (the proxy) at 60fps for display.
+     * Calling setCurrentTime here would flood the worker with time updates
+     * (causing "worker busy" log spam and re-render storms).
+     *
+     * setCurrentTime is called from tick() at ~250ms cadence — matching the
+     * same rhythm as HTML5 video's timeupdate event.
+     *
+     * Falls back to interpolation if no native time source is available.
      * @private
      */
     _startSmoothRender() {
@@ -395,16 +425,26 @@ export default class LibassWasmRenderer {
                 this._rafId = null;
                 return;
             }
-            const elapsed = Math.min(
-                (performance.now() - this._lastTickWallTime) / 1000,
-                MAX_ADVANCE
-            );
-            const estimatedTime = this._lastTickTime + (elapsed * this._playbackRate);
-            const currentProxyTime = this._videoProxy.currentTime;
-            if (Math.abs(estimatedTime - currentProxyTime) >= SMOOTH_INTERVAL) {
-                this._videoProxy.currentTime = estimatedTime;
-                this._octopus.setCurrentTime(estimatedTime);
+
+            const realTime = this._getPlatformTime();
+            if (realTime >= 0) {
+                // Native time source (AVPlay or callback) — no drift, proxy only
+                const offsetTime = realTime - this._delaySeconds;
+                if (Math.abs(offsetTime - this._videoProxy.currentTime) >= SMOOTH_INTERVAL) {
+                    this._videoProxy.currentTime = offsetTime;
+                }
+            } else {
+                // Fallback: interpolate from last coarse tick
+                const elapsed = Math.min(
+                    (performance.now() - this._lastTickWallTime) / 1000,
+                    MAX_ADVANCE
+                );
+                const estimatedTime = this._lastTickTime + (elapsed * this._playbackRate);
+                if (Math.abs(estimatedTime - this._videoProxy.currentTime) >= SMOOTH_INTERVAL) {
+                    this._videoProxy.currentTime = estimatedTime;
+                }
             }
+
             this._rafId = requestAnimationFrame(loop);
         };
         this._rafId = requestAnimationFrame(loop);
