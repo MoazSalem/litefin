@@ -3049,12 +3049,18 @@ export default class OSDController extends Component {
             this._cacheFocusableElements();
 
             /* 
-             * Focus Management:
-             * We do NOT reset _currentFocusRow to -1 here. By leaving it at Row 1 (Controls),
-             * the lyrics button STAYS focused while the modal is open. This allows the user
-             * to see what they clicked, and more importantly, ensures that our new 
-             * 'toggle' logic (clicking the same button again) actually works.
+             * -----------------------------------------------------------------
+             * LYRICS MODAL FOCUS TRANSITION
+             * -----------------------------------------------------------------
+             * Shift focus from the controls row to the overlay row (Row -1),
+             * targeting the close button in the lyrics modal header. This
+             * allows immediate keyboard navigation and D-pad control.
+             * -----------------------------------------------------------------
              */
+            this._currentFocusRow = -1;
+            const closeBtn = this.lyricsModal.el?.querySelector('.osd-offset-close');
+            const closeIdx = closeBtn ? this._cachedOverlayRow.indexOf(closeBtn) : -1;
+            this._currentFocusIndex = closeIdx !== -1 ? closeIdx : 0;
             this._updateFocus();
         } else {
             if (this.activeMenu === this.lyricsModal) {
