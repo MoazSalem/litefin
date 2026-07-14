@@ -4493,23 +4493,13 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="CheckForUpdatesDesc">${i18n.t('CheckForUpdatesDesc') || 'Trigger a manual check for new releases on GitHub.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-secondary btn-small focusable" id="btn-check-updates" tabindex="0" data-i18n="CheckForUpdatesNow" data-focusable="true" style="width: auto; min-width: 120px;">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-check-updates" tabindex="0" data-focusable="true" style="width: auto; min-width: 120px;">
                             ${i18n.t('CheckForUpdatesNow')}
                         </button>
                     </div>
                 </div>
 
-                <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
-                        <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="btn btn-danger btn-small" id="btn-reset-settings" tabindex="0">
-                            ${i18n.t('ButtonResetAll') || 'Reset All'}
-                        </button>
-                    </div>
-                </div>
+
             </div>
         `;
     }
@@ -4527,6 +4517,20 @@ class SettingsPage extends Page {
                 ">
                     ${i18n.t('BackupDescription') || 'Synchronize your application settings and preferences across all your devices by backing them up to your Jellyfin server.'}
                 </p>
+
+                <!-- Settings Per User Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSettingsPerUser">${i18n.t('LabelSettingsPerUser') || 'Settings Per User'}</span>
+                        <span class="setting-description" data-i18n="SettingsPerUserDescription">${i18n.t('SettingsPerUserDescription') || 'Store distinct settings and preferences for each logged-in user profile.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('litefin:settings_per_user') === 'true' ? 'active' : ''}" 
+                                id="toggle-settings-per-user" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Status / Dropdown Item -->
                 <div class="setting-item">
@@ -4561,6 +4565,19 @@ class SettingsPage extends Page {
                 <!-- Dynamic Action Area -->
                 <div id="backup-actions-container">
                     <!-- Populated dynamically -->
+                </div>
+
+                <!-- Reset Section -->
+                <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
+                        <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-danger btn-small focusable" id="btn-reset-settings" tabindex="0" data-focusable="true">
+                            ${i18n.t('ButtonResetAll') || 'Reset All'}
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -4803,7 +4820,7 @@ class SettingsPage extends Page {
 
             // Gather all user configuration options from memory cache/localStorage
             for (const key of keys) {
-                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:')) {
+                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:') && !key.startsWith('litefin:user_settings_')) {
                     const value = storage.getItem(key);
                     if (value !== null) {
                         backupData[key] = value;
@@ -4942,7 +4959,7 @@ class SettingsPage extends Page {
             ];
 
             for (const key of keys) {
-                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:')) {
+                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:') && !key.startsWith('litefin:user_settings_')) {
                     const value = storage.getItem(key);
                     if (value !== null) {
                         backupData[key] = value;
@@ -5071,10 +5088,10 @@ class SettingsPage extends Page {
             storage.removeItem('image_preset');
             storage.removeItem('image_details_preset');
 
-            // Clear all non-sensitive litefin: keys currently set in storage
+            // Clear all non-sensitive litefin: keys currently set in storage, preserving user settings objects
             const keysToClear = storage
                 .keys()
-                .filter((key) => key.startsWith('litefin:') && !excludedKeys.includes(key));
+                .filter((key) => key.startsWith('litefin:') && !excludedKeys.includes(key) && !key.startsWith('litefin:user_settings_'));
             for (const key of keysToClear) {
                 storage.removeItem(key);
             }
@@ -5446,6 +5463,19 @@ class SettingsPage extends Page {
         // ==========================================
         // BACKUP & RESTORE EVENTS
         // ==========================================
+        const settingsPerUserToggle = this.$('#toggle-settings-per-user');
+        if (settingsPerUserToggle) {
+            settingsPerUserToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('litefin:settings_per_user') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('litefin:settings_per_user', newValue.toString());
+                settingsPerUserToggle.classList.toggle('active', newValue);
+                log.info(`Settings Per User set to: ${newValue}`);
+                // Safely trigger a hard reload of the application to apply storage routing
+                this._triggerHardReload();
+            });
+        }
+
         const btnBackupNow = this.$('#btn-backup-now');
         if (btnBackupNow) {
             btnBackupNow.addEventListener('click', async () => {

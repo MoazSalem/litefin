@@ -99,12 +99,74 @@ class StorageService {
     // ========================================================================
 
     /**
+     * Determine if a storage key is system-level and should not be isolated per user.
+     * @param {string} key
+     * @returns {boolean}
+     * @private
+     */
+    _isGlobalKey(key) {
+        const globalKeys = [
+            'litefin:serverUrl',
+            'litefin:deviceId',
+            'litefin:activeUserId',
+            'litefin:serverSessions',
+            'litefin:sessions',
+            'litefin:serverNames',
+            'litefin:accessToken',
+            'litefin:userId',
+            'app_platform',
+            'litefin:settings_per_user'
+        ];
+        if (globalKeys.includes(key)) return true;
+        if (key.startsWith('serverPlugin:available:')) return true;
+        if (key.startsWith('litefin:user_settings_')) return true;
+        return false;
+    }
+
+    /**
+     * Copy all current global settings to the user's isolated storage object.
+     * Called the first time the toggle is active for a given user.
+     * @param {string} userId
+     * @private
+     */
+    _initializeUserSettings(userId) {
+        const userSettingsKey = `litefin:user_settings_${userId}`;
+        if (this._cache.has(userSettingsKey)) return;
+
+        const userSettingsObj = {};
+        for (const [k, v] of this._cache.entries()) {
+            if (!this._isGlobalKey(k)) {
+                userSettingsObj[k] = v;
+            }
+        }
+
+        this._cache.set(userSettingsKey, JSON.stringify(userSettingsObj));
+        this._dirtyKeys.add(userSettingsKey);
+        this._scheduleSave();
+    }
+
+    /**
      * Get a value by key. Returns null if the key doesn't exist, matching
      * the native localStorage.getItem() behavior.
      * @param {string} key - Storage key
      * @returns {string|null} The stored value or null
      */
     getItem(key) {
+        if (this._isGlobalKey(key)) {
+            return this._cache.has(key) ? this._cache.get(key) : null;
+        }
+
+        if (this._cache.get('litefin:settings_per_user') === 'true') {
+            const activeUserId = this._cache.get('litefin:activeUserId');
+            if (activeUserId) {
+                const userSettingsKey = `litefin:user_settings_${activeUserId}`;
+                this._initializeUserSettings(activeUserId);
+
+                const userSettingsObj = JSON.parse(this._cache.get(userSettingsKey) || '{}');
+                return key in userSettingsObj ? userSettingsObj[key] : null;
+            }
+        }
+
         return this._cache.has(key) ? this._cache.get(key) : null;
     }
 
@@ -122,19 +184,37 @@ class StorageService {
     setItem(key, value) {
         const strValue = String(value);
 
-        // Skip if value hasn't actually changed
+        if (this._isGlobalKey(key)) {
+            if (this._cache.get(key) === strValue) return;
+            this._cache.set(key, strValue);
+            this._dirtyKeys.add(key);
+            this._removedKeys.delete(key);
+            this._scheduleSave();
+            return;
+        }
+
+        if (this._cache.get('litefin:settings_per_user') === 'true') {
+            const activeUserId = this._cache.get('litefin:activeUserId');
+            if (activeUserId) {
+                const userSettingsKey = `litefin:user_settings_${activeUserId}`;
+                this._initializeUserSettings(activeUserId);
+
+                const userSettingsObj = JSON.parse(this._cache.get(userSettingsKey) || '{}');
+                if (userSettingsObj[key] === strValue) return;
+
+                userSettingsObj[key] = strValue;
+                this._cache.set(userSettingsKey, JSON.stringify(userSettingsObj));
+                this._dirtyKeys.add(userSettingsKey);
+                this._scheduleSave();
+                return;
+            }
+        }
+
         if (this._cache.get(key) === strValue) return;
 
-        // Update in-memory cache immediately
         this._cache.set(key, strValue);
-
-        // Mark this key as needing a disk write
         this._dirtyKeys.add(key);
-
-        // If this key was pending removal, cancel that removal
         this._removedKeys.delete(key);
-
-        // Schedule a batched flush to disk
         this._scheduleSave();
     }
 
@@ -143,19 +223,37 @@ class StorageService {
      * @param {string} key - Storage key to remove
      */
     removeItem(key) {
-        // Only act if the key actually exists in our cache
+        if (this._isGlobalKey(key)) {
+            if (!this._cache.has(key)) return;
+            this._cache.delete(key);
+            this._dirtyKeys.delete(key);
+            this._removedKeys.add(key);
+            this._scheduleSave();
+            return;
+        }
+
+        if (this._cache.get('litefin:settings_per_user') === 'true') {
+            const activeUserId = this._cache.get('litefin:activeUserId');
+            if (activeUserId) {
+                const userSettingsKey = `litefin:user_settings_${activeUserId}`;
+                this._initializeUserSettings(activeUserId);
+
+                const userSettingsObj = JSON.parse(this._cache.get(userSettingsKey) || '{}');
+                if (!(key in userSettingsObj)) return;
+
+                delete userSettingsObj[key];
+                this._cache.set(userSettingsKey, JSON.stringify(userSettingsObj));
+                this._dirtyKeys.add(userSettingsKey);
+                this._scheduleSave();
+                return;
+            }
+        }
+
         if (!this._cache.has(key)) return;
 
-        // Remove from in-memory cache
         this._cache.delete(key);
-
-        // If this key was pending a write, cancel it
         this._dirtyKeys.delete(key);
-
-        // Mark for disk removal on next flush
         this._removedKeys.add(key);
-
-        // Schedule flush
         this._scheduleSave();
     }
 
@@ -169,7 +267,7 @@ class StorageService {
      * @returns {number} Number of stored keys
      */
     get length() {
-        return this._cache.size;
+        return this.keys().length;
     }
 
     /**
@@ -179,7 +277,7 @@ class StorageService {
      * @returns {string|null} The key at that index, or null
      */
     key(index) {
-        const keys = Array.from(this._cache.keys());
+        const keys = this.keys();
         return index >= 0 && index < keys.length ? keys[index] : null;
     }
 
@@ -189,7 +287,30 @@ class StorageService {
      * @returns {string[]} Array of all keys
      */
     keys() {
-        return Array.from(this._cache.keys());
+        const list = [];
+        for (const k of this._cache.keys()) {
+            if (this._isGlobalKey(k)) {
+                list.push(k);
+            }
+        }
+        if (this._cache.get('litefin:settings_per_user') === 'true') {
+            const activeUserId = this._cache.get('litefin:activeUserId');
+            if (activeUserId) {
+                const userSettingsKey = `litefin:user_settings_${activeUserId}`;
+                this._initializeUserSettings(activeUserId);
+                const userSettingsObj = JSON.parse(this._cache.get(userSettingsKey) || '{}');
+                for (const k in userSettingsObj) {
+                    list.push(k);
+                }
+                return list;
+            }
+        }
+        for (const k of this._cache.keys()) {
+            if (!this._isGlobalKey(k)) {
+                list.push(k);
+            }
+        }
+        return list;
     }
 
     // ========================================================================
@@ -208,19 +329,56 @@ class StorageService {
      * @returns {number} The number of keys that were removed
      */
     clearByPrefix(prefix) {
-        // Collect matching keys from the in-memory cache — zero disk reads
-        const matching = Array.from(this._cache.keys()).filter((k) => k.startsWith(prefix));
+        if (this._isGlobalKey(prefix)) {
+            const matching = Array.from(this._cache.keys()).filter((k) => k.startsWith(prefix));
 
-        // Remove each one: update the in-memory cache and queue disk deletes
+            for (const key of matching) {
+                this._cache.delete(key);
+                this._dirtyKeys.delete(key);
+                this._removedKeys.add(key);
+            }
+
+            if (matching.length > 0) {
+                log.info(`clearByPrefix('${prefix}'): removed ${matching.length} key(s)`);
+                this.flush();
+            }
+
+            return matching.length;
+        }
+
+        if (this._cache.get('litefin:settings_per_user') === 'true') {
+            const activeUserId = this._cache.get('litefin:activeUserId');
+            if (activeUserId) {
+                const userSettingsKey = `litefin:user_settings_${activeUserId}`;
+                this._initializeUserSettings(activeUserId);
+
+                const userSettingsObj = JSON.parse(this._cache.get(userSettingsKey) || '{}');
+                let count = 0;
+                for (const k in userSettingsObj) {
+                    if (k.startsWith(prefix)) {
+                        delete userSettingsObj[k];
+                        count++;
+                    }
+                }
+                if (count > 0) {
+                    this._cache.set(userSettingsKey, JSON.stringify(userSettingsObj));
+                    this._dirtyKeys.add(userSettingsKey);
+                    log.info(`clearByPrefix('${prefix}'): removed ${count} key(s) from user settings`);
+                    this.flush();
+                }
+                return count;
+            }
+        }
+
+        const matching = Array.from(this._cache.keys()).filter((k) => k.startsWith(prefix) && !this._isGlobalKey(k));
         for (const key of matching) {
             this._cache.delete(key);
-            this._dirtyKeys.delete(key); // Cancel any pending write for this key
-            this._removedKeys.add(key); // Queue disk-level removal on next flush
+            this._dirtyKeys.delete(key);
+            this._removedKeys.add(key);
         }
 
         if (matching.length > 0) {
             log.info(`clearByPrefix('${prefix}'): removed ${matching.length} key(s)`);
-            // Flush immediately so the disk state is consistent ASAP
             this.flush();
         }
 
