@@ -504,7 +504,20 @@ const DEFAULTS = {
     // Toggle states for showing/hiding specific player buttons
     osdHideFavorite: true,
     osdHideInfo: true,
-    osdHideBackButton: true,
+
+    /*
+     * =========================================================================
+     * BACK BUTTON VISIBILITY DEFAULT
+     * =========================================================================
+     * For native TV apps (Tizen / WebOS), we hide the OSD back button by default
+     * (true) since physical remotes provide a dedicated hardware Back key.
+     *
+     * For desktop/mobile web browsers, we display the OSD back button by default
+     * (false) to ensure users have a clear visual navigation path to return
+     * to the details page without relying on keyboard shortcuts or browser back.
+     * =========================================================================
+     */
+    osdHideBackButton: !platformInfo.isWeb,
 
     // Combine skip (seek, chapter, track) buttons into single buttons with multi-click actions
     osdCombineSkipButtons: false
