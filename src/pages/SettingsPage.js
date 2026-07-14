@@ -1373,11 +1373,13 @@ class SettingsPage extends Page {
                 },
                 {
                     value: 'backdropMinimal',
-                    label: i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
                 },
                 {
                     value: 'backdropLeft',
-                    label: i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
                 }
             ],
             storage.getItem('pref:detailsLayout') || 'posterLeft'
@@ -2314,8 +2316,14 @@ class SettingsPage extends Page {
             [
                 { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
                 { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
-                { value: 'semi', label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent' },
-                { value: 'transparent', label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent' }
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
             ],
             storage.getItem('pref:collapsedSidebarColor') || 'theme'
         )}
@@ -2334,8 +2342,14 @@ class SettingsPage extends Page {
             [
                 { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
                 { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
-                { value: 'semi', label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent' },
-                { value: 'transparent', label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent' }
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
             ],
             storage.getItem('pref:expandedSidebarColor') || 'theme'
         )}
@@ -2353,7 +2367,10 @@ class SettingsPage extends Page {
             'sidebar-logo-settings-select',
             [
                 { value: 'visible', label: i18n.t('OptionLogoSettingsVisible') || 'Visible' },
-                { value: 'settings', label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings' },
+                {
+                    value: 'settings',
+                    label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings'
+                },
                 { value: 'home', label: i18n.t('OptionLogoSettingsHome') || 'Visible as Home' },
                 { value: 'hidden', label: i18n.t('OptionLogoSettingsHidden') || 'Hidden' }
             ],
@@ -3739,6 +3756,7 @@ class SettingsPage extends Page {
             'ass-renderer-select',
             [
                 { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
+                { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' },
                 { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
             ],
             PlayerSettings.get('assRenderer')
@@ -7284,7 +7302,6 @@ class SettingsPage extends Page {
                                 eventBus.emit(settingConfig.key, newValue);
                             }
 
-
                             if (
                                 settingConfig.key === 'pref:mediaRowsLayout' ||
                                 settingConfig.key === 'pref:loginPageLayout' ||
@@ -7580,7 +7597,6 @@ class SettingsPage extends Page {
             });
         }
 
-
         // Toggle Switch for Disable Sidebar Animation
         const disableAnimationToggle = this.$('#toggle-disable-sidebar-animation');
         if (disableAnimationToggle) {
@@ -7659,7 +7675,6 @@ class SettingsPage extends Page {
                 log.info(`Show Collapsed Library Icons set to: ${newValue}`);
             });
         }
-
 
         // Toggle Switch for Hide Sidebar Library Header
         const hideSidebarLibraryHeaderToggle = this.$('#toggle-hide-sidebar-library-header');

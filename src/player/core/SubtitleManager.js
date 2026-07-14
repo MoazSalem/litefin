@@ -15,6 +15,7 @@
 import { SubtitleParser } from './SubtitleParser.js';
 import ASSRenderer from './ASSRenderer.js';
 import LibassWasmRenderer from './LibassWasmRenderer.js';
+import ASSJSRenderer from './ASSJSRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
@@ -800,6 +801,8 @@ export default class SubtitleManager {
             let TargetRendererClass;
             if (preferredEngine === 'libass-wasm') {
                 TargetRendererClass = LibassWasmRenderer;
+            } else if (preferredEngine === 'assjs') {
+                TargetRendererClass = ASSJSRenderer;
             } else {
                 TargetRendererClass = ASSRenderer;
             }

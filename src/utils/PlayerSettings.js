@@ -164,6 +164,8 @@ const DEFAULTS = {
                         limited hardware, but doesn't support complex typesetting.
          'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
                          accurate styling and drawing support.
+         'assjs'      — Lightweight DOM-based renderer (ass.js). Uses browser
+                        native font fallback. Experimental on Tizen AVPlay.
        ------------------------------------------------------------------------- */
     assRenderer: 'libjass',
 
