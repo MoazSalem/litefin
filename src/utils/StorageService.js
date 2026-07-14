@@ -115,11 +115,13 @@ class StorageService {
             'litefin:accessToken',
             'litefin:userId',
             'app_platform',
-            'litefin:settings_per_user'
+            'litefin:settings_per_user',
+            'litefin:skip_profiles_once'
         ];
         if (globalKeys.includes(key)) return true;
         if (key.startsWith('serverPlugin:available:')) return true;
         if (key.startsWith('litefin:user_settings_')) return true;
+        if (key.startsWith('pin:')) return true;
         return false;
     }
 

@@ -878,11 +878,17 @@ class App {
                 const activeUserId = auth.getCurrentUser()?.Id;
                 const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
+                const skipProfilesOnce = storage.getItem('litefin:skip_profiles_once') === 'true';
+                if (skipProfilesOnce) {
+                    storage.removeItem('litefin:skip_profiles_once');
+                    storage.flush();
+                }
+
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
-                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin)) {
+                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin) && !skipProfilesOnce) {
                     // Multiple users stored, or the restored profile is PIN-locked —
                     // make them pick a profile (which enforces any PIN).
                     log.info(
@@ -890,8 +896,8 @@ class App {
                     );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Single user, no PIN — skip the profiles screen and go straight home
-                    log.info('Initial route: Authenticated (single user), navigating to HomePage');
+                    // Single user, no PIN, or skipped once — skip the profiles screen and go straight home
+                    log.info('Initial route: Authenticated, navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {
                     log.info('Initial route: No session, navigating to LoginPage');
