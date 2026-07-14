@@ -226,6 +226,22 @@ export default class ChaptersModal extends BaseMenu {
 
         this.$el = overlay;
 
+        /*
+         * ---------------------------------------------------------------------
+         * BACKDROP CLICK DISMISSAL
+         * ---------------------------------------------------------------------
+         * Add event listener to the outer overlay backdrop. Clicking on the
+         * empty space surrounding the chapters modal panel will dismiss it
+         * and restore control focus to the OSD.
+         * ---------------------------------------------------------------------
+         */
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.log.info('ChaptersModal backdrop clicked, closing chapters overlay');
+                this._close();
+            }
+        });
+
         /* Enable lazy loading for thumbnails. */
         const listEl = overlay.querySelector('.chapters-modal__list');
         if (listEl) {
@@ -279,6 +295,26 @@ export default class ChaptersModal extends BaseMenu {
             }
 
             case 'back':
+                /*
+                 * -------------------------------------------------------------
+                 * BACK KEY EXIT PATH
+                 * -------------------------------------------------------------
+                 * Close the modal and return focus to the previous item.
+                 * -------------------------------------------------------------
+                 */
+                this._close();
+                return true;
+
+            case 'left':
+                /*
+                 * -------------------------------------------------------------
+                 * DPAD LEFT EXIT PATH
+                 * -------------------------------------------------------------
+                 * Added to provide a swift, intuitive D-pad navigation flow.
+                 * Pressing left will dismiss the modal, returning focus to the
+                 * player's main playback controls bar.
+                 * -------------------------------------------------------------
+                 */
                 this._close();
                 return true;
 
