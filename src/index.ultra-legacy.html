@@ -68,19 +68,6 @@
             }
 
             // ----------------------------------------------------------------
-            // Element.remove() — removes the element from the DOM.
-            // Added in Chrome 23 (should be fine), but some old WebOS WebKit
-            // builds are missing it. Safe no-op if parentNode is null.
-            // ----------------------------------------------------------------
-            if (typeof Element !== 'undefined' && !Element.prototype.remove) {
-                Element.prototype.remove = function() {
-                    if (this.parentNode) {
-                        this.parentNode.removeChild(this);
-                    }
-                };
-            }
-
-            // ----------------------------------------------------------------
             // NodeList.forEach() — iterates over a NodeList like an array.
             // Added in Chrome 51. querySelectorAll() returns a NodeList,
             // not a real Array, so Array.prototype.forEach doesn't apply.

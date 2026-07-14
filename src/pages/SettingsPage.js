@@ -2358,7 +2358,7 @@ class SettingsPage extends Page {
                 { value: 'hidden', label: i18n.t('OptionLogoSettingsHidden') || 'Hidden' }
             ],
             (() => {
-                let val = storage.getItem('pref:logoSettings') || 'visible';
+                const val = storage.getItem('pref:logoSettings') || 'visible';
                 if (val === 'true') return 'settings';
                 if (val === 'false') return 'visible';
                 return val;

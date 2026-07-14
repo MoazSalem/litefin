@@ -32,7 +32,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 /**
  * Factory function to generate Webpack plugins required for different tiers.
  * Supports customizing the application icon source.
- * 
+ *
  * @param {string} tier - The build tier ('modern' or 'legacy')
  * @param {object} [options] - Additional options to configure build output
  * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'assets/icon.png')
@@ -40,7 +40,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 function getPlugins(tier, options = {}) {
     // Determine the build tier, falling back to 'modern' by default
     const buildTier = tier || 'modern';
-    
+
     // Retrieve the source icon path, defaulting to standard icon.png in assets/
     const iconSrc = options.iconSrc || 'assets/icon.png';
 
@@ -219,7 +219,7 @@ const normalConfig = {
         hints: 'warning'
     },
     // No source maps — production build
-    entry: './src/index.js',
+    entry: ['./src/utils/DomPolyfills.js', './src/index.js'],
 
     output: {
         path: path.resolve(__dirname, 'dist/normal'),
@@ -286,7 +286,7 @@ const legacyConfig = {
         maxEntrypointSize: 4000000,
         hints: 'warning'
     },
-    entry: ['url-search-params-polyfill', './src/index.js'],
+    entry: ['url-search-params-polyfill', './src/utils/DomPolyfills.js', './src/index.js'],
 
     output: {
         path: path.resolve(__dirname, 'dist/legacy'),
@@ -521,7 +521,7 @@ const normalOblongConfig = {
         hints: 'warning'
     },
     // The main app entry point
-    entry: './src/index.js',
+    entry: ['./src/utils/DomPolyfills.js', './src/index.js'],
 
     output: {
         // Output to the specific normal-oblong folder in dist
