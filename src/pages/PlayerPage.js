@@ -85,6 +85,20 @@ class PlayerPage extends Page {
         this._preSelectedMediaSourceId = undefined;
         this._preSelectedAudio = undefined;
         this._preSelectedSubtitle = undefined;
+
+        /*
+         * ====================================================================
+         * ORIGINATING CONTEXT TRACKING
+         * ====================================================================
+         * We store the context type (e.g., 'playlist', 'album', 'boxset') and the
+         * matching container ID that triggered this playback session. When exiting,
+         * these variables let us redirect the user back to the correct metadata details
+         * screen (like the album or playlist overview) rather than attempting to open
+         * a details page for an individual audio track/song, which is unsupported.
+         * ====================================================================
+         */
+        this._contextType = null;
+        this._contextId = null;
     }
 
     /**
@@ -267,6 +281,16 @@ class PlayerPage extends Page {
             // Initialize Play Queue
             const contextType = state.get('player:contextType');
             const contextId = state.get('player:contextId');
+
+            /*
+             * Save the active container context locally on the page instance before
+             * the state is purged. This ensures the stop and exit logic can resolve
+             * the originating album/playlist details page path even if the play queue
+             * transitions/advances items multiple times during the session.
+             */
+            this._contextType = contextType || null;
+            this._contextId = contextId || null;
+
             // For BoxSet queues, the sort order is forwarded from DetailsPage so the
             // full queue is ordered the same way the collection display grid is ordered.
             const boxsetSortBy = state.get('player:boxsetSortBy');
@@ -2877,6 +2901,26 @@ class PlayerPage extends Page {
             let targetPath = `/details/${this._item.Id}`;
             if (isTvChannel && this.params.fromGuide === 'true') {
                 targetPath = '/livetv';
+            } else if (this._item.Type === 'Audio') {
+                /*
+                 * ====================================================================
+                 * MUSIC PLAYBACK RETURN PATH RESOLUTION
+                 * ====================================================================
+                 * Individual audio tracks do not have standalone detail views. Returning
+                 * the user to the track's own ID results in a broken/blank screen.
+                 *
+                 * 1. If we have a stored context container (like a Playlist or a BoxSet)
+                 *    that matches the active session, route back to that playlist/boxset.
+                 * 2. Otherwise, if the song item carries an AlbumId, route back to the
+                 *    MusicAlbum Details page.
+                 * 3. Fallback: navigate to the track's own Details page (legacy path).
+                 * ====================================================================
+                 */
+                if ((this._contextType === 'playlist' || this._contextType === 'boxset') && this._contextId) {
+                    targetPath = `/details/${this._contextId}`;
+                } else if (this._item.AlbumId) {
+                    targetPath = `/details/${this._item.AlbumId}`;
+                }
             }
 
             // The PlayerPage normally replaces the page that launched it in history (to prevent bloat)
