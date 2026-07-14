@@ -205,6 +205,20 @@ export default class ASSJSRenderer {
         }
     }
 
+    play() {
+        this._paused = false;
+        if (this._clockProxy) {
+            this._clockProxy.dispatchEvent(new Event('play'));
+        }
+    }
+
+    pause() {
+        this._paused = true;
+        if (this._clockProxy) {
+            this._clockProxy.dispatchEvent(new Event('pause'));
+        }
+    }
+
     show() {
         if (this._assContainer) {
             this._assContainer.style.display = '';

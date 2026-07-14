@@ -566,6 +566,26 @@ export default class SubtitleManager {
     }
 
     // ========================================================================
+    // Playback State
+    // ========================================================================
+
+    /**
+     * Notify the ASS renderer that playback has resumed.
+     * Resumes CSS animations and the internal rAF loop.
+     */
+    play() {
+        if (this._assRenderer && typeof this._assRenderer.play === 'function') {
+            this._assRenderer.play();
+        }
+    }
+
+    pause() {
+        if (this._assRenderer && typeof this._assRenderer.pause === 'function') {
+            this._assRenderer.pause();
+        }
+    }
+
+    // ========================================================================
     // Cleanup
     // ========================================================================
 
