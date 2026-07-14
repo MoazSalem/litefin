@@ -466,15 +466,17 @@ export default class SubtitleManager {
             let fontClass = null;
             let fontFamily = null;
 
-            if (this._hasContainerFonts && !overrideAssFonts) {
-                log.info('Using container fonts for ASS; font override toggle is OFF.');
-            } else {
+            if (overrideAssFonts) {
                 const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
                 if (fontId) {
                     await FontLoader.loadFont(fontId);
                 }
                 fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
                 fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+            } else if (this._hasContainerFonts) {
+                log.info('Using container fonts for ASS; font override toggle is OFF.');
+            } else {
+                log.info('Override OFF and no container fonts — restoring original ASS fonts.');
             }
 
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');

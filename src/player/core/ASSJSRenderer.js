@@ -154,11 +154,15 @@ export default class ASSJSRenderer {
         if (this._content && needsReparse) {
             log.info(`Re-creating ASS.js with new font: ${fontFamily}`);
             const currentTime = this._lastTime || 0;
+            const content = this._content;
+            const delay = this._delaySeconds;
             this.destroy();
-            await this.setTrack(this._content);
-            if (this._ass) {
-                if (this._delaySeconds) this._ass.delay = this._delaySeconds;
-                if (this._isVirtual) this._currentTime = currentTime;
+            await this.setTrack(content);
+            if (this._ass && delay) {
+                this._ass.delay = delay;
+            }
+            if (this._isVirtual) {
+                this._currentTime = currentTime;
             }
         }
     }
