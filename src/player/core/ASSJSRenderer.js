@@ -64,6 +64,13 @@ export default class ASSJSRenderer {
 
         this._fontClass = null;
         this._fontFamily = null;
+        this._fontScale = 1.0;
+        this._outlineThickness = null;
+        this._shadowThickness = null;
+        this._lineHeight = 0;
+        this._letterSpacing = 0;
+        this._bottomOffset = 0;
+        this._styleElement = null;
 
         log.info('ASSJSRenderer initialized');
     }
@@ -165,6 +172,7 @@ export default class ASSJSRenderer {
             }
 
             this._resizeContainer();
+            this._applyStyles();
 
             video.dispatchEvent(new Event('play'));
 
@@ -184,12 +192,18 @@ export default class ASSJSRenderer {
         log.debug(`ASS.js delay set to ${seconds}s`);
     }
 
-    async setFontStyles(className, fontFamily) {
+    async setFontStyles(className, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset) {
         log.info(`ASSJSRenderer.setFontStyles: class="${className}", family="${fontFamily}"`);
 
         const needsReparse = this._fontFamily !== fontFamily;
         this._fontClass = className;
         this._fontFamily = fontFamily;
+        this._fontScale = fontScale || 1.0;
+        this._outlineThickness = outlineThickness !== undefined ? outlineThickness : null;
+        this._shadowThickness = shadowThickness !== undefined ? shadowThickness : null;
+        this._lineHeight = lineHeight || 0;
+        this._letterSpacing = letterSpacing || 0;
+        this._bottomOffset = bottomOffset || 0;
 
         if (this._content && needsReparse) {
             log.info(`Re-creating ASS.js with new font: ${fontFamily}`);
@@ -203,6 +217,8 @@ export default class ASSJSRenderer {
             }
             this._currentTime = currentTime;
         }
+
+        this._applyStyles();
     }
 
     play() {
@@ -257,6 +273,11 @@ export default class ASSJSRenderer {
             this._ass = null;
         }
 
+        if (this._styleElement && this._styleElement.parentNode) {
+            this._styleElement.parentNode.removeChild(this._styleElement);
+        }
+        this._styleElement = null;
+
         if (this._assContainer && this._assContainer.parentNode) {
             this._assContainer.parentNode.removeChild(this._assContainer);
         }
@@ -268,6 +289,66 @@ export default class ASSJSRenderer {
         this._clockProxy = null;
 
         this._content = null;
+    }
+
+    _applyStyles() {
+        if (this._styleElement && this._styleElement.parentNode) {
+            this._styleElement.parentNode.removeChild(this._styleElement);
+            this._styleElement = null;
+        }
+
+        if (!this._assContainer) return;
+
+        const rules = [];
+
+        if (this._fontScale && this._fontScale !== 1.0) {
+            rules.push(`
+.ASS-dialogue [data-text] {
+    font-size: calc(var(--ass-scale) * var(--ass-real-fs) * ${this._fontScale}px) !important;
+}`);
+        }
+
+        if (this._lineHeight) {
+            rules.push(`
+.ASS-dialogue [data-text] {
+    line-height: calc(var(--ass-scale) * var(--ass-tag-fs) * 1px + ${this._lineHeight}px) !important;
+}`);
+        }
+
+        if (this._letterSpacing) {
+            rules.push(`
+.ASS-dialogue [data-text] {
+    letter-spacing: calc(var(--ass-scale) * var(--ass-tag-fsp) * 1px + ${this._letterSpacing}px) !important;
+}`);
+        }
+
+        if (this._bottomOffset) {
+            rules.push(`
+.ASS-box {
+    margin-top: -${this._bottomOffset}px !important;
+}`);
+        }
+
+        if (this._outlineThickness !== null && this._outlineThickness !== undefined) {
+            rules.push(`
+.ASS-dialogue [data-border-style="1"]::after {
+    -webkit-text-stroke: calc(var(--ass-scale-stroke) * var(--ass-border-width) * ${this._outlineThickness}px) var(--ass-border-color) !important;
+}`);
+        }
+
+        if (this._shadowThickness !== null && this._shadowThickness !== undefined) {
+            rules.push(`
+.ASS-dialogue [data-border-style="1"]::before {
+    transform: translate(calc(var(--ass-scale-stroke) * var(--ass-tag-xshad) * ${this._shadowThickness}px), calc(var(--ass-scale-stroke) * var(--ass-tag-yshad) * ${this._shadowThickness}px)) !important;
+}`);
+        }
+
+        if (rules.length === 0) return;
+
+        const style = document.createElement('style');
+        style.textContent = rules.join('\n');
+        this._assContainer.appendChild(style);
+        this._styleElement = style;
     }
 
     _resizeContainer() {
