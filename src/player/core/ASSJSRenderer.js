@@ -3,11 +3,52 @@ import { logger } from '../../utils/Logger.js';
 
 const log = logger.create('ASSJSRenderer');
 
+/**
+ * ASS.js can produce malformed CSS keyframe offsets from certain \fade()
+ * combinations (non-monotonically-decreasing). Element.animate() throws
+ * TypeError when this happens, breaking the rAF loop. We patch the method
+ * once globally to swallow only this specific error and return a no-op
+ * Animation stub so ASS.js can continue without crashing.
+ */
+if (typeof Element !== 'undefined' && Element.prototype.animate && !Element.prototype._assPatched) {
+    const _origAnimate = Element.prototype.animate;
+    const _noopAnimation = {
+        currentTime: null,
+        effect: null,
+        finished: Promise.resolve(),
+        id: '',
+        oncancel: null,
+        onfinish: null,
+        pause: () => {},
+        play: () => {},
+        cancel: () => {},
+        finish: () => {},
+        reverse: () => {},
+        commitStyles: () => {},
+        persist: () => {},
+        updatePlaybackRate: () => {},
+        pending: false,
+        playbackRate: 1,
+        ready: Promise.resolve(),
+        replaceState: 'active',
+        startTime: null,
+        timeline: null
+    };
+    Element.prototype.animate = function (keyframes, options) {
+        try {
+            return _origAnimate.call(this, keyframes, options);
+        } catch (e) {
+            log.verbose('ASS.js animate error:', e.message);
+            return _noopAnimation;
+        }
+    };
+    Element.prototype._assPatched = true;
+}
+
 export default class ASSJSRenderer {
     constructor({ container, video, width, height }) {
         this._container = container;
         this._videoElement = video || null;
-        this._isVirtual = !video;
         this._videoWidth = width || 1920;
         this._videoHeight = height || 1080;
 
@@ -20,14 +61,11 @@ export default class ASSJSRenderer {
 
         this._currentTime = 0;
         this._paused = false;
-        this._rafId = null;
-        this._lastTickWallTime = 0;
 
         this._fontClass = null;
         this._fontFamily = null;
 
-        log.info('ASSJSRenderer initialized' +
-            (this._isVirtual ? ' (AVPlay/virtual mode)' : ' (HTML5 mode)'));
+        log.info('ASSJSRenderer initialized');
     }
 
     _createClockProxy() {
@@ -64,20 +102,23 @@ export default class ASSJSRenderer {
         return proxy;
     }
 
+    _dispatchSeeking(from) {
+        if (!this._clockProxy) return;
+        try {
+            this._clockProxy.dispatchEvent(new Event('seeking'));
+        } catch (err) {
+            log.warn(`ASS.js seek error (${from}):`, err.message);
+        }
+    }
+
     tick(timeSeconds) {
         this._lastTime = timeSeconds;
         if (!this._ass) return;
 
-        if (this._isVirtual) {
-            this._currentTime = timeSeconds;
+        this._currentTime = timeSeconds;
 
-            const now = performance.now();
-            if (now - this._lastTickWallTime > 250) {
-                if (this._clockProxy) {
-                    this._clockProxy.dispatchEvent(new Event('seeking'));
-                }
-                this._lastTickWallTime = now;
-            }
+        if (this._assContainer && this._assContainer.style.visibility === 'hidden') {
+            this._assContainer.style.visibility = '';
         }
     }
 
@@ -85,10 +126,10 @@ export default class ASSJSRenderer {
         if (width) this._videoWidth = width;
         if (height) this._videoHeight = height;
 
-        if (this._isVirtual && this._clockProxy) {
+        if (this._clockProxy) {
             this._clockProxy.style.width = this._container.offsetWidth + 'px';
             this._clockProxy.style.height = this._container.offsetHeight + 'px';
-            this._clockProxy.dispatchEvent(new Event('seeking'));
+            this._dispatchSeeking('resize');
         }
     }
 
@@ -112,8 +153,8 @@ export default class ASSJSRenderer {
             this._container.appendChild(this._assContainer);
 
             const processedContent = this._preProcessAssContent(content, this._fontFamily);
-            const video = this._isVirtual ? this._createClockProxy() : this._videoElement;
-            this._clockProxy = this._isVirtual ? video : null;
+            const video = this._createClockProxy();
+            this._clockProxy = video;
 
             this._ass = new ASS(processedContent, video, {
                 container: this._assContainer
@@ -123,10 +164,9 @@ export default class ASSJSRenderer {
                 this._ass.delay = this._delaySeconds;
             }
 
-            if (this._isVirtual) {
-                video.dispatchEvent(new Event('play'));
-                this._resizeContainer();
-            }
+            this._resizeContainer();
+
+            video.dispatchEvent(new Event('play'));
 
             log.info('ASS.js renderer created successfully');
         } catch (err) {
@@ -161,9 +201,7 @@ export default class ASSJSRenderer {
             if (this._ass && delay) {
                 this._ass.delay = delay;
             }
-            if (this._isVirtual) {
-                this._currentTime = currentTime;
-            }
+            this._currentTime = currentTime;
         }
     }
 
@@ -188,17 +226,14 @@ export default class ASSJSRenderer {
 
     clear() {
         if (!this._ass) return;
-        if (this._isVirtual && this._clockProxy) {
-            this._currentTime = -1;
-            this._clockProxy.dispatchEvent(new Event('seeking'));
-        } else if (this._videoElement) {
-            this._videoElement.dispatchEvent(new Event('seeking'));
+        this._currentTime = -1;
+        this._dispatchSeeking('clear');
+        if (this._assContainer) {
+            this._assContainer.style.visibility = 'hidden';
         }
     }
 
     destroy() {
-        this._stopSmoothRender();
-
         if (this._ass) {
             try {
                 this._ass.destroy();
@@ -219,25 +254,6 @@ export default class ASSJSRenderer {
         this._clockProxy = null;
 
         this._content = null;
-    }
-
-    _startSmoothRender() {
-        if (this._rafId !== null || !this._isVirtual) return;
-        const loop = () => {
-            if (!this._ass || !this._isVirtual) {
-                this._rafId = null;
-                return;
-            }
-            this._rafId = requestAnimationFrame(loop);
-        };
-        this._rafId = requestAnimationFrame(loop);
-    }
-
-    _stopSmoothRender() {
-        if (this._rafId !== null) {
-            cancelAnimationFrame(this._rafId);
-            this._rafId = null;
-        }
     }
 
     _resizeContainer() {
