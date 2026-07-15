@@ -113,7 +113,7 @@ body.lyrics-active .audio-player-center {
     position: relative;
     width: 460px; /* Reduced slightly to ensure it doesn't crowd and fits beautifully on various screen sizes */
     height: 460px; /* Reduced slightly from 500px */
-    border-radius: 24px; /* Sleek, rounded aesthetics following Apple design principles */
+    border-radius: 24px;
     background-size: cover;
     background-position: center;
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65);

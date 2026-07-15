@@ -285,7 +285,7 @@
     border-radius: 14px;
     cursor: pointer;
     
-    /* Apple-style spring animation */
+    /* spring animation */
     -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
                         background-color 0.2s ease,
                         color 0.2s ease,

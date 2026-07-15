@@ -83,15 +83,14 @@ class HeroCarousel {
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
-                    ${
-                        this._items.length > 1
-                            ? `
+                    ${this._items.length > 1
+                ? `
                     <div class="hero-indicators">
                         ${dotsHtml}
                     </div>
                     `
-                            : ''
-                    }
+                : ''
+            }
                 </div>
                 ${navArrowsHtml}
             </div>
@@ -320,7 +319,7 @@ class HeroCarousel {
         this._startAutoScroll();
 
         // =========================================================================
-        // Apple HIG: Dynamic Visual Weight Adaptation for Hero Logos
+        // Dynamic Visual Weight Adaptation for Hero Logos
         // =========================================================================
         // Calculate the natural aspect ratio of the loaded hero logo image.
         // Cap the height dynamically to keep the layout visually balanced:

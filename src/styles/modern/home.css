@@ -568,7 +568,6 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .card-image {
    ========================================================================= */
 
 /* 
-   Apple-Style Initials Dissolve Transition:
    When a poster using a fallback gradient is hovered or D-pad focused, it
    smoothly expands to 600px width. We dissolve the initials (opacity: 0)
    with a clean ease curve so they don't overlap or clash with the beautiful

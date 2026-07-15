@@ -367,7 +367,6 @@
 
 /* 
  * Positioned and styled to float in the same bottom-right or bottom-left corner
- * as the Apple HIG inspired "Skip Intro" button overlay.
  */
 .upnext-dialog.upnext-style-button {
     background: transparent;

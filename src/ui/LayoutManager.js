@@ -57,7 +57,7 @@ class LayoutManager {
         this._loginPageLayout = 'classic';
 
         // Current theme mode
-        // Ambient Glow is now the default theme mode for a premium glassmorphic Apple TV style look.
+        // Ambient Glow is now the default theme mode for a premium glassmorphic look.
         this._themeMode = THEME_MODES.AMBIENT;
 
         // Current theme color (HEX)
@@ -405,7 +405,7 @@ class LayoutManager {
             const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
             dynamicCss += `
             --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
-            --jf-text-secondary: ${isLight ? '#666666' : '#999999'};
+            --jf-text-secondary: ${isLight ? '#666666' : '#ffffffcc'};
             --jf-text-tertiary: ${isLight ? '#888888' : '#666666'};
             
             --text-primary: var(--jf-text-primary);
@@ -431,7 +431,7 @@ class LayoutManager {
             --jf-divider: ${tints.divider};
             --jf-navbar-bg: ${tints.background};`;
         } else if (this._themeMode === THEME_MODES.AMBIENT) {
-            // Elegant, matte ultra-dark background matching Apple's Human Interface Guidelines.
+            // Elegant, matte ultra-dark background.
             // A deeply saturated charcoal canvas serves as the foundation.
             // Translucent material cards absorb the dynamically-cast ambient gradients.
             dynamicCss += `
@@ -586,8 +586,6 @@ class LayoutManager {
 
     /**
      * Sets the active button style theme and updates HTML attributes immediately.
-     * Follows Apple's visual clarity recommendations, ensuring high legibility
-     * and premium spring-like focus behaviors.
      * @param {string} style - Selected button style
      * @param {boolean} [save=true] - If true, persist value to localStorage
      */

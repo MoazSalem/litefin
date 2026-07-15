@@ -275,7 +275,7 @@ progress.card-progress::-webkit-progress-bar {
 }
 
 progress.card-progress::-webkit-progress-value {
-    /* Premium Apple-style gradient */
+    /* Premium gradient */
     background: linear-gradient(90deg, var(--jf-accent) 0%, var(--jf-accent-hover) 100%);
     /* Ensure sharp edges for the value bar */
     border-radius: 0;
@@ -324,7 +324,7 @@ progress.card-progress::-webkit-progress-value {
     z-index: 1;
 }
 
-/* Gradient Variants (Apple-style) */
+/* Gradient Variants */
 .grad-1 {
     background: linear-gradient(135deg, #007aff 0%, #004a99 100%);
 }
@@ -642,7 +642,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 
-/* Base Badge Styling: Clean, Apple-style pills with glassmorphism */
+/* Base Badge Styling */
 .track-badge {
     display: inline-flex;
     align-items: center;

@@ -547,7 +547,6 @@ class HomePage extends Page {
                  * UI Layout Aspect Determination
                  * ============================================================
                  *
-                 * Following Apple's Human Interface Guidelines, grid systems
                  * should display items in card aspect ratios that match their
                  * media type semantics.
                  *
@@ -560,16 +559,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',

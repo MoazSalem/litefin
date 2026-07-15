@@ -72,7 +72,6 @@ const SMALL_ELEMENT_FRACTION = 0.9;
 // budget — each intermediate frame must repaint the hero (Ken Burns animation,
 // gradient overlays, backdrop layer) AND the content rows (per-row translateZ(0)
 // compositor layers), causing visible frame drops. Instant-snapping large deltas
-// matches Apple TV's behavior for hero-to-content transitions.
 const LARGE_SCROLL_SNAP_FRACTION = 0.45;
 
 class ScrollController {
@@ -261,7 +260,6 @@ class ScrollController {
         /* ====================================================================
          * 🚀 INSTANT SCROLL NAVIGATION OVERRIDE
          * ====================================================================
-         * Under Apple Human Interface Guidelines and premium responsiveness goals,
          * we allow users to opt for an "Instant" snapping scroll behavior.
          * If 'pref:verticalScrollMode' is set to 'instant', we override the scroll
          * duration parameter to 0, which immediately diverts the execution flow

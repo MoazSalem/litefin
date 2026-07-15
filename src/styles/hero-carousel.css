@@ -2,8 +2,6 @@
  * ============================================================================
  * Litefin Tizen - Hero Carousel Styles
  * ============================================================================
- * Apple TV inspired hero section for the home screen.
- *
  * PERFORMANCE NOTES (Tizen/WebKit):
  *   - NO -webkit-mask-image: it forces a software compositing pass that
  *     serializes ALL sibling animations through the CPU. Use overflow:hidden
@@ -670,7 +668,7 @@
 
 /* 
  * ============================================================================
- * Apple Human Interface Guidelines - Responsive Space & Density Controls
+ * Responsive Space & Density Controls
  * ============================================================================
  * Since TV viewports have a strict 1080p logical grid canvas, we must balance
  * the vertical space extremely carefully. By scaling down logo heights, font
@@ -717,7 +715,6 @@
 .hero-carousel-container.immersive.compact .hero-logo-container {
     /* 
      * Ultra-compact 80px height designed for extreme information density.
-     * Replicates Apple tvOS home screen app channel preview proportions.
      */
     height: 110px;
     margin-bottom: 12px;

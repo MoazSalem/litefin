@@ -36,7 +36,7 @@ import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
-import { detailsIcons } from '../utils/Icons.js';
+import { detailsIcons, settingsIcons } from '../utils/Icons.js';
 
 const log = logger.create('DetailsPage');
 
@@ -301,9 +301,7 @@ class DetailsPage extends Page {
         // ====================================================================
         // Details Page Primary Actions Focus Registration
         // ====================================================================
-        // We register the actions section using a 'grid' orientation instead
-        // of 'horizontal'. Under Apple's Human Interface Guidelines (HIG) and TV
-        // navigation best practices, controls must be predictable and reachable.
+        // We register the actions section using a 'grid' orientation,
         // On smaller displays or layouts with wrapped buttons, a strict horizontal
         // orientation forces users to navigate linearly and skips wrapped elements
         // when pressing vertical keys (UP/DOWN).
@@ -1713,7 +1711,7 @@ class DetailsPage extends Page {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
                     // =========================================================================
-                    // Apple HIG: Dynamic Visual Weight Adaptation (Sleek Proportional Spacing)
+                    // Dynamic Visual Weight Adaptation (Sleek Proportional Spacing)
                     // =========================================================================
                     // Calculate the natural aspect ratio of the loaded logo image.
                     // By dividing the max width by the aspect ratio, we find the target height.
@@ -1911,8 +1909,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                  ? item.OriginalTitle
-                  : ''
+                    ? item.OriginalTitle
+                    : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -2160,13 +2158,13 @@ class DetailsPage extends Page {
         if (ghostBtn) {
             // Check if SyncPlay is currently active.
             const isSyncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
-            
+
             // Check if user has toggled the preference option to hide the button entirely.
             const isHiddenByPref = storage.getItem('pref:hideGhostMode') === 'true';
-            
+
             // Determine playability (non-photos and not in sync play, and not hidden by user preference).
             const isPlayable = item.Type !== 'Photo' && !isSyncPlayActive && !isHiddenByPref;
-            
+
             // Toggle visibility classes and keyboard accessibility index dynamically.
             if (isPlayable) {
                 ghostBtn.classList.remove('hidden');
@@ -2220,7 +2218,7 @@ class DetailsPage extends Page {
             const minutes = resumeTime % 60;
 
             // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
-            // show only the hour to maintain a clean and beautiful Apple-like minimal aesthetic.
+            // show only the hour to maintain a clean and beautiful minimal aesthetic.
             timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
         } else {
             // Under 60 minutes, display in simple minute format (e.g., "45m").
@@ -2235,7 +2233,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => {});
+        requestAnimationFrame(() => { });
 
         // Watched button
         if (watchedBtn) {
@@ -2442,56 +2440,178 @@ class DetailsPage extends Page {
         section.classList.remove('hidden');
 
         if (this._item.Type === 'Season') {
-            // Remove 'media-row' to prevent ScrollController from aggressively top-snapping this entire deep grid
+            // Remove 'media-row' to prevent ScrollController from aggressively top-snapping this entire deep layout
             section.classList.remove('media-row');
-            // Use MediaGrid for a clean, generic 2D landscape episode layout
-            this._episodeGrid = new MediaGrid({
-                id: 'season-episodes-grid',
-                items: this._episodes,
-                type: 'episode',
-                contextType: 'details',
-                limit: 60,
-                moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
-                isLandscape: true,
-                onClick: (card) => {
-                    const stateKey = `details:lastFocusedItem:${this._itemId}`;
-                    if (card.dataset.itemId) {
-                        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
-                            state.set(stateKey, {
-                                itemId: card.dataset.itemId,
-                                sectionId: 'details-episodes'
-                            });
+
+            const episodeLayout = storage.getItem('pref:episodeLayout') || 'list';
+
+            if (episodeLayout === 'list') {
+                container.classList.add('vertical-list');
+
+                // ====================================================================
+                // Premium List with Details Layout
+                // ====================================================================
+                // Render episode cards in a clean, vertical scrollable column:
+                // - Thumbnail on the left with a subtle rounded cover design and progress indicators.
+                // - High-contrast text stack on the right: SxxExx index code, clear title,
+                //   ratings & duration metadata row, and overview line clamping.
+                // ====================================================================
+                const limit = 30;
+                const episodesToShow = this._episodes.slice(0, limit);
+                const hasMore = this._episodes.length > limit;
+
+                let html = '<div class="episode-list-container">';
+                episodesToShow.forEach((ep) => {
+                    const progress =
+                        ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
+                            ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
+                            : 0;
+                    const progressHtml = progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : '';
+
+                    const imgUrl = api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality });
+                    const episodeCode = i18n.ensureBiDi(`S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}`);
+                    const episodeTitle = i18n.ensureBiDi(ep.Name);
+
+                    const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    let runtimeText = '';
+                    if (ep.RunTimeTicks) {
+                        const mins = Math.round(ep.RunTimeTicks / 600000000);
+                        runtimeText = `${mins}m`;
+                    }
+                    let endsAtText = '';
+                    if (ep.RunTimeTicks) {
+                        const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                        const timeString = i18n.formatLocalTime(endTime);
+                        endsAtText = i18n.t('EndsAtValue', [timeString]);
+                    }
+
+                    html += `
+                        <div class="episode-row">
+                            <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                                <div class="episode-row-thumb">
+                                    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
+                                    ${progressHtml}
+                                </div>
+                                <div class="episode-row-info">
+                                    <div class="episode-row-title">${ep.IndexNumber || 0}. ${episodeTitle}</div>
+                                    <div class="episode-row-meta">
+                                        ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                        ${runtimeText ? `<span>${runtimeText}</span>` : ''}
+                                        ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                    </div>
+                                    <p class="episode-row-overview">${ep.Overview || ''}</p>
+                                </div>
+                            </button>
+                        </div>
+                    `;
+                });
+
+                if (hasMore) {
+                    const moreUrl = `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`;
+                    html += `
+                        <div class="episode-row">
+                            <button class="episode-row-card media-card see-more-card" data-more-url="${moreUrl}" tabindex="0" style="justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.5); border: 2px dashed rgba(255, 255, 255, 0.15);">
+                                <span style="font-size: 1.4rem; font-weight: 600; color: var(--jf-text-secondary);">${i18n.t('ShowMore') || 'See More'}</span>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                html += '</div>';
+                container.innerHTML = html;
+
+                // Wire up click event delegation for navigating to details
+                container.onclick = (e) => {
+                    const card = e.target.closest('.media-card');
+                    if (card) {
+                        if (card.classList.contains('see-more-card')) {
+                            router.navigate(card.dataset.moreUrl);
+                            return;
                         }
-                        router.navigate(`/details/${card.dataset.itemId}`);
+                        const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                        if (card.dataset.itemId) {
+                            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                                state.set(stateKey, {
+                                    itemId: card.dataset.itemId,
+                                    sectionId: 'details-episodes'
+                                });
+                            }
+                            router.navigate(`/details/${card.dataset.itemId}`);
+                        }
                     }
-                }
-            });
+                };
 
-            container.innerHTML = this._episodeGrid.render();
-            this._episodeGrid.onMounted(); // Wire up generic grid router links
+                lazyLoader.observe(container);
 
-            // Register focus section for grid
-            const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
-            const nextSection = this._getNextVisibleSection('details-episodes');
-            const leaveDownTarget = nextSection ? nextSection.targetName : null;
+                // Register vertical list navigation constraints
+                const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
+                const nextSection = this._getNextVisibleSection('details-episodes');
+                const leaveDownTarget = nextSection ? nextSection.targetName : null;
 
-            this.registerFocusSection('details-episodes', container, {
-                orientation: 'grid',
-                leaveUp: upwardLink,
-                leaveDown: leaveDownTarget,
-                leaveLeft: 'sidebar',
-                onEnter: (fromElement, options) => {
-                    // Only assert focus on the first item for the very first entry.
-                    // Afterwards, let FocusManager use standard spatial/memory routing.
-                    if (!this._hasEnteredEpisodesGrid) {
-                        this._hasEnteredEpisodesGrid = true;
-                        return container.querySelector('.media-card');
+                this.registerFocusSection('details-episodes', container, {
+                    orientation: 'vertical',
+                    leaveUp: upwardLink,
+                    leaveDown: leaveDownTarget,
+                    leaveLeft: 'sidebar',
+                    onEnter: (fromElement, options) => {
+                        if (!this._hasEnteredEpisodesGrid) {
+                            this._hasEnteredEpisodesGrid = true;
+                            return container.querySelector('.media-card');
+                        }
+                        return null;
                     }
-                    return null;
-                }
-            });
+                });
 
-            this._updateLeaveDown(upwardLink, 'details-episodes');
+                this._updateLeaveDown(upwardLink, 'details-episodes');
+            } else {
+                container.classList.remove('vertical-list');
+                // Use MediaGrid for a clean, generic 2D landscape episode layout
+                this._episodeGrid = new MediaGrid({
+                    id: 'season-episodes-grid',
+                    items: this._episodes,
+                    type: 'episode',
+                    contextType: 'details',
+                    limit: 60,
+                    moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
+                    isLandscape: true,
+                    onClick: (card) => {
+                        const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                        if (card.dataset.itemId) {
+                            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                                state.set(stateKey, {
+                                    itemId: card.dataset.itemId,
+                                    sectionId: 'details-episodes'
+                                });
+                            }
+                            router.navigate(`/details/${card.dataset.itemId}`);
+                        }
+                    }
+                });
+
+                container.innerHTML = this._episodeGrid.render();
+                this._episodeGrid.onMounted(); // Wire up generic grid router links
+
+                // Register focus section for grid
+                const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
+                const nextSection = this._getNextVisibleSection('details-episodes');
+                const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+                this.registerFocusSection('details-episodes', container, {
+                    orientation: 'grid',
+                    leaveUp: upwardLink,
+                    leaveDown: leaveDownTarget,
+                    leaveLeft: 'sidebar',
+                    onEnter: (fromElement, options) => {
+                        if (!this._hasEnteredEpisodesGrid) {
+                            this._hasEnteredEpisodesGrid = true;
+                            return container.querySelector('.media-card');
+                        }
+                        return null;
+                    }
+                });
+
+                this._updateLeaveDown(upwardLink, 'details-episodes');
+            }
         } else {
             // Horizontal episode cards (for Series NextUp, etc.) require 'media-row' for correct horizontal snap scrolling
             section.classList.add('media-row');
@@ -2568,7 +2688,6 @@ class DetailsPage extends Page {
 
     /**
      * Toggles the overview description layout between truncated and expanded states.
-     * Complies with Apple's Human Interface Guidelines for focus states and screen flow.
      */
     _showFullOverview() {
         // Fetch references to structural elements
@@ -2820,12 +2939,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                      this._item.SeasonName.toLowerCase().startsWith('season ')
-                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                          : /^\d+$/.test(this._item.SeasonName)
+                    this._item.SeasonName.toLowerCase().startsWith('season ')
+                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                        : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                  ])
+                ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
@@ -3537,14 +3656,14 @@ class DetailsPage extends Page {
             </div>
         `
                 : options
-                      .map((opt, i) => {
-                          return `
+                    .map((opt, i) => {
+                        return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-                      })
-                      .join('');
+                    })
+                    .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -4556,10 +4675,6 @@ class DetailsPage extends Page {
 
         // --------------------------------------------------------------------
         // Stop background ambient theme score loop playback.
-        // Under Apple's HIG principles, when transitioning between distinct
-        // navigational spaces, the audio scape must cleanly fade or cease to
-        // make room for the new destination's sensory focus.
-        //
         // Elegant Sustain Logic: If the next destination is also a DetailsPage
         // (e.g. going from a Series details to a Season/Episode details, or back),
         // we defer stopping by a 2.0-second grace period. If the new page shares

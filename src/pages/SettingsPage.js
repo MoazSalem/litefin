@@ -470,7 +470,7 @@ class SettingsPage extends Page {
                 'theme-mode-select',
                 [
                     // ====================================================================
-                    // Ambient Glow Theme Mode (Mac/Apple TV inspired dynamic accent gradients)
+                    // Ambient Glow Theme Mode 
                     // ====================================================================
                     { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' },
 
@@ -1693,6 +1693,22 @@ class SettingsPage extends Page {
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
 
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EpisodeLayout">${i18n.t('EpisodeLayout') || 'Episode Layout'}</span>
+                        <span class="setting-description">Choose the layout mode for TV show episodes on Season details pages.</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'episode-layout-select',
+                [
+                    { value: 'grid', label: i18n.t('EpisodeLayoutGrid') || 'Grid' },
+                    { value: 'list', label: i18n.t('EpisodeLayoutList') || 'List with Details' }
+                ],
+                storage.getItem('pref:episodeLayout') || 'list'
+            )}
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1768,7 +1784,7 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="SecondaryTitleSecondaryColorDescription">${i18n.t('SecondaryTitleSecondaryColorDescription') || 'Use the secondary text color for the episode number and show name secondary title on the details page instead of the primary accent color.'}</span>
                     </div>
                     <div class="setting-control">
-                        <!-- Tactile fluid toggle switch matching Apple & TV navigation design guidelines -->
+                        <!-- Tactile fluid toggle switch -->
                         <button class="toggle-switch ${storage.getItem('pref:secondaryTitleSecondaryColor') === 'true' ? 'active' : ''}" 
                                 id="toggle-secondary-title-color" 
                                 tabindex="0">
@@ -2209,7 +2225,7 @@ class SettingsPage extends Page {
                   =============================================================================
                   This control allows the user to filter the hero carousel items, hiding any
                   movies or series that the user has already marked as watched (played) in their
-                  Jellyfin library database. Fits seamlessly with Apple-style premium toggles.
+                  Jellyfin library database.
                 -->
                 <div class="setting-item" id="hero-carousel-ignore-watched-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
                     <div class="setting-label">
@@ -2444,7 +2460,7 @@ class SettingsPage extends Page {
      * =========================================================================
      * Premium Controls and Remote Button Mapping Configuration Pane
      * =========================================================================
-     * Provides a sleek, Apple-inspired interface to configure user interface
+     * Provides a sleek, interface to configure user interface
      * interaction behaviors (e.g. scroll wheel list navigation, hover-activated
      * seek trickplay seekbars) and physical TV remote controller color buttons
      * (Red, Green, Yellow, Blue). Fully responsive, layout-aware, and aligned
@@ -5649,7 +5665,6 @@ class SettingsPage extends Page {
         // Registers the click event handler for the Ghost Mode visibility toggle.
         // Reading/writing via the browser storage abstraction ensures the details page
         // can dynamically render actions based on the stored preference state.
-        // Activates classes instantly for premium Apple HIG feedback.
         // =====================================================================
         const hideGhostModeBtn = this.$('#toggle-hide-ghost-mode');
         if (hideGhostModeBtn) {
@@ -5671,7 +5686,7 @@ class SettingsPage extends Page {
         // TOGGLE FORCE EXPANDABLE POSTERS (MODERN)
         // ==========================================
         // Accesses the DOM toggle switch to let the user force every row in their
-        // homepage to use the Apple-inspired expanding poster card layout.
+        // homepage to use the expanding poster card layout.
         // Toggling this will persist the value to local storage so the Home Page layout
         // engine applies the configuration seamlessly when the user returns.
         const forceExpandablePostersBtn = this.$('#toggle-home-force-expandable-posters');
@@ -5692,7 +5707,6 @@ class SettingsPage extends Page {
         // Accesses the DOM element representing our toggle button for hiding unplayed
         // episode count badges on media cards. When interacted with, this event listener
         // will toggle the user's preference state, persist it to localStorage, and
-        // update the button's toggle class to provide instant Apple-style tactile feedback.
         const hideEpisodeCountsBtn = this.$('#toggle-hide-episode-counts');
 
         // Ensure the button is present in the current view layout before binding.
@@ -7160,6 +7174,7 @@ class SettingsPage extends Page {
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
             'details-layout-select': { key: 'pref:detailsLayout', type: 'local' },
+            'episode-layout-select': { key: 'pref:episodeLayout', type: 'local' },
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
@@ -7831,7 +7846,7 @@ class SettingsPage extends Page {
         }
 
         // =====================================================================
-        // Apple HIG Guidelines: Tactile Toggle Event Handling - Secondary Title Color
+        // Tactile Toggle Event Handling - Secondary Title Color
         // =====================================================================
         // Registers click handler for the secondary details title color switch.
         // Reading current state from localStorage key, toggles value, and persists

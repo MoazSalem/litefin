@@ -5,7 +5,6 @@
  * Full-screen profile switcher page. Shown at startup when multiple sessions
  * are stored, or when the user clicks their name in the Sidebar.
  *
- * Design follows Apple Human Interface Guidelines:
  * - Large, generous avatar tiles spaced for easy TV navigation
  * - Muted accent-on-dark palette that lets avatars breathe
  * - Spring-style focus animations (cubic-bezier with overshoot)

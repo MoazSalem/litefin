@@ -536,9 +536,6 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
        5 * 320px + 4 * 30px = 1600 + 120 = 1720px exactly. */
     margin-bottom: 30px;
     
-    /* Premium Apple-style spring transition for focus 'pop' */
-    /* Premium Apple-style spring transition for focus 'pop'
-       Mandatory -webkit- prefixing for Chromium 32 compatibility. */
     -webkit-transition: -webkit-transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
     transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
 
@@ -652,7 +649,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     margin-right: 10px !important;
     margin-left: 10px !important;
     margin-bottom: 25px !important;
-    border-radius: 20px !important; /* Deeper, more premium Apple-style curve */
+    border-radius: 20px !important;
     -webkit-border-radius: 20px !important;
     background-clip: padding-box !important;
 }
@@ -967,7 +964,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 .media-card:focus,
 .media-card.focused,
 .media-card:hover {
-    transform: scale(1.05); /* Slightly less aggressive scale for larger cards to avoid pixelation */
+    transform: scale(1.02); /* Slightly less aggressive scale for larger cards to avoid pixelation */
     z-index: 10;
 }
 

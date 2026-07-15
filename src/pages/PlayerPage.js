@@ -1192,7 +1192,7 @@ class PlayerPage extends Page {
         const subtitleEl = overlay.querySelector('.audio-subtitle');
         const itemId = this._item.Id;
 
-        // Populate track name (Apple Human Interface Guidelines: clear hierarchical title).
+        // Populate track name.
         if (titleEl) {
             titleEl.textContent = this._item.Name || '';
         }
