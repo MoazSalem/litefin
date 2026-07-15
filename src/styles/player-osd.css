@@ -1968,5 +1968,73 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
     display: none !important;
 }
 
+/* ============================================================================
+   OSD HDR Darker White Overrides
+   ============================================================================ */
+.player-osd.hdr-darker-white {
+    --osd-text-color: #a9a9a9 !important;
+    --osd-thumb-bg: #a9a9a9 !important;
+    --osd-slider-progress: #a9a9a9 !important;
+    --jf-text-primary: #a9a9a9 !important;
+    --osd-slider-bg: rgba(169, 169, 169, 0.3) !important;
+}
 
+.player-osd.hdr-darker-white .osd-time,
+.player-osd.hdr-darker-white .osd-clock,
+.player-osd.hdr-darker-white .osd-title,
+.player-osd.hdr-darker-white .osd-title-secondary,
+.player-osd.hdr-darker-white .osd-ends-at,
+.player-osd.hdr-darker-white .osd-seek-tooltip-text,
+.player-osd.hdr-darker-white .chapters-modal__title,
+.player-osd.hdr-darker-white .chapters-modal__count,
+.player-osd.hdr-darker-white .queue-modal__title,
+.player-osd.hdr-darker-white .queue-modal__count,
+.player-osd.hdr-darker-white .chapter-row__name,
+.player-osd.hdr-darker-white .chapter-row__time,
+.player-osd.hdr-darker-white .queue-row__name,
+.player-osd.hdr-darker-white .queue-row__subtitle,
+.player-osd.hdr-darker-white .queue-row__number,
+.player-osd.hdr-darker-white .track-menu-title,
+.player-osd.hdr-darker-white .osd-modal-header h2,
+.player-osd.hdr-darker-white .lyrics-modal h2,
+.player-osd.hdr-darker-white .lyrics-line,
+.player-osd.hdr-darker-white .description-modal h2,
+.player-osd.hdr-darker-white .description-overview,
+.player-osd.hdr-darker-white .playback-info-title,
+.player-osd.hdr-darker-white .playback-info-value,
+.player-osd.hdr-darker-white .setting-name,
+.player-osd.hdr-darker-white .setting-description,
+.player-osd.hdr-darker-white .track-option:not(.focused):not(.selected),
+.player-osd.hdr-darker-white .osd-btn:not(:focus):not(.focused):not(.magic-hover):not(.active) {
+    color: #a9a9a9 !important;
+}
 
+.player-osd.hdr-darker-white .osd-btn:not(:focus):not(.focused):not(.magic-hover):not(.active) svg,
+.player-osd.hdr-darker-white .osd-btn:not(:focus):not(.focused):not(.magic-hover):not(.active) .osd-icon {
+    fill: #a9a9a9 !important;
+    color: #a9a9a9 !important;
+}
+
+/* HDR overrides for body-level track-menu-overlay elements
+   (track menus are appended to document.body, not inside .player-osd) */
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) {
+    color: #a9a9a9 !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) svg {
+    fill: #a9a9a9 !important;
+    color: #a9a9a9 !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .track-badge {
+    color: #a9a9a9 !important;
+    border-color: rgba(169, 169, 169, 0.3) !important;
+    background: rgba(169, 169, 169, 0.1) !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .track-option-secondary,
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .track-badges,
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .sub-setting-label,
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .sub-setting-value {
+    color: #a9a9a9 !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-menu-title {
+    color: #a9a9a9 !important;
+}

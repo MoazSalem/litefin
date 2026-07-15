@@ -640,6 +640,20 @@ class SettingsPage extends Page {
                 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdHdrDarkerWhite">${i18n.t('OsdHdrDarkerWhite') || 'OSD HDR Darker White'}</span>
+                        <span class="setting-description" data-i18n="OsdHdrDarkerWhiteDescription">${i18n.t('OsdHdrDarkerWhiteDescription') || 'Override white OSD elements with a softer dark grey inside HDR content to prevent eye strain.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('osdHdrDarkerWhite') !== false ? 'active' : ''}" 
+                                 id="osd-hdr-darker-white-toggle" 
+                                 data-setting="osdHdrDarkerWhite"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelShowLogoInOsd">${i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD'}</span>
                         <span class="setting-description" data-i18n="ShowLogoInOsdDescription">${i18n.t('ShowLogoInOsdDescription') || 'Display show or movie logo instead of text title in the player interface (if available).'}</span>
                     </div>
@@ -7621,6 +7635,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('preferExternalSubtitles', newValue);
                 preferExternalToggle.classList.toggle('active', newValue);
                 log.info(`Prefer External Subtitles set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for OSD HDR Darker White
+        const osdHdrDarkerWhiteToggle = this.$('#osd-hdr-darker-white-toggle');
+        if (osdHdrDarkerWhiteToggle) {
+            osdHdrDarkerWhiteToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHdrDarkerWhite') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHdrDarkerWhite', newValue);
+                osdHdrDarkerWhiteToggle.classList.toggle('active', newValue);
+                log.info(`OSD HDR Darker White set to: ${newValue}`);
             });
         }
 

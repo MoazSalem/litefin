@@ -912,6 +912,8 @@
     "OsdButtonStyle": "OSD Button Style",
     "OsdButtonStyleDescription": "Choose a button color theme specifically for player control buttons.",
     "OsdCombineSkipButtonsDescription": "Combine seek, chapter, and file skip buttons. Click once to seek, twice for chapters, three times for files.",
+    "OsdHdrDarkerWhite": "OSD HDR Darker White",
+    "OsdHdrDarkerWhiteDescription": "Override white OSD elements with a softer dark grey inside HDR content to prevent eye strain.",
     "OsdFocusAlways": "Always return to Play/Pause",
     "OsdFocusBorderStyle": "OSD Focus Border Style",
     "OsdFocusBorderStyleDescription": "Choose a focus border highlight style specifically for player control buttons.",

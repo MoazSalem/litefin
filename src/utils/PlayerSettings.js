@@ -226,6 +226,14 @@ const DEFAULTS = {
        ------------------------------------------------------------------------- */
     subtitleTextOpacityHdr: 100,
 
+    /* -------------------------------------------------------------------------
+       OSD HDR DARKER WHITE
+       -------------------------------------------------------------------------
+       Toggle to make the whole OSD darker in HDR by overriding white/light-grey
+       elements with subtitle dark grey color instead.
+       ------------------------------------------------------------------------- */
+    osdHdrDarkerWhite: true,
+
     // Subtitle background color
     subtitleTextBackground: 'transparent',
 

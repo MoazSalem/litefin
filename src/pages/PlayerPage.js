@@ -1386,6 +1386,8 @@ class PlayerPage extends Page {
         // Mount OSD — this triggers render + event binding
         this._osd.mount(osdContainer);
 
+        this._osd?.updateHdrTheme();
+
         // Register as child component for automatic cleanup on page destroy
         this.addChild(this._osd);
 
@@ -1420,6 +1422,8 @@ class PlayerPage extends Page {
 
     _onPlaying() {
         log.info('Playing');
+
+        this._osd?.updateHdrTheme();
 
         eventBus.emit('player:playing', { item: this._item });
 
@@ -2240,11 +2244,22 @@ class PlayerPage extends Page {
     }
 
     /**
+     * ========================================================================
+     * OSD HDR Theme Updater
+     * ========================================================================
+     * Adjusts the overall OSD background contrast and overrides bright white
+     * highlights/text/icons with a softer dark grey color.
+     * Prevents eye strain when watching HDR/Dolby Vision content.
+     * ========================================================================
+     */
+    /**
      * Re-apply styles to the currently displayed subtitle(s).
      * Called when user changes subtitle appearance settings (e.g. from SubtitleQuickSettings).
      * Both primary and secondary overlays are refreshed here.
      */
     _refreshSubtitleStyles() {
+        this._osd?.updateHdrTheme();
+
         /* -------------------------------------------------------------
            Determine active playback HDR format to correctly choose
            between SDR and HDR text opacity settings.

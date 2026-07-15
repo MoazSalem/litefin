@@ -346,6 +346,9 @@ export default class OSDController extends Component {
             this._currentFocusIndex = initialPlayIdx;
         }
 
+        // Apply initial HDR theme state
+        this.updateHdrTheme();
+
         // Start hidden
         this.hide();
     }
@@ -354,6 +357,7 @@ export default class OSDController extends Component {
         this._stopUpdates();
         if (this._updateTimer) clearInterval(this._updateTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
+        document.body.classList.remove('hdr-darker-white');
         import('../../core/EventBus.js').then(({ eventBus }) => {
             eventBus.off('playqueue:updated', this._boundHandleQueueUpdate);
             if (this._boundSyncPlayButtonState) {
@@ -876,6 +880,32 @@ export default class OSDController extends Component {
                 this._currentFocusIndex = playIdx;
                 this._updateFocus();
             }
+        }
+    }
+
+    /**
+     * ========================================================================
+     * OSD HDR Theme Updater
+     * ========================================================================
+     * Adjusts the overall OSD background contrast and overrides bright white
+     * highlights/text/icons with a softer dark grey color.
+     * Prevents eye strain when watching HDR/Dolby Vision content.
+     * ========================================================================
+     */
+    updateHdrTheme() {
+        if (!this._osdEl) return;
+
+        const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+        const darkerWhiteEnabled = PlayerSettings.get('osdHdrDarkerWhite') ?? true;
+
+        if (isHdr && darkerWhiteEnabled) {
+            this._osdEl.classList.add('hdr-darker-white');
+            document.body.classList.add('hdr-darker-white');
+            log.info('OSD HDR Darker White theme active');
+        } else {
+            this._osdEl.classList.remove('hdr-darker-white');
+            document.body.classList.remove('hdr-darker-white');
+            log.info('OSD HDR Darker White theme inactive');
         }
     }
 
