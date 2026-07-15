@@ -4567,8 +4567,23 @@ class SettingsPage extends Page {
                     <!-- Populated dynamically -->
                 </div>
 
-                <!-- Reset Section -->
+                ${storage.getItem('litefin:settings_per_user') === 'true' ? `
+                <!-- Reset to Global Settings (Visible only when settings per user is enabled) -->
                 <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelResetUserToGlobal">${i18n.t('LabelResetUserToGlobal') || 'Reset Profile Settings to Global'}</span>
+                        <span class="setting-description" data-i18n="LabelResetUserToGlobalDescription">${i18n.t('LabelResetUserToGlobalDescription') || 'Discard all custom settings for this profile and copy the current global settings.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-reset-user-to-global" tabindex="0" data-focusable="true">
+                            ${i18n.t('ButtonResetToGlobal') || 'Reset to Global'}
+                        </button>
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- Reset Section -->
+                <div class="setting-item" style="${storage.getItem('litefin:settings_per_user') === 'true' ? 'margin-top: 20px;' : 'margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
                         <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
@@ -5596,6 +5611,14 @@ class SettingsPage extends Page {
         if (resetSettingsBtn) {
             resetSettingsBtn.addEventListener('click', () => {
                 this._showResetConfirmation();
+            });
+        }
+
+        // Reset User Settings to Global Button
+        const resetUserToGlobalBtn = this.$('#btn-reset-user-to-global');
+        if (resetUserToGlobalBtn) {
+            resetUserToGlobalBtn.addEventListener('click', () => {
+                this._showResetUserToGlobalConfirmation();
             });
         }
 
@@ -8577,6 +8600,85 @@ class SettingsPage extends Page {
         overlay.onclick = (e) => {
             if (e.target === overlay) closeDialog();
         };
+    }
+
+    /**
+     * Show a confirmation dialog before resetting current profile settings to global.
+     * @private
+     */
+    _showResetUserToGlobalConfirmation() {
+        const prevFocus = focusManager.getFocused();
+        const prevSection = focusManager.getActiveSection();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'reset-user-to-global-dialog';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        overlay.innerHTML = `
+            <div class="settings-modal exit-dialog-modal" role="dialog" aria-modal="true" aria-label="${i18n.t('LabelResetUserToGlobal')}">
+                <div class="modal-header">
+                    <h2>${i18n.t('LabelResetUserToGlobal')}</h2>
+                </div>
+                <div class="modal-content" style="padding: 0 24px 24px; color: var(--text-color); font-size: 1.1rem; text-align: center;">
+                    ${i18n.t('ResetUserToGlobalWarning')}
+                </div>
+                <div class="modal-actions" id="reset-user-dialog-actions" style="margin-top: 0; justify-content: center; gap: 16px;">
+                    <button class="modal-action-btn" id="reset-user-dialog-no" tabindex="0">
+                        ${i18n.t('ButtonCancel') || 'Cancel'}
+                    </button>
+                    <button class="modal-action-btn danger-btn" id="reset-user-dialog-yes" tabindex="0">
+                        ${i18n.t('ButtonResetToGlobal') || 'Reset to Global'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const closeDialog = () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 300);
+            focusManager.unregister('reset-user-dialog-actions');
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        focusManager.register('reset-user-dialog-actions', overlay.querySelector('#reset-user-dialog-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first' // Focus Cancel safely
+        });
+
+        focusManager.setActiveSection('reset-user-dialog-actions');
+
+        overlay.querySelector('#reset-user-dialog-no').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+        };
+
+        overlay.querySelector('#reset-user-dialog-yes').onclick = (e) => {
+            e.stopPropagation();
+            log.info('User confirmed reset profile settings to global.');
+            this._handleResetUserToGlobal();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeDialog();
+        };
+    }
+
+    /**
+     * Reset the active user settings back to global preferences and hard reload.
+     * @private
+     */
+    _handleResetUserToGlobal() {
+        const activeUserId = storage.getItem('litefin:activeUserId');
+        if (activeUserId) {
+            storage.removeItem(`litefin:user_settings_${activeUserId}`);
+            storage.setItem('litefin:skip_profiles_once', 'true');
+            storage.flush();
+            this._triggerHardReload();
+        }
     }
 
     /**
