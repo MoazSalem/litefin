@@ -139,7 +139,7 @@ class PlayerPage extends Page {
                         </div>
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
-                            <button class="btn btn-secondary focusable" id="error-force-transcode-btn" tabindex="0">Force Transcode</button>
+                            <button class="btn btn-secondary focusable" id="error-playback-mode-btn" tabindex="0">Playback Mode</button>
                             <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
@@ -1025,6 +1025,7 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
+
             // Build player options. If a specific media source version was pre-selected
             // on the details screen (e.g. 720p vs 1080p), ensure we pass the target
             // mediaSourceId down as a fallback even if the client-side metadata matching
@@ -1041,9 +1042,19 @@ class PlayerPage extends Page {
                 autoPlay: syncPlayManager.wantsAutoPlay()
             };
 
-            if (this._forceTranscode) {
-                playOptions.playbackMode = 'transcode';
-                this._forceTranscode = false; // Reset after applying
+            // ----------------------------------------------------------------
+            // Preserve any playback-mode override that was set before this call
+            // — e.g. by the error-screen 'Playback Mode' button, which calls
+            // player.setPlaybackMode(id) and then triggers _retryPlayback().
+            // player.play() resets _playbackMode from options.playbackMode and
+            // falls back to 'auto' when the key is absent, so we must inject
+            // whatever mode the player currently holds to honour the user choice.
+            // ----------------------------------------------------------------
+            if (this._player && typeof this._player.getPlaybackMode === 'function') {
+                const storedMode = this._player.getPlaybackMode();
+                if (storedMode && storedMode !== 'auto') {
+                    playOptions.playbackMode = storedMode;
+                }
             }
 
             await this._player.play(playOptions);
@@ -2492,16 +2503,18 @@ class PlayerPage extends Page {
             }
 
             // Bind buttons
-            const retryBtn = this.$('#error-retry-btn');
-            const forceTranscodeBtn = this.$('#error-force-transcode-btn');
-            const backBtn = this.$('#error-back-btn');
+            const retryBtn          = this.$('#error-retry-btn');
+            const playbackModeBtn   = this.$('#error-playback-mode-btn');
+            const backBtn           = this.$('#error-back-btn');
 
             if (retryBtn) {
                 retryBtn.onclick = () => this._retryPlayback();
             }
 
-            if (forceTranscodeBtn) {
-                forceTranscodeBtn.onclick = () => this._retryPlayback(true);
+            if (playbackModeBtn) {
+                // Open the OSD's PlaybackModeMenu so the user can pick any delivery
+                // mode to try instead of hard-coding "transcode".
+                playbackModeBtn.onclick = () => this._openPlaybackModeMenuFromError();
             }
 
             if (backBtn) {
@@ -2521,10 +2534,13 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Attempt to restart playback after an error
+     * Attempt to restart playback after an error.
+     * The player's current _playbackMode (set either by the user via the
+     * Playback Mode menu before retrying, or untouched for a plain retry)
+     * is honoured automatically by _startPlayback via the play() options.
      */
-    async _retryPlayback(forceTranscode = false) {
-        // Hide error and unregister focus
+    async _retryPlayback() {
+        // Hide error overlay and unregister its focus section
         const errorEl = this.$('#player-error');
         if (errorEl) {
             errorEl.classList.add('hidden');
@@ -2534,16 +2550,12 @@ class PlayerPage extends Page {
         try {
             this._showLoading(true);
 
-            if (forceTranscode) {
-                this._forceTranscode = true;
-            }
-
             // Re-initialize if player instance was lost or in bad state
             if (!this._player || this._player.isDestroyed) {
                 await this._initPlayer();
             }
 
-            // Restart playback
+            // Restart playback using whatever mode is currently set on the player
             await this._startPlayback();
 
             this._showLoading(false);
@@ -2552,6 +2564,154 @@ class PlayerPage extends Page {
             this._showError(error.message || 'Retry failed. Check your connection.');
         }
     }
+
+    /**
+     * Open the OSD's PlaybackModeMenu from the error screen so the user can
+     * choose a different delivery mode (e.g. "Transcode Video Only", "Change
+     * Container", etc.) before retrying playback.
+     *
+     * Flow:
+     *   1. Hide the error overlay (so the menu isn't blocked visually)
+     *   2. Show the OSD temporarily and open the PlaybackModeMenu
+     *   3. Wrap PlaybackModeMenu.handleEnter so that after the user picks a
+     *      mode (which calls player.setPlaybackMode internally), we also
+     *      trigger _retryPlayback() so playback restarts immediately.
+     *   4. If the user dismisses the menu without selecting, re-show the
+     *      error overlay so they can still go back.
+     * @private
+     */
+    _openPlaybackModeMenuFromError() {
+        const errorEl = this.$('#player-error');
+
+        // Defer execution to the next tick so the current enter-key event loop
+        // completes fully before we tear down the focused section and modify the DOM.
+        setTimeout(() => {
+            // Step 1 — hide error panel so the menu can render unobstructed
+            if (errorEl) {
+                errorEl.classList.add('hidden');
+                focusManager.unregister('player-error');
+            }
+
+            // Step 2 — ensure OSD is initialized, then check availability
+            if (!this._osd) {
+                try {
+                    this._initOSD();
+                } catch (osdErr) {
+                    log.error('Failed to init OSD from error screen:', osdErr);
+                }
+            }
+
+            if (!this._osd || !this._osd.playbackModeMenu) {
+                log.warn('_openPlaybackModeMenuFromError: OSD or playbackModeMenu not available.');
+                // Re-show the error overlay so the user isn't left stranded
+                if (errorEl) {
+                    errorEl.classList.remove('hidden');
+                    focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
+                        orientation: 'horizontal',
+                        enterTo: 'last-focused'
+                    });
+                    const retryBtn = errorEl.querySelector('#error-retry-btn');
+                    focusManager.setActiveSection('player-error');
+                    focusManager.focusElement(retryBtn);
+                }
+                return;
+            }
+
+            const menu = this._osd.playbackModeMenu;
+
+            // Suspend FocusManager so that it does not fight the OSD/menu for
+            // key events and focus while the playback mode picker is open.
+            focusManager.suspend();
+
+            // Step 3 — install one-shot wrappers around key handling and selection.
+            const originalHandleEnter = menu.handleEnter.bind(menu);
+            const originalHandleKey   = menu.handleKey.bind(menu);
+            let hookActive = true;
+
+            // Helper: remove hook and restore normal methods
+            const restoreHook = () => {
+                if (hookActive) {
+                    hookActive = false;
+                    menu.handleEnter = originalHandleEnter;
+                    menu.handleKey   = originalHandleKey;
+                }
+            };
+
+            menu.handleEnter = () => {
+                // Restore original methods BEFORE we act, ensuring cleanup hooks are clean
+                restoreHook();
+
+                // Directly handle the selection: set mode on the player
+                const selected = menu.options[menu.focusIndex];
+                if (selected) {
+                    log.info('Selected playback mode from error screen:', selected.id);
+                    this._player.setPlaybackMode(selected.id);
+                }
+
+                // Hide the menu and OSD directly, bypassing closeMenu which would call show()
+                menu.hide();
+                this._osd.activeMenu = null;
+                this._osd.hide();
+
+                // After the menu closes and the mode is applied, kick off a retry.
+                // Small defer so the menu's own hide/DOM cleanup finishes first.
+                setTimeout(() => this._retryPlayback(), 80);
+            };
+
+            // Override handleKey so that when opened from the error screen:
+            //   - Left/Right are ignored (normally they navigate back to Settings)
+            //   - Back hides the menu (which returns to the error screen)
+            menu.handleKey = (key) => {
+                if (key === 'left' || key === 'right') {
+                    return true; // Swallow key, do nothing
+                }
+                if (key === 'back') {
+                    menu.hide();
+                    return true;
+                }
+                // Delegate up/down/enter to normal menu behavior
+                return originalHandleKey(key);
+            };
+
+            // Also patch hide() so that if the user dismisses without selecting
+            // (Back / click-outside), the error overlay comes back.
+            const originalHide = menu.hide.bind(menu);
+            menu.hide = (...args) => {
+                originalHide(...args);
+                // Only restore the error screen if the user bailed without selecting
+                if (hookActive) {
+                    restoreHook();
+                    // Resume FocusManager since the OSD menu is closed and we are
+                    // returning to the error screen.
+                    focusManager.resume();
+
+                    if (errorEl) {
+                        errorEl.classList.remove('hidden');
+                        focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
+                            orientation: 'horizontal',
+                            enterTo: 'last-focused'
+                        });
+                        const retryBtn = errorEl.querySelector('#error-retry-btn');
+                        focusManager.setActiveSection('player-error');
+                        focusManager.focusElement(retryBtn);
+                    }
+                }
+                // Restore real hide() for future normal use
+                menu.hide = originalHide;
+            };
+
+            // Step 4 — open the menu through the OSD (renders + shows + sets focus)
+            this._osd.togglePlaybackModeMenu(true);
+
+            // Clear previous focus references on the menu so it does not restore focus
+            // back to settings or controls in the background OSD when hidden.
+            menu._prevRow = undefined;
+            menu._prevIndex = undefined;
+            menu._prevFocus = null;
+        }, 0);
+    }
+
+
 
     /**
      * Report playback stopped to server
