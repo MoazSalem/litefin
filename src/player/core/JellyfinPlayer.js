@@ -2503,7 +2503,7 @@ export class JellyfinPlayer extends EventEmitter {
             }
         } else {
             // Standard Jellyfin Authorization format
-            headers['Authorization'] = `MediaBrowser Token="${this.authToken}"`;
+            headers['Authorization'] = api.getAuthHeader(this.authToken);
         }
 
         const response = await fetch(url, {
