@@ -207,7 +207,7 @@ export class JellyfinPlayer extends EventEmitter {
         // "Auto" (null) means Unlimited/Direct Play.
         this._manualBitrate = PlayerSettings.get('maxBitrateInternet') || null;
         this._isRestarting = false; // Flag to suppress stop events during manual quality change
-        this._playbackMode = 'auto'; // Current playback mode ('auto', 'directPlay', 'transcode', 'remux')
+        this._playbackMode = 'auto'; // Current playback mode ('auto', 'directPlay', 'transcode', 'remux', 'transcodeVideo', 'transcodeAudio')
         
         // ────────────────────────────────────────────────────────────────────
         // Initial Playback Mode Store
@@ -2687,10 +2687,17 @@ export class JellyfinPlayer extends EventEmitter {
 
     /**
      * Force a specific playback mode and restart if playing
-     * @param {string} mode - 'auto', 'directPlay', 'transcode', 'remux'
+     * @param {string} mode - 'auto', 'directPlay', 'transcode', 'remux',
+     *                        'transcodeVideo', 'transcodeAudio'
      */
     async setPlaybackMode(mode) {
-        if (!['auto', 'directPlay', 'transcode', 'remux'].includes(mode)) return;
+        // ----------------------------------------------------------------
+        // Validate the incoming mode against the full supported set.
+        // 'transcodeVideo' → copy video + transcode audio (partial transcode)
+        // 'transcodeAudio' → transcode video + copy audio (partial transcode)
+        // ----------------------------------------------------------------
+        if (!['auto', 'directPlay', 'transcode', 'remux', 'transcodeVideo', 'transcodeAudio'].includes(mode)) return;
+
         
         if (this._playbackMode === mode) return;
 

@@ -18,10 +18,24 @@ export default class PlaybackModeMenu extends BaseMenu {
         this.isModal = true;
         this.title = i18n.t('PlaybackMode');
         this.options = [
+            // Auto lets the server decide the best delivery method.
             { id: 'auto', label: i18n.t('Auto') },
+
+            // Forces the raw file to be sent as-is without any server processing.
             { id: 'directPlay', label: i18n.t('ForceDirectPlay') },
-            { id: 'transcode', label: i18n.t('ForceTranscode') },
-            { id: 'remux', label: i18n.t('ForceRemux') }
+
+            // Rewraps the video into a new container without re-encoding any streams.
+            // Previously labelled "Force Remux".
+            { id: 'remux', label: i18n.t('ChangeContainer') },
+
+            // Full re-encode of video stream; audio is copied through untouched.
+            { id: 'transcodeVideo', label: i18n.t('TranscodeVideoOnly') },
+
+            // Full re-encode of audio stream; video is copied through untouched.
+            { id: 'transcodeAudio', label: i18n.t('TranscodeAudioOnly') },
+
+            // Forces both video and audio to be fully re-encoded on the server.
+            { id: 'transcode', label: i18n.t('ForceTranscode') }
         ];
     }
 
