@@ -163,6 +163,18 @@ class SmartHubManager {
             this._pendingDeepLink = null;
             this._stopRefreshCycle();
         });
+
+        // ── Playback end — refresh tiles ────────────────────────────────
+        // When the user finishes watching an item, the Continue Watching and
+        // Next Up data may have changed. Run a fresh update so the Smart Hub
+        // tiles reflect the new state. The update() method has a built-in
+        // concurrency guard so rapid back-to-back calls are safe.
+        eventBus.on('player:ended', () => {
+            if (this._cycleActive) {
+                log.info('Playback ended — refreshing Smart Hub preview');
+                this.update();
+            }
+        });
     }
 
     /**
