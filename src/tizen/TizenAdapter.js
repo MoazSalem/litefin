@@ -366,6 +366,12 @@ class TizenAdapter {
      */
     exit() {
         if (this._isTizen) {
+            // Flush all pending storage writes to disk before exiting.
+            // On Tizen 9.0+, Chromium 120 aggressively throttles background timers,
+            // so the debounced flush may never fire if the app is suspended. Without
+            // this explicit flush, critical keys (server URL, auth tokens) can be lost,
+            // causing the app to start fresh on next launch.
+            storage.flush();
             try {
                 tizen.application.getCurrentApplication().exit();
             } catch (e) {

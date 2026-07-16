@@ -13,6 +13,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
 import { focusManager } from '../ui/FocusManager.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
@@ -1273,6 +1274,7 @@ class LoginPage extends Page {
                 router.navigate('/profiles', { replace: true });
             } else if (typeof tizen !== 'undefined') {
                 try {
+                    storage.flush();
                     tizen.application.getCurrentApplication().exit();
                 } catch (e) {
                     log.error('App exit failed:', e);

@@ -11,6 +11,7 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('WebOSAdapter');
@@ -408,6 +409,8 @@ class WebOSAdapter {
      */
     exit() {
         if (this._isWebOS) {
+            // Flush all pending storage writes to disk before exiting.
+            storage.flush();
             log.info('Exiting application via webOS.platformBack()');
             if (window.webOS && typeof window.webOS.platformBack === 'function') {
                 window.webOS.platformBack();

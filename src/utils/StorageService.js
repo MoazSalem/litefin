@@ -29,8 +29,9 @@ const log = logger.create('Storage');
 // ============================================================================
 
 // Debounce delay before flushing dirty keys to disk (ms)
-// 1 second is a good balance between responsiveness and batching
-const FLUSH_DELAY_MS = 1000;
+// 200ms reduces the data-loss window on Tizen 9.0+ where Chromium 120 aggressively
+// throttles background timers and may freeze the event loop before flush fires.
+const FLUSH_DELAY_MS = 200;
 
 // ============================================================================
 // StorageService Class
@@ -191,7 +192,11 @@ class StorageService {
             this._cache.set(key, strValue);
             this._dirtyKeys.add(key);
             this._removedKeys.delete(key);
-            this._scheduleSave();
+            // Global keys (server URL, auth tokens, active user) are critical for
+            // session restoration — flush to disk immediately instead of debouncing.
+            // Without this, Tizen 9.0's aggressive background timer throttling can
+            // prevent the debounced flush from firing before app suspension.
+            this.flush();
             return;
         }
 
