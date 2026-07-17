@@ -192,10 +192,22 @@ class FocusManager {
                 )
                     return;
 
-                // Threshold to prevent accidental jitter moves (Magic Remotes are sensitive)
-                if (Math.abs(e.deltaY) < 30) return;
+                // Normalize deltaY based on deltaMode for cross-platform compatibility.
+                // webOS Magic Remote reports wheel events in DOM_DELTA_LINE (deltaMode=1)
+                // where a single tick is deltaY=1-3, which would be swallowed by a
+                // raw pixel threshold. Convert all modes to approximate pixels:
+                //   - DOM_DELTA_PIXEL (0): already pixels
+                //   - DOM_DELTA_LINE  (1): multiply by 20px per line
+                //   - DOM_DELTA_PAGE  (2): multiply by viewport height
+                let deltaY = e.deltaY;
+                const dm = e.deltaMode || 0;
+                if (dm === 1) deltaY *= 20;
+                else if (dm === 2) deltaY *= window.innerHeight;
 
-                const direction = e.deltaY > 0 ? 'down' : 'up';
+                // Threshold to prevent accidental jitter moves (Magic Remotes are sensitive)
+                if (Math.abs(deltaY) < 30) return;
+
+                const direction = deltaY > 0 ? 'down' : 'up';
                 this._handleKey(direction);
             },
             { passive: true }
