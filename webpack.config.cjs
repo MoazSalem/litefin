@@ -219,7 +219,7 @@ const normalConfig = {
         hints: 'warning'
     },
     // No source maps — production build
-    entry: ['./src/utils/DomPolyfills.js', './src/index.js'],
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
 
     output: {
         path: path.resolve(__dirname, 'dist/normal'),
@@ -286,7 +286,12 @@ const legacyConfig = {
         maxEntrypointSize: 4000000,
         hints: 'warning'
     },
-    entry: ['url-search-params-polyfill', './src/utils/DomPolyfills.js', './src/index.js'],
+    entry: [
+        'url-search-params-polyfill',
+        './src/utils/DomPolyfills.js',
+        './src/utils/AssJsPolyfills.js',
+        './src/index.js'
+    ],
 
     output: {
         path: path.resolve(__dirname, 'dist/legacy'),
@@ -521,7 +526,7 @@ const normalOblongConfig = {
         hints: 'warning'
     },
     // The main app entry point
-    entry: ['./src/utils/DomPolyfills.js', './src/index.js'],
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
 
     output: {
         // Output to the specific normal-oblong folder in dist
