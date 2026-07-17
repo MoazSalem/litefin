@@ -2370,6 +2370,20 @@ export class JellyfinPlayer extends EventEmitter {
         return this._currentMediaSource;
     }
 
+    /**
+     * Retrieves the user-facing name of the currently active subtitle rendering engine.
+     * Delegates the lookup directly to the internal SubtitleManager instance.
+     * 
+     * @returns {string} Human-readable subtitle renderer name.
+     */
+    getSubtitleRendererName() {
+        // Delegate to subtitle manager if initialized; otherwise return 'None'.
+        if (this._subtitleManager) {
+            return this._subtitleManager.getSubtitleRendererName();
+        }
+        return 'None';
+    }
+
     /* =========================================================================
        HDR DETECTION UTILITY
        =========================================================================

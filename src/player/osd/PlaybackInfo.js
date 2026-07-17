@@ -191,11 +191,16 @@ export default class PlaybackInfo extends BaseMenu {
             displayPlayMethod = i18n.t('Transcoding');
         }
         
+        // Fetch the user-friendly name of the current active subtitle renderer engine
+        const subtitleRenderer = this.player.getSubtitleRendererName ? this.player.getSubtitleRendererName() : i18n.t('None');
+
         html += createSection('', [
             { label: i18n.t('LabelPlayer'), value: playerType },
             { label: i18n.t('LabelPlayMethod'), value: displayPlayMethod },
             { label: i18n.t('LabelProtocol'), value: protocol },
-            { label: i18n.t('LabelStreamType'), value: streamType }
+            { label: i18n.t('LabelStreamType'), value: streamType },
+            // Display the current subtitle rendering pipeline as a dedicated field
+            { label: i18n.t('LabelSubtitleRenderer') || 'Subtitle Renderer', value: subtitleRenderer }
         ]);
 
         html += createSection(i18n.t('LabelVideoInfo'), [

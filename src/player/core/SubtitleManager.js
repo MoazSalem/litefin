@@ -442,6 +442,47 @@ export default class SubtitleManager {
     }
 
     /**
+     * Determines and returns the user-facing name of the currently active subtitle rendering engine.
+     * Evaluates backend type, delivery method, and player preferences to identify the active pipeline.
+     * 
+     * @returns {string} Human-readable renderer description.
+     */
+    getSubtitleRendererName() {
+        // Return 'None' if there's no active track loaded or if delivery is explicitly disabled.
+        if (!this._primaryTrack || this._primaryDelivery === DeliveryMethod.NONE) {
+            return i18n.t('None') || 'None';
+        }
+
+        // Map the internal delivery method constant to a descriptive name.
+        switch (this._primaryDelivery) {
+            case DeliveryMethod.EMBEDDED_NATIVE: {
+                // For native playback, distinguish based on the target OS environment.
+                if (this._backendType === 'webos') {
+                    return 'WebOS Native';
+                } else if (this._backendType === 'tizen') {
+                    return 'Tizen AVPlayer Native';
+                } else {
+                    return 'HTML5 Native';
+                }
+            }
+            case DeliveryMethod.EXTERNAL_TEXT:
+                // DOM rendering of parsed text-based formats (VTT, SRT, etc.).
+                return 'DOM / Text';
+            case DeliveryMethod.ASS_CANVAS: {
+                // ASS/SSA renderer engine: return 'libjass' or 'libass-wasm' directly.
+                const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+                return preferredEngine;
+            }
+            case DeliveryMethod.PGS_BITMAP:
+                // Graphics/bitmap subtitle rendering engine.
+                return 'PGSRenderer';
+            default:
+                // Fallback for unexpected delivery states.
+                return i18n.t('Unknown') || 'Unknown';
+        }
+    }
+
+    /**
      * Get the current primary subtitle track.
      * @returns {Object|null} The Jellyfin subtitle stream object
      */

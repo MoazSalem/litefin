@@ -167,6 +167,7 @@
     "LabelSkipBackLength": "Skip back length",
     "LabelSkipForwardLength": "Skip forward length",
     "LabelStreamType": "Stream type",
+    "LabelSubtitleRenderer": "Subtitle renderer",
     "LabelSubtitlePlaybackMode": "Subtitle mode",
     "LabelSubtitleVerticalPosition": "Vertical position",
     "LabelTextColor": "Text color",
