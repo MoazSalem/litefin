@@ -58,6 +58,7 @@ export default class ASSJSRenderer {
         this._delaySeconds = 0;
         this._lastTime = null;
         this._content = null;
+        this._gcObserver = null;
 
         this._currentTime = 0;
         this._paused = false;
@@ -134,8 +135,8 @@ export default class ASSJSRenderer {
         if (height) this._videoHeight = height;
 
         if (this._clockProxy) {
-            this._clockProxy.style.width = this._container.offsetWidth + 'px';
-            this._clockProxy.style.height = this._container.offsetHeight + 'px';
+            this._clockProxy.style.width = (width || this._videoWidth) + 'px';
+            this._clockProxy.style.height = (height || this._videoHeight) + 'px';
             this._dispatchSeeking('resize');
         }
     }
@@ -150,14 +151,33 @@ export default class ASSJSRenderer {
         this._content = content;
 
         try {
+            // Cache container dimensions BEFORE any heavy DOM creation to avoid
+            // forcing a full synchronous layout after ass.js adds thousands of
+            // elements.  Reading offsetWidth/offsetHeight at the right moment
+            // — before the subtitle DOM tree exists — is essentially free.
+            const containerWidth = this._container.offsetWidth || this._videoWidth;
+            const containerHeight = this._container.offsetHeight || this._videoHeight;
+
             this._assContainer = document.createElement('div');
             this._assContainer.style.position = 'absolute';
             this._assContainer.style.top = '0';
             this._assContainer.style.left = '0';
-            this._assContainer.style.width = '100%';
-            this._assContainer.style.height = '100%';
+            this._assContainer.style.width = containerWidth + 'px';
+            this._assContainer.style.height = containerHeight + 'px';
             this._assContainer.style.pointerEvents = 'none';
             this._container.appendChild(this._assContainer);
+
+            this._gcObserver = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.removedNodes) {
+                        if (node.nodeType === 1) {
+                            node.getAnimations().forEach((a) => a.cancel());
+                            node.querySelectorAll('*').forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
+                        }
+                    }
+                }
+            });
+            this._gcObserver.observe(this._assContainer, { childList: true, subtree: true });
 
             const processedContent = this._preProcessAssContent(content, this._fontFamily);
             const video = this._createClockProxy();
@@ -171,7 +191,6 @@ export default class ASSJSRenderer {
                 this._ass.delay = this._delaySeconds;
             }
 
-            this._resizeContainer();
             this._applyStyles();
 
             video.dispatchEvent(new Event('play'));
@@ -289,6 +308,11 @@ export default class ASSJSRenderer {
         this._clockProxy = null;
 
         this._content = null;
+
+        if (this._gcObserver) {
+            this._gcObserver.disconnect();
+            this._gcObserver = null;
+        }
     }
 
     _applyStyles() {
@@ -349,14 +373,6 @@ export default class ASSJSRenderer {
         style.textContent = rules.join('\n');
         this._assContainer.appendChild(style);
         this._styleElement = style;
-    }
-
-    _resizeContainer() {
-        if (!this._assContainer) return;
-        const cw = this._container.offsetWidth || this._videoWidth;
-        const ch = this._container.offsetHeight || this._videoHeight;
-        this._assContainer.style.width = cw + 'px';
-        this._assContainer.style.height = ch + 'px';
     }
 
     _preProcessAssContent(content, fontFamily) {
