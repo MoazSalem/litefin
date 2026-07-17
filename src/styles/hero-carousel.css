@@ -77,14 +77,13 @@
      * Outer container retains overflow: hidden, keeping boundaries clean on GPU.
      */
     overflow: visible;
-    /* Pre-promote inactive slides too so the cross-fade is GPU-only */
     transform: translateZ(0);
-    will-change: opacity;
 }
 
 .hero-item.active {
     opacity: 1;
     z-index: 2;
+    will-change: opacity;
 }
 
 /* ============================================================================
@@ -152,13 +151,13 @@
                 opacity 800ms ease;
     -webkit-transition: -webkit-transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
                         opacity 800ms ease;
-    will-change: transform, opacity;
 }
 
 .hero-item.active .hero-content {
     opacity: 1;
     transform: translateY(0);
     -webkit-transform: translateY(0);
+    will-change: transform, opacity;
 }
 
 /* ============================================================================
@@ -748,12 +747,10 @@
  * ============================================================================
  * Dynamic Masking & Alpha-Blending (Immersive & Semi-Immersive)
  * ============================================================================
- * Rather than drawing solid dark color gradients (which block page backgrounds)
- * on top of the carousel, we apply a high-performance linear-gradient alpha mask
- * directly to the backdrop image element and the left-to-right text shadow layer.
- * 
- * This smoothly fades out the bottom of the carousel to fully transparent,
- * letting card rows, titles, and theme backgrounds blend with organic unity.
+ * NOTE: -webkit-mask-image forces a CPU compositing pass for the masked
+ * element. This is acceptable here because only the active slide carries
+ * the mask — inactive slides use visibility:hidden and are not composited
+ * at all, so there is no serialization of sibling animations.
  * ============================================================================
  */
 
