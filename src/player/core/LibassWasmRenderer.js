@@ -78,6 +78,11 @@ export default class LibassWasmRenderer {
         this._letterSpacing = 0;
         this._bottomOffset = 0;
 
+        // Whether to apply style modifications (font/outline/shadow overrides,
+        // dialogue stripping, Fontsize scaling, bottom offset). Default off.
+        this._enableStyleMods = false;
+        this._prevEnableStyleMods = false;
+
         this._octopus = null;
         this._wrapper = null;
         this._canvas = null;
@@ -108,6 +113,18 @@ export default class LibassWasmRenderer {
 
         log.info('LibassWasmRenderer initialized' +
             (this._isVirtual ? ' (AVPlay/Manual mode)' : ' (HTML5/Auto mode)'));
+    }
+
+    /**
+     * Configure whether ASS style modifications are enabled.
+     *
+     * @param {Object} config
+     * @param {boolean} [config.enableModifications=false] - Apply style overrides,
+     *        dialogue stripping, Fontsize scaling, and bottom offset.
+     */
+    setStyleConfig({ enableModifications } = {}) {
+        this._enableStyleMods = enableModifications === true;
+        log.debug(`LibassWasmRenderer style config: modifications=${this._enableStyleMods}`);
     }
 
     /**
@@ -273,30 +290,46 @@ export default class LibassWasmRenderer {
     }
 
     async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.8, shadowThickness = 0.5, lineHeight = 0, letterSpacing = 0, bottomOffset = 0) {
-        log.info(`LibassWasmRenderer.setFontStyles: family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);
+        log.info(`LibassWasmRenderer.setFontStyles: family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}, enableMods=${this._enableStyleMods}`);
 
-        const styleRequiresReparse =
-            this._fontFamily !== fontFamily ||
-            this._fontScale !== fontScale ||
-            this._outlineThickness !== outlineThickness ||
-            this._shadowThickness !== shadowThickness;
+        const modsToggled = this._enableStyleMods !== this._prevEnableStyleMods;
+        this._prevEnableStyleMods = this._enableStyleMods;
 
-        this._fontClass = className;
-        this._fontFamily = fontFamily;
-        this._fontScale = fontScale;
-        this._outlineThickness = outlineThickness;
-        this._shadowThickness = shadowThickness;
-        this._lineHeight = lineHeight;
-        this._letterSpacing = letterSpacing;
-        this._bottomOffset = bottomOffset;
+        if (this._enableStyleMods) {
+            const styleRequiresReparse =
+                this._fontFamily !== fontFamily ||
+                this._fontScale !== fontScale ||
+                this._outlineThickness !== outlineThickness ||
+                this._shadowThickness !== shadowThickness ||
+                modsToggled;
 
-        this._updateWrapperStyles();
+            this._fontClass = className;
+            this._fontFamily = fontFamily;
+            this._fontScale = fontScale;
+            this._outlineThickness = outlineThickness;
+            this._shadowThickness = shadowThickness;
+            this._lineHeight = lineHeight;
+            this._letterSpacing = letterSpacing;
+            this._bottomOffset = bottomOffset;
 
-        if (this._rawContent && styleRequiresReparse) {
-            // Invalidate hash so setTrack re-processes the content
-            this._lastProcessedHash = null;
-            log.info('Re-preprocessing ASS content for SubtitlesOctopus...');
-            await this.setTrack(this._rawContent);
+            this._updateWrapperStyles();
+
+            if (this._rawContent && styleRequiresReparse) {
+                // Invalidate hash so setTrack re-processes the content
+                this._lastProcessedHash = null;
+                log.info('Re-preprocessing ASS content for SubtitlesOctopus...');
+                await this.setTrack(this._rawContent);
+            }
+        } else {
+            this._updateWrapperStyles();
+
+            // If mods were just turned off, re-process from original (unmodified)
+            // content so SubtitlesOctopus renders with original embedded styles.
+            if (modsToggled && this._rawContent) {
+                this._lastProcessedHash = null;
+                log.info('Style modifications disabled — re-processing ASS with original content');
+                await this.setTrack(this._rawContent);
+            }
         }
     }
 
@@ -505,7 +538,7 @@ export default class LibassWasmRenderer {
         const target = this._wrapper || (this._octopus && this._octopus.canvasParent);
         if (!target) return;
 
-        if (this._bottomOffset) {
+        if (this._enableStyleMods && this._bottomOffset) {
             log.debug(`Applying translateY offset translation: ${-this._bottomOffset}px`);
             target.style.transform = `translateY(${-this._bottomOffset}px)`;
         } else {
@@ -516,10 +549,12 @@ export default class LibassWasmRenderer {
     _preProcessAssContent(content, fontFamily, fontScale = 1.0, outlineThickness = 0.8, shadowThickness = 0.5) {
         if (!content) return content;
 
-        log.debug('Pre-processing ASS content for SubtitlesOctopus...');
+        log.debug(`Pre-processing ASS content for SubtitlesOctopus... enableStyleMods=${this._enableStyleMods}`);
 
         const lines = content.split(/\r?\n/);
 
+        // libass-wasm handles missing PlayRes natively — skip injection.
+        // Just warn so developers know the file is non-compliant.
         const getPlayRes = (key) => {
             const line = lines.find(l => new RegExp(`^${key}\\s*:`, 'i').test(l.trim()));
             if (!line) return -1;
@@ -529,26 +564,13 @@ export default class LibassWasmRenderer {
         const resX = getPlayRes('PlayResX');
         const resY = getPlayRes('PlayResY');
 
-        const safeResX = 384;
-        const safeResY = 288;
-
         if (resX <= 0 || resY <= 0) {
-            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — patching to ${safeResX}x${safeResY}`);
+            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — libass-wasm handles this natively, skipping patch`);
+        }
 
-            const scriptInfoIdx = lines.findIndex(l => /^\[Script Info\]/i.test(l.trim()));
-            const insertAt = scriptInfoIdx !== -1 ? scriptInfoIdx + 1 : 0;
-
-            const setPlayRes = (key, value) => {
-                const idx = lines.findIndex(l => new RegExp(`^${key}\\s*:`, 'i').test(l.trim()));
-                if (idx !== -1) {
-                    lines[idx] = `${key}: ${value}`;
-                } else {
-                    lines.splice(insertAt, 0, `${key}: ${value}`);
-                }
-            };
-
-            setPlayRes('PlayResX', safeResX);
-            setPlayRes('PlayResY', safeResY);
+        if (!this._enableStyleMods) {
+            // Style modifications disabled: return content as-is
+            return content;
         }
 
         let styleFormat = null;

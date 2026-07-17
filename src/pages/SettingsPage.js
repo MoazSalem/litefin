@@ -470,7 +470,7 @@ class SettingsPage extends Page {
                 'theme-mode-select',
                 [
                     // ====================================================================
-                    // Ambient Glow Theme Mode 
+                    // Ambient Glow Theme Mode
                     // ====================================================================
                     { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' },
 
@@ -1387,11 +1387,13 @@ class SettingsPage extends Page {
                 },
                 {
                     value: 'backdropMinimal',
-                    label: i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
                 },
                 {
                     value: 'backdropLeft',
-                    label: i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
                 }
             ],
             storage.getItem('pref:detailsLayout') || 'posterLeft'
@@ -2344,8 +2346,14 @@ class SettingsPage extends Page {
             [
                 { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
                 { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
-                { value: 'semi', label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent' },
-                { value: 'transparent', label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent' }
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
             ],
             storage.getItem('pref:collapsedSidebarColor') || 'theme'
         )}
@@ -2364,8 +2372,14 @@ class SettingsPage extends Page {
             [
                 { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
                 { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
-                { value: 'semi', label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent' },
-                { value: 'transparent', label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent' }
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
             ],
             storage.getItem('pref:expandedSidebarColor') || 'theme'
         )}
@@ -2383,7 +2397,10 @@ class SettingsPage extends Page {
             'sidebar-logo-settings-select',
             [
                 { value: 'visible', label: i18n.t('OptionLogoSettingsVisible') || 'Visible' },
-                { value: 'settings', label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings' },
+                {
+                    value: 'settings',
+                    label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings'
+                },
                 { value: 'home', label: i18n.t('OptionLogoSettingsHome') || 'Visible as Home' },
                 { value: 'hidden', label: i18n.t('OptionLogoSettingsHidden') || 'Hidden' }
             ],
@@ -4172,6 +4189,21 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableAssStyleModifications">${i18n.t('EnableAssStyleModifications') || 'Enable ASS Style Overrides'}</span>
+                        <span class="setting-description" data-i18n="EnableAssStyleModificationsDescription">${i18n.t('EnableAssStyleModificationsDescription') || 'When disabled, ASS subtitles render with their original embedded styles (font, outline, shadow, scaling, spacing are all kept as-authored).'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableAssStyleModifications') === true ? 'active' : ''}" 
+                                 id="toggle-enable-ass-style-mods" 
+                                 data-setting="enableAssStyleModifications"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div id="ass-style-mods-subsettings" style="display: ${PlayerSettings.get('enableAssStyleModifications') === true ? '' : 'none'}">
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="OverrideAssFonts">${i18n.t('OverrideAssFonts')}</span>
                         <span class="setting-description" data-i18n="OverrideAssFontsDescription">${i18n.t('OverrideAssFontsDescription')}</span>
                     </div>
@@ -4343,6 +4375,7 @@ class SettingsPage extends Page {
             'px'
         )}
                     </div>
+                </div>
                 </div>
             </div>
         `;
@@ -4597,7 +4630,8 @@ class SettingsPage extends Page {
                     <!-- Populated dynamically -->
                 </div>
 
-                ${storage.getItem('litefin:settings_per_user') === 'true' ? `
+                ${storage.getItem('litefin:settings_per_user') === 'true'
+                ? `
                 <!-- Reset to Global Settings (Visible only when settings per user is enabled) -->
                 <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
                     <div class="setting-label">
@@ -4610,7 +4644,9 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-                ` : ''}
+                `
+                : ''
+            }
 
                 <!-- Reset Section -->
                 <div class="setting-item" style="${storage.getItem('litefin:settings_per_user') === 'true' ? 'margin-top: 20px;' : 'margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;'}">
@@ -4865,7 +4901,11 @@ class SettingsPage extends Page {
 
             // Gather all user configuration options from memory cache/localStorage
             for (const key of keys) {
-                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:') && !key.startsWith('litefin:user_settings_')) {
+                if (
+                    !excludedKeys.includes(key) &&
+                    !key.startsWith('serverPlugin:available:') &&
+                    !key.startsWith('litefin:user_settings_')
+                ) {
                     const value = storage.getItem(key);
                     if (value !== null) {
                         backupData[key] = value;
@@ -5004,7 +5044,11 @@ class SettingsPage extends Page {
             ];
 
             for (const key of keys) {
-                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:') && !key.startsWith('litefin:user_settings_')) {
+                if (
+                    !excludedKeys.includes(key) &&
+                    !key.startsWith('serverPlugin:available:') &&
+                    !key.startsWith('litefin:user_settings_')
+                ) {
                     const value = storage.getItem(key);
                     if (value !== null) {
                         backupData[key] = value;
@@ -5136,7 +5180,12 @@ class SettingsPage extends Page {
             // Clear all non-sensitive litefin: keys currently set in storage, preserving user settings objects
             const keysToClear = storage
                 .keys()
-                .filter((key) => key.startsWith('litefin:') && !excludedKeys.includes(key) && !key.startsWith('litefin:user_settings_'));
+                .filter(
+                    (key) =>
+                        key.startsWith('litefin:') &&
+                        !excludedKeys.includes(key) &&
+                        !key.startsWith('litefin:user_settings_')
+                );
             for (const key of keysToClear) {
                 storage.removeItem(key);
             }
@@ -6309,6 +6358,23 @@ class SettingsPage extends Page {
         }
 
         // Toggle ASS Font Override
+        // Toggle ASS Style Modifications master switch
+        const assStyleModsBtn = this.$('#toggle-enable-ass-style-mods');
+        if (assStyleModsBtn) {
+            assStyleModsBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableAssStyleModifications') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('enableAssStyleModifications', newValue);
+                assStyleModsBtn.classList.toggle('active', newValue);
+
+                // Update visibility of the sub-settings container
+                const subsContainer = this.$('#ass-style-mods-subsettings');
+                if (subsContainer) subsContainer.style.display = newValue ? '' : 'none';
+
+                focusManager.invalidateCache();
+            });
+        }
+
         const assFontOverrideBtn = this.$('#toggle-subtitle-override-ass-fonts');
         if (assFontOverrideBtn) {
             assFontOverrideBtn.addEventListener('click', () => {
@@ -7366,7 +7432,6 @@ class SettingsPage extends Page {
                                 eventBus.emit(settingConfig.key, newValue);
                             }
 
-
                             if (
                                 settingConfig.key === 'pref:mediaRowsLayout' ||
                                 settingConfig.key === 'pref:loginPageLayout' ||
@@ -7674,7 +7739,6 @@ class SettingsPage extends Page {
             });
         }
 
-
         // Toggle Switch for Disable Sidebar Animation
         const disableAnimationToggle = this.$('#toggle-disable-sidebar-animation');
         if (disableAnimationToggle) {
@@ -7753,7 +7817,6 @@ class SettingsPage extends Page {
                 log.info(`Show Collapsed Library Icons set to: ${newValue}`);
             });
         }
-
 
         // Toggle Switch for Hide Sidebar Library Header
         const hideSidebarLibraryHeaderToggle = this.$('#toggle-hide-sidebar-library-header');

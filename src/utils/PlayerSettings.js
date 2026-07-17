@@ -197,6 +197,10 @@ const DEFAULTS = {
     // Enable user-defined outline and shadow thickness overrides for ASS
     subtitleOverrideAssOutlineShadow: false,
 
+    // Master toggle for ASS style modifications (font, outline, shadow, scaling, spacing).
+    // When disabled, ASS subtitles render using their original embedded styles as-is.
+    enableAssStyleModifications: false,
+
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
 

@@ -971,6 +971,8 @@
     "OverrideOutlineShadow": "Override Outline/Shadow (ASS)",
     "OverrideOutlineShadowDescription": "Enable user settings for text border and shadow depth (disabling this uses values from the file)",
     "Overwrite": "Overwrite",
+    "EnableAssStyleModifications": "Enable ASS Style Overrides",
+    "EnableAssStyleModificationsDescription": "When disabled, ASS subtitles render with their original embedded styles (font, outline, shadow, scaling, and spacing are all kept as-authored).",
     "PageNumberXOfY": "Page {0} of {1}",
     "PasswordPlaceholder": "Password (leave empty if none)",
     "Path": "Path",

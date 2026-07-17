@@ -461,6 +461,11 @@ export default class SubtitleManager {
         // SRT/VTT track is active, triggering an unwanted overlay.
         // =================================================================
         if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
+            // Sync the master style modifications toggle and preferred engine
+            const enableModifications = PlayerSettings.get('enableAssStyleModifications') === true;
+            const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+            this._assRenderer.setStyleConfig({ enableModifications, preferredEngine });
+
             const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
             let fontClass = null;
             let fontFamily = null;
@@ -842,6 +847,10 @@ export default class SubtitleManager {
                     });
                 }
             }
+
+            // Sync master style modifications toggle and engine config
+            const enableAssMods = PlayerSettings.get('enableAssStyleModifications') === true;
+            this._assRenderer.setStyleConfig({ enableModifications: enableAssMods, preferredEngine });
 
             // Apply current subtitle font override
             let fontClass = null;
