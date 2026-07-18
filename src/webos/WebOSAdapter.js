@@ -209,18 +209,39 @@ class WebOSAdapter {
                 activeElem &&
                 ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA');
 
+            /*
+             * Space bar control helper:
+             * We only want to hijack the space bar if the player is actively rendering
+             * on screen. This prevents breaking standard browser scroll functionality
+             * on the settings, details, or library grid pages.
+             */
+            const isPlayerActive = window.location.hash.startsWith('#/player');
+
             if (!isTextInput) {
-                if (
-                    [WEBOS_KEYS.LEFT, WEBOS_KEYS.RIGHT, WEBOS_KEYS.UP, WEBOS_KEYS.DOWN, WEBOS_KEYS.ENTER].includes(
-                        keyCode
-                    )
-                ) {
+                const keysToPrevent = [
+                    WEBOS_KEYS.LEFT,
+                    WEBOS_KEYS.RIGHT,
+                    WEBOS_KEYS.UP,
+                    WEBOS_KEYS.DOWN,
+                    WEBOS_KEYS.ENTER
+                ];
+                if (isPlayerActive && keyCode === 32) {
+                    keysToPrevent.push(32);
+                }
+                if (keysToPrevent.includes(keyCode)) {
                     e.preventDefault();
                 }
             }
 
             // Map key codes to eventBus events
             switch (keyCode) {
+                // Space bar mapping for web/desktop players
+                case 32:
+                    if (!isTextInput && isPlayerActive) {
+                        e.preventDefault();
+                        eventBus.emit('key:playPause', e);
+                    }
+                    break;
                 // Navigation
                 case WEBOS_KEYS.LEFT:
                     eventBus.emit('key:left', e);
@@ -241,6 +262,13 @@ class WebOSAdapter {
                     // LG requires preventDefault on 461 to prevent the app from closing immediately
                     e.preventDefault();
                     eventBus.emit('key:back', e);
+                    break;
+                case 27: // Escape
+                case 8: // Backspace
+                    if (!isTextInput) {
+                        e.preventDefault();
+                        eventBus.emit('key:back', e);
+                    }
                     break;
 
                 case WEBOS_KEYS.PLAY:

@@ -207,18 +207,39 @@ class TizenAdapter {
                 activeElem &&
                 ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA');
 
+            /*
+             * Space bar control helper:
+             * We only want to hijack the space bar if the player is actively rendering
+             * on screen. This prevents breaking standard browser scroll functionality
+             * on the settings, details, or library grid pages.
+             */
+            const isPlayerActive = window.location.hash.startsWith('#/player');
+
             if (!isTextInput) {
-                if (
-                    [TIZEN_KEYS.LEFT, TIZEN_KEYS.RIGHT, TIZEN_KEYS.UP, TIZEN_KEYS.DOWN, TIZEN_KEYS.ENTER].includes(
-                        keyCode
-                    )
-                ) {
+                const keysToPrevent = [
+                    TIZEN_KEYS.LEFT,
+                    TIZEN_KEYS.RIGHT,
+                    TIZEN_KEYS.UP,
+                    TIZEN_KEYS.DOWN,
+                    TIZEN_KEYS.ENTER
+                ];
+                if (isPlayerActive && keyCode === 32) {
+                    keysToPrevent.push(32);
+                }
+                if (keysToPrevent.includes(keyCode)) {
                     e.preventDefault();
                 }
             }
 
             // Map key codes to events
             switch (keyCode) {
+                // Space bar mapping for web/desktop players
+                case 32:
+                    if (!isTextInput && isPlayerActive) {
+                        e.preventDefault();
+                        eventBus.emit('key:playPause', e);
+                    }
+                    break;
                 // Navigation
                 case TIZEN_KEYS.LEFT:
                     eventBus.emit('key:left', e);
@@ -238,6 +259,13 @@ class TizenAdapter {
                 case TIZEN_KEYS.BACK:
                     e.preventDefault();
                     eventBus.emit('key:back', e);
+                    break;
+                case 27: // Escape
+                case 8: // Backspace
+                    if (!isTextInput) {
+                        e.preventDefault();
+                        eventBus.emit('key:back', e);
+                    }
                     break;
 
                 // Media controls
