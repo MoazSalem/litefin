@@ -233,6 +233,12 @@ class DetailsPage extends Page {
                         <div class="guest-stars-row row-items" id="guest-stars-row"></div>
                     </section>
                     
+                    <!-- Collections this item belongs to -->
+                    <section class="details-item-collections media-row hidden" id="item-collections-section">
+                        <h2 class="row-title" data-i18n="Collections">Collections</h2>
+                        <div class="item-collections-row row-items" id="item-collections-row"></div>
+                    </section>
+
                     <!-- Similar items -->
                     <section class="details-similar media-row hidden" id="similar-section">
                         <h2 class="row-title" data-i18n="HeaderMoreLikeThis">More Like This</h2>
@@ -527,6 +533,10 @@ class DetailsPage extends Page {
 
             if (this._item.Type !== 'Season') {
                 loadTasks.push(this._loadSimilar());
+            }
+
+            if (this._item.Type === 'Movie' || this._item.Type === 'Series') {
+                loadTasks.push(this._loadItemCollections());
             }
 
             await Promise.all(loadTasks);
@@ -2803,6 +2813,11 @@ class DetailsPage extends Page {
                 elementId: '#guest-stars-row',
                 isVisible: () => isNotHidden('#guest-stars-section')
             },
+            {
+                name: 'details-item-collections',
+                elementId: '#item-collections-row',
+                isVisible: () => isNotHidden('#item-collections-section')
+            },
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') }
         ];
 
@@ -2828,6 +2843,11 @@ class DetailsPage extends Page {
 
         const sections = [
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
+            {
+                name: 'details-item-collections',
+                elementId: '#item-collections-row',
+                isVisible: () => isNotHidden('#item-collections-section')
+            },
             {
                 name: 'guest-stars-section',
                 elementId: '#guest-stars-row',
@@ -3064,6 +3084,56 @@ class DetailsPage extends Page {
             },
             focusSectionName: 'details-similar',
             cardType: useSquare ? 'square' : 'poster'
+        });
+    }
+
+    async _loadItemCollections() {
+        try {
+            const cacheKey = `details:collections:${this._itemId}`;
+            let collections = state.get(cacheKey);
+
+            if (!collections) {
+                const response = await api.getItemCollections(this._itemId, {
+                    fields: 'PrimaryImageAspectRatio'
+                });
+                collections = response.Items || [];
+                if (collections.length > 0) {
+                    state.set(cacheKey, collections);
+                }
+            }
+
+            this._itemCollections = collections;
+
+            if (this._itemCollections.length > 0) {
+                this._renderItemCollections();
+            } else {
+                const section = this.$('#item-collections-section');
+                if (section) {
+                    section.classList.add('hidden');
+                }
+            }
+        } catch (error) {
+            log.warn('Failed to load item collections', error);
+            const section = this.$('#item-collections-section');
+            if (section) {
+                section.classList.add('hidden');
+            }
+        }
+    }
+
+    _renderItemCollections() {
+        if (!this._itemCollections || this._itemCollections.length === 0) return;
+
+        this._renderVirtualRow({
+            sectionId: 'item-collections-section',
+            listId: 'item-collections-row',
+            items: this._itemCollections,
+            isLandscape: false,
+            renderCard: (item) => {
+                return this._renderMediaCard(item, false, 'poster');
+            },
+            focusSectionName: 'details-item-collections',
+            cardType: 'poster'
         });
     }
 

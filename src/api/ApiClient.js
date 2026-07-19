@@ -390,8 +390,12 @@ export class ApiClient {
                 throw networkError;
             }
 
-            log.error(`Request to ${endpoint} failed:`, error.message || error);
-            eventBus.emit('api:error', { endpoint, error });
+            if (options.warnOnError) {
+                log.warn(`Request to ${endpoint} failed (suppressed):`, error.message || error);
+            } else {
+                log.error(`Request to ${endpoint} failed:`, error.message || error);
+                eventBus.emit('api:error', { endpoint, error });
+            }
             throw error;
         }
     }
@@ -880,6 +884,38 @@ export class ApiClient {
     async addToCollection(collectionId, itemIds) {
         const qs = itemIds.map((id) => `Ids=${encodeURIComponent(id)}`).join('&');
         return this.post(`/Collections/${collectionId}/Items?${qs}&UserId=${encodeURIComponent(this._userId)}`);
+    }
+
+    /**
+     * Gets the collections that include the specified item.
+     * Tries the native Jellyfin endpoint (/Items/{itemId}/Collections) first.
+     * If the server returns a 404 (meaning it's an older server like 10.11), 
+     * it falls back to the custom Litefin plugin endpoint (/Litefin/Items/{itemId}/Collections).
+     * 
+     * @param {string} itemId - The target item ID
+     * @param {Object} [params] - Query parameters such as Fields, StartIndex, Limit
+     * @returns {Promise<Object>} collections query result
+     */
+    async getItemCollections(itemId, params = {}) {
+        const defaults = {
+            userId: this._userId
+        };
+
+        try {
+            // Attempt to fetch from native Jellyfin endpoint (available in newer servers)
+            return await this.get(`/Items/${itemId}/Collections`, { ...defaults, ...params }, { warnOnError: true });
+        } catch (err) {
+            // Fall back to the Litefin plugin endpoint if the native route is not found
+            if (err.status === 404 || err.message?.includes('Not found')) {
+                log.info(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
+                return await this.get(
+                    `/Litefin/Items/${itemId}/Collections`,
+                    { ...defaults, ...params },
+                    { warnOnError: true }
+                );
+            }
+            throw err;
+        }
     }
 
     async getSimilar(itemId, params = {}) {
