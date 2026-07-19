@@ -421,103 +421,106 @@ const skipIntroPlugin = {
             }
         }
 
-        // --------------------------------------------------------------------
-        // FALLBACK PATH: Parse chapters if intro-skipper is missing or returned no data
-        // --------------------------------------------------------------------
-        const hasLoadedSegments = this._introSegment.length > 0 ||
-            this._outroSegment.length > 0 ||
-            this._recapSegment.length > 0 ||
-            this._previewSegment.length > 0;
-        if (!hasLoadedSegments) {
-            api.log.info(`Skip Intro: intro-skipper unavailable or returned empty. Checking chapters fallback.`);
+        // Ensure segments are initialized as arrays (in case API route threw or wasn't run)
+        this._introSegment = this._introSegment || [];
+        this._outroSegment = this._outroSegment || [];
+        this._recapSegment = this._recapSegment || [];
+        this._previewSegment = this._previewSegment || [];
 
-            // Ensure we have access to the chapter lists.
-            // If they are missing from the current active item reference, fetch them directly.
-            let chapters = item.Chapters;
-            if (!chapters) {
-                try {
-                    api.log.debug(`Skip Intro: fetching full item to retrieve chapters list`);
-                    const fullItem = await api.getItem(itemId, { Fields: 'Chapters,RunTimeTicks' });
-                    chapters = fullItem?.Chapters || [];
-                    item.Chapters = chapters;
-                    if (fullItem?.RunTimeTicks) {
-                        item.RunTimeTicks = fullItem.RunTimeTicks;
-                    }
-                } catch (err) {
-                    api.log.warn(`Skip Intro: failed to retrieve item chapters:`, err.message);
-                    chapters = [];
+        // --------------------------------------------------------------------
+        // Retrieve chapters and merge results to fill any missing segments
+        // --------------------------------------------------------------------
+        let chapters = item.Chapters;
+        if (!chapters) {
+            try {
+                api.log.debug(`Skip Intro: fetching full item to retrieve chapters list`);
+                const fullItem = await api.getItem(itemId, { Fields: 'Chapters,RunTimeTicks' });
+                chapters = fullItem?.Chapters || [];
+                item.Chapters = chapters;
+                if (fullItem?.RunTimeTicks) {
+                    item.RunTimeTicks = fullItem.RunTimeTicks;
                 }
+            } catch (err) {
+                api.log.warn(`Skip Intro: failed to retrieve item chapters:`, err.message);
+                chapters = [];
             }
+        }
 
-            if (chapters && chapters.length > 0) {
-                // Ensure chapters are sorted sequentially by their start positions
-                const sortedChapters = [...chapters].sort((a, b) => a.StartPositionTicks - b.StartPositionTicks);
+        if (chapters && chapters.length > 0) {
+            // Sort chapters by start position for reliable sequential boundaries
+            const sortedChapters = [...chapters].sort((a, b) => a.StartPositionTicks - b.StartPositionTicks);
 
-                this._introSegment = [];
-                this._outroSegment = [];
-                this._recapSegment = [];
-                this._previewSegment = [];
+            const chapterIntros = [];
+            const chapterOutros = [];
+            const chapterRecaps = [];
 
-                sortedChapters.forEach((c, idx) => {
-                    const start = c.StartPositionTicks;
-                    let end;
-                    // By default, end a segment when the next chapter starts
-                    if (idx + 1 < sortedChapters.length) {
-                        end = sortedChapters[idx + 1].StartPositionTicks;
+            sortedChapters.forEach((c, idx) => {
+                const start = c.StartPositionTicks;
+                let end;
+                if (idx + 1 < sortedChapters.length) {
+                    end = sortedChapters[idx + 1].StartPositionTicks;
+                } else {
+                    end = start + (120 * TICKS_PER_SECOND);
+                }
+
+                // Check intro keywords
+                const isIntro = c.MarkerType === 'IntroStart' || (c.Name && (
+                    c.Name.toLowerCase().includes('intro') ||
+                    c.Name.toLowerCase().includes('opening') ||
+                    /\bop\b/i.test(c.Name)
+                ));
+
+                // Check outro keywords
+                const isCredits = c.MarkerType === 'Credits' || (c.Name && (
+                    c.Name.toLowerCase().includes('credit') ||
+                    c.Name.toLowerCase().includes('ending') ||
+                    /\bed\b/i.test(c.Name)
+                ));
+
+                // Check recap keywords
+                const isRecap = c.Name && c.Name.toLowerCase().includes('recap');
+
+                if (isIntro) {
+                    const durationTicks = end - start;
+                    const durationMinutes = durationTicks / (60 * TICKS_PER_SECOND);
+                    if (durationMinutes >= 3) {
+                        api.log.info(
+                            `Skip Intro: skipped mapping intro chapter [${c.Name || c.MarkerType}] ` +
+                            `due to long duration: ${durationMinutes.toFixed(1)} minutes (>= 3m)`
+                        );
                     } else {
-                        end = start + (120 * TICKS_PER_SECOND); // 2 minutes fallback
+                        chapterIntros.push({ start, end });
                     }
+                } else if (isCredits) {
+                    const creditsEnd = item.RunTimeTicks || (start + (300 * TICKS_PER_SECOND));
+                    chapterOutros.push({ start, end: creditsEnd });
+                } else if (isRecap) {
+                    const recapEnd = idx + 1 < sortedChapters.length ? sortedChapters[idx + 1].StartPositionTicks : (start + (60 * TICKS_PER_SECOND));
+                    chapterRecaps.push({ start, end: recapEnd });
+                }
+            });
 
-                    // Check if chapter matches intro keywords
-                    const isIntro = c.MarkerType === 'IntroStart' || (c.Name && (
-                        c.Name.toLowerCase().includes('intro') ||
-                        c.Name.toLowerCase().includes('opening') ||
-                        /\bop\b/i.test(c.Name)
-                    ));
-
-                    // Check if chapter matches credit/outro keywords
-                    const isCredits = c.MarkerType === 'Credits' || (c.Name && (
-                        c.Name.toLowerCase().includes('credit') ||
-                        c.Name.toLowerCase().includes('ending') ||
-                        /\bed\b/i.test(c.Name)
-                    ));
-
-                    // Check if chapter matches recap keywords
-                    const isRecap = c.Name && c.Name.toLowerCase().includes('recap');
-
-                     if (isIntro) {
-                        // ----------------------------------------------------
-                        // Validate duration: Intros shouldn't be excessively long.
-                        // If the duration between this intro chapter and the next
-                        // is 3 minutes or more, it is likely a standard episode act
-                        // rather than an intro segment. Skip it to prevent incorrect prompts.
-                        // ----------------------------------------------------
-                        const durationTicks = end - start;
-                        const durationMinutes = durationTicks / (60 * TICKS_PER_SECOND);
-
-                        if (durationMinutes >= 3) {
-                            api.log.info(
-                                `Skip Intro: skipped mapping intro chapter [${c.Name || c.MarkerType}] ` +
-                                `due to long duration: ${durationMinutes.toFixed(1)} minutes (>= 3m)`
-                            );
-                        } else {
-                            this._introSegment.push({ start, end });
-                            api.log.debug(`Skip Intro: mapped intro segment from chapters (${start} - ${end})`);
-                        }
-                    } else if (isCredits) {
-                        // Credits usually end at the very end of the media duration
-                        const creditsEnd = item.RunTimeTicks || (start + (300 * TICKS_PER_SECOND));
-                        this._outroSegment.push({ start, end: creditsEnd });
-                        api.log.debug(`Skip Intro: mapped credits segment from chapters (${start} - ${creditsEnd})`);
-                    } else if (isRecap) {
-                        const recapEnd = idx + 1 < sortedChapters.length ? sortedChapters[idx + 1].StartPositionTicks : (start + (60 * TICKS_PER_SECOND));
-                        this._recapSegment.push({ start, end: recapEnd });
-                        api.log.debug(`Skip Intro: mapped recap segment from chapters (${start} - ${recapEnd})`);
+            // Local helper to merge segments without duplicates or overlaps
+            const mergeSegments = (serverSegs, chapterSegs) => {
+                const merged = [...serverSegs];
+                chapterSegs.forEach(c => {
+                    const overlaps = merged.some(s => {
+                        const timeOverlap = Math.max(c.start, s.start) < Math.min(c.end, s.end);
+                        const closeStart = Math.abs(c.start - s.start) < 5 * TICKS_PER_SECOND;
+                        return timeOverlap || closeStart;
+                    });
+                    if (!overlaps) {
+                        merged.push(c);
                     }
                 });
-            } else {
-                api.log.debug(`Skip Intro: no chapters found for item ${itemId}`);
-            }
+                return merged.sort((a, b) => a.start - b.start);
+            };
+
+            this._introSegment = mergeSegments(this._introSegment, chapterIntros);
+            this._outroSegment = mergeSegments(this._outroSegment, chapterOutros);
+            this._recapSegment = mergeSegments(this._recapSegment, chapterRecaps);
+        } else {
+            api.log.debug(`Skip Intro: no chapters found for item ${itemId}`);
         }
 
         // Cache whatever results we gathered (even if null) to prevent redundant queries
