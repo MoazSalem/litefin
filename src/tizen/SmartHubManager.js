@@ -411,6 +411,7 @@ class SmartHubManager {
      * @private
      */
     _buildPreviewJson(resumeItems, nextUpItems) {
+        // Prepare list of sections to return to Samsung Smart Hub
         const sections = [];
 
         /* ── Next Up ──────────────────────────────────────────────────────
@@ -421,8 +422,12 @@ class SmartHubManager {
             .map((item) => this._buildTile(item))
             .filter(Boolean); /* _buildTile returns null for unsupported types. */
 
+        // If we have Next Up tiles, add them to the sections array.
+        // We call .reverse() because Samsung Smart Hub renders the tiles in
+        // reverse order (right-to-left array order on the UI screen), so reversing
+        // the array ensures the first (most recent) item appears leftmost.
         if (nextUpTiles.length > 0) {
-            sections.push({ title: 'Next Up', tiles: nextUpTiles });
+            sections.push({ title: 'Next Up', tiles: nextUpTiles.reverse() });
         }
 
         /* ── Continue Watching ───────────────────────────────────────────
@@ -433,8 +438,11 @@ class SmartHubManager {
             .map((item) => this._buildTile(item))
             .filter(Boolean);
 
+        // If we have Continue Watching tiles, add them to the sections array.
+        // We also reverse this array so that the most recently watched items
+        // appear leftmost on the Samsung home screen instead of being pushed to the end.
         if (resumeTiles.length > 0) {
-            sections.push({ title: 'Continue Watching', tiles: resumeTiles });
+            sections.push({ title: 'Continue Watching', tiles: resumeTiles.reverse() });
         }
 
         return { sections };
