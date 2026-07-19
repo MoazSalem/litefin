@@ -87,11 +87,11 @@ const skipIntroPlugin = {
     // === Required metadata ===
     id: 'skip-intro',
     name: 'Skip Intro & Outro',
-    version: '2.0.0',
+    version: '3.0.0',
 
-    // Require the intro-skipper server plugin — PluginManager checks this
-    // before calling init() and will disable us with a toast if not found
-    serverDependency: 'intro-skipper',
+    // No strict serverDependency defined here so the PluginManager does not disable us.
+    // Instead, we check intro-skipper availability dynamically at playback and fall back
+    // to video chapter markers if it is missing or disabled.
 
     // ---- Private state ----
 
@@ -104,26 +104,26 @@ const skipIntroPlugin = {
     _cache: new Map(),
 
     /**
-     * Loaded segments for the current item — values are null if segment
-     * was not returned by the server OR if the setting is 'None'.
+     * Loaded segments for the current item — values are arrays containing
+     * { start, end } bounds in ticks.
      * @private
      */
-    _introSegment: null,
-    _outroSegment: null,
-    _recapSegment: null,
-    _previewSegment: null,
+    _introSegment: [],
+    _outroSegment: [],
+    _recapSegment: [],
+    _previewSegment: [],
 
     /**
      * Segments that should be *auto-skipped* (action === 'Skip').
-     * Map<type, { start, end }> — only populated segments land here.
+     * Map<type, Array<{ start, end }>> — only populated segments land here.
      * @private
      */
     _autoSkipSegments: {},
 
     /**
-     * Tracks the type of the last segment we auto-skipped so we don't
-     * re-trigger the seek on every subsequent timeupdate tick until the
-     * player has moved past the segment.
+     * Tracks the type and index of the last segment we auto-skipped so we don't
+     * re-trigger the seek on every subsequent timeupdate tick.
+     * Format: 'type-index'
      * @private
      */
     _lastAutoSkipped: null,
@@ -156,12 +156,12 @@ const skipIntroPlugin = {
      */
     async onPlayerStart(item, api) {
         // ----------------------------------------------------------------
-        // Reset all state from any previous episode
+        // Reset all state from any previous episode to empty arrays
         // ----------------------------------------------------------------
-        this._introSegment = null;
-        this._outroSegment = null;
-        this._recapSegment = null;
-        this._previewSegment = null;
+        this._introSegment = [];
+        this._outroSegment = [];
+        this._recapSegment = [];
+        this._previewSegment = [];
         this._autoSkipSegments = {};
         this._lastAutoSkipped = null;
 
@@ -191,7 +191,7 @@ const skipIntroPlugin = {
         // ----------------------------------------------------------------
         // Fetch segment data for this episode (with per-item caching)
         // ----------------------------------------------------------------
-        await this._loadSegments(item.Id, api);
+        await this._loadSegments(item, api);
 
         // ----------------------------------------------------------------
         // Convenience reference map for the 4 raw segments by type string
@@ -204,27 +204,34 @@ const skipIntroPlugin = {
         };
 
         // ----------------------------------------------------------------
-        // For each segment type, apply its configured action
+        // For each segment type, apply its configured action.
+        // Since there can be multiple segments of the same type (e.g. both
+        // an intro chapter and an opening theme song chapter), we handle
+        // segments as an array.
         // ----------------------------------------------------------------
         for (const seg of SEGMENT_TYPES) {
             const action = actions[seg.type];
-            const segment = segments[seg.type];
+            const segmentList = segments[seg.type] || [];
 
-            // No segment data from the server — nothing to do regardless
-            if (!segment) continue;
+            // Skip if no matching segments exist
+            if (segmentList.length === 0) continue;
 
             if (action === 'AskToSkip') {
-                // Show the skip button in the OSD overlay row (existing behavior)
-                api.addOSDWidget(this._buildWidget(seg, segment, api));
-                api.log.debug(`Skip Intro: [${seg.type}] AskToSkip widget registered`);
+                // Register an independent OSD widget for each individual segment
+                segmentList.forEach((segment, idx) => {
+                    const segDef = {
+                        ...seg,
+                        widgetId: `${seg.widgetId}-${idx}`
+                    };
+                    api.addOSDWidget(this._buildWidget(segDef, segment, api));
+                });
+                api.log.debug(`Skip Intro: [${seg.type}] registered ${segmentList.length} AskToSkip widgets`);
             } else if (action === 'Skip') {
-                // Store for auto-seek; no widget is added to the OSD
-                this._autoSkipSegments[seg.type] = segment;
-                api.log.debug(
-                    `Skip Intro: [${seg.type}] Auto-Skip registered (${segment.start / TICKS_PER_SECOND}s – ${segment.end / TICKS_PER_SECOND}s)`
-                );
+                // Store all segments of this type for automatic seek bypasses
+                this._autoSkipSegments[seg.type] = segmentList;
+                api.log.debug(`Skip Intro: [${seg.type}] registered ${segmentList.length} Auto-Skips`);
             } else {
-                // action === 'None' — completely ignore this segment
+                // Action is 'None' — ignore entirely
                 api.log.debug(`Skip Intro: [${seg.type}] action is None — ignored`);
             }
         }
@@ -233,74 +240,64 @@ const skipIntroPlugin = {
     /**
      * Called on each time update tick by the PluginManager.
      * Handles auto-skip logic: when the current playback position enters
-     * a segment whose action is 'Skip', seek past its end immediately.
-     *
-     * Widget visibility (AskToSkip) is managed automatically by
-     * PluginWidgetHost via each widget's shouldShow() — no extra work needed.
+     * any segment whose action is 'Skip', seek past its end immediately.
      *
      * @param {number} positionTicks  - Current playback position in ticks
      * @param {number} durationTicks  - Total duration in ticks
      * @param {import('../../PluginAPI.js').default} api
      */
     onTimeUpdate(positionTicks, durationTicks, api) {
-        // Nothing to auto-skip — short-circuit for performance
+        // Safe exit if no auto-skips registered
         if (Object.keys(this._autoSkipSegments).length === 0) return;
 
-        for (const [type, segment] of Object.entries(this._autoSkipSegments)) {
-            // Is the player currently inside this segment?
-            const inSegment = positionTicks >= segment.start && positionTicks < segment.end;
-            if (!inSegment) continue;
+        for (const [type, segmentList] of Object.entries(this._autoSkipSegments)) {
+            let matchedSegment = null;
+            let matchedIndex = -1;
 
-            // Avoid re-triggering until the player has moved past the segment
-            // (the seek fires this callback again momentarily, so the guard
-            // prevents an infinite loop / double-seek on the same segment)
-            if (this._lastAutoSkipped === type) continue;
+            // Check if player is currently in any of the segments for this type
+            segmentList.forEach((segment, idx) => {
+                if (positionTicks >= segment.start && positionTicks < segment.end) {
+                    matchedSegment = segment;
+                    matchedIndex = idx;
+                }
+            });
 
-            // Mark before seeking so the next tick from the async seek
-            // doesn't trigger it again
-            this._lastAutoSkipped = type;
+            if (!matchedSegment) continue;
+
+            // Unique guard identifier for the specific matched segment
+            const guardKey = `${type}-${matchedIndex}`;
+            if (this._lastAutoSkipped === guardKey) continue;
+
+            this._lastAutoSkipped = guardKey;
 
             const player = api.getPlayer();
             if (!player) {
-                api.log.warn(`Skip Intro: auto-skip for [${type}] failed — no player`);
+                api.log.warn(`Skip Intro: auto-skip for [${type}-${matchedIndex}] failed — no player`);
                 continue;
             }
 
-            // ----------------------------------------------------------------
-            // Determine total video duration to avoid seeking past the file boundaries.
-            // On hardware players like Tizen's AVPlay, seeking to or beyond the
-            // media's actual duration results in an invalid operation that freezes
-            // the video decoder rather than completing naturally.
-            // ----------------------------------------------------------------
             const durationTicks = player.getDurationTicks ? player.getDurationTicks() : 0;
+            const seekTarget = matchedSegment.end + TICKS_PER_SECOND;
 
-            // Seek 1 second past segment end for a clean boundary
-            const seekTarget = segment.end + TICKS_PER_SECOND;
-
-            // ----------------------------------------------------------------
-            // If the seek target reaches or exceeds the absolute duration of the video,
-            // we bypass the native seek pipeline entirely and emit the 'ended' event.
-            // This triggers the player page to halt playback and clean up properly.
-            // ----------------------------------------------------------------
+            // Handle clean completion if seeking past video boundary
             if (durationTicks > 0 && seekTarget >= durationTicks) {
                 api.log.info(
-                    `Skip Intro: auto-skip target [${type}] at ${seekTarget / TICKS_PER_SECOND}s is at or past duration ${durationTicks / TICKS_PER_SECOND}s. Triggering ended event.`
+                    `Skip Intro: auto-skip target [${type}-${matchedIndex}] at ${seekTarget / TICKS_PER_SECOND}s is at or past duration ${durationTicks / TICKS_PER_SECOND}s. Triggering ended event.`
                 );
                 player.emit('ended');
             } else {
-                api.log.info(`Skip Intro: auto-skipping [${type}] → ${seekTarget / TICKS_PER_SECOND}s`);
+                api.log.info(`Skip Intro: auto-skipping [${type}-${matchedIndex}] → ${seekTarget / TICKS_PER_SECOND}s`);
                 player.seek(seekTarget);
             }
 
-            // Only handle one auto-skip per tick
             break;
         }
 
-        // Reset the auto-skipped guard once the player has moved past ALL
-        // auto-skip segments so the same segment can fire again if the user
-        // seeks back into it manually.
+        // Reset the auto-skipped guard when the player transitions past the active segment
         if (this._lastAutoSkipped !== null) {
-            const skippedSeg = this._autoSkipSegments[this._lastAutoSkipped];
+            const [type, idxStr] = this._lastAutoSkipped.split('-');
+            const idx = parseInt(idxStr, 10);
+            const skippedSeg = this._autoSkipSegments[type]?.[idx];
             if (skippedSeg && positionTicks >= skippedSeg.end) {
                 this._lastAutoSkipped = null;
             }
@@ -323,10 +320,10 @@ const skipIntroPlugin = {
      */
     destroy(api) {
         this._cache.clear();
-        this._introSegment = null;
-        this._outroSegment = null;
-        this._recapSegment = null;
-        this._previewSegment = null;
+        this._introSegment = [];
+        this._outroSegment = [];
+        this._recapSegment = [];
+        this._previewSegment = [];
         this._autoSkipSegments = {};
         this._lastAutoSkipped = null;
     },
@@ -348,8 +345,22 @@ const skipIntroPlugin = {
      * @param {import('../../PluginAPI.js').default} api
      * @private
      */
-    async _loadSegments(itemId, api) {
-        // Return from cache if already fetched for this episode
+    /**
+     * Fetch and cache segment timestamps.
+     * Checks if the intro-skipper plugin is available on the server:
+     * - If available: Fetches from the /Episode/{id}/Timestamps endpoint.
+     * - If unavailable: Falls back to parsing chapter markers on the item.
+     *
+     * @param {Object} item - Jellyfin episode item object
+     * @param {import('../../PluginAPI.js').default} api
+     * @private
+     */
+    async _loadSegments(item, api) {
+        const itemId = item.Id;
+
+        // --------------------------------------------------------------------
+        // Cache Check: Avoid hit to network if already loaded for this item.
+        // --------------------------------------------------------------------
         if (this._cache.has(itemId)) {
             const cached = this._cache.get(itemId);
             this._introSegment = cached.intro;
@@ -360,54 +371,162 @@ const skipIntroPlugin = {
             return;
         }
 
+        // --------------------------------------------------------------------
+        // Check Plugin Presence dynamically.
+        // --------------------------------------------------------------------
+        let introSkipperAvailable = false;
         try {
-            const data = await api.serverPlugins.call(`/Episode/${itemId}/Timestamps`);
-
-            // Helper: coerce a raw segment object to { start, end } in ticks,
-            // returning null when the server has no data (End === 0 or missing).
-            const toSegment = (raw) => {
-                if (!raw || !(raw.End > 0)) return null;
-                return {
-                    start: raw.Start * TICKS_PER_SECOND,
-                    end: raw.End * TICKS_PER_SECOND
-                };
-            };
-
-            this._introSegment = toSegment(data?.Introduction);
-            this._outroSegment = toSegment(data?.Credits);
-            this._recapSegment = toSegment(data?.Recap);
-            this._previewSegment = toSegment(data?.Preview);
-
-            // Cache the raw results — we'll apply action filtering in onPlayerStart
-            this._cache.set(itemId, {
-                intro: this._introSegment,
-                outro: this._outroSegment,
-                recap: this._recapSegment,
-                preview: this._previewSegment
-            });
-
-            api.log.info(
-                `Skip Intro: fetched segments for ${itemId} —`,
-                `intro=${this._introSegment ? 'yes' : 'no'}`,
-                `outro=${this._outroSegment ? 'yes' : 'no'}`,
-                `recap=${this._recapSegment ? 'yes' : 'no'}`,
-                `preview=${this._previewSegment ? 'yes' : 'no'}`
-            );
+            api.log.debug(`Skip Intro: probing intro-skipper plugin availability`);
+            const check = await api.serverPlugins.isPluginAvailable('intro-skipper', item);
+            introSkipperAvailable = !!check.available;
         } catch (err) {
-            // 404 = intro-skipper has no data for this episode
-            if (err.status === 404) {
-                api.log.debug(`Skip Intro: no segments for episode ${itemId}`);
-            } else {
-                api.log.warn(`Skip Intro: failed to fetch segments for ${itemId}:`, err.message);
+            api.log.warn(`Skip Intro: failed to probe intro-skipper availability:`, err.message);
+        }
+
+        if (introSkipperAvailable) {
+            // ----------------------------------------------------------------
+            // PRIMARY PATH: Fetch timestamps from intro-skipper server plugin
+            // ----------------------------------------------------------------
+            try {
+                api.log.info(`Skip Intro: fetching timestamps from intro-skipper for item ${itemId}`);
+                const data = await api.serverPlugins.call(`/Episode/${itemId}/Timestamps`);
+
+                // Helper to safely transform raw values into ticks as an array
+                const toSegment = (raw) => {
+                    if (!raw || !(raw.End > 0)) return [];
+                    return [{
+                        start: raw.Start * TICKS_PER_SECOND,
+                        end: raw.End * TICKS_PER_SECOND
+                    }];
+                };
+
+                this._introSegment = toSegment(data?.Introduction);
+                this._outroSegment = toSegment(data?.Credits);
+                this._recapSegment = toSegment(data?.Recap);
+                this._previewSegment = toSegment(data?.Preview);
+
+                api.log.info(
+                    `Skip Intro: successfully loaded timestamps from server —`,
+                    `intro=${this._introSegment.length > 0 ? 'yes' : 'no'}`,
+                    `outro=${this._outroSegment.length > 0 ? 'yes' : 'no'}`,
+                    `recap=${this._recapSegment.length > 0 ? 'yes' : 'no'}`,
+                    `preview=${this._previewSegment.length > 0 ? 'yes' : 'no'}`
+                );
+            } catch (err) {
+                if (err.status === 404) {
+                    api.log.debug(`Skip Intro: no intro-skipper timestamps found for ${itemId}`);
+                } else {
+                    api.log.warn(`Skip Intro: intro-skipper API call failed:`, err.message);
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // FALLBACK PATH: Parse chapters if intro-skipper is missing or returned no data
+        // --------------------------------------------------------------------
+        const hasLoadedSegments = this._introSegment.length > 0 ||
+            this._outroSegment.length > 0 ||
+            this._recapSegment.length > 0 ||
+            this._previewSegment.length > 0;
+        if (!hasLoadedSegments) {
+            api.log.info(`Skip Intro: intro-skipper unavailable or returned empty. Checking chapters fallback.`);
+
+            // Ensure we have access to the chapter lists.
+            // If they are missing from the current active item reference, fetch them directly.
+            let chapters = item.Chapters;
+            if (!chapters) {
+                try {
+                    api.log.debug(`Skip Intro: fetching full item to retrieve chapters list`);
+                    const fullItem = await api.getItem(itemId, { Fields: 'Chapters,RunTimeTicks' });
+                    chapters = fullItem?.Chapters || [];
+                    item.Chapters = chapters;
+                    if (fullItem?.RunTimeTicks) {
+                        item.RunTimeTicks = fullItem.RunTimeTicks;
+                    }
+                } catch (err) {
+                    api.log.warn(`Skip Intro: failed to retrieve item chapters:`, err.message);
+                    chapters = [];
+                }
             }
 
-            // Cache a null-result to avoid hammering the server on every tick
-            this._cache.set(itemId, { intro: null, outro: null, recap: null, preview: null });
-            this._introSegment = null;
-            this._outroSegment = null;
-            this._recapSegment = null;
-            this._previewSegment = null;
+            if (chapters && chapters.length > 0) {
+                // Ensure chapters are sorted sequentially by their start positions
+                const sortedChapters = [...chapters].sort((a, b) => a.StartPositionTicks - b.StartPositionTicks);
+
+                this._introSegment = [];
+                this._outroSegment = [];
+                this._recapSegment = [];
+                this._previewSegment = [];
+
+                sortedChapters.forEach((c, idx) => {
+                    const start = c.StartPositionTicks;
+                    let end;
+                    // By default, end a segment when the next chapter starts
+                    if (idx + 1 < sortedChapters.length) {
+                        end = sortedChapters[idx + 1].StartPositionTicks;
+                    } else {
+                        end = start + (120 * TICKS_PER_SECOND); // 2 minutes fallback
+                    }
+
+                    // Check if chapter matches intro keywords
+                    const isIntro = c.MarkerType === 'IntroStart' || (c.Name && (
+                        c.Name.toLowerCase().includes('intro') ||
+                        c.Name.toLowerCase().includes('opening') ||
+                        /\bop\b/i.test(c.Name)
+                    ));
+
+                    // Check if chapter matches credit/outro keywords
+                    const isCredits = c.MarkerType === 'Credits' || (c.Name && (
+                        c.Name.toLowerCase().includes('credit') ||
+                        c.Name.toLowerCase().includes('ending') ||
+                        /\bed\b/i.test(c.Name)
+                    ));
+
+                    // Check if chapter matches recap keywords
+                    const isRecap = c.Name && c.Name.toLowerCase().includes('recap');
+
+                     if (isIntro) {
+                        // ----------------------------------------------------
+                        // Validate duration: Intros shouldn't be excessively long.
+                        // If the duration between this intro chapter and the next
+                        // is 3 minutes or more, it is likely a standard episode act
+                        // rather than an intro segment. Skip it to prevent incorrect prompts.
+                        // ----------------------------------------------------
+                        const durationTicks = end - start;
+                        const durationMinutes = durationTicks / (60 * TICKS_PER_SECOND);
+
+                        if (durationMinutes >= 3) {
+                            api.log.info(
+                                `Skip Intro: skipped mapping intro chapter [${c.Name || c.MarkerType}] ` +
+                                `due to long duration: ${durationMinutes.toFixed(1)} minutes (>= 3m)`
+                            );
+                        } else {
+                            this._introSegment.push({ start, end });
+                            api.log.debug(`Skip Intro: mapped intro segment from chapters (${start} - ${end})`);
+                        }
+                    } else if (isCredits) {
+                        // Credits usually end at the very end of the media duration
+                        const creditsEnd = item.RunTimeTicks || (start + (300 * TICKS_PER_SECOND));
+                        this._outroSegment.push({ start, end: creditsEnd });
+                        api.log.debug(`Skip Intro: mapped credits segment from chapters (${start} - ${creditsEnd})`);
+                    } else if (isRecap) {
+                        const recapEnd = idx + 1 < sortedChapters.length ? sortedChapters[idx + 1].StartPositionTicks : (start + (60 * TICKS_PER_SECOND));
+                        this._recapSegment.push({ start, end: recapEnd });
+                        api.log.debug(`Skip Intro: mapped recap segment from chapters (${start} - ${recapEnd})`);
+                    }
+                });
+            } else {
+                api.log.debug(`Skip Intro: no chapters found for item ${itemId}`);
+            }
         }
+
+        // Cache whatever results we gathered (even if null) to prevent redundant queries
+        this._cache.set(itemId, {
+            intro: this._introSegment,
+            outro: this._outroSegment,
+            recap: this._recapSegment,
+            preview: this._previewSegment
+        });
     },
 
     /**
