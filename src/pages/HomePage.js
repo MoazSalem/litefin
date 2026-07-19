@@ -328,8 +328,25 @@ class HomePage extends Page {
                 cardType: 'resume',
                 contextType: 'resume',
                 fetchFn: async () => {
+                    // Try to query the custom server-side merged endpoint first to speed up load times
+                    try {
+                        log.info('Attempting to fetch pre-merged continue/next-up rows from Litefin plugin');
+                        
+                        // Request a combined list of 16 items from our custom server controller
+                        const response = await api.getMergedRows({ limit: 16 });
+                        
+                        // If we got valid items back, return them immediately
+                        if (response && response.Items && response.Items.length > 0) {
+                            log.info('Successfully fetched merged items from server-side Litefin plugin');
+                            return response.Items;
+                        }
+                    } catch (err) {
+                        // Fall back to client-side merge if the plugin is not installed or returns an error
+                        log.warn('Litefin plugin endpoint failed or not installed. Falling back to client-side merge:', err);
+                    }
+
                     // ──────────────────────────────────────────────────────────
-                    // STAGE 1: Parallel Fetching of Base Data Lists
+                    // FALLBACK: Parallel Fetching of Base Data Lists
                     // ──────────────────────────────────────────────────────────
                     // We initiate simultaneous network requests for both in-progress items
                     // and next-up show items to optimize load times and keep the UI highly

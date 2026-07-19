@@ -712,6 +712,18 @@ export class ApiClient {
     }
 
     /**
+     * Get merged continue watching and next up items from the Litefin plugin on the server.
+     * This calls the custom Litefin plugin controller to return a pre-merged deduplicated list.
+     * 
+     * @param {Object} [params] - Query parameters such as limit
+     * @returns {Promise<Object>} Object containing the merged items list
+     */
+    async getMergedRows(params = {}) {
+        // Query the custom plugin controller route directly on the server
+        return this.get('/Litefin/MergedRows/ContinueAndNextUp', params);
+    }
+
+    /**
      * Get upcoming episodes for a library
      */
     async getUpcoming(params = {}) {
