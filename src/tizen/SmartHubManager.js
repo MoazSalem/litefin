@@ -46,6 +46,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { logger } from '../utils/Logger.js';
 import { pinManager } from '../utils/PinManager.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('SmartHubManager');
 
@@ -55,10 +56,6 @@ const log = logger.create('SmartHubManager');
 
 /* How often (after a completed update) to push a fresh preview. */
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-
-/* Tile limits per section — Samsung recommends keeping this small. */
-const NEXT_UP_LIMIT = 2;
-const RESUME_LIMIT = 4;
 
 /* Named local MessagePort that the ytresolver service sends its ACK to. */
 const ACK_PORT_NAME = 'SmartHubAck';
@@ -278,40 +275,168 @@ class SmartHubManager {
      */
     async update() {
         /* Guard against concurrent runs (exit-time race with the timer). */
+        // If an update process is already active, ignore this request to avoid
+        // concurrent overlapping fetches on slow hardware.
         if (this._updating) {
             log.debug('Update already running — debounced');
             return;
         }
 
         /* Skip if no active auth session exists yet. */
+        // Smart Hub updates require access token and user credentials to query the server
         if (!state.get('user:authenticated')) {
             log.debug('Not authenticated — skipping Smart Hub update');
             return;
         }
 
+        // Lock the updating process
         this._updating = true;
 
         try {
             log.info('Starting Smart Hub data fetch...');
+            let mergedItems = [];
 
-            /* Run both API calls concurrently — they are fully independent. */
-            const [resumeResult, nextUpResult] = await Promise.all([
-                api.getResumeItems({
-                    Limit: RESUME_LIMIT,
-                    ImageTypeLimit: 1,
-                    EnableImageTypes: 'Primary,Backdrop,Thumb',
-                    EnableTotalRecordCount: false
-                }),
-                api.getNextUp({
-                    Limit: NEXT_UP_LIMIT,
-                    ImageTypeLimit: 1,
-                    EnableImageTypes: 'Primary,Backdrop,Thumb',
-                    EnableTotalRecordCount: false
-                })
-            ]);
+            // ─── Phase 1: Try server-side Litefin plugin first ─────────────────
+            // Query the custom endpoint provided by our Litefin plugin.
+            // When using the plugin, we fetch up to 8 pre-merged, deduplicated,
+            // and chronologically sorted items directly from the server.
+            try {
+                log.info('Attempting to fetch pre-merged continue/next-up items from Litefin plugin');
+                const response = await api.getMergedRows({ limit: 8 });
+                if (response && response.Items && response.Items.length > 0) {
+                    log.info('Successfully fetched merged items from server-side Litefin plugin');
+                    mergedItems = response.Items;
+                }
+            } catch (err) {
+                // Plugin is not installed or returned an error; fallback to client-side logic
+                log.warn('Litefin plugin endpoint failed or not installed. Falling back to client-side merge:', err);
+            }
 
-            /* Build the Samsung-schema JSON from the raw Jellyfin items. */
-            const previewJson = this._buildPreviewJson(resumeResult?.Items || [], nextUpResult?.Items || []);
+            // ─── Phase 2: Fallback to client-side merging (4 and 4) ─────────────
+            // If the server-side plugin didn't return any items, we perform
+            // a client-side merge by fetching 4 resume items and 4 next-up items.
+            if (mergedItems.length === 0) {
+                log.info('Falling back to client-side merge (4 and 4 items)');
+                
+                // Fetch both lists in parallel to minimize network roundtrips
+                const [resumeRes, nextUpRes] = await Promise.all([
+                    api.getResumeItems({
+                        Limit: 4,
+                        ImageTypeLimit: 1,
+                        EnableImageTypes: 'Primary,Backdrop,Thumb',
+                        EnableTotalRecordCount: false
+                    }),
+                    (async () => {
+                        // Extract Next Up max days filter from preferences, defaults to 365
+                        const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                        const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+                        const params = {
+                            Limit: 4,
+                            ImageTypeLimit: 1,
+                            EnableImageTypes: 'Primary,Backdrop,Thumb',
+                            EnableTotalRecordCount: false
+                        };
+                        
+                        // Apply the cutoff date constraint if configured
+                        if (daysLimit > 0) {
+                            const cutoff = new Date();
+                            cutoff.setDate(cutoff.getDate() - daysLimit);
+                            params.NextUpDateCutoff = cutoff.toISOString();
+                        }
+                        return api.getNextUp(params);
+                    })()
+                ]);
+
+                // Map items and tag them so we can distinguish them during sorting
+                const resumeItems = (resumeRes?.Items || []).map((item) => ({
+                    ...item,
+                    _isResume: true
+                }));
+
+                const nextUpItems = (nextUpRes?.Items || [])
+                    .filter((item) => {
+                        // Filter out next-up items that have already been partially played,
+                        // as they will already be included in the continue watching list.
+                        const position = item.UserData?.PlaybackPositionTicks || 0;
+                        return position === 0;
+                    })
+                    .map((item) => ({
+                        ...item,
+                        _isResume: false
+                    }));
+
+                // Fetch series last played dates so next-up items can be sorted
+                // chronologically relative to when the show was last watched.
+                const nextUpSeriesIds = nextUpItems.map((item) => item.SeriesId).filter(Boolean);
+                const seriesLastPlayedMap = {};
+
+                if (nextUpSeriesIds.length > 0) {
+                    try {
+                        const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
+                        const activeEpisodesRes = await api.getItems({
+                            SeriesIds: uniqueSeriesIds.join(','),
+                            IncludeItemTypes: 'Episode',
+                            SortBy: 'DatePlayed',
+                            SortOrder: 'Descending',
+                            Fields: 'LastPlayedDate',
+                            Recursive: true,
+                            Limit: 100
+                        });
+
+                        const activeEpisodes = activeEpisodesRes?.Items || [];
+                        for (const ep of activeEpisodes) {
+                            const seriesId = ep.SeriesId;
+                            const lastPlayed = ep.UserData?.LastPlayedDate;
+                            if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
+                                seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
+                            }
+                        }
+                    } catch (err) {
+                        log.warn('Failed to batch-fetch next-up parent activity dates:', err);
+                    }
+                }
+
+                // Combine both lists and remove duplicate entries by ID
+                const combined = [...resumeItems, ...nextUpItems];
+                const seen = new Set();
+                const deduplicated = combined.filter((item) => {
+                    if (seen.has(item.Id)) return false;
+                    seen.add(item.Id);
+                    return true;
+                });
+
+                // Chronologically sort the merged items to match Plex-style layout
+                deduplicated.sort((a, b) => {
+                    let timeA = 0;
+                    if (a._isResume && a.UserData?.LastPlayedDate) {
+                        timeA = new Date(a.UserData.LastPlayedDate).getTime();
+                    } else if (a.SeriesId && seriesLastPlayedMap[a.SeriesId]) {
+                        timeA = seriesLastPlayedMap[a.SeriesId];
+                    } else if (a.UserData?.LastPlayedDate) {
+                        timeA = new Date(a.UserData.LastPlayedDate).getTime();
+                    } else {
+                        timeA = new Date(a.DateCreated || 0).getTime();
+                    }
+
+                    let timeB = 0;
+                    if (b._isResume && b.UserData?.LastPlayedDate) {
+                        timeB = new Date(b.UserData.LastPlayedDate).getTime();
+                    } else if (b.SeriesId && seriesLastPlayedMap[b.SeriesId]) {
+                        timeB = seriesLastPlayedMap[b.SeriesId];
+                    } else if (b.UserData?.LastPlayedDate) {
+                        timeB = new Date(b.UserData.LastPlayedDate).getTime();
+                    } else {
+                        timeB = new Date(b.DateCreated || 0).getTime();
+                    }
+
+                    return timeB - timeA;
+                });
+
+                mergedItems = deduplicated;
+            }
+
+            /* Build the Samsung-schema JSON from the merged items list. */
+            const previewJson = this._buildPreviewJson(mergedItems);
 
             /* Cache in memory so future callers can inspect last-known state. */
             this._cachedJson = previewJson;
@@ -405,44 +530,25 @@ class SmartHubManager {
      * Output schema: { sections: [{ title: string, tiles: TileObject[] }] }
      * Sections with zero valid tiles are omitted entirely.
      *
-     * @param {Object[]} resumeItems - Items from /Users/{id}/Items/Resume
-     * @param {Object[]} nextUpItems - Items from /Shows/NextUp
+     * @param {Object[]} mergedItems - List of merged Continue Watching and Next Up items
      * @returns {{ sections: Object[] }}
      * @private
      */
-    _buildPreviewJson(resumeItems, nextUpItems) {
+    _buildPreviewJson(mergedItems) {
         // Prepare list of sections to return to Samsung Smart Hub
         const sections = [];
 
-        /* ── Next Up ──────────────────────────────────────────────────────
-         * Shown first — upcoming episodes feel more timely and are the
-         * most common entry point after a series marathon. */
-        const nextUpTiles = nextUpItems
-            .slice(0, NEXT_UP_LIMIT)
+        /* ── Continue Watching (Merged) ───────────────────────────────────
+         * Interweaves partially-played items and next-up episodes chronologically. */
+        const tiles = mergedItems
             .map((item) => this._buildTile(item))
             .filter(Boolean); /* _buildTile returns null for unsupported types. */
 
-        // If we have Next Up tiles, add them to the sections array.
-        // We call .reverse() because Samsung Smart Hub renders the tiles in
-        // reverse order (right-to-left array order on the UI screen), so reversing
-        // the array ensures the first (most recent) item appears leftmost.
-        if (nextUpTiles.length > 0) {
-            sections.push({ title: 'Next Up', tiles: nextUpTiles.reverse() });
-        }
-
-        /* ── Continue Watching ───────────────────────────────────────────
-         * Mid-progress items go second — they are resumable movies and
-         * partially-watched episodes. */
-        const resumeTiles = resumeItems
-            .slice(0, RESUME_LIMIT)
-            .map((item) => this._buildTile(item))
-            .filter(Boolean);
-
-        // If we have Continue Watching tiles, add them to the sections array.
-        // We also reverse this array so that the most recently watched items
-        // appear leftmost on the Samsung home screen instead of being pushed to the end.
-        if (resumeTiles.length > 0) {
-            sections.push({ title: 'Continue Watching', tiles: resumeTiles.reverse() });
+        // If we have valid tiles, add them under the 'Continue Watching' section.
+        // We reverse the array because Samsung Smart Hub renders the tiles in
+        // right-to-left order on the home screen UI, ensuring the most recent item is leftmost.
+        if (tiles.length > 0) {
+            sections.push({ title: 'Continue Watching', tiles: tiles.reverse() });
         }
 
         return { sections };
