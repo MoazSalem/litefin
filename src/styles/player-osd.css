@@ -962,7 +962,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .track-menu {
     background: transparent;
     padding: 1.8em;
-    min-width: 600px;
+    min-width: 750px;
     max-width: 90vw;
     max-height: 70vh;
     overflow-y: auto;
@@ -1108,14 +1108,6 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 #debug-overlay .log-info {
     color: #fff;
-}
-
-/* ============================================================================
-   Subtitle Quick Settings Layout Fixes
-   ============================================================================ */
-
-.subtitle-settings-menu {
-    min-width: 650px !important;
 }
 
 /* Internal layout for settings items within the standard .track-option */
