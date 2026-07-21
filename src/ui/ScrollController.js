@@ -367,7 +367,12 @@ class ScrollController {
                 if (container.scrollLeft !== 0) {
                     container.scrollLeft = 0;
                 }
-                this._checkScrollFinished();
+
+                // DO NOT call _checkScrollFinished() here — the native smooth
+                // scroll is still in progress; scroll:finished would fire
+                // prematurely. The LazyLoader's native scroll event listener
+                // naturally handles cleanup via its scroll debounce after
+                // the animation settles.
                 return;
             } catch (nativeError) {
                 // Log warning and fall through to standard JS RAF smooth scroll fallback.
