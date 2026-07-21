@@ -31,39 +31,20 @@ class CardRenderer {
         let imageInnerHtml = '';
         const itemId = item.Id;
 
-        // Spy on getImageUrl to capture the exact image type and tag resolved during execution
+        // Captures which image type+tag was resolved for BlurHash lookup
         let resolvedImageType = '';
         let resolvedImageTag = '';
-        const originalGetImageUrl = api.getImageUrl;
-        api.getImageUrl = function (id, imageType, getUrlOptions = {}) {
+
+        const _imgUrl = (id, imageType, getUrlOptions = {}) => {
             resolvedImageType = imageType;
             resolvedImageTag = getUrlOptions.tag || '';
-
-            /*
-             * =========================================================================
-             * DYNAMIC IMAGE SIZE OVERRIDE
-             * =========================================================================
-             * When rendering in dynamic column mode, cardWidth specifies the exact
-             * computed logical layout width of the card. We scale it by the device's
-             * pixel ratio to request a size that matches the physical resolution perfectly
-             * (critical for crispness on 4K screens) while preventing over-fetching.
-             * =========================================================================
-             */
             if (cardWidth) {
-                // Fetch the quality multiplier from the centralized ImageService
-                // to align the requested dynamic card image width with the user's settings.
                 const scaleFactor = imageService.getPresetScale();
-
-                // If the scaleFactor is resolved (i.e. not 'original' where no limit is needed),
-                // calculate the targeted resolution using cardWidth * scaleFactor.
                 if (scaleFactor !== null) {
-                    getUrlOptions = Object.assign({}, getUrlOptions, {
-                        maxWidth: Math.round(cardWidth * scaleFactor)
-                    });
+                    getUrlOptions = { ...getUrlOptions, maxWidth: Math.round(cardWidth * scaleFactor) };
                 }
             }
-
-            return originalGetImageUrl.call(api, id, imageType, getUrlOptions);
+            return api.getImageUrl(id, imageType, getUrlOptions);
         };
 
         // --- 1. Image Resolution Strategy ---
@@ -76,7 +57,7 @@ class CardRenderer {
 
             if (primaryTag || (itemId && isArtist)) {
                 const params = imageService.getParams('poster', contextType); // People usually have poster-like images
-                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     ...(primaryTag ? { tag: primaryTag } : {})
@@ -86,21 +67,21 @@ class CardRenderer {
             // Force Episode Primary Image (for Person Page grid)
             const params = imageService.getParams('card-backdrop', contextType);
             if (item.ImageTags?.Primary) {
-                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.ImageTags.Primary
                 });
             } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
                 // Fallback to season thumb
-                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', {
+                imageUrl = _imgUrl(item.ParentThumbItemId, 'Thumb', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.ParentThumbImageTag
                 });
             } else if (item.SeriesThumbImageTag && item.SeriesId) {
                 // Fallback to series thumb
-                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', {
+                imageUrl = _imgUrl(item.SeriesId, 'Thumb', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.SeriesThumbImageTag
@@ -108,7 +89,7 @@ class CardRenderer {
             } else if (item.SeriesId) {
                 // Final Fallback: Series Primary if nothing else (only if SeriesId exists)
                 const seriesParams = imageService.getParams('poster', contextType); // Series primary is usually a poster
-                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                imageUrl = _imgUrl(item.SeriesId, 'Primary', {
                     maxWidth: seriesParams.maxWidth,
                     quality: seriesParams.quality
                 });
@@ -119,26 +100,26 @@ class CardRenderer {
 
             // Priority: Banner -> Backdrop -> Thumb -> Primary
             if (item.ImageTags && item.ImageTags.Banner) {
-                imageUrl = api.getImageUrl(itemId, 'Banner', {
+                imageUrl = _imgUrl(itemId, 'Banner', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.ImageTags.Banner
                 });
             } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                imageUrl = api.getImageUrl(itemId, 'Backdrop', {
+                imageUrl = _imgUrl(itemId, 'Backdrop', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.BackdropImageTags[0]
                 });
             } else if (item.ImageTags && item.ImageTags.Thumb) {
-                imageUrl = api.getImageUrl(itemId, 'Thumb', {
+                imageUrl = _imgUrl(itemId, 'Thumb', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.ImageTags.Thumb
                 });
             } else if (item.ImageTags && item.ImageTags.Primary) {
                 // Last Resort: Poster (will be object-fit: cover in CSS to fill gaps)
-                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.ImageTags.Primary
@@ -162,36 +143,36 @@ class CardRenderer {
                 // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
                 // If spoiler free, skip Primary logic unless nothing else exists
                 if (!isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
                     });
                 } else if (item.SeriesThumbImageTag && item.SeriesId) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', {
+                    imageUrl = _imgUrl(item.SeriesId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.SeriesThumbImageTag
                     });
                 } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
-                    imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', {
+                    imageUrl = _imgUrl(item.ParentThumbItemId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ParentThumbImageTag
                     });
                 } else if (item.ParentBackdropItemId) {
-                    imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', {
+                    imageUrl = _imgUrl(item.ParentBackdropItemId, 'Backdrop', {
                         maxWidth: params.maxWidth,
                         quality: params.quality
                     });
                 } else if (item.SeriesId) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', {
+                    imageUrl = _imgUrl(item.SeriesId, 'Backdrop', {
                         maxWidth: params.maxWidth,
                         quality: params.quality
                     });
                 } else if (isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
                     // Fallback to primary if forced but nothing else found
-                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
@@ -204,19 +185,19 @@ class CardRenderer {
                 }
                 // Libraries: Primary -> Thumb -> Backdrop
                 else if (item.ImageTags?.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
                     });
                 } else if (item.ImageTags?.Thumb) {
-                    imageUrl = api.getImageUrl(itemId, 'Thumb', {
+                    imageUrl = _imgUrl(itemId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Thumb
                     });
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                    imageUrl = api.getImageUrl(itemId, 'Backdrop', {
+                    imageUrl = _imgUrl(itemId, 'Backdrop', {
                         maxWidth: params.maxWidth,
                         quality: params.quality
                     });
@@ -237,18 +218,18 @@ class CardRenderer {
                 }
                 // Movies/Series Landscape: Thumb -> Backdrop -> Primary
                 else if (item.ImageTags?.Thumb) {
-                    imageUrl = api.getImageUrl(itemId, 'Thumb', {
+                    imageUrl = _imgUrl(itemId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Thumb
                     });
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                    imageUrl = api.getImageUrl(itemId, 'Backdrop', {
+                    imageUrl = _imgUrl(itemId, 'Backdrop', {
                         maxWidth: params.maxWidth,
                         quality: params.quality
                     });
                 } else if (item.ImageTags?.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
@@ -259,7 +240,7 @@ class CardRenderer {
             // Live TV Channel: Primary (Logo) -> Thumb
             const params = imageService.getParams('square', contextType); // Channels are usually square logos
             if (item.ImageTags && item.ImageTags.Primary) {
-                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.ImageTags.Primary
@@ -271,7 +252,7 @@ class CardRenderer {
                 ? imageService.getParams('card-backdrop', contextType)
                 : imageService.getParams('poster', contextType);
             if (item.ImageTags && item.ImageTags.Primary) {
-                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     tag: item.ImageTags.Primary
@@ -279,7 +260,7 @@ class CardRenderer {
             } else if (item.ChannelPrimaryImageTag && item.ChannelId) {
                 // Use Channel Logo as fallback
                 const logoParams = imageService.getParams('square', contextType);
-                imageUrl = api.getImageUrl(item.ChannelId, 'Primary', {
+                imageUrl = _imgUrl(item.ChannelId, 'Primary', {
                     maxWidth: logoParams.maxWidth,
                     quality: logoParams.quality,
                     tag: item.ChannelPrimaryImageTag
@@ -291,20 +272,20 @@ class CardRenderer {
                 // Season: Own Primary -> Series Primary
                 const params = imageService.getParams('poster', contextType);
                 if (item.ImageTags && item.ImageTags.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
                     });
                 } else if (item.SeriesPrimaryImageTag) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                    imageUrl = _imgUrl(item.SeriesId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.SeriesPrimaryImageTag
                     });
                 } else if (item.SeriesId) {
                     // Fallback without tag
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                    imageUrl = _imgUrl(item.SeriesId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality
                     });
@@ -318,27 +299,27 @@ class CardRenderer {
                 if (!preferEpisodeImages && item.Type === 'Episode' && item.SeriesId) {
                     // Prefer Series Primary/Thumb for Resume episodes to avoid spoilers
                     if (item.SeriesPrimaryImageTag) {
-                        imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                        imageUrl = _imgUrl(item.SeriesId, 'Primary', {
                             maxWidth: params.maxWidth,
                             quality: params.quality,
                             tag: item.SeriesPrimaryImageTag
                         });
                     } else if (item.SeriesThumbImageTag) {
-                        imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', {
+                        imageUrl = _imgUrl(item.SeriesId, 'Thumb', {
                             maxWidth: params.maxWidth,
                             quality: params.quality,
                             tag: item.SeriesThumbImageTag
                         });
                     } else {
                         // Fallback
-                        imageUrl = api.getImageUrl(itemId, 'Primary', {
+                        imageUrl = _imgUrl(itemId, 'Primary', {
                             maxWidth: params.maxWidth,
                             quality: params.quality,
                             tag: item.ImageTags.Primary
                         });
                     }
                 } else {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
@@ -347,7 +328,7 @@ class CardRenderer {
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 // Episode as Poster: Use Series Title/Poster usually, but if requested as poster
                 const params = imageService.getParams('poster', contextType);
-                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                imageUrl = _imgUrl(item.SeriesId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality
                 });
@@ -376,16 +357,13 @@ class CardRenderer {
                     targetTag = item.AlbumPrimaryImageTag;
                 }
 
-                imageUrl = api.getImageUrl(targetId, 'Primary', {
+                imageUrl = _imgUrl(targetId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     ...(targetTag ? { tag: targetTag } : {})
                 });
             }
         }
-        // Restore getImageUrl and resolve the BlurHash string for the rendered card
-        api.getImageUrl = originalGetImageUrl;
-
         // =====================================================================
         // BlurHash Resolution Strategy
         // =====================================================================
@@ -758,7 +736,7 @@ class CardRenderer {
 
             // 1. Prioritize native backdrops for the classic theatrical landscape feel.
             if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                thumbUrl = api.getImageUrl(itemId, 'Backdrop', {
+                thumbUrl = _imgUrl(itemId, 'Backdrop', {
                     maxWidth: thumbParams.maxWidth,
                     quality: thumbParams.quality,
                     tag: item.BackdropImageTags[0]
@@ -766,7 +744,7 @@ class CardRenderer {
             }
             // 2. Fall back to parent-level backdrops (for episodes/seasons where series backdrop applies).
             else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
-                thumbUrl = api.getImageUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
+                thumbUrl = _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
                     maxWidth: thumbParams.maxWidth,
                     quality: thumbParams.quality,
                     tag: item.ParentBackdropImageTags[0]
@@ -774,7 +752,7 @@ class CardRenderer {
             }
             // 3. Fall back to series-level backdrops.
             else if (item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0) {
-                thumbUrl = api.getImageUrl(item.SeriesId, 'Backdrop', {
+                thumbUrl = _imgUrl(item.SeriesId, 'Backdrop', {
                     maxWidth: thumbParams.maxWidth,
                     quality: thumbParams.quality,
                     tag: item.SeriesBackdropImageTags[0]
@@ -791,7 +769,7 @@ class CardRenderer {
                     targetId = item.AlbumId;
                 }
 
-                thumbUrl = api.getImageUrl(targetId, 'Primary', {
+                thumbUrl = _imgUrl(targetId, 'Primary', {
                     maxWidth: thumbParams.maxWidth,
                     quality: thumbParams.quality,
                     ...(primaryTag ? { tag: primaryTag } : {})
