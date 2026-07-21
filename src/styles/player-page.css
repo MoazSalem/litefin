@@ -353,10 +353,7 @@ body.lyrics-active .audio-player-center {
     top: 0;
     left: 0;
     right: 0;
-    padding: 40px 60px;
-    background: linear-gradient(to bottom,
-            var(--osd-gradient-dark, rgba(0, 0, 0, 0.8)) 0%,
-            rgba(0, 0, 0, 0) 100%);
+    padding: 60px 60px;
 }
 
 .osd-title {

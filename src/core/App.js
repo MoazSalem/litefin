@@ -121,6 +121,13 @@ class App {
             (trackMenuBgOpacity / 100).toFixed(2)
         );
 
+        // Initialize OSD background gradient opacity CSS variable
+        const osdGradientOpacity = PlayerSettings.get('osdGradientOpacity');
+        document.documentElement.style.setProperty(
+            '--osd-gradient-opacity',
+            (osdGradientOpacity / 100).toFixed(2)
+        );
+
         // 3.1. Initialize CSS vars polyfill (no-op on Chrome 49+, active on Tizen 3.0 / Chrome 47).
         //      Must run AFTER layoutManager.init() so the data-theme attribute and theme
         //      CSS variables are already present on <html> when the polyfill scans the DOM.
@@ -401,6 +408,12 @@ class App {
         // Listen for OSD track menu bg opacity changes
         eventBus.on('pref:osdTrackMenuBgOpacity', (value) => {
             document.documentElement.style.setProperty('--osd-track-menu-bg-opacity', (value / 100).toFixed(2));
+            cssVarsPolyfill.update();
+        });
+
+        // Listen for OSD background gradient opacity changes
+        eventBus.on('pref:osdGradientOpacity', (value) => {
+            document.documentElement.style.setProperty('--osd-gradient-opacity', (value / 100).toFixed(2));
             cssVarsPolyfill.update();
         });
 

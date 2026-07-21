@@ -507,6 +507,9 @@ const DEFAULTS = {
     // Background opacity of the track menus (0-100)
     osdTrackMenuBgOpacity: 85,
 
+    // Background gradient opacity of the OSD (0-100)
+    osdGradientOpacity: 75,
+
     // Position of playback control buttons relative to seek bar ('above', 'below')
     osdButtonsLocation: 'above',
 

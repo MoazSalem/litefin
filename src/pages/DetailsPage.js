@@ -1961,7 +1961,7 @@ class DetailsPage extends Page {
                 ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
                 : `${seasonPrefix}${episodePrefix} - ${item.SeriesName}`;
 
-            const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
+            const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
             const colorClass = useSecondaryColor ? 'secondary-color' : '';
 
             heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;

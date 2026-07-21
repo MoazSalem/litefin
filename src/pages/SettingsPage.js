@@ -1423,6 +1423,22 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdGradientOpacity">${i18n.t('LabelOsdGradientOpacity') || 'OSD Background Gradient Opacity'}</span>
+                        <span class="setting-description" data-i18n="OsdGradientOpacityDescription">${i18n.t('OsdGradientOpacityDescription') || 'Adjust the opacity of the top and bottom dark gradient overlays on the player.'}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                'osd-gradient-opacity',
+                PlayerSettings.get('osdGradientOpacity') ?? 75,
+                0,
+                100,
+                5
+            )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelOsdHideFavorite">${i18n.t('LabelOsdHideFavorite') || 'Hide Favorite Button'}</span>
                         <span class="setting-description" data-i18n="OsdHideFavoriteDescription">${i18n.t('OsdHideFavoriteDescription') || 'Hide the favorite heart button from the playback overlay.'}</span>
                     </div>
@@ -1801,7 +1817,7 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         <!-- Tactile fluid toggle switch -->
-                        <button class="toggle-switch ${storage.getItem('pref:secondaryTitleSecondaryColor') === 'true' ? 'active' : ''}" 
+                        <button class="toggle-switch ${storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false' ? 'active' : ''}" 
                                 id="toggle-secondary-title-color" 
                                 tabindex="0">
                         </button>
@@ -6786,7 +6802,8 @@ class SettingsPage extends Page {
             'subtitle-letter-spacing': 'subtitleLetterSpacing',
             'subtitle-bottom-offset': 'subtitleBottomOffset',
             'subtitle-custom-size': 'subtitleSizeCustomValue',
-            'osd-track-menu-bg-opacity': 'osdTrackMenuBgOpacity'
+            'osd-track-menu-bg-opacity': 'osdTrackMenuBgOpacity',
+            'osd-gradient-opacity': 'osdGradientOpacity'
         };
 
         this.$$('.setting-slider').forEach((slider) => {
@@ -7945,8 +7962,8 @@ class SettingsPage extends Page {
         const secondaryTitleColorToggle = this.$('#toggle-secondary-title-color');
         if (secondaryTitleColorToggle) {
             secondaryTitleColorToggle.addEventListener('click', () => {
-                // Read from local storage (defaults to false)
-                const currentValue = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
+                // Read from local storage (defaults to true)
+                const currentValue = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
                 // Toggle state
                 const newValue = !currentValue;
 

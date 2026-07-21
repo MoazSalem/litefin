@@ -22,7 +22,8 @@
 :root {
     --osd-text-color: var(--jf-text-primary, #fff);
     --osd-accent-color: var(--jf-accent);
-    --osd-gradient-dark: rgba(0, 0, 0, 0.75);
+    --osd-gradient-opacity: 0.75;
+    --osd-gradient-dark: rgba(0, 0, 0, 1);
     --osd-slider-bg: rgba(255, 255, 255, 0.3);
     --osd-slider-progress: var(--jf-btn-primary-bg);
     --osd-btn-hover: var(--jf-button-hover, rgba(255, 255, 255, 0.1));
@@ -149,7 +150,6 @@ html[data-osd-progress-color="theme-inverted"] {
     top: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(180deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
     padding: 2.4em 2.4em 4.8em;
     /* 2em*1.2, 4em*1.2 */
     display: -webkit-box;
@@ -158,6 +158,20 @@ html[data-osd-progress-color="theme-inverted"] {
     justify-content: space-between;
     -webkit-box-align: center;
     align-items: center;
+    z-index: 1;
+}
+
+.osd-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(180deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
+    opacity: var(--osd-gradient-opacity, 0.75);
+    z-index: -1;
+    pointer-events: none;
 }
 
 .osd-header-left {
@@ -314,8 +328,7 @@ html[data-osd-progress-color="theme-inverted"] {
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
-    padding: 6em 2.4em 3em;
+    padding: 10em 2.4em 3em;
     /* 5em*1.2, 2em*1.2, 2.5em*1.2 */
     display: -webkit-box;
     display: -webkit-flex;
@@ -324,6 +337,20 @@ html[data-osd-progress-color="theme-inverted"] {
     -webkit-box-direction: normal;
     -webkit-flex-direction: column;
     flex-direction: column;
+    z-index: 1;
+}
+
+.osd-bottom::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
+    opacity: var(--osd-gradient-opacity, 0.75);
+    z-index: -1;
+    pointer-events: none;
 }
 
 .player-osd .osd-bottom > * + * {
