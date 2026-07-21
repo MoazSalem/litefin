@@ -1038,14 +1038,14 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
     pointer-events: none;
 }
 
-/* Maintain a solid dark backdrop to mask page background bleed during load */
+/* Maintain theme background to mask page background bleed during load */
 .hero-carousel-container.skeleton .hero-carousel {
-    background: #0d0d0d;
+    background: var(--jf-background);
 }
 
-/* Base style for the skeleton background shimmer track */
+/* Base style for the skeleton background shimmer track utilizing theme variables */
 .hero-carousel-container.skeleton .hero-backdrop {
-    background: #151515;
+    background: rgba(var(--jf-primary-btn-color-rgb, 255, 255, 255), 0.04);
 }
 
 /* Forces the content area to remain visible without transition delays on load */

@@ -1315,8 +1315,9 @@ class HomePage extends Page {
 
             // ─── Default: focus the first card in the first rendered row ──────
             if (!restoredFocus) {
-                // Prioritize the hero carousel if it exists
-                if (this._hero && this.$('#hero-carousel-container')) {
+                // Prioritize the hero carousel if a home-hero section exists
+                // (registered during skeleton insertion or by the real carousel).
+                if (focusManager.getSectionConfig('home-hero') && this.$('#hero-carousel-container')) {
                     this.setActiveSection('home-hero', false);
                     focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
                 } else {
@@ -1520,8 +1521,10 @@ class HomePage extends Page {
             if (nextConfig) nextConfig.leaveUp = `home-row-${rowId}`;
         }
 
-        // Special Case: If this is now the first row, link its leaveUp to the hero carousel
-        if (idx === 0 && this._hero) {
+        // Special Case: If this is now the first row, link its leaveUp to the hero carousel.
+        // Uses focusManager section existence rather than this._hero so the link is
+        // established even during the skeleton phase (before hero data loads).
+        if (idx === 0 && focusManager.getSectionConfig('home-hero')) {
             const firstRowConfig = focusManager.getSectionConfig(`home-row-${rowId}`);
             if (firstRowConfig) {
                 firstRowConfig.leaveUp = 'home-hero';
@@ -1576,6 +1579,17 @@ class HomePage extends Page {
                 </div>
             </div>
         `;
+
+        // Pre-register a home-hero focus section so row-to-row focus adjacency
+        // (linked by _relinkAdjacentSections) works correctly before the real
+        // carousel data arrives. When HeroCarousel.init() fires later, it
+        // re-registers on the same container, overwriting this placeholder config
+        // with the real carousel's onMove/onEnter handlers.
+        focusManager.register('home-hero', placeholder, {
+            orientation: 'horizontal',
+            leaveDown: null, // Patched by _relinkAdjacentSections when first row renders
+            leaveLeft: 'sidebar'
+        });
     }
 
     /**
