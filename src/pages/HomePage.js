@@ -158,6 +158,13 @@ class HomePage extends Page {
 
         // Mark as async page for Navigation State so scroll/focus restoration is deferred
         this._isAsyncPage = true;
+
+        /**
+         * Whether library thumbnail enrichment is pending after rows render.
+         * Set in the non-cache pipeline path; consumed in Step 7 post-render.
+         * @type {boolean}
+         */
+        this._deferredThumbEnrich = false;
     }
 
     render() {
@@ -331,10 +338,10 @@ class HomePage extends Page {
                     // Try to query the custom server-side merged endpoint first to speed up load times
                     try {
                         log.info('Attempting to fetch pre-merged continue/next-up rows from Litefin plugin');
-                        
+
                         // Request a combined list of 16 items from our custom server controller
                         const response = await api.getMergedRows({ limit: 16 });
-                        
+
                         // If we got valid items back, return them immediately
                         if (response && response.Items && response.Items.length > 0) {
                             log.info('Successfully fetched merged items from server-side Litefin plugin');
@@ -342,7 +349,10 @@ class HomePage extends Page {
                         }
                     } catch (err) {
                         // Fall back to client-side merge if the plugin is not installed or returns an error
-                        log.warn('Litefin plugin endpoint failed or not installed. Falling back to client-side merge:', err);
+                        log.warn(
+                            'Litefin plugin endpoint failed or not installed. Falling back to client-side merge:',
+                            err
+                        );
                     }
 
                     // ──────────────────────────────────────────────────────────
@@ -576,16 +586,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -678,10 +688,19 @@ class HomePage extends Page {
                 }
             } else {
                 // ─── Step 1: Load core dependencies ──────────────────────────────
-                // Libraries are shared across multiple descriptors, so we fetch them
-                // once upfront before building the descriptor list.
-                const viewsResponse = await api.getUserViews();
-                this._libraries = viewsResponse.Items || [];
+                // Libraries are shared across multiple descriptors.
+                // Check in-memory state cache first to avoid redundant network calls
+                // within the same app session.
+                const cachedLibs = state.get('home:libraries');
+                if (cachedLibs && cachedLibs.length > 0) {
+                    this._libraries = cachedLibs;
+                } else {
+                    const viewsResponse = await api.getUserViews();
+                    this._libraries = viewsResponse.Items || [];
+                    if (this._libraries.length > 0) {
+                        state.set('home:libraries', this._libraries);
+                    }
+                }
 
                 if (!this._isMounted) return;
 
@@ -702,26 +721,21 @@ class HomePage extends Page {
                         }
                     });
 
-                // ─── Step 2: Library thumbnails + Hero Carousel ──────────────────
-                const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+                // ─── Step 2: Hero Carousel (fire in background) ──────────────────
+                // Hero does not depend on libraries — fetch it in parallel but do NOT
+                // await it here so row rendering starts immediately. It populates the
+                // hero placeholder when its data arrives.
                 const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
-                const needsThumbs = (thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0;
-
-                if (needsThumbs && enableHero) {
-                    // Both are independent API calls — fire in parallel
-                    await Promise.all([
-                        this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode),
-                        this._loadHeroCarousel()
-                    ]);
-                } else {
-                    if (needsThumbs) {
-                        await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
-                    }
-                    if (enableHero) {
-                        await this._loadHeroCarousel();
-                    }
+                if (enableHero) {
+                    this._loadHeroCarousel().catch((err) => log.error('Hero carousel failed', err));
                 }
-                if (!this._isMounted) return;
+
+                // ─── Step 2b: Defer library thumb enrichment ─────────────────────
+                // Thumbnails are purely cosmetic. Schedule enrichment to run AFTER
+                // all rows render so it does not delay the critical rendering path.
+                const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+                this._deferredThumbEnrich =
+                    (thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0;
             }
 
             // ─── Step 3: Build descriptors ────────────────────────────────────
@@ -813,6 +827,15 @@ class HomePage extends Page {
             // ─── Cache data for instant back-navigation ─────────────────────
             if (!cache) {
                 this._savePageCache();
+            }
+
+            // ─── Deferred library thumb enrichment (cosmetic, non-blocking) ─
+            if (this._deferredThumbEnrich) {
+                const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+                this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode).catch((err) =>
+                    log.warn('Background thumb enrichment failed', err)
+                );
+                this._deferredThumbEnrich = false;
             }
 
             // ── Reveal page with focus already in place ───────────────────────
