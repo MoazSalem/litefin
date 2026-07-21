@@ -663,152 +663,115 @@ class DetailsPage extends Page {
     }
 
     _loadImages() {
-        return new Promise((resolve) => {
-            const item = this._item;
+        const item = this._item;
 
-            // Guard: Promise.resolve() is idempotent, but we track this
-            // to avoid logging a spurious "timed out" warning after the
-            // image has already loaded and resolved the promise.
-            let resolved = false;
+        // Poster
+        const posterContainer = this.$('#poster');
+        posterContainer.innerHTML = '';
 
-            // Safety timeout: don't block page interaction forever if the
-            // poster is slow. 800ms is sufficient — poster loading is fire-and-forget
-            // now, so we can be more aggressive without impacting page readiness.
-            const timeout = setTimeout(() => {
-                if (!resolved) {
-                    log.warn('Poster load timed out, showing content');
-                    resolved = true;
-                    resolve();
-                }
-            }, 800);
+        // Determine Aspect Ratio Type
+        let posterType = 'poster';
+        if (item.Type === 'Episode') posterType = 'landscape';
+        if (
+            item.Type === 'MusicAlbum' ||
+            item.Type === 'MusicArtist' ||
+            item.Type === 'Audio' ||
+            item.Type === 'TvChannel'
+        )
+            posterType = 'square';
 
-            const onPosterReady = () => {
-                if (!resolved) {
-                    resolved = true;
-                    clearTimeout(timeout);
-                    resolve();
-                }
-            };
+        // Apply class for CSS aspect ratio
+        posterContainer.classList.remove('landscape', 'square');
+        if (posterType !== 'poster') {
+            posterContainer.classList.add(posterType);
+        }
 
-            // Poster
-            const posterContainer = this.$('#poster');
-            posterContainer.innerHTML = '';
-
-            // Determine Aspect Ratio Type
-            let posterType = 'poster';
-            if (item.Type === 'Episode') posterType = 'landscape';
-            if (
-                item.Type === 'MusicAlbum' ||
-                item.Type === 'MusicArtist' ||
-                item.Type === 'Audio' ||
-                item.Type === 'TvChannel'
-            )
-                posterType = 'square';
-
-            // Apply class for CSS aspect ratio
-            posterContainer.classList.remove('landscape', 'square');
-            if (posterType !== 'poster') {
-                posterContainer.classList.add(posterType);
-            }
-
-            if (item.ImageTags && item.ImageTags.Primary) {
-                const params = imageService.getParams('details-poster');
-                const posterUrl = api.getImageUrl(item.Id, 'Primary', {
-                    maxWidth: params.maxWidth,
-                    quality: params.quality
-                });
-
-                // Resolve Poster BlurHash
-                const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
-                let posterBlurHash = '';
-                if (!isBlurHashDisabled && item.ImageBlurHashes?.Primary) {
-                    const keys = Object.keys(item.ImageBlurHashes.Primary);
-                    if (keys.length > 0) {
-                        posterBlurHash = item.ImageBlurHashes.Primary[keys[0]];
-                    }
-                }
-
-                // Render dynamic BlurHash canvas placeholder
-                let posterCanvas = null;
-                if (posterBlurHash) {
-                    posterCanvas = document.createElement('canvas');
-                    posterCanvas.className = 'blurhash-canvas poster-blurhash';
-                    posterCanvas.style.position = 'absolute';
-                    posterCanvas.style.top = '0';
-                    posterCanvas.style.left = '0';
-                    posterCanvas.style.width = '100%';
-                    posterCanvas.style.height = '100%';
-                    posterCanvas.style.objectFit = 'cover';
-                    posterCanvas.style.zIndex = '0';
-                    posterCanvas.style.transition = 'opacity 250ms ease-out';
-                    posterCanvas.style.pointerEvents = 'none';
-                    posterCanvas.style.opacity = '1';
-
-                    posterContainer.appendChild(posterCanvas);
-
-                    // Decode at a lightweight size asynchronously
-                    import('../utils/BlurHashDecoder.js')
-                        .then(({ default: BlurHashDecoder }) => {
-                            const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
-                            if (pixels && posterCanvas) {
-                                posterCanvas.width = 32;
-                                posterCanvas.height = 48;
-                                const ctx = posterCanvas.getContext('2d');
-                                const imageData = ctx.createImageData(32, 48);
-                                imageData.data.set(pixels);
-                                ctx.putImageData(imageData, 0, 0);
-                            }
-                        })
-                        .catch((err) => log.error('Failed to decode poster blurhash', err));
-                }
-
-                const img = new Image();
-                img.onload = () => {
-                    img.classList.add('loaded');
-                    // Fade out and remove canvas when image loads
-                    if (posterCanvas) {
-                        posterCanvas.style.opacity = '0';
-                        setTimeout(() => {
-                            if (posterCanvas && posterCanvas.parentNode) {
-                                posterCanvas.parentNode.removeChild(posterCanvas);
-                            }
-                        }, 250);
-                    }
-                    onPosterReady();
-                };
-                img.onerror = () => {
-                    onPosterReady();
-                };
-                img.src = posterUrl;
-                img.alt = item.Name;
-                posterContainer.appendChild(img);
-            } else {
-                // No primary image, show gradient fallback
-                const isLandscape = posterType === 'landscape';
-                posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
-                onPosterReady();
-            }
-
-            // Backdrop (Fire and forget, via Manager)
-            const params = imageService.getParams('details-backdrop');
-            const backdropUrl = BackdropManager.getBackdropUrl(item, {
+        if (item.ImageTags && item.ImageTags.Primary) {
+            const params = imageService.getParams('details-poster');
+            const posterUrl = api.getImageUrl(item.Id, 'Primary', {
                 maxWidth: params.maxWidth,
                 quality: params.quality
             });
 
-            // Resolve Backdrop BlurHash
-            let backdropBlurHash = '';
-            if (item.ImageBlurHashes?.Backdrop) {
-                const keys = Object.keys(item.ImageBlurHashes.Backdrop);
+            // Resolve Poster BlurHash
+            const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+            let posterBlurHash = '';
+            if (!isBlurHashDisabled && item.ImageBlurHashes?.Primary) {
+                const keys = Object.keys(item.ImageBlurHashes.Primary);
                 if (keys.length > 0) {
-                    backdropBlurHash = item.ImageBlurHashes.Backdrop[keys[0]];
+                    posterBlurHash = item.ImageBlurHashes.Primary[keys[0]];
                 }
             }
 
-            if (backdropUrl) {
-                BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl, backdropBlurHash);
+            // Render dynamic BlurHash canvas placeholder
+            let posterCanvas = null;
+            if (posterBlurHash) {
+                posterCanvas = document.createElement('canvas');
+                posterCanvas.className = 'blurhash-canvas poster-blurhash';
+                posterCanvas.style.position = 'absolute';
+                posterCanvas.style.top = '0';
+                posterCanvas.style.left = '0';
+                posterCanvas.style.width = '100%';
+
+                posterContainer.appendChild(posterCanvas);
+
+                // Decode at a lightweight size asynchronously
+                import('../utils/BlurHashDecoder.js')
+                    .then(({ default: BlurHashDecoder }) => {
+                        const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
+                        if (pixels && posterCanvas) {
+                            posterCanvas.width = 32;
+                            posterCanvas.height = 48;
+                            const ctx = posterCanvas.getContext('2d');
+                            const imageData = ctx.createImageData(32, 48);
+                            imageData.data.set(pixels);
+                            ctx.putImageData(imageData, 0, 0);
+                        }
+                    })
+                    .catch((err) => log.error('Failed to decode poster blurhash', err));
             }
+
+            const img = new Image();
+            img.onload = () => {
+                img.classList.add('loaded');
+                // Fade out and remove canvas when image loads
+                if (posterCanvas) {
+                    posterCanvas.style.opacity = '0';
+                    setTimeout(() => {
+                        if (posterCanvas && posterCanvas.parentNode) {
+                            posterCanvas.parentNode.removeChild(posterCanvas);
+                        }
+                    }, 250);
+                }
+            };
+            img.src = posterUrl;
+            img.alt = item.Name;
+            posterContainer.appendChild(img);
+        } else {
+            // No primary image, show gradient fallback
+            const isLandscape = posterType === 'landscape';
+            posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
+        }
+
+        // Backdrop (Fire and forget, via Manager)
+        const params = imageService.getParams('details-backdrop');
+        const backdropUrl = BackdropManager.getBackdropUrl(item, {
+            maxWidth: params.maxWidth,
+            quality: params.quality
         });
+
+        // Resolve Backdrop BlurHash
+        let backdropBlurHash = '';
+        if (item.ImageBlurHashes?.Backdrop) {
+            const keys = Object.keys(item.ImageBlurHashes.Backdrop);
+            if (keys.length > 0) {
+                backdropBlurHash = item.ImageBlurHashes.Backdrop[keys[0]];
+            }
+        }
+
+        if (backdropUrl) {
+            BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl, backdropBlurHash);
+        }
     }
 
     async _loadSecondaryContent() {
