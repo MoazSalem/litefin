@@ -35,6 +35,13 @@ class LazyLoader {
         // Queue elements that intersect during active scrolling animations or events
         this._pendingLoads = new Map();
 
+        // ── BlurHash decode queue ───────────────────────────────────────────
+        // Prevents micro-freeze storms on low-end TV CPUs by throttling
+        // BlurHash DCT inversions to at most N per animation frame.
+        this._blurHashQueue = [];
+        this._blurHashProcessing = false;
+        this._maxBlurhashPerFrame = 2;
+
         this._init();
     }
 
@@ -349,8 +356,11 @@ class LazyLoader {
     }
 
     /**
-     * Decode and draw the BlurHash string onto the sibling canvas element.
-     * Run asynchronously to keep the main thread and D-pad event loops responsive on TV hardware.
+     * Enqueue a BlurHash canvas for deferred, throttled decoding.
+     * Instead of decoding every card's BlurHash immediately (which causes
+     * micro-freeze storms on single-core TV CPUs when 30+ cards load at once),
+     * we process at most `_maxBlurhashPerFrame` per animation frame.
+     *
      * @param {HTMLImageElement} img - The image element being loaded
      * @private
      */
@@ -367,25 +377,52 @@ class LazyLoader {
         // Mark it decoded immediately to prevent duplicate decoding attempts
         canvas.classList.add('blurhash-decoded');
 
-        // Defer decoding to keep UI/focus animations perfectly butter-smooth
-        setTimeout(() => {
-            // Decoded dimensions are kept extremely small (20x20) for optimal CPU/GPU usage
-            const width = 20;
-            const height = 20;
+        // Enqueue for throttled batch processing instead of firing 30+
+        // concurrent setTimeout(0) tasks that freeze the main thread.
+        this._blurHashQueue.push({ canvas, blurHashStr });
+        this._processBlurHashQueue();
+    }
 
-            const pixels = BlurHashDecoder.decode(blurHashStr, width, height);
-            if (!pixels) return;
+    /**
+     * Process pending BlurHash decodes at a throttled rate.
+     * Drains up to `_maxBlurhashPerFrame` items per rAF cycle.
+     * @private
+     */
+    _processBlurHashQueue() {
+        if (this._blurHashProcessing) return;
+        if (this._blurHashQueue.length === 0) return;
 
-            // Prepare the 2D canvas context and write pixels
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                const imgData = ctx.createImageData(width, height);
-                imgData.data.set(pixels);
-                ctx.putImageData(imgData, 0, 0);
+        this._blurHashProcessing = true;
+
+        const processBatch = () => {
+            const batch = this._blurHashQueue.splice(0, this._maxBlurhashPerFrame);
+
+            for (const { canvas, blurHashStr } of batch) {
+                // Decoded dimensions are kept extremely small (20x20)
+                const width = 20;
+                const height = 20;
+
+                const pixels = BlurHashDecoder.decode(blurHashStr, width, height);
+                if (!pixels) continue;
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const imgData = ctx.createImageData(width, height);
+                    imgData.data.set(pixels);
+                    ctx.putImageData(imgData, 0, 0);
+                }
             }
-        }, 0);
+
+            if (this._blurHashQueue.length > 0) {
+                requestAnimationFrame(processBatch);
+            } else {
+                this._blurHashProcessing = false;
+            }
+        };
+
+        requestAnimationFrame(processBatch);
     }
 
     /**
