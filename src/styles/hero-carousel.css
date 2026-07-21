@@ -1023,8 +1023,95 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
     .hero-description {
         -webkit-line-clamp: 2 !important;
         line-clamp: 2 !important;
-        margin-bottom: 12px !important;
     }
 }
+
+/* ============================================================================
+   Hero Carousel Loading Skeleton
+   ============================================================================
+   Provides premium layout-aligned placeholders while hero metadata/images load.
+   Prevents vertical layout shifts (reflows) on low-end TV chipsets (Tizen/WebOS).
+   ============================================================================ */
+
+/* Disable all user interactions and D-pad clicks during the loading state */
+.hero-carousel-container.skeleton {
+    pointer-events: none;
+}
+
+/* Maintain a solid dark backdrop to mask page background bleed during load */
+.hero-carousel-container.skeleton .hero-carousel {
+    background: #0d0d0d;
+}
+
+/* Base style for the skeleton background shimmer track */
+.hero-carousel-container.skeleton .hero-backdrop {
+    background: #151515;
+}
+
+/* Forces the content area to remain visible without transition delays on load */
+.hero-carousel-container.skeleton .hero-content {
+    opacity: 1;
+    transform: translateY(0);
+    -webkit-transform: translateY(0);
+}
+
+/* Logo placeholder simulating high-resolution asset geometry */
+.hero-logo-skeleton {
+    width: 320px;
+    height: 60px;
+    border-radius: var(--jf-border-radius, 8px);
+    margin-bottom: 24px;
+}
+
+/* Scales down the logo height when compact mode is preferred */
+.hero-carousel-container.compact .hero-logo-skeleton {
+    height: 48px;
+    margin-bottom: 16px;
+}
+
+/* Metadata pills placeholder row */
+.hero-meta-row-skeleton {
+    width: 220px;
+    height: 24px;
+    border-radius: var(--jf-border-radius, 8px);
+    margin-bottom: 24px;
+}
+
+/* Reduces metadata placeholder vertical weight in compact layouts */
+.hero-carousel-container.compact .hero-meta-row-skeleton {
+    height: 20px;
+    margin-bottom: 16px;
+}
+
+/* Paragraph line 1 - matching standard 3-line clamping synopsis layouts */
+.hero-description-skeleton {
+    width: 600px;
+    height: 20px;
+    border-radius: var(--jf-border-radius, 8px);
+    margin-bottom: 12px;
+}
+
+/* Paragraph line 2 - slightly shorter for natural typographic hierarchy */
+.hero-description-skeleton-2 {
+    width: 450px;
+    height: 20px;
+    border-radius: var(--jf-border-radius, 8px);
+}
+
+/* Responsive handling for windowed viewports and smaller TV setups */
+@media (max-width: 1000px) {
+    .hero-logo-skeleton {
+        width: 240px;
+    }
+    .hero-description-skeleton {
+        width: 100%;
+        max-width: 450px;
+    }
+    .hero-description-skeleton-2 {
+        width: 100%;
+        max-width: 320px;
+    }
+}
+
 
 

@@ -725,8 +725,10 @@ class HomePage extends Page {
                 // Hero does not depend on libraries — fetch it in parallel but do NOT
                 // await it here so row rendering starts immediately. It populates the
                 // hero placeholder when its data arrives.
+                // Instantly insert a style-matched loading skeleton to prevent reflow.
                 const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
                 if (enableHero) {
+                    this._insertHeroSkeleton();
                     this._loadHeroCarousel().catch((err) => log.error('Hero carousel failed', err));
                 }
 
@@ -1534,6 +1536,49 @@ class HomePage extends Page {
     }
 
     /**
+     * Inserts a matching loading skeleton inside the hero carousel container placeholder
+     * before the actual hero carousel items finish loading in the background.
+     * Prevents vertical layout shift and ensures a premium, unified aesthetic.
+     * @private
+     */
+    _insertHeroSkeleton() {
+        const placeholder = this.$('#home-hero-placeholder');
+        if (!placeholder) return;
+
+        // Retrieve current style configurations from StorageService
+        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
+        const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+
+        // Clear any leftover state on the wrapper element to prevent class leaks
+        placeholder.className = '';
+        placeholder.classList.add(`style-${carouselStyle}`);
+        if (isCompact) {
+            placeholder.classList.add('style-compact');
+        }
+
+        // Render skeleton structure that mirrors the real HeroCarousel component geometry
+        placeholder.innerHTML = `
+            <div id="hero-carousel-container" 
+                 class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} skeleton" 
+                 tabindex="-1">
+                <div class="hero-carousel">
+                    <div class="hero-carousel-track">
+                        <div class="hero-item active">
+                            <div class="hero-backdrop skeleton-shimmer"></div>
+                            <div class="hero-content">
+                                <div class="hero-logo-skeleton skeleton-line skeleton-shimmer"></div>
+                                <div class="hero-meta-row-skeleton skeleton-line skeleton-shimmer"></div>
+                                <div class="hero-description-skeleton skeleton-line skeleton-shimmer"></div>
+                                <div class="hero-description-skeleton-2 skeleton-line skeleton-shimmer"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * Loads items for the hero carousel and initializes the component.
      * Picks 5 random items from the user's libraries.
      */
@@ -1659,6 +1704,16 @@ class HomePage extends Page {
                 // Render the hero carousel and initialize its event listeners
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
+
+                // Relink the first rendered row and the hero carousel now that the hero has initialized
+                const container = this.$('#home-rows');
+                if (container) {
+                    const firstRow = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+                    if (firstRow) {
+                        const firstRowId = firstRow.getAttribute('data-row-id');
+                        this._relinkAdjacentSections(container, firstRow, firstRowId);
+                    }
+                }
             }
         } catch (e) {
             log.error('Failed to load Hero Carousel', e);
