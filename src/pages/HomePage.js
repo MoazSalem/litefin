@@ -62,10 +62,11 @@ const IMAGE_PREWARM_PER_ROW = 10;
 
 /**
  * How long (in ms) to cache homepage data for instant back-navigation.
- * 5 minutes — stale enough that users see fresh data on re-visit,
- * fresh enough that back/forward navigation feels instant.
+ * 24 hours — cache lives in-memory (StateManager) so it's automatically
+ * cleared on app restart/refresh. Explicitly cleared on metadata refresh
+ * calls and settings changes that affect homepage display.
  */
-const PAGE_CACHE_TTL = 5 * 60 * 1000;
+const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /**
  * Card width definitions (matching home.css) — used by VirtualCardRow internally.

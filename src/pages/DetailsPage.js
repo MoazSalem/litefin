@@ -1919,8 +1919,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                    ? item.OriginalTitle
-                    : ''
+                  ? item.OriginalTitle
+                  : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -2243,7 +2243,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => { });
+        requestAnimationFrame(() => {});
 
         // Watched button
         if (watchedBtn) {
@@ -2476,10 +2476,18 @@ class DetailsPage extends Page {
                         ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
                             ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
                             : 0;
-                    const progressHtml = progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : '';
+                    const progressHtml =
+                        progress > 0
+                            ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>`
+                            : '';
 
-                    const imgUrl = api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality });
-                    const episodeCode = i18n.ensureBiDi(`S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}`);
+                    const imgUrl = api.getImageUrl(ep.Id, 'Primary', {
+                        maxWidth: imageService.getParams('thumb').maxWidth,
+                        quality: imageService.getParams('thumb').quality
+                    });
+                    const episodeCode = i18n.ensureBiDi(
+                        `S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}`
+                    );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
                     const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
@@ -2959,12 +2967,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                    this._item.SeasonName.toLowerCase().startsWith('season ')
-                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                        : /^\d+$/.test(this._item.SeasonName)
+                      this._item.SeasonName.toLowerCase().startsWith('season ')
+                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                          : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                ])
+                  ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
@@ -3726,14 +3734,14 @@ class DetailsPage extends Page {
             </div>
         `
                 : options
-                    .map((opt, i) => {
-                        return `
+                      .map((opt, i) => {
+                          return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-                    })
-                    .join('');
+                      })
+                      .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -4022,6 +4030,11 @@ class DetailsPage extends Page {
                     ReplaceAllMetadata: opt.replace,
                     ReplaceAllImages: opt.replace
                 });
+
+                // Invalidate homepage page cache so the next home visit
+                // fetches fresh data reflecting the updated metadata.
+                state.delete('home:pageCache');
+
                 toast.show(i18n.t('MessageRefreshQueued'));
             } catch (e) {
                 log.error('Failed to queue metadata refresh', e);
