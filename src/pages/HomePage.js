@@ -981,11 +981,15 @@ class HomePage extends Page {
                 return;
             }
 
-            // Pre-warm image cache for this row's items (non-blocking)
-            this._preWarmImagesForRow(descriptor, items);
-
             // Find the placeholder and replace it with a live row
             this._renderRow(descriptor, items);
+
+            // Pre-warm image cache AFTER the row DOM is built, so the visible
+            // image loads from VirtualCardRow (lazyLoader.forceLoad) get HTTP
+            // connection pool priority over speculative pre-warm requests.
+            // This also prevents pre-warm from starving remaining API calls
+            // (each row's fetchFn is still in-flight for unfinished rows).
+            this._preWarmImagesForRow(descriptor, items);
             this._checkFocusRestoration(descriptor.id, true);
         } catch (error) {
             log.error(`Failed to load row "${descriptor.id}"`, error);
