@@ -502,6 +502,11 @@ class DetailsPage extends Page {
             });
             this._item = item;
 
+            // Cache Series item for reuse across child Season/Episode detail pages
+            if (item.Type === 'Series') {
+                state.set(`details:series:${item.Id}`, item);
+            }
+
             // 2. Render all text content immediately — only needs this._item
             this._renderHeroText();
             this._setupFavoriteButton();
@@ -811,8 +816,10 @@ class DetailsPage extends Page {
         if (this._item.Type === 'Series') {
             await Promise.all([this._loadNextUp(), this._loadSeasons()]);
         } else if (this._item.Type === 'Season') {
+            this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
         } else if (this._item.Type === 'Episode') {
+            this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
             const loads = [this._loadMoreFromSeason()];
             if (!hideCast) {
@@ -2241,9 +2248,8 @@ class DetailsPage extends Page {
         // Update the inner HTML of the resume button with a play icon and the formatted label.
         resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
 
-        // CRITICAL: If we hid the Play button (which probably had focus or would get it),
-        // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => {});
+        // If we hid the Play button, try to move focus to the Resume button.
+        resumeBtn.focus();
 
         // Watched button
         if (watchedBtn) {
@@ -2428,9 +2434,20 @@ class DetailsPage extends Page {
     }
 
     async _loadEpisodes(seriesId, seasonId) {
+        const cacheKey = `details:episodes:${seriesId}:${seasonId}`;
+        const cached = state.get(cacheKey);
+        if (cached) {
+            this._episodes = cached;
+            if (this._episodes.length > 0) {
+                this._renderEpisodes();
+            }
+            return;
+        }
+
         try {
             const response = await api.getEpisodes(seriesId, { SeasonId: seasonId });
             this._episodes = response.Items || [];
+            state.set(cacheKey, this._episodes);
 
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
@@ -2932,30 +2949,37 @@ class DetailsPage extends Page {
     async _loadMoreFromSeason() {
         if (!this._item.SeasonId || !this._item.SeriesId) return;
 
-        try {
-            const response = await api.getEpisodes(this._item.SeriesId, {
-                SeasonId: this._item.SeasonId
-            });
+        const cacheKey = `details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`;
+        let allItems = state.get(cacheKey);
 
-            // -------------------------------------------------------------
-            // Retrieve preference to determine if we include current episode.
-            // Defaults to false.
-            // -------------------------------------------------------------
-            const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
-            const allItems = response.Items || [];
-
-            // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
-            const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
-
-            if (siblings.length > 0) {
-                // Find index of the current active episode in the siblings list
-                const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
-
-                // Pass siblings and focused index down to renderer
-                this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
+        if (!allItems) {
+            try {
+                const response = await api.getEpisodes(this._item.SeriesId, {
+                    SeasonId: this._item.SeasonId
+                });
+                allItems = response.Items || [];
+                state.set(cacheKey, allItems);
+            } catch (error) {
+                log.warn('Failed to load more from season', error);
+                return;
             }
-        } catch (error) {
-            log.warn('Failed to load season episodes', error);
+        }
+
+        // -------------------------------------------------------------
+        // Retrieve preference to determine if we include current episode.
+        // Defaults to false.
+        // -------------------------------------------------------------
+        const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
+
+        // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
+        const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
+
+        if (siblings.length > 0) {
+            // Find index of the current active episode in the siblings list
+            const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
+
+            // Pass siblings and focused index down to renderer
+            this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
         }
     }
 

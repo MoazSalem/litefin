@@ -155,6 +155,9 @@ export class ApiClient {
         // Wipe ETag cache — cached responses are bound to the previous auth session
         this._etagCache.clear();
 
+        // Wipe detail page caches — stale series/episode data from previous session
+        state.clearByPrefix('details:');
+
         log.info('Authentication cleared');
     }
 
