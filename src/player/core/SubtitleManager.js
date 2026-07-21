@@ -1374,7 +1374,20 @@ export default class SubtitleManager {
 
                 callback({
                     text: activeCue.text,
-                    duration: (activeCue.end - activeCue.start) * 1000
+                    duration: (activeCue.end - activeCue.start) * 1000,
+                    // ─────────────────────────────────────────────────────────
+                    // Absolute cue end position expressed in ticks (100ns units).
+                    // PlayerPage uses this to schedule subtitle clearing without
+                    // relying on video.currentTime, which may be stale right after
+                    // a seek on WebOS (hardware seek completes asynchronously).
+                    // 
+                    // We add the user's subtitle offset back in because the cue's
+                    // raw end time is in subtitle-space (adjusted), but PlayerPage
+                    // compares against the raw video position from getCurrentPositionTicks().
+                    // Failing to add the offset back would cause premature clearing
+                    // whenever the user has set a non-zero subtitle delay.
+                    // ─────────────────────────────────────────────────────────
+                    endTicks: Math.round((activeCue.end + offset) * 10000000)
                 });
             }
         } else {

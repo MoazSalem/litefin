@@ -2142,9 +2142,23 @@ class PlayerPage extends Page {
             const windowStyles = SubtitleStyles.getWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
 
-            // Set end time for sync clearing (Duration is in ms, Ticks are 10000 per ms)
-            if (data.duration > 0) {
-                // Get current position safely
+            // =====================================================================
+            // Set end time for sync clearing (used by _onTimeUpdate to auto-clear
+            // the subtitle if the tick-based clear somehow fires late).
+            //
+            // IMPORTANT: Use the absolute cue end position (data.endTicks) rather
+            // than computing currentTicks + duration * 10000. On WebOS, video.currentTime
+            // can still report the pre-seek position immediately after a seek because
+            // hardware seek completes asynchronously. Using the cue's absolute end time
+            // prevents the clearing timer from being anchored to a stale position,
+            // which is the root cause of post-seek subtitle desync on WebOS.
+            // =====================================================================
+            if (data.endTicks != null) {
+                // Preferred path: SubtitleManager provided the absolute cue end tick.
+                this._subtitleEndTime = data.endTicks;
+            } else if (data.duration > 0) {
+                // Fallback for embedded/native subtitles that don't have endTicks
+                // (e.g. EMBEDDED_NATIVE from Tizen AVPlay's onsubtitlechange).
                 const currentTicks = this._player?.getCurrentPositionTicks?.() || 0;
                 this._subtitleEndTime = currentTicks + data.duration * 10000;
             } else {
@@ -2172,7 +2186,7 @@ class PlayerPage extends Page {
      * font, weight, opacity, background) but use independent size + position settings.
      * They render into #secondary-subtitle-overlay which is positioned at the top.
      *
-     * @param {Object} data - Cue data: { text, duration }
+     * @param {Object} data - Cue data: { text, duration, endTicks }
      */
     _onSecondarySubtitleChange(data) {
         const overlay = document.getElementById('secondary-subtitle-overlay');
@@ -2208,8 +2222,16 @@ class PlayerPage extends Page {
             const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
 
-            // Track when this cue ends so _onTimeUpdate can clear it
-            if (data.duration > 0) {
+            // =====================================================================
+            // Track when this cue ends so _onTimeUpdate can clear it.
+            // Use data.endTicks (absolute position from SubtitleManager) to avoid
+            // the same seek-desync race that affects the primary subtitle.
+            // =====================================================================
+            if (data.endTicks != null) {
+                // Absolute cue end — not anchored to stale video.currentTime
+                this._secondarySubtitleEndTime = data.endTicks;
+            } else if (data.duration > 0) {
+                // Fallback for native/embedded tracks without endTicks
                 const currentTicks = this._player?.getCurrentPositionTicks?.() || 0;
                 this._secondarySubtitleEndTime = currentTicks + data.duration * 10000;
             } else {
