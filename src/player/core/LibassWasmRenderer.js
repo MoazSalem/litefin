@@ -94,11 +94,6 @@ export default class LibassWasmRenderer {
         this._lastProcessedHash = null;
         this._lastProcessedResult = null;
 
-        /* rAF smooth-render state (virtual/Tizen AVPlay mode only) */
-        this._rafId = null;
-        this._lastTickTime = 0;
-        this._lastTickWallTime = 0;
-        this._playbackRate = 1.0;
         this._seekPending = false;
         /* throttle: skip setCurrentTime if time moved < 20ms */
         this._MIN_TICK_DELTA = 0.020;
@@ -129,7 +124,7 @@ export default class LibassWasmRenderer {
 
     /**
      * Get the current playback time from the platform's native time source.
-     * Priority: injected callback > AVPlay direct > fallback interpolation.
+     * Priority: injected callback > AVPlay direct.
      * @returns {number} Current time in seconds, or -1 if unavailable.
      * @private
      */
@@ -147,29 +142,44 @@ export default class LibassWasmRenderer {
         return -1;
     }
 
+    /**
+     * Replace the static proxy with a getter-based one so Octopus's internal
+     * oneshotRender() rAF loop reads the real AVPlay time on every frame.
+     *
+     * This eliminates the need for a separate rAF loop — no duplicate frame
+     * work, no interpolation drift, and the time is always frame-accurate.
+     * @private
+     */
+    _setupVirtualProxy() {
+        const self = this;
+        const oldCurrentTime = this._videoProxy.currentTime;
+        Object.defineProperty(this._videoProxy, 'currentTime', {
+            get() {
+                const t = self._getPlatformTime();
+                return t >= 0 ? t : oldCurrentTime;
+            },
+            configurable: true
+        });
+    }
+
     tick(timeSeconds) {
         this._lastTime = timeSeconds;
         if (this._isVirtual && this._octopus) {
             const offsetTime = timeSeconds - this._delaySeconds;
 
-            // Handle pending seek — do a clean reset without pushing -1 to the worker
             if (this._seekPending) {
                 this._seekPending = false;
-                this._octopus.lastRenderTime = -999999;
             }
 
-            // Gate: skip if the time hasn't moved enough (avoids flooding the worker)
-            if (Math.abs(offsetTime - this._videoProxy.currentTime) < this._MIN_TICK_DELTA) {
+            // Gate: skip if the player tick time is close to the real AVPlay
+            // time already seen by Octopus's internal rAF loop. This avoids
+            // redundant setCurrentTime calls (the getter returns raw AVPlay
+            // time; delay is applied separately via offsetTime).
+            if (Math.abs(timeSeconds - this._videoProxy.currentTime) < this._MIN_TICK_DELTA) {
                 return;
             }
 
-            this._videoProxy.currentTime = offsetTime;
             this._octopus.setCurrentTime(offsetTime);
-            this._lastTickTime = offsetTime;
-            this._lastTickWallTime = performance.now();
-
-            // Start the smooth rAF render loop if not already running
-            this._startSmoothRender();
         }
     }
 
@@ -254,8 +264,18 @@ export default class LibassWasmRenderer {
             this._octopus = new SubtitlesOctopus(options);
 
             if (this._isVirtual) {
+                this._setupVirtualProxy();
                 this._octopus.video = this._videoProxy;
                 log.info('Injected virtual video proxy into SubtitlesOctopus (AVPlay mode)');
+
+                // Start the oneshotRender rAF loop. Octopus only starts this
+                // loop inside resetRenderAheadCache(), which is called from
+                // setTrack()/setTrackByUrl(). Since we pass subContent in
+                // options instead of calling setTrack(), the loop never starts
+                // automatically — leaving subtitles jerky (~250ms updates from
+                // tick() only). This gives us 60fps per-frame time reads via
+                // the virtual proxy getter.
+                this._octopus.resetRenderAheadCache(false);
             }
 
             if (!this._isVirtual && this._octopus.canvasParent) {
@@ -369,11 +389,25 @@ export default class LibassWasmRenderer {
         // Flag the next tick() to reset the worker state cleanly instead of
         // calling setCurrentTime(-1) which floods the worker and causes freezes.
         this._seekPending = true;
-        log.info('SubtitlesOctopus canvas cleared on seek (deferred reset)');
+
+        // Break Octopus prerender deadlock: reset the render request flag and
+        // increment the iteration so stale in-flight worker responses are ignored.
+        // Without this, oneshotState.renderRequested stays true after seek and
+        // blocks all future prerender requests — subtitles never reappear.
+        if (this._octopus && this._octopus.oneshotState) {
+            this._octopus.oneshotState.renderRequested = false;
+            this._octopus.oneshotState.iteration++;
+            this._octopus.oneshotState.requestNextTimestamp = -1;
+            this._octopus.oneshotState.displayedEvent = null;
+            this._octopus.oneshotState.restart = true;
+            this._octopus.renderedItems = [];
+            this._octopus.lastRenderTime = -999999;
+        }
+
+        log.info('SubtitlesOctopus canvas cleared (seek reset — prerender deadlock broken)');
     }
 
     destroy() {
-        this._stopSmoothRender();
         window.removeEventListener('resize', this._onWindowResize);
         this._teardownOctopus();
         this._removeDOM();
@@ -431,66 +465,6 @@ export default class LibassWasmRenderer {
                 log.warn('Error disposing SubtitlesOctopus instance:', err);
             }
             this._octopus = null;
-        }
-    }
-
-    /**
-     * Start a requestAnimationFrame loop that keeps the proxy's currentTime
-     * in sync with AVPlay's real playback position at display refresh rate.
-     *
-     * This ONLY updates the proxy — Octopus's internal oneshotRender() rAF
-     * loop reads self.video.currentTime (the proxy) at 60fps for display.
-     * Calling setCurrentTime here would flood the worker with time updates
-     * (causing "worker busy" log spam and re-render storms).
-     *
-     * setCurrentTime is called from tick() at ~250ms cadence — matching the
-     * same rhythm as HTML5 video's timeupdate event.
-     *
-     * Falls back to interpolation if no native time source is available.
-     * @private
-     */
-    _startSmoothRender() {
-        if (this._rafId !== null) return;
-        const SMOOTH_INTERVAL = 0.033;
-        const MAX_ADVANCE = 0.100;
-        const loop = () => {
-            if (!this._octopus || !this._isVirtual || this._seekPending) {
-                this._rafId = null;
-                return;
-            }
-
-            const realTime = this._getPlatformTime();
-            if (realTime >= 0) {
-                // Native time source (AVPlay or callback) — no drift, proxy only
-                const offsetTime = realTime - this._delaySeconds;
-                if (Math.abs(offsetTime - this._videoProxy.currentTime) >= SMOOTH_INTERVAL) {
-                    this._videoProxy.currentTime = offsetTime;
-                }
-            } else {
-                // Fallback: interpolate from last coarse tick
-                const elapsed = Math.min(
-                    (performance.now() - this._lastTickWallTime) / 1000,
-                    MAX_ADVANCE
-                );
-                const estimatedTime = this._lastTickTime + (elapsed * this._playbackRate);
-                if (Math.abs(estimatedTime - this._videoProxy.currentTime) >= SMOOTH_INTERVAL) {
-                    this._videoProxy.currentTime = estimatedTime;
-                }
-            }
-
-            this._rafId = requestAnimationFrame(loop);
-        };
-        this._rafId = requestAnimationFrame(loop);
-    }
-
-    /**
-     * Cancel the smooth render loop.
-     * @private
-     */
-    _stopSmoothRender() {
-        if (this._rafId !== null) {
-            cancelAnimationFrame(this._rafId);
-            this._rafId = null;
         }
     }
 
