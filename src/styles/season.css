@@ -27,7 +27,7 @@
 .episode-row {
     display: flex;
     align-items: center;
-    height: 220px;
+    height: 250px;
     margin-bottom: 24px;
     /* PERFORMANCE: Isolate layout calculations */
     /* 'strict' might be too aggressive if content changes size, but 'content' is safer */
@@ -118,7 +118,7 @@
 /* Episode Info Section */
 .episode-row-info {
     flex: 1;
-    padding: 10px 24px;
+    padding: 18px 24px;
     display: flex;
     flex-direction: column;
     justify-content: center;

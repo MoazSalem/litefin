@@ -391,16 +391,13 @@ body.lyrics-active .audio-player-center {
     margin-bottom: 24px;
 }
 
-
-/* Time Display */
-
 /* Time Display */
 .osd-time {
     display: -webkit-flex;
     display: flex;
     -webkit-justify-content: space-between;
     justify-content: space-between;
-    font-size: 14px;
+    font-size: 1.2em;
     color: var(--jf-text-primary);
     margin-top: 2px;
 }
