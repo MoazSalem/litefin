@@ -1933,7 +1933,7 @@ class HomePage extends Page {
                         const ltvResponse = await api.getLiveTvChannels({
                             Limit: 50,
                             EnableImageTypes: 'Primary,Thumb,Backdrop',
-                            Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
+                            Fields: 'ImageTags,BackdropImageTags'
                         });
 
                         // Extract channel items safely
@@ -2150,7 +2150,7 @@ class HomePage extends Page {
                                 const ltvFallback = await api.getLiveTvChannels({
                                     Limit: 50,
                                     EnableImageTypes: 'Primary,Thumb,Backdrop',
-                                    Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
+                                    Fields: 'ImageTags,BackdropImageTags'
                                 });
 
                                 // Extract items safely

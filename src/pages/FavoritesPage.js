@@ -69,7 +69,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear'
+                        Fields: 'DateCreated,ProductionYear'
                     }),
                     api.getItems({
                         Filters: 'IsFavorite',
@@ -77,7 +77,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio,ProductionYear,UnplayedItemCount,UserData'
+                        Fields: 'ProductionYear,UnplayedItemCount,UserData'
                     }),
                     api.getItems({
                         Filters: 'IsFavorite',
@@ -85,7 +85,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio,ParentTitle,ProductionYear,UnplayedItemCount,UserData'
+                        Fields: 'ParentTitle,ProductionYear,UnplayedItemCount,UserData'
                     }),
                     api.getItems({
                         Filters: 'IsFavorite',
@@ -93,7 +93,7 @@ class FavoritesPage extends Page {
                         SortBy: 'DateCreated',
                         SortOrder: 'Descending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber'
+                        Fields: 'ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber'
                     }),
                     api.getItems({
                         Filters: 'IsFavorite',
@@ -101,7 +101,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio'
+                        Fields: ''
                     }),
                     api.get('/Persons', {
                         Filters: 'IsFavorite',
@@ -109,7 +109,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio'
+                        Fields: ''
                     }),
                     // --- Music Types --- (Note: artists use the dedicated /Artists endpoint
                     // because the /Items endpoint with IsFavorite + MusicArtist filtering
@@ -121,7 +121,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists'
+                        Fields: 'ProductionYear,AlbumArtist,Artists'
                     }),
                     api.getItems({
                         Filters: 'IsFavorite',
@@ -129,7 +129,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
+                        Fields: 'ProductionYear,AlbumArtist,Artists,RunTimeTicks'
                     }),
                     api.getUserViews()
                 ]);

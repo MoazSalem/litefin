@@ -383,7 +383,7 @@ class LiveTvPage extends Page {
             userId: api.userId,
             limit: 24,
             enableImageTypes: 'Primary,Thumb,Backdrop',
-            fields: 'PrimaryImageAspectRatio,CanSelfDelete,SortName'
+            fields: 'CanSelfDelete,SortName'
         });
 
         if (!this._isMounted) return;

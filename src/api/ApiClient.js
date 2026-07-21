@@ -656,7 +656,7 @@ export class ApiClient {
             SortOrder: 'Ascending',
             IncludeItemTypes: '',
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             Limit: 100
@@ -686,7 +686,7 @@ export class ApiClient {
         const defaults = {
             // 20 items gives a comfortable scrollable collection per library row
             Limit: 20,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ParentId: parentId
@@ -704,7 +704,7 @@ export class ApiClient {
             // users can scroll through up to 20 continue-watching entries
             Limit: 20,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -725,8 +725,7 @@ export class ApiClient {
             Filters: 'IsPlayed',
             SortBy: 'DatePlayed',
             SortOrder: 'Descending',
-            Limit: limit,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+            Limit: limit
         });
     }
 
@@ -741,8 +740,7 @@ export class ApiClient {
             Filters: 'IsPlayed',
             SortBy: 'PlayCount',
             SortOrder: 'Descending',
-            Limit: limit,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+            Limit: limit
         });
     }
 
@@ -753,7 +751,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
@@ -780,7 +778,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 48,
-            Fields: 'AirTime,PrimaryImageAspectRatio',
+            Fields: 'AirTime',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             EnableTotalRecordCount: false
@@ -797,7 +795,7 @@ export class ApiClient {
             UserId: this._userId,
             IncludeItemTypes: 'Series',
             Recursive: true,
-            Fields: 'DateCreated,PrimaryImageAspectRatio'
+            Fields: 'DateCreated'
         };
 
         return this.get(`/Studios`, { ...defaults, ...params });
@@ -871,7 +869,7 @@ export class ApiClient {
     async getPlaylistItems(playlistId, params = {}) {
         return this.get(`/Playlists/${playlistId}/Items`, {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,UserData,RunTimeTicks,BasicSyncInfo',
+            Fields: 'UserData,RunTimeTicks',
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ...params
         });
@@ -967,8 +965,7 @@ export class ApiClient {
     async getSimilar(itemId, params = {}) {
         const defaults = {
             UserId: this._userId,
-            Limit: 12,
-            Fields: 'PrimaryImageAspectRatio'
+            Limit: 12
         };
 
         return this.get(`/Items/${itemId}/Similar`, { ...defaults, ...params });
@@ -976,8 +973,7 @@ export class ApiClient {
 
     async getSeasons(seriesId) {
         return this.get(`/Shows/${seriesId}/Seasons`, {
-            UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+            UserId: this._userId
         });
     }
 
@@ -986,7 +982,7 @@ export class ApiClient {
         // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters',
+            Fields: 'Overview,RunTimeTicks,Chapters',
             IsVirtualUnaired: false,
             IsMissing: false,
             ...params
@@ -1013,7 +1009,7 @@ export class ApiClient {
             IncludeItemTypes: 'Movie,Series,Episode',
             Recursive: true,
             Limit: 500,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
+            Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
             SortBy: 'PremiereDate',
             SortOrder: 'Descending'
         });
@@ -1047,7 +1043,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
@@ -1060,7 +1056,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
@@ -1073,7 +1069,7 @@ export class ApiClient {
         const defaults = {
             Limit: 20,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ParentThumbImageTag',
+            Fields: 'ParentThumbImageTag',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -1091,7 +1087,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: false
@@ -1104,7 +1100,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: false
@@ -1131,7 +1127,6 @@ export class ApiClient {
             SearchTerm: query,
             IncludeItemTypes: 'Movie,Series,Episode,BoxSet',
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
             EnableTotalRecordCount: false,
             MediaTypes: null
@@ -1153,8 +1148,7 @@ export class ApiClient {
             searchTerm: query,
             IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,Artist,MusicAlbum,Audio',
             Limit: 50,
-            Recursive: true,
-            Fields: 'PrimaryImageAspectRatio'
+            Recursive: true
         };
 
         return this.get('/Search/Hints', { ...defaults, ...params });
@@ -1174,7 +1168,7 @@ export class ApiClient {
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             Limit: 50,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear'
+            Fields: 'ProductionYear'
         };
 
         return this.get('/Artists', { ...defaults, ...params });
@@ -1195,7 +1189,7 @@ export class ApiClient {
             SortOrder: 'Descending',
             Recursive: true,
             Limit: 100,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists'
+            Fields: 'ProductionYear,AlbumArtist,Artists'
         };
 
         return this.get('/Items', { ...defaults, ...params });
@@ -1216,7 +1210,7 @@ export class ApiClient {
             SortOrder: 'Ascending',
             Recursive: true,
             Limit: 200,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
+            Fields: 'ProductionYear,AlbumArtist,Artists,RunTimeTicks'
         };
 
         return this.get('/Items', { ...defaults, ...params });
@@ -1227,7 +1221,6 @@ export class ApiClient {
             UserId: this._userId,
             searchTerm: query,
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
             EnableTotalRecordCount: false
         };
@@ -1427,7 +1420,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             EnableUserData: true,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            Fields: 'CanSelfRecord',
             EnableTotalRecordCount: false
         };
         return this.get('/LiveTv/Channels', { ...defaults, ...params });
@@ -1437,7 +1430,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             EnableUserData: true,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            Fields: 'CanSelfRecord',
             EnableTotalRecordCount: false
         };
         return this.get('/LiveTv/Programs', { ...defaults, ...params });
@@ -1448,7 +1441,7 @@ export class ApiClient {
             UserId: this._userId,
             IsAiring: true,
             EnableUserData: true,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            Fields: 'CanSelfRecord',
             EnableTotalRecordCount: false,
             Limit: 24
         };
@@ -1458,7 +1451,7 @@ export class ApiClient {
     async getLiveTvRecordings(params = {}) {
         const defaults = {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord,Status',
+            Fields: 'CanSelfRecord,Status',
             EnableTotalRecordCount: false
         };
         return this.get('/LiveTv/Recordings', { ...defaults, ...params });

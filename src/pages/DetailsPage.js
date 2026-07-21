@@ -905,7 +905,7 @@ class DetailsPage extends Page {
                 ParentId: this._itemId,
                 IncludeItemTypes: 'Audio',
                 Recursive: true,
-                Fields: 'PrimaryImageAspectRatio,UserData,RunTimeTicks',
+                Fields: 'UserData,RunTimeTicks',
                 SortBy: 'ParentIndexNumber,IndexNumber,SortName'
             });
 
@@ -1152,7 +1152,7 @@ class DetailsPage extends Page {
                     ParentId: this._itemId,
                     IncludeItemTypes: 'Movie',
                     Recursive: true,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                    Fields: 'ProductionYear',
                     SortBy: sortBy,
                     SortOrder: 'Ascending',
                     Limit: 100 // Increased limit to capture larger collections
@@ -1161,7 +1161,7 @@ class DetailsPage extends Page {
                     ParentId: this._itemId,
                     IncludeItemTypes: 'Series',
                     Recursive: true,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                    Fields: 'ProductionYear',
                     SortBy: sortBy,
                     SortOrder: 'Ascending',
                     Limit: 100
@@ -2369,7 +2369,7 @@ class DetailsPage extends Page {
                     Filters: 'IsUnplayed',
                     SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
-                    Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
@@ -3101,9 +3101,7 @@ class DetailsPage extends Page {
             let collections = state.get(cacheKey);
 
             if (!collections) {
-                const response = await api.getItemCollections(this._itemId, {
-                    fields: 'PrimaryImageAspectRatio'
-                });
+                const response = await api.getItemCollections(this._itemId);
                 collections = response.Items || [];
                 if (collections.length > 0) {
                     state.set(cacheKey, collections);
@@ -3245,7 +3243,7 @@ class DetailsPage extends Page {
                 itemToPlay = { ...target };
             } else {
                 try {
-                    const fields = 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters';
+                    const fields = 'Overview,RunTimeTicks,Chapters';
                     if (isShufflePlay) {
                         const randomEp = await api.getItems({
                             ParentId: this._item.Id,
@@ -3318,7 +3316,7 @@ class DetailsPage extends Page {
                                 Limit: 1,
                                 Filters: 'IsUnplayed',
                                 SortBy: 'ParentIndexNumber,IndexNumber',
-                                Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                                Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                             });
                         } else {
                             // On Jellyfin, query next up directly using SeriesId parameter.

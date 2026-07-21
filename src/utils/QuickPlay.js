@@ -119,7 +119,7 @@ async function resolveSeries(series) {
             Limit: 1,
             Filters: 'IsUnplayed',
             SortBy: 'ParentIndexNumber,IndexNumber',
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
         });
     } else {
         nextUp = await api.getNextUp({ SeriesId: series.Id, Limit: 1 });
