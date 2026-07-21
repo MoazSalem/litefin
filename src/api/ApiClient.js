@@ -49,6 +49,13 @@ export class ApiClient {
 
         // Track retries to prevent infinite loops on 401
         this._retryingRequests = new Set();
+
+        // ── ETag Response Cache ───────────────────────────────────────────
+        // In-memory cache of { etag, body } keyed by full request URL.
+        // Used to send If-None-Match on GET requests and short-circuit to 304
+        // cached data when the server reports no change.
+        this._etagCache = new Map();
+        this._etagCacheMaxSize = 20;
     }
 
     // ========================================================================
@@ -144,6 +151,10 @@ export class ApiClient {
         this._userId = null;
         state.set('user:authenticated', false);
         state.set('user:data', null);
+
+        // Wipe ETag cache — cached responses are bound to the previous auth session
+        this._etagCache.clear();
+
         log.info('Authentication cleared');
     }
 
@@ -279,11 +290,24 @@ export class ApiClient {
         // DEBUG: Store last requested URL
         this.lastUrl = url;
 
+        // ── ETag cache lookup ──────────────────────────────────────────────
+        // For GET requests, check if we have a cached ETag and send
+        // If-None-Match so the server can respond with 304 if unchanged.
+        let etagEntry = null;
+        if (method === 'GET') {
+            etagEntry = this._etagCache.get(url) || null;
+        }
+
         // Build headers
         const headers = {
             Accept: 'application/json', // Explicitly request JSON response
             ...options.headers
         };
+
+        // Add If-None-Match header if we have a cached ETag for this URL
+        if (etagEntry && etagEntry.etag) {
+            headers['If-None-Match'] = etagEntry.etag;
+        }
 
         if (!options.skipAuth) {
             /*
@@ -347,6 +371,12 @@ export class ApiClient {
             const response = await fetch(url, fetchOptions);
             if (timeoutId) clearTimeout(timeoutId);
 
+            // Handle 304 Not Modified — return cached response body
+            if (response.status === 304 && etagEntry) {
+                log.debug(`304 ${endpoint} — returning cached response`);
+                return etagEntry.body;
+            }
+
             // Handle error responses
             if (!response.ok) {
                 // If 401 Unauthorized and not already a retry, try one more time
@@ -367,11 +397,27 @@ export class ApiClient {
 
             // Parse response based on content type
             const contentType = response.headers.get('content-type');
+            let body;
             if (contentType && contentType.includes('application/json')) {
-                return await response.json();
+                body = await response.json();
+            } else {
+                body = await response.text();
             }
 
-            return await response.text();
+            // Cache ETag for GET requests so subsequent calls can use
+            // If-None-Match / 304 short-circuit when data hasn't changed.
+            if (method === 'GET') {
+                const etag = response.headers.get('ETag');
+                if (etag && body !== undefined && body !== null) {
+                    if (this._etagCache.size >= this._etagCacheMaxSize) {
+                        const firstKey = this._etagCache.keys().next().value;
+                        this._etagCache.delete(firstKey);
+                    }
+                    this._etagCache.set(url, { etag, body });
+                }
+            }
+
+            return body;
         } catch (error) {
             // Handle Network Errors (DNS, Connection Refused, Offline) or Timeout
             const isTimeout = error.name === 'AbortError';
@@ -718,7 +764,7 @@ export class ApiClient {
     /**
      * Get merged continue watching and next up items from the Litefin plugin on the server.
      * This calls the custom Litefin plugin controller to return a pre-merged deduplicated list.
-     * 
+     *
      * @param {Object} [params] - Query parameters such as limit
      * @returns {Promise<Object>} Object containing the merged items list
      */
@@ -889,9 +935,9 @@ export class ApiClient {
     /**
      * Gets the collections that include the specified item.
      * Tries the native Jellyfin endpoint (/Items/{itemId}/Collections) first.
-     * If the server returns a 404 (meaning it's an older server like 10.11), 
+     * If the server returns a 404 (meaning it's an older server like 10.11),
      * it falls back to the custom Litefin plugin endpoint (/Litefin/Items/{itemId}/Collections).
-     * 
+     *
      * @param {string} itemId - The target item ID
      * @param {Object} [params] - Query parameters such as Fields, StartIndex, Limit
      * @returns {Promise<Object>} collections query result
