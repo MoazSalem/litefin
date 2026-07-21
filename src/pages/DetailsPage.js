@@ -426,18 +426,14 @@ class DetailsPage extends Page {
 
         try {
             // ────────────────────────────────────────────────────────────────────────
-            // 2. Fetch Base Item Details
+            // 1. Fetch Base Item Details (blocking — page needs this to render)
             // ────────────────────────────────────────────────────────────────────────
-            // Backward-compatible custom metadata selector options.
-            // Check the new pref:richMetadataStyle select preference, fallback cleanly to standard hideRichMetadata.
-            // Under HIG Guidelines, this guarantees lightweight layouts on spatial networks.
             const richMetadataStyle =
                 storage.getItem('pref:richMetadataStyle') ||
                 (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
             const hideRich = richMetadataStyle === 'none';
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
-            // Build dynamic fields list based on user preferences to save bandwidth/CPU
             const requestedFields = [
                 'MediaStreams',
                 'MediaSources',
@@ -457,21 +453,13 @@ class DetailsPage extends Page {
             ];
 
             if (!hideRich) {
-                // Genres are always loaded if not hidden.
                 requestedFields.push('Genres', 'GenreItems');
-
-                // Studios are required for 'all' or 'genres-studios-writers'.
                 if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
                     requestedFields.push('Studios');
                 }
-
-                // Tags are only required when showing full metadata.
                 if (richMetadataStyle === 'all') {
                     requestedFields.push('Tags');
                 }
-
-                // Directors and Writers come from the 'People' collection in Jellyfin.
-                // If they are requested via the rich metadata dropdown, ensure we include 'People' even if the cast section is hidden.
                 if (
                     richMetadataStyle === 'all' ||
                     richMetadataStyle === 'genres-studios-writers' ||
@@ -482,22 +470,14 @@ class DetailsPage extends Page {
             }
 
             if (!hideCast) {
-                // Ensure People is loaded for cast display (avoid duplicates using unique tracking or simple array inclusion check)
                 if (!requestedFields.includes('People')) {
                     requestedFields.push('People');
                 }
             }
 
-            // Fire user fetch in parallel with item fetch — they're independent.
-            // The user object is only needed for the context menu (admin checks),
-            // not for the initial render, so it does not block text/poster display.
             const userPromise = state.get('user:data') ? Promise.resolve(state.get('user:data')) : api.getCurrentUser();
 
             const item = await api.getItem(this._itemId, {
-                // We request comprehensive fields to avoid redundant refetching.
-                // CanDelete is essential for implementing the 'Delete Media' feature.
-                // MediaSources must be explicitly requested to guarantee MediaStreams logic works reliably.
-                // We also request Photo EXIF fields so they are available immediately.
                 Fields: requestedFields.join(',')
             });
             this._item = item;
@@ -507,13 +487,13 @@ class DetailsPage extends Page {
                 state.set(`details:series:${item.Id}`, item);
             }
 
-            // 2. Render all text content immediately — only needs this._item
+            // Render all text content immediately — only needs this._item
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
             this._updateTrailerButton();
 
-            // ── Restore persisted version selection ─────────────────────────────────
+            // Restore persisted version selection
             const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
             if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
                 this._selectedMediaSourceId = savedSourceId;
@@ -527,13 +507,20 @@ class DetailsPage extends Page {
             // Await user data (likely already resolved from state cache)
             this._currentUser = await userPromise;
 
-            // 3. Fire image loading in the background (fire-and-forget).
-            // The poster and backdrop are not used for layout — they are decorative
-            // overlays. We do NOT await them so the content rows are never held up
-            // by a slow image download or the 800ms safety timeout.
-            this._loadImages(); // non-blocking
+            // ────────────────────────────────────────────────────────────────────────
+            // 2. Fire images and logo in the background (non-blocking, fire-and-forget)
+            // ────────────────────────────────────────────────────────────────────────
+            this._loadImages();
+            this._loadLogo();
 
-            // 4. Parallelize loading of all major content (rows, similar items)
+            // ────────────────────────────────────────────────────────────────────────
+            // 3. Hide loading — main text content is visible, images loading in bg
+            // ────────────────────────────────────────────────────────────────────────
+            this.setLoading(false);
+
+            // ────────────────────────────────────────────────────────────────────────
+            // 4. Load secondary content (rows, similar, collections) after loading hidden
+            // ────────────────────────────────────────────────────────────────────────
             const loadTasks = [this._loadSecondaryContent()];
 
             if (this._item.Type !== 'Season') {
@@ -546,13 +533,14 @@ class DetailsPage extends Page {
 
             await Promise.all(loadTasks);
 
-            // Trigger theme song background audio if user has activated it in display settings
+            // Trigger theme song background audio if user has activated it
             if (storage.getItem('pref:playThemeSongs') === 'true') {
                 void this._playThemeSong();
             }
 
-            // 4. Rebuild navigation chain after everything is in the DOM
-            // We use requestAnimationFrame to ensure the browser has parsed the new HTML
+            // ────────────────────────────────────────────────────────────────────────
+            // 5. Post-render tasks (navigation chain, focus restoration)
+            // ────────────────────────────────────────────────────────────────────────
             await new Promise((resolve) => {
                 requestAnimationFrame(() => {
                     this._rebuildNavigationChain();
@@ -560,12 +548,8 @@ class DetailsPage extends Page {
                 });
             });
 
-            // FIX: Ensure Focus Manager knows about the Resume button if it appeared
             focusManager.invalidateCache('details-actions');
 
-            // 5. Restore custom scroll/focus FIRST before hiding the loading overlay
-            // If we have a pending navigation state, it will be handled by restoreScrollFocusWhenReady()
-            // which was called in onInit. If not, we handle initial landing here.
             requestAnimationFrame(() => {
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
                 let lastFocusedObj = null;
@@ -582,7 +566,6 @@ class DetailsPage extends Page {
                     const targetId = lastFocusedObj.itemId;
                     const sectionId = lastFocusedObj.sectionId;
 
-                    // Support virtual rows (where elements might not be in DOM yet) by finding index
                     const virtualRow = this._virtualRows ? this._virtualRows[sectionId] : null;
 
                     if (virtualRow) {
@@ -598,7 +581,6 @@ class DetailsPage extends Page {
                             }
                         }
                     } else {
-                        // Standard fallback for non-virtual row sections (like similar items if they aren't virtual)
                         const sectionConfig = focusManager.getSectionConfig(sectionId);
                         const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
                         const savedCard = sectionContainer.querySelector(
@@ -616,7 +598,6 @@ class DetailsPage extends Page {
 
                 if (!restoredFocus && !this._pendingNavState) {
                     if (this._item.UserData?.PlaybackPositionTicks > 0) {
-                        // If we have resume progress (Movie/Episode), FORCE focus to the resume button
                         const resumeBtn = this.$('.resume-btn');
                         if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
                             log.info('Forcing focus to Resume button');
@@ -624,9 +605,6 @@ class DetailsPage extends Page {
                         }
                     }
                 }
-
-                // 6. NOW hide loading — page is scrolled and focused correctly
-                this.setLoading(false);
             });
         } catch (error) {
             log.error('Failed to load', error);
@@ -819,13 +797,6 @@ class DetailsPage extends Page {
 
         // Load Artists (Music/Albums)
         await this._loadArtists();
-
-        // Already loaded via conditional above if MusicAlbum,
-        // but this ensures fallback or shared logic consistency
-        // await this._loadAlbumSongs();
-
-        // Load Logo (non-blocking, fire and forget)
-        this._loadLogo();
     }
 
     async _loadArtists() {
