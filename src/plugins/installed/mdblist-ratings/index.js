@@ -82,15 +82,17 @@ export default {
             // 1. Try to get IDs and ratings from MDBList cache
             const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
 
-            let finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb;
-
-            // 2. Fallback: If MDBList plugin doesn't have the item in cache, fetch IMDb ID from Jellyfin
-            if (!finalImdbId) {
-                try {
-                    const itemInfo = await this.api.getItem(itemId);
-                    finalImdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb;
-                } catch (e) {
-                    this.log.warn('Could not fetch IMDb ID from Jellyfin for metadata request:', e);
+            // 2. Resolve IMDb ID only if awards are requested (to avoid wasteful fallback API calls)
+            let finalImdbId = null;
+            if (includeAwards) {
+                finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb;
+                if (!finalImdbId) {
+                    try {
+                        const itemInfo = await this.api.getItem(itemId);
+                        finalImdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb;
+                    } catch (e) {
+                        this.log.warn('Could not fetch IMDb ID from Jellyfin for metadata request:', e);
+                    }
                 }
             }
 
@@ -132,7 +134,8 @@ export default {
 
         try {
             // Use the new public method to get metadata
-            const metadata = await this.getItemMetadata(itemId);
+            const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
+            const metadata = await this.getItemMetadata(itemId, null, userWantsAwards);
 
             const tryRender = () => {
                 const metaRow = pageEl.querySelector('.details-meta-row');
