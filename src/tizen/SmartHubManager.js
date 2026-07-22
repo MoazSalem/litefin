@@ -162,16 +162,27 @@ class SmartHubManager {
         });
 
         // ── Playback end — refresh tiles ────────────────────────────────
-        // When the user finishes watching an item, the Continue Watching and
-        // Next Up data may have changed. Run a fresh update so the Smart Hub
-        // tiles reflect the new state. The update() method has a built-in
-        // concurrency guard so rapid back-to-back calls are safe.
-        eventBus.on('player:ended', () => {
+        // ── Playback end / stop — refresh tiles ─────────────────────────
+        // When the user finishes watching or stops an item, the Continue Watching
+        // and Next Up data may have changed. We listen to both 'player:ended' (natural completion)
+        // and 'player:stopped' (user backing out or manually stopping) to cover all exit paths.
+        //
+        // We introduce a 2-second delay before calling update() to ensure the Jellyfin
+        // server has fully received, processed, and committed the playback stop report
+        // before we query the fresh lists. This avoids fetching stale data due to network race conditions.
+        const handlePlaybackFinished = () => {
             if (this._cycleActive) {
-                log.info('Playback ended — refreshing Smart Hub preview');
-                this.update();
+                log.info('Playback finished or stopped — scheduling Smart Hub preview refresh in 2s');
+                setTimeout(() => {
+                    if (this._cycleActive) {
+                        this.update();
+                    }
+                }, 2000);
             }
-        });
+        };
+
+        eventBus.on('player:ended', handlePlaybackFinished);
+        eventBus.on('player:stopped', handlePlaybackFinished);
     }
 
     /**
@@ -298,30 +309,30 @@ class SmartHubManager {
 
             // ─── Phase 1: Try server-side Litefin plugin first ─────────────────
             // Query the custom endpoint provided by our Litefin plugin.
-            // When using the plugin, we fetch up to 8 pre-merged, deduplicated,
+            // When using the plugin, we fetch up to 10 pre-merged, deduplicated,
             // and chronologically sorted items directly from the server.
             try {
                 log.info('Attempting to fetch pre-merged continue/next-up items from Litefin plugin');
-                const response = await api.getMergedRows({ limit: 8 });
+                const response = await api.getMergedRows({ limit: 10 });
                 if (response && response.Items && response.Items.length > 0) {
                     log.info('Successfully fetched merged items from server-side Litefin plugin');
-                    mergedItems = response.Items;
+                    mergedItems = response.Items.slice(0, 10);
                 }
             } catch (err) {
                 // Plugin is not installed or returned an error; fallback to client-side logic
                 log.warn('Litefin plugin endpoint failed or not installed. Falling back to client-side merge:', err);
             }
 
-            // ─── Phase 2: Fallback to client-side merging (4 and 4) ─────────────
+            // ─── Phase 2: Fallback to client-side merging (5 and 5) ─────────────
             // If the server-side plugin didn't return any items, we perform
-            // a client-side merge by fetching 4 resume items and 4 next-up items.
+            // a client-side merge by fetching 5 resume items and 5 next-up items.
             if (mergedItems.length === 0) {
-                log.info('Falling back to client-side merge (4 and 4 items)');
-                
+                log.info('Falling back to client-side merge (5 and 5 items)');
+
                 // Fetch both lists in parallel to minimize network roundtrips
                 const [resumeRes, nextUpRes] = await Promise.all([
                     api.getResumeItems({
-                        Limit: 4,
+                        Limit: 5,
                         ImageTypeLimit: 1,
                         EnableImageTypes: 'Primary,Backdrop,Thumb',
                         EnableTotalRecordCount: false
@@ -331,12 +342,12 @@ class SmartHubManager {
                         const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                         const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                         const params = {
-                            Limit: 4,
+                            Limit: 5,
                             ImageTypeLimit: 1,
                             EnableImageTypes: 'Primary,Backdrop,Thumb',
                             EnableTotalRecordCount: false
                         };
-                        
+
                         // Apply the cutoff date constraint if configured
                         if (daysLimit > 0) {
                             const cutoff = new Date();
@@ -448,8 +459,14 @@ class SmartHubManager {
                 .join(', ');
             log.info(`Preview JSON built — sections: [${sectionSummary || 'EMPTY — nothing to show'}]`);
 
-            /* Dispatch the JSON to the ytresolver background service and
-             * wait for its ACK before releasing the updating guard. */
+            /* Dispatch the JSON to the ytresolver background service.
+             *
+             * Samsung Smart Hub caches preview tile data at the TV system level.
+             * To guarantee the fresh data is accepted and not served from cache,
+             * we first send an empty sections payload to clear the current tiles,
+             * then immediately follow with the real data. This two-step approach
+             * forces Samsung's home screen to drop the stale cached version. */
+            await this._sendToService({ sections: [] });
             await this._sendToService(previewJson);
 
             log.info('Smart Hub update complete');
@@ -545,10 +562,8 @@ class SmartHubManager {
             .filter(Boolean); /* _buildTile returns null for unsupported types. */
 
         // If we have valid tiles, add them under the 'Continue Watching' section.
-        // We reverse the array because Samsung Smart Hub renders the tiles in
-        // right-to-left order on the home screen UI, ensuring the most recent item is leftmost.
         if (tiles.length > 0) {
-            sections.push({ title: 'Continue Watching', tiles: tiles.reverse() });
+            sections.push({ title: 'Continue Watching', tiles: tiles });
         }
 
         return { sections };
@@ -739,7 +754,7 @@ class SmartHubManager {
                 if (localPort !== null && listenerId !== null) {
                     try {
                         localPort.removeMessagePortListener(listenerId);
-                    } catch (_) {}
+                    } catch (_) { }
                     listenerId = null;
                 }
             };
