@@ -99,33 +99,44 @@ class PersonPage extends Page {
         this.setLoading(true);
 
         try {
-            // 1. Fetch Person Details
+            // ────────────────────────────────────────────────────────────
+            // 1. Fetch person metadata + render text (blocking)
+            // ────────────────────────────────────────────────────────────
             this._person = await api.getPerson(this._personId);
             this.title = this._person.Name;
 
             this._renderPersonInfo();
 
-            // 2. Determine if this is a music artist or an actor/person
+            // ────────────────────────────────────────────────────────────
+            // 2. Fire poster/backdrop (non-blocking, fire-and-forget)
+            // ────────────────────────────────────────────────────────────
+            this._setSmartBackdrop();
+
+            // ────────────────────────────────────────────────────────────
+            // 3. Hide loading — text content is visible, images loading in bg
+            // ────────────────────────────────────────────────────────────
+            this.setLoading(false);
+
+            // ────────────────────────────────────────────────────────────
+            // 4. Load works in visual order after loading is hidden
+            // ────────────────────────────────────────────────────────────
             const isArtist = this._person.Type === 'MusicArtist' || this._person.Type === 'Artist';
 
             if (isArtist) {
-                // --- Music Artist Mode: load Albums and Songs ---
-                const [albumsResult, songsResult] = await Promise.all([
-                    api.getArtistAlbums(this._personId),
-                    api.getArtistSongs(this._personId)
-                ]);
+                // 4a. Albums first (top), then Songs (bottom)
+                const albumsResult = await api.getArtistAlbums(this._personId);
+                const albums = albumsResult.Items || [];
+                log.debug('Loaded artist albums', { count: albums.length });
 
-                log.debug('Loaded artist content', {
-                    albums: albumsResult.Items?.length ?? 0,
-                    songs: songsResult.Items?.length ?? 0
-                });
+                const songsResult = await api.getArtistSongs(this._personId);
+                const songs = songsResult.Items || [];
+                log.debug('Loaded artist songs', { count: songs.length });
 
-                this._renderArtistWorks(albumsResult.Items || [], songsResult.Items || []);
+                this._renderArtistWorks(albums, songs);
             } else {
-                // --- Actor / Crew Mode: load Movies/Shows/Episodes ---
+                // 4a. Movies/Shows/Episodes (renders in visual order: Movies → Shows → Episodes)
                 const result = await api.getPersonItems(this._personId);
                 this._items = result.Items || [];
-
                 log.debug('Loaded items', {
                     total: this._items.length,
                     movies: this._items.filter((i) => i.Type === 'Movie').length,
@@ -135,56 +146,53 @@ class PersonPage extends Page {
 
                 this._renderWorks();
 
-                // Background: Fetch role names and update UI when ready
+                // 4b. Background: Fetch role names and update UI when ready
                 this._loadRolesInBackground();
             }
-
-            // Set background (Person's own, or fallback to best work for actors)
-            this._setSmartBackdrop();
         } catch (error) {
             log.error('Failed to load', error);
             this.showError('Failed to load person details');
-        } finally {
-            this.setLoading(false);
-
-            // Focus Nav restored or default
-            requestAnimationFrame(() => {
-                const stateKey = `person:lastFocusedItem:${this._personId}`;
-                let lastFocusedObj = null;
-
-                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
-                    lastFocusedObj = state.get(stateKey);
-                } else {
-                    state.delete(stateKey);
-                }
-
-                let restoredFocus = false;
-
-                if (lastFocusedObj) {
-                    const targetId = lastFocusedObj.itemId;
-                    const sectionId = lastFocusedObj.sectionId;
-
-                    const sectionConfig = focusManager.getSectionConfig(sectionId);
-                    const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
-
-                    const savedCard = sectionContainer.querySelector(
-                        `[data-item-id="${targetId}"], [data-id="${targetId}"]`
-                    );
-
-                    if (savedCard) {
-                        this.setActiveSection(sectionId, false);
-                        focusManager.focusElement(savedCard, { instantScroll: true });
-                        restoredFocus = true;
-                    }
-
-                    state.delete(stateKey);
-                }
-
-                if (!restoredFocus) {
-                    this.setActiveSection('person-fav-actions');
-                }
-            });
         }
+
+        // ────────────────────────────────────────────────────────────
+        // 5. Focus restoration (runs after works are in DOM)
+        // ────────────────────────────────────────────────────────────
+        requestAnimationFrame(() => {
+            const stateKey = `person:lastFocusedItem:${this._personId}`;
+            let lastFocusedObj = null;
+
+            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                lastFocusedObj = state.get(stateKey);
+            } else {
+                state.delete(stateKey);
+            }
+
+            let restoredFocus = false;
+
+            if (lastFocusedObj) {
+                const targetId = lastFocusedObj.itemId;
+                const sectionId = lastFocusedObj.sectionId;
+
+                const sectionConfig = focusManager.getSectionConfig(sectionId);
+                const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
+
+                const savedCard = sectionContainer.querySelector(
+                    `[data-item-id="${targetId}"], [data-id="${targetId}"]`
+                );
+
+                if (savedCard) {
+                    this.setActiveSection(sectionId, false);
+                    focusManager.focusElement(savedCard, { instantScroll: true });
+                    restoredFocus = true;
+                }
+
+                state.delete(stateKey);
+            }
+
+            if (!restoredFocus) {
+                this.setActiveSection('person-fav-actions');
+            }
+        });
     }
 
     _setSmartBackdrop() {
