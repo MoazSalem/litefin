@@ -1025,7 +1025,6 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
-
             // Build player options. If a specific media source version was pre-selected
             // on the details screen (e.g. 720p vs 1080p), ensure we pass the target
             // mediaSourceId down as a fallback even if the client-side metadata matching
@@ -2525,9 +2524,9 @@ class PlayerPage extends Page {
             }
 
             // Bind buttons
-            const retryBtn          = this.$('#error-retry-btn');
-            const playbackModeBtn   = this.$('#error-playback-mode-btn');
-            const backBtn           = this.$('#error-back-btn');
+            const retryBtn = this.$('#error-retry-btn');
+            const playbackModeBtn = this.$('#error-playback-mode-btn');
+            const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
                 retryBtn.onclick = () => this._retryPlayback();
@@ -2647,7 +2646,7 @@ class PlayerPage extends Page {
 
             // Step 3 — install one-shot wrappers around key handling and selection.
             const originalHandleEnter = menu.handleEnter.bind(menu);
-            const originalHandleKey   = menu.handleKey.bind(menu);
+            const originalHandleKey = menu.handleKey.bind(menu);
             let hookActive = true;
 
             // Helper: remove hook and restore normal methods
@@ -2655,7 +2654,7 @@ class PlayerPage extends Page {
                 if (hookActive) {
                     hookActive = false;
                     menu.handleEnter = originalHandleEnter;
-                    menu.handleKey   = originalHandleKey;
+                    menu.handleKey = originalHandleKey;
                 }
             };
 
@@ -2732,8 +2731,6 @@ class PlayerPage extends Page {
             menu._prevFocus = null;
         }, 0);
     }
-
-
 
     /**
      * Report playback stopped to server
@@ -3071,6 +3068,14 @@ class PlayerPage extends Page {
         // Emit for any general listeners; no longer used by the chain logic
         // but kept for potential future use (e.g., analytics, remote control).
         eventBus.emit('player:stopped', { itemId: this._item?.Id, reason });
+
+        // Invalidate stale caches so pages reload fresh data after playback
+        if (this._isPlaybackEnded && this._item) {
+            if (this._item.Type === 'Episode' && this._item.SeriesId && this._item.SeasonId) {
+                state.delete(`details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`);
+            }
+            state.delete('home:pageCache');
+        }
 
         // ----------------------------------------------------------------
         // Navigation Override: Ensure we return to the Details page of the

@@ -4663,12 +4663,48 @@ class DetailsPage extends Page {
     }
 
     _updateCachedPlayedStatus() {
-        const cachedItem = Object.entries(state.getAll())
-            .filter(([key, cached]) => key.startsWith('library:state:') && cached?.stateData?.items)
-            .flatMap(([, cached]) => cached.stateData.items)
-            .find(({ Id }) => Id === this._itemId);
+        const itemId = this._itemId;
+        const userData = this._item.UserData;
 
-        if (cachedItem) cachedItem.UserData = { ...cachedItem.UserData, ...this._item.UserData };
+        // 1. Patch library:state:* caches (library page grid items)
+        const allState = state.getAll();
+        for (const [key, val] of Object.entries(allState)) {
+            if (key.startsWith('library:state:') && val?.stateData?.items) {
+                const match = val.stateData.items.find(({ Id }) => Id === itemId);
+                if (match) match.UserData = { ...match.UserData, ...userData };
+            }
+        }
+
+        // 2. Patch details:episodes:* caches (season episode lists)
+        for (const [key, episodes] of Object.entries(allState)) {
+            if (key.startsWith('details:episodes:') && Array.isArray(episodes)) {
+                const match = episodes.find((ep) => ep.Id === itemId);
+                if (match) match.UserData = { ...match.UserData, ...userData };
+            }
+        }
+
+        // 3. Delete home:pageCache — row structure depends on server-side filters
+        // (e.g. continue watching = PlaybackPositionTicks > 0), so patching individual
+        // item UserData isn't enough. Force a full refetch on next HomePage visit.
+        state.delete('home:pageCache');
+
+        // 4. Re-render the More from Season row if on an Episode page
+        if (this._item?.Type === 'Episode' && this._item.SeriesId && this._item.SeasonId) {
+            this._refreshMoreFromSeason();
+        }
+    }
+
+    _refreshMoreFromSeason() {
+        const list = this.$('#more-from-season-row');
+        const section = this.$('#more-from-season-section');
+        if (!list || !section) return;
+
+        // Clear old virtual row so _loadMoreFromSeason renders fresh
+        delete this._virtualRows?.['more-from-season-section'];
+
+        // Re-render with current (now-patched) cached data
+        list.innerHTML = '';
+        this._loadMoreFromSeason();
     }
 
     async _resetProgress() {
