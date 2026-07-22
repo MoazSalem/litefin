@@ -508,20 +508,31 @@ class DetailsPage extends Page {
             this._currentUser = await userPromise;
 
             // ────────────────────────────────────────────────────────────────────────
-            // 2. Fire images and logo in the background (non-blocking, fire-and-forget)
+            // 2. Fire background images (non-blocking)
             // ────────────────────────────────────────────────────────────────────────
             this._loadImages();
-            this._loadLogo();
 
             // ────────────────────────────────────────────────────────────────────────
-            // 3. Hide loading — main text content is visible, images loading in bg
+            // 3. Load logo — await for backdrop layouts (where logo is the primary
+            //    title), fire-and-forget for poster layouts (text title is sufficient)
+            // ────────────────────────────────────────────────────────────────────────
+            const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+            const isBackdropLayout = detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft';
+            if (isBackdropLayout) {
+                await this._loadLogoAsync();
+            } else {
+                this._loadLogo();
+            }
+
+            // ────────────────────────────────────────────────────────────────────────
+            // 4. Hide loading — main text content is visible, images/logo loading in bg
             // ────────────────────────────────────────────────────────────────────────
             this.setLoading(false);
 
             // ────────────────────────────────────────────────────────────────────────
-            // 4. Load secondary content in visual order (top rows first, bottom rows last)
+            // 5. Load secondary content in visual order (top rows first, bottom rows last)
             // ────────────────────────────────────────────────────────────────────────
-            // 4a. Primary rows first (seasons, episodes, cast, special features)
+            // 5a. Primary rows first (seasons, episodes, cast, special features)
             await this._loadSecondaryContent();
 
             // 4b. Bottom-of-page rows after (similar items, collections)
@@ -1617,59 +1628,60 @@ class DetailsPage extends Page {
     }
 
     _loadLogo() {
+        return this._loadLogoAsync();
+    }
+
+    /**
+     * Load the logo image and return a promise that resolves when the logo
+     * is loaded (or immediately if no logo exists).
+     * @returns {Promise<void>}
+     */
+    _loadLogoAsync() {
         const item = this._item;
-        // Check for Logo using ImageTags.Logo or ParentLogoImageTag
         const logoTag = item.ImageTags?.Logo || item.ParentLogoImageTag;
         const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId || item.SeriesId;
 
-        if (logoItemId && logoTag) {
-            const params = imageService.getParams('details-logo');
-            let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
-            const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
-            if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
-                titleStyle = 'logo-only';
-            }
-            const isLogoOnly = titleStyle === 'logo-only';
-            let baseWidth = isLogoOnly ? 360 : 280;
-            let baseHeight = isLogoOnly ? 140 : 100;
-            if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
-                baseWidth = 540;
-                baseHeight = 220;
-            }
-            const dpr = window.devicePixelRatio || 1;
+        if (!logoItemId || !logoTag) return Promise.resolve();
 
-            const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                fillWidth: Math.round(baseWidth * dpr),
-                fillHeight: Math.round(baseHeight * dpr),
-                quality: params.quality,
-                tag: logoTag
-            });
-            const img = new Image();
-            if (item.Type === 'Season' || item.Type === 'Episode') {
-                const targetId = item.SeriesId;
-                if (targetId) {
-                    img.classList.add('clickable-logo');
-                    img.onclick = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        log.info('Logo clicked, navigating to series details:', targetId);
-                        router.navigate(`/details/${targetId}`);
-                    };
-                }
-            }
+        const params = imageService.getParams('details-logo');
+        let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
+            titleStyle = 'logo-only';
+        }
+        const isLogoOnly = titleStyle === 'logo-only';
+        let baseWidth = isLogoOnly ? 360 : 280;
+        let baseHeight = isLogoOnly ? 140 : 100;
+        if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
+            baseWidth = 540;
+            baseHeight = 220;
+        }
+        const dpr = window.devicePixelRatio || 1;
 
+        const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
+            fillWidth: Math.round(baseWidth * dpr),
+            fillHeight: Math.round(baseHeight * dpr),
+            quality: params.quality,
+            tag: logoTag
+        });
+        const img = new Image();
+        if (item.Type === 'Season' || item.Type === 'Episode') {
+            const targetId = item.SeriesId;
+            if (targetId) {
+                img.classList.add('clickable-logo');
+                img.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    log.info('Logo clicked, navigating to series details:', targetId);
+                    router.navigate(`/details/${targetId}`);
+                };
+            }
+        }
+
+        return new Promise((resolve) => {
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
-                    // =========================================================================
-                    // Dynamic Visual Weight Adaptation (Sleek Proportional Spacing)
-                    // =========================================================================
-                    // Calculate the natural aspect ratio of the loaded logo image.
-                    // By dividing the max width by the aspect ratio, we find the target height.
-                    // We cap the height dynamically to keep the layout visually balanced:
-                    // - Tall/square logos get more height (up to 140px) to remain legible.
-                    // - Wide/short logos shrink in container height to eliminate top whitespace.
-                    // =========================================================================
                     const aspect = img.naturalWidth / img.naturalHeight || 1;
                     let maxW = isLogoOnly ? 360 : 280;
                     let minHeight = isLogoOnly ? 60 : 50;
@@ -1682,17 +1694,17 @@ class DetailsPage extends Page {
                     const targetHeight = maxW / aspect;
                     const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
 
-                    // Apply the computed height dynamically
                     logoContainer.style.height = `${containerHeight}px`;
 
                     logoContainer.innerHTML = '';
                     logoContainer.appendChild(img);
                     img.classList.add('loaded');
                 }
+                resolve();
             };
+            img.onerror = () => resolve();
             img.src = logoUrl;
-            // img.alt = item.Name + " Logo"; // Alt might show if transparent PNG fails?
-        }
+        });
     }
 
     /**
