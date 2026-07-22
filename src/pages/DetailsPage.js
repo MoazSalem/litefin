@@ -519,19 +519,18 @@ class DetailsPage extends Page {
             this.setLoading(false);
 
             // ────────────────────────────────────────────────────────────────────────
-            // 4. Load secondary content (rows, similar, collections) after loading hidden
+            // 4. Load secondary content in visual order (top rows first, bottom rows last)
             // ────────────────────────────────────────────────────────────────────────
-            const loadTasks = [this._loadSecondaryContent()];
+            // 4a. Primary rows first (seasons, episodes, cast, special features)
+            await this._loadSecondaryContent();
 
+            // 4b. Bottom-of-page rows after (similar items, collections)
             if (this._item.Type !== 'Season') {
-                loadTasks.push(this._loadSimilar());
+                await this._loadSimilar();
             }
-
             if (this._item.Type === 'Movie' || this._item.Type === 'Series') {
-                loadTasks.push(this._loadItemCollections());
+                await this._loadItemCollections();
             }
-
-            await Promise.all(loadTasks);
 
             // Trigger theme song background audio if user has activated it
             if (storage.getItem('pref:playThemeSongs') === 'true') {
@@ -755,22 +754,23 @@ class DetailsPage extends Page {
     async _loadSecondaryContent() {
         // Load additional data based on type
         if (this._item.Type === 'Series') {
-            await Promise.all([this._loadNextUp(), this._loadSeasons()]);
+            // Next Up is above Seasons visually
+            await this._loadNextUp();
+            await this._loadSeasons();
         } else if (this._item.Type === 'Season') {
             this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
         } else if (this._item.Type === 'Episode') {
             this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
+            // More from Season is above Guest Stars visually
+            await this._loadMoreFromSeason();
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
-            const loads = [this._loadMoreFromSeason()];
             if (!hideCast) {
-                loads.push(this._loadGuestStars());
+                await this._loadGuestStars();
             } else {
-                // Ensure section is hidden if guest stars are skipped
                 const guestStarsSection = this.$('#guest-stars-section');
                 if (guestStarsSection) guestStarsSection.classList.add('hidden');
             }
-            await Promise.all(loads);
         } else if (this._item.Type === 'BoxSet') {
             await this._loadCollectionItems();
         } else if (this._item.Type === 'MusicAlbum') {
