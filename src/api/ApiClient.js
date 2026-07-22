@@ -162,6 +162,15 @@ export class ApiClient {
         log.info('Authentication cleared');
     }
 
+    /**
+     * Clear the ETag response cache. Call after playback or server data mutations
+     * to ensure the next request fetches fresh data instead of a 304-stale body.
+     */
+    clearEtagCache() {
+        this._etagCache.clear();
+        log.debug('ETag cache cleared');
+    }
+
     // ========================================================================
     // Header Management
     // ========================================================================

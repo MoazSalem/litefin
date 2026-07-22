@@ -3070,11 +3070,18 @@ class PlayerPage extends Page {
         eventBus.emit('player:stopped', { itemId: this._item?.Id, reason });
 
         // Invalidate stale caches so pages reload fresh data after playback
-        if (this._isPlaybackEnded && this._item) {
+        if (this._item) {
+            // Clear the ETag cache so the next API requests get fresh 200
+            // responses instead of stale 304-cached bodies.
+            api.clearEtagCache();
+
+            // Invalidate home page's rendered row cache
+            state.delete('home:pageCache');
+
+            // Invalidate episode listing for the current series/season
             if (this._item.Type === 'Episode' && this._item.SeriesId && this._item.SeasonId) {
                 state.delete(`details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`);
             }
-            state.delete('home:pageCache');
         }
 
         // ----------------------------------------------------------------

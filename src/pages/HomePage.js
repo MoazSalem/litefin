@@ -675,6 +675,7 @@ class HomePage extends Page {
             // ─── Step 0: Try to restore from cached data ────────────────────
             // On back-navigation, avoid all network calls and render from cache.
             const cache = this._getValidCache();
+            this._wasPageCached = !!cache;
 
             if (cache) {
                 log.info('Restoring homepage from cache');
@@ -791,48 +792,22 @@ class HomePage extends Page {
                 this.setLoading(false);
             }
 
-            // ─── Step 6: Render groups — priority 0 first, then rest in parallel ──
-            // Priority 0 (My Media) renders first since data is already in memory.
-            // Remaining priorities are independent, so they fire in parallel.
-            const p0Group = priorityGroups.get(0);
-            if (p0Group) {
-                await Promise.all(p0Group.map((descriptor) => this._loadAndRenderRow(descriptor)));
-                if (!this._isMounted) return;
+            // ─── Step 6: Render priority 0 + 1 (above-the-fold rows) ────────
+            // My Media (P0) + Continue Watching/Next Up (P1) are the first rows
+            // the user sees. We await these so we can reveal the page ASAP.
+            const earlyPriorities = [0, 1];
+            for (const p of earlyPriorities) {
+                const group = priorityGroups.get(p);
+                if (group) {
+                    await Promise.all(group.map((d) => this._loadAndRenderRow(d)));
+                    if (!this._isMounted) return;
+                }
             }
 
-            const remainingPriorities = priorities.filter((p) => p !== 0);
-            if (remainingPriorities.length > 0) {
-                await Promise.all(
-                    remainingPriorities.map((p) =>
-                        Promise.all(priorityGroups.get(p).map((d) => this._loadAndRenderRow(d)))
-                    )
-                );
-                if (!this._isMounted) return;
-            }
-
-            // ─── Step 7: Post-render cleanup ──────────────────────────────────
-            // After all rows are rendered, pre-warm the ScrollController offset
-            // cache in one batched layout read (much cheaper than per-row reads).
-            this._prewarmScrollCache();
-
-            // Notify base Page that async content is ready for scroll/focus restoration
-            this.restoreScrollFocusWhenReady();
-
-            // Mark the page as fully loaded and ready, resolving the ready Promise
-            this.markReady();
-
-            // Safety net: if no row triggered _tryInitializeFocus during rendering
-            // (e.g. all rows failed or there was no target row), initialize now.
-            if (!this._focusInitialized) {
-                this._tryInitializeFocus(this.$('#home-rows'));
-            }
-
-            // ─── Cache data for instant back-navigation ─────────────────────
-            if (!cache) {
-                this._savePageCache();
-            }
-
-            // ─── Deferred library thumb enrichment (cosmetic, non-blocking) ─
+            // ─── Step 7: Fire library thumb enrichment (cosmetic, non-blocking) ─
+            // My Media is now rendered — start loading dynamic library thumbnails
+            // immediately so they populate as soon as images resolve, rather than
+            // waiting for all background rows to complete.
             if (this._deferredThumbEnrich) {
                 const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
                 this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode).catch((err) =>
@@ -841,29 +816,54 @@ class HomePage extends Page {
                 this._deferredThumbEnrich = false;
             }
 
-            // ── Reveal page with focus already in place ───────────────────────
-            // We wait until ALL rows have finished rendering before hiding the
-            // loading overlay. We use a rAF so that the browser paints the final
-            // fully-rendered row layout BEFORE we call _hideSplash(), and so that
-            // any focus-restoring rAF queued by _tryInitializeFocus() (which runs
-            // during Step 6) has already fired and placed focus correctly.
+            // ─── Step 8: Hide splash early + restore focus ───────────────────
+            // At this point My Media + content rows are visible. Reveal the page
+            // so the user can start interacting while remaining rows load.
             requestAnimationFrame(() => {
                 if (!this._isMounted) return;
 
-                // Execute any pending focus restoration callback
-                // (queued by _tryInitializeFocus when the target row rendered during Step 6)
-                if (typeof this._pendingFocusRestore === 'function') {
-                    this._pendingFocusRestore();
-                    this._pendingFocusRestore = null;
-                }
+                try {
+                    // Safety net: if no row triggered _tryInitializeFocus during P0/P1
+                    // (e.g. focus target is a background row), initialize on first row.
+                    if (!this._focusInitialized) {
+                        this._tryInitializeFocus(this.$('#home-rows'));
+                    }
 
-                // Final fallback: if nothing focused yet, go to sidebar
-                if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
-                    this.setActiveSection('sidebar');
+                    // Execute any pending focus restoration callback
+                    if (typeof this._pendingFocusRestore === 'function') {
+                        this._pendingFocusRestore();
+                        this._pendingFocusRestore = null;
+                    }
+
+                    // Final fallback: if nothing focused yet, go to sidebar
+                    if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+                        this.setActiveSection('sidebar');
+                    }
+                } catch (err) {
+                    log.error('Focus restoration failed, hiding splash anyway', err);
                 }
 
                 this._hideSplash();
             });
+
+            // ─── Step 9: Render remaining priority groups in background ────
+            // These rows are below the fold — non-critical for first interaction.
+            // We load them sequentially (one priority group at a time) so the
+            // HTTP connection pool isn't overwhelmed on slow TV processors.
+            const remainingPriorities = priorities.filter((p) => p !== 0 && p !== 1);
+            if (remainingPriorities.length > 0) {
+                this._loadBackgroundRows(remainingPriorities, priorityGroups).catch((err) =>
+                    log.error('Background row loading failed', err)
+                );
+            } else {
+                // No background rows — do cleanup now
+                this._prewarmScrollCache();
+                this.restoreScrollFocusWhenReady();
+                this.markReady();
+                if (!cache) {
+                    this._savePageCache();
+                }
+            }
         } catch (error) {
             log.error('Pipeline failed', error);
 
@@ -1003,6 +1003,39 @@ class HomePage extends Page {
                 placeholder.remove();
             }
             this._checkFocusRestoration(descriptor.id, false);
+        }
+    }
+
+    /**
+     * Loads remaining priority groups in the background after the splash overlay
+     * has been hidden. Rows within each priority group fire in parallel, but groups
+     * run sequentially to avoid overwhelming the TV's limited HTTP connection pool.
+     *
+     * Once all background rows complete, runs post-render cleanup (prewarm scroll
+     * cache, markReady, save page cache, library thumb enrichment).
+     *
+     * @param {number[]} remainingPriorities - Priority values to load
+     * @param {Map<number, RowDescriptor[]>} priorityGroups
+     */
+    async _loadBackgroundRows(remainingPriorities, priorityGroups) {
+        for (const p of remainingPriorities) {
+            if (!this._isMounted) return;
+            const group = priorityGroups.get(p);
+            if (group) {
+                await Promise.all(group.map((d) => this._loadAndRenderRow(d)));
+            }
+        }
+
+        // ─── Post-background cleanup ──────────────────────────────────────
+        if (!this._isMounted) return;
+
+        this._prewarmScrollCache();
+        this.restoreScrollFocusWhenReady();
+        this.markReady();
+
+        // Save page cache for instant back-navigation (skip if restoring from cache)
+        if (!this._wasPageCached) {
+            this._savePageCache();
         }
     }
 
