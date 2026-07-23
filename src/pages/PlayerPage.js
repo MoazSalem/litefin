@@ -3070,9 +3070,15 @@ class PlayerPage extends Page {
             // on webOS/Tizen where the page context may be torn down before the fetch
             // finishes — causing the stop signal to never reach the server and transcoding
             // to continue indefinitely.
-            this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
+            // NOTE: We MUST await this call. The sync XHR path blocks the event loop
+            // so navigation cannot proceed until it finishes. If sync XHR throws and
+            // falls back to async fetch (keepalive), awaiting ensures the fetch has a
+            // chance to complete before the page context is destroyed.
+            try {
+                await this._reportPlaybackStopped(mediaSource, positionTicks, true);
+            } catch (err) {
                 log.warn('Background stop report failed:', err);
-            });
+            }
         } catch (error) {
             log.warn('Error during stop:', error);
         }
