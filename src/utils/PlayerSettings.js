@@ -492,6 +492,12 @@ const DEFAULTS = {
     // Preview/next-episode teaser segment action
     skipActionPreview: 'None',
 
+    // Segment data source preference ('both', 'server', 'chapters')
+    //   'both'     — Merge Intro-Skipper server plugin & Chapter markers (default)
+    //   'server'   — Only use Intro-Skipper server plugin
+    //   'chapters' — Only use Chapter markers (disable server-reported segments)
+    skipSegmentSource: 'both',
+
     // Show show/movie logo in OSD instead of text title
     osdShowLogo: false,
 

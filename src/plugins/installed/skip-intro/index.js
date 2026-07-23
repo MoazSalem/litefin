@@ -371,156 +371,165 @@ const skipIntroPlugin = {
             return;
         }
 
-        // --------------------------------------------------------------------
-        // Check Plugin Presence dynamically.
-        // --------------------------------------------------------------------
-        let introSkipperAvailable = false;
-        try {
-            api.log.debug(`Skip Intro: probing intro-skipper plugin availability`);
-            const check = await api.serverPlugins.isPluginAvailable('intro-skipper', item);
-            introSkipperAvailable = !!check.available;
-        } catch (err) {
-            api.log.warn(`Skip Intro: failed to probe intro-skipper availability:`, err.message);
-        }
+        const sourcePref = PlayerSettings.get('skipSegmentSource') || 'both';
 
-        if (introSkipperAvailable) {
-            // ----------------------------------------------------------------
-            // PRIMARY PATH: Fetch timestamps from intro-skipper server plugin
-            // ----------------------------------------------------------------
+        // Initialize state arrays for this load run
+        this._introSegment = [];
+        this._outroSegment = [];
+        this._recapSegment = [];
+        this._previewSegment = [];
+
+        // --------------------------------------------------------------------
+        // Check Plugin Presence dynamically and fetch server timestamps
+        // --------------------------------------------------------------------
+        if (sourcePref !== 'chapters') {
+            let introSkipperAvailable = false;
             try {
-                api.log.info(`Skip Intro: fetching timestamps from intro-skipper for item ${itemId}`);
-                const data = await api.serverPlugins.call(`/Episode/${itemId}/Timestamps`);
-
-                // Helper to safely transform raw values into ticks as an array
-                const toSegment = (raw) => {
-                    if (!raw || !(raw.End > 0)) return [];
-                    return [{
-                        start: raw.Start * TICKS_PER_SECOND,
-                        end: raw.End * TICKS_PER_SECOND
-                    }];
-                };
-
-                this._introSegment = toSegment(data?.Introduction);
-                this._outroSegment = toSegment(data?.Credits);
-                this._recapSegment = toSegment(data?.Recap);
-                this._previewSegment = toSegment(data?.Preview);
-
-                api.log.info(
-                    `Skip Intro: successfully loaded timestamps from server —`,
-                    `intro=${this._introSegment.length > 0 ? 'yes' : 'no'}`,
-                    `outro=${this._outroSegment.length > 0 ? 'yes' : 'no'}`,
-                    `recap=${this._recapSegment.length > 0 ? 'yes' : 'no'}`,
-                    `preview=${this._previewSegment.length > 0 ? 'yes' : 'no'}`
-                );
+                api.log.debug(`Skip Intro: probing intro-skipper plugin availability`);
+                const check = await api.serverPlugins.isPluginAvailable('intro-skipper', item);
+                introSkipperAvailable = !!check.available;
             } catch (err) {
-                if (err.status === 404) {
-                    api.log.debug(`Skip Intro: no intro-skipper timestamps found for ${itemId}`);
-                } else {
-                    api.log.warn(`Skip Intro: intro-skipper API call failed:`, err.message);
-                }
+                api.log.warn(`Skip Intro: failed to probe intro-skipper availability:`, err.message);
             }
-        }
 
-        // Ensure segments are initialized as arrays (in case API route threw or wasn't run)
-        this._introSegment = this._introSegment || [];
-        this._outroSegment = this._outroSegment || [];
-        this._recapSegment = this._recapSegment || [];
-        this._previewSegment = this._previewSegment || [];
+            if (introSkipperAvailable) {
+                try {
+                    api.log.info(`Skip Intro: fetching timestamps from intro-skipper for item ${itemId}`);
+                    const data = await api.serverPlugins.call(`/Episode/${itemId}/Timestamps`);
 
-        // --------------------------------------------------------------------
-        // Retrieve chapters and merge results to fill any missing segments
-        // --------------------------------------------------------------------
-        let chapters = item.Chapters;
-        if (!chapters) {
-            try {
-                api.log.debug(`Skip Intro: fetching full item to retrieve chapters list`);
-                const fullItem = await api.getItem(itemId, { Fields: 'Chapters,RunTimeTicks' });
-                chapters = fullItem?.Chapters || [];
-                item.Chapters = chapters;
-                if (fullItem?.RunTimeTicks) {
-                    item.RunTimeTicks = fullItem.RunTimeTicks;
-                }
-            } catch (err) {
-                api.log.warn(`Skip Intro: failed to retrieve item chapters:`, err.message);
-                chapters = [];
-            }
-        }
+                    // Helper to safely transform raw values into ticks as an array
+                    const toSegment = (raw) => {
+                        if (!raw || !(raw.End > 0)) return [];
+                        return [{
+                            start: raw.Start * TICKS_PER_SECOND,
+                            end: raw.End * TICKS_PER_SECOND
+                        }];
+                    };
 
-        if (chapters && chapters.length > 0) {
-            // Sort chapters by start position for reliable sequential boundaries
-            const sortedChapters = [...chapters].sort((a, b) => a.StartPositionTicks - b.StartPositionTicks);
+                    this._introSegment = toSegment(data?.Introduction);
+                    this._outroSegment = toSegment(data?.Credits);
+                    this._recapSegment = toSegment(data?.Recap);
+                    this._previewSegment = toSegment(data?.Preview);
 
-            const chapterIntros = [];
-            const chapterOutros = [];
-            const chapterRecaps = [];
-
-            sortedChapters.forEach((c, idx) => {
-                const start = c.StartPositionTicks;
-                let end;
-                if (idx + 1 < sortedChapters.length) {
-                    end = sortedChapters[idx + 1].StartPositionTicks;
-                } else {
-                    end = start + (120 * TICKS_PER_SECOND);
-                }
-
-                // Check intro keywords
-                const isIntro = c.MarkerType === 'IntroStart' || (c.Name && (
-                    c.Name.toLowerCase().includes('intro') ||
-                    c.Name.toLowerCase().includes('opening') ||
-                    /\bop\b/i.test(c.Name)
-                ));
-
-                // Check outro keywords
-                const isCredits = c.MarkerType === 'Credits' || (c.Name && (
-                    c.Name.toLowerCase().includes('credit') ||
-                    c.Name.toLowerCase().includes('ending') ||
-                    /\bed\b/i.test(c.Name)
-                ));
-
-                // Check recap keywords
-                const isRecap = c.Name && c.Name.toLowerCase().includes('recap');
-
-                if (isIntro) {
-                    const durationTicks = end - start;
-                    const durationMinutes = durationTicks / (60 * TICKS_PER_SECOND);
-                    if (durationMinutes >= 3) {
-                        api.log.info(
-                            `Skip Intro: skipped mapping intro chapter [${c.Name || c.MarkerType}] ` +
-                            `due to long duration: ${durationMinutes.toFixed(1)} minutes (>= 3m)`
-                        );
+                    api.log.info(
+                        `Skip Intro: loaded timestamps from server —`,
+                        `intro=${this._introSegment.length > 0 ? 'yes' : 'no'}`,
+                        `outro=${this._outroSegment.length > 0 ? 'yes' : 'no'}`,
+                        `recap=${this._recapSegment.length > 0 ? 'yes' : 'no'}`,
+                        `preview=${this._previewSegment.length > 0 ? 'yes' : 'no'}`
+                    );
+                } catch (err) {
+                    if (err.status === 404) {
+                        api.log.debug(`Skip Intro: no intro-skipper timestamps found for ${itemId}`);
                     } else {
-                        chapterIntros.push({ start, end });
+                        api.log.warn(`Skip Intro: intro-skipper API call failed:`, err.message);
                     }
-                } else if (isCredits) {
-                    const creditsEnd = item.RunTimeTicks || (start + (300 * TICKS_PER_SECOND));
-                    chapterOutros.push({ start, end: creditsEnd });
-                } else if (isRecap) {
-                    const recapEnd = idx + 1 < sortedChapters.length ? sortedChapters[idx + 1].StartPositionTicks : (start + (60 * TICKS_PER_SECOND));
-                    chapterRecaps.push({ start, end: recapEnd });
                 }
-            });
+            }
+        }
 
-            // Local helper to merge segments without duplicates or overlaps
-            const mergeSegments = (serverSegs, chapterSegs) => {
-                const merged = [...serverSegs];
-                chapterSegs.forEach(c => {
-                    const overlaps = merged.some(s => {
-                        const timeOverlap = Math.max(c.start, s.start) < Math.min(c.end, s.end);
-                        const closeStart = Math.abs(c.start - s.start) < 5 * TICKS_PER_SECOND;
-                        return timeOverlap || closeStart;
-                    });
-                    if (!overlaps) {
-                        merged.push(c);
+        // --------------------------------------------------------------------
+        // Retrieve chapters and merge/set results if enabled
+        // --------------------------------------------------------------------
+        if (sourcePref !== 'server') {
+            let chapters = item.Chapters;
+            if (!chapters) {
+                try {
+                    api.log.debug(`Skip Intro: fetching full item to retrieve chapters list`);
+                    const fullItem = await api.getItem(itemId, { Fields: 'Chapters,RunTimeTicks' });
+                    chapters = fullItem?.Chapters || [];
+                    item.Chapters = chapters;
+                    if (fullItem?.RunTimeTicks) {
+                        item.RunTimeTicks = fullItem.RunTimeTicks;
+                    }
+                } catch (err) {
+                    api.log.warn(`Skip Intro: failed to retrieve item chapters:`, err.message);
+                    chapters = [];
+                }
+            }
+
+            if (chapters && chapters.length > 0) {
+                // Sort chapters by start position for reliable sequential boundaries
+                const sortedChapters = [...chapters].sort((a, b) => a.StartPositionTicks - b.StartPositionTicks);
+
+                const chapterIntros = [];
+                const chapterOutros = [];
+                const chapterRecaps = [];
+
+                sortedChapters.forEach((c, idx) => {
+                    const start = c.StartPositionTicks;
+                    let end;
+                    if (idx + 1 < sortedChapters.length) {
+                        end = sortedChapters[idx + 1].StartPositionTicks;
+                    } else {
+                        end = start + (120 * TICKS_PER_SECOND);
+                    }
+
+                    // Check intro keywords
+                    const isIntro = c.MarkerType === 'IntroStart' || (c.Name && (
+                        c.Name.toLowerCase().includes('intro') ||
+                        c.Name.toLowerCase().includes('opening') ||
+                        /\bop\b/i.test(c.Name)
+                    ));
+
+                    // Check outro keywords
+                    const isCredits = c.MarkerType === 'Credits' || (c.Name && (
+                        c.Name.toLowerCase().includes('credit') ||
+                        c.Name.toLowerCase().includes('ending') ||
+                        /\bed\b/i.test(c.Name)
+                    ));
+
+                    // Check recap keywords
+                    const isRecap = c.Name && c.Name.toLowerCase().includes('recap');
+
+                    if (isIntro) {
+                        const durationTicks = end - start;
+                        const durationMinutes = durationTicks / (60 * TICKS_PER_SECOND);
+                        if (durationMinutes >= 3) {
+                            api.log.info(
+                                `Skip Intro: skipped mapping intro chapter [${c.Name || c.MarkerType}] ` +
+                                `due to long duration: ${durationMinutes.toFixed(1)} minutes (>= 3m)`
+                            );
+                        } else {
+                            chapterIntros.push({ start, end });
+                        }
+                    } else if (isCredits) {
+                        const creditsEnd = item.RunTimeTicks || (start + (300 * TICKS_PER_SECOND));
+                        chapterOutros.push({ start, end: creditsEnd });
+                    } else if (isRecap) {
+                        const recapEnd = idx + 1 < sortedChapters.length ? sortedChapters[idx + 1].StartPositionTicks : (start + (60 * TICKS_PER_SECOND));
+                        chapterRecaps.push({ start, end: recapEnd });
                     }
                 });
-                return merged.sort((a, b) => a.start - b.start);
-            };
 
-            this._introSegment = mergeSegments(this._introSegment, chapterIntros);
-            this._outroSegment = mergeSegments(this._outroSegment, chapterOutros);
-            this._recapSegment = mergeSegments(this._recapSegment, chapterRecaps);
-        } else {
-            api.log.debug(`Skip Intro: no chapters found for item ${itemId}`);
+                if (sourcePref === 'both') {
+                    // Local helper to merge segments without duplicates or overlaps
+                    const mergeSegments = (serverSegs, chapterSegs) => {
+                        const merged = [...serverSegs];
+                        chapterSegs.forEach(c => {
+                            const overlaps = merged.some(s => {
+                                const timeOverlap = Math.max(c.start, s.start) < Math.min(c.end, s.end);
+                                const closeStart = Math.abs(c.start - s.start) < 5 * TICKS_PER_SECOND;
+                                return timeOverlap || closeStart;
+                            });
+                            if (!overlaps) {
+                                merged.push(c);
+                            }
+                        });
+                        return merged.sort((a, b) => a.start - b.start);
+                    };
+
+                    this._introSegment = mergeSegments(this._introSegment, chapterIntros);
+                    this._outroSegment = mergeSegments(this._outroSegment, chapterOutros);
+                    this._recapSegment = mergeSegments(this._recapSegment, chapterRecaps);
+                } else if (sourcePref === 'chapters') {
+                    this._introSegment = chapterIntros;
+                    this._outroSegment = chapterOutros;
+                    this._recapSegment = chapterRecaps;
+                }
+            } else {
+                api.log.debug(`Skip Intro: no chapters found for item ${itemId}`);
+            }
         }
 
         // Cache whatever results we gathered (even if null) to prevent redundant queries

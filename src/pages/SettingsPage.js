@@ -3026,6 +3026,25 @@ class SettingsPage extends Page {
                     line-height: 1.4;
                 ">${i18n.t('SegmentSkippingDescription') || 'Choose what happens when playback enters a detected segment. Requires the intro-skipper server plugin.'}</p>
 
+                <!-- Segment Data Source -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSkipSegmentSource">${i18n.t('LabelSkipSegmentSource') || 'Segment Data Source'}</span>
+                        <span class="setting-description" data-i18n="SkipSegmentSourceDescription">${i18n.t('SkipSegmentSourceDescription') || 'Choose whether to use the intro-skipper server plugin, video chapter markers, or combine both.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'segment-source-select',
+            [
+                { value: 'both', label: i18n.t('SegmentSourceBoth') || 'Server Plugin & Chapters (Merged)' },
+                { value: 'server', label: i18n.t('SegmentSourceServer') || 'Server Plugin Only (intro-skipper)' },
+                { value: 'chapters', label: i18n.t('SegmentSourceChapters') || 'Chapters Only (Disable Server Plugin)' }
+            ],
+            PlayerSettings.get('skipSegmentSource') || 'both'
+        )}
+                    </div>
+                </div>
+
                 <!-- Intro segment action -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -7308,6 +7327,7 @@ class SettingsPage extends Page {
             'next-up-dialog-trigger-select': { type: 'player', key: 'nextUpTriggerMode' },
 
             // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
+            'segment-source-select': { type: 'player', key: 'skipSegmentSource' },
             'segment-action-intro-select': { type: 'player', key: 'skipActionIntro' },
             'segment-action-outro-select': { type: 'player', key: 'skipActionOutro' },
             'segment-action-recap-select': { type: 'player', key: 'skipActionRecap' },
