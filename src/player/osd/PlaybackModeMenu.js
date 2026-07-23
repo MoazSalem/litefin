@@ -151,12 +151,12 @@ export default class PlaybackModeMenu extends BaseMenu {
                 this.updateFocus();
                 return true;
             case 'enter':
+                this.handleEnter();
                 return true;
             case 'back':
             case 'left':
             case 'right':
-                this.hide();
-                this.osd.toggleSettings( true );
+                this.osd.closeMenu();
                 return true;
         }
         return false;

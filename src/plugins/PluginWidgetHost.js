@@ -371,6 +371,12 @@ class PluginWidgetHost {
     onTimeUpdate(positionTicks, durationTicks) {
         if (this._widgets.size === 0) return;
 
+        // Guard: During track transitions/lockouts, the player's position and duration
+        // are unreliable and may briefly reflect the previous track's end state.
+        if (this._osd && (this._osd._trackTransitionLockoutActive || (this._osd._playerPage && this._osd._playerPage._isSwitching))) {
+            return;
+        }
+
         let cacheInvalidated = false;
         // Track whether any widget just became visible (to trigger auto-focus)
         let justBecameVisible = false;

@@ -2568,6 +2568,20 @@ class PlayerPage extends Page {
             focusManager.unregister('player-error');
         }
 
+        // Always ensure FocusManager is resumed if suspended during error menu interaction
+        focusManager.resume();
+
+        // Clear any active OSD modal menu state so OSD doesn't hijack inputs
+        if (this._osd) {
+            if (this._osd.activeMenu) {
+                try {
+                    this._osd.activeMenu.hide();
+                } catch (e) {}
+                this._osd.activeMenu = null;
+            }
+            this._osd.hide();
+        }
+
         try {
             this._showLoading(true);
 
@@ -2690,7 +2704,11 @@ class PlayerPage extends Page {
                     menu.hide();
                     return true;
                 }
-                // Delegate up/down/enter to normal menu behavior
+                if (key === 'enter') {
+                    menu.handleEnter();
+                    return true;
+                }
+                // Delegate up/down to normal menu behavior
                 return originalHandleKey(key);
             };
 
@@ -2699,6 +2717,9 @@ class PlayerPage extends Page {
             const originalHide = menu.hide.bind(menu);
             menu.hide = (...args) => {
                 originalHide(...args);
+                if (this._osd && this._osd.activeMenu === menu) {
+                    this._osd.activeMenu = null;
+                }
                 // Only restore the error screen if the user bailed without selecting
                 if (hookActive) {
                     restoreHook();
