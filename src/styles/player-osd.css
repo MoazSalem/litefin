@@ -1989,12 +1989,19 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
 
 /* ============================================================================
    OSD HDR Darker White Overrides
+   ----------------------------------------------------------------------------
+   Overrides bright white text, headers, icons, and muted elements with dark grey (#a9a9a9).
+   Prevents eye strain in high-brightness HDR modes according to Apple HIG principles.
+   Note: --osd-slider-progress is intentionally preserved so user/theme seek bar colors remain untouched.
    ============================================================================ */
 .player-osd.hdr-darker-white {
+    /* Mute default white text color variables for high dynamic range */
     --osd-text-color: #a9a9a9 !important;
+    /* Soften seek bar thumb background handle */
     --osd-thumb-bg: #a9a9a9 !important;
-    --osd-slider-progress: #a9a9a9 !important;
+    /* Mute primary container text fallback */
     --jf-text-primary: #a9a9a9 !important;
+    /* Adjust unfilled track background to subtle dark grey */
     --osd-slider-bg: rgba(169, 169, 169, 0.3) !important;
 }
 
