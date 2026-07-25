@@ -1095,25 +1095,15 @@ class HomePage extends Page {
         // ── Instantiate VirtualCardRow ────────────────────────────────────────
         const trackEl = sectionEl.querySelector('.row-items-track');
 
+        const cardType = descriptor.cardType || 'poster';
+        const { visibleCount, initialWindow } = this._computeRowSizing(isLandscape, cardType);
+
         const virtualRow = new VirtualCardRow(trackEl, items, {
             isLandscape,
-            cardType: descriptor.cardType || 'poster',
+            cardType,
             hideLabels: shouldHideLabels,
-            // Sliding window size after initial boot render.
-            // Landscape rows: 6 cards in the window — ~4.5 fit in the TV viewport, so this gives
-            // about 1 card of lookahead on each side without keeping 8 large decoded backdrop
-            // images in GPU memory simultaneously.
-            // Portrait rows: 8 — matches initialWindow so the first interaction doesn't trigger
-            // a sudden DOM expansion. ~4-5 cards visible on TV, buffer zone of 4 keeps scrolling
-            // smooth while minimizing DOM/GPU memory pressure on single-core hardware.
-            visibleCount: isLandscape ? 6 : 8,
-            // Boot render: pre-render first N items before the user scrolls,
-            // so the row is ready to receive focus without on-demand DOM creation lag.
-            // Landscape rows get 5 (they're wide, so ~5 fill the screen).
-            // Portrait rows get 8 — roughly 2x the TV viewport (~4-5 cards visible),
-            // enough for immediate right-scroll without blank nodes, while keeping
-            // initial load light on single-core TV hardware with ~6 HTTP connections.
-            initialWindow: isLandscape ? 5 : 8,
+            visibleCount,
+            initialWindow,
             focusSectionId: `home-row-${descriptor.id}`,
             // Card render function — delegates to CardRenderer via Page._renderMediaCard
             renderCard: (item) =>
@@ -1827,6 +1817,66 @@ class HomePage extends Page {
         const mediaRows = this.$('#home-rows').querySelectorAll('.media-row');
         scrollController.prewarmOffsetCache(mediaRows, pageContent);
         log.debug(`Pre-warmed scroll cache for ${mediaRows.length} rows`);
+    }
+
+    /**
+     * Compute optimal VirtualCardRow sizing (visibleCount / initialWindow)
+     * based on actual card dimensions and viewport width.
+     *
+     * Card widths mirror the constants in VirtualCardRow constructor:
+     *   Classic: landscape=400, portrait=240, margin=24
+     *   Modern:  landscape=600, portrait=225, square=338, margin=40
+     *   Scale factor from user preference (pref:classicCardSizeScale or
+     *   pref:modernCardSizeScale).
+     *
+     * visibleCount = viewport + 2 (small buffer for smooth scrolling),
+     * clamped to [6, 10]. This keeps DOM/GPU memory light on TV hardware
+     * while giving enough lookahead for comfortable right-scrolling.
+     *
+     * initialWindow matches visibleCount so boot render and the first
+     * interaction window are identical — no sudden DOM expansion on
+     * the first right-press.
+     *
+     * @param {boolean} isLandscape
+     * @param {string} cardType
+     * @returns {{ visibleCount: number, initialWindow: number }}
+     */
+    _computeRowSizing(isLandscape, cardType) {
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+        const VIEWPORT_WIDTH = window.innerWidth || 1920;
+        const SIDE_PADDING = 60;
+        const MAX_VISIBLE = Math.ceil(parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10) * 0.8);
+
+        let itemWidth, itemMargin;
+
+        if (isModern) {
+            const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3;
+            const m = scale / 1.5;
+
+            if (isLandscape) {
+                itemWidth = Math.round(600 * m);
+            } else if (cardType === 'square' || cardType === 'artist') {
+                itemWidth = Math.round(338 * m);
+            } else {
+                itemWidth = Math.round(225 * m);
+            }
+            itemMargin = Math.round(40 * m);
+        } else {
+            const scale = parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+            itemWidth = Math.round((isLandscape ? 400 : 240) * scale);
+            itemMargin = Math.round(24 * scale);
+        }
+
+        const totalItemWidth = itemWidth + itemMargin;
+        const usableWidth = VIEWPORT_WIDTH - SIDE_PADDING * 2;
+        const visibleInViewport = Math.max(1, Math.floor(usableWidth / totalItemWidth));
+
+        // Viewport + 2 small buffer, clamped [6, 10]. initialWindow matches visibleCount
+        // so the first right-press doesn't trigger a sudden DOM expansion.
+        const visibleCount = Math.max(6, Math.min(MAX_VISIBLE, visibleInViewport + 2));
+        const initialWindow = visibleCount;
+
+        return { visibleCount, initialWindow };
     }
 
     /**
