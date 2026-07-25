@@ -459,14 +459,8 @@ class SmartHubManager {
                 .join(', ');
             log.info(`Preview JSON built — sections: [${sectionSummary || 'EMPTY — nothing to show'}]`);
 
-            /* Dispatch the JSON to the ytresolver background service.
-             *
-             * Samsung Smart Hub caches preview tile data at the TV system level.
-             * To guarantee the fresh data is accepted and not served from cache,
-             * we first send an empty sections payload to clear the current tiles,
-             * then immediately follow with the real data. This two-step approach
-             * forces Samsung's home screen to drop the stale cached version. */
-            await this._sendToService({ sections: [] });
+            /* Dispatch the JSON to the ytresolver background service and
+             * wait for its ACK before releasing the updating guard. */
             await this._sendToService(previewJson);
 
             log.info('Smart Hub update complete');
