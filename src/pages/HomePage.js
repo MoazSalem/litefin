@@ -592,16 +592,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                        lib.CollectionType === 'livetv' ||
+                        lib.CollectionType === 'homevideos' ||
+                        lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -733,7 +733,8 @@ class HomePage extends Page {
                 // Hero does not depend on libraries — fetch it in parallel but do NOT
                 // await it here so row rendering starts immediately. It populates the
                 // hero placeholder when its data arrives.
-                // Instantly insert a style-matched loading skeleton to prevent reflow.
+                // Insert a static placeholder so the hero area is sized correctly
+                // while data loads (no animated shimmer — just dark rectangles).
                 const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
                 if (enableHero) {
                     this._insertHeroSkeleton();
@@ -771,8 +772,10 @@ class HomePage extends Page {
                 return;
             }
 
-            // ─── Step 4: Insert skeleton placeholders instantly ───────────────
-            // This gives the user immediate visual feedback while data loads.
+            // ─── Step 4: Insert skeleton placeholders ─────────────────────────
+            // Static dark card rectangles (no animated shimmer) give the row
+            // correct visual sizing while data loads. BlurHash on live cards
+            // provides the actual loading state once _renderRow() replaces them.
             this._insertSkeletonRows(descriptors);
 
             // ─── Step 5: Group descriptors by priority ────────────────────────
@@ -892,8 +895,9 @@ class HomePage extends Page {
 
     /**
      * Inserts a skeleton placeholder `<section>` for each descriptor into the
-     * home-rows container. The placeholders are replaced in-place when the
-     * actual data arrives, giving the user instant visual feedback.
+     * home-rows container. Cards are rendered as static dark rectangles (no
+     * animated shimmer) to give the row correct visual sizing while data loads.
+     * The placeholders are replaced in-place via _renderRow() once data arrives.
      *
      * Each skeleton uses `data-row-id` to allow `_loadAndRenderRow` to find
      * its placeholder and populate it without shifting other rows.
@@ -937,24 +941,46 @@ class HomePage extends Page {
                 sectionEl.style.setProperty('--skeleton-card-margin', `${itemMargin}px`);
             }
 
-            // Build skeleton interior — title + shimmer cards
-            // Number of skeleton cards to show: landscape rows fit ~5, portrait ~8
+            // Build skeleton interior — title + static placeholder cards
+            // The skeleton-shimmer class is stripped so these are just dark
+            // rectangles — no animated shimmer. BlurHash provides the loading
+            // state once live cards render.
             const skeletonCardCount = landscape ? 5 : 8;
-            const skeletonHtml = CardRenderer.createSkeletonHtml(
+            const rawHtml = CardRenderer.createSkeletonHtml(
                 skeletonCardCount,
                 landscape,
                 descriptor.cardType || 'poster',
                 shouldHideLabels
             );
+            const staticHtml = rawHtml.replace(/\bskeleton-shimmer\b/g, '');
 
             sectionEl.innerHTML = `
                 <h2 class="row-title">${descriptor.title}</h2>
                 <div class="row-items">
                     <div class="row-items-track">
-                        ${skeletonHtml}
+                        ${staticHtml}
                     </div>
                 </div>
             `;
+
+            // Override skeleton backgrounds with theme-following visible color.
+            // The default rgba(..., 0.08) from .skeleton-image / .skeleton-line
+            // is too subtle, and modern mode has an animated gradient on
+            // .card-image. We suppress both with higher-opacity overrides.
+            sectionEl.insertAdjacentHTML(
+                'afterbegin',
+                `
+                <style>
+                    .media-row--skeleton[data-row-id="${descriptor.id}"] .card-image,
+                    .media-row--skeleton[data-row-id="${descriptor.id}"] .skeleton-image,
+                    .media-row--skeleton[data-row-id="${descriptor.id}"] .skeleton-line {
+                        background-color: rgba(var(--jf-primary-btn-color-rgb, 255, 255, 255), 0.6) !important;
+                        background-image: none !important;
+                        animation: none !important;
+                    }
+                </style>
+            `
+            );
 
             container.appendChild(sectionEl);
         }
@@ -1573,27 +1599,29 @@ class HomePage extends Page {
     }
 
     /**
-     * Inserts a matching loading skeleton inside the hero carousel container placeholder
-     * before the actual hero carousel items finish loading in the background.
-     * Prevents vertical layout shift and ensures a premium, unified aesthetic.
+     * Inserts a static placeholder inside the hero carousel container while
+     * carousel data loads. Keeps the hero area sized correctly — no animated
+     * shimmer, just dark rectangles that prevent layout shift.
      * @private
      */
     _insertHeroSkeleton() {
         const placeholder = this.$('#home-hero-placeholder');
         if (!placeholder) return;
 
-        // Retrieve current style configurations from StorageService
         const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
         const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
 
-        // Clear any leftover state on the wrapper element to prevent class leaks
         placeholder.className = '';
         placeholder.classList.add(`style-${carouselStyle}`);
         if (isCompact) {
             placeholder.classList.add('style-compact');
         }
 
-        // Render skeleton structure that mirrors the real HeroCarousel component geometry
+        // Read theme color for skeleton backgrounds
+        const primaryRgb =
+            getComputedStyle(document.documentElement).getPropertyValue('--jf-primary-btn-color-rgb').trim() ||
+            '255, 255, 255';
+
         placeholder.innerHTML = `
             <div id="hero-carousel-container" 
                  class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} skeleton" 
@@ -1601,12 +1629,12 @@ class HomePage extends Page {
                 <div class="hero-carousel">
                     <div class="hero-carousel-track">
                         <div class="hero-item active">
-                            <div class="hero-backdrop skeleton-shimmer"></div>
+                            <div class="hero-backdrop" style="background: rgba(${primaryRgb}, 0.6);"></div>
                             <div class="hero-content">
-                                <div class="hero-logo-skeleton skeleton-line skeleton-shimmer"></div>
-                                <div class="hero-meta-row-skeleton skeleton-line skeleton-shimmer"></div>
-                                <div class="hero-description-skeleton skeleton-line skeleton-shimmer"></div>
-                                <div class="hero-description-skeleton-2 skeleton-line skeleton-shimmer"></div>
+                                <div class="hero-logo-skeleton" style="background: rgba(${primaryRgb}, 0.6); border-radius: 8px;"></div>
+                                <div class="hero-meta-row-skeleton" style="background: rgba(${primaryRgb}, 0.6); border-radius: 8px;"></div>
+                                <div class="hero-description-skeleton" style="background: rgba(${primaryRgb}, 0.6); border-radius: 8px;"></div>
+                                <div class="hero-description-skeleton-2" style="background: rgba(${primaryRgb}, 0.6); border-radius: 8px;"></div>
                             </div>
                         </div>
                     </div>
@@ -1614,14 +1642,9 @@ class HomePage extends Page {
             </div>
         `;
 
-        // Pre-register a home-hero focus section so row-to-row focus adjacency
-        // (linked by _relinkAdjacentSections) works correctly before the real
-        // carousel data arrives. When HeroCarousel.init() fires later, it
-        // re-registers on the same container, overwriting this placeholder config
-        // with the real carousel's onMove/onEnter handlers.
         focusManager.register('home-hero', placeholder, {
             orientation: 'horizontal',
-            leaveDown: null, // Patched by _relinkAdjacentSections when first row renders
+            leaveDown: null,
             leaveLeft: 'sidebar'
         });
     }

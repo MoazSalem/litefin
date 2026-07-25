@@ -874,7 +874,7 @@ class CardRenderer {
 
         return `
             <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" tabindex="0">
-                <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
+                <div class="card-image">
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
@@ -1037,7 +1037,7 @@ class CardRenderer {
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer">
-                        ${isIntegratedModern ? infoHtml : '<!-- Space reserved by aspect-ratio padding -->'}
+                        ${isIntegratedModern || isPortraitModern ? infoHtml : '<!-- Space reserved by aspect-ratio padding -->'}
                     </div>
                     ${!skeletonHideLabels && !isIntegratedModern && !isPortraitModern ? infoHtml : ''}
                 </div>

@@ -548,21 +548,6 @@ html[data-layout-media-rows="modern"] .played-badge ~ .quality-badge,
 html[data-layout-media-rows="modern"] .count-badge ~ .quality-badge {
     right: 74px;
 }
-html[data-layout-media-rows="modern"] .media-row--skeleton .card-image {
-    background: linear-gradient(90deg, 
-        var(--jf-surface, rgba(255,255,255,0.05)) 25%, 
-        var(--jf-surface-hover, rgba(255,255,255,0.1)) 50%, 
-        var(--jf-surface, rgba(255,255,255,0.05)) 75%
-    );
-    background-size: 200% 100%;
-    animation: modern-shimmer 2s infinite linear;
-}
-
-@keyframes modern-shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
 /* =========================================================================
    Modern Gradient Fallback Expansion Improvements
    ========================================================================= */
