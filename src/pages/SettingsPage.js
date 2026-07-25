@@ -1316,7 +1316,7 @@ class SettingsPage extends Page {
                 <div class="setting-item" id="wol-mac-container" style="display: ${storage.getItem('pref:enableWolOnStartup') === 'true' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="WolMacAddress">Server MAC Address</span>
-                        <span class="setting-description">Enter the MAC address of your server (e.g. 00:11:22:33:44:55).</span>
+                        <span class="setting-description">Enter the MAC address of your server (e.g. 00:11:22:33:44:55 or raw hex 001122334455). Colons are added automatically.</span>
                     </div>
                     <div class="setting-control">
                         <input id="input-wol-mac-address" type="text" class="focusable" tabindex="0" data-focusable="true" 
@@ -6436,20 +6436,38 @@ class SettingsPage extends Page {
         // WOL SERVER MAC ADDRESS TEXT INPUT
         // =====================================================================
         // Registers change, input, and blur listeners to capture and save the
-        // server MAC address inputted by the user immediately back into storage.
+        // server MAC address. Automatically formats raw hex digits into standard
+        // colon-delimited MAC address format (00:11:22:33:44:55) for TV remote ease.
         // =====================================================================
         const wolMacInput = this.$('#input-wol-mac-address');
         if (wolMacInput) {
-            const saveWolMac = () => {
-                const cleanValue = wolMacInput.value.trim();
-                storage.setItem('pref:wolMacAddress', cleanValue);
-                storage.flush();
-                log.debug(`Saved WOL MAC Address: ${cleanValue}`);
+            const formatMac = (val) => {
+                const hexOnly = val.replace(/[^0-9a-fA-F]/g, '').toUpperCase().slice(0, 12);
+                const pairs = hexOnly.match(/.{1,2}/g);
+                return pairs ? pairs.join(':') : hexOnly;
             };
 
-            wolMacInput.addEventListener('change', saveWolMac);
-            wolMacInput.addEventListener('input', saveWolMac);
-            wolMacInput.addEventListener('blur', saveWolMac);
+            const saveWolMac = (forceFormat = false) => {
+                let currentVal = wolMacInput.value.trim();
+                const hexOnly = currentVal.replace(/[^0-9a-fA-F]/g, '');
+                
+                // Format automatically if full 12 hex digits are entered or on blur/change
+                if (forceFormat || hexOnly.length === 12) {
+                    const formatted = formatMac(currentVal);
+                    if (formatted) {
+                        currentVal = formatted;
+                        wolMacInput.value = formatted;
+                    }
+                }
+
+                storage.setItem('pref:wolMacAddress', currentVal);
+                storage.flush();
+                log.debug(`Saved WOL MAC Address: ${currentVal}`);
+            };
+
+            wolMacInput.addEventListener('input', () => saveWolMac(false));
+            wolMacInput.addEventListener('change', () => saveWolMac(true));
+            wolMacInput.addEventListener('blur', () => saveWolMac(true));
         }
 
         // Toggle Auto-play Next Episode
