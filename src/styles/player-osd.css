@@ -701,8 +701,13 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 /* Seek Tooltip - Shows target time above seekbar during seeking */
 .osd-seek-tooltip {
     position: absolute;
-    top: -60px;
-    /* -50px * 1.2 */
+    /* 
+     * Anchor tooltip using bottom edge rather than fixed top pixel offset.
+     * This guarantees consistent vertical clearance above the seek thumb 
+     * across all TV screen resolutions and font rendering engines (including Tizen).
+     */
+    top: auto;
+    bottom: calc(100% + 14px);
     left: 50%;
     transform: translateX(-50%);
     background: var(--osd-gradient-dark, rgba(0, 0, 0, 0.9));
@@ -749,9 +754,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     /* Let content size the box; JS will set exact thumb dimensions */
     white-space: nowrap;
     padding: 8px 8px 12px;
-    /* Anchor tooltip so the bottom edge sits above the seekbar */
-    top: auto;
-    bottom: calc(100% + 12px);
+    /* Tooltip inherits bottom: calc(100% + 14px) from base class */
 }
 
 /*
@@ -1991,7 +1994,7 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
    OSD HDR Darker White Overrides
    ----------------------------------------------------------------------------
    Overrides bright white text, headers, icons, and muted elements with dark grey (#a9a9a9).
-   Prevents eye strain in high-brightness HDR modes according to Apple HIG principles.
+   Prevents eye strain in high-brightness HDR modes.
    Note: --osd-slider-progress is intentionally preserved so user/theme seek bar colors remain untouched.
    ============================================================================ */
 .player-osd.hdr-darker-white {

@@ -1428,12 +1428,12 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
-                'osd-gradient-opacity',
-                PlayerSettings.get('osdGradientOpacity') ?? 75,
-                0,
-                100,
-                5
-            )}
+            'osd-gradient-opacity',
+            PlayerSettings.get('osdGradientOpacity') ?? 75,
+            0,
+            100,
+            5
+        )}
                     </div>
                 </div>
 
@@ -1937,7 +1937,7 @@ class SettingsPage extends Page {
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="HomeScreen">${i18n.t('HomeScreen')}</h3>
 
-                <!-- Home Rows Item Limit setting - Apple HIG minimal sleek design selector -->
+                <!-- Home Rows Item Limit setting -->
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelHomeRowsLimit">${i18n.t('LabelHomeRowsLimit') || 'Home Rows Limit'}</span>
@@ -5717,13 +5717,13 @@ class SettingsPage extends Page {
                 // Determine whether the My Media section is currently hidden
                 const isHidden = storage.getItem('pref:hideMyMedia') === 'true';
                 const newValue = !isHidden;
-                
+
                 // Persist the updated preference value locally
                 storage.setItem('pref:hideMyMedia', newValue);
-                
+
                 // Toggle active state classes to visual element transitions
                 myMediaBtn.classList.toggle('active', newValue);
-                
+
                 // Clear the homepage pageCache so the updated layout loads on next visit
                 state.delete('home:pageCache');
             });
@@ -5824,14 +5824,14 @@ class SettingsPage extends Page {
                 // Determine whether the expandable posters preference is currently active
                 const isEnabled = storage.getItem('pref:homeForceExpandablePosters') === 'true';
                 const newValue = !isEnabled;
-                
+
                 // Save updated preference key into browser storage
                 storage.setItem('pref:homeForceExpandablePosters', newValue.toString());
-                
+
                 // Toggle active style class for switch indicator animation
                 forceExpandablePostersBtn.classList.toggle('active', newValue);
                 log.info(`Force Expandable Posters on Home set to: ${newValue}`);
-                
+
                 // Clear the homepage pageCache so the card layouts refresh instantly on navigation
                 state.delete('home:pageCache');
             });
@@ -5957,14 +5957,14 @@ class SettingsPage extends Page {
                 // Determine whether Live TV is currently hidden in My Media
                 const isHidden = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
                 const newValue = !isHidden;
-                
+
                 // Save updated preference key into local storage
                 storage.setItem('pref:hideLiveTvInMyMedia', newValue);
-                
+
                 // Toggle active style class for visual switch transitions
                 hideLiveTvBtn.classList.toggle('active', newValue);
                 log.info(`Hide Live TV in My Media set to: ${newValue}`);
-                
+
                 // Clear the homepage pageCache so the updated layout loads on next visit
                 state.delete('home:pageCache');
             });
@@ -6001,10 +6001,10 @@ class SettingsPage extends Page {
                 // Determine whether we merge resume items and next up items
                 const isEnabled = storage.getItem('pref:mergeResumeNextUp') === 'true';
                 const newValue = !isEnabled;
-                
+
                 // Save updated preference key into browser storage
                 storage.setItem('pref:mergeResumeNextUp', newValue);
-                
+
                 // Toggle active style class for switch indicator animation
                 mergeResumeNextUpBtn.classList.toggle('active', newValue);
                 log.info(`Merge Resume and Next Up set to: ${newValue}`);
@@ -6015,7 +6015,7 @@ class SettingsPage extends Page {
 
                 // Invalidate focus cache to keep navigation stable
                 focusManager.invalidateCache('settings-content');
-                
+
                 // Clear the homepage pageCache so the rows layout can be re-rendered with the new merged structure
                 state.delete('home:pageCache');
             });
@@ -6044,13 +6044,13 @@ class SettingsPage extends Page {
                 // Determine whether the Hero Carousel is currently active
                 const isEnabled = storage.getItem('pref:heroCarousel') !== 'false';
                 const newValue = !isEnabled;
-                
+
                 // Save updated preference key into browser storage
                 storage.setItem('pref:heroCarousel', newValue.toString());
-                
+
                 // Toggle active style class for switch indicator animation
                 heroCarouselBtn.classList.toggle('active', newValue);
- 
+
                 // =====================================================================
                 // DEPENDENT COMPONENT VISIBILITY DISPATCHER
                 // =====================================================================
@@ -6092,7 +6092,7 @@ class SettingsPage extends Page {
                 // target issues on spatial navigators when toggles change the layout height.
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
-                
+
                 // Clear the homepage pageCache so the hero section responds immediately
                 state.delete('home:pageCache');
             });
@@ -6299,14 +6299,14 @@ class SettingsPage extends Page {
                 // Determine whether the Hero Carousel has MDB ratings enabled
                 const isEnabled = storage.getItem('pref:heroCarouselMdbList') !== 'false';
                 const newValue = !isEnabled;
-                
+
                 // Save updated preference key into browser storage
                 storage.setItem('pref:heroCarouselMdbList', newValue.toString());
-                
+
                 // Toggle active style class for switch indicator animation
                 heroCarouselMdbBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel MDBList set to: ${newValue}`);
-                
+
                 // Clear the homepage pageCache so ratings populate correctly on next visit
                 state.delete('home:pageCache');
             });
@@ -6331,7 +6331,7 @@ class SettingsPage extends Page {
                 // Toggle active state classes to visual elements.
                 heroCarouselIgnoreWatchedBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Ignore Watched set to: ${newValue}`);
-                
+
                 // Clear the homepage pageCache to refresh randomized hero pool selections
                 state.delete('home:pageCache');
             });
@@ -6356,10 +6356,10 @@ class SettingsPage extends Page {
                 // Determine whether to filter out played items from the latest list
                 const isHidden = storage.getItem('pref:hidePlayedInLatest') === 'true';
                 const newValue = !isHidden;
-                
+
                 // Save preference locally
                 storage.setItem('pref:hidePlayedInLatest', newValue);
-                
+
                 // Toggle active class on toggle switch element
                 hidePlayedLatestBtn.classList.toggle('active', newValue);
 
@@ -6374,7 +6374,7 @@ class SettingsPage extends Page {
                 } catch (e) {
                     log.error('Failed to sync HidePlayedInLatest to server', e);
                 }
-                
+
                 // Clear the homepage pageCache so latest items are refreshed instantly on next visit
                 state.delete('home:pageCache');
             });
