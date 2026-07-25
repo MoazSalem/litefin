@@ -3858,6 +3858,7 @@ class SettingsPage extends Page {
             'ass-renderer-select',
             [
                 { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
+                { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' },
                 { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
             ],
             PlayerSettings.get('assRenderer')

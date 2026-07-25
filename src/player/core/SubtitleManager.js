@@ -15,6 +15,7 @@
 import { SubtitleParser } from './SubtitleParser.js';
 import ASSRenderer from './ASSRenderer.js';
 import LibassWasmRenderer from './LibassWasmRenderer.js';
+import ASSJSRenderer from './ASSJSRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
@@ -511,15 +512,17 @@ export default class SubtitleManager {
             let fontClass = null;
             let fontFamily = null;
 
-            if (this._hasContainerFonts && !overrideAssFonts) {
-                log.info('Using container fonts for ASS; font override toggle is OFF.');
-            } else {
+            if (overrideAssFonts) {
                 const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
                 if (fontId) {
                     await FontLoader.loadFont(fontId);
                 }
                 fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
                 fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+            } else if (this._hasContainerFonts) {
+                log.info('Using container fonts for ASS; font override toggle is OFF.');
+            } else {
+                log.info('Override OFF and no container fonts — restoring original ASS fonts.');
             }
 
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
@@ -605,6 +608,26 @@ export default class SubtitleManager {
         if (this._pgsRenderer && this._primaryDelivery === DeliveryMethod.PGS_BITMAP) {
             // Renders timestamp -1 to wipe the OffscreenCanvas clean
             this._pgsRenderer.clear();
+        }
+    }
+
+    // ========================================================================
+    // Playback State
+    // ========================================================================
+
+    /**
+     * Notify the ASS renderer that playback has resumed.
+     * Resumes CSS animations and the internal rAF loop.
+     */
+    play() {
+        if (this._assRenderer && typeof this._assRenderer.play === 'function') {
+            this._assRenderer.play();
+        }
+    }
+
+    pause() {
+        if (this._assRenderer && typeof this._assRenderer.pause === 'function') {
+            this._assRenderer.pause();
         }
     }
 
@@ -846,6 +869,8 @@ export default class SubtitleManager {
             let TargetRendererClass;
             if (preferredEngine === 'libass-wasm') {
                 TargetRendererClass = LibassWasmRenderer;
+            } else if (preferredEngine === 'assjs') {
+                TargetRendererClass = ASSJSRenderer;
             } else {
                 TargetRendererClass = ASSRenderer;
             }

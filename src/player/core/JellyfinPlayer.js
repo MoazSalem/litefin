@@ -464,8 +464,10 @@ export class JellyfinPlayer extends EventEmitter {
         // Sync internal state
         if (event.type === PlayerEvent.PAUSE) {
             this._isPaused = true;
+            this._subtitleManager?.pause();
         } else if (event.type === PlayerEvent.PLAY || event.type === PlayerEvent.PLAYING) {
             this._isPaused = false;
+            this._subtitleManager?.play();
         }
 
         // Handle timeupdate — tick the SubtitleManager to update cues
