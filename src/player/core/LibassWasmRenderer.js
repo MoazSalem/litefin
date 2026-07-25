@@ -60,7 +60,7 @@ export default class LibassWasmRenderer {
      * @param {number} [options.height] - Video height (required if video not provided)
      * @param {number} [options.videoFrameRate] - Video framerate (for render sync)
      */
-    constructor({ container, video, width, height, videoFrameRate, getTime }) {
+    constructor({ container, video, width, height, videoFrameRate, getTime, avplayLatency }) {
         this._container = container;
         this._videoElement = video || null;
         this._isVirtual = !video;
@@ -68,6 +68,13 @@ export default class LibassWasmRenderer {
         this._videoHeight = height || 1080;
         this._videoFrameRate = videoFrameRate || 24;
         this._getTime = typeof getTime === 'function' ? getTime : null;
+        // AVPlay's getCurrentTime() leads the actual displayed frame by
+        // the hardware decode pipeline depth (~1-2 frames). Default 0.06s
+        // (60ms ~1.5 frames at 24fps) for AVPlay mode; override via
+        // constructor if tuning for a different device.
+        this._avplayLatency = typeof avplayLatency === 'number'
+            ? Math.max(0, avplayLatency)
+            : (this._isVirtual ? 0.06 : 0);
 
         this._fontFamily = null;
         this._fontClass = null;
@@ -136,7 +143,13 @@ export default class LibassWasmRenderer {
             const avplay = window.webapis?.avplay || window.tizen?.avplay;
             if (avplay && typeof avplay.getCurrentTime === 'function') {
                 const timeMs = Number(avplay.getCurrentTime());
-                if (!isNaN(timeMs) && timeMs >= 0) return timeMs / 1000;
+                if (!isNaN(timeMs) && timeMs >= 0) {
+                    // AVPlay's getCurrentTime() reflects the decode pipeline
+                    // position, which is slightly ahead of the actual displayed
+                    // frame. Subtract the configured pipeline latency so
+                    // subtitles align with what's on screen.
+                    return (timeMs / 1000) - this._avplayLatency;
+                }
             }
         } catch (e) {}
         return -1;
