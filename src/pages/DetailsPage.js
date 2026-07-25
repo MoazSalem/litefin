@@ -3999,9 +3999,36 @@ class DetailsPage extends Page {
                     ReplaceAllImages: opt.replace
                 });
 
-                // Invalidate homepage page cache so the next home visit
-                // fetches fresh data reflecting the updated metadata.
+                // ── Purge ALL cached data so every page re-fetches fresh ───
+                // The ETag cache can return stale 304-cached bodies for the
+                // same URL — wiping it ensures the next request gets a 200.
+                api.clearEtagCache();
+
+                // Wipe all home and details page in-memory caches so the
+                // next visit to any page fetches fresh data from the server.
+                state.clearByPrefix('home:');
+                state.clearByPrefix('details:');
+
+                // Also clear the rendered-row cache used by the homepage
                 state.delete('home:pageCache');
+
+                // ── Re-fetch current page's episode data ─────────────────────
+                // The server may still be processing the scan, but clearing
+                // the cache and re-fetching gives the best chance of showing
+                // up-to-date content without requiring a page navigation.
+                if (this._item?.SeriesId && this._item?.SeasonId) {
+                    const cacheKey = `details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`;
+                    state.delete(cacheKey);
+                    this._episodes = null;
+
+                    // Fire re-fetch after a short delay to let the server
+                    // begin processing before we re-render the sections.
+                    setTimeout(() => {
+                        if (!this._isMounted) return;
+                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => {});
+                        this._loadMoreFromSeason().catch(() => {});
+                    }, 500);
+                }
 
                 toast.show(i18n.t('MessageRefreshQueued'));
             } catch (e) {
