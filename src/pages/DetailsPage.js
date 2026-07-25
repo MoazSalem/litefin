@@ -4843,6 +4843,20 @@ class DetailsPage extends Page {
         if (this._isRichMetaActive) {
             this._deactivateRichMeta();
         }
+
+        if (this._playlistGrid) {
+            this._playlistGrid.destroy();
+            this._playlistGrid = null;
+        }
+        if (this._songsGrid) {
+            this._songsGrid.destroy();
+            this._songsGrid = null;
+        }
+        if (this._episodeGrid) {
+            this._episodeGrid.destroy();
+            this._episodeGrid = null;
+        }
+
         super.destroy();
     }
 }

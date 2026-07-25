@@ -618,17 +618,25 @@ class SearchPage extends Page {
     _clearResults() {
         this.$('#search-results').innerHTML = '';
 
-        // Unregister grid sections to prevent memory leaks and focus confusion
-        if (this._grids) {
-            Object.values(this._grids).forEach((grid) => {
-                const baseId = grid.id;
-                focusManager.unregister(`${baseId}-items`);
-                focusManager.unregister(`${baseId}-btn-zone`);
-            });
-        }
+        this._destroyGrids();
 
         this._results = [];
         this._grids = {};
+    }
+
+    _destroyGrids() {
+        if (!this._grids) return;
+        Object.values(this._grids).forEach((grid) => {
+            const baseId = grid.id;
+            focusManager.unregister(`${baseId}-items`);
+            focusManager.unregister(`${baseId}-btn-zone`);
+            grid.destroy();
+        });
+    }
+
+    destroy() {
+        this._destroyGrids();
+        super.destroy();
     }
 
     _saveStateAndNavigate(sectionId, card) {
