@@ -1743,6 +1743,21 @@ export class TizenAVPlayer {
                 log.debug('seek(): cancelled pending subtitle confirmation timer');
             }
 
+            // ── Mute native subtitles during seek to flush ghost cues ────────────
+            // For native subtitles, temporarily mute them during the seek.
+            // This forces AVPlay to flush the current cue buffer, preventing 
+            // the subtitle that was active before the seek from lingering on-screen.
+            const hasActiveNativeSubtitle = this._activeTizenSubtitleIndex !== null && this._activeTizenSubtitleIndex !== -1;
+            if (hasActiveNativeSubtitle) {
+                try {
+                    log.debug('seek(): muting native subtitles to prevent ghost cues');
+                    this._avplay.setSilentSubtitle(true);
+                    this._lastSubtitleApiTime = Date.now();
+                } catch (e) {
+                    log.warn('seek(): failed to mute native subtitles:', e);
+                }
+            }
+
             // ── Mark seek in progress ────────────────────────────────────────────
             // Set before _safeSeekTo so that onbufferingcomplete (which fires during
             // seek) does not trigger _checkNativePlay → play() while seekTo is still
@@ -1770,6 +1785,17 @@ export class TizenAVPlayer {
                     if (this._bufferingCompleteDuringSeek) {
                         this._bufferingComplete = true;
                         this._bufferingCompleteDuringSeek = false;
+                    }
+
+                    // ── Unmute native subtitles post-seek ─────────────────────────
+                    if (hasActiveNativeSubtitle && this._avplay) {
+                        try {
+                            log.debug('seek(): unmuting native subtitles post-seek');
+                            this._avplay.setSilentSubtitle(false);
+                            this._lastSubtitleApiTime = Date.now();
+                        } catch (e) {
+                            log.warn('seek(): failed to unmute native subtitles:', e);
+                        }
                     }
 
                     // Resume playback now that seek completed successfully.
