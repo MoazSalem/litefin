@@ -60,6 +60,12 @@ class DetailsPage extends Page {
 
         // Mark as async page for Navigation State
         this._isAsyncPage = true;
+
+        // Deferred loading flag: when set, the loading overlay stays visible
+        // until focus restoration completes, preventing a visible "focus jump"
+        // on back-navigation where the page content appears and then focus
+        // snaps to a restored card.
+        this._deferredLoading = false;
     }
 
     /**
@@ -526,8 +532,18 @@ class DetailsPage extends Page {
 
             // ────────────────────────────────────────────────────────────────────────
             // 4. Hide loading — main text content is visible, images/logo loading in bg
+            //    But if we have a pending focus target to restore (back-navigation),
+            //    defer hiding the overlay until focus lands on the target row.
+            //    This prevents a visible "focus jump" where the page content appears
+            //    and then focus snaps to a restored card a frame later.
             // ────────────────────────────────────────────────────────────────────────
-            this.setLoading(false);
+            const focusStateKey = `details:lastFocusedItem:${this._itemId}`;
+            const hasFocusTarget = this._pendingNavState || state.get(focusStateKey);
+            if (hasFocusTarget) {
+                this._deferredLoading = true;
+            } else {
+                this.setLoading(false);
+            }
 
             // ────────────────────────────────────────────────────────────────────────
             // 5. Load secondary content in visual order (top rows first, bottom rows last)
@@ -614,6 +630,15 @@ class DetailsPage extends Page {
                             focusManager.focusElement(resumeBtn);
                         }
                     }
+                }
+
+                // If loading was deferred for focus restoration, reveal the page now
+                // that focus has been placed (or attempted). This prevents the visible
+                // "focus jump" when the page content is revealed and focus snaps to a
+                // restored card in a later frame.
+                if (this._deferredLoading) {
+                    this._deferredLoading = false;
+                    this.setLoading(false);
                 }
             });
         } catch (error) {
