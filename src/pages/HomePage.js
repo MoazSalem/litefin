@@ -1103,13 +1103,17 @@ class HomePage extends Page {
             // Landscape rows: 6 cards in the window — ~4.5 fit in the TV viewport, so this gives
             // about 1 card of lookahead on each side without keeping 8 large decoded backdrop
             // images in GPU memory simultaneously.
-            // Portrait rows: 12 — narrower cards (240px) pack more per screen, lookahead is cheap.
-            visibleCount: isLandscape ? 6 : 12,
+            // Portrait rows: 8 — matches initialWindow so the first interaction doesn't trigger
+            // a sudden DOM expansion. ~4-5 cards visible on TV, buffer zone of 4 keeps scrolling
+            // smooth while minimizing DOM/GPU memory pressure on single-core hardware.
+            visibleCount: isLandscape ? 6 : 8,
             // Boot render: pre-render first N items before the user scrolls,
             // so the row is ready to receive focus without on-demand DOM creation lag.
             // Landscape rows get 5 (they're wide, so ~5 fill the screen).
-            // Portrait rows get all items (narrow, packs more per screen, worth the cost).
-            initialWindow: isLandscape ? 5 : items.length,
+            // Portrait rows get 8 — roughly 2x the TV viewport (~4-5 cards visible),
+            // enough for immediate right-scroll without blank nodes, while keeping
+            // initial load light on single-core TV hardware with ~6 HTTP connections.
+            initialWindow: isLandscape ? 5 : 8,
             focusSectionId: `home-row-${descriptor.id}`,
             // Card render function — delegates to CardRenderer via Page._renderMediaCard
             renderCard: (item) =>
