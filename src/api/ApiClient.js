@@ -166,8 +166,8 @@ export class ApiClient {
         if (this.isEmby()) {
             /*
              * Emby auth header format uses the 'Emby' scheme.
-             * It requires 'UserId' (if authenticated) but does NOT carry the 
-             * 'Token' inside the Authorization header itself. Instead, the token 
+             * It requires 'UserId' (if authenticated) but does NOT carry the
+             * 'Token' inside the Authorization header itself. Instead, the token
              * is transmitted in the separate 'X-Emby-Token' request header.
              */
             const parts = [
@@ -1071,7 +1071,7 @@ export class ApiClient {
     async searchPeople(query, params = {}) {
         const defaults = {
             UserId: this._userId,
-            searchTerm: query,
+            SearchTerm: query,
             Limit: 24,
             Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
@@ -1159,11 +1159,11 @@ export class ApiClient {
         // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
-        
+
         // Map fill constraints (contain style aspect preservation)
         if (options.fillWidth) params.append('fillWidth', options.fillWidth);
         if (options.fillHeight) params.append('fillHeight', options.fillHeight);
-        
+
         // Map quality and unique content tags
         if (options.quality) params.append('quality', options.quality);
         if (options.tag) params.append('tag', options.tag);
@@ -1182,11 +1182,11 @@ export class ApiClient {
         // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
         if (options.maxHeight) params.append('maxHeight', options.maxHeight);
-        
+
         // Map fill constraints (contain style aspect preservation)
         if (options.fillWidth) params.append('fillWidth', options.fillWidth);
         if (options.fillHeight) params.append('fillHeight', options.fillHeight);
-        
+
         // Map quality settings
         if (options.quality) params.append('quality', options.quality);
 
