@@ -926,6 +926,10 @@ class ScrollController {
                     );
                 }
             } else if (activePageContent) {
+                // PERFORMANCE: Skip vertical scroll recalculation for same-row
+                // horizontal moves in grids — the element is already in view.
+                if (options.skipVerticalScroll) return;
+
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);
                 const viewHeight = activePageContent.clientHeight;
