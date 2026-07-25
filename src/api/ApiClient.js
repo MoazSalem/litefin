@@ -1232,7 +1232,7 @@ export class ApiClient {
     async searchPeople(query, params = {}) {
         const defaults = {
             UserId: this._userId,
-            searchTerm: query,
+            SearchTerm: query,
             Limit: 24,
             Recursive: true,
             EnableTotalRecordCount: false
