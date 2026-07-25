@@ -217,8 +217,34 @@ if (isWebOS) {
         if (Object.keys(subscriptions).length === 0 && rescanInterval) {
             console.log('[Litefin Discovery] No more subscribers — stopping rescan interval');
             clearInterval(rescanInterval);
-            rescanInterval = undefined;
         }
+    });
+
+    /*
+     * `luna://org.litefin.app.service/wol`
+     *
+     * Call with `{ mac: "00:11:22:33:44:55" }` to send a magic packet.
+     */
+    var wolMethod = service.register('wol');
+    wolMethod.on('request', function (message) {
+        var mac = message.payload && message.payload.mac;
+        if (!mac) {
+            console.log('[Litefin Service] Luna WOL request rejected: Missing MAC');
+            message.respond({ returnValue: false, errorText: 'Missing MAC address' });
+            return;
+        }
+
+        console.log('[Litefin Service] Luna processing WOL for MAC: ' + mac);
+
+        sendWolPacket(mac)
+            .then(function () {
+                console.log('[Litefin Service] Luna WOL packet sent');
+                message.respond({ returnValue: true });
+            })
+            .catch(function (err) {
+                console.log('[Litefin Service] Luna WOL packet failed: ' + err.message);
+                message.respond({ returnValue: false, errorText: err.message });
+            });
     });
     
 }
@@ -319,7 +345,75 @@ var PLAYER_HTML = `<!doctype html>
     });
 </script>
 </body>
-</html>`;
+/**
+ * Send a Wake-on-LAN (WOL) Magic Packet
+ * ============================================================================
+ * Creates a raw UDP broadcast socket, constructs a 102-byte Magic Packet
+ * (6 bytes of 0xFF followed by 16 repetitions of the target MAC address),
+ * and broadcasts it to 255.255.255.255 on UDP port 9.
+ * 
+ * Supports fallback allocation mechanisms to ensure compatibility with
+ * older Tizen/Chromium Node.js versions (<= v5.x).
+ * ============================================================================
+ * @param {string} macAddress - Target machine's hardware MAC address
+ * @returns {Promise<void>} Resolves when the packet has been sent
+ */
+function sendWolPacket(macAddress) {
+    return new Promise(function (resolve, reject) {
+        try {
+            var dgram = require('dgram');
+
+            // Strip everything except valid hexadecimal characters
+            var cleanMac = macAddress.replace(/[^0-9a-fA-F]/g, '');
+            if (cleanMac.length !== 12) {
+                return reject(new Error('Invalid MAC address length (must be 12 hex characters)'));
+            }
+
+            // Allocate buffer: 6 bytes of 0xFF prefix + 16 * 6 bytes of MAC
+            var buf = typeof Buffer.alloc === 'function' ? Buffer.alloc(102) : new Buffer(102);
+            for (var i = 0; i < 6; i++) {
+                buf[i] = 0xff;
+            }
+
+            // Populate the rest of the buffer with 16 copies of the target MAC address
+            var macBuffer = typeof Buffer.from === 'function' ? Buffer.from(cleanMac, 'hex') : new Buffer(cleanMac, 'hex');
+            for (var j = 0; j < 16; j++) {
+                macBuffer.copy(buf, 6 + j * 6);
+            }
+
+            // Create temporary UDP socket
+            var socket = dgram.createSocket('udp4');
+
+            // Bind to dynamic port
+            socket.bind(0, function () {
+                try {
+                    // Enable broadcast mode
+                    socket.setBroadcast(true);
+                    
+                    // Broadcast magic packet to port 9
+                    socket.send(buf, 0, buf.length, 9, '255.255.255.255', function (err) {
+                        try { socket.close(); } catch (_) {}
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                } catch (sendErr) {
+                    try { socket.close(); } catch (_) {}
+                    reject(sendErr);
+                }
+            });
+
+            socket.on('error', function (err) {
+                try { socket.close(); } catch (_) {}
+                reject(err);
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
 
 function handler(req, res) {
     var u = urlMod.parse(req.url, true);
@@ -454,6 +548,36 @@ function handler(req, res) {
             // Resolve after the collection window regardless of how many servers answered
             setTimeout(finishDiscover, DISC_WAIT_MS);
         });
+
+        return;
+    }
+
+    /*
+     * =========================================================================
+     * POST/GET /wol
+     * =========================================================================
+     * Triggers sending a Wake-on-LAN magic packet to a specified target MAC
+     * address parameter from the HTTP request query block.
+     * =========================================================================
+     */
+    if (u.pathname === '/wol') {
+        var mac = u.query.mac;
+        if (!mac) {
+            console.log('[Litefin Proxy] WOL request rejected: Missing MAC address');
+            return writeResponse(res, 400, 'application/json', JSON.stringify({ error: 'Missing MAC address' }));
+        }
+
+        console.log('[Litefin Proxy] Processing WOL request for MAC: ' + mac);
+
+        sendWolPacket(mac)
+            .then(function () {
+                console.log('[Litefin Proxy] WOL Magic Packet broadcasted successfully');
+                writeResponse(res, 200, 'application/json', JSON.stringify({ success: true, message: 'WOL packet sent' }));
+            })
+            .catch(function (err) {
+                console.log('[Litefin Proxy] WOL broadcast failed: ' + err.message);
+                writeResponse(res, 500, 'application/json', JSON.stringify({ error: err.message }));
+            });
 
         return;
     }
