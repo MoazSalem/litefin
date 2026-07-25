@@ -1611,7 +1611,7 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="UseSeasonBadgesDescription">${i18n.t('UseSeasonBadgesDescription') || 'Display the season name/number badge on season cards.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:useSeasonBadges') !== 'false' ? 'active' : ''}" 
+                         <button class="toggle-switch ${storage.getItem('pref:useSeasonBadges') === 'true' ? 'active' : ''}" 
                                  id="toggle-use-season-badges" 
                                  tabindex="0">
                         </button>
@@ -1951,7 +1951,12 @@ class SettingsPage extends Page {
                     { value: 25, label: i18n.t('ItemCountValue', [25]) || '25 items' },
                     { value: 20, label: i18n.t('ItemCountValue', [20]) || '20 items' },
                     { value: 15, label: i18n.t('ItemCountValue', [15]) || '15 items' },
-                    { value: 12, label: (i18n.t('ItemCountValue', [12]) || '12 items') + ` (${i18n.t('Default') || 'Default'})` },
+                    {
+                        value: 12,
+                        label:
+                            (i18n.t('ItemCountValue', [12]) || '12 items') +
+                            ` (${i18n.t('Default') || 'Default'})`
+                    },
                     { value: 10, label: i18n.t('ItemCountValue', [10]) || '10 items' },
                     { value: 8, label: i18n.t('ItemCountValue', [8]) || '8 items' }
                 ],
@@ -3059,9 +3064,18 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
             'segment-source-select',
             [
-                { value: 'both', label: i18n.t('SegmentSourceBoth') || 'Server Plugin & Chapters (Merged)' },
-                { value: 'server', label: i18n.t('SegmentSourceServer') || 'Server Plugin Only (intro-skipper)' },
-                { value: 'chapters', label: i18n.t('SegmentSourceChapters') || 'Chapters Only (Disable Server Plugin)' }
+                {
+                    value: 'both',
+                    label: i18n.t('SegmentSourceBoth') || 'Server Plugin & Chapters (Merged)'
+                },
+                {
+                    value: 'server',
+                    label: i18n.t('SegmentSourceServer') || 'Server Plugin Only (intro-skipper)'
+                },
+                {
+                    value: 'chapters',
+                    label: i18n.t('SegmentSourceChapters') || 'Chapters Only (Disable Server Plugin)'
+                }
             ],
             PlayerSettings.get('skipSegmentSource') || 'both'
         )}
@@ -5896,8 +5910,8 @@ class SettingsPage extends Page {
         const useSeasonBadgesBtn = this.$('#toggle-use-season-badges');
         if (useSeasonBadgesBtn) {
             useSeasonBadgesBtn.addEventListener('click', () => {
-                // Determine whether season badges are currently enabled (defaults to true)
-                const isEnabled = storage.getItem('pref:useSeasonBadges') !== 'false';
+                // Determine whether season badges are currently enabled (defaults to false)
+                const isEnabled = storage.getItem('pref:useSeasonBadges') === 'true';
                 const newValue = !isEnabled;
 
                 // Save updated preference key
@@ -7553,7 +7567,9 @@ class SettingsPage extends Page {
                                 'pref:heroCarouselInterval'
                             ];
                             if (homepageLocalKeys.includes(settingConfig.key)) {
-                                log.info(`Invalidating home page cache due to local setting change: ${settingConfig.key}`);
+                                log.info(
+                                    `Invalidating home page cache due to local setting change: ${settingConfig.key}`
+                                );
                                 state.delete('home:pageCache');
                             }
 
@@ -7581,6 +7597,14 @@ class SettingsPage extends Page {
                                 if (libraryThumbContainer) {
                                     libraryThumbContainer.style.display = newValue === 'static' ? '' : 'none';
                                     focusManager.invalidateCache('settings-content');
+                                }
+
+                                // Clear cached thumb URLs so stale images don't linger
+                                storage.clearByPrefix('libThumb:');
+                                const pageCache = state.get('home:pageCache');
+                                if (pageCache && pageCache.thumbUrls) {
+                                    pageCache.thumbUrls = {};
+                                    state.set('home:pageCache', pageCache);
                                 }
                             }
 

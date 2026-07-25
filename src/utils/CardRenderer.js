@@ -471,10 +471,10 @@ class CardRenderer {
 
         // -------------------------------------------------------------
         // Retrieve Episode & Season Badge preferences from local storage.
-        // Both defaults are true if no value is explicitly set.
+        // Episode badges default to true, Season badges default to false (off).
         // -------------------------------------------------------------
         const useEpisodeBadges = storage.getItem('pref:useEpisodeBadges') !== 'false';
-        const useSeasonBadges = storage.getItem('pref:useSeasonBadges') !== 'false';
+        const useSeasonBadges = storage.getItem('pref:useSeasonBadges') === 'true';
 
         // -------------------------------------------------------------
         // Check item type and build appropriate badge markup if allowed.
