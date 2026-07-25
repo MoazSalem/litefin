@@ -1309,8 +1309,16 @@ export default class OSDController extends Component {
             this._cacheFocusableElements();
 
             this.show(); // Restore OSD visibility
-            // The menu.hide() call internally updates OSD focus row/index 
-            // and calls _updateFocus()
+
+            // Lock out enter/click inputs for 350ms to absorb any ghost key presses or trailing clicks
+            this._focusRestoreLockout = true;
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+            }, 350);
         }
     }
 
