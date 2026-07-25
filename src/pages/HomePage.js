@@ -297,6 +297,9 @@ class HomePage extends Page {
          */
         const descriptors = [];
 
+        // Read user preference for homepage row items limit (defaults to 12)
+        const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+
         // ── Priority 0: My Media (Libraries) ──────────────────────────────────
         // Libraries are already fetched at pipeline start and stored in
         // this._libraries — the fetchFn just resolves from memory.
@@ -340,8 +343,8 @@ class HomePage extends Page {
                     try {
                         log.info('Attempting to fetch pre-merged continue/next-up rows from Litefin plugin');
 
-                        // Request a combined list of 16 items from our custom server controller
-                        const response = await api.getMergedRows({ limit: 16 });
+                        // Request a combined list of items limited by user's homeRowLimit setting
+                        const response = await api.getMergedRows({ limit: homeRowLimit });
 
                         // If we got valid items back, return them immediately
                         if (response && response.Items && response.Items.length > 0) {
@@ -363,12 +366,12 @@ class HomePage extends Page {
                     // and next-up show items to optimize load times and keep the UI highly
                     // responsive under typical domestic network latency.
                     const [resumeRes, nextUpRes] = await Promise.all([
-                        api.getResumeItems(),
+                        api.getResumeItems({ Limit: homeRowLimit }),
                         (async () => {
                             // Extract maximum cutoff days limit for Next Up items from local storage.
                             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
-                            const params = {};
+                            const params = { Limit: homeRowLimit };
 
                             // If a valid cutoff constraint is present, pass it along as an ISO date string.
                             if (daysLimit > 0) {
@@ -509,7 +512,9 @@ class HomePage extends Page {
                         return timeB - timeA;
                     });
 
-                    return deduplicated.length > 0 ? deduplicated : null;
+                    // Return deduplicated results trimmed to homeRowLimit
+                    const sliced = deduplicated.slice(0, homeRowLimit);
+                    return sliced.length > 0 ? sliced : null;
                 }
             });
         } else {
@@ -522,7 +527,7 @@ class HomePage extends Page {
                 cardType: 'resume',
                 contextType: 'resume',
                 fetchFn: async () => {
-                    const res = await api.getResumeItems();
+                    const res = await api.getResumeItems({ Limit: homeRowLimit });
                     return res?.Items?.length > 0 ? res.Items : null;
                 }
             });
@@ -539,7 +544,7 @@ class HomePage extends Page {
                     const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                     const daysLimit = isNaN(maxDays) ? 365 : maxDays;
 
-                    const params = {};
+                    const params = { Limit: homeRowLimit };
                     if (daysLimit > 0) {
                         const cutoff = new Date();
                         cutoff.setDate(cutoff.getDate() - daysLimit);
@@ -603,6 +608,7 @@ class HomePage extends Page {
                 fetchFn: async () => {
                     try {
                         const params = hidePlayedInLatest ? { Filters: 'IsUnplayed' } : {};
+                        params.Limit = homeRowLimit;
                         const items = await api.getLatestItems(lib.Id, params);
                         return items?.length > 0 ? items : null;
                     } catch (e) {

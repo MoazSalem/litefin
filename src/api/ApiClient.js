@@ -694,11 +694,15 @@ export class ApiClient {
 
     /**
      * Get latest items in a library
+     * Uses configurable user limit preference (defaults to 12 items)
      */
     async getLatestItems(parentId, params = {}) {
+        // Read user's custom homepage row limit from storage, defaulting to 12 items
+        const defaultLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+
         const defaults = {
-            // 20 items gives a comfortable scrollable collection per library row
-            Limit: 20,
+            // Default item count per library row configured via user settings
+            Limit: defaultLimit,
             Fields: 'BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
@@ -710,12 +714,15 @@ export class ApiClient {
 
     /**
      * Get resume items (continue watching)
+     * Uses configurable user limit preference (defaults to 12 items)
      */
     async getResumeItems(params = {}) {
+        // Read user's custom homepage row limit from storage, defaulting to 12 items
+        const defaultLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+
         const defaults = {
-            // Fetch enough items to fill the horizontal row generously —
-            // users can scroll through up to 20 continue-watching entries
-            Limit: 20,
+            // Fetch items up to the user-selected row item limit
+            Limit: defaultLimit,
             Recursive: true,
             Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,

@@ -1937,6 +1937,29 @@ class SettingsPage extends Page {
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="HomeScreen">${i18n.t('HomeScreen')}</h3>
 
+                <!-- Home Rows Item Limit setting - Apple HIG minimal sleek design selector -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHomeRowsLimit">${i18n.t('LabelHomeRowsLimit') || 'Home Rows Limit'}</span>
+                        <span class="setting-description" data-i18n="HomeRowsLimitDescription">${i18n.t('HomeRowsLimitDescription') || 'Maximum number of items displayed per row on the home screen.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'home-rows-limit-select',
+                [
+                    { value: 30, label: i18n.t('ItemCountValue', [30]) || '30 items' },
+                    { value: 25, label: i18n.t('ItemCountValue', [25]) || '25 items' },
+                    { value: 20, label: i18n.t('ItemCountValue', [20]) || '20 items' },
+                    { value: 15, label: i18n.t('ItemCountValue', [15]) || '15 items' },
+                    { value: 12, label: (i18n.t('ItemCountValue', [12]) || '12 items') + ` (${i18n.t('Default') || 'Default'})` },
+                    { value: 10, label: i18n.t('ItemCountValue', [10]) || '10 items' },
+                    { value: 8, label: i18n.t('ItemCountValue', [8]) || '8 items' }
+                ],
+                parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10)
+            )}
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLibraryLabels">${i18n.t('HideLibraryLabels')}</span>
@@ -7346,6 +7369,7 @@ class SettingsPage extends Page {
             'html5-segment-length-select': { type: 'player', key: 'html5SegmentLength' },
 
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
+            'home-rows-limit-select': { key: 'pref:homeRowsLimit', type: 'local', triggerEvent: true },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },

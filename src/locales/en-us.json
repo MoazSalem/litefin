@@ -761,6 +761,8 @@
     "LabelHideShowNameInOsd": "Hide Show Name",
     "LabelHideSimilarSection": "Hide More Like This",
     "LabelHideYearInOsd": "Hide Year in OSD",
+    "LabelHomeRowsLimit": "Home Rows Limit",
+    "HomeRowsLimitDescription": "Maximum number of items displayed per row on the home screen.",
     "LabelLibraryPageSize": "Items per page (Library)",
     "LabelLogoSettings": "Litefin Logo",
     "LabelMaxDaysForNextUp": "Max days in Next Up",
