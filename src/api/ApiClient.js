@@ -2337,6 +2337,20 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
 
     log.info('Starting server discovery...');
 
+    // =========================================================================
+    // WAKE-ON-LAN ON SERVER SCAN
+    // =========================================================================
+    // If enabled in settings, broadcast a Wake-on-LAN magic packet to wake
+    // sleeping servers on the local subnet while performing discovery.
+    // =========================================================================
+    const wolOnScanEnabled = storage.getItem('pref:enableWolOnServerScan') === 'true';
+    const wolMac = storage.getItem('pref:wolMacAddress');
+
+    if (wolOnScanEnabled && wolMac) {
+        log.info(`Server discovery initiated. Sending Wake-on-LAN packet to ${wolMac}...`);
+        sendWakeOnLan(wolMac).catch((e) => log.warn('Failed to send WOL on server discovery scan:', e));
+    }
+
     /*
      * =========================================================================
      * WebOS Fast Path: Native UDP Discovery via Luna Service
