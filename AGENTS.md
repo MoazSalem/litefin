@@ -34,7 +34,9 @@ npm run format:check   # Prettier check only
 ### Package
 
 ```bash
-npm run package                    # All 8 variants (WGT + IPK)
+npm run package                    # All variants (WGT + IPK)
+npm run package:tizen              # All Tizen variants (WGT)
+npm run package:webos              # All webOS variants (IPK)
 npm run package:modern             # Modern - Tizen WGT + webOS IPK
 npm run package:normal             # Normal - Tizen WGT + webOS IPK
 npm run package:legacy             # Legacy - Tizen WGT + webOS IPK

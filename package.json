@@ -22,6 +22,8 @@
         "format:check": "prettier --check src/",
         "clean": "rimraf dist/ *.wgt *.ipk",
         "package": "gulp buildPackage",
+        "package:tizen": "gulp buildPackageTizen",
+        "package:webos": "gulp buildPackageWebosAll",
         "package:modern": "gulp buildPackageCombinedModern",
         "package:normal": "gulp buildPackageCombinedNormal",
         "package:legacy": "gulp buildPackageCombinedLegacy",
