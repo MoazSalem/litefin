@@ -379,17 +379,13 @@ class PlayerPage extends Page {
             // Initialize the player
             await this._initPlayer();
 
-            // Listen for app close/hide events to report playback stopped
+            // Listen for app close events to report playback stopped
             this._onAppBeforeExit = () => this._handleAppExit();
             eventBus.on('app:beforeExit', this._onAppBeforeExit);
 
-            // Pause playback when app goes to background (e.g. user switches TV input).
-            // We do NOT stop the player or report stopped — the session stays alive so
-            // the user can resume when they return without losing their position.
+            // Listen for app background/suspend events
             this._onAppHidden = () => this._handleAppHidden();
             eventBus.on('app:hidden', this._onAppHidden);
-
-            // When returning to foreground the player is still paused and ready.
             this._onAppVisible = () => this._handleAppVisible();
             eventBus.on('app:visible', this._onAppVisible);
 
@@ -3487,10 +3483,9 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Handle app going to background — pause playback and tell the server.
-     * The player and session remain alive so the user can resume on return.
-     * This is intentionally different from _handleAppExit() which fully stops
-     * the session (only used on actual app close via beforeunload).
+     * Handle app going to background — pause playback, optionally suspend AVPlay decoder,
+     * and report state to server. The player and session remain alive so the user can
+     * resume on return.
      */
     _handleAppHidden() {
         // Don't pause if we're already in the process of stopping playback
@@ -3538,6 +3533,16 @@ class PlayerPage extends Page {
             }
         }
 
+        // Suspend the AVPlay decoder to preserve hardware state if supported
+        const backend = this._player?._backend;
+        if (typeof backend?.suspend === 'function') {
+            try {
+                backend.suspend();
+            } catch (e) {
+                log.warn('Failed to suspend AVPlay:', e);
+            }
+        }
+
         // Prepare the takeover while the app is still hidden. webOS may paint the
         // video surface before the first foreground callback, so waiting until
         // app:visible would briefly expose the previous stream.
@@ -3547,17 +3552,41 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Handle app returning to foreground — the player is still paused and
-     * ready. We do NOT auto-resume; the user presses play to continue.
+     * Handle app returning to foreground — restore suspended decoder if needed.
+     * Player paused state is preserved; we do NOT auto-resume unless restored.
      */
-    _handleAppVisible() {
+    async _handleAppVisible() {
         if (this._isExiting) return;
 
         if (!this._resumeProfileSelectionActive) this._backgroundPrepared = false;
 
         log.info('App foregrounded, player paused state preserved');
-        // The player remains paused. When the user presses play, the normal
-        // togglePlay/unpause flow resumes from the current position.
+
+        const backend = this._player?._backend;
+        if (backend && typeof backend.isSuspended === 'function' && backend.isSuspended()) {
+            const url = backend.getCurrentUrl?.();
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
+
+            if (url && playSessionId) {
+                const { success, wasPlaying } = await backend.restore(url, 0);
+                if (success) {
+                    log.info('AVPlay restored from suspend');
+                    if (wasPlaying && !this._resumeProfileSelectionActive) {
+                        try {
+                            backend.unpause?.();
+                            this._reportPlaybackProgress('unpause');
+                        } catch (e) {
+                            log.warn('Failed to resume after restore:', e);
+                        }
+                    }
+                } else {
+                    log.warn('AVPlay restore failed, reporting stopped');
+                    const positionTicks = this._player.getCurrentPositionTicks?.() || 0;
+                    this._reportPlaybackStopped(mediaSource, positionTicks, false);
+                }
+            }
+        }
     }
 
     // ========================================================================
@@ -4005,13 +4034,11 @@ class PlayerPage extends Page {
             this._subtitleTimeout = null;
         }
 
-        // Remove app exit listener
+        // Remove app lifecycle listeners
         if (this._onAppBeforeExit) {
             eventBus.off('app:beforeExit', this._onAppBeforeExit);
             this._onAppBeforeExit = null;
         }
-
-        // Remove background/foreground listeners
         if (this._onAppHidden) {
             eventBus.off('app:hidden', this._onAppHidden);
             this._onAppHidden = null;
