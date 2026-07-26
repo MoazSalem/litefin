@@ -305,6 +305,11 @@ export class TizenAVPlayer {
                 await new Promise((resolve) => setTimeout(resolve, 100));
             }
 
+            // Ensure HLS playlist exists before opening the URL (prevents "Unknown Error" on transcode).
+            if (options.url && options.url.includes('.m3u8')) {
+                await MediaHelper.pollHlsManifest(options.url, () => !this._isPlaying);
+            }
+
             // Open the media
             this._avplay.open(options.url);
             this._currentSrc = options.url; // Set currentSrc after open
@@ -537,11 +542,6 @@ export class TizenAVPlayer {
                 this._pendingSeekMs = startMs;
             }
 
-            // Ensure HLS playlist exists before preparing AVPlay (prevents "Unknown Error" crash on 404)
-            if (options.url && options.url.includes('.m3u8')) {
-                await this._pollHlsPlaylist(options.url);
-            }
-
             // ── Arm Buffering Deadlock Safety Net ────────────────────────────
             //
             // Start a 30-second countdown BEFORE calling prepareAsync(). If the
@@ -586,7 +586,6 @@ export class TizenAVPlayer {
                     });
                 }, 15000);
             }
-
             // Prepare asynchronously
             await this._prepareAsync();
 
@@ -2409,12 +2408,8 @@ export class TizenAVPlayer {
     }
 
     /**
-     * Polls the HLS playlist URL until it returns HTTP 200 with content.
-     * Prevents Tizen AVPlay from crashing with 'Unknown error' if
-     * prepareAsync() is called before the server builds the manifest.
-     * @param {string} url - The HLS playlist URL
-     * @returns {Promise<void>}
-     * @private
+     * Get current time in seconds
+     * @returns {number}
      */
     async _pollHlsPlaylist(url) {
         if (!url || !url.includes('.m3u8')) return;
