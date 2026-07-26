@@ -432,6 +432,9 @@ export default class OSDController extends Component {
                         <div class="osd-ends-at" id="osdEndsAt"></div>
                         <div class="osd-spacer"></div>
                         <div class="osd-controls-right">
+                            ${PlayerSettings.get('enableScreenLock') ? `
+                            <button class="osd-btn" data-action="lock" tabindex="0" id="osdLockBtn" aria-label="Lock Screen">${osdIcons.lock}</button>
+                            ` : ''}
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${osdIcons.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${osdIcons.audiotrack}</button>
                             <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
@@ -2307,6 +2310,10 @@ export default class OSDController extends Component {
             case 'togglePlay':
                 if (this._player.togglePlay) this._player.togglePlay();
                 this.updatePlayPauseButton();
+                break;
+            case 'lock':
+                log.info('OSD lock action triggered');
+                this.emit('lock');
                 break;
             case 'rewind': {
                 const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack;

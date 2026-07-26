@@ -32,6 +32,7 @@ import { platformInfo } from '../utils/PlatformInfo.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
+import { osdIcons } from '../utils/Icons.js';
 
 const log = logger.create('Player');
 
@@ -99,6 +100,16 @@ class PlayerPage extends Page {
          */
         this._contextType = null;
         this._contextId = null;
+
+        // Playback Screen Lock states
+        this._isScreenLocked = false;
+        this._lockHoldTimer = null;
+        this._lockHoldStartTime = null;
+        this._isHoldingUnlock = false;
+        this._lockIndicatorTimeout = null;
+        // Press-counter for the unlock gesture (3 rapid OK/Enter presses)
+        this._unlockPressCount = 0;
+        this._unlockLastPressTime = null;
     }
 
     /**
@@ -155,6 +166,23 @@ class PlayerPage extends Page {
                 <!-- Positioned via CSS .subtitle-overlay.secondary (top: 10%) -->
                 <!-- Styles are inherited from primary, only size/position are independent -->
                 <div id="secondary-subtitle-overlay" class="subtitle-overlay secondary hidden"></div>
+
+                <!-- Playback Screen/Input Lock Overlay (Premium Dark Mode Aesthetic) -->
+                <div id="lock-overlay" class="lock-overlay">
+                    <div class="lock-container">
+                        <div class="lock-progress-wrapper">
+                            <svg class="lock-progress-svg" viewBox="0 0 100 100">
+                                <circle class="lock-progress-bg" cx="50" cy="50" r="45"></circle>
+                                <circle class="lock-progress-bar" id="lock-progress-bar" cx="50" cy="50" r="45"></circle>
+                            </svg>
+                            <div class="lock-icon-inner" id="lock-icon-inner"></div>
+                        </div>
+                        <div class="lock-text-container">
+                            <h2 class="lock-message" id="lock-message">Locked</h2>
+                            <p class="lock-submessage" id="lock-submessage">Press OK repeatedly to Unlock</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -173,6 +201,14 @@ class PlayerPage extends Page {
 
         // Reset playback completion flag for the new video page session.
         this._isPlaybackEnded = false;
+
+        // Always reset screen lock state on init — the previous page session
+        // may have ended with the lock still engaged (e.g. destroy while locked).
+        this._isScreenLocked = false;
+        this._isHoldingUnlock = false;
+        this._lockHoldStartTime = null;
+        this._unlockPressCount = 0;
+        this._unlockLastPressTime = null;
 
         // Parse Ghost Mode flag from the navigation query parameters.
         this._isGhostMode = this.params.ghostMode === 'true';
@@ -345,6 +381,16 @@ class PlayerPage extends Page {
             // Handle remote pause/play/stop commands from Jellyfin dashboard
             // IMPORTANT: These must also report state changes to the server!
 
+            const lockCheck = (fn) => {
+                return (...args) => {
+                    if (this._isScreenLocked) {
+                        this._showLockIndicator();
+                        return;
+                    }
+                    return fn(...args);
+                };
+            };
+
             this._onRemotePause = () => {
                 log.info('Remote: Pause');
                 if (this._player?.pause) {
@@ -359,7 +405,7 @@ class PlayerPage extends Page {
                     }
                 }
             };
-            eventBus.on('remote:pause', this._onRemotePause);
+            eventBus.on('remote:pause', lockCheck(this._onRemotePause));
 
             this._onRemotePlay = () => {
                 log.info('Remote: Play/Resume');
@@ -379,7 +425,7 @@ class PlayerPage extends Page {
                     this._osd.updatePlayPauseButton();
                 }
             };
-            eventBus.on('remote:play', this._onRemotePlay);
+            eventBus.on('remote:play', lockCheck(this._onRemotePlay));
 
             this._onRemotePlayPause = () => {
                 log.info('Remote: PlayPause');
@@ -400,14 +446,14 @@ class PlayerPage extends Page {
                     this._osd.updatePlayPauseButton();
                 }
             };
-            eventBus.on('remote:playpause', this._onRemotePlayPause);
+            eventBus.on('remote:playpause', lockCheck(this._onRemotePlayPause));
 
             this._onRemoteStop = () => {
                 log.info('Remote: Stop');
                 // _stopAndExit already handles reporting stopped to server
                 this._stopAndExit();
             };
-            eventBus.on('remote:stop', this._onRemoteStop);
+            eventBus.on('remote:stop', lockCheck(this._onRemoteStop));
 
             this._onRemoteSeek = (positionTicks) => {
                 log.info('Remote: Seek to', positionTicks);
@@ -420,7 +466,7 @@ class PlayerPage extends Page {
                     log.warn('Player has no seek method');
                 }
             };
-            eventBus.on('remote:seek', this._onRemoteSeek);
+            eventBus.on('remote:seek', lockCheck(this._onRemoteSeek));
 
             // Volume controls - these don't need server reporting (volume is local)
             // Note: On Tizen, volume may be controlled via system API not player API
@@ -440,7 +486,7 @@ class PlayerPage extends Page {
                     log.warn('No volume control available');
                 }
             };
-            eventBus.on('remote:volume', this._onRemoteVolume);
+            eventBus.on('remote:volume', lockCheck(this._onRemoteVolume));
 
             this._onRemoteVolumeUp = () => {
                 log.info('Remote: VolumeUp');
@@ -455,7 +501,7 @@ class PlayerPage extends Page {
                     }
                 }
             };
-            eventBus.on('remote:volumeup', this._onRemoteVolumeUp);
+            eventBus.on('remote:volumeup', lockCheck(this._onRemoteVolumeUp));
 
             this._onRemoteVolumeDown = () => {
                 log.info('Remote: VolumeDown');
@@ -470,7 +516,7 @@ class PlayerPage extends Page {
                     }
                 }
             };
-            eventBus.on('remote:volumedown', this._onRemoteVolumeDown);
+            eventBus.on('remote:volumedown', lockCheck(this._onRemoteVolumeDown));
 
             this._onRemoteMute = (muted) => {
                 log.info('Remote: Mute', muted);
@@ -486,7 +532,7 @@ class PlayerPage extends Page {
                 // Report mute state to server
                 this._reportPlaybackProgress('timeupdate');
             };
-            eventBus.on('remote:mute', this._onRemoteMute);
+            eventBus.on('remote:mute', lockCheck(this._onRemoteMute));
 
             this._onRemoteToggleMute = () => {
                 log.info('Remote: ToggleMute');
@@ -503,20 +549,20 @@ class PlayerPage extends Page {
                 // Report mute state to server
                 this._reportPlaybackProgress('timeupdate');
             };
-            eventBus.on('remote:togglemute', this._onRemoteToggleMute);
+            eventBus.on('remote:togglemute', lockCheck(this._onRemoteToggleMute));
 
             // Next/Previous track handlers
             this._onRemoteNext = async () => {
                 log.info('Remote: NextTrack');
                 this._playNextItem();
             };
-            eventBus.on('remote:next', this._onRemoteNext);
+            eventBus.on('remote:next', lockCheck(this._onRemoteNext));
 
             this._onRemotePrevious = async () => {
                 log.info('Remote: PreviousTrack');
                 this._playPreviousItem();
             };
-            eventBus.on('remote:previous', this._onRemotePrevious);
+            eventBus.on('remote:previous', lockCheck(this._onRemotePrevious));
 
             // Repeat and Shuffle
             this._onRemoteRepeatMode = (mode) => {
@@ -545,7 +591,7 @@ class PlayerPage extends Page {
                     this._osd.handleInput(direction);
                 }
             };
-            eventBus.on('remote:navigate', this._onRemoteNavigate);
+            eventBus.on('remote:navigate', lockCheck(this._onRemoteNavigate));
 
             this._onRemoteSelect = () => {
                 log.info('Remote: Select');
@@ -553,7 +599,7 @@ class PlayerPage extends Page {
                     this._osd.handleInput('enter');
                 }
             };
-            eventBus.on('remote:select', this._onRemoteSelect);
+            eventBus.on('remote:select', lockCheck(this._onRemoteSelect));
 
             this._onRemoteAudioTrack = (index) => {
                 log.info('Remote: SetAudioStreamIndex', index);
@@ -562,7 +608,7 @@ class PlayerPage extends Page {
                     this._refreshSubtitleStyles(); // In case track change affects OSD state
                 }
             };
-            eventBus.on('remote:audiotrack', this._onRemoteAudioTrack);
+            eventBus.on('remote:audiotrack', lockCheck(this._onRemoteAudioTrack));
 
             this._onRemoteSubtitle = (index) => {
                 log.info('Remote: SetSubtitleStreamIndex', index);
@@ -570,7 +616,7 @@ class PlayerPage extends Page {
                     this._player.setSubtitleStreamIndex(index);
                 }
             };
-            eventBus.on('remote:subtitle', this._onRemoteSubtitle);
+            eventBus.on('remote:subtitle', lockCheck(this._onRemoteSubtitle));
 
             // ---------------------------------------------------------------
             // Remote queue manipulation
@@ -611,10 +657,10 @@ class PlayerPage extends Page {
 
             // Channel Up/Down for Live TV
             this._onChannelUp = () => this._handleChannelChange(1);
-            eventBus.on('key:channelUp', this._onChannelUp);
+            eventBus.on('key:channelUp', lockCheck(this._onChannelUp));
 
             this._onChannelDown = () => this._handleChannelChange(-1);
-            eventBus.on('key:channelDown', this._onChannelDown);
+            eventBus.on('key:channelDown', lockCheck(this._onChannelDown));
 
             // ================================================================
             // MAGIC CURSOR SUPPORT (WebOS / Tizen Pointer)
@@ -627,6 +673,10 @@ class PlayerPage extends Page {
             let _mouseMoveThrottle = null;
             this.el.addEventListener('mousemove', (e) => {
                 if (!PlayerSettings.get('enableMagicCursor')) return;
+                if (this._isScreenLocked) {
+                    this._showLockIndicator();
+                    return;
+                }
 
                 if (_mouseMoveThrottle) return;
                 _mouseMoveThrottle = setTimeout(() => {
@@ -642,6 +692,10 @@ class PlayerPage extends Page {
             //    so OSD button clicks can never accidentally reach this handler even if
             //    stopPropagation() is still in flight on older TV browsers.
             this.el.addEventListener('click', (e) => {
+                if (this._isScreenLocked) {
+                    this._showLockIndicator();
+                    return;
+                }
                 /*
                  * DELIBERATE PHYSICAL CLICK EXEMPTION:
                  * We do NOT bypass physical clicks when 'enableMagicCursor' is false.
@@ -693,6 +747,10 @@ class PlayerPage extends Page {
             this.on('key:channelDown', () => this._onRemoteChannelDown());
 
             this.on('key:rewind', () => {
+                if (this._isScreenLocked) {
+                    this._showLockIndicator();
+                    return;
+                }
                 if (this._player) {
                     log.info('Hardware Remote: Rewind (10s)');
                     this._player.seekRelative(-10000);
@@ -701,12 +759,57 @@ class PlayerPage extends Page {
             });
 
             this.on('key:fastForward', () => {
+                if (this._isScreenLocked) {
+                    this._showLockIndicator();
+                    return;
+                }
                 if (this._player) {
                     log.info('Hardware Remote: FastForward (30s)');
                     this._player.seekRelative(30000);
                     if (this._osd) this._osd.show();
                 }
             });
+
+            // Bind lock overlay pointer events for click-based unlock on touch/mouse.
+            // Rapid-clicking the overlay also increments the unlock press counter.
+            const lockOverlay = this.$('#lock-overlay');
+            if (lockOverlay) {
+                lockOverlay.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    this._handleUnlockPress();
+                });
+            }
+
+            // Bind global document event listeners to intercept ALL key events while locked.
+            // This fires in the CAPTURE phase so it runs BEFORE the TV adapter's bubble-phase
+            // listener — stopImmediatePropagation() prevents the adapter from ever seeing the
+            // event, which means eventBus never gets any key:* emits while locked.
+            this._onGlobalKeyDown = (e) => {
+                if (!this._isScreenLocked) return;
+
+                // Always swallow the raw DOM event unconditionally — nothing gets through.
+                e.preventDefault();
+                e.stopImmediatePropagation();
+
+                // OK/Enter (keyCode 13) is our unlock trigger.
+                // We count presses; 3 presses within 2 seconds unlocks.
+                if (e.keyCode === 13) {
+                    this._handleUnlockPress();
+                } else {
+                    // Any other key: flash the overlay so the user knows it's locked.
+                    this._showLockIndicator();
+                }
+            };
+            document.addEventListener('keydown', this._onGlobalKeyDown, true);
+
+            // keyup capture — just swallow it entirely when locked.
+            this._onGlobalKeyUp = (e) => {
+                if (!this._isScreenLocked) return;
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            };
+            document.addEventListener('keyup', this._onGlobalKeyUp, true);
 
             // Start playback
             await this._startPlayback();
@@ -1387,6 +1490,7 @@ class PlayerPage extends Page {
         });
         this._osd.on('next', () => this._playNextItem()); // Ensure OSD emits this
         this._osd.on('previous', () => this._playPreviousItem()); // Ensure OSD emits this
+        this._osd.on('lock', () => this._lockScreen());
         /* Queue modal: instant skip to a specific index in the play queue. */
         this._osd.on('playQueueItem', (index) => this._playQueueItemAtIndex(index));
 
@@ -3004,6 +3108,11 @@ class PlayerPage extends Page {
     onBack() {
         log.info('onBack() called');
 
+        if (this._isScreenLocked) {
+            this._showLockIndicator();
+            return;
+        }
+
         // ====================================================================
         // PHYSICAL / PLATFORM BACK BUTTON TRANSITION GUARD
         // ====================================================================
@@ -3190,6 +3299,135 @@ class PlayerPage extends Page {
     }
 
     // ========================================================================
+    // Playback Screen Lock Helpers
+    // ========================================================================
+
+    _lockScreen() {
+        log.info('Locking screen and remote controls');
+        this._isScreenLocked = true;
+        if (this._osd) this._osd.hide();
+        
+        const overlay = this.$('#lock-overlay');
+        const iconContainer = this.$('#lock-icon-inner');
+        if (overlay) {
+            overlay.classList.add('visible');
+        }
+        if (iconContainer) {
+            iconContainer.innerHTML = osdIcons.lock;
+        }
+        this._showLockIndicator();
+    }
+
+    _unlockScreen() {
+        log.info('Unlocking screen and remote controls');
+        this._isScreenLocked = false;
+        this._stopUnlockHold();
+
+        // Reset the press counter for the next lock cycle.
+        this._unlockPressCount = 0;
+        this._unlockLastPressTime = null;
+        
+        const overlay = this.$('#lock-overlay');
+        if (overlay) {
+            overlay.classList.remove('visible');
+        }
+        
+        // Reset progress ring and icon back to locked state for next use.
+        const progressBar = this.$('#lock-progress-bar');
+        if (progressBar) {
+            progressBar.style.strokeDashoffset = '283';
+        }
+        const iconContainer = this.$('#lock-icon-inner');
+        if (iconContainer) {
+            iconContainer.innerHTML = osdIcons.lock;
+        }
+        
+        // Show OSD briefly as feedback that it is unlocked
+        if (this._osd) {
+            this._osd.show();
+            this._osd.resetAutoHide();
+        }
+    }
+
+    _showLockIndicator() {
+        const overlay = this.$('#lock-overlay');
+        if (overlay) {
+            overlay.classList.add('visible');
+            
+            if (this._lockIndicatorTimeout) clearTimeout(this._lockIndicatorTimeout);
+            this._lockIndicatorTimeout = setTimeout(() => {
+                if (!this._isHoldingUnlock && this._isScreenLocked) {
+                    overlay.classList.remove('visible');
+                }
+            }, 3000);
+        }
+    }
+
+    _startUnlockHold() {
+        // No-op: replaced by _handleUnlockPress() for TV compatibility.
+        // TVs send repeated keydown events and do not reliably fire keyup for held keys,
+        // so we use a 3-press counter instead of a hold timer.
+    }
+
+    _stopUnlockHold() {
+        // No-op: replaced by _handleUnlockPress() for TV compatibility.
+    }
+
+    /**
+     * Count consecutive OK/Enter presses to unlock.
+     *
+     * TVs fire keydown in rapid autorepeat bursts — we deliberately exploit this.
+     * The user holds OK/Enter; within ~2 seconds we receive enough repeat events
+     * to hit our threshold (default 8) and unlock.
+     *
+     * Window resets if no press arrives within 1.5 seconds.
+     */
+    _handleUnlockPress() {
+        const PRESS_THRESHOLD = 5;      // presses (fast taps or one held key with autorepeat)
+        const PRESS_WINDOW_MS = 3000;   // window to collect them
+
+        const now = Date.now();
+
+        // Reset counter if window expired.
+        if (this._unlockLastPressTime && (now - this._unlockLastPressTime) > PRESS_WINDOW_MS) {
+            this._unlockPressCount = 0;
+            // Reset progress ring when window expires.
+            const progressBar = this.$('#lock-progress-bar');
+            if (progressBar) progressBar.style.strokeDashoffset = '283';
+            const iconContainer = this.$('#lock-icon-inner');
+            if (iconContainer) iconContainer.innerHTML = osdIcons.lock;
+        }
+
+        this._unlockLastPressTime = now;
+        this._unlockPressCount = (this._unlockPressCount || 0) + 1;
+
+        // Show unlock icon and animate progress ring proportional to presses collected.
+        const progress = Math.min(1, this._unlockPressCount / PRESS_THRESHOLD);
+
+        const progressBar = this.$('#lock-progress-bar');
+        if (progressBar) {
+            progressBar.style.strokeDashoffset = 283 - (progress * 283);
+        }
+
+        const iconContainer = this.$('#lock-icon-inner');
+        if (iconContainer) {
+            iconContainer.innerHTML = progress >= 0.5 ? osdIcons.unlock : osdIcons.lock;
+        }
+
+        // Keep overlay visible while user is pressing.
+        const overlay = this.$('#lock-overlay');
+        if (overlay) overlay.classList.add('visible');
+        if (this._lockIndicatorTimeout) clearTimeout(this._lockIndicatorTimeout);
+
+        if (this._unlockPressCount >= PRESS_THRESHOLD) {
+            // Threshold reached — unlock.
+            this._unlockPressCount = 0;
+            this._unlockLastPressTime = null;
+            this._unlockScreen();
+        }
+    }
+
+    // ========================================================================
     // Cleanup
     // ========================================================================
 
@@ -3248,6 +3486,24 @@ class PlayerPage extends Page {
         if (this._onRemoteUserDataChanged) eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
         if (this._onChannelUp) eventBus.off('key:channelUp', this._onChannelUp);
         if (this._onChannelDown) eventBus.off('key:channelDown', this._onChannelDown);
+
+        // Clean up global lock listeners
+        if (this._onGlobalKeyDown) {
+            document.removeEventListener('keydown', this._onGlobalKeyDown, true);
+            this._onGlobalKeyDown = null;
+        }
+        if (this._onGlobalKeyUp) {
+            document.removeEventListener('keyup', this._onGlobalKeyUp, true);
+            this._onGlobalKeyUp = null;
+        }
+        if (this._lockHoldTimer) {
+            clearInterval(this._lockHoldTimer);
+            this._lockHoldTimer = null;
+        }
+        if (this._lockIndicatorTimeout) {
+            clearTimeout(this._lockIndicatorTimeout);
+            this._lockIndicatorTimeout = null;
+        }
 
         // Clean up focus sections
         focusManager.unregister('player-error');

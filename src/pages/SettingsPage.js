@@ -2547,6 +2547,9 @@ class SettingsPage extends Page {
         // Retrieve localized keys or fallback gracefully to default values.
         const scrollNavEnabled = storage.getItem('pref:hoverScrollNavigation') === 'true';
         const magicCursorEnabled = PlayerSettings.get('enableMagicCursor');
+        const enableScreenLockEnabled = PlayerSettings.get('enableScreenLock');
+
+        // Seekbar Hover Trickplay Preview Frame Row
         const hoverTrickplayEnabled = PlayerSettings.get('enableHoverTrickplay');
         const focusFirstItemEnabled = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
 
@@ -2646,6 +2649,21 @@ class SettingsPage extends Page {
                         <button class="toggle-switch ${magicCursorEnabled ? 'active' : ''}" 
                                 id="toggle-magic-cursor" 
                                 data-setting="enableMagicCursor"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Playback Screen Lock Option Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableScreenLock">${i18n.t('EnableScreenLock') || 'Playback Screen Lock'}</span>
+                        <span class="setting-description" data-i18n="EnableScreenLockDescription">${i18n.t('EnableScreenLockDescription') || 'Enable a screen and input lock button in the player overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${enableScreenLockEnabled ? 'active' : ''}" 
+                                id="toggle-enable-screen-lock" 
+                                data-setting="enableScreenLock"
                                 tabindex="0">
                         </button>
                     </div>
@@ -8034,6 +8052,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('enableMagicCursor', newValue);
                 magicCursorToggle.classList.toggle('active', newValue);
                 log.info(`Magic Cursor set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Playback Screen Lock
+        const enableScreenLockToggle = this.$('#toggle-enable-screen-lock');
+        if (enableScreenLockToggle) {
+            enableScreenLockToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableScreenLock');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableScreenLock', newValue);
+                enableScreenLockToggle.classList.toggle('active', newValue);
+                log.info(`Playback Screen Lock set to: ${newValue}`);
             });
         }
 
