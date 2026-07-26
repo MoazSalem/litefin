@@ -478,21 +478,66 @@ export class WebOSPlayer {
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut:    20000,
                 fragLoadingTimeOut:     20000,
-                maxBufferSize:          60 * 1000 * 1000, // 60 MB
+                maxBufferSize:          60 * 1000 * 1000,
                 enableWorker:           true
             });
+
+            let bufferReady = false;
+            let initialBufferTimer = null;
+            let resolved = false;
+
+            const resolveOnce = (value) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                resolve(value);
+            };
+
+            const rejectOnce = (reason) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                reject(reason);
+            };
+
+            const startPlayback = () => {
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => resolveOnce())
+                        .catch(err => this._handleAutoplayError(err, video, options, resolveOnce, rejectOnce));
+                } else {
+                    resolveOnce();
+                }
+            };
+
+            // Buffer-readiness gate: defer play() until the first segment is buffered.
+            const onBufferAppended = () => {
+                if (bufferReady) return;
+                bufferReady = true;
+                clearTimeout(initialBufferTimer);
+                log.info('WebOSPlayer: Hls.js initial segment buffered, starting playback');
+                startPlayback();
+            };
+
+            initialBufferTimer = setTimeout(() => {
+                if (!bufferReady) {
+                    log.warn('WebOSPlayer: Hls.js initial buffer timeout (3s) — forcing play');
+                    bufferReady = true;
+                    startPlayback();
+                }
+            }, 3000);
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('WebOSPlayer: Hls.js manifest parsed');
                 this._applyInitialTracks(options, hls);
-                const playPromise = video.play();
-                if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                    playPromise
-                        .then(resolve)
-                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
-                } else {
-                    resolve();
+
+                if (options.autoPlay === false) {
+                    resolveOnce();
                 }
+                // Otherwise BUFFER_APPENDED or timeout will call startPlayback()
             });
 
             if (options.playerStartPositionTicks) {
@@ -502,7 +547,6 @@ export class WebOSPlayer {
             }
 
             hls.on(Hls.Events.ERROR, (event, data) => {
-                // Swallow non-fatal buffer stalls — they typically self-recover
                 if (data.details === 'bufferStalledError' && !data.fatal) {
                     log.warn('WebOSPlayer: Hls.js non-fatal buffer stall');
                     return;
@@ -521,11 +565,14 @@ export class WebOSPlayer {
                             break;
                         default:
                             hls.destroy();
-                            reject(new Error('Hls.js fatal error'));
+                            rejectOnce(new Error('Hls.js fatal error'));
                             break;
                     }
                 }
             });
+
+            // Listen for the first segment buffered — triggers play()
+            hls.on(Hls.Events.BUFFER_APPENDED, onBufferAppended);
 
             hls.loadSource(options.url);
             hls.attachMedia(video);

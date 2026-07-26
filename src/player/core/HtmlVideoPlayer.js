@@ -246,12 +246,77 @@ export class HtmlVideoPlayer {
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut: 20000,
                 fragLoadingTimeOut: 20000,
-                // Increase initial buffer goal for stability (matching Tizen's 6s goal)
-                maxBufferSize: 60 * 1000 * 1000, // 60MB roughly
+                maxBufferSize: 60 * 1000 * 1000,
                 enableWorker: true
             });
 
-            // HLS.js events
+            let bufferReady = false;
+            let initialBufferTimer = null;
+            let resolved = false;
+
+            const resolveOnce = (value) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                resolve(value);
+            };
+
+            const rejectOnce = (reason) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                reject(reason);
+            };
+
+            const startPlayback = () => {
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise.then(() => resolveOnce()).catch((err) => {
+                        if (err.name === 'NotAllowedError') {
+                            log.warn('Autoplay blocked — retrying muted (remote launch).');
+                            video.muted = true;
+                            const retryPromise = video.play();
+                            if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
+                                retryPromise.then(() => {
+                                    this._scheduleUnmuteOnInteraction(video);
+                                    resolveOnce();
+                                }).catch((retryErr) => rejectOnce(retryErr));
+                            } else {
+                                this._scheduleUnmuteOnInteraction(video);
+                                resolveOnce();
+                            }
+                        } else {
+                            rejectOnce(err);
+                        }
+                    });
+                } else {
+                    resolveOnce();
+                }
+            };
+
+            // Buffer-readiness gate: defer play() until the first segment is buffered.
+            // This prevents a black stall on HLS streams where the manifest is parsed
+            // before any media data is available for playback.
+            const onBufferAppended = () => {
+                if (bufferReady) return;
+                bufferReady = true;
+                clearTimeout(initialBufferTimer);
+                log.info('HLS.js: initial segment buffered, starting playback');
+                startPlayback();
+            };
+
+            // 3s fallback: if no segment arrives, force play anyway
+            initialBufferTimer = setTimeout(() => {
+                if (!bufferReady) {
+                    log.warn('HLS.js: initial buffer timeout (3s) — forcing play');
+                    bufferReady = true;
+                    startPlayback();
+                }
+            }, 3000);
+
+            // Apply track selection and set up the buffer gate once manifest is parsed
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('HLS manifest parsed');
 
@@ -264,9 +329,8 @@ export class HtmlVideoPlayer {
                 }
 
                 if (options.subtitleStreamIndex !== undefined) {
-                    // HLS.js subtitle tracks
                     if (options.subtitleStreamIndex === -1) {
-                        hls.subtitleTrack = -1; // Disabled
+                        hls.subtitleTrack = -1;
                     } else if (options.subtitleStreamIndex < hls.subtitleTracks.length) {
                         hls.subtitleTrack = options.subtitleStreamIndex;
                         log.debug('Set HLS subtitle track:', options.subtitleStreamIndex);
@@ -275,79 +339,33 @@ export class HtmlVideoPlayer {
 
                 if (options.autoPlay === false) {
                     log.info('HLS.js path: Skipping initial play() due to autoPlay=false');
-                    resolve();
-                } else {
-                    const playPromise = video.play();
-                    if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                        playPromise.then(resolve).catch((err) => {
-                            if (err.name === 'NotAllowedError') {
-                                log.warn('Autoplay blocked — retrying muted (remote launch).');
-                                video.muted = true;
-                                const retryPromise = video.play();
-                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
-                                    retryPromise.then(() => {
-                                        this._scheduleUnmuteOnInteraction(video);
-                                        resolve();
-                                    }).catch(reject);
-                                } else {
-                                    this._scheduleUnmuteOnInteraction(video);
-                                    resolve();
-                                }
-                            } else {
-                                reject(err);
-                            }
-                        });
-                    } else {
-                        resolve();
-                    }
+                    resolveOnce();
                 }
+                // Otherwise BUFFER_APPENDED or timeout will call startPlayback()
             });
 
             // ================================================================
             // LEVEL_UPDATED — fired every time the manifest playlist is
             // fetched and parsed (live: every ~4s; VOD: once at the end).
-            //
-            // When details.live === false the server has appended #EXT-X-ENDLIST
-            // to the manifest, which means the Jellyfin transcoder has finished
-            // encoding the entire file. At that point details.totalduration is
-            // the accurate total, and we can lock in the OSD to the right value.
-            //
-            // We store it on the HLS player instance and dispatch a synthetic
-            // durationchange on the video element so JellyfinPlayer's existing
-            // durationchange handler picks it up automatically.
             // ================================================================
             hls.on(Hls.Events.LEVEL_UPDATED, (event, data) => {
                 const details = data?.details;
                 if (!details) return;
 
                 if (!details.live && details.totalduration > 0) {
-                    // Manifest is complete — store duration for JellyfinPlayer to read
                     log.info(`[HLS] Manifest complete (EXT-X-ENDLIST). Total duration: ${details.totalduration.toFixed(1)}s`);
                     this._hlsManifestDuration = details.totalduration;
-
-                    // Dispatch durationchange on the video element so the OSD
-                    // refreshes without needing a separate polling mechanism.
                     video.dispatchEvent(new Event('durationchange'));
                 }
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
-                // Filter out benign buffer stall errors
                 if (data.details === 'bufferStalledError' && !data.fatal) {
                     log.warn('HLS buffer low (non-fatal):', data.buffer);
                     return;
                 }
 
                 if (!data.fatal) {
-                    // ============================================================
-                    // Non-fatal fragment load error — the most common cause is
-                    // seeking ahead of the Jellyfin transcoder: segment N hasn't
-                    // been encoded yet, so the server returns an empty response.
-                    //
-                    // Immediately calling startLoad() would hammer the server.
-                    // Wait 2 seconds so the transcoder has time to produce the
-                    // next segment, then tell HLS.js to retry loading.
-                    // ============================================================
                     if (data.details === 'fragLoadError') {
                         log.warn('[HLS] Non-fatal fragLoadError — waiting 2s for transcoder, then retrying');
                         setTimeout(() => {
@@ -357,8 +375,6 @@ export class HtmlVideoPlayer {
                         }, 2000);
                         return;
                     }
-
-                    // All other non-fatal errors — log but let HLS.js handle automatically
                     log.warn('HLS non-fatal error:', data);
                     return;
                 }
@@ -378,21 +394,22 @@ export class HtmlVideoPlayer {
                         default:
                             log.error('Fatal HLS error, cannot recover');
                             hls.destroy();
-                            reject(new Error('HLS playback failed'));
+                            rejectOnce(new Error('HLS playback failed'));
                             break;
                     }
                 }
             });
 
-            // Load source
+            // Listen for the first segment buffered — triggers play()
+            hls.on(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+
             log.debug('HLS Loading source:', options.url);
             hls.loadSource(options.url);
             hls.attachMedia(video);
 
             this._hlsPlayer = hls;
-            this._hlsManifestDuration = null; // Reset for this session
+            this._hlsManifestDuration = null;
 
-            // Failsafe timeout
             setTimeout(() => {
                 if (!this._started && !this._videoElement?.paused) {
                     log.warn('No playback start detected after 10s');
