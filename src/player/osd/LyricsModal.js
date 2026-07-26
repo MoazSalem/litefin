@@ -226,10 +226,32 @@ export default class LyricsModal extends Component {
         
         const scrollTop = targetTop - (containerHeight / 2) + (targetHeight / 2);
 
-        this.$container.scrollTo({
-            top: scrollTop,
-            behavior: instant ? 'auto' : 'smooth'
-        });
+        /*
+         * ---------------------------------------------------------------------
+         * LEGACY SCROLL SUPPORT FALLBACK
+         * ---------------------------------------------------------------------
+         * Detect if scrollBehavior is supported natively by the browser.
+         * Older Tizen and WebOS platforms (running Chromium < 49) do not support
+         * the scrollTo options object (with top/behavior keys). Passing it will
+         * fail silently or throw. We fallback to direct scrollTop assignment.
+         * ---------------------------------------------------------------------
+         */
+        const supportsScrollOptions = 'scrollBehavior' in document.documentElement.style;
+
+        if (supportsScrollOptions && !instant) {
+            try {
+                this.$container.scrollTo({
+                    top: scrollTop,
+                    behavior: 'smooth'
+                });
+                return;
+            } catch (e) {
+                log.warn('scrollTo options failed, using fallback scrollTop:', e);
+            }
+        }
+
+        // Direct assignment fallback - universally supported on all legacy browsers/platforms
+        this.$container.scrollTop = scrollTop;
     }
 
     handleKey(key) {
@@ -240,7 +262,24 @@ export default class LyricsModal extends Component {
 
         switch (key) {
             case 'left':
+                /*
+                 * -------------------------------------------------------------
+                 * DPAD LEFT EXIT PATH
+                 * -------------------------------------------------------------
+                 * Close the lyrics modal and return focus to the player controls.
+                 * -------------------------------------------------------------
+                 */
+                this.osdController.toggleLyricsModal(false);
+                return true;
+
             case 'right':
+                /*
+                 * -------------------------------------------------------------
+                 * DPAD RIGHT NAVIGATION
+                 * -------------------------------------------------------------
+                 * Horizontal navigation support for the close button.
+                 * -------------------------------------------------------------
+                 */
                 if (isClose && this._focusedIndex === -1) {
                     // Close button horizontal nav -> return to player header or allow default
                     this.osdController._currentFocusRow = 0;

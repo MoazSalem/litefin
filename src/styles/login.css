@@ -167,7 +167,7 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
     justify-content: center;
     border-radius: var(--jf-border-radius);
     box-sizing: border-box;
-    /* Apple-style subtle shadows and simplified transparency for Tizen */
+    /* subtle shadows and simplified transparency for Tizen */
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: var(--jf-text-primary);

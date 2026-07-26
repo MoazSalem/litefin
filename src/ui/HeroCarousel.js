@@ -30,6 +30,7 @@ class HeroCarousel {
         this._isFocused = false;
         const savedInterval = storage.getItem('pref:heroCarouselInterval');
         this._autoScrollInterval = savedInterval ? parseInt(savedInterval, 10) : 8000; // Default 8s
+        this._hideTimeoutId = null;
 
         // Bindings
         this._handleFocus = this._handleFocus.bind(this);
@@ -83,15 +84,14 @@ class HeroCarousel {
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
-                    ${
-                        this._items.length > 1
-                            ? `
+                    ${this._items.length > 1
+                ? `
                     <div class="hero-indicators">
                         ${dotsHtml}
                     </div>
                     `
-                            : ''
-                    }
+                : ''
+            }
                 </div>
                 ${navArrowsHtml}
             </div>
@@ -123,12 +123,16 @@ class HeroCarousel {
 
         if (!useTextTitle && logoItemId && logoTag) {
             const logoParams = imageService.getParams('hero-logo');
+            const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+            const dpr = window.devicePixelRatio || 1;
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: logoParams.maxWidth,
+                fillWidth: Math.round(400 * dpr),
+                fillHeight: Math.round((isCompact ? 110 : 130) * dpr),
                 quality: logoParams.quality,
                 tag: logoTag
             });
-            logoHtml = `<div class="hero-logo-container"><img src="${logoUrl}" alt="" class="hero-logo"></div>`;
+            const logoSrc = isActive ? `src="${logoUrl}"` : `data-src="${logoUrl}"`;
+            logoHtml = `<div class="hero-logo-container"><img ${logoSrc} alt="" class="hero-logo"></div>`;
         } else {
             logoHtml = `<h1 class="hero-item-title">${i18n.ensureBiDi(item.Name)}</h1>`;
         }
@@ -174,8 +178,8 @@ class HeroCarousel {
         }
 
         return `
-            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}">
-                <div class="hero-backdrop" style="background-image: url('${backdropUrl}')">
+            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}"${!isActive ? ' style="visibility:hidden"' : ''}>
+                <div class="hero-backdrop" data-backdrop="${backdropUrl}"${isActive ? ` style="background-image: url('${backdropUrl}')"` : ''}>
                     ${blurHash ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
                 </div>
                 <div class="hero-content">
@@ -316,6 +320,38 @@ class HeroCarousel {
         // Start auto-scroll
         this._startAutoScroll();
 
+        // =========================================================================
+        // Dynamic Visual Weight Adaptation for Hero Logos
+        // =========================================================================
+        // Calculate the natural aspect ratio of the loaded hero logo image.
+        // Cap the height dynamically to keep the layout visually balanced:
+        // - Tall/square logos get more height (up to 130px) to remain legible.
+        // - Wide/short logos shrink in container height to eliminate vertical gaps.
+        // =========================================================================
+        const logos = this._container.querySelectorAll('.hero-logo');
+        logos.forEach((img) => {
+            const adjustHeight = () => {
+                const container = img.closest('.hero-logo-container');
+                if (container) {
+                    const aspect = img.naturalWidth / img.naturalHeight || 1;
+                    const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+                    const maxW = 400; // max-width of .hero-logo in CSS
+                    const maxHeight = isCompact ? 110 : 130;
+                    const minHeight = isCompact ? 50 : 60;
+
+                    const targetHeight = maxW / aspect;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                    container.style.height = `${containerHeight}px`;
+                }
+            };
+
+            if (img.complete) {
+                adjustHeight();
+            } else {
+                img.onload = adjustHeight;
+            }
+        });
+
         // ────────────────────────────────────────────────────────────────────
         // BlurHash Background Placeholders for Hero Carousel items
         // ────────────────────────────────────────────────────────────────────
@@ -330,48 +366,70 @@ class HeroCarousel {
 
             const style = heroBackdrop.style.backgroundImage;
             const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
-            if (match && match[1]) {
-                const url = match[1];
+            const url = match && match[1];
+            if (!url) return;
 
-                // Decode blurhash at low resolution asynchronously
-                import('../utils/BlurHashDecoder.js')
-                    .then(({ default: BlurHashDecoder }) => {
-                        const pixels = BlurHashDecoder.decode(hash, 64, 36);
-                        if (pixels && canvas) {
-                            canvas.width = 64;
-                            canvas.height = 36;
-                            const ctx = canvas.getContext('2d');
-                            const imageData = ctx.createImageData(64, 36);
-                            imageData.data.set(pixels);
-                            ctx.putImageData(imageData, 0, 0);
-                        }
-                    })
-                    .catch((err) => log.error('Failed to decode hero blurhash', err));
+            // Determine slide index for selective preloading
+            const index = parentHeroItem ? parseInt(parentHeroItem.dataset.index, 10) : -1;
+            const isFirstSlide = index === 0;
 
-                // Listen for backdrop image to finish preloading
-                const img = new Image();
-                img.onload = () => {
-                    requestAnimationFrame(() => {
-                        canvas.style.opacity = '0';
-                        setTimeout(() => {
-                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                        }, 500);
-                    });
-                };
-                img.src = url;
-            }
+            // Decode blurhash at low resolution asynchronously
+            import('../utils/BlurHashDecoder.js')
+                .then(({ default: BlurHashDecoder }) => {
+                    const pixels = BlurHashDecoder.decode(hash, 64, 36);
+                    if (pixels && canvas) {
+                        canvas.width = 64;
+                        canvas.height = 36;
+                        const ctx = canvas.getContext('2d');
+                        const imageData = ctx.createImageData(64, 36);
+                        imageData.data.set(pixels);
+                        ctx.putImageData(imageData, 0, 0);
+                    }
+                })
+                .catch((err) => log.error('Failed to decode hero blurhash', err));
+
+            // Only preload backdrop image for the first (active) slide
+            // Other slides load lazily via _preloadSlide on navigation
+            if (!isFirstSlide) return;
+
+            // Listen for backdrop image to finish preloading
+            const img = new Image();
+            img.onload = () => {
+                requestAnimationFrame(() => {
+                    canvas.style.opacity = '0';
+                    setTimeout(() => {
+                        if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                    }, 500);
+                });
+            };
+            img.src = url;
         });
+
+        // Preload the adjacent slide for smoother initial navigation
+        if (this._items.length > 1) {
+            this._preloadSlide(1);
+        }
     }
 
     /**
      * Clean up resources
      */
     destroy() {
+        // Pause timer
         this._stopAutoScroll();
-        // Cancel any in-flight indicator animation frame
+
+        // Cancel any in-flight indicator animation frame or timeout
         if (this._indicatorRafId) {
             cancelAnimationFrame(this._indicatorRafId);
             this._indicatorRafId = null;
+        }
+        if (this._indicatorTimeoutId) {
+            clearTimeout(this._indicatorTimeoutId);
+            this._indicatorTimeoutId = null;
+        }
+        if (this._hideTimeoutId) {
+            clearTimeout(this._hideTimeoutId);
+            this._hideTimeoutId = null;
         }
         if (this._onFocusChanged) {
             eventBus.off('focus:changed', this._onFocusChanged);
@@ -452,23 +510,77 @@ class HeroCarousel {
     _resetIndicatorAnimation() {
         if (!this._container) return;
 
+        // Retrieve all dot indicators
         const dots = this._container.querySelectorAll('.hero-dot');
         const currentDot = dots[this._currentIndex];
         if (!currentDot) return;
 
-        // Cancel any pending restart to avoid double-firing on rapid transitions
+        // --------------------------------------------------------------------
+        // Cleanup existing timers or animation frames to prevent double-firing
+        // --------------------------------------------------------------------
         if (this._indicatorRafId) {
             cancelAnimationFrame(this._indicatorRafId);
+            this._indicatorRafId = null;
+        }
+        if (this._indicatorTimeoutId) {
+            clearTimeout(this._indicatorTimeoutId);
+            this._indicatorTimeoutId = null;
         }
 
-        // Frame N: remove the active class (stops the CSS animation)
+        // --------------------------------------------------------------------
+        // Stop current animation immediately by removing the active class
+        // --------------------------------------------------------------------
         currentDot.classList.remove('active');
 
-        // Frame N+1: add it back — the animation restarts cleanly with no reflow
-        this._indicatorRafId = requestAnimationFrame(() => {
-            this._indicatorRafId = null;
+        // --------------------------------------------------------------------
+        // Re-add the class on a macro-task boundary (setTimeout) instead of
+        // requestAnimationFrame. On Tizen/TV WebKit platforms, if the element
+        // is off-screen or during scrolling, requestAnimationFrame can be
+        // coalesced or skipped, leaving the progress bar stuck at width 0.
+        // A short setTimeout guarantees the browser registers the removal.
+        // --------------------------------------------------------------------
+        this._indicatorTimeoutId = setTimeout(() => {
+            this._indicatorTimeoutId = null;
             currentDot.classList.add('active');
-        });
+        }, 40); // 40ms is a safe window (~2-3 frames) to ensure rendering pipeline updates
+    }
+
+    /**
+     * Preload images for a specific slide by index
+     * Loads backdrop and logo images so they're ready for display
+     * @private
+     */
+    _preloadSlide(index) {
+        const items = this._container.querySelectorAll('.hero-item');
+        const item = items[index];
+        if (!item) return;
+
+        // Preload backdrop image
+        const backdrop = item.querySelector('.hero-backdrop');
+        if (backdrop && backdrop.dataset.backdrop && !backdrop.style.backgroundImage) {
+            const url = backdrop.dataset.backdrop;
+            const img = new Image();
+            img.onload = () => {
+                if (backdrop.dataset.backdrop === url) {
+                    backdrop.style.backgroundImage = `url('${url}')`;
+                    // Fade out blurhash canvas if present
+                    const canvas = item.querySelector('.hero-blurhash-canvas');
+                    if (canvas) {
+                        canvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                        }, 500);
+                    }
+                }
+            };
+            img.src = url;
+        }
+
+        // Load logo image if deferred
+        const logo = item.querySelector('.hero-logo');
+        if (logo && logo.dataset.src && !logo.src) {
+            logo.src = logo.dataset.src;
+        }
     }
 
     /**
@@ -500,14 +612,56 @@ class HeroCarousel {
 
         if (!items[index] || !dots[index]) return;
 
+        const prevItem = items[this._currentIndex];
+        const nextItem = items[index];
+
+        // Hide all non-adjacent slides immediately to free GPU memory
+        items.forEach((item, i) => {
+            if (i !== this._currentIndex && i !== index) {
+                item.style.visibility = 'hidden';
+            }
+        });
+
+        // Preload the target slide's images
+        this._preloadSlide(index);
+
+        // Make the new slide visible and promote GPU layers before transition
+        nextItem.style.visibility = 'visible';
+        nextItem.style.willChange = 'opacity';
+        const nextContent = nextItem.querySelector('.hero-content');
+        if (nextContent) nextContent.style.willChange = 'transform, opacity';
+        const nextBackdrop = nextItem.querySelector('.hero-backdrop');
+        if (nextBackdrop) nextBackdrop.style.willChange = 'transform';
+
         // Update classes
-        items[this._currentIndex].classList.remove('active');
+        prevItem.classList.remove('active');
         dots[this._currentIndex].classList.remove('active');
 
         this._currentIndex = index;
 
-        items[this._currentIndex].classList.add('active');
+        nextItem.classList.add('active');
         dots[this._currentIndex].classList.add('active');
+
+        // After the opacity transition completes, hide the previous slide
+        // from GPU compositing to free memory (30-35MB per slide)
+        if (this._hideTimeoutId) clearTimeout(this._hideTimeoutId);
+        this._hideTimeoutId = setTimeout(() => {
+            prevItem.style.visibility = 'hidden';
+            prevItem.style.willChange = 'auto';
+            const prevContent = prevItem.querySelector('.hero-content');
+            if (prevContent) prevContent.style.willChange = 'auto';
+            const prevBackdrop = prevItem.querySelector('.hero-backdrop');
+            if (prevBackdrop) prevBackdrop.style.willChange = 'auto';
+            // Free the backdrop GPU texture
+            if (prevBackdrop) prevBackdrop.style.backgroundImage = '';
+            this._hideTimeoutId = null;
+        }, 1050); // Just after the 1000ms opacity transition
+
+        // Preload adjacent slides for instant navigation
+        const nextAdjacent = (this._currentIndex + 1) % this._items.length;
+        const prevAdjacent = (this._currentIndex - 1 + this._items.length) % this._items.length;
+        if (nextAdjacent !== index) this._preloadSlide(nextAdjacent);
+        if (prevAdjacent !== index) this._preloadSlide(prevAdjacent);
 
         // Restart timer on navigation. This will also restart the progress
         // animation if it is enabled.

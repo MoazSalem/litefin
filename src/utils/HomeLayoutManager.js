@@ -72,28 +72,22 @@ class HomeLayoutManager {
         });
 
         // First pass: Filter and attach order value
+        // Process descriptors to map saved user preferences (hiding and custom sorting order).
         const processedDescriptors = [];
         const newDescriptors = []; // Descriptors without a saved preference
-        let myMediaDesc = null;
-        const unlockMyMediaOrder = storage.getItem('pref:unlockMyMediaOrder') === 'true';
 
+        // Loop through all raw descriptors provided by the home screen logic
+        // and map them against user's custom layout settings.
         for (const desc of descriptors) {
-            // Priority 0 check: "my-media" is ALWAYS forced to the very first position
-            // unless the user explicitly unlocked it in settings.
-            if (desc.id === 'my-media' && !unlockMyMediaOrder) {
-                const config = layoutMap.get(desc.id);
-                if (config && config.hidden) continue;
-                myMediaDesc = desc;
-                continue;
-            }
-
             const config = layoutMap.get(desc.id);
 
             if (config) {
                 // Skip if hidden
+                // Skip rendering if the section has been toggled to hidden by the user.
                 if (config.hidden) continue;
 
                 // Keep the descriptor but augment with user sort order
+                // Attach the user-defined order for subsequent sorting.
                 processedDescriptors.push({
                     ...desc,
                     _userOrder: config.order
@@ -101,26 +95,26 @@ class HomeLayoutManager {
             } else {
                 // New library or section not in preferences yet!
                 // We'll append it to the end.
+                // If a section is new (e.g. newly created server library), we default it to visible
+                // and place it at the end of the screen.
                 newDescriptors.push(desc);
             }
         }
 
         // Sort processed descriptors by user order
+        // Order sections sequentially based on user's layout preferences.
         processedDescriptors.sort((a, b) => a._userOrder - b._userOrder);
 
         // Map them back to clean descriptors and append new ones
+        // Remove the temporary ordering metadata before returning clean descriptor data.
         const finalDescriptors = processedDescriptors.map((pd) => {
             const clean = { ...pd };
             delete clean._userOrder;
             return clean;
         });
 
-        const allOthers = [...finalDescriptors, ...newDescriptors];
-
-        if (myMediaDesc) {
-            return [myMediaDesc, ...allOthers];
-        }
-        return allOthers;
+        // Combine the sorted existing layout rows with any new/appended sections.
+        return [...finalDescriptors, ...newDescriptors];
     }
 
     /**
@@ -167,18 +161,8 @@ class HomeLayoutManager {
             }
         });
 
-        const unlockMyMediaOrder = storage.getItem('pref:unlockMyMediaOrder') === 'true';
-
-        if (!unlockMyMediaOrder) {
-            const myMediaIdx = settingsList.findIndex((item) => item.id === 'my-media');
-            if (myMediaIdx !== -1) {
-                const [myMediaItem] = settingsList.splice(myMediaIdx, 1);
-                myMediaItem.locked = true;
-                settingsList.unshift(myMediaItem);
-            }
-        }
-
         // Ensure order values are sequential and correct after any manipulation
+        // Sequence layout items sequentially according to their final array positions.
         settingsList.forEach((item, index) => {
             item.order = index;
         });

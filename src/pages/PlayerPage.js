@@ -77,6 +77,28 @@ class PlayerPage extends Page {
 
         // Flag indicating if the current session is private/incognito (no progress reported)
         this._isGhostMode = false;
+
+        // Tracking ID to detect item switches in the queue and reset version/track preferences
+        this._playingItemId = null;
+
+        // Pre-selected version and tracks from the Details page to persist across error retries
+        this._preSelectedMediaSourceId = undefined;
+        this._preSelectedAudio = undefined;
+        this._preSelectedSubtitle = undefined;
+
+        /*
+         * ====================================================================
+         * ORIGINATING CONTEXT TRACKING
+         * ====================================================================
+         * We store the context type (e.g., 'playlist', 'album', 'boxset') and the
+         * matching container ID that triggered this playback session. When exiting,
+         * these variables let us redirect the user back to the correct metadata details
+         * screen (like the album or playlist overview) rather than attempting to open
+         * a details page for an individual audio track/song, which is unsupported.
+         * ====================================================================
+         */
+        this._contextType = null;
+        this._contextId = null;
     }
 
     /**
@@ -117,7 +139,7 @@ class PlayerPage extends Page {
                         </div>
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
-                            <button class="btn btn-secondary focusable" id="error-force-transcode-btn" tabindex="0">Force Transcode</button>
+                            <button class="btn btn-secondary focusable" id="error-playback-mode-btn" tabindex="0">Playback Mode</button>
                             <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
@@ -259,6 +281,16 @@ class PlayerPage extends Page {
             // Initialize Play Queue
             const contextType = state.get('player:contextType');
             const contextId = state.get('player:contextId');
+
+            /*
+             * Save the active container context locally on the page instance before
+             * the state is purged. This ensures the stop and exit logic can resolve
+             * the originating album/playlist details page path even if the play queue
+             * transitions/advances items multiple times during the session.
+             */
+            this._contextType = contextType || null;
+            this._contextId = contextId || null;
+
             // For BoxSet queues, the sort order is forwarded from DetailsPage so the
             // full queue is ordered the same way the collection display grid is ordered.
             const boxsetSortBy = state.get('player:boxsetSortBy');
@@ -267,8 +299,12 @@ class PlayerPage extends Page {
 
             // Sync the active item to the instance that PlayQueue just minted.
             // This prevents duplicate-fetch bugs with plugins like Local Intros.
+            // Rather than replacing the item completely (which discards metadata fields
+            // like MediaSources or Chapters that weren't returned by collection or episode
+            // query lists), we merge the fetched details onto the queue instance in-place.
             const queueItem = playQueue.getCurrentItem();
             if (queueItem && queueItem.Id === this._item.Id) {
+                Object.assign(queueItem, this._item);
                 this._item = queueItem;
             }
 
@@ -293,9 +329,13 @@ class PlayerPage extends Page {
             this._onAppBeforeExit = () => this._handleAppExit();
             eventBus.on('app:beforeExit', this._onAppBeforeExit);
 
-            // Listen for app background/suspend events to suspend decoder
+            // Pause playback when app goes to background (e.g. user switches TV input).
+            // We do NOT stop the player or report stopped — the session stays alive so
+            // the user can resume when they return without losing their position.
             this._onAppHidden = () => this._handleAppHidden();
             eventBus.on('app:hidden', this._onAppHidden);
+
+            // When returning to foreground the player is still paused and ready.
             this._onAppVisible = () => this._handleAppVisible();
             eventBus.on('app:visible', this._onAppVisible);
 
@@ -732,6 +772,25 @@ class PlayerPage extends Page {
         this._player.on('restarting', () => {
             log.info('Player restarting (quality change), showing loading');
             this._showLoading(true);
+
+            // Report playback stopped for the old session BEFORE the restart
+            // replaces it. Otherwise the server keeps the old ffmpeg/remux
+            // process running indefinitely — the restart suppresses STOP
+            // events from JellyfinPlayer.stop(), so no stop report is sent.
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            if (mediaSource?.PlaySessionId && this._item && !this._item.isIntro) {
+                // Use sync XHR (isSync=true) to guarantee the stop signal
+                // reaches the server before the new session starts.
+                this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
+                    log.warn('Failed to report playback stopped during restart:', err);
+                });
+            }
+
+            // Reset start-report guard so the upcoming 'playing' event
+            // reports playbackStart for the new session and updates the
+            // cached media source / play method for accurate stop reporting.
+            this._hasReportedStart = false;
         });
 
         this._player.on('playing', () => {
@@ -804,14 +863,21 @@ class PlayerPage extends Page {
         if (streams.length === 0) return undefined;
 
         // 1. Try exact match: Match both Language and Display Title/Title
+        // ---------------------------------------------------------------------
+        // Fall back to 'und' (undetermined) for empty/missing language attributes,
+        // matching our stored preference format.
+        // ---------------------------------------------------------------------
         const exactMatch = streams.find(
-            (s) => (s.Language || 'none') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
+            (s) => (s.Language || 'und') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
         );
         // If exact match found, return its index
         if (exactMatch) return exactMatch.Index;
 
         // 2. Fall back to Language only match
-        const langMatch = streams.find((s) => (s.Language || 'none') === targetLang);
+        // ---------------------------------------------------------------------
+        // Find streams matching the language preference when exact titles differ.
+        // ---------------------------------------------------------------------
+        const langMatch = streams.find((s) => (s.Language || 'und') === targetLang);
         // If language match found, return its index
         if (langMatch) return langMatch.Index;
 
@@ -826,6 +892,11 @@ class PlayerPage extends Page {
         // Reset playback ended state before beginning new playback session.
         // This ensures subsequent video loads or queue transitions start clean.
         this._isPlaybackEnded = false;
+
+        // Clear cached play method so we never bleed the previous item's value
+        // into the new session (relevant for queue auto-advance where onInit
+        // is not called between items).
+        this._cachedPlayMethod = null;
 
         // === Plugin System ===
         // Allow plugins to perform late-stage preparation before playback actually
@@ -858,15 +929,32 @@ class PlayerPage extends Page {
 
         const item = this._item;
 
-        // 1. Check for pre-selected tracks/version from DetailsPage (stored in state)
-        const preSelectedMediaSourceId = state.get('player:initialMediaSourceId');
-        const preSelectedAudio = state.get('player:initialAudioIndex');
-        const preSelectedSubtitle = state.get('player:initialSubtitleIndex');
+        // Reset version and track selections if the item has changed (e.g. queue advance/prev)
+        if (this._playingItemId !== item.Id) {
+            this._playingItemId = item.Id;
+            this._preSelectedMediaSourceId = undefined;
+            this._preSelectedAudio = undefined;
+            this._preSelectedSubtitle = undefined;
+        }
 
-        // Clear state to prevent persistence to future playbacks
-        state.set('player:initialMediaSourceId', null);
-        state.set('player:initialAudioIndex', null);
-        state.set('player:initialSubtitleIndex', null);
+        // 1. Check for pre-selected tracks/version from DetailsPage (stored in state)
+        // Store these on the page instance once so they persist across error/retry attempts
+        if (this._preSelectedMediaSourceId === undefined) {
+            this._preSelectedMediaSourceId = state.get('player:initialMediaSourceId') || null;
+            state.set('player:initialMediaSourceId', null);
+        }
+        if (this._preSelectedAudio === undefined) {
+            this._preSelectedAudio = state.get('player:initialAudioIndex') ?? null;
+            state.set('player:initialAudioIndex', null);
+        }
+        if (this._preSelectedSubtitle === undefined) {
+            this._preSelectedSubtitle = state.get('player:initialSubtitleIndex') ?? null;
+            state.set('player:initialSubtitleIndex', null);
+        }
+
+        const preSelectedMediaSourceId = this._preSelectedMediaSourceId;
+        const preSelectedAudio = this._preSelectedAudio;
+        const preSelectedSubtitle = this._preSelectedSubtitle;
 
         // Resolve MediaSource to use
         const mediaSource = preSelectedMediaSourceId
@@ -937,20 +1025,35 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
+            // Build player options. If a specific media source version was pre-selected
+            // on the details screen (e.g. 720p vs 1080p), ensure we pass the target
+            // mediaSourceId down as a fallback even if the client-side metadata matching
+            // did not resolve (for example if the media sources array was empty or lost
+            // during page transitions).
             const playOptions = {
                 item: item, // Pass full item which might have Chapters
                 itemId: item.Id,
                 userId: api.userId, // Required for playback info
                 startPositionTicks: this._resumePosition,
-                mediaSourceId: mediaSource?.Id,
+                mediaSourceId: preSelectedMediaSourceId || mediaSource?.Id,
                 audioStreamIndex: savedAudioIndex,
                 subtitleStreamIndex: savedSubtitleIndex,
                 autoPlay: syncPlayManager.wantsAutoPlay()
             };
 
-            if (this._forceTranscode) {
-                playOptions.playbackMode = 'transcode';
-                this._forceTranscode = false; // Reset after applying
+            // ----------------------------------------------------------------
+            // Preserve any playback-mode override that was set before this call
+            // — e.g. by the error-screen 'Playback Mode' button, which calls
+            // player.setPlaybackMode(id) and then triggers _retryPlayback().
+            // player.play() resets _playbackMode from options.playbackMode and
+            // falls back to 'auto' when the key is absent, so we must inject
+            // whatever mode the player currently holds to honour the user choice.
+            // ----------------------------------------------------------------
+            if (this._player && typeof this._player.getPlaybackMode === 'function') {
+                const storedMode = this._player.getPlaybackMode();
+                if (storedMode && storedMode !== 'auto') {
+                    playOptions.playbackMode = storedMode;
+                }
             }
 
             await this._player.play(playOptions);
@@ -1063,7 +1166,7 @@ class PlayerPage extends Page {
             overlay = document.createElement('div');
             overlay.id = 'audio-visual-overlay';
             overlay.className = 'audio-visual-overlay hidden';
-            
+
             // Insert the overlay right behind the OSD overlay so it displays beneath it.
             const osd = this.$('#osd-overlay');
             if (osd && osd.parentNode) {
@@ -1075,7 +1178,7 @@ class PlayerPage extends Page {
 
         // Establish the HTML layout structure for the music player details panel.
         // We wrap the album art and metadata inside a centered player panel
-        // that handles the translations and layout adjustments under Apple Guidelines.
+        // that handles the translations and layout adjustments.
         if (!overlay.querySelector('.audio-player-center')) {
             overlay.innerHTML = `
                 <div class="audio-backdrop"></div>
@@ -1099,7 +1202,7 @@ class PlayerPage extends Page {
         const subtitleEl = overlay.querySelector('.audio-subtitle');
         const itemId = this._item.Id;
 
-        // Populate track name (Apple Human Interface Guidelines: clear hierarchical title).
+        // Populate track name.
         if (titleEl) {
             titleEl.textContent = this._item.Name || '';
         }
@@ -1120,13 +1223,13 @@ class PlayerPage extends Page {
             const album = this._item.Album;
             const trackName = this._item.Name || '';
             const isSingle = !album || album.trim().toLowerCase() === trackName.trim().toLowerCase();
-            
+
             // Format album portion if not a single, prepending a bullet character for spacing.
-            const albumStr = (!isSingle && album) ? ` • ${album}` : '';
+            const albumStr = !isSingle && album ? ` • ${album}` : '';
 
             // Format year portion if available, prepending a bullet character for spacing.
             const yearStr = this._item.ProductionYear ? ` • ${this._item.ProductionYear}` : '';
-            
+
             // Assemble the final metadata subtitle line combining artist, album, and year.
             if (artist) {
                 subtitleEl.textContent = `${artist}${albumStr}${yearStr}`;
@@ -1293,6 +1396,8 @@ class PlayerPage extends Page {
         // Mount OSD — this triggers render + event binding
         this._osd.mount(osdContainer);
 
+        this._osd?.updateHdrTheme();
+
         // Register as child component for automatic cleanup on page destroy
         this.addChild(this._osd);
 
@@ -1327,6 +1432,8 @@ class PlayerPage extends Page {
 
     _onPlaying() {
         log.info('Playing');
+
+        this._osd?.updateHdrTheme();
 
         eventBus.emit('player:playing', { item: this._item });
 
@@ -1760,7 +1867,9 @@ class PlayerPage extends Page {
                 (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
             );
             if (activeAudioTrack) {
-                storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'none');
+                // Save undetermined ('und') instead of 'none' if language is missing
+                // to distinguish undefined languages from disabled tracks.
+                storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'und');
                 storage.setItem(
                     'session:lastAudioTitle',
                     activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
@@ -1770,26 +1879,38 @@ class PlayerPage extends Page {
         }
 
         // 2. Subtitle Track Capture
-        const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
-        if (activeSubtitleIndex !== undefined) {
-            if (activeSubtitleIndex === -1) {
-                // User explicitly disabled subtitles
-                storage.setItem('session:lastSubtitleLang', 'none');
-                storage.setItem('session:lastSubtitleTitle', 'none');
-                log.info(`[Track Memory] Saved Subtitle: none`);
-            } else {
-                const activeSubtitleTrack = mediaSource.MediaStreams.find(
-                    (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                );
-                if (activeSubtitleTrack) {
-                    storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
-                    storage.setItem(
-                        'session:lastSubtitleTitle',
-                        activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+        // ---------------------------------------------------------------------
+        // Check if the current media source contains any subtitle tracks.
+        // If there are no subtitle tracks at all (e.g. hardcoded subs or no subs),
+        // we skip track selection capture entirely. This prevents overwriting the
+        // stored user subtitle preference with 'none' for subsequent episodes.
+        // ---------------------------------------------------------------------
+        const hasSubtitles = mediaSource.MediaStreams.some((s) => s.Type === 'Subtitle');
+        if (hasSubtitles) {
+            const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
+            if (activeSubtitleIndex !== undefined) {
+                // An index of -1 represents the user explicitly turning subtitles off
+                if (activeSubtitleIndex === -1) {
+                    storage.setItem('session:lastSubtitleLang', 'none');
+                    storage.setItem('session:lastSubtitleTitle', 'none');
+                    log.info(`[Track Memory] Saved Subtitle: none`);
+                } else {
+                    // Search for the stream details using the active stream index
+                    const activeSubtitleTrack = mediaSource.MediaStreams.find(
+                        (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
                     );
-                    log.info(
-                        `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
-                    );
+                    if (activeSubtitleTrack) {
+                        // Use undetermined ('und') for tracks with empty/undefined language
+                        // to prevent them from matching the 'none' check (which disables subtitles).
+                        storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
+                        storage.setItem(
+                            'session:lastSubtitleTitle',
+                            activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                        );
+                        log.info(
+                            `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
+                        );
+                    }
                 }
             }
         }
@@ -1907,10 +2028,15 @@ class PlayerPage extends Page {
         }
 
         // 3. Report progress periodically (every 10 seconds approx)
-        const now = Date.now();
-        if (!this._lastReportTime || now - this._lastReportTime > 10000) {
-            this._reportPlaybackProgress();
-            this._lastReportTime = now;
+        // Skip progress reporting until playback start has been reported — prevents
+        // sending payloads before _currentPlayMethod is resolved, which would send
+        // a null/undefined PlayMethod and cause the dashboard to show "Direct Play".
+        if (this._hasReportedStart) {
+            const now = Date.now();
+            if (!this._lastReportTime || now - this._lastReportTime > 10000) {
+                this._reportPlaybackProgress();
+                this._lastReportTime = now;
+            }
         }
 
         // 4. Forward tick to plugin manager for widget visibility evaluation
@@ -2015,9 +2141,23 @@ class PlayerPage extends Page {
             const windowStyles = SubtitleStyles.getWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
 
-            // Set end time for sync clearing (Duration is in ms, Ticks are 10000 per ms)
-            if (data.duration > 0) {
-                // Get current position safely
+            // =====================================================================
+            // Set end time for sync clearing (used by _onTimeUpdate to auto-clear
+            // the subtitle if the tick-based clear somehow fires late).
+            //
+            // IMPORTANT: Use the absolute cue end position (data.endTicks) rather
+            // than computing currentTicks + duration * 10000. On WebOS, video.currentTime
+            // can still report the pre-seek position immediately after a seek because
+            // hardware seek completes asynchronously. Using the cue's absolute end time
+            // prevents the clearing timer from being anchored to a stale position,
+            // which is the root cause of post-seek subtitle desync on WebOS.
+            // =====================================================================
+            if (data.endTicks != null) {
+                // Preferred path: SubtitleManager provided the absolute cue end tick.
+                this._subtitleEndTime = data.endTicks;
+            } else if (data.duration > 0) {
+                // Fallback for embedded/native subtitles that don't have endTicks
+                // (e.g. EMBEDDED_NATIVE from Tizen AVPlay's onsubtitlechange).
                 const currentTicks = this._player?.getCurrentPositionTicks?.() || 0;
                 this._subtitleEndTime = currentTicks + data.duration * 10000;
             } else {
@@ -2045,7 +2185,7 @@ class PlayerPage extends Page {
      * font, weight, opacity, background) but use independent size + position settings.
      * They render into #secondary-subtitle-overlay which is positioned at the top.
      *
-     * @param {Object} data - Cue data: { text, duration }
+     * @param {Object} data - Cue data: { text, duration, endTicks }
      */
     _onSecondarySubtitleChange(data) {
         const overlay = document.getElementById('secondary-subtitle-overlay');
@@ -2081,8 +2221,16 @@ class PlayerPage extends Page {
             const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
 
-            // Track when this cue ends so _onTimeUpdate can clear it
-            if (data.duration > 0) {
+            // =====================================================================
+            // Track when this cue ends so _onTimeUpdate can clear it.
+            // Use data.endTicks (absolute position from SubtitleManager) to avoid
+            // the same seek-desync race that affects the primary subtitle.
+            // =====================================================================
+            if (data.endTicks != null) {
+                // Absolute cue end — not anchored to stale video.currentTime
+                this._secondarySubtitleEndTime = data.endTicks;
+            } else if (data.duration > 0) {
+                // Fallback for native/embedded tracks without endTicks
                 const currentTicks = this._player?.getCurrentPositionTicks?.() || 0;
                 this._secondarySubtitleEndTime = currentTicks + data.duration * 10000;
             } else {
@@ -2128,11 +2276,22 @@ class PlayerPage extends Page {
     }
 
     /**
+     * ========================================================================
+     * OSD HDR Theme Updater
+     * ========================================================================
+     * Adjusts the overall OSD background contrast and overrides bright white
+     * highlights/text/icons with a softer dark grey color.
+     * Prevents eye strain when watching HDR/Dolby Vision content.
+     * ========================================================================
+     */
+    /**
      * Re-apply styles to the currently displayed subtitle(s).
      * Called when user changes subtitle appearance settings (e.g. from SubtitleQuickSettings).
      * Both primary and secondary overlays are refreshed here.
      */
     _refreshSubtitleStyles() {
+        this._osd?.updateHdrTheme();
+
         /* -------------------------------------------------------------
            Determine active playback HDR format to correctly choose
            between SDR and HDR text opacity settings.
@@ -2270,7 +2429,12 @@ class PlayerPage extends Page {
         // PlayMethod enum has no 'Remux' value and returns HTTP 400 if we send it.
         // Map it to 'DirectStream' which is the closest server-side equivalent.
         const rawPlayMethod = this._player?._currentPlayMethod || this._cachedPlayMethod;
-        const serverPlayMethod = rawPlayMethod === 'Remux' ? 'DirectStream' : rawPlayMethod;
+        // If both sources are falsy (e.g. race condition before _currentPlayMethod is resolved),
+        // derive a reasonable default from the media source. Never send null — the dashboard
+        // may default to showing "Direct Play" for null/unknown methods.
+        const fallbackPlayMethod = mediaSource?.TranscodingUrl ? 'DirectStream' : 'DirectPlay';
+        const resolvedPlayMethod = rawPlayMethod || fallbackPlayMethod;
+        const serverPlayMethod = resolvedPlayMethod === 'Remux' ? 'DirectStream' : resolvedPlayMethod;
 
         // Build base state
         const state = {
@@ -2290,9 +2454,9 @@ class PlayerPage extends Page {
             // Playback rate (1.0 = normal speed)
             PlaybackRate: Number(this._player?.getPlaybackRate?.()) || 1.0,
 
-            // Queue modes (litefin doesn't support playlists yet)
-            RepeatMode: 'RepeatNone',
-            ShuffleMode: 'Sorted'
+            // Queue modes — read actual state from PlayQueue
+            RepeatMode: playQueue.getRepeatMode(),
+            ShuffleMode: playQueue.getShuffleMode() ? 'Shuffled' : 'Sorted'
         };
 
         // Only include stream indices if they are valid numbers (strings or undefined cause 400 errors)
@@ -2361,15 +2525,17 @@ class PlayerPage extends Page {
 
             // Bind buttons
             const retryBtn = this.$('#error-retry-btn');
-            const forceTranscodeBtn = this.$('#error-force-transcode-btn');
+            const playbackModeBtn = this.$('#error-playback-mode-btn');
             const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
                 retryBtn.onclick = () => this._retryPlayback();
             }
 
-            if (forceTranscodeBtn) {
-                forceTranscodeBtn.onclick = () => this._retryPlayback(true);
+            if (playbackModeBtn) {
+                // Open the OSD's PlaybackModeMenu so the user can pick any delivery
+                // mode to try instead of hard-coding "transcode".
+                playbackModeBtn.onclick = () => this._openPlaybackModeMenuFromError();
             }
 
             if (backBtn) {
@@ -2389,29 +2555,42 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Attempt to restart playback after an error
+     * Attempt to restart playback after an error.
+     * The player's current _playbackMode (set either by the user via the
+     * Playback Mode menu before retrying, or untouched for a plain retry)
+     * is honoured automatically by _startPlayback via the play() options.
      */
-    async _retryPlayback(forceTranscode = false) {
-        // Hide error and unregister focus
+    async _retryPlayback() {
+        // Hide error overlay and unregister its focus section
         const errorEl = this.$('#player-error');
         if (errorEl) {
             errorEl.classList.add('hidden');
             focusManager.unregister('player-error');
         }
 
+        // Always ensure FocusManager is resumed if suspended during error menu interaction
+        focusManager.resume();
+
+        // Clear any active OSD modal menu state so OSD doesn't hijack inputs
+        if (this._osd) {
+            if (this._osd.activeMenu) {
+                try {
+                    this._osd.activeMenu.hide();
+                } catch (e) {}
+                this._osd.activeMenu = null;
+            }
+            this._osd.hide();
+        }
+
         try {
             this._showLoading(true);
-
-            if (forceTranscode) {
-                this._forceTranscode = true;
-            }
 
             // Re-initialize if player instance was lost or in bad state
             if (!this._player || this._player.isDestroyed) {
                 await this._initPlayer();
             }
 
-            // Restart playback
+            // Restart playback using whatever mode is currently set on the player
             await this._startPlayback();
 
             this._showLoading(false);
@@ -2422,12 +2601,165 @@ class PlayerPage extends Page {
     }
 
     /**
+     * Open the OSD's PlaybackModeMenu from the error screen so the user can
+     * choose a different delivery mode (e.g. "Transcode Video Only", "Change
+     * Container", etc.) before retrying playback.
+     *
+     * Flow:
+     *   1. Hide the error overlay (so the menu isn't blocked visually)
+     *   2. Show the OSD temporarily and open the PlaybackModeMenu
+     *   3. Wrap PlaybackModeMenu.handleEnter so that after the user picks a
+     *      mode (which calls player.setPlaybackMode internally), we also
+     *      trigger _retryPlayback() so playback restarts immediately.
+     *   4. If the user dismisses the menu without selecting, re-show the
+     *      error overlay so they can still go back.
+     * @private
+     */
+    _openPlaybackModeMenuFromError() {
+        const errorEl = this.$('#player-error');
+
+        // Defer execution to the next tick so the current enter-key event loop
+        // completes fully before we tear down the focused section and modify the DOM.
+        setTimeout(() => {
+            // Step 1 — hide error panel so the menu can render unobstructed
+            if (errorEl) {
+                errorEl.classList.add('hidden');
+                focusManager.unregister('player-error');
+            }
+
+            // Step 2 — ensure OSD is initialized, then check availability
+            if (!this._osd) {
+                try {
+                    this._initOSD();
+                } catch (osdErr) {
+                    log.error('Failed to init OSD from error screen:', osdErr);
+                }
+            }
+
+            if (!this._osd || !this._osd.playbackModeMenu) {
+                log.warn('_openPlaybackModeMenuFromError: OSD or playbackModeMenu not available.');
+                // Re-show the error overlay so the user isn't left stranded
+                if (errorEl) {
+                    errorEl.classList.remove('hidden');
+                    focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
+                        orientation: 'horizontal',
+                        enterTo: 'last-focused'
+                    });
+                    const retryBtn = errorEl.querySelector('#error-retry-btn');
+                    focusManager.setActiveSection('player-error');
+                    focusManager.focusElement(retryBtn);
+                }
+                return;
+            }
+
+            const menu = this._osd.playbackModeMenu;
+
+            // Suspend FocusManager so that it does not fight the OSD/menu for
+            // key events and focus while the playback mode picker is open.
+            focusManager.suspend();
+
+            // Step 3 — install one-shot wrappers around key handling and selection.
+            const originalHandleEnter = menu.handleEnter.bind(menu);
+            const originalHandleKey = menu.handleKey.bind(menu);
+            let hookActive = true;
+
+            // Helper: remove hook and restore normal methods
+            const restoreHook = () => {
+                if (hookActive) {
+                    hookActive = false;
+                    menu.handleEnter = originalHandleEnter;
+                    menu.handleKey = originalHandleKey;
+                }
+            };
+
+            menu.handleEnter = () => {
+                // Restore original methods BEFORE we act, ensuring cleanup hooks are clean
+                restoreHook();
+
+                // Directly handle the selection: set mode on the player
+                const selected = menu.options[menu.focusIndex];
+                if (selected) {
+                    log.info('Selected playback mode from error screen:', selected.id);
+                    this._player.setPlaybackMode(selected.id);
+                }
+
+                // Hide the menu and OSD directly, bypassing closeMenu which would call show()
+                menu.hide();
+                this._osd.activeMenu = null;
+                this._osd.hide();
+
+                // After the menu closes and the mode is applied, kick off a retry.
+                // Small defer so the menu's own hide/DOM cleanup finishes first.
+                setTimeout(() => this._retryPlayback(), 80);
+            };
+
+            // Override handleKey so that when opened from the error screen:
+            //   - Left/Right are ignored (normally they navigate back to Settings)
+            //   - Back hides the menu (which returns to the error screen)
+            menu.handleKey = (key) => {
+                if (key === 'left' || key === 'right') {
+                    return true; // Swallow key, do nothing
+                }
+                if (key === 'back') {
+                    menu.hide();
+                    return true;
+                }
+                if (key === 'enter') {
+                    menu.handleEnter();
+                    return true;
+                }
+                // Delegate up/down to normal menu behavior
+                return originalHandleKey(key);
+            };
+
+            // Also patch hide() so that if the user dismisses without selecting
+            // (Back / click-outside), the error overlay comes back.
+            const originalHide = menu.hide.bind(menu);
+            menu.hide = (...args) => {
+                originalHide(...args);
+                if (this._osd && this._osd.activeMenu === menu) {
+                    this._osd.activeMenu = null;
+                }
+                // Only restore the error screen if the user bailed without selecting
+                if (hookActive) {
+                    restoreHook();
+                    // Resume FocusManager since the OSD menu is closed and we are
+                    // returning to the error screen.
+                    focusManager.resume();
+
+                    if (errorEl) {
+                        errorEl.classList.remove('hidden');
+                        focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
+                            orientation: 'horizontal',
+                            enterTo: 'last-focused'
+                        });
+                        const retryBtn = errorEl.querySelector('#error-retry-btn');
+                        focusManager.setActiveSection('player-error');
+                        focusManager.focusElement(retryBtn);
+                    }
+                }
+                // Restore real hide() for future normal use
+                menu.hide = originalHide;
+            };
+
+            // Step 4 — open the menu through the OSD (renders + shows + sets focus)
+            this._osd.togglePlaybackModeMenu(true);
+
+            // Clear previous focus references on the menu so it does not restore focus
+            // back to settings or controls in the background OSD when hidden.
+            menu._prevRow = undefined;
+            menu._prevIndex = undefined;
+            menu._prevFocus = null;
+        }, 0);
+    }
+
+    /**
      * Report playback stopped to server
      * @param {Object} [capturedMediaSource] - Pre-captured media source
      * @param {number} [capturedPosition] - Pre-captured position ticks
-     * @param {boolean} [isSync=true] - Whether to use synchronous XHR
+     * @param {boolean} [isSync=false] - Whether to use synchronous XHR
      */
-    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = true) {
+    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = false) {
         if (this._item?.isIntro) {
             log.info('Skipping PlaybackStopped report for intro item');
             return;
@@ -2454,12 +2786,12 @@ class PlayerPage extends Page {
             // This prevents minor timing differences between player backend and server
             // from leaving the item unmarked as watched and failing scrobble sync.
             if (this._isPlaybackEnded) {
-                const durationTicks = this._player?.getDurationTicks?.() ||
-                                      mediaSource?.RunTimeTicks ||
-                                      this._item?.RunTimeTicks ||
-                                      0;
+                const durationTicks =
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
                 if (durationTicks > 0) {
-                    log.info(`Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`);
+                    log.info(
+                        `Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`
+                    );
                     rawPosition = durationTicks;
                 }
             }
@@ -2561,6 +2893,15 @@ class PlayerPage extends Page {
                 log.info('Reporting playback stopped (async), position:', positionTicks);
                 await api.reportPlaybackStopped(data);
             }
+
+            // 4. Clear server-side resume point if playback completed naturally
+            // This prevents stale caches on the server that require a restart to clear.
+            if (this._isPlaybackEnded && this._item?.Id && !this._item.isIntro) {
+                log.info('Playback completed naturally — deleting server resume point');
+                api.deletePlaybackProgress(this._item.Id).catch((err) => {
+                    log.warn('Failed to delete playback progress:', err);
+                });
+            }
         } catch (error) {
             log.warn('Failed to report playback stopped:', error);
         }
@@ -2571,6 +2912,12 @@ class PlayerPage extends Page {
      * Called when app is about to close or go to background
      */
     _handleAppExit() {
+        // Skip if already in the process of stopping playback
+        if (this._isExiting) {
+            log.info('App exit while already exiting — skipping duplicate stop report');
+            return;
+        }
+
         // Skip reporting on exit if running in private/ghost mode
         if (this._isGhostMode) {
             log.info('Ghost Mode is active: skipping app exit playback stopped report');
@@ -2589,15 +2936,21 @@ class PlayerPage extends Page {
             return;
         }
 
-        // Use synchronous-ish reporting (fire and forget, no await)
-        // App may close before async completes
+        // Stop the backend player immediately to free resources and tear down
+        // the media pipeline (video element, HLS.js, AVPlay, WebOSPlayer, etc.)
+        if (this._player?.stop) {
+            this._player.stop().catch((err) => {
+                log.warn('Failed to stop player on exit:', err);
+            });
+        }
+
+        // Use centralized reporting which handles LiveStreamId close, full
+        // payload construction, isPlaybackEnded position override, keepalive,
+        // and deletePlaybackProgress for completed items.
+        // Use synchronous XHR (isSync=true) for the same reason as _stopAndExit
+        // — the app context may be destroyed before an async fetch completes.
         if (this._item) {
-            api.reportPlaybackStopped({
-                ItemId: this._item.Id,
-                PlaySessionId: playSessionId,
-                MediaSourceId: mediaSource?.Id,
-                PositionTicks: positionTicks
-            }).catch((err) => {
+            this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
                 log.warn('Failed to report on exit:', err);
             });
         }
@@ -2767,8 +3120,21 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            // Report stopped with captured values
-            await this._reportPlaybackStopped(mediaSource, positionTicks);
+            // Report stopped with captured values.
+            // We use synchronous XHR (isSync=true) so the request completes BEFORE the
+            // page navigates and gets destroyed. fetch with keepalive:true is unreliable
+            // on webOS/Tizen where the page context may be torn down before the fetch
+            // finishes — causing the stop signal to never reach the server and transcoding
+            // to continue indefinitely.
+            // NOTE: We MUST await this call. The sync XHR path blocks the event loop
+            // so navigation cannot proceed until it finishes. If sync XHR throws and
+            // falls back to async fetch (keepalive), awaiting ensures the fetch has a
+            // chance to complete before the page context is destroyed.
+            try {
+                await this._reportPlaybackStopped(mediaSource, positionTicks, true);
+            } catch (err) {
+                log.warn('Background stop report failed:', err);
+            }
         } catch (error) {
             log.warn('Error during stop:', error);
         }
@@ -2786,6 +3152,21 @@ class PlayerPage extends Page {
         // but kept for potential future use (e.g., analytics, remote control).
         eventBus.emit('player:stopped', { itemId: this._item?.Id, reason });
 
+        // Invalidate stale caches so pages reload fresh data after playback
+        if (this._item) {
+            // Clear the ETag cache so the next API requests get fresh 200
+            // responses instead of stale 304-cached bodies.
+            api.clearEtagCache();
+
+            // Invalidate home page's rendered row cache
+            state.delete('home:pageCache');
+
+            // Invalidate episode listing for the current series/season
+            if (this._item.Type === 'Episode' && this._item.SeriesId && this._item.SeasonId) {
+                state.delete(`details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`);
+            }
+        }
+
         // ----------------------------------------------------------------
         // Navigation Override: Ensure we return to the Details page of the
         // item that was LAST playing, not the one that started the session.
@@ -2795,27 +3176,71 @@ class PlayerPage extends Page {
         // the item they were just watching is more intuitive than returning
         // to the initial entry point.
         // ----------------------------------------------------------------
+        const isTvChannel = this._item?.Type === 'TvChannel';
+        const shouldNavigateTv =
+            isTvChannel && (this.params.fromGuide === 'true' || this.params.fromDetails === 'true');
+
         if (
             this._item &&
             this._item.Id &&
             !this._item.isIntro &&
-            this._item.Type !== 'TvChannel' &&
-            this._item.Type !== 'Trailer'
+            this._item.Type !== 'Trailer' &&
+            (!isTvChannel || shouldNavigateTv)
         ) {
-            const detailsPath = `/details/${this._item.Id}`;
+            // Determine exit destination path:
+            // Standard items and details-launched channels route back to details.
+            // Guide-launched Live TV channels route back to the guide screen.
+            let targetPath = `/details/${this._item.Id}`;
+            if (isTvChannel && this.params.fromGuide === 'true') {
+                targetPath = '/livetv';
+            } else if (this._item.Type === 'Audio') {
+                /*
+                 * ====================================================================
+                 * MUSIC PLAYBACK RETURN PATH RESOLUTION
+                 * ====================================================================
+                 * Individual audio tracks do not have standalone detail views. Returning
+                 * the user to the track's own ID results in a broken/blank screen.
+                 *
+                 * 1. If we have a stored context container (like a Playlist or a BoxSet)
+                 *    that matches the active session, route back to that playlist/boxset.
+                 * 2. Otherwise, if the song item carries an AlbumId, route back to the
+                 *    MusicAlbum Details page.
+                 * 3. Fallback: navigate to the track's own Details page (legacy path).
+                 * ====================================================================
+                 */
+                if ((this._contextType === 'playlist' || this._contextType === 'boxset') && this._contextId) {
+                    targetPath = `/details/${this._contextId}`;
+                } else if (this._item.AlbumId) {
+                    targetPath = `/details/${this._item.AlbumId}`;
+                }
+            }
 
             // The PlayerPage normally replaces the page that launched it in history (to prevent bloat)
             // and returns to the item's Details page on stop.
             // HOWEVER: if we came from a slideshow or a browse-page Play key, the player was PUSHED
             // (not replaced) by App.js, and we want to go BACK to that originating page exactly where
             // we left off — not synthesize a Details page the user never visited. So we call router.back().
-            if (this.params.fromSlideshow === 'true' || this.params.fromBrowse === 'true') {
+            //
+            // Standard web exception:
+            // If we are on standard web (non-Tizen and non-webOS), we always want to just go back
+            // to the existing details page rather than replacing history and recreating a new DetailsPage/Guide instance.
+            // fromSlideshow / fromBrowse: the player was PUSHED on top of the originating page,
+            // so a simple back() pop restores that page exactly where it was.
+            // fromGuide: same — App.js now pushes the player instead of replacing /livetv,
+            // which means /livetv is still in history with its saved tab/EPG state intact.
+            // On web: always back() to let the browser handle history natively.
+            if (
+                this.params.fromSlideshow === 'true' ||
+                this.params.fromBrowse === 'true' ||
+                this.params.fromGuide === 'true' ||
+                platformInfo.isWeb
+            ) {
                 router.back();
             } else {
-                router.navigate(detailsPath, { replace: true, isBack: true });
+                router.navigate(targetPath, { replace: true, isBack: true });
             }
         } else {
-            // Standard back navigation for special types (Live TV, Intros) or if no item state exists.
+            // Standard back navigation for special types (Live TV default, Intros) or if no item state exists.
             router.back();
         }
     }
@@ -2845,6 +3270,16 @@ class PlayerPage extends Page {
             eventBus.off('app:beforeExit', this._onAppBeforeExit);
             this._onAppBeforeExit = null;
         }
+        if (this._onAppHidden) {
+            eventBus.off('app:hidden', this._onAppHidden);
+            this._onAppHidden = null;
+        }
+        if (this._onAppVisible) {
+            eventBus.off('app:visible', this._onAppVisible);
+            this._onAppVisible = null;
+        }
+
+        // Remove background/foreground listeners
         if (this._onAppHidden) {
             eventBus.off('app:hidden', this._onAppHidden);
             this._onAppHidden = null;

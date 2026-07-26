@@ -21,13 +21,18 @@
  */
 
 import { storage } from '../utils/StorageService.js';
+import { eventBus } from '../core/EventBus.js';
 
 // ============================================================================
 // Constants — all tunable values in one place for easy TV hardware tweaking
 // ============================================================================
 
 // Default animation duration (ms) for vertical smooth scrolling
-const SCROLL_DURATION_VERTICAL = 150;
+// INCREASED from 150→200ms for smoother scrolls: 200ms at 60fps gives 12
+// frames instead of 9, so each frame's position delta is smaller and the
+// final arrival jump is ~1.5px instead of ~3px, eliminating the perceptible
+// "nudge" in the last 10% of the animation.
+const SCROLL_DURATION_VERTICAL = 200;
 
 // Animation duration (ms) for horizontal card-centering scrolls
 const SCROLL_DURATION_HORIZONTAL = 120;
@@ -71,7 +76,6 @@ const SMALL_ELEMENT_FRACTION = 0.9;
 // budget — each intermediate frame must repaint the hero (Ken Burns animation,
 // gradient overlays, backdrop layer) AND the content rows (per-row translateZ(0)
 // compositor layers), causing visible frame drops. Instant-snapping large deltas
-// matches Apple TV's behavior for hero-to-content transitions.
 const LARGE_SCROLL_SNAP_FRACTION = 0.45;
 
 class ScrollController {
@@ -100,11 +104,83 @@ class ScrollController {
         // scroll container changes.
         // ====================================================================
         this._offsetCache = new WeakMap();
+
+        // Expose to window for lazy-load checking to bypass circular imports
+        window.__scrollController = this;
+    }
+
+    /**
+     * Check if there are active scroll animations in progress
+     * @returns {boolean}
+     */
+    get isAnimating() {
+        return this._verticalScrollAnimationId !== null || this._horizontalScrollAnimationId !== null;
+    }
+
+    /**
+     * Emit scroll:finished event if no scroll animation remains active
+     * @private
+     */
+    _checkScrollFinished() {
+        if (this._verticalScrollAnimationId === null && this._horizontalScrollAnimationId === null) {
+            eventBus.emit('scroll:finished');
+        }
     }
 
     // ========================================================================
     // Public API
     // ========================================================================
+
+    /**
+     * ========================================================================
+     * OFFSET CACHE PRE-WARMING
+     * ========================================================================
+     * Batch-computes and caches the offsetTop for a list of elements relative
+     * to a scroll container. Called once after a grid renders inside a single
+     * requestAnimationFrame to ensure the styles are committed before we read.
+     *
+     * This eliminates the forced synchronous layout reflows that would otherwise
+     * occur when getCumulativeOffsetTop() is called per D-pad keypress for
+     * elements whose offsetParent chain resolves normally (not via transform).
+     *
+     * Elements inside CSS transform containers (e.g. .row-items-track) are NOT
+     * safe to cache because their values are scroll-relative — we skip those
+     * automatically by checking if the chain reaches the relativeTo container.
+     *
+     * @param {NodeList|Array} elements - Grid card elements to pre-warm
+     * @param {HTMLElement} relativeTo - The scroll container (.page-content)
+     */
+    prewarmOffsetCache(elements, relativeTo) {
+        if (!elements || !relativeTo) return;
+
+        let warmedCount = 0;
+
+        // Walk every element's offsetParent chain and store the cumulative top.
+        // All reads are batched in this single call, so the browser only needs
+        // one layout pass to satisfy all the offsetTop queries.
+        for (let i = 0; i < elements.length; i++) {
+            const el = elements[i];
+
+            // Skip if already cached (can happen on append/pagination)
+            if (this._offsetCache.has(el)) continue;
+
+            let top = 0;
+            let current = el;
+
+            // Walk offsetParent chain
+            while (current && current !== relativeTo && current !== document.body) {
+                top += current.offsetTop || 0;
+                current = current.offsetParent;
+            }
+
+            // Only cache if the chain completed — elements inside transformed
+            // containers will exit early and must NOT be cached (stale values).
+            if (current === relativeTo) {
+                this._offsetCache.set(el, { container: relativeTo, value: top });
+                warmedCount++;
+            }
+        }
+    }
 
     /**
      * Smooth scroll with easeOutQuad easing and retarget support.
@@ -188,7 +264,6 @@ class ScrollController {
         /* ====================================================================
          * 🚀 INSTANT SCROLL NAVIGATION OVERRIDE
          * ====================================================================
-         * Under Apple Human Interface Guidelines and premium responsiveness goals,
          * we allow users to opt for an "Instant" snapping scroll behavior.
          * If 'pref:verticalScrollMode' is set to 'instant', we override the scroll
          * duration parameter to 0, which immediately diverts the execution flow
@@ -244,9 +319,9 @@ class ScrollController {
             if (isVertical) {
                 if (scrollMode === 'gpu' && track) {
                     // Update transform coordinates on GPU compositor track.
-                    track.style.transform = `translate3d(0px, -${targetScroll}px, 0px)`;
-                    track.style.webkitTransform = `translate3d(0px, -${targetScroll}px, 0px)`;
-                    container.scrollTop = 0;
+                    track.style.transform = `translate3d(0px, -0px, 0px)`;
+                    track.style.webkitTransform = `translate3d(0px, -0px, 0px)`;
+                    container.scrollTop = targetScroll;
                 } else {
                     container.scrollTop = targetScroll;
                 }
@@ -257,6 +332,7 @@ class ScrollController {
             } else {
                 container.scrollLeft = targetScroll;
             }
+            this._checkScrollFinished();
             return;
         }
 
@@ -291,6 +367,12 @@ class ScrollController {
                 if (container.scrollLeft !== 0) {
                     container.scrollLeft = 0;
                 }
+
+                // DO NOT call _checkScrollFinished() here — the native smooth
+                // scroll is still in progress; scroll:finished would fire
+                // prematurely. The LazyLoader's native scroll event listener
+                // naturally handles cleanup via its scroll debounce after
+                // the animation settles.
                 return;
             } catch (nativeError) {
                 // Log warning and fall through to standard JS RAF smooth scroll fallback.
@@ -334,6 +416,16 @@ class ScrollController {
         // easeOutQuad: fast start, smooth deceleration (t * (2 - t))
         const easeOutQuad = (t) => t * (2 - t);
 
+        // SMOOTH ARRIVAL BLEND: For the last 15% of animation time, rescale
+        // easeOutQuad over the remaining distance. This maintains velocity
+        // continuity at the transition point AND ensures velocity smoothly
+        // reaches 0 at t=1 — eliminating the final-frame micro-jump that
+        // occurs with vanilla easeOutQuad (which reaches 99% at 90% time).
+        const EASE_BLEND = 0.85;
+        const blendAt = easeOutQuad(EASE_BLEND);
+        const blendRemaining = 1 - blendAt;
+        const blendDuration = 1 - EASE_BLEND;
+
         // Animation loop
         const animate = (time) => {
             const state = this[stateKey];
@@ -346,7 +438,14 @@ class ScrollController {
 
             const elapsed = time - state.startTime;
             const progress = Math.min(elapsed / state.duration, 1);
-            const eased = easeOutQuad(progress);
+
+            // SMOOTH ARRIVAL: Blend easeOutQuad into a rescaled easeOutQuad
+            // for the final portion so velocity reaches 0 at the end instead
+            // of making a sub-pixel jump from the asymmetric deceleration curve.
+            const eased =
+                progress < EASE_BLEND
+                    ? easeOutQuad(progress)
+                    : blendAt + blendRemaining * easeOutQuad((progress - EASE_BLEND) / blendDuration);
 
             // Interpolate between start and target
             const distance = state.target - state.startScroll;
@@ -394,6 +493,7 @@ class ScrollController {
                 }
                 this[animIdKey] = null;
                 this[stateKey] = null;
+                this._checkScrollFinished();
             }
         };
 
@@ -420,6 +520,7 @@ class ScrollController {
             }
             this._horizontalScrollState = null;
         }
+        this._checkScrollFinished();
     }
 
     /**
@@ -825,11 +926,35 @@ class ScrollController {
                     );
                 }
             } else if (activePageContent) {
+                // PERFORMANCE: Skip vertical scroll recalculation for same-row
+                // horizontal moves in grids — the element is already in view.
+                if (options.skipVerticalScroll) return;
+
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);
-                const elementHeight = element.offsetHeight;
                 const viewHeight = activePageContent.clientHeight;
                 const currentScroll = this.getVerticalScroll(activePageContent);
+
+                // ============================================================
+                // PERF: CACHE ELEMENT HEIGHT PER SECTION
+                // ============================================================
+                // In grid sections, all cards have the same height. Reading
+                // element.offsetHeight forces a synchronous layout reflow on
+                // every keypress since the value lives in the layout engine.
+                // We cache the first successful read on the config object so
+                // subsequent D-pad moves are free integer comparisons.
+                // ============================================================
+                let elementHeight;
+                if (config._cachedCardHeight) {
+                    // Re-use the cached value — no layout read needed
+                    elementHeight = config._cachedCardHeight;
+                } else {
+                    // First time: read and cache
+                    elementHeight = element.offsetHeight;
+                    if (config && elementHeight > 0) {
+                        config._cachedCardHeight = elementHeight;
+                    }
+                }
 
                 // Comfort margins for top and bottom visibility
                 const topMargin = GENERIC_SCROLL_MARGIN;
@@ -891,44 +1016,6 @@ class ScrollController {
         // Clear the offsetTop cache so stale row positions don't persist
         // across page navigations (rows on the new page have different offsets).
         this._offsetCache = new WeakMap();
-    }
-
-    /**
-     * Pre-populate the _offsetCache for a list of elements in a single pass.
-     *
-     * Call this once after the page DOM is stable (e.g. inside the initial
-     * requestAnimationFrame after content is rendered). This batches all
-     * offsetTop reads into the layout flush that is already required for
-     * focus restoration, so the reads are essentially free. Every subsequent
-     * keypress that queries getCumulativeOffsetTop for these elements will be
-     * a pure O(1) WeakMap hit with no forced layout at all.
-     *
-     * @param {NodeList|Array} elements - Elements to pre-cache (e.g. all .media-row)
-     * @param {HTMLElement} relativeTo - The scroll container (e.g. .page-content)
-     */
-    prewarmOffsetCache(elements, relativeTo) {
-        if (!relativeTo) return;
-
-        // Batch read all offsetTops — every read forces layout once (the browser
-        // computes the entire layout tree in one shot for the first read, then
-        // serves subsequent reads from the cached layout result).
-        for (let i = 0; i < elements.length; i++) {
-            const el = elements[i];
-            if (!el || this._offsetCache.has(el)) continue; // Skip if already cached
-
-            let top = 0;
-            let current = el;
-
-            while (current && current !== relativeTo && current !== document.body) {
-                top += current.offsetTop || 0;
-                current = current.offsetParent;
-            }
-
-            // Only cache if the chain successfully reached the scroll container
-            if (current === relativeTo) {
-                this._offsetCache.set(el, { container: relativeTo, value: top });
-            }
-        }
     }
 }
 

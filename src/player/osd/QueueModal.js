@@ -222,6 +222,22 @@ export default class QueueModal extends BaseMenu {
 
         this.$el = overlay;
 
+        /*
+         * ---------------------------------------------------------------------
+         * BACKDROP CLICK DISMISSAL
+         * ---------------------------------------------------------------------
+         * Add event listener to the outer overlay backdrop. Clicking on the
+         * empty space surrounding the queue modal panel will dismiss it and
+         * restore control focus to the OSD.
+         * ---------------------------------------------------------------------
+         */
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.log.info('QueueModal backdrop clicked, closing queue overlay');
+                this._close();
+            }
+        });
+
         /* Enable lazy loading for thumbnails. */
         const listEl = overlay.querySelector('.queue-modal__list');
         if (listEl) {
@@ -279,6 +295,26 @@ export default class QueueModal extends BaseMenu {
             }
 
             case 'back':
+                /*
+                 * -------------------------------------------------------------
+                 * BACK KEY EXIT PATH
+                 * -------------------------------------------------------------
+                 * Close the modal and return focus to the previous item.
+                 * -------------------------------------------------------------
+                 */
+                this._close();
+                return true;
+
+            case 'left':
+                /*
+                 * -------------------------------------------------------------
+                 * DPAD LEFT EXIT PATH
+                 * -------------------------------------------------------------
+                 * Added to provide a swift, intuitive D-pad navigation flow.
+                 * Pressing left will dismiss the modal, returning focus to the
+                 * player's main playback controls bar.
+                 * -------------------------------------------------------------
+                 */
                 this._close();
                 return true;
 

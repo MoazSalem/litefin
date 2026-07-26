@@ -29,7 +29,65 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 // ============================================================================
 // Shared plugins factory
 // ============================================================================
-function getPlugins() {
+/**
+ * Factory function to generate Webpack plugins required for different tiers.
+ * Supports customizing the application icon source.
+ *
+ * @param {string} tier - The build tier ('modern' or 'legacy')
+ * @param {object} [options] - Additional options to configure build output
+ * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'assets/icon.png')
+ */
+function getPlugins(tier, options = {}) {
+    // Determine the build tier, falling back to 'modern' by default
+    const buildTier = tier || 'modern';
+
+    // Retrieve the source icon path, defaulting to standard icon.png in assets/
+    const iconSrc = options.iconSrc || 'assets/icon.png';
+
+    // Build files pattern list for CopyWebpackPlugin
+    const patterns = [
+        // Copy Tizen config file to root of build directory
+        { from: 'config.xml', to: 'config.xml' },
+        // Copy WebOS app info to root of build directory
+        { from: 'appinfo.json', to: 'appinfo.json' },
+        // Copy selected icon file as assets/icon.png to built directory
+        { from: iconSrc, to: 'assets/icon.png' },
+        // Copy WebOS icons from root assets/ to build assets/
+        { from: 'assets/icon-80.png', to: 'assets/icon-80.png' },
+        { from: 'assets/icon-130.png', to: 'assets/icon-130.png' },
+        // Copy general assets (images, resources, etc.)
+        { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
+        // Copy translation localization files
+        { from: 'src/locales', to: 'locales' },
+        // Copy libpgs web worker file
+        { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
+        /*
+         * WebOS SDK: required for window.webOS and window.webOS.service to exist.
+         * Without this script the Luna service check in ApiClient.js
+         * will silently fall through to the HTTP scan on WebOS.
+         * The file is a no-op on non-WebOS platforms so safe to include in all builds.
+         */
+        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
+    ];
+
+    if (buildTier === 'modern') {
+        patterns.push(
+            {
+                from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.js',
+                to: 'js/subtitles-octopus-worker.js'
+            },
+            {
+                from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.wasm',
+                to: 'js/subtitles-octopus-worker.wasm'
+            },
+            {
+                from: 'node_modules/@jellyfin/libass-wasm/dist/js/default.woff2',
+                to: 'assets/fonts/default.woff2',
+                noErrorOnMissing: true
+            }
+        );
+    }
+
     return [
         new MiniCssExtractPlugin({
             filename: 'css/[name].css'
@@ -40,24 +98,7 @@ function getPlugins() {
             inject: 'body',
             scriptLoading: 'blocking'
         }),
-        new CopyWebpackPlugin({
-            patterns: [
-                { from: 'config.xml', to: 'config.xml' },
-                { from: 'appinfo.json', to: 'appinfo.json' },
-                { from: 'icon.png', to: 'icon.png' },
-                { from: 'tile_1920x1080.png', to: 'tile_1920x1080.png', noErrorOnMissing: true },
-                { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
-                { from: 'src/locales', to: 'locales' },
-                { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
-                /*
-                 * WebOS SDK: required for window.webOS and window.webOS.service to exist.
-                 * Without this script the Luna service check in ApiClient.js
-                 * will silently fall through to the HTTP scan on WebOS.
-                 * The file is a no-op on non-WebOS platforms so safe to include in all builds.
-                 */
-                { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
-            ]
-        }),
+        new CopyWebpackPlugin({ patterns }),
         new webpack.DefinePlugin({
             __APP_VERSION__: JSON.stringify(require('./package.json').version)
         })
@@ -65,17 +106,27 @@ function getPlugins() {
 }
 
 // ============================================================================
-// ES6 build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Modern build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Formerly referred to as the "ES6" build tier. Renamed to "Modern" to ensure
+// non-technical users can easily distinguish this as the appropriate package
+// for newer/modern television models.
 // ============================================================================
-const es6Config = {
-    name: 'es6',
+const modernConfig = {
+    // Unique identifier for this configuration used in the CLI build command
+    name: 'modern',
+    // Output production bundle optimization
     mode: 'production',
-    performance: { hints: false },
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // No source maps — keeps the bundle lean for production deployment
     entry: './src/index.js',
 
     output: {
-        path: path.resolve(__dirname, 'dist/es6'),
+        // Output directly into the user-friendly modern folder within dist
+        path: path.resolve(__dirname, 'dist/modern'),
         filename: 'js/[name].js',
         clean: true
     },
@@ -94,11 +145,19 @@ const es6Config = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Modern tier: WASM-capable (ES6+ / no transpilation needed)
+    plugins: getPlugins('modern')
 };
 
 // ============================================================================
@@ -133,11 +192,19 @@ const debugConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Modern tier: same WASM-capable worker set as es6, just with source maps
+    plugins: getPlugins('modern')
 };
 
 // ============================================================================
@@ -146,8 +213,13 @@ const debugConfig = {
 const normalConfig = {
     name: 'normal',
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // No source maps — production build
-    entry: './src/index.js',
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
 
     output: {
         path: path.resolve(__dirname, 'dist/normal'),
@@ -188,11 +260,19 @@ const normalConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Modern tier: Chromium 63 supports WASM and OffscreenCanvas
+    plugins: getPlugins('modern')
 };
 
 // ============================================================================
@@ -201,7 +281,17 @@ const normalConfig = {
 const legacyConfig = {
     name: 'legacy',
     mode: 'production',
-    entry: ['url-search-params-polyfill', './src/index.js'],
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
+    entry: [
+        'url-search-params-polyfill',
+        './src/utils/DomPolyfills.js',
+        './src/utils/AssJsPolyfills.js',
+        './src/index.js'
+    ],
 
     output: {
         path: path.resolve(__dirname, 'dist/legacy'),
@@ -249,11 +339,25 @@ const legacyConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
 
-    plugins: getPlugins()
+    // Legacy tier: LibassWasmRenderer is stubbed — no WASM workers are shipped.
+    plugins: [
+        ...getPlugins('legacy'),
+        new webpack.NormalModuleReplacementPlugin(
+            /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
+            path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+        )
+    ]
 };
 
 // ============================================================================
@@ -263,6 +367,11 @@ const ultraLegacyConfig = {
     name: 'ultra-legacy',
     target: ['web', 'es5'],
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     entry: [
         /*
          * POLYFILL LOAD ORDER — CRITICAL for Chrome 32 / Tizen 2.x:
@@ -274,12 +383,12 @@ const ultraLegacyConfig = {
          * because regenerator-runtime internally calls Symbol() and
          * iterates with for-of (which needs Symbol.iterator).
          */
-        'core-js/es/symbol',          // Symbol — used by regenerator-runtime
-        'core-js/es/promise',         // Promise — async/await transpilation target
-        'core-js/es/map',             // Map — used by several core-js internals
-        'core-js/es/set',             // Set — used by several core-js internals
-        'core-js/es/array/from',      // Array.from — spread/iterator polyfill
-        'whatwg-fetch',               // fetch() for Tizen 2.x / WebOS 1.x
+        'core-js/es/symbol', // Symbol — used by regenerator-runtime
+        'core-js/es/promise', // Promise — async/await transpilation target
+        'core-js/es/map', // Map — used by several core-js internals
+        'core-js/es/set', // Set — used by several core-js internals
+        'core-js/es/array/from', // Array.from — spread/iterator polyfill
+        'whatwg-fetch', // fetch() for Tizen 2.x / WebOS 1.x
         'url-search-params-polyfill', // URLSearchParams for Chrome 32
         './src/index.js'
     ],
@@ -339,6 +448,13 @@ const ultraLegacyConfig = {
                 generator: {
                     filename: 'assets/fonts/[name][ext]'
                 }
+            },
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
             }
         ]
     },
@@ -349,12 +465,14 @@ const ultraLegacyConfig = {
          *   1. A separate HTML template (index.ultra-legacy.html) that includes the
          *      backup-logger <script> tag before any other scripts.
          *   2. An extra CopyWebpackPlugin entry to ship backup-logger.js to dist.
+         *   3. NormalModuleReplacementPlugin to swap LibassWasmRenderer with a stub
+         *      so the WASM dependencies are kept out of the bundle.
          *
          * The backup logger patches console.* BEFORE the webpack bundle executes,
          * which is the only effective way to intercept the boot crash on Chrome 32/38
          * (Tizen 2.x / WebOS 3.x). All other build tiers do not need or include it.
          */
-        var base = getPlugins();
+        var base = getPlugins('ultra-legacy');
 
         /* Swap HtmlWebpackPlugin for the ultra-legacy-specific template */
         base = base.map(function (p) {
@@ -379,10 +497,99 @@ const ultraLegacyConfig = {
             }
         });
 
+        base.push(
+            new webpack.NormalModuleReplacementPlugin(
+                /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
+                path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+            )
+        );
+
         return base;
-    }())
+    })()
+};
+
+// ============================================================================
+// Normal Oblong build - Tizen 5.0+ (Chromium 63) with oblong icon
+// ============================================================================
+/**
+ * Configuration for the "Normal Oblong" build target.
+ * Matches the "normal" configuration but replaces the default icon with icon_oblong.png.
+ */
+const normalOblongConfig = {
+    // Unique identifier for this configuration
+    name: 'normal-oblong',
+    // Run in production mode for optimization
+    mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
+    // The main app entry point
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
+
+    output: {
+        // Output to the specific normal-oblong folder in dist
+        path: path.resolve(__dirname, 'dist/normal-oblong'),
+        // Keep standard JavaScript subdirectory layout
+        filename: 'js/[name].js',
+        // Clean output directory before building
+        clean: true
+    },
+
+    optimization: {
+        // Shared optimization settings
+        splitChunks: { chunks: 'all', maxSize: 100000 },
+        minimizer: ['...', new CssMinimizerPlugin()]
+    },
+
+    module: {
+        rules: [
+            {
+                // Transpile JS using Babel for Chromium 63
+                test: /\.js$/,
+                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: [
+                            [
+                                '@babel/preset-env',
+                                {
+                                    targets: { chrome: '63' },
+                                    useBuiltIns: 'usage',
+                                    corejs: 3
+                                }
+                            ]
+                        ]
+                    }
+                }
+            },
+            // Load and package CSS stylesheets
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            // Handle font assets
+            {
+                test: /\.(woff|woff2|eot|ttf|otf)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/fonts/[name][ext]'
+                }
+            },
+            // Prevent loading WASM files on output
+            {
+                test: /\.wasm$/,
+                type: 'asset/resource',
+                generator: {
+                    emit: false
+                }
+            }
+        ]
+    },
+
+    // Load plugins with the modern tier configuration, selecting icon_oblong.png from assets/
+    plugins: getPlugins('modern', { iconSrc: 'assets/icon_oblong.png' })
 };
 
 // Export all configs. Run a specific one with --config-name <name>.
 // e.g. npx webpack --config webpack.config.cjs --config-name debug
-module.exports = [es6Config, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig];
+module.exports = [modernConfig, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];

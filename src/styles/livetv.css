@@ -229,7 +229,7 @@
     align-items: center;
     padding: 0 20px;
     border-bottom: 1px solid var(--jf-divider);
-    border-left: 4px solid transparent; /* Apple-style selection indicator */
+    border-left: 4px solid transparent;
     transition: background 0.25s ease, border-left-color 0.25s ease, transform 0.2s ease;
     will-change: background, border-left-color;
     box-sizing: border-box;
@@ -267,7 +267,7 @@
     text-transform: uppercase;
 }
 
-/* Apple-style Gradient Palettes for Fallbacks */
+/* Gradient Palettes for Fallbacks */
 .grad-1 { background: linear-gradient(135deg, #ff5e62, #ff9966); }
 .grad-2 { background: linear-gradient(135deg, #4facfe, #00f2fe); }
 .grad-3 { background: linear-gradient(135deg, #667eea, #764ba2); }
@@ -441,7 +441,7 @@
     line-height: 1.5;
 }
 
-/* Apple-style subtle pulse for the recording dot */
+/* subtle pulse for the recording dot */
 .record-dot {
     animation: heartBeat 2s infinite ease-in-out;
 }

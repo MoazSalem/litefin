@@ -413,6 +413,29 @@ export const MediaHelper = {
             return `${serverUrl}${deliveryPath}${sep}${authKey}=${encodeURIComponent(authToken)}`;
         }
 
+        // ====================================================================
+        // Filesystem path guard for external subtitle files.
+        //
+        // When a subtitle track is external (IsExternal = true), Jellyfin may
+        // set DeliveryUrl to the server's local filesystem path (e.g.
+        // "/Volumes/Storage/movie.srt"). This path is not accessible from the
+        // client — we must stream the subtitle through the server's subtitle
+        // API endpoint instead.
+        //
+        // We detect this by checking that the DeliveryUrl is neither an HTTP
+        // URL nor a server-relative API path under /Videos/ or /Audio/.
+        // ====================================================================
+        if (
+            deliveryPath.startsWith('/') &&
+            !deliveryPath.startsWith('/Videos/') &&
+            !deliveryPath.startsWith('/Audio/')
+        ) {
+            const codec = (track.Codec || 'subrip').toLowerCase();
+            const format_ = format || codec;
+            deliveryPath = `/Videos/${itemId}/${mediaSourceId}/Subtitles/${track.Index}/0/Stream.${format_}`;
+            return `${serverUrl}${deliveryPath}?${authKey}=${encodeURIComponent(authToken)}`;
+        }
+
         // Ensure it's a fully-qualified URL (DeliveryUrl is usually root-relative)
         let url = deliveryPath.startsWith('http')
             ? deliveryPath
@@ -425,9 +448,11 @@ export const MediaHelper = {
                      .replace(/\.\w+$/, `.${format}`);      // or at end of string
         }
 
-        // Append auth token (DeliveryUrl itself usually omits it)
-        const separator = url.includes('?') ? '&' : '?';
-        url += `${separator}${authKey}=${encodeURIComponent(authToken)}`;
+        // Append auth token only if the DeliveryUrl doesn't already include one.
+        if (!url.includes(authKey + '=')) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += `${separator}${authKey}=${encodeURIComponent(authToken)}`;
+        }
 
         return url;
     },

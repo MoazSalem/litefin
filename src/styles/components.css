@@ -275,7 +275,7 @@ progress.card-progress::-webkit-progress-bar {
 }
 
 progress.card-progress::-webkit-progress-value {
-    /* Premium Apple-style gradient */
+    /* Premium gradient */
     background: linear-gradient(90deg, var(--jf-accent) 0%, var(--jf-accent-hover) 100%);
     /* Ensure sharp edges for the value bar */
     border-radius: 0;
@@ -324,7 +324,7 @@ progress.card-progress::-webkit-progress-value {
     z-index: 1;
 }
 
-/* Gradient Variants (Apple-style) */
+/* Gradient Variants */
 .grad-1 {
     background: linear-gradient(135deg, #007aff 0%, #004a99 100%);
 }
@@ -472,7 +472,7 @@ progress.card-progress::-webkit-progress-value {
     display: flex;
     flex-direction: column;
     position: relative;
-    width: 600px;
+    width: 750px;
     max-width: 90%;
     max-height: 80vh;
     min-height: 180px; /* Lower minimum for short dialogs (e.g. Delete?) */
@@ -642,7 +642,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 
-/* Base Badge Styling: Clean, Apple-style pills with glassmorphism */
+/* Base Badge Styling */
 .track-badge {
     display: inline-flex;
     align-items: center;
@@ -718,13 +718,13 @@ progress.card-progress::-webkit-progress-value {
     background: var(--jf-btn-primary-focus-bg) !important; /* Force priority over .selected */
     color: var(--jf-btn-primary-focus-color) !important;
     outline: none;
-    transform: scale(1.03);
+    transform: scale(1.01);
     border: 2px solid var(--jf-btn-primary-focus-border) !important;
     will-change: transform;
 }
 
 .modal-option-btn:hover {
-    transform: scale(1.03);
+    transform: scale(1.01);
     border: 2px solid var(--jf-btn-primary-focus-border) !important;
     will-change: transform;
 }
@@ -875,6 +875,67 @@ progress.card-progress::-webkit-progress-value {
     transform: scale(1.05);
     border-color: var(--jf-btn-primary-border) !important;
     z-index: 10;
+}
+
+/* Playlist Editor Modal styles */
+.pe-selector-label {
+    font-size: 1.1rem;
+    opacity: 0.7;
+    min-width: 80px;
+    margin-right: 16px;
+}
+
+.pe-selector-value {
+    flex: 1;
+    text-align: right;
+    margin-right: 8px;
+    font-weight: 600;
+}
+
+.pe-chevron {
+    font-size: 1.8rem;
+    opacity: 0.5;
+    transition: transform 0.2s ease;
+}
+
+.modal-option-btn:focus .pe-chevron,
+.modal-option-btn.focused .pe-chevron {
+    transform: translateX(4px);
+}
+
+.modal-field-group {
+    padding: 4px 4px 16px;
+}
+
+.modal-field-label {
+    display: block;
+    color: var(--jf-text-secondary, #b0b0b0);
+    font-size: 1.1rem;
+    font-weight: 400;
+    margin-bottom: 8px;
+}
+
+.playlist-name-input {
+    width: 100%;
+    padding: 16px 20px;
+    font-size: 1.3rem;
+    background: var(--jf-input-bg, rgba(255, 255, 255, 0.06));
+    border: 2px solid var(--jf-input-border, rgba(255, 255, 255, 0.15));
+    border-radius: var(--jf-border-radius, 8px);
+    color: var(--jf-text-primary);
+    box-sizing: border-box;
+}
+
+.playlist-name-input:focus,
+.playlist-name-input.focused {
+    border-color: var(--jf-button-border-focus, var(--jf-accent));
+    outline: none;
+}
+
+.btn-add:focus,
+.btn-add.focused {
+    background: var(--jf-btn-primary-bg) !important;
+    color: var(--jf-btn-primary-color) !important;
 }
 
 /* Secondary/Cancel styling: Lower prominence but perfect readability */
@@ -1783,3 +1844,46 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-info {
 html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
     display: block;
 }
+
+/* ==========================================================================
+   Card Text Marquee Scrolling (Loop Overflowing Titles/Subtitles)
+   ========================================================================== */
+.card-title,
+.card-subtitle {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.card-title span,
+.card-subtitle span {
+    display: inline-block;
+    white-space: nowrap;
+    will-change: transform;
+    /* Use dynamic spring-like transitions for reset focus animations */
+    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* When the card is focused, disable truncation and apply alternate animation */
+.media-card.focused .card-title.marquee-active,
+.media-card.focused .card-subtitle.marquee-active {
+    text-overflow: clip;
+}
+
+.media-card.focused .card-title.marquee-active span,
+.media-card.focused .card-subtitle.marquee-active span {
+    animation: card-text-marquee var(--marquee-duration, 4s) linear infinite alternate;
+}
+
+/* Alternate keyframes for smooth scrolling back-and-forth */
+@keyframes card-text-marquee {
+    0%, 20% {
+        transform: translate3d(0, 0, 0);
+    }
+    80%, 100% {
+        transform: translate3d(var(--scroll-dist, 0px), 0, 0);
+    }
+}
+

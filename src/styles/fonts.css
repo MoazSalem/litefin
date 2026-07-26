@@ -235,6 +235,7 @@
 .font-zen-kaku-gothic-new { font-family: 'Zen Kaku Gothic New', sans-serif; }
 .font-opendyslexic { font-family: 'OpenDyslexic', sans-serif; }
 .font-atkinson { font-family: 'Atkinson Hyperlegible', sans-serif; }
+.font-fallback-font { font-family: 'Jellyfin Fallback Font', sans-serif; }
 
 .font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', 'LG Smart UI', Roboto, Helvetica, Arial, sans-serif; }
 

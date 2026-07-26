@@ -1,5 +1,7 @@
 import { logger } from './Logger.js';
 import { state } from '../core/StateManager.js';
+import { api } from '../api/index.js';
+import { storage } from './StorageService.js';
 
 const log = logger.create('FontLoader');
 
@@ -37,7 +39,8 @@ class FontLoader {
             opendyslexic: 'OpenDyslexic',
             atkinson: 'Atkinson Hyperlegible',
             'poiret-one': 'Poiret One',
-            'zen-kaku-gothic-new': 'Zen Kaku Gothic New'
+            'zen-kaku-gothic-new': 'Zen Kaku Gothic New',
+            'fallback-font': 'Jellyfin Fallback Font'
         };
 
         // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls
@@ -46,6 +49,17 @@ class FontLoader {
         // Track all blob: URLs created for container fonts so we can revoke
         // them on cleanup and avoid memory leaks across media sessions.
         this._blobUrls = new Set();
+
+        // Dynamically fetched server fallback font URL
+        this._fallbackFontUrl = null;
+    }
+
+    /**
+     * Retrieve the dynamically fetched server fallback font URL
+     * @returns {string|null} The fallback font URL
+     */
+    getFallbackFontUrl() {
+        return this._fallbackFontUrl;
     }
 
     /**
@@ -65,6 +79,21 @@ class FontLoader {
     }
 
     /**
+     * =========================================================================
+     * getContainerFontUrls
+     * =========================================================================
+     * Returns a flat array of all active container-embedded font blob URLs currently
+     * stored in the session cache. This allows the WASM subtitle renderer
+     * (libass-wasm / SubtitlesOctopus) to resolve and draw custom typesetting
+     * files directly.
+     * =========================================================================
+     * @returns {string[]} Array of active blob URLs
+     */
+    getContainerFontUrls() {
+        return Array.from(this._blobUrls);
+    }
+
+    /**
      * Get the font family name for a given internal ID
      * @param {string} fontId - Internal font identifier (e.g., 'typewriter')
      * @returns {string|null} The font family name, or null if not mapped
@@ -78,11 +107,112 @@ class FontLoader {
      * Force load a font to ensure it's ready before use.
      * Uses document.fonts.load() or a hidden DOM element to trigger download.
      * @param {string} fontId
+     * @param {boolean} [forceReload=false]
      * @returns {Promise<boolean>}
      */
-    async loadFont(fontId) {
+    async loadFont(fontId, forceReload = false) {
         if (!fontId || !this._fontMap[fontId]) return false;
-        if (this._loadedStaticFonts.has(fontId)) return true;
+        if (this._loadedStaticFonts.has(fontId) && !forceReload) return true;
+
+        /*
+         * -------------------------------------------------------------
+         * Special Handling: Jellyfin Server Fallback Font
+         * -------------------------------------------------------------
+         * If the requested font is the server fallback font, we construct
+         * the authenticated retrieval URL dynamically and load it via
+         * CSS FontFace API or style tag injection fallback.
+         * -------------------------------------------------------------
+         */
+        if (fontId === 'fallback-font') {
+            try {
+                const token = api.accessToken;
+                if (!token || !api.serverUrl) {
+                    log.warn('Cannot load fallback font: serverUrl or accessToken missing');
+                    return false;
+                }
+
+                // Query the list of fallback fonts from the server
+                const fonts = await api.get('/FallbackFont/Fonts');
+                if (!fonts || !fonts.length) {
+                    log.warn('No fallback fonts returned from server');
+                    return false;
+                }
+
+                // Retrieve the user selected font name, falling back to the first font from the server list
+                const userSelectedFont = storage.getItem('pref:jellyfinFallbackFont');
+                let fontName = '';
+                if (userSelectedFont && fonts.some((f) => f.Name === userSelectedFont)) {
+                    fontName = userSelectedFont;
+                } else {
+                    fontName = fonts[0].Name;
+                }
+
+                if (!fontName) {
+                    log.warn('Invalid fallback font name in server response');
+                    return false;
+                }
+
+                const serverInfo = state.get('server:info') || {};
+                const isEmbyInstance = !!(
+                    serverInfo.ServerName &&
+                    (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby'))
+                );
+                const authKey = isEmbyInstance ? 'api_key' : 'ApiKey';
+                const url = `${api.serverUrl}/FallbackFont/Fonts/${encodeURIComponent(fontName)}?${authKey}=${encodeURIComponent(token)}`;
+
+                log.debug(`Downloading Jellyfin fallback font binary from: ${url}`);
+
+                // Download the font binary to create a clean blob URL, preventing FS errors in WASM worker
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const buffer = await response.arrayBuffer();
+                const blob = new Blob([buffer], { type: response.headers.get('content-type') || 'font/ttf' });
+
+                // Revoke the old fallback font URL if it exists to avoid memory leaks
+                if (this._fallbackFontUrl) {
+                    try {
+                        URL.revokeObjectURL(this._fallbackFontUrl);
+                    } catch (_) {
+                        /* ignore */
+                    }
+                }
+
+                const blobUrl = URL.createObjectURL(blob);
+                this._fallbackFontUrl = blobUrl;
+
+                log.debug(`Loading Jellyfin fallback font "${fontName}" from blob URL: ${blobUrl}`);
+
+                if (window.FontFace && document.fonts) {
+                    const fontFace = new FontFace('Jellyfin Fallback Font', `url("${blobUrl}")`);
+                    await fontFace.load();
+                    document.fonts.add(fontFace);
+                    log.info(`Jellyfin fallback font "${fontName}" loaded successfully via FontFace API`);
+                    this._loadedStaticFonts.add(fontId);
+                    return true;
+                } else {
+                    const styleId = 'jellyfin-fallback-font-style';
+                    if (!document.getElementById(styleId)) {
+                        const style = document.createElement('style');
+                        style.id = styleId;
+                        style.textContent = `
+                            @font-face {
+                                font-family: "Jellyfin Fallback Font";
+                                src: url("${blobUrl}");
+                            }
+                        `;
+                        document.head.appendChild(style);
+                        log.info(`Jellyfin fallback font "${fontName}" injected via fallback style tag`);
+                    }
+                    this._loadedStaticFonts.add(fontId);
+                    return true;
+                }
+            } catch (err) {
+                log.error('Failed to load Jellyfin fallback font:', err);
+                return false;
+            }
+        }
 
         const fontFamily = this._fontMap[fontId];
         log.debug(`Preloading font: ${fontFamily}`);
@@ -293,13 +423,16 @@ class FontLoader {
          * System Info response, whereas Jellyfin does.
          */
         const serverInfo = state.get('server:info') || {};
-        const isEmbyInstance = !!(serverInfo.ServerName && (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby')));
+        const isEmbyInstance = !!(
+            serverInfo.ServerName &&
+            (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby'))
+        );
         const authKey = isEmbyInstance ? 'api_key' : 'ApiKey';
 
         // Download all font attachments in parallel.
         // This avoids the major sequential bottleneck when a media container has multiple fonts.
         const downloadPromises = fontAttachments.map(async (font, idx) => {
-            const uniqueIndex = font.Index !== undefined ? font.Index : (idx + 1);
+            const uniqueIndex = font.Index !== undefined ? font.Index : idx + 1;
             let url;
             if (font.DeliveryUrl) {
                 url = font.DeliveryUrl.startsWith('http') ? font.DeliveryUrl : `${serverUrl}${font.DeliveryUrl}`;

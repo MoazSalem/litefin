@@ -51,6 +51,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { smartHubManager } from '../tizen/SmartHubManager.js';
 import { remoteButtonManager } from './RemoteButtonManager.js';
+import { screensaverManager } from './ScreensaverManager.js';
 
 const log = logger.create('App');
 
@@ -120,17 +121,25 @@ class App {
             (trackMenuBgOpacity / 100).toFixed(2)
         );
 
+        // Initialize OSD background gradient opacity CSS variable
+        const osdGradientOpacity = PlayerSettings.get('osdGradientOpacity');
+        document.documentElement.style.setProperty(
+            '--osd-gradient-opacity',
+            (osdGradientOpacity / 100).toFixed(2)
+        );
+
         // 3.1. Initialize CSS vars polyfill (no-op on Chrome 49+, active on Tizen 3.0 / Chrome 47).
         //      Must run AFTER layoutManager.init() so the data-theme attribute and theme
         //      CSS variables are already present on <html> when the polyfill scans the DOM.
         cssVarsPolyfill.init();
 
-        // 3.5. Initialize translations
-        // Ensures language dictionaries are loaded before the UI renders
+        // 3.5. Initialize translations + auth session in parallel
+        // i18n and auth are completely independent — overlapping them saves a round-trip
         const appLanguage = storage.getItem('app_language') || 'en-us';
-        await i18n.init(appLanguage);
+        const i18nPromise = i18n.init(appLanguage);
+        const authPromise = auth.init();
 
-        // 3.6. Initialize Layout Direction (RTL/LTR)
+        // 3.6. Initialize Layout Direction (RTL/LTR) — only needs appLanguage string, not i18n data
         const layoutDirection = storage.getItem('layout_direction') || 'auto';
         let isRtl = false;
 
@@ -144,8 +153,15 @@ class App {
 
         document.documentElement.setAttribute('dir', isRtl ? 'rtl' : 'ltr');
 
-        // 4. Try to restore auth session
-        await auth.init();
+        // Wait for both to complete — they've been running in parallel
+        await Promise.all([i18nPromise, authPromise]);
+
+        // Load UI font if it requires server fallback font
+        if (state.get('user:authenticated') && layoutManager.getUiFont() === 'fallback-font') {
+            import('../utils/FontLoader.js').then((module) => {
+                module.default.loadFont('fallback-font');
+            });
+        }
 
         // 4.5. Initialize Smart Hub Preview (Tizen 4+ only — gracefully no-ops on older
         //      hardware or other platforms. Must run after auth.init() so the manager can
@@ -154,20 +170,42 @@ class App {
             smartHubManager.init();
         }
 
-        // 4.6. Initialize Plugin Manager and Screensaver if user is authenticated (session restores).
+        // ====================================================================
+        // 4.6. Plugin Manager Initialization
+        // ====================================================================
+        // Initialize Plugin Manager if a user session was successfully restored.
+        // However, if we have multiple cached user profiles or the active profile
+        // is protected by a PIN, the app will route the user to the "Who's Watching"
+        // selection screen. In that scenario, we must defer initialization until
+        // a profile is explicitly selected and unlocked, preventing unauthorized
+        // background API requests from firing on the selection screen.
         if (state.get('user:authenticated')) {
-            pluginManager
-                .init({
-                    api,
-                    focusManager,
-                    toast: null // Toast component reference wired up once UI is ready
-                })
-                .catch((err) => log.error('pluginManager.init failed:', err));
+            // Count of saved user profiles on the server
+            const sessionCount = state.get('user:sessionCount', 0);
+
+            // Retrieve current active user profile ID
+            const activeUserId = auth.getCurrentUser()?.Id;
+
+            // Verify if the active user profile has a local PIN lock enabled
+            const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
+
+            // Defer if user needs to go through profiles selection or PIN verification
+            if (sessionCount > 1 || activeHasPin) {
+                log.info('Deferring plugin manager initialization: profiles screen or PIN gate is active');
+            } else {
+                log.info('No profile switcher active: initializing plugin manager immediately');
+                pluginManager
+                    .init({
+                        api,
+                        focusManager,
+                        toast: null // Toast component reference wired up once UI is ready
+                    })
+                    .catch((err) => log.error('pluginManager.init failed:', err));
+            }
         }
 
         // Initialize ScreensaverManager (runs on all pages, handles its own auth checks)
         // Must be initialized after StorageService so it can read delay preferences.
-        const { screensaverManager } = await import('./ScreensaverManager.js');
         screensaverManager.init();
 
         /*
@@ -317,6 +355,12 @@ class App {
                 document.body.classList.remove('sidebar-mode-hidden');
             }
 
+            if (sidebarMode === 'collapsed') {
+                document.body.classList.add('sidebar-mode-collapsed');
+            } else {
+                document.body.classList.remove('sidebar-mode-collapsed');
+            }
+
             this.sidebar.setMode('visible');
         }
     }
@@ -367,6 +411,12 @@ class App {
             cssVarsPolyfill.update();
         });
 
+        // Listen for OSD background gradient opacity changes
+        eventBus.on('pref:osdGradientOpacity', (value) => {
+            document.documentElement.style.setProperty('--osd-gradient-opacity', (value / 100).toFixed(2));
+            cssVarsPolyfill.update();
+        });
+
         // Handle back button / return key
         eventBus.on('key:back', () => {
             // 1. Check for standalone global overlays
@@ -407,10 +457,13 @@ class App {
         // Handle app visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // App going to background - player can suspend decoder state
+                // App going to background — pause playback and save state,
+                // but do NOT stop the session or report stopped. The player
+                // stays alive and the server-side session remains active so
+                // the user can resume when they return.
                 log.debug('App hidden (background)');
                 eventBus.emit('app:hidden');
-                // Close WebSocket - user goes offline on server dashboard
+                // Close WebSocket — user appears offline on server dashboard
                 api.closeWebSocket();
             } else {
                 log.debug('App visible (foreground)');
@@ -467,6 +520,12 @@ class App {
          */
         eventBus.on('auth:switchToProfiles', () => {
             log.info('Switching to profiles screen (other sessions remain)');
+
+            // Wrecks active plugin instances and clears server plugin detection cache
+            // before redirecting to the user selection view, ensuring no background
+            // plugins continue fetching endpoints during the profile select flow.
+            pluginManager.destroy();
+
             router.reset('/profiles');
         });
 
@@ -474,6 +533,14 @@ class App {
         // (covers fresh logins, not session restores which are handled in init())
         eventBus.on('auth:login', () => {
             log.info('User logged in - initializing plugin manager');
+
+            // If the UI font is fallback-font, load it now that we are authenticated
+            if (layoutManager.getUiFont() === 'fallback-font') {
+                import('../utils/FontLoader.js').then((module) => {
+                    module.default.loadFont('fallback-font');
+                });
+            }
+
             pluginManager
                 .init({
                     api,
@@ -524,12 +591,9 @@ class App {
 
                 let itemToPlay = item;
 
-                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, Playlist, BoxSet without movies/episodes),
+                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, BoxSet without movies/episodes),
                 // the API cannot play it directly. We must resolve it to the first playable audio track.
-                if (
-                    item &&
-                    ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Playlist', 'Artist', 'Person'].includes(item.Type)
-                ) {
+                if (item && ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Artist', 'Person'].includes(item.Type)) {
                     try {
                         const tracks = await api.getItems({
                             ParentId: item.Id,
@@ -550,6 +614,26 @@ class App {
                         }
                     } catch (e) {
                         log.error('Failed to resolve audio container tracks:', e);
+                        return;
+                    }
+                }
+
+                // Playlist items are containers with no direct MediaSource.
+                // Resolve to the first item and tag context so PlayQueue builds the full list.
+                if (item && item.Type === 'Playlist' && itemToPlay === item) {
+                    try {
+                        const result = await api.getPlaylistItems(item.Id, { Limit: 1 });
+                        if (result.Items && result.Items.length > 0) {
+                            itemToPlay = result.Items[0];
+                            itemToPlay.contextType = 'playlist';
+                            itemToPlay.contextId = item.Id;
+                            log.info('Resolved Playlist to first item:', itemToPlay.Name);
+                        } else {
+                            log.warn('Playlist is empty:', item.Id);
+                            return;
+                        }
+                    } catch (e) {
+                        log.error('Failed to resolve playlist:', e);
                         return;
                     }
                 }
@@ -606,6 +690,17 @@ class App {
                 if (fromSlideshow) queryParts.push('fromSlideshow=true');
                 if (fromBrowse) queryParts.push('fromBrowse=true');
                 if (ghostMode) queryParts.push('ghostMode=true');
+
+                // Determine referrer context to handle exit routing cleanly.
+                // If we are playing from a details screen or the Live TV guide,
+                // we want to ensure we navigate back to the correct view on exit.
+                const currentPath = router.getCurrentPath?.() || '';
+                if (currentPath.startsWith('/details/')) {
+                    queryParts.push('fromDetails=true');
+                } else if (currentPath.startsWith('/livetv')) {
+                    queryParts.push('fromGuide=true');
+                }
+
                 const queryParam = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
 
                 // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
@@ -629,11 +724,23 @@ class App {
                     return;
                 }
 
-                // If we came from a slideshow or a browse-page Play key, we PUSH the
-                // player so we can go BACK to the originating page exactly where we
-                // left off. For DetailsPage launches we REPLACE to prevent history bloat.
+                // If we came from a slideshow, a browse-page Play key, or the Live TV guide,
+                // we PUSH the player so we can go BACK to the originating page exactly where
+                // we left off. The Live TV case is critical: replacing /livetv in history
+                // destroys the saved tab, EPG scroll position, and focused program, so
+                // pressing Back from the player lands the user on a blank suggestions tab
+                // with no focus (stuck). Pushing the player keeps /livetv alive in history.
+                //
+                // For DetailsPage launches we still REPLACE to prevent history bloat.
+                //
+                // Standard web exception:
+                // We disable this optimization on standard web browsers to prevent breaking
+                // the browser's native back button behavior and page reload flow.
+                const isFromLiveTv = currentPath.startsWith('/livetv');
+                const shouldReplace = !fromSlideshow && !fromBrowse && !isFromLiveTv && !platformInfo.isWeb;
+
                 router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${queryParam}`, {
-                    replace: !fromSlideshow && !fromBrowse
+                    replace: shouldReplace
                 });
             }
         );
@@ -784,11 +891,17 @@ class App {
                 const activeUserId = auth.getCurrentUser()?.Id;
                 const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
+                const skipProfilesOnce = storage.getItem('litefin:skip_profiles_once') === 'true';
+                if (skipProfilesOnce) {
+                    storage.removeItem('litefin:skip_profiles_once');
+                    storage.flush();
+                }
+
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
-                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin)) {
+                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin) && !skipProfilesOnce) {
                     // Multiple users stored, or the restored profile is PIN-locked —
                     // make them pick a profile (which enforces any PIN).
                     log.info(
@@ -796,8 +909,8 @@ class App {
                     );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Single user, no PIN — skip the profiles screen and go straight home
-                    log.info('Initial route: Authenticated (single user), navigating to HomePage');
+                    // Single user, no PIN, or skipped once — skip the profiles screen and go straight home
+                    log.info('Initial route: Authenticated, navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {
                     log.info('Initial route: No session, navigating to LoginPage');

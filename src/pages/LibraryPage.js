@@ -10,7 +10,9 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { imageService } from '../utils/ImageService.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
@@ -270,6 +272,38 @@ class LibraryPage extends Page {
                 virtualTitle = decodeURIComponent(this.params.personName);
             } else if (this.params.searchTerm) {
                 virtualTitle = `${i18n.t('Search')}: ${decodeURIComponent(this.params.searchTerm)}`;
+            } else if (this.params.IsFavorite === 'true') {
+                // =============================================================
+                // TRANSLATABLE TYPE-SPECIFIC FAVORITE HEADERS
+                // =============================================================
+                // Maps the includeItemTypes query filter parameters to localized
+                // singular or plural display values (e.g. Movies, TV Shows, etc.).
+                // =============================================================
+                let typeLabel = '';
+                if (this.params.includeItemTypes) {
+                    if (this.params.includeItemTypes.includes('Movie')) {
+                        typeLabel = i18n.t('Movies') || 'Movies';
+                    } else if (this.params.includeItemTypes.includes('Series')) {
+                        typeLabel = i18n.t('TypeOptionPluralSeries') || 'TV Shows';
+                    } else if (this.params.includeItemTypes.includes('Season')) {
+                        typeLabel = i18n.t('HeaderSeasons') || 'Seasons';
+                    } else if (this.params.includeItemTypes.includes('Episode')) {
+                        typeLabel = i18n.t('Episodes') || 'Episodes';
+                    } else if (this.params.includeItemTypes.includes('TvChannel')) {
+                        typeLabel = i18n.t('LiveTv') || 'Live TV';
+                    } else if (this.params.includeItemTypes.includes('Person')) {
+                        typeLabel = i18n.t('People') || 'People';
+                    } else if (this.params.includeItemTypes.includes('MusicArtist')) {
+                        typeLabel = i18n.t('Artists') || 'Artists';
+                    } else if (this.params.includeItemTypes.includes('MusicAlbum')) {
+                        typeLabel = i18n.t('Albums') || 'Albums';
+                    } else if (this.params.includeItemTypes.includes('Audio')) {
+                        typeLabel = i18n.t('Songs') || 'Songs';
+                    }
+                }
+
+                // Format title as e.g. "Favorites - Movies" or just fallback to "Favorites"
+                virtualTitle = `${i18n.t('Favorites') || 'Favorites'}${typeLabel ? ' - ' + typeLabel : ''}`;
             }
 
             this.state.libraryInfo = {
@@ -287,6 +321,7 @@ class LibraryPage extends Page {
 
         // State Rehydration Check
         const savedState = state.get(cacheKey);
+
         if (savedState) {
             // Merge cached state properties
             Object.assign(this.state, savedState.stateData);
@@ -300,6 +335,18 @@ class LibraryPage extends Page {
             this._loadPersistedSortMode();
             this._loadPersistedFilters();
 
+            // =========================================================================
+            // QUERY PARAMETER FILTER OVERRIDES (CACHE)
+            // =========================================================================
+            // If the route contains an explicit 'IsFavorite=true' query parameter,
+            // we override the loaded library filters to enforce favorite filtering.
+            // This allows linking directly to a favorite-filtered subset of any library.
+            // =========================================================================
+            if (this.params.IsFavorite === 'true') {
+                this.state.filters = this.state.filters || {};
+                this.state.filters.IsFavorite = true;
+            }
+
             // 1. Setup UI Components
             this._renderTabs();
             this._renderAlphaPicker();
@@ -308,7 +355,19 @@ class LibraryPage extends Page {
             i18n.translateDOM(this.el);
             this._bindEvents();
 
-            this.$('#library-title').textContent = this.state.libraryInfo?.Name || this.title;
+            // =========================================================================
+            // FAVORITES TITLE DECORATION (CACHE)
+            // =========================================================================
+            // If we are displaying favorite-filtered items, prepend "Favorites"
+            // to the page title to provide clear contextual feedback.
+            // =========================================================================
+            let title = this.state.libraryInfo?.Name || this.title;
+            if (this.params.IsFavorite === 'true') {
+                title = `${i18n.t('Favorites') || 'Favorites'} - ${title}`;
+            }
+
+            this.$('#library-title').textContent = title;
+            this.title = title;
 
             // 2. Hide loading skeleton, show correct container
             const isHorizontalLayout =
@@ -336,8 +395,9 @@ class LibraryPage extends Page {
             // 3. Restore Focus
             requestAnimationFrame(() => {
                 let restoredFocus = false;
-                const targetId = savedState.focusItemId;
-                const sectionId = savedState.focusSectionId;
+                const targetId = storage.getItem('pref:disableFocusRestore') === 'true' ? null : savedState.focusItemId;
+                const sectionId =
+                    storage.getItem('pref:disableFocusRestore') === 'true' ? null : savedState.focusSectionId;
 
                 if (targetId && sectionId) {
                     const sectionConfig = focusManager.getSectionConfig(sectionId);
@@ -365,18 +425,25 @@ class LibraryPage extends Page {
             return;
         }
 
-        // 1. Fetch Library Info — skip for virtual libraries ('all') as they have no real item record.
-        // Virtual library info was already set up in the isVirtualLibrary block above.
-        if (!isVirtualLibrary) {
-            await this._fetchLibraryInfo();
-        }
-
+        // Library info was already fetched at the top (shared with cache-hit path).
         // Load persisted view mode, sort configurations, and filters now that we know
         // the libraryId and collectionType. This happens before _renderGrid() so the correct
         // display modes and subsets are active from the very beginning.
         this._loadPersistedViewMode();
         this._loadPersistedSortMode();
         this._loadPersistedFilters();
+
+        // =========================================================================
+        // QUERY PARAMETER FILTER OVERRIDES (FRESH)
+        // =========================================================================
+        // If the route contains an explicit 'IsFavorite=true' query parameter,
+        // we override the loaded library filters to enforce favorite filtering.
+        // This allows linking directly to a favorite-filtered subset of any library.
+        // =========================================================================
+        if (this.params.IsFavorite === 'true') {
+            this.state.filters = this.state.filters || {};
+            this.state.filters.IsFavorite = true;
+        }
 
         // 2. Setup UI Components
         this._renderTabs();
@@ -487,6 +554,14 @@ class LibraryPage extends Page {
     }
 
     _setupFocus() {
+        // Clear stale focus memory from previously viewed libraries since all
+        // library instances share section names like 'library-grid'
+        focusManager.clearMemory('library-grid');
+        focusManager.clearMemory('row-0');
+        focusManager.clearMemory('library-tabs');
+        focusManager.clearMemory('library-controls');
+        focusManager.clearMemory('empty-state-btn');
+
         const collectionType = this.state.libraryInfo?.CollectionType;
         const autoFocusFirstItem = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
 
@@ -625,10 +700,11 @@ class LibraryPage extends Page {
     }
 
     _saveState(focusSectionId, focusItemId) {
+        if (storage.getItem('pref:disableLibraryCache') === 'true') return;
         state.set(this._getCacheKey(), {
             stateData: this.state,
-            focusSectionId,
-            focusItemId
+            focusSectionId: storage.getItem('pref:disableFocusRestore') === 'true' ? null : focusSectionId,
+            focusItemId: storage.getItem('pref:disableFocusRestore') === 'true' ? null : focusItemId
         });
     }
 
@@ -722,8 +798,20 @@ class LibraryPage extends Page {
                 item.Type === 'Folder' || (item.Type === 'CollectionFolder' && !item.CollectionType && item.ParentId);
 
             this.state.libraryInfo = item;
-            this.$('#library-title').textContent = item.Name;
-            this.title = item.Name; // Update Page title
+            let title = item.Name;
+
+            // =========================================================================
+            // FAVORITES TITLE DECORATION (FETCH)
+            // =========================================================================
+            // If the route contains an explicit 'IsFavorite=true' query parameter,
+            // we prepend the localized 'Favorites' string to the library page title.
+            // =========================================================================
+            if (this.params.IsFavorite === 'true') {
+                title = `${i18n.t('Favorites') || 'Favorites'} - ${title}`;
+            }
+
+            this.$('#library-title').textContent = title;
+            this.title = title; // Update Page title
         } catch (e) {
             log.error('Failed to fetch info', e);
         }
@@ -801,7 +889,7 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,DateCreated,ProductionYear,CommunityRating,OfficialRating',
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
             };
@@ -1295,7 +1383,7 @@ class LibraryPage extends Page {
                         Limit: 12, // Max 12 items as requested
                         Recursive: true,
                         IncludeItemTypes: includeItemTypes,
-                        Fields: 'PrimaryImageAspectRatio,ProductionYear,CommunityRating',
+                        Fields: 'ProductionYear,CommunityRating',
                         ImageTypeLimit: 1,
                         EnableImageTypes: 'Primary,Backdrop,Thumb'
                     };
@@ -1460,6 +1548,12 @@ class LibraryPage extends Page {
             if (this.state.viewType === capturedViewType) {
                 this.state.items = result?.Items || [];
                 this.state.totalRecordCount = result?.TotalRecordCount || 0;
+
+                // Enrich individual playlist/collection items with Primary images from their contents
+                const collectionType = this.state.libraryInfo?.CollectionType;
+                if ((collectionType === 'playlists' || collectionType === 'boxsets') && this.state.items.length > 0) {
+                    await this._enrichCollectionItems(this.state.items, collectionType);
+                }
 
                 this._renderGrid(this.state.items);
                 this._updatePaginationUI();
@@ -1635,7 +1729,6 @@ class LibraryPage extends Page {
      * Load the user's previously applied filters for this specific library.
      * Preserving filter preferences ensures a personalized and streamlined
      * navigation experience across sessions, conforming to state-preservation
-     * recommendations from Apple's Human Interface Guidelines.
      */
     _loadPersistedFilters() {
         // Skip sub-views (genre, studio, tag pages, etc.) to prevent overriding
@@ -1874,6 +1967,51 @@ class LibraryPage extends Page {
         });
     }
 
+    async _enrichCollectionItems(items, collectionType) {
+        const isPlaylist = collectionType === 'playlists';
+        await Promise.all(
+            items.map(async (item) => {
+                try {
+                    let innerItems;
+                    if (isPlaylist) {
+                        const resp = await api.getPlaylistItems(item.Id, {
+                            Limit: 20,
+                            Fields: 'ImageTags'
+                        });
+                        innerItems = resp?.Items || [];
+                    } else {
+                        const resp = await api.getItems({
+                            ParentId: item.Id,
+                            SortBy: 'Random',
+                            Recursive: true,
+                            Limit: 20,
+                            Fields: 'ImageTags',
+                            ImageTypeLimit: 1,
+                            EnableImageTypes: 'Primary'
+                        });
+                        innerItems = resp?.Items || [];
+                    }
+
+                    const shuffled = innerItems.sort(() => 0.5 - Math.random());
+                    const { maxWidth, quality } = imageService.getParams('card-backdrop');
+
+                    for (const inner of shuffled) {
+                        if (inner.ImageTags?.Primary) {
+                            item._dynamicThumbUrl = api.getImageUrl(inner.Id, 'Primary', {
+                                maxWidth,
+                                quality,
+                                tag: inner.ImageTags.Primary
+                            });
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    log.warn(`Failed to fetch dynamic thumb for ${item.Name}`, e);
+                }
+            })
+        );
+    }
+
     _renderGrid(items) {
         const grid = this.$('#library-grid');
         if (!grid) return;
@@ -2105,6 +2243,22 @@ class LibraryPage extends Page {
 
         // Lazy Load Images
         lazyLoader.observe(grid);
+
+        // ====================================================================
+        // PERF: PRE-WARM SCROLL CONTROLLER OFFSET CACHE
+        // ====================================================================
+        // By pre-warming the offsets for all grid cards in a single layout pass
+        // right after render, subsequent offsetTop reads during D-pad moves
+        // will hit the WeakMap cache instantly as O(1) reads rather than forcing
+        // synchronous layout/style recalculation flushes.
+        // ====================================================================
+        requestAnimationFrame(() => {
+            const cards = grid.querySelectorAll('.media-card');
+            const pageContent = document.querySelector('.page-content');
+            if (cards.length && pageContent) {
+                scrollController.prewarmOffsetCache(cards, pageContent);
+            }
+        });
 
         // Calculate expected alpha visibility (avoids DOM race conditions with _updateHeaderVisibility)
         const collectionType = this.state.libraryInfo?.CollectionType;
@@ -2516,7 +2670,7 @@ class LibraryPage extends Page {
                 ParentId: this.state.libraryId,
                 GenreIds: genreId,
                 Limit: 10,
-                Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                Fields: 'ProductionYear',
                 IncludeItemTypes: includeItemTypes,
                 Recursive: true,
                 SortBy: 'Random' // Randomize to make it look interesting?
@@ -3131,9 +3285,9 @@ class LibraryPage extends Page {
                     </div>
                 </div>
 
-                <div class="modal-actions" id="vm-actions" style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
+                <div class="modal-actions-library" id="vm-actions" style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
                     <button class="modal-action-btn close" id="btn-vm-close">${i18n.t('ButtonClose')}</button>
-                    <button class="modal-action-btn apply" id="btn-vm-apply" style="background-color: var(--jf-btn-primary-bg) !important; color: var(--jf-btn-primary-color) !important;">${i18n.t('ButtonApply') || 'Apply'}</button>
+                    <button class="modal-action-btn apply" id="btn-vm-apply" !important;">${i18n.t('ButtonApply') || 'Apply'}</button>
                 </div>
             </div>
         `;
@@ -3261,7 +3415,7 @@ class LibraryPage extends Page {
                     </div>
                 </div>
 
-                <div class="modal-actions">
+                <div class="modal-actions-library">
                     <button class="modal-action-btn close" id="btn-sort-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
                     <button class="modal-action-btn apply" id="btn-sort-apply" data-i18n="ButtonApply">${i18n.t('ButtonApply')}</button>
                 </div>
@@ -3340,7 +3494,7 @@ class LibraryPage extends Page {
             leaveDown: 'sort-actions'
         });
 
-        this.registerFocusSection('sort-actions', overlay.querySelector('.modal-actions'), {
+        this.registerFocusSection('sort-actions', overlay.querySelector('.modal-actions-library'), {
             orientation: 'horizontal',
             onMove: (direction) => {
                 if (direction === 'up') {
@@ -3511,7 +3665,7 @@ class LibraryPage extends Page {
                     </div>
                 </div>
 
-                <div class="modal-actions">
+                <div class="modal-actions-library">
                     <button class="modal-action-btn clear" id="btn-filter-clear" data-i18n="ButtonClear">${i18n.t('ButtonClear')}</button>
                     <button class="modal-action-btn close" id="btn-filter-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
                     <button class="modal-action-btn apply" id="btn-filter-apply" data-i18n="ButtonApply">${i18n.t('ButtonApply')}</button>
@@ -3793,7 +3947,7 @@ class LibraryPage extends Page {
             scroll: true // Enable automatic scrolling for TV navigation
         });
 
-        this.registerFocusSection('filter-actions', overlay.querySelector('.modal-actions'), {
+        this.registerFocusSection('filter-actions', overlay.querySelector('.modal-actions-library'), {
             orientation: 'horizontal',
             onMove: (direction) => {
                 if (direction === 'up') {

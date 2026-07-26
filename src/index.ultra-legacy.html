@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="Litefin - Native Jellyfin Client for Samsung Tizen TVs">
     <title>Litefin</title>
-    <link rel="icon" type="image/png" href="assets/icon.png">
-    <link rel="apple-touch-icon" href="assets/icon.png">
+    <link rel="icon" type="image/png" href="assets/icon-80.png">
+    <link rel="apple-touch-icon" href="assets/icon-80.png">
     <!--
         WebOS SDK — must load before any app JS so that window.webOS and
         window.webOS.service are available when ApiClient runs its Luna check.
@@ -65,19 +65,6 @@
                         while (--i >= 0 && matches.item(i) !== this) {}
                         return i > -1;
                     };
-            }
-
-            // ----------------------------------------------------------------
-            // Element.remove() — removes the element from the DOM.
-            // Added in Chrome 23 (should be fine), but some old WebOS WebKit
-            // builds are missing it. Safe no-op if parentNode is null.
-            // ----------------------------------------------------------------
-            if (typeof Element !== 'undefined' && !Element.prototype.remove) {
-                Element.prototype.remove = function() {
-                    if (this.parentNode) {
-                        this.parentNode.removeChild(this);
-                    }
-                };
             }
 
             // ----------------------------------------------------------------
@@ -282,20 +269,33 @@
         // Immediately restore theme to prevent flash of wrong color
         (function() {
             try {
+                // Read user's chosen theme mode from local storage
                 var savedTheme = localStorage.getItem('litefin:theme') || 'ambient';
+                
+                // Stamp the theme mode tag on documentElement for CSS styling
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
-                // Theme variables for early loading (must match CSS)
+                // Theme variables for early loading (must match CSS definitions)
+                // These provide standard values before Webpack bundle is loaded.
                 var themes = {
-                    'ambient': { accent: '#af52de', bg: '#0a0b0c', text: '#ffffff', textSec: '#999999' },
-                    'tinted': { accent: '#af52de', bg: '#0f0a14', text: '#ffffff', textSec: '#999999' },
-                    'black': { accent: '#af52de', bg: '#000000', text: '#ffffff', textSec: '#999999' },
-                    'classic-dark': { accent: '#af52de', bg: '#101010', text: '#ffffff', textSec: '#999999' },
+                    'ambient': { accent: '#af52de', bg: '#0a0b0c', text: '#ffffff', textSec: '#ffffffcc' },
+                    'tinted': { accent: '#af52de', bg: '#0f0a14', text: '#ffffff', textSec: '#ffffffcc' },
+                    'black': { accent: '#af52de', bg: '#000000', text: '#ffffff', textSec: '#ffffffcc' },
+                    'classic-dark': { accent: '#af52de', bg: '#101010', text: '#ffffff', textSec: '#ffffffcc' },
                     'classic-light': { accent: '#af52de', bg: '#f5f5f5', text: '#101010', textSec: '#666666' }
                 };
 
+                // Fall back to ambient if savedTheme is not found in the dictionary
                 var currentTheme = themes[savedTheme] || themes['ambient'];
-                document.documentElement.style.setProperty('--jf-accent', currentTheme.accent);
+                
+                // Read user's custom accent color from local storage
+                var savedThemeColor = localStorage.getItem('litefin:themeColor');
+                
+                // Fall back to the default theme accent color if the saved one is invalid
+                var accentColor = (savedThemeColor && savedThemeColor.indexOf('#') === 0) ? savedThemeColor : currentTheme.accent;
+
+                // Stamp the critical variables directly onto root stylesheet
+                document.documentElement.style.setProperty('--jf-accent', accentColor);
                 document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
                 document.documentElement.style.setProperty('--jf-text-primary', currentTheme.text);
                 document.documentElement.style.setProperty('--jf-text-secondary', currentTheme.textSec);

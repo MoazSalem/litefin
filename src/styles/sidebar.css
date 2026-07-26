@@ -55,6 +55,37 @@
     box-shadow: none !important;
 }
 
+/* Semi-transparent collapsed sidebar with glassmorphic blur */
+.sidebar.semi-transparent-collapsed:not(.expanded):not(:hover) {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+/* Transparent expanded sidebar */
+.sidebar.transparent-expanded.expanded,
+.sidebar.transparent-expanded:hover {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+/* Semi-transparent expanded sidebar */
+.sidebar.semi-transparent-expanded.expanded,
+.sidebar.semi-transparent-expanded:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+/* Black collapsed sidebar */
+.sidebar.black-collapsed:not(.expanded):not(:hover) {
+    background: #000000 !important;
+}
+
+/* Black expanded sidebar */
+.sidebar.black-expanded.expanded,
+.sidebar.black-expanded:hover {
+    background: #000000 !important;
+}
+
 /* Fully hidden state */
 .sidebar.hidden {
     -webkit-transform: translate3d(-100%, 0, 0);
@@ -66,6 +97,82 @@
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
     /* Shift to reveal full sidebar */
+}
+
+body.sidebar-mode-collapsed .sidebar.expanded,
+body.sidebar-mode-collapsed .sidebar:hover {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
+    background: #000000 !important;
+}
+
+/* Ambient Theme Specific Overrides for Always Collapsed Mode */
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar:hover {
+    background: transparent !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
+    background: transparent !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
+    background: #000000 !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.expanded .logo-text,
+body.sidebar-mode-collapsed .sidebar:hover .logo-text,
+body.sidebar-mode-collapsed .sidebar.expanded .item-text,
+body.sidebar-mode-collapsed .sidebar:hover .item-text {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Ensure focused item text/icon uses high-contrast text color when focused in collapsed state */
+body.sidebar-mode-collapsed .sidebar-item.focused,
+body.sidebar-mode-collapsed .sidebar-item:focus {
+    color: var(--jf-primary-btn-color) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar .logo-icon,
+body.sidebar-mode-collapsed .sidebar .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+/* Rounded square focus indicator overrides for Always Collapsed mode */
+body.sidebar-mode-collapsed .sidebar-focus-indicator {
+    width: 56px !important;
+    height: 56px !important;
+    left: 272px !important;
+    margin-top: 8px !important;
+    border-radius: 14px !important;
 }
 
 /* Instant Mode: Remove all transitions when disabled in settings */
@@ -249,7 +356,8 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
 }
 
 .sidebar-item:focus,
-.sidebar-item.focused{
+.sidebar.expanded .sidebar-item.focused,
+.sidebar:hover .sidebar-item.focused {
     background: transparent;
     color: var(--jf-primary-btn-color);
 }
@@ -315,7 +423,8 @@ html[data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus
 .sidebar.expanded .sidebar-item.active.focused,
 .sidebar:hover .sidebar-item.active:focus,
 .sidebar:hover .sidebar-item.active.focused,
-.sidebar-item.focused {
+.sidebar.expanded .sidebar-item.focused,
+.sidebar:hover .sidebar-item.focused {
     color: var(--jf-primary-btn-color) !important;
     transform: none;
     will-change: unset;
@@ -323,9 +432,11 @@ html[data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus
 
 /* Update icon background to match item state when focused */
 html[data-sidebar-selected-color] .sidebar-item:focus .item-icon,
-html[data-sidebar-selected-color] .sidebar-item.focused .item-icon,
+html[data-sidebar-selected-color] .sidebar.expanded .sidebar-item.focused .item-icon,
+html[data-sidebar-selected-color] .sidebar:hover .sidebar-item.focused .item-icon,
 .sidebar-item:focus .item-icon,
-.sidebar-item.focused .item-icon {
+.sidebar.expanded .sidebar-item.focused .item-icon,
+.sidebar:hover .sidebar-item.focused .item-icon {
     background: transparent; /* Indicator handles the background */
     color: inherit !important;
 }
@@ -425,14 +536,16 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 }
 
 .sidebar-item.active .item-icon .icon-outline,
-.sidebar-item.focused .item-icon .icon-outline,
+.sidebar.expanded .sidebar-item.focused .item-icon .icon-outline,
+.sidebar:hover .sidebar-item.focused .item-icon .icon-outline,
 .sidebar-item:focus .item-icon .icon-outline,
 .sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-outline {
     display: none;
 }
 
 .sidebar-item.active .item-icon .icon-filled,
-.sidebar-item.focused .item-icon .icon-filled,
+.sidebar.expanded .sidebar-item.focused .item-icon .icon-filled,
+.sidebar:hover .sidebar-item.focused .item-icon .icon-filled,
 .sidebar-item:focus .item-icon .icon-filled,
 .sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-filled {
     display: block;
@@ -452,7 +565,8 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 }
 
 .sidebar-item:focus .sidebar-avatar,
-.sidebar-item.focused .sidebar-avatar {
+.sidebar.expanded .sidebar-item.focused .sidebar-avatar,
+.sidebar:hover .sidebar-item.focused .sidebar-avatar {
     border-color: var(--jf-primary-btn-color, #fff);
 }
 
@@ -494,6 +608,14 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+}
+
+.sidebar.align-center .sidebar-content {
+    justify-content: center !important;
+}
+
+.sidebar.align-bottom .sidebar-content {
+    justify-content: flex-end !important;
 }
 
 .sidebar-libraries {
@@ -538,14 +660,11 @@ html[data-layout-tier="ultra-legacy"] .item-text {
        to completely eliminate layout shifting. Spans the full visible 100px width
        of the collapsed sidebar by shifting margins (margin-left: 250px).
     */
-    font-size: 0;
-    color: transparent;
-    padding: 0;
-    height: 0;
-    margin: 22px 0 21px 250px;
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    height: auto;
+    border-top: 1px solid hsla(0, 0%, 100%, .15);
     opacity: 0.6;
     overflow: hidden;
+    visibility: hidden;
 }
 
 .sidebar:not(.expanded):not(:hover):not(.show-lib-icons-collapsed) .sidebar-section-header,

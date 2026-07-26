@@ -1,6 +1,6 @@
 {
     "id": "org.litefin.app",
-    "version": "1.2.32",
+    "version": "1.3.70",
     "vendor": "Litefin",
     "type": "web",
     "main": "index.html",
@@ -8,8 +8,8 @@
     "transparent": false,
     "appDescription": "Native Jellyfin client for WebOS",
     "disableBackHistoryAPI": true,
-    "icon": "icon-80.png",
-    "largeIcon": "icon-130.png",
+    "icon": "assets/icon-80.png",
+    "largeIcon": "assets/icon-130.png",
     "supportGIP": true,
     "bgImage": "assets/splash.png",
     "splashBackground": "assets/splash.png",

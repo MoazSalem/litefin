@@ -8,23 +8,23 @@
 [![GitHub issues](https://img.shields.io/github/issues/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/issues)
 [![Discord Link](https://img.shields.io/discord/1498618592902647818?color=blue&label=discord&logo=discord&style=flat-square)](https://discord.gg/N3VpazBtTx)
 
-![Litefin Banner](./Docs/Previews/banner.png)
+![Litefin Banner](./documentations/previews/banner.png)
 
 Litefin is designed to provide a premium media browsing and playback experience, even on legacy hardware. It features a robust dual-backend player, advanced subtitle support, and a highly optimized UI engine.
 
 ## Documentation
 
-Comprehensive documentation is available in the `Docs` directory:
+Comprehensive documentation is available in the `documentations` directory:
 
-- [**Overview**](./Docs/Overview.md): Project introduction and the 8x build strategy.
-- [**Architecture**](./Docs/Architecture.md): Framework details (EventBus, FocusManager, Plugins).
-- [**Plugins**](./Docs/Plugins.md): How the plugin system works and how to create them.
-- [**Playback**](./Docs/Playback.md): Tizen AVPlay, web-OS adapters, and Subtitle Manager.
-- [**Features**](./Docs/Features.md): Categorized list of all implemented functionality.
-- [**UI & UX**](./Docs/UI_UX.md): Design system, components, and animation principles.
-- [**Screenshots**](./Docs/Screenshots.md): Visual previews of the application.
-- [**Development**](./Docs/Development.md): Build pipeline, variants, and deployment guide.
-- [**Localization**](./Docs/Localization.md) A doc for translation contributions
+- [**Overview**](./documentations/Overview.md): Project introduction and the 8x build strategy.
+- [**Architecture**](./documentations/Architecture.md): Framework details (EventBus, FocusManager, Plugins).
+- [**Plugins**](./documentations/Plugins.md): How the plugin system works and how to create them.
+- [**Playback**](./documentations/Playback.md): Tizen AVPlay, web-OS adapters, and Subtitle Manager.
+- [**Features**](./documentations/Features.md): Categorized list of all implemented functionality.
+- [**UI & UX**](./documentations/UI_UX.md): Design system, components, and animation principles.
+- [**Screenshots**](./documentations/Screenshots.md): Visual previews of the application.
+- [**Development**](./documentations/Development.md): Build pipeline, variants, and deployment guide.
+- [**Localization**](./documentations/Localization.md) A doc for translation contributions
 
 ## Quick Start (Development)
 
@@ -35,7 +35,7 @@ npm install
 # Build the project
 npm run build
 
-# Add your Tizen certificates to the .sign folder
+# For Tizen Only: Add your Tizen certificates to a .sign folder or just use Apps2Samsung
 
 # Build all packages
 npm run package
@@ -45,10 +45,10 @@ npm run package
 
 ### Samsung Tizen TVs
 
-The easiest way to install on a Samsung TV is with the **Jellyfin2Samsung** installer:
+The easiest way to install on a Samsung TV is with the **Apps2Samsung** installer:
 
 1. Download the latest `.wgt` from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
-2. Use [**Jellyfin2Samsung**](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer) to sideload the `.wgt` to your TV.
+2. Use [**Apps2Samsung**](https://github.com/Apps2Samsung/Apps2Samsung) to sideload the `.wgt` to your TV.
 
 ### LG web-OS TVs
 
@@ -70,23 +70,51 @@ If Litefin is useful to you, please consider supporting the development:
 
   <table border="0">
     <tr>
-      <td align="center" width="120">
+     <td align="center" width="160">
+        <a href="https://github.com/Saulimedes">
+          <img src="https://github.com/Saulimedes.png?s=100" width="80" alt="Paul Becker" />
+          <br />
+          <b>Paul Becker</b>
+        </a>
+      </td>
+      <td align="center" width="160">
+        <a href="https://github.com/meric426">
+          <img src="https://github.com/meric426.png?s=100" width="80" alt="Martin Ericson" />
+          <br />
+          <b>Martin Ericson</b>
+        </a>
+      </td>
+      <td align="center" width="160">
         <a href="https://github.com/DatAres37">
           <img src="https://github.com/DatAres37.png?s=100" width="80" alt="DatAres37" />
-          <br />
           <br />
           <b>DatAres37</b>
         </a>
       </td>
-      <td align="center" width="120">
+      <td align="center" width="160">
         <a href="https://github.com/danitesler">
           <img src="https://github.com/danitesler.png?s=100" width="80" alt="Dani Tesler" />
-          <br />
           <br />
           <b>Dani Tesler</b>
         </a>
       </td>
-      </tr>
+       </tr>
+    <tr>
+      <td align="center" width="160">
+        <a href="https://github.com/witks">
+          <img src="https://github.com/witks.png?s=100" width="80" alt="witks" />
+          <br />
+          <b>witek</b>
+        </a>
+      </td>
+       <td align="center" width="160">
+        <a href="https://github.com/h3xler">
+          <img src="https://github.com/h3xler.png?s=100" width="80" alt="h3xler" />
+          <br />
+          <b>h3xler</b>
+        </a>
+      </td>
+     </tr>
     
   </table>
 

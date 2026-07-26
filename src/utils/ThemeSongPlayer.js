@@ -3,7 +3,7 @@
  * Litefin Tizen - Background Theme Song Player
  * ============================================================================
  * Optimized HTML5 background audio controller singleton.
- * Orchestrates premium, Apple-style smooth volumetric fades on TV systems,
+ * Orchestrates premium, smooth volumetric fades on TV systems,
  * ensuring hardware decoders are cleanly initialized and released.
  * ============================================================================
  */
@@ -44,7 +44,6 @@ class ThemeSongPlayer {
         // ====================================================================
         // Playback Conflict Preventer
         // ====================================================================
-        // Under Apple's HIG principles, media experiences should be seamless.
         // We listen to the global application EventBus for any 'player:play' events.
         // As soon as video or trailer playback begins, we instantly silence the
         // background theme music to avoid conflicting overlapping audio tracks.
@@ -227,18 +226,17 @@ class ThemeSongPlayer {
 
     /**
      * Interpolates volume from 0 to the user-configured target volume level
-     * for a premium, Apple-style smooth entry transition.
      */
     _fadeIn() {
         // Read the user's custom volume preference from local storage.
-        // Under Apple's HIG principles, sound levels should default to a comfortable,
+        // sound levels should default to a comfortable,
         // ambient level (30% or 0.3) rather than blasting at 100%.
         const targetVolume = parseFloat(storage.getItem('pref:themeSongVolume') || '0.3');
-        
+
         // Calculate the total number of updates needed to complete the transition
         // based on the configured step size (e.g. 1500ms / 30ms = 50 steps).
         const steps = this.FADE_IN_DURATION / this.FADE_INTERVAL_STEP;
-        
+
         // Compute the amount of volume to add during each step interval
         const volumeIncrement = targetVolume / steps;
         let currentStep = 0;
@@ -251,7 +249,7 @@ class ThemeSongPlayer {
             }
 
             currentStep++;
-            
+
             // Slowly increase the volume level up to the target cap
             const nextVolume = Math.min(targetVolume, currentStep * volumeIncrement);
             this._audio.volume = nextVolume;

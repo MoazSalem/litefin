@@ -7,10 +7,6 @@
  * The buttons sit inside the OSD .osd-overlays container (row -1),
  * alongside Playback Info and Subtitle Offset panels.
  * They inherit .osd-btn focus/hover states from the existing OSD stylesheet.
- *
- * Design: Apple Human Interface Guidelines inspired. Minimal, high-contrast,
- * smooth spring-like transitions. Bottom-right corner placement, floating
- * slightly above the control bar.
  * ============================================================================
  */
 

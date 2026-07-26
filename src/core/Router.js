@@ -253,6 +253,18 @@ class Router {
                     this._currentPage.destroy();
                 }
 
+                // Detect browser back/forward navigation — restore state from history
+                // This handles cases where hashchange fires without navigate() or back()
+                // being called (e.g., browser back button, sidebar click on a seen path).
+                if (!this._isBackNavigation) {
+                    const existingIndex = this._history.findIndex((entry) => entry.path === fullPath);
+                    if (existingIndex !== -1 && existingIndex < this._history.length - 1) {
+                        this._isBackNavigation = true;
+                        this._pendingRestoreState = this._history[existingIndex].state;
+                        this._history = this._history.slice(0, existingIndex + 1);
+                    }
+                }
+
                 // Add to history as an object with path and state
                 // Skip if: back navigation and the path is already at the top of the stack (we just returned there)
                 const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;

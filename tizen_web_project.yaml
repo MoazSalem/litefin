@@ -28,7 +28,7 @@ trust_anchor: []
 # list of files in web project (.html,.css etc) and resources
 files:
   - css/style.css
-  - icon.png
+  - assets/icon-80.png
   - images/tizen_32.png
   - index.html
   - js/main.js

@@ -18,7 +18,7 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 
 - **Platform**: [e.g. Tizen, webOS, Web]
 - **Device Model**: [e.g. UN65KU6300, OLED55C1PUB]
-- **Build Variant Tested**: [e.g. Normal, Legacy, Ultra Legacy, ES6]
+- **Build Variant Tested**: [e.g. Normal, Legacy, Ultra Legacy, Modern]
 
 ## Checklist
 

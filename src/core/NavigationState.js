@@ -16,6 +16,7 @@ import { focusManager } from '../ui/FocusManager.js';
 // ============================================================================
 import { scrollController } from '../ui/ScrollController.js';
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('NavigationState');
 
@@ -35,8 +36,13 @@ class NavigationState {
         // Find the main scroll container
         const scrollContainer = this._getScrollContainer(pageInstance);
 
-        let focusedEl = focusManager.getFocused();
-        let sectionName = focusManager.getSectionForElement(focusedEl);
+        let focusedEl = null;
+        let sectionName = null;
+
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            focusedEl = focusManager.getFocused();
+            sectionName = focusManager.getSectionForElement(focusedEl);
+        }
 
         // If the user is navigating via the sidebar, their focus is currently on the sidebar block.
         // We actually want to capture what they were focused on IN THE PAGE before they moved
@@ -140,6 +146,8 @@ class NavigationState {
      * @private
      */
     _doRestoreScrollFocus(pageInstance, state) {
+        if (storage.getItem('pref:disableFocusRestore') === 'true') return;
+
         if (this._debug) {
             log.debug('Executing scroll/focus restoration');
         }

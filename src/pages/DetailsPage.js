@@ -22,6 +22,7 @@ import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
+import AddToTargetModal from '../components/AddToTargetModal.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -35,7 +36,7 @@ import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
-import { detailsIcons } from '../utils/Icons.js';
+import { detailsIcons, settingsIcons } from '../utils/Icons.js';
 
 const log = logger.create('DetailsPage');
 
@@ -59,6 +60,12 @@ class DetailsPage extends Page {
 
         // Mark as async page for Navigation State
         this._isAsyncPage = true;
+
+        // Deferred loading flag: when set, the loading overlay stays visible
+        // until focus restoration completes, preventing a visible "focus jump"
+        // on back-navigation where the page content appears and then focus
+        // snaps to a restored card.
+        this._deferredLoading = false;
     }
 
     /**
@@ -73,8 +80,18 @@ class DetailsPage extends Page {
     }
 
     render() {
+        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        let layoutClass = 'layout-poster-left';
+        if (detailsLayout === 'posterRight') {
+            layoutClass = 'layout-poster-right';
+        } else if (detailsLayout === 'backdropMinimal') {
+            layoutClass = 'layout-backdrop-minimal';
+        } else if (detailsLayout === 'backdropLeft') {
+            layoutClass = 'layout-backdrop-left';
+        }
+
         return `
-            <div class="page details-page">
+            <div class="page details-page ${layoutClass}">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="backdrop">
                     <div class="backdrop-gradient"></div>
@@ -222,6 +239,12 @@ class DetailsPage extends Page {
                         <div class="guest-stars-row row-items" id="guest-stars-row"></div>
                     </section>
                     
+                    <!-- Collections this item belongs to -->
+                    <section class="details-item-collections media-row hidden" id="item-collections-section">
+                        <h2 class="row-title" data-i18n="Collections">Collections</h2>
+                        <div class="item-collections-row row-items" id="item-collections-row"></div>
+                    </section>
+
                     <!-- Similar items -->
                     <section class="details-similar media-row hidden" id="similar-section">
                         <h2 class="row-title" data-i18n="HeaderMoreLikeThis">More Like This</h2>
@@ -290,9 +313,7 @@ class DetailsPage extends Page {
         // ====================================================================
         // Details Page Primary Actions Focus Registration
         // ====================================================================
-        // We register the actions section using a 'grid' orientation instead
-        // of 'horizontal'. Under Apple's Human Interface Guidelines (HIG) and TV
-        // navigation best practices, controls must be predictable and reachable.
+        // We register the actions section using a 'grid' orientation,
         // On smaller displays or layouts with wrapped buttons, a strict horizontal
         // orientation forces users to navigate linearly and skips wrapped elements
         // when pressing vertical keys (UP/DOWN).
@@ -411,18 +432,14 @@ class DetailsPage extends Page {
 
         try {
             // ────────────────────────────────────────────────────────────────────────
-            // 2. Fetch Base Item Details
+            // 1. Fetch Base Item Details (blocking — page needs this to render)
             // ────────────────────────────────────────────────────────────────────────
-            // Backward-compatible custom metadata selector options.
-            // Check the new pref:richMetadataStyle select preference, fallback cleanly to standard hideRichMetadata.
-            // Under HIG Guidelines, this guarantees lightweight layouts on spatial networks.
             const richMetadataStyle =
                 storage.getItem('pref:richMetadataStyle') ||
                 (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
             const hideRich = richMetadataStyle === 'none';
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
-            // Build dynamic fields list based on user preferences to save bandwidth/CPU
             const requestedFields = [
                 'MediaStreams',
                 'MediaSources',
@@ -442,21 +459,13 @@ class DetailsPage extends Page {
             ];
 
             if (!hideRich) {
-                // Genres are always loaded if not hidden.
                 requestedFields.push('Genres', 'GenreItems');
-
-                // Studios are required for 'all' or 'genres-studios-writers'.
                 if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
                     requestedFields.push('Studios');
                 }
-
-                // Tags are only required when showing full metadata.
                 if (richMetadataStyle === 'all') {
                     requestedFields.push('Tags');
                 }
-
-                // Directors and Writers come from the 'People' collection in Jellyfin.
-                // If they are requested via the rich metadata dropdown, ensure we include 'People' even if the cast section is hidden.
                 if (
                     richMetadataStyle === 'all' ||
                     richMetadataStyle === 'genres-studios-writers' ||
@@ -467,77 +476,97 @@ class DetailsPage extends Page {
             }
 
             if (!hideCast) {
-                // Ensure People is loaded for cast display (avoid duplicates using unique tracking or simple array inclusion check)
                 if (!requestedFields.includes('People')) {
                     requestedFields.push('People');
                 }
             }
 
+            const userPromise = state.get('user:data') ? Promise.resolve(state.get('user:data')) : api.getCurrentUser();
+
             const item = await api.getItem(this._itemId, {
-                // We request comprehensive fields to avoid redundant refetching.
-                // CanDelete is essential for implementing the 'Delete Media' feature.
-                // MediaSources must be explicitly requested to guarantee MediaStreams logic works reliably.
-                // We also request Photo EXIF fields so they are available immediately.
                 Fields: requestedFields.join(',')
             });
             this._item = item;
-            //log.debug('Item loaded:', item);
 
-            // ── Restore persisted version selection ─────────────────────────────────
-            // We key by itemId so each item independently remembers its last version.
-            // Only restore if the saved ID still exists in the current MediaSources list
-            // (the server may have removed a version since the last visit).
-            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
-            if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
-                this._selectedMediaSourceId = savedSourceId;
-                log.info('Restored persisted media source:', savedSourceId);
-            } else {
-                // Reset — either first visit or the saved source no longer exists
-                this._selectedMediaSourceId = null;
+            // Cache Series item for reuse across child Season/Episode detail pages
+            if (item.Type === 'Series') {
+                state.set(`details:series:${item.Id}`, item);
             }
 
-            // Reset stream selections on every fresh item load (they are version-specific)
-            this._selectedAudioIndex = undefined;
-            this._selectedSubtitleIndex = undefined;
-
-            // ────────────────────────────────────────────────────────────────────────
-            // 3. Fetch User and Library Context
-            // ────────────────────────────────────────────────────────────────────────
-            this._currentUser = await api.getCurrentUser();
-            log.debug('Current user loaded:', this._currentUser);
-
-            // 2. Render all text content immediately (Metadata, Hero Info)
+            // Render all text content immediately — only needs this._item
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
-
-            // Show/hide the trailer button based on what the item exposes.
-            // We can do this immediately — both LocalTrailerCount and RemoteTrailers
-            // are present in the initial getItem response without extra API calls.
             this._updateTrailerButton();
 
-            // 3. Fire image loading in the background (fire-and-forget).
-            // The poster and backdrop are not used for layout — they are decorative
-            // overlays. We do NOT await them so the content rows are never held up
-            // by a slow image download or the 800ms safety timeout.
-            this._loadImages(); // non-blocking
-
-            // 4. Parallelize loading of all major content (rows, similar items)
-            const loadTasks = [this._loadSecondaryContent()];
-
-            if (this._item.Type !== 'Season') {
-                loadTasks.push(this._loadSimilar());
+            // Restore persisted version selection
+            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
+            if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
+                this._selectedMediaSourceId = savedSourceId;
+            } else {
+                this._selectedMediaSourceId = null;
             }
 
-            await Promise.all(loadTasks);
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
 
-            // Trigger theme song background audio if user has activated it in display settings
+            // Await user data (likely already resolved from state cache)
+            this._currentUser = await userPromise;
+
+            // ────────────────────────────────────────────────────────────────────────
+            // 2. Fire background images (non-blocking)
+            // ────────────────────────────────────────────────────────────────────────
+            this._loadImages();
+
+            // ────────────────────────────────────────────────────────────────────────
+            // 3. Load logo — await for backdrop layouts (where logo is the primary
+            //    title), fire-and-forget for poster layouts (text title is sufficient)
+            // ────────────────────────────────────────────────────────────────────────
+            const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+            const isBackdropLayout = detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft';
+            if (isBackdropLayout) {
+                await this._loadLogoAsync();
+            } else {
+                this._loadLogo();
+            }
+
+            // ────────────────────────────────────────────────────────────────────────
+            // 4. Hide loading — main text content is visible, images/logo loading in bg
+            //    But if we have a pending focus target to restore (back-navigation),
+            //    defer hiding the overlay until focus lands on the target row.
+            //    This prevents a visible "focus jump" where the page content appears
+            //    and then focus snaps to a restored card a frame later.
+            // ────────────────────────────────────────────────────────────────────────
+            const focusStateKey = `details:lastFocusedItem:${this._itemId}`;
+            const hasFocusTarget = this._pendingNavState || state.get(focusStateKey);
+            if (hasFocusTarget) {
+                this._deferredLoading = true;
+            } else {
+                this.setLoading(false);
+            }
+
+            // ────────────────────────────────────────────────────────────────────────
+            // 5. Load secondary content in visual order (top rows first, bottom rows last)
+            // ────────────────────────────────────────────────────────────────────────
+            // 5a. Primary rows first (seasons, episodes, cast, special features)
+            await this._loadSecondaryContent();
+
+            // 4b. Bottom-of-page rows after (similar items, collections)
+            if (this._item.Type !== 'Season') {
+                await this._loadSimilar();
+            }
+            if (this._item.Type === 'Movie' || this._item.Type === 'Series') {
+                await this._loadItemCollections();
+            }
+
+            // Trigger theme song background audio if user has activated it
             if (storage.getItem('pref:playThemeSongs') === 'true') {
                 void this._playThemeSong();
             }
 
-            // 4. Rebuild navigation chain after everything is in the DOM
-            // We use requestAnimationFrame to ensure the browser has parsed the new HTML
+            // ────────────────────────────────────────────────────────────────────────
+            // 5. Post-render tasks (navigation chain, focus restoration)
+            // ────────────────────────────────────────────────────────────────────────
             await new Promise((resolve) => {
                 requestAnimationFrame(() => {
                     this._rebuildNavigationChain();
@@ -545,22 +574,24 @@ class DetailsPage extends Page {
                 });
             });
 
-            // FIX: Ensure Focus Manager knows about the Resume button if it appeared
             focusManager.invalidateCache('details-actions');
 
-            // 5. Restore custom scroll/focus FIRST before hiding the loading overlay
-            // If we have a pending navigation state, it will be handled by restoreScrollFocusWhenReady()
-            // which was called in onInit. If not, we handle initial landing here.
             requestAnimationFrame(() => {
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
-                const lastFocusedObj = state.get(stateKey);
+                let lastFocusedObj = null;
+
+                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                    lastFocusedObj = state.get(stateKey);
+                } else {
+                    state.delete(stateKey);
+                }
+
                 let restoredFocus = false;
 
                 if (lastFocusedObj) {
                     const targetId = lastFocusedObj.itemId;
                     const sectionId = lastFocusedObj.sectionId;
 
-                    // Support virtual rows (where elements might not be in DOM yet) by finding index
                     const virtualRow = this._virtualRows ? this._virtualRows[sectionId] : null;
 
                     if (virtualRow) {
@@ -576,7 +607,6 @@ class DetailsPage extends Page {
                             }
                         }
                     } else {
-                        // Standard fallback for non-virtual row sections (like similar items if they aren't virtual)
                         const sectionConfig = focusManager.getSectionConfig(sectionId);
                         const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
                         const savedCard = sectionContainer.querySelector(
@@ -594,7 +624,6 @@ class DetailsPage extends Page {
 
                 if (!restoredFocus && !this._pendingNavState) {
                     if (this._item.UserData?.PlaybackPositionTicks > 0) {
-                        // If we have resume progress (Movie/Episode), FORCE focus to the resume button
                         const resumeBtn = this.$('.resume-btn');
                         if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
                             log.info('Forcing focus to Resume button');
@@ -603,10 +632,14 @@ class DetailsPage extends Page {
                     }
                 }
 
-                // 6. NOW hide loading - page is scrolled and focused correctly
-                requestAnimationFrame(() => {
+                // If loading was deferred for focus restoration, reveal the page now
+                // that focus has been placed (or attempted). This prevents the visible
+                // "focus jump" when the page content is revealed and focus snaps to a
+                // restored card in a later frame.
+                if (this._deferredLoading) {
+                    this._deferredLoading = false;
                     this.setLoading(false);
-                });
+                }
             });
         } catch (error) {
             log.error('Failed to load', error);
@@ -643,171 +676,137 @@ class DetailsPage extends Page {
     }
 
     _loadImages() {
-        return new Promise((resolve) => {
-            const item = this._item;
+        const item = this._item;
 
-            // Guard: Promise.resolve() is idempotent, but we track this
-            // to avoid logging a spurious "timed out" warning after the
-            // image has already loaded and resolved the promise.
-            let resolved = false;
+        // Poster
+        const posterContainer = this.$('#poster');
+        posterContainer.innerHTML = '';
 
-            // Safety timeout: don't block page interaction forever if the
-            // poster is slow. 800ms is sufficient — poster loading is fire-and-forget
-            // now, so we can be more aggressive without impacting page readiness.
-            const timeout = setTimeout(() => {
-                if (!resolved) {
-                    log.warn('Poster load timed out, showing content');
-                    resolved = true;
-                    resolve();
-                }
-            }, 800);
+        // Determine Aspect Ratio Type
+        let posterType = 'poster';
+        if (item.Type === 'Episode') posterType = 'landscape';
+        if (
+            item.Type === 'MusicAlbum' ||
+            item.Type === 'MusicArtist' ||
+            item.Type === 'Audio' ||
+            item.Type === 'TvChannel'
+        )
+            posterType = 'square';
 
-            const onPosterReady = () => {
-                if (!resolved) {
-                    resolved = true;
-                    clearTimeout(timeout);
-                    resolve();
-                }
-            };
+        // Apply class for CSS aspect ratio
+        posterContainer.classList.remove('landscape', 'square');
+        if (posterType !== 'poster') {
+            posterContainer.classList.add(posterType);
+        }
 
-            // Poster
-            const posterContainer = this.$('#poster');
-            posterContainer.innerHTML = '';
-
-            // Determine Aspect Ratio Type
-            let posterType = 'poster';
-            if (item.Type === 'Episode') posterType = 'landscape';
-            if (
-                item.Type === 'MusicAlbum' ||
-                item.Type === 'MusicArtist' ||
-                item.Type === 'Audio' ||
-                item.Type === 'TvChannel'
-            )
-                posterType = 'square';
-
-            // Apply class for CSS aspect ratio
-            posterContainer.classList.remove('landscape', 'square');
-            if (posterType !== 'poster') {
-                posterContainer.classList.add(posterType);
-            }
-
-            if (item.ImageTags && item.ImageTags.Primary) {
-                const params = imageService.getParams('details-poster');
-                const posterUrl = api.getImageUrl(item.Id, 'Primary', {
-                    maxWidth: params.maxWidth,
-                    quality: params.quality
-                });
-
-                // Resolve Poster BlurHash
-                const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
-                let posterBlurHash = '';
-                if (!isBlurHashDisabled && item.ImageBlurHashes?.Primary) {
-                    const keys = Object.keys(item.ImageBlurHashes.Primary);
-                    if (keys.length > 0) {
-                        posterBlurHash = item.ImageBlurHashes.Primary[keys[0]];
-                    }
-                }
-
-                // Render dynamic BlurHash canvas placeholder
-                let posterCanvas = null;
-                if (posterBlurHash) {
-                    posterCanvas = document.createElement('canvas');
-                    posterCanvas.className = 'blurhash-canvas poster-blurhash';
-                    posterCanvas.style.position = 'absolute';
-                    posterCanvas.style.top = '0';
-                    posterCanvas.style.left = '0';
-                    posterCanvas.style.width = '100%';
-                    posterCanvas.style.height = '100%';
-                    posterCanvas.style.objectFit = 'cover';
-                    posterCanvas.style.zIndex = '0';
-                    posterCanvas.style.transition = 'opacity 250ms ease-out';
-                    posterCanvas.style.pointerEvents = 'none';
-                    posterCanvas.style.opacity = '1';
-
-                    posterContainer.appendChild(posterCanvas);
-
-                    // Decode at a lightweight size asynchronously
-                    import('../utils/BlurHashDecoder.js')
-                        .then(({ default: BlurHashDecoder }) => {
-                            const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
-                            if (pixels && posterCanvas) {
-                                posterCanvas.width = 32;
-                                posterCanvas.height = 48;
-                                const ctx = posterCanvas.getContext('2d');
-                                const imageData = ctx.createImageData(32, 48);
-                                imageData.data.set(pixels);
-                                ctx.putImageData(imageData, 0, 0);
-                            }
-                        })
-                        .catch((err) => log.error('Failed to decode poster blurhash', err));
-                }
-
-                const img = new Image();
-                img.onload = () => {
-                    img.classList.add('loaded');
-                    // Fade out and remove canvas when image loads
-                    if (posterCanvas) {
-                        posterCanvas.style.opacity = '0';
-                        setTimeout(() => {
-                            if (posterCanvas && posterCanvas.parentNode) {
-                                posterCanvas.parentNode.removeChild(posterCanvas);
-                            }
-                        }, 250);
-                    }
-                    onPosterReady();
-                };
-                img.onerror = () => {
-                    onPosterReady();
-                };
-                img.src = posterUrl;
-                img.alt = item.Name;
-                posterContainer.appendChild(img);
-            } else {
-                // No primary image, show gradient fallback
-                const isLandscape = posterType === 'landscape';
-                posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
-                onPosterReady();
-            }
-
-            // Backdrop (Fire and forget, via Manager)
-            const params = imageService.getParams('details-backdrop');
-            const backdropUrl = BackdropManager.getBackdropUrl(item, {
+        if (item.ImageTags && item.ImageTags.Primary) {
+            const params = imageService.getParams('details-poster');
+            const posterUrl = api.getImageUrl(item.Id, 'Primary', {
                 maxWidth: params.maxWidth,
                 quality: params.quality
             });
 
-            // Resolve Backdrop BlurHash
-            let backdropBlurHash = '';
-            if (item.ImageBlurHashes?.Backdrop) {
-                const keys = Object.keys(item.ImageBlurHashes.Backdrop);
+            // Resolve Poster BlurHash
+            const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+            let posterBlurHash = '';
+            if (!isBlurHashDisabled && item.ImageBlurHashes?.Primary) {
+                const keys = Object.keys(item.ImageBlurHashes.Primary);
                 if (keys.length > 0) {
-                    backdropBlurHash = item.ImageBlurHashes.Backdrop[keys[0]];
+                    posterBlurHash = item.ImageBlurHashes.Primary[keys[0]];
                 }
             }
 
-            if (backdropUrl) {
-                BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl, backdropBlurHash);
+            // Render dynamic BlurHash canvas placeholder
+            let posterCanvas = null;
+            if (posterBlurHash) {
+                posterCanvas = document.createElement('canvas');
+                posterCanvas.className = 'blurhash-canvas poster-blurhash';
+                posterCanvas.style.position = 'absolute';
+                posterCanvas.style.top = '0';
+                posterCanvas.style.left = '0';
+                posterCanvas.style.width = '100%';
+
+                posterContainer.appendChild(posterCanvas);
+
+                // Decode at a lightweight size asynchronously
+                import('../utils/BlurHashDecoder.js')
+                    .then(({ default: BlurHashDecoder }) => {
+                        const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
+                        if (pixels && posterCanvas) {
+                            posterCanvas.width = 32;
+                            posterCanvas.height = 48;
+                            const ctx = posterCanvas.getContext('2d');
+                            const imageData = ctx.createImageData(32, 48);
+                            imageData.data.set(pixels);
+                            ctx.putImageData(imageData, 0, 0);
+                        }
+                    })
+                    .catch((err) => log.error('Failed to decode poster blurhash', err));
             }
+
+            const img = new Image();
+            img.onload = () => {
+                img.classList.add('loaded');
+                // Fade out and remove canvas when image loads
+                if (posterCanvas) {
+                    posterCanvas.style.opacity = '0';
+                    setTimeout(() => {
+                        if (posterCanvas && posterCanvas.parentNode) {
+                            posterCanvas.parentNode.removeChild(posterCanvas);
+                        }
+                    }, 250);
+                }
+            };
+            img.src = posterUrl;
+            img.alt = item.Name;
+            posterContainer.appendChild(img);
+        } else {
+            // No primary image, show gradient fallback
+            const isLandscape = posterType === 'landscape';
+            posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
+        }
+
+        // Backdrop (Fire and forget, via Manager)
+        const params = imageService.getParams('details-backdrop');
+        const backdropUrl = BackdropManager.getBackdropUrl(item, {
+            maxWidth: params.maxWidth,
+            quality: params.quality
         });
+
+        // Resolve Backdrop BlurHash
+        let backdropBlurHash = '';
+        if (item.ImageBlurHashes?.Backdrop) {
+            const keys = Object.keys(item.ImageBlurHashes.Backdrop);
+            if (keys.length > 0) {
+                backdropBlurHash = item.ImageBlurHashes.Backdrop[keys[0]];
+            }
+        }
+
+        if (backdropUrl) {
+            BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl, backdropBlurHash);
+        }
     }
 
     async _loadSecondaryContent() {
         // Load additional data based on type
         if (this._item.Type === 'Series') {
-            await Promise.all([this._loadNextUp(), this._loadSeasons()]);
+            // Next Up is above Seasons visually
+            await this._loadNextUp();
+            await this._loadSeasons();
         } else if (this._item.Type === 'Season') {
+            this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
         } else if (this._item.Type === 'Episode') {
+            this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
+            // More from Season is above Guest Stars visually
+            await this._loadMoreFromSeason();
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
-            const loads = [this._loadMoreFromSeason()];
             if (!hideCast) {
-                loads.push(this._loadGuestStars());
+                await this._loadGuestStars();
             } else {
-                // Ensure section is hidden if guest stars are skipped
                 const guestStarsSection = this.$('#guest-stars-section');
                 if (guestStarsSection) guestStarsSection.classList.add('hidden');
             }
-            await Promise.all(loads);
         } else if (this._item.Type === 'BoxSet') {
             await this._loadCollectionItems();
         } else if (this._item.Type === 'MusicAlbum') {
@@ -834,13 +833,6 @@ class DetailsPage extends Page {
 
         // Load Artists (Music/Albums)
         await this._loadArtists();
-
-        // Already loaded via conditional above if MusicAlbum,
-        // but this ensures fallback or shared logic consistency
-        // await this._loadAlbumSongs();
-
-        // Load Logo (non-blocking, fire and forget)
-        this._loadLogo();
     }
 
     async _loadArtists() {
@@ -890,7 +882,7 @@ class DetailsPage extends Page {
                 ParentId: this._itemId,
                 IncludeItemTypes: 'Audio',
                 Recursive: true,
-                Fields: 'PrimaryImageAspectRatio,UserData,RunTimeTicks',
+                Fields: 'UserData,RunTimeTicks',
                 SortBy: 'ParentIndexNumber,IndexNumber,SortName'
             });
 
@@ -963,10 +955,12 @@ class DetailsPage extends Page {
                 // Save focus context so Back navigation returns to the same card
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
                 if (card.dataset.itemId) {
-                    state.set(stateKey, {
-                        itemId: card.dataset.itemId,
-                        sectionId: 'details-playlist-items'
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: 'details-playlist-items'
+                        });
+                    }
                     router.navigate(`/details/${card.dataset.itemId}`);
                 }
             }
@@ -1017,10 +1011,12 @@ class DetailsPage extends Page {
             onClick: (card) => {
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
                 if (card.dataset.itemId) {
-                    state.set(stateKey, {
-                        itemId: card.dataset.itemId,
-                        sectionId: 'details-songs'
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: 'details-songs'
+                        });
+                    }
                     // Start playback directly for songs?
                     // Or navigate to song details?
                     // Jellyfin usually plays. Litefin usually navigates.
@@ -1133,7 +1129,7 @@ class DetailsPage extends Page {
                     ParentId: this._itemId,
                     IncludeItemTypes: 'Movie',
                     Recursive: true,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                    Fields: 'ProductionYear',
                     SortBy: sortBy,
                     SortOrder: 'Ascending',
                     Limit: 100 // Increased limit to capture larger collections
@@ -1142,7 +1138,7 @@ class DetailsPage extends Page {
                     ParentId: this._itemId,
                     IncludeItemTypes: 'Series',
                     Recursive: true,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                    Fields: 'ProductionYear',
                     SortBy: sortBy,
                     SortOrder: 'Ascending',
                     Limit: 100
@@ -1271,16 +1267,20 @@ class DetailsPage extends Page {
                 // to prevent child DetailsPages from consuming parent state
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
                 if (card.dataset.itemId) {
-                    state.set(stateKey, {
-                        itemId: card.dataset.itemId,
-                        sectionId: focusSectionName
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: focusSectionName
+                        });
+                    }
                 } else if (card.dataset.id) {
                     // Fallback for some cards that might use data-id
-                    state.set(stateKey, {
-                        itemId: card.dataset.id,
-                        sectionId: focusSectionName
-                    });
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.id,
+                            sectionId: focusSectionName
+                        });
+                    }
                 }
 
                 if (onClick) {
@@ -1653,30 +1653,83 @@ class DetailsPage extends Page {
     }
 
     _loadLogo() {
+        return this._loadLogoAsync();
+    }
+
+    /**
+     * Load the logo image and return a promise that resolves when the logo
+     * is loaded (or immediately if no logo exists).
+     * @returns {Promise<void>}
+     */
+    _loadLogoAsync() {
         const item = this._item;
-        // Check for Logo using ImageTags.Logo or ParentLogoImageTag
         const logoTag = item.ImageTags?.Logo || item.ParentLogoImageTag;
         const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId || item.SeriesId;
 
-        if (logoItemId && logoTag) {
-            const params = imageService.getParams('details-logo');
-            const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: params.maxWidth,
-                quality: params.quality,
-                tag: logoTag
-            });
-            const img = new Image();
+        if (!logoItemId || !logoTag) return Promise.resolve();
+
+        const params = imageService.getParams('details-logo');
+        let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
+            titleStyle = 'logo-only';
+        }
+        const isLogoOnly = titleStyle === 'logo-only';
+        let baseWidth = isLogoOnly ? 360 : 280;
+        let baseHeight = isLogoOnly ? 140 : 100;
+        if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
+            baseWidth = 540;
+            baseHeight = 220;
+        }
+        const dpr = window.devicePixelRatio || 1;
+
+        const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
+            fillWidth: Math.round(baseWidth * dpr),
+            fillHeight: Math.round(baseHeight * dpr),
+            quality: params.quality,
+            tag: logoTag
+        });
+        const img = new Image();
+        if (item.Type === 'Season' || item.Type === 'Episode') {
+            const targetId = item.SeriesId;
+            if (targetId) {
+                img.classList.add('clickable-logo');
+                img.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    log.info('Logo clicked, navigating to series details:', targetId);
+                    router.navigate(`/details/${targetId}`);
+                };
+            }
+        }
+
+        return new Promise((resolve) => {
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
+                    const aspect = img.naturalWidth / img.naturalHeight || 1;
+                    let maxW = isLogoOnly ? 360 : 280;
+                    let minHeight = isLogoOnly ? 60 : 50;
+                    let maxHeight = isLogoOnly ? 140 : 100;
+                    if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
+                        maxW = 540;
+                        minHeight = 100;
+                        maxHeight = 220;
+                    }
+                    const targetHeight = maxW / aspect;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+
+                    logoContainer.style.height = `${containerHeight}px`;
+
                     logoContainer.innerHTML = '';
                     logoContainer.appendChild(img);
                     img.classList.add('loaded');
                 }
+                resolve();
             };
+            img.onerror = () => resolve();
             img.src = logoUrl;
-            // img.alt = item.Name + " Logo"; // Alt might show if transparent PNG fails?
-        }
+        });
     }
 
     /**
@@ -1754,7 +1807,10 @@ class DetailsPage extends Page {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating && shouldShowScore(item) ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}` : '';
+        const starRating =
+            item.CommunityRating && shouldShowScore(item)
+                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
+                : '';
         const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';
@@ -1791,9 +1847,11 @@ class DetailsPage extends Page {
         } else {
             metaHtml += addedHtml + airedHtml;
         }
-        // Retrieve the user's preferred title display style from localized preferences.
-        // Default style is 'both' (displaying both text title and logo icon).
-        const titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+        let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
+            titleStyle = 'logo-only';
+        }
 
         // Retrieve and check for logo references using Jellyfin image tags.
         // Determines if a localized image tag or series/parent image tag is available.
@@ -1881,7 +1939,10 @@ class DetailsPage extends Page {
                 ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
                 : `${seasonPrefix}${episodePrefix} - ${item.SeriesName}`;
 
-            heroHtml += `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+            const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
+            const colorClass = useSecondaryColor ? 'secondary-color' : '';
+
+            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
         }
 
         // Finish appending standard metadata row and secondary date labels.
@@ -2083,8 +2144,16 @@ class DetailsPage extends Page {
         // Ghost Mode button visibility
         const ghostBtn = this.$('.ghost-btn');
         if (ghostBtn) {
+            // Check if SyncPlay is currently active.
             const isSyncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
-            const isPlayable = item.Type !== 'Photo' && !isSyncPlayActive;
+
+            // Check if user has toggled the preference option to hide the button entirely.
+            const isHiddenByPref = storage.getItem('pref:hideGhostMode') === 'true';
+
+            // Determine playability (non-photos and not in sync play, and not hidden by user preference).
+            const isPlayable = item.Type !== 'Photo' && !isSyncPlayActive && !isHiddenByPref;
+
+            // Toggle visibility classes and keyboard accessibility index dynamically.
             if (isPlayable) {
                 ghostBtn.classList.remove('hidden');
                 ghostBtn.setAttribute('tabindex', '0');
@@ -2137,7 +2206,7 @@ class DetailsPage extends Page {
             const minutes = resumeTime % 60;
 
             // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
-            // show only the hour to maintain a clean and beautiful Apple-like minimal aesthetic.
+            // show only the hour to maintain a clean and beautiful minimal aesthetic.
             timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
         } else {
             // Under 60 minutes, display in simple minute format (e.g., "45m").
@@ -2150,9 +2219,8 @@ class DetailsPage extends Page {
         // Update the inner HTML of the resume button with a play icon and the formatted label.
         resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
 
-        // CRITICAL: If we hid the Play button (which probably had focus or would get it),
-        // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => {});
+        // If we hid the Play button, try to move focus to the Resume button.
+        resumeBtn.focus();
 
         // Watched button
         if (watchedBtn) {
@@ -2264,7 +2332,7 @@ class DetailsPage extends Page {
     async _loadNextUp() {
         try {
             let response;
-            
+
             // Check if the current server is Emby. Emby ignores the SeriesId parameter
             // on the /Shows/NextUp endpoint, so we fall back to querying the first
             // unplayed episode of the series via /Items, which matches NextUp logic.
@@ -2278,13 +2346,13 @@ class DetailsPage extends Page {
                     Filters: 'IsUnplayed',
                     SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
-                    Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
                 response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
             }
-            
+
             this._nextUp = response.Items || [];
 
             if (this._nextUp.length > 0) {
@@ -2337,9 +2405,20 @@ class DetailsPage extends Page {
     }
 
     async _loadEpisodes(seriesId, seasonId) {
+        const cacheKey = `details:episodes:${seriesId}:${seasonId}`;
+        const cached = state.get(cacheKey);
+        if (cached) {
+            this._episodes = cached;
+            if (this._episodes.length > 0) {
+                this._renderEpisodes();
+            }
+            return;
+        }
+
         try {
             const response = await api.getEpisodes(seriesId, { SeasonId: seasonId });
             this._episodes = response.Items || [];
+            state.set(cacheKey, this._episodes);
 
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
@@ -2359,54 +2438,186 @@ class DetailsPage extends Page {
         section.classList.remove('hidden');
 
         if (this._item.Type === 'Season') {
-            // Remove 'media-row' to prevent ScrollController from aggressively top-snapping this entire deep grid
+            // Remove 'media-row' to prevent ScrollController from aggressively top-snapping this entire deep layout
             section.classList.remove('media-row');
-            // Use MediaGrid for a clean, generic 2D landscape episode layout
-            this._episodeGrid = new MediaGrid({
-                id: 'season-episodes-grid',
-                items: this._episodes,
-                type: 'episode',
-                contextType: 'details',
-                limit: 60,
-                moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
-                isLandscape: true,
-                onClick: (card) => {
-                    const stateKey = `details:lastFocusedItem:${this._itemId}`;
-                    if (card.dataset.itemId) {
-                        state.set(stateKey, {
-                            itemId: card.dataset.itemId,
-                            sectionId: 'details-episodes'
-                        });
-                        router.navigate(`/details/${card.dataset.itemId}`);
+
+            const episodeLayout = storage.getItem('pref:episodeLayout') || 'list';
+
+            if (episodeLayout === 'list') {
+                container.classList.add('vertical-list');
+
+                // ====================================================================
+                // Premium List with Details Layout
+                // ====================================================================
+                // Render episode cards in a clean, vertical scrollable column:
+                // - Thumbnail on the left with a subtle rounded cover design and progress indicators.
+                // - High-contrast text stack on the right: SxxExx index code, clear title,
+                //   ratings & duration metadata row, and overview line clamping.
+                // ====================================================================
+                const limit = 30;
+                const episodesToShow = this._episodes.slice(0, limit);
+                const hasMore = this._episodes.length > limit;
+
+                let html = '<div class="episode-list-container">';
+                episodesToShow.forEach((ep) => {
+                    const progress =
+                        ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
+                            ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
+                            : 0;
+                    const progressHtml =
+                        progress > 0
+                            ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>`
+                            : '';
+
+                    const imgUrl = api.getImageUrl(ep.Id, 'Primary', {
+                        maxWidth: imageService.getParams('thumb').maxWidth,
+                        quality: imageService.getParams('thumb').quality
+                    });
+                    const episodeCode = i18n.ensureBiDi(
+                        `S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}`
+                    );
+                    const episodeTitle = i18n.ensureBiDi(ep.Name);
+
+                    const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    let runtimeText = '';
+                    if (ep.RunTimeTicks) {
+                        const mins = Math.round(ep.RunTimeTicks / 600000000);
+                        runtimeText = `${mins}m`;
                     }
-                }
-            });
-
-            container.innerHTML = this._episodeGrid.render();
-            this._episodeGrid.onMounted(); // Wire up generic grid router links
-
-            // Register focus section for grid
-            const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
-            const nextSection = this._getNextVisibleSection('details-episodes');
-            const leaveDownTarget = nextSection ? nextSection.targetName : null;
-
-            this.registerFocusSection('details-episodes', container, {
-                orientation: 'grid',
-                leaveUp: upwardLink,
-                leaveDown: leaveDownTarget,
-                leaveLeft: 'sidebar',
-                onEnter: (fromElement, options) => {
-                    // Only assert focus on the first item for the very first entry.
-                    // Afterwards, let FocusManager use standard spatial/memory routing.
-                    if (!this._hasEnteredEpisodesGrid) {
-                        this._hasEnteredEpisodesGrid = true;
-                        return container.querySelector('.media-card');
+                    let endsAtText = '';
+                    if (ep.RunTimeTicks) {
+                        const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                        const timeString = i18n.formatLocalTime(endTime);
+                        endsAtText = i18n.t('EndsAtValue', [timeString]);
                     }
-                    return null;
-                }
-            });
 
-            this._updateLeaveDown(upwardLink, 'details-episodes');
+                    html += `
+                        <div class="episode-row">
+                            <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                                <div class="episode-row-thumb">
+                                    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
+                                    ${progressHtml}
+                                </div>
+                                <div class="episode-row-info">
+                                    <div class="episode-row-title">${ep.IndexNumber || 0}. ${episodeTitle}</div>
+                                    <div class="episode-row-meta">
+                                        ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                        ${runtimeText ? `<span>${runtimeText}</span>` : ''}
+                                        ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                    </div>
+                                    <p class="episode-row-overview">${ep.Overview || ''}</p>
+                                </div>
+                            </button>
+                        </div>
+                    `;
+                });
+
+                if (hasMore) {
+                    const moreUrl = `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`;
+                    html += `
+                        <div class="episode-row">
+                            <button class="episode-row-card media-card see-more-card" data-more-url="${moreUrl}" tabindex="0" style="justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.5); border: 2px dashed rgba(255, 255, 255, 0.15);">
+                                <span style="font-size: 1.4rem; font-weight: 600; color: var(--jf-text-secondary);">${i18n.t('ShowMore') || 'See More'}</span>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                html += '</div>';
+                container.innerHTML = html;
+
+                // Wire up click event delegation for navigating to details
+                container.onclick = (e) => {
+                    const card = e.target.closest('.media-card');
+                    if (card) {
+                        if (card.classList.contains('see-more-card')) {
+                            router.navigate(card.dataset.moreUrl);
+                            return;
+                        }
+                        const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                        if (card.dataset.itemId) {
+                            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                                state.set(stateKey, {
+                                    itemId: card.dataset.itemId,
+                                    sectionId: 'details-episodes'
+                                });
+                            }
+                            router.navigate(`/details/${card.dataset.itemId}`);
+                        }
+                    }
+                };
+
+                lazyLoader.observe(container);
+
+                // Register vertical list navigation constraints
+                const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
+                const nextSection = this._getNextVisibleSection('details-episodes');
+                const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+                this.registerFocusSection('details-episodes', container, {
+                    orientation: 'vertical',
+                    leaveUp: upwardLink,
+                    leaveDown: leaveDownTarget,
+                    leaveLeft: 'sidebar',
+                    onEnter: (fromElement, options) => {
+                        if (!this._hasEnteredEpisodesGrid) {
+                            this._hasEnteredEpisodesGrid = true;
+                            return container.querySelector('.media-card');
+                        }
+                        return null;
+                    }
+                });
+
+                this._updateLeaveDown(upwardLink, 'details-episodes');
+            } else {
+                container.classList.remove('vertical-list');
+                // Use MediaGrid for a clean, generic 2D landscape episode layout
+                this._episodeGrid = new MediaGrid({
+                    id: 'season-episodes-grid',
+                    items: this._episodes,
+                    type: 'episode',
+                    contextType: 'details',
+                    limit: 60,
+                    moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
+                    isLandscape: true,
+                    onClick: (card) => {
+                        const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                        if (card.dataset.itemId) {
+                            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                                state.set(stateKey, {
+                                    itemId: card.dataset.itemId,
+                                    sectionId: 'details-episodes'
+                                });
+                            }
+                            router.navigate(`/details/${card.dataset.itemId}`);
+                        }
+                    }
+                });
+
+                container.innerHTML = this._episodeGrid.render();
+                this._episodeGrid.onMounted(); // Wire up generic grid router links
+
+                // Register focus section for grid
+                const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
+                const nextSection = this._getNextVisibleSection('details-episodes');
+                const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+                this.registerFocusSection('details-episodes', container, {
+                    orientation: 'grid',
+                    leaveUp: upwardLink,
+                    leaveDown: leaveDownTarget,
+                    leaveLeft: 'sidebar',
+                    onEnter: (fromElement, options) => {
+                        if (!this._hasEnteredEpisodesGrid) {
+                            this._hasEnteredEpisodesGrid = true;
+                            return container.querySelector('.media-card');
+                        }
+                        return null;
+                    }
+                });
+
+                this._updateLeaveDown(upwardLink, 'details-episodes');
+            }
         } else {
             // Horizontal episode cards (for Series NextUp, etc.) require 'media-row' for correct horizontal snap scrolling
             section.classList.add('media-row');
@@ -2483,7 +2694,6 @@ class DetailsPage extends Page {
 
     /**
      * Toggles the overview description layout between truncated and expanded states.
-     * Complies with Apple's Human Interface Guidelines for focus states and screen flow.
      */
     _showFullOverview() {
         // Fetch references to structural elements
@@ -2599,6 +2809,11 @@ class DetailsPage extends Page {
                 elementId: '#guest-stars-row',
                 isVisible: () => isNotHidden('#guest-stars-section')
             },
+            {
+                name: 'details-item-collections',
+                elementId: '#item-collections-row',
+                isVisible: () => isNotHidden('#item-collections-section')
+            },
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') }
         ];
 
@@ -2624,6 +2839,11 @@ class DetailsPage extends Page {
 
         const sections = [
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
+            {
+                name: 'details-item-collections',
+                elementId: '#item-collections-row',
+                isVisible: () => isNotHidden('#item-collections-section')
+            },
             {
                 name: 'guest-stars-section',
                 elementId: '#guest-stars-row',
@@ -2700,30 +2920,37 @@ class DetailsPage extends Page {
     async _loadMoreFromSeason() {
         if (!this._item.SeasonId || !this._item.SeriesId) return;
 
-        try {
-            const response = await api.getEpisodes(this._item.SeriesId, {
-                SeasonId: this._item.SeasonId
-            });
+        const cacheKey = `details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`;
+        let allItems = state.get(cacheKey);
 
-            // -------------------------------------------------------------
-            // Retrieve preference to determine if we include current episode.
-            // Defaults to false.
-            // -------------------------------------------------------------
-            const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
-            const allItems = response.Items || [];
-
-            // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
-            const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
-
-            if (siblings.length > 0) {
-                // Find index of the current active episode in the siblings list
-                const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
-                
-                // Pass siblings and focused index down to renderer
-                this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
+        if (!allItems) {
+            try {
+                const response = await api.getEpisodes(this._item.SeriesId, {
+                    SeasonId: this._item.SeasonId
+                });
+                allItems = response.Items || [];
+                state.set(cacheKey, allItems);
+            } catch (error) {
+                log.warn('Failed to load more from season', error);
+                return;
             }
-        } catch (error) {
-            log.warn('Failed to load season episodes', error);
+        }
+
+        // -------------------------------------------------------------
+        // Retrieve preference to determine if we include current episode.
+        // Defaults to false.
+        // -------------------------------------------------------------
+        const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
+
+        // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
+        const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
+
+        if (siblings.length > 0) {
+            // Find index of the current active episode in the siblings list
+            const currentEpisodeIndex = siblings.findIndex((ep) => ep.Id === this._itemId);
+
+            // Pass siblings and focused index down to renderer
+            this._renderMoreFromSeason(siblings, currentEpisodeIndex !== -1 ? currentEpisodeIndex : 0);
         }
     }
 
@@ -2745,9 +2972,10 @@ class DetailsPage extends Page {
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
             // -------------------------------------------------------------
-            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode', {
-                isCurrentEpisode: ep.Id === this._itemId
-            }),
+            renderCard: (ep) =>
+                this._renderMediaCard(ep, true, 'episode', {
+                    isCurrentEpisode: ep.Id === this._itemId
+                }),
             focusSectionName: 'more-from-season-section',
             currentIndex: currentEpisodeIndex
         });
@@ -2862,6 +3090,54 @@ class DetailsPage extends Page {
         });
     }
 
+    async _loadItemCollections() {
+        try {
+            const cacheKey = `details:collections:${this._itemId}`;
+            let collections = state.get(cacheKey);
+
+            if (!collections) {
+                const response = await api.getItemCollections(this._itemId);
+                collections = response.Items || [];
+                if (collections.length > 0) {
+                    state.set(cacheKey, collections);
+                }
+            }
+
+            this._itemCollections = collections;
+
+            if (this._itemCollections.length > 0) {
+                this._renderItemCollections();
+            } else {
+                const section = this.$('#item-collections-section');
+                if (section) {
+                    section.classList.add('hidden');
+                }
+            }
+        } catch (error) {
+            log.warn('Failed to load item collections', error);
+            const section = this.$('#item-collections-section');
+            if (section) {
+                section.classList.add('hidden');
+            }
+        }
+    }
+
+    _renderItemCollections() {
+        if (!this._itemCollections || this._itemCollections.length === 0) return;
+
+        this._renderVirtualRow({
+            sectionId: 'item-collections-section',
+            listId: 'item-collections-row',
+            items: this._itemCollections,
+            isLandscape: false,
+            renderCard: (item) => {
+                return this._renderMediaCard(item, false, 'poster');
+            },
+            focusSectionName: 'details-item-collections',
+            cardType: 'poster'
+        });
+    }
+
     async _play({ resume = false, isShufflePlay = false, ghostMode = false } = {}) {
         let itemToPlay = this._item;
 
@@ -2962,7 +3238,7 @@ class DetailsPage extends Page {
                 itemToPlay = { ...target };
             } else {
                 try {
-                    const fields = 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters';
+                    const fields = 'Overview,RunTimeTicks,Chapters';
                     if (isShufflePlay) {
                         const randomEp = await api.getItems({
                             ParentId: this._item.Id,
@@ -3035,7 +3311,7 @@ class DetailsPage extends Page {
                                 Limit: 1,
                                 Filters: 'IsUnplayed',
                                 SortBy: 'ParentIndexNumber,IndexNumber',
-                                Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                                Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                             });
                         } else {
                             // On Jellyfin, query next up directly using SeriesId parameter.
@@ -3428,6 +3704,14 @@ class DetailsPage extends Page {
                 }
             }
 
+            // ── Add to Playlist / Collection ────────────────────────────────────
+            // Show for any media item that can be added to a group
+            const nonPlayableTypes = ['Person', 'CollectionFolder', 'UserView', 'Folder', 'Genre', 'Studio', 'Year'];
+            if (this._item?.Id && !nonPlayableTypes.includes(this._item.Type)) {
+                options.push({ id: 'add-to-playlist', label: i18n.t('AddToPlaylist') });
+                options.push({ id: 'add-to-collection', label: i18n.t('AddToCollection') || 'Add to Collection' });
+            }
+
             // ── Delete Media Permission Check ────────────────────────────────────
             // Only show delete option if the item explicitly reports CanDelete=true
             if (this._item.CanDelete) {
@@ -3435,15 +3719,22 @@ class DetailsPage extends Page {
             }
         }
 
-        const optionsHtml = options
-            .map((opt, i) => {
-                return `
+        const optionsHtml =
+            options.length === 0
+                ? `
+            <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
+                ${i18n.t('NoOptionsAvailable') || 'No options available'}
+            </div>
+        `
+                : options
+                      .map((opt, i) => {
+                          return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-            })
-            .join('');
+                      })
+                      .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -3489,7 +3780,15 @@ class DetailsPage extends Page {
         });
 
         // Set active immediately
-        focusManager.setActiveSection(optionsSection);
+        if (options.length === 0) {
+            focusManager.setActiveSection(actionsSection);
+            setTimeout(() => {
+                const cancelBtn = overlay.querySelector('#btn-modal-cancel');
+                if (cancelBtn) focusManager.focusElement(cancelBtn);
+            }, 50);
+        } else {
+            focusManager.setActiveSection(optionsSection);
+        }
 
         // Helper to close menu
         this._closeMoreMenu = () => {
@@ -3628,6 +3927,20 @@ class DetailsPage extends Page {
                         fromMoreOptions: true,
                         oldOnBack: oldOnBack
                     });
+                } else if (id === 'add-to-playlist' || id === 'add-to-collection') {
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister('details-more-menu');
+                    focusManager.unregister('details-more-menu-actions');
+                    setTimeout(() => overlay.remove(), 300);
+
+                    const mode = id === 'add-to-collection' ? 'collection' : 'playlist';
+                    AddToTargetModal.show(this, itemId, mode, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
                 } else if (id === 'delete') {
                     // Transition to confirmation dialog
                     this._showDeleteConfirmation(itemId);
@@ -3710,6 +4023,38 @@ class DetailsPage extends Page {
                     ReplaceAllMetadata: opt.replace,
                     ReplaceAllImages: opt.replace
                 });
+
+                // ── Purge ALL cached data so every page re-fetches fresh ───
+                // The ETag cache can return stale 304-cached bodies for the
+                // same URL — wiping it ensures the next request gets a 200.
+                api.clearEtagCache();
+
+                // Wipe all home and details page in-memory caches so the
+                // next visit to any page fetches fresh data from the server.
+                state.clearByPrefix('home:');
+                state.clearByPrefix('details:');
+
+                // Also clear the rendered-row cache used by the homepage
+                state.delete('home:pageCache');
+
+                // ── Re-fetch current page's episode data ─────────────────────
+                // The server may still be processing the scan, but clearing
+                // the cache and re-fetching gives the best chance of showing
+                // up-to-date content without requiring a page navigation.
+                if (this._item?.SeriesId && this._item?.SeasonId) {
+                    const cacheKey = `details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`;
+                    state.delete(cacheKey);
+                    this._episodes = null;
+
+                    // Fire re-fetch after a short delay to let the server
+                    // begin processing before we re-render the sections.
+                    setTimeout(() => {
+                        if (!this._isMounted) return;
+                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => {});
+                        this._loadMoreFromSeason().catch(() => {});
+                    }, 500);
+                }
+
                 toast.show(i18n.t('MessageRefreshQueued'));
             } catch (e) {
                 log.error('Failed to queue metadata refresh', e);
@@ -4382,12 +4727,48 @@ class DetailsPage extends Page {
     }
 
     _updateCachedPlayedStatus() {
-        const cachedItem = Object.entries(state.getAll())
-            .filter(([key, cached]) => key.startsWith('library:state:') && cached?.stateData?.items)
-            .flatMap(([, cached]) => cached.stateData.items)
-            .find(({ Id }) => Id === this._itemId);
+        const itemId = this._itemId;
+        const userData = this._item.UserData;
 
-        if (cachedItem) cachedItem.UserData = { ...cachedItem.UserData, ...this._item.UserData };
+        // 1. Patch library:state:* caches (library page grid items)
+        const allState = state.getAll();
+        for (const [key, val] of Object.entries(allState)) {
+            if (key.startsWith('library:state:') && val?.stateData?.items) {
+                const match = val.stateData.items.find(({ Id }) => Id === itemId);
+                if (match) match.UserData = { ...match.UserData, ...userData };
+            }
+        }
+
+        // 2. Patch details:episodes:* caches (season episode lists)
+        for (const [key, episodes] of Object.entries(allState)) {
+            if (key.startsWith('details:episodes:') && Array.isArray(episodes)) {
+                const match = episodes.find((ep) => ep.Id === itemId);
+                if (match) match.UserData = { ...match.UserData, ...userData };
+            }
+        }
+
+        // 3. Delete home:pageCache — row structure depends on server-side filters
+        // (e.g. continue watching = PlaybackPositionTicks > 0), so patching individual
+        // item UserData isn't enough. Force a full refetch on next HomePage visit.
+        state.delete('home:pageCache');
+
+        // 4. Re-render the More from Season row if on an Episode page
+        if (this._item?.Type === 'Episode' && this._item.SeriesId && this._item.SeasonId) {
+            this._refreshMoreFromSeason();
+        }
+    }
+
+    _refreshMoreFromSeason() {
+        const list = this.$('#more-from-season-row');
+        const section = this.$('#more-from-season-section');
+        if (!list || !section) return;
+
+        // Clear old virtual row so _loadMoreFromSeason renders fresh
+        delete this._virtualRows?.['more-from-season-section'];
+
+        // Re-render with current (now-patched) cached data
+        list.innerHTML = '';
+        this._loadMoreFromSeason();
     }
 
     async _resetProgress() {
@@ -4433,10 +4814,6 @@ class DetailsPage extends Page {
 
         // --------------------------------------------------------------------
         // Stop background ambient theme score loop playback.
-        // Under Apple's HIG principles, when transitioning between distinct
-        // navigational spaces, the audio scape must cleanly fade or cease to
-        // make room for the new destination's sensory focus.
-        //
         // Elegant Sustain Logic: If the next destination is also a DetailsPage
         // (e.g. going from a Series details to a Season/Episode details, or back),
         // we defer stopping by a 2.0-second grace period. If the new page shares
@@ -4466,6 +4843,20 @@ class DetailsPage extends Page {
         if (this._isRichMetaActive) {
             this._deactivateRichMeta();
         }
+
+        if (this._playlistGrid) {
+            this._playlistGrid.destroy();
+            this._playlistGrid = null;
+        }
+        if (this._songsGrid) {
+            this._songsGrid.destroy();
+            this._songsGrid = null;
+        }
+        if (this._episodeGrid) {
+            this._episodeGrid.destroy();
+            this._episodeGrid = null;
+        }
+
         super.destroy();
     }
 }

@@ -45,6 +45,16 @@ const syncPlayPlugin = {
     /** @type {string} Short description shown in Settings */
     description: 'Synchronize playback with other Jellyfin clients in real time.',
 
+    /**
+     * =========================================================================
+     * Default Plugin Activation State
+     * =========================================================================
+     * Controls whether SyncPlay is activated automatically on fresh installs
+     * or cache resets. Setting this to false disables the plugin by default,
+     * requiring manual user activation in Settings.
+     */
+    defaultEnabled: false,
+
     // -------------------------------------------------------------------------
     // Lifecycle hooks
     // -------------------------------------------------------------------------

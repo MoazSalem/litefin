@@ -764,7 +764,7 @@ class EpgGrid {
                     hasEndDate: true,
                     startDate: this.startTime.toISOString(),
                     endDate: this.endTime.toISOString(),
-                    fields: 'Overview,PrimaryImageAspectRatio'
+                    fields: 'Overview'
                 })
             )
         );

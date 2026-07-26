@@ -13,6 +13,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
 import { focusManager } from '../ui/FocusManager.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
@@ -22,6 +23,9 @@ import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
 
 const log = logger.create('Login');
+
+// Default Jellyfin port when user omits one
+const DEFAULT_PORT = 8096;
 
 // Login states — each maps to a data-section attribute on its panel
 const STATE = {
@@ -108,7 +112,7 @@ class LoginPage extends Page {
                                 type="url"
                                 id="server-url"
                                 class="text-input tv-input server-url-input"
-                                placeholder="https://your-server.com"
+                                placeholder="192.168.x.x"
                                 autocomplete="off"
                                 readonly
                                 tabindex="0"
@@ -285,7 +289,7 @@ class LoginPage extends Page {
                                 type="url"
                                 id="server-url"
                                 class="text-input tv-input server-url-input"
-                                placeholder="https://192.168.x.x:8096"
+                                placeholder="192.168.x.x"
                                 autocomplete="off"
                                 readonly
                                 tabindex="0"
@@ -520,9 +524,7 @@ class LoginPage extends Page {
 
             // Ensure splash hides after switching states (if it was up)
             setTimeout(() => {
-                import('../core/EventBus.js').then(({ eventBus }) => {
-                    eventBus.emit('app:hideSplash');
-                });
+                eventBus.emit('app:hideSplash');
             }, 10);
         }
 
@@ -881,6 +883,47 @@ class LoginPage extends Page {
         }, 150);
     }
 
+    /**
+     * Normalize a user-typed server address.
+     * Rules:
+     *   - Bare hostname/IP (no protocol) → prepend http://, append :8096
+     *   - Full URL with protocol (http:// or https://) → use as-is, no port added
+     *   - If user typed their own port, it is always respected
+     * @param {string} input - Raw user input
+     * @returns {string} Normalized server URL
+     */
+    _normalizeServerUrl(input) {
+        let url = input.trim();
+        if (!url) return '';
+
+        const hasProtocol = url.includes('://');
+
+        if (!hasProtocol) {
+            // Bare hostname/IP — add default protocol and port
+            url = `http://${url}`;
+            try {
+                const parsed = new URL(url);
+                if (!parsed.port) {
+                    parsed.port = String(DEFAULT_PORT);
+                }
+                let result = parsed.toString();
+                if (result.endsWith('/')) {
+                    result = result.slice(0, -1);
+                }
+                return result;
+            } catch {
+                return url;
+            }
+        }
+
+        // User typed a full URL with protocol — respect their choice, no port added
+        let result = url;
+        if (result.endsWith('/')) {
+            result = result.slice(0, -1);
+        }
+        return result;
+    }
+
     async _connectToServer() {
         const url = this._serverInput.value.trim();
 
@@ -893,8 +936,7 @@ class LoginPage extends Page {
         this._hideError('server-error');
 
         try {
-            // Add https if no protocol
-            const serverUrl = url.includes('://') ? url : `https://${url}`;
+            const serverUrl = this._normalizeServerUrl(url);
             this._serverUrl = serverUrl;
 
             // Connect to server
@@ -953,13 +995,14 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                        src="${
+                                            user.PrimaryImageTag
+                                                ? api.getUserImageUrl(user.Id, {
+                                                      maxWidth: imageService.getParams('avatar').maxWidth,
+                                                      quality: imageService.getParams('avatar').quality
+                                                  })
+                                                : ''
+                                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -974,13 +1017,14 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                    src="${
+                                        user.PrimaryImageTag
+                                            ? api.getUserImageUrl(user.Id, {
+                                                  maxWidth: imageService.getParams('avatar').maxWidth,
+                                                  quality: imageService.getParams('avatar').quality
+                                              })
+                                            : ''
+                                    }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
@@ -1230,6 +1274,7 @@ class LoginPage extends Page {
                 router.navigate('/profiles', { replace: true });
             } else if (typeof tizen !== 'undefined') {
                 try {
+                    storage.flush();
                     tizen.application.getCurrentApplication().exit();
                 } catch (e) {
                     log.error('App exit failed:', e);
@@ -1589,13 +1634,10 @@ class LoginPage extends Page {
         if (server && this._serverInput) {
             this._serverInput.value = server.address;
 
-            // Focus the Connect button so user can proceed immediately
-            const connectBtn = this.$('.connect-btn');
-            if (connectBtn) {
-                connectBtn.focus();
-            }
+            log.info(`Selected server ${server.name} (${server.address}) - initiating auto-connect`);
 
-            log.info(`Selected server ${server.name} (${server.address})`);
+            // Automatically connect to the selected server immediately
+            this._connectToServer();
         }
     }
 
