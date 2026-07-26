@@ -10,7 +10,6 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
-import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { imageService } from '../utils/ImageService.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -19,6 +18,7 @@ import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('Library');
 
@@ -45,6 +45,26 @@ class LibraryPage extends Page {
 
             // Data Cache
             items: [],
+
+            /*
+             * ---------------------------------------------------------------
+             * VIRTUAL GRID WINDOW STATE
+             * ---------------------------------------------------------------
+             * Instead of rendering all N items at once, we maintain a sliding
+             * "window" of DOM nodes. Only items[gridWindowStart..gridWindowEnd-1]
+             * exist in the DOM at any time. A spacer <div> at the top of the
+             * grid holds the height of the removed top rows so scroll position
+             * is not disturbed when items are evicted.
+             *
+             *   gridWindowStart  — first item index currently in DOM
+             *   gridWindowEnd    — one past the last item index currently in DOM
+             *   gridCardRowHeight — measured height of one card row (px), cached
+             * ---------------------------------------------------------------
+             */
+            gridWindowStart: 0,
+            gridWindowEnd: 0,
+            gridCardRowHeight: null,
+
             alphaPickerChars: '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
 
             /*
@@ -757,6 +777,12 @@ class LibraryPage extends Page {
         super.destroy();
         this.$('#library-tabs')?.removeEventListener('click', this._onTabClick);
         this.$('#alpha-picker')?.removeEventListener('click', this._onAlphaClick);
+
+        // Clean up the progressive grid DOM trigger listener to prevent leaks
+        if (this._onGridFocusChanged) {
+            eventBus.off('focus:changed', this._onGridFocusChanged);
+            this._onGridFocusChanged = null;
+        }
     }
 
     // ========================================================================
@@ -2211,54 +2237,48 @@ class LibraryPage extends Page {
         // Special viewTypes (Episodes, Networks) always override the user preference.
         const resolvedCardType = this._resolveCardType(isLandscape);
 
-        // Generate HTML using the correct card type and view mode flag
-        const html = items
-            .map((item) =>
-                // ==========================================================
-                // Grid Card Rendering Configuration
-                // ==========================================================
-                // Here we set 'isGrid: true' to tell the card renderer that
-                // this card is rendered inside the vertical library grid.
-                // This disables horizontal poster expansions to maintain
-                // clean, stable column layouts and prevent shifts on TV displays.
-                // ==========================================================
-                CardRenderer.createCardHtml(item, {
-                    isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
-                    type: this.state.viewMode === 'banner' ? 'banner' : resolvedCardType,
-                    contextType:
-                        this.state.viewType === 'Upcoming'
-                            ? 'upcoming'
-                            : this.state.viewType === 'Albums'
-                              ? 'music'
-                              : 'library',
-                    // Only show rich meta row in list view (rating, score, runtime)
-                    showMeta: !isLandscape && this.state.viewMode === 'list',
-                    isGrid: true,
-                    cardWidth: cardWidth
-                })
-            )
-            .join('');
+        // ====================================================================
+        // PROGRESSIVE DOM INSERTION
+        // ====================================================================
+        // PROBLEM: Rendering all 100 items at once puts 100 flex nodes into the
+        // layout engine simultaneously. Even with lazy IMAGE loading, every
+        // D-pad keypress forces a flexbox layout pass, style recalculation, and
+        // compositor evaluation over all 100 nodes — this is what makes 100-item
+        // libraries noticeably laggier than 25-item ones.
+        //
+        // SOLUTION: Render only the first visible chunk immediately, then append
+        // more rows as the user navigates toward the bottom. The DOM stays at
+        // ~25-35 items at any given time regardless of total library size.
+        //
+        // Chunk sizing: (columns × 5 rows) gives ~2 visible screens worth of content.
+        // ====================================================================
+        const columns = this.state.gridColumns || this._getDefaultColumnsForMode(
+            isLandscape ? 'thumb' : this.state.viewMode
+        );
 
-        grid.innerHTML = html;
+        // Store rendering context + column count on state so _appendGridChunk
+        // and _prependGridChunk can access them without re-deriving
+        this.state._gridRenderContext = {
+            isLandscape,
+            resolvedCardType,
+            cardWidth
+        };
+        this.state._gridColumns = columns;
 
-        // Lazy Load Images
+        // Reset the sliding window — a fresh _renderGrid always starts from zero
+        this.state.gridWindowStart = 0;
+        this.state.gridWindowEnd = 0;
+        this.state.gridCardRowHeight = null; // Force re-measure on next append
+
+        // Clear the grid and inject the spacer that maintains scroll position
+        // when top rows are evicted from the DOM. Height starts at 0px.
+        grid.innerHTML = '<div id="grid-top-spacer" style="height:0;width:100%;flex:0 0 100%"></div>';
+
+        // Render the first chunk immediately — this is what the user sees on load
+        this._appendGridChunk(grid, items, columns);
+
+        // Lazy Load Images (observe the initial chunk)
         lazyLoader.observe(grid);
-
-        // ====================================================================
-        // PERF: PRE-WARM SCROLL CONTROLLER OFFSET CACHE
-        // ====================================================================
-        // By pre-warming the offsets for all grid cards in a single layout pass
-        // right after render, subsequent offsetTop reads during D-pad moves
-        // will hit the WeakMap cache instantly as O(1) reads rather than forcing
-        // synchronous layout/style recalculation flushes.
-        // ====================================================================
-        requestAnimationFrame(() => {
-            const cards = grid.querySelectorAll('.media-card');
-            const pageContent = document.querySelector('.page-content');
-            if (cards.length && pageContent) {
-                scrollController.prewarmOffsetCache(cards, pageContent);
-            }
-        });
 
         // Calculate expected alpha visibility (avoids DOM race conditions with _updateHeaderVisibility)
         const collectionType = this.state.libraryInfo?.CollectionType;
@@ -2301,6 +2321,53 @@ class LibraryPage extends Page {
             scrollOffsetTop: 100
         });
 
+        // ====================================================================
+        // PROGRESSIVE DOM TRIGGER — focus:changed listener
+        // ====================================================================
+        // Fires after every focus change anywhere in the page. We filter to
+        // cards inside the library-grid and check if we are close enough to
+        // the bottom of the rendered DOM to warrant adding the next chunk.
+        //
+        // We replace any previous listener stored on the instance so that
+        // re-renders (sort / filter change) don't accumulate duplicate handlers.
+        // ====================================================================
+        if (this._onGridFocusChanged) {
+            eventBus.off('focus:changed', this._onGridFocusChanged);
+        }
+        this._onGridFocusChanged = (element) => {
+            // Only act on media-cards inside this grid
+            if (!element || !grid.contains(element)) return;
+            if (!element.classList.contains('media-card')) return;
+
+            // Find DOM index of the focused card (fast linear scan — window is small)
+            const allCards = grid.querySelectorAll('.media-card');
+            let domIndex = -1;
+            for (let i = 0; i < allCards.length; i++) {
+                if (allCards[i] === element) { domIndex = i; break; }
+            }
+            if (domIndex === -1) return;
+
+            // The card's index in the full items array
+            const itemIndex = this.state.gridWindowStart + domIndex;
+
+            // -----------------------------------------------------------------------
+            // DOWNWARD TRIGGER: within 2 rows of the bottom rendered boundary
+            // -----------------------------------------------------------------------
+            const appendThreshold = this.state.gridWindowEnd - (currentColumns * 2);
+            if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                this._appendGridChunk(grid, this.state.items, currentColumns);
+            }
+
+            // -----------------------------------------------------------------------
+            // UPWARD TRIGGER: within 2 rows of the top rendered boundary
+            // -----------------------------------------------------------------------
+            const prependThreshold = this.state.gridWindowStart + (currentColumns * 2);
+            if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                this._prependGridChunk(grid, this.state.items, currentColumns);
+            }
+        };
+        eventBus.on('focus:changed', this._onGridFocusChanged);
+
         // Register pagination footer — the grid's leaveDown points here.
         // Without this registration the section is a ghost and focus is silently
         // dropped when the user presses DOWN from the last grid row.
@@ -2335,6 +2402,277 @@ class LibraryPage extends Page {
             });
         }
     }
+
+    /**
+     * =========================================================================
+     * GRID CARD HTML GENERATOR (shared by append and prepend)
+     * =========================================================================
+     * Produces the HTML string for a slice of items[], using the render context
+     * stored by _renderGrid so we don't re-derive card type / width / orientation.
+     * @param {Array} items - Subset of the full items array to render
+     * @returns {string} HTML string
+     * =========================================================================
+     */
+    _buildGridChunkHtml(items) {
+        const ctx = this.state._gridRenderContext || {};
+        const isLandscape = ctx.isLandscape || false;
+        const resolvedCardType = ctx.resolvedCardType || 'poster';
+        const cardWidth = ctx.cardWidth || null;
+
+        return items
+            .map((item) =>
+                CardRenderer.createCardHtml(item, {
+                    isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
+                    type: this.state.viewMode === 'banner' ? 'banner' : resolvedCardType,
+                    contextType:
+                        this.state.viewType === 'Upcoming'
+                            ? 'upcoming'
+                            : this.state.viewType === 'Albums'
+                              ? 'music'
+                              : 'library',
+                    showMeta: !isLandscape && this.state.viewMode === 'list',
+                    isGrid: true,
+                    cardWidth: cardWidth
+                })
+            )
+            .join('');
+    }
+
+    /**
+     * =========================================================================
+     * MEASURE GRID ROW HEIGHT (cached)
+     * =========================================================================
+     * Reads the vertical distance between the first and second card row by
+     * comparing offsetTop values. Includes any CSS gap/margin automatically.
+     * Result is cached in state.gridCardRowHeight so we only force layout once.
+     * @param {HTMLElement} grid
+     * @param {number} columns
+     * @returns {number|null} Row height in px, or null if not yet measurable
+     * =========================================================================
+     */
+    _measureGridRowHeight(grid, columns) {
+        if (this.state.gridCardRowHeight) return this.state.gridCardRowHeight;
+
+        const cards = grid.querySelectorAll('.media-card');
+        // Need at least 2 full rows to calculate the difference
+        if (cards.length < columns + 1) return null;
+
+        // Row height = offsetTop delta between row 0 card 0 and row 1 card 0.
+        // This naturally captures the card height + any CSS gap between rows.
+        const rowHeight = cards[columns].offsetTop - cards[0].offsetTop;
+        if (rowHeight > 0) {
+            this.state.gridCardRowHeight = rowHeight;
+        }
+        return rowHeight || null;
+    }
+
+    /**
+     * =========================================================================
+     * HOOK NEW CARDS INTO LAZY LOADERS + FOCUS CACHE
+     * =========================================================================
+     * After inserting DOM nodes, register their images with the lazy image
+     * observer and their shimmer wrappers with the shimmer pause observer.
+     * Then invalidate the FocusManager cache so new cards become navigable.
+     * @param {HTMLElement[]} newCards - Array of newly-inserted .media-card elements
+     * =========================================================================
+     */
+    _hookGridCards(newCards) {
+        if (!newCards || !newCards.length) return;
+
+        newCards.forEach((card) => {
+            const img = card.querySelector('img[data-src]');
+            if (img) {
+                lazyLoader.observeElement(img);
+            }
+            const shimmer = card.querySelector('.card-image.skeleton-shimmer');
+            if (shimmer && lazyLoader._shimmerObserver) {
+                lazyLoader._shimmerObserver.observe(shimmer);
+            }
+        });
+
+        // Tell FocusManager about the new focusable nodes
+        focusManager.invalidateCache('library-grid');
+
+        // Prewarm ScrollController offset cache in the next idle frame
+        requestAnimationFrame(() => {
+            const pageContent = document.querySelector('.page-content');
+            if (pageContent) {
+                scrollController.prewarmOffsetCache(newCards, pageContent);
+            }
+        });
+    }
+
+    /**
+     * =========================================================================
+     * PROGRESSIVE GRID CHUNK APPENDER — with sliding window eviction
+     * =========================================================================
+     * Appends the next batch of cards at the BOTTOM of the rendered window.
+     *
+     * Window cap: when the DOM count exceeds MAX_WINDOW_ROWS, the oldest rows
+     * at the top are removed and the top spacer div is grown by the same
+     * pixel amount. Since the spacer occupies the same space in the flex layout
+     * as the evicted cards, the scroll position stays perfectly stable.
+     *
+     * @param {HTMLElement} grid    - The #library-grid container element
+     * @param {Array}       items   - Full items array
+     * @param {number}      columns - Grid column count
+     * @returns {boolean}           - true if more items remain after this chunk
+     * =========================================================================
+     */
+    _appendGridChunk(grid, items, columns) {
+        if (!grid || !items || !items.length) return false;
+
+        const windowEnd = this.state.gridWindowEnd;
+
+        // All items already rendered — nothing to do
+        if (windowEnd >= items.length) return false;
+
+        // -----------------------------------------------------------------------
+        // CHUNK SIZE
+        // -----------------------------------------------------------------------
+        // First render: 5 rows — fills ~1.5 TV screens immediately.
+        // Incremental: 3 rows — small enough not to spike layout, large enough
+        // that the user can scroll a full screen before triggering another append.
+        // -----------------------------------------------------------------------
+        const INITIAL_ROWS = 5;
+        const INCREMENTAL_ROWS = 3;
+        // Maximum rows to keep in the DOM at once (8 rows = comfortable window)
+        const MAX_WINDOW_ROWS = 8;
+
+        const isFirstChunk = windowEnd === 0;
+        const chunkSize = isFirstChunk ? columns * INITIAL_ROWS : columns * INCREMENTAL_ROWS;
+
+        const chunkItems = items.slice(windowEnd, windowEnd + chunkSize);
+        if (!chunkItems.length) return false;
+
+        // Generate and append HTML for this chunk
+        grid.insertAdjacentHTML('beforeend', this._buildGridChunkHtml(chunkItems));
+        this.state.gridWindowEnd = windowEnd + chunkItems.length;
+
+        // Hook new cards into observers and focus cache (skip for first chunk —
+        // _renderGrid calls lazyLoader.observe(grid) separately for that case)
+        if (!isFirstChunk) {
+            const allCards = grid.querySelectorAll('.media-card');
+            // The new cards are the last chunkItems.length entries
+            const newCards = Array.from(allCards).slice(allCards.length - chunkItems.length);
+            this._hookGridCards(newCards);
+        }
+
+        // -----------------------------------------------------------------------
+        // WINDOW EVICTION — remove rows from the top once we exceed the cap
+        // -----------------------------------------------------------------------
+        const windowRows = Math.ceil((this.state.gridWindowEnd - this.state.gridWindowStart) / columns);
+
+        if (windowRows > MAX_WINDOW_ROWS) {
+            // Measure row height before evicting (cached after first call)
+            const rowHeight = this._measureGridRowHeight(grid, columns);
+            if (rowHeight) {
+                // How many rows we are over the cap
+                const rowsToEvict = windowRows - MAX_WINDOW_ROWS;
+                const cardsToEvict = rowsToEvict * columns;
+
+                // Remove the top N cards (they are directly after the spacer)
+                const allCards = grid.querySelectorAll('.media-card');
+                for (let i = 0; i < Math.min(cardsToEvict, allCards.length); i++) {
+                    allCards[i].remove();
+                }
+
+                // Grow the spacer by exactly the height of the evicted rows.
+                // This keeps the total scroll height and viewport position stable.
+                this.state.gridWindowStart += cardsToEvict;
+                const spacer = grid.querySelector('#grid-top-spacer');
+                if (spacer) {
+                    const newSpacerHeight = Math.floor(this.state.gridWindowStart / columns) * rowHeight;
+                    spacer.style.height = `${newSpacerHeight}px`;
+                }
+            }
+        }
+
+        return this.state.gridWindowEnd < items.length;
+    }
+
+    /**
+     * =========================================================================
+     * PROGRESSIVE GRID CHUNK PREPENDER — for navigating back upward
+     * =========================================================================
+     * Adds rows at the TOP of the rendered window when the user navigates back
+     * toward cards that were previously evicted from the DOM.
+     *
+     * Inserts new cards AFTER the spacer div so they appear visually above the
+     * existing rendered cards. Shrinks the spacer by the same amount so scroll
+     * position stays stable. Evicts rows from the bottom if the window cap is
+     * exceeded.
+     *
+     * @param {HTMLElement} grid    - The #library-grid container element
+     * @param {Array}       items   - Full items array
+     * @param {number}      columns - Grid column count
+     * @returns {boolean}           - true if more items remain above this chunk
+     * =========================================================================
+     */
+    _prependGridChunk(grid, items, columns) {
+        if (!grid || !items || !items.length) return false;
+
+        const windowStart = this.state.gridWindowStart;
+
+        // Nothing above the current window — already at the very top
+        if (windowStart <= 0) return false;
+
+        const INCREMENTAL_ROWS = 3;
+        const MAX_WINDOW_ROWS = 8;
+
+        const chunkSize = Math.min(columns * INCREMENTAL_ROWS, windowStart);
+        const newStart = windowStart - chunkSize;
+
+        const chunkItems = items.slice(newStart, windowStart);
+        if (!chunkItems.length) return false;
+
+        // Measure row height BEFORE modifying the DOM (cards are still in place)
+        const rowHeight = this._measureGridRowHeight(grid, columns);
+
+        // Insert the new cards after the spacer, before the first existing card
+        const spacer = grid.querySelector('#grid-top-spacer');
+        if (spacer) {
+            spacer.insertAdjacentHTML('afterend', this._buildGridChunkHtml(chunkItems));
+        }
+
+        // Update window boundary
+        this.state.gridWindowStart = newStart;
+
+        // Shrink the spacer by exactly the height of the newly added rows.
+        // This keeps the cards below the insertion point at the same pixel
+        // offset from the top, so scrollTop doesn't need any adjustment.
+        if (rowHeight && spacer) {
+            const rowsAdded = Math.ceil(chunkSize / columns);
+            const currentSpacerHeight = parseInt(spacer.style.height, 10) || 0;
+            const newSpacerHeight = Math.max(0, currentSpacerHeight - rowsAdded * rowHeight);
+            spacer.style.height = `${newSpacerHeight}px`;
+        }
+
+        // Register the new cards with observers
+        const allCards = grid.querySelectorAll('.media-card');
+        const newCards = Array.from(allCards).slice(0, chunkSize);
+        this._hookGridCards(newCards);
+
+        // -----------------------------------------------------------------------
+        // WINDOW EVICTION from the bottom to maintain the cap
+        // -----------------------------------------------------------------------
+        const windowRows = Math.ceil((this.state.gridWindowEnd - this.state.gridWindowStart) / columns);
+        if (windowRows > MAX_WINDOW_ROWS) {
+            const rowsToEvict = windowRows - MAX_WINDOW_ROWS;
+            const cardsToEvict = rowsToEvict * columns;
+
+            // Remove the last N cards in the grid
+            const updatedCards = grid.querySelectorAll('.media-card');
+            const totalCards = updatedCards.length;
+            for (let i = totalCards - 1; i >= totalCards - cardsToEvict && i >= 0; i--) {
+                updatedCards[i].remove();
+            }
+            this.state.gridWindowEnd -= cardsToEvict;
+        }
+
+        return this.state.gridWindowStart > 0;
+    }
+
     _renderHorizontalRows(rows) {
         const grid = this.$('#library-grid');
         const pagination = this.$('#library-pagination');
