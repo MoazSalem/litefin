@@ -113,6 +113,11 @@ if (isWebOS) {
         }
     });
     
+    udpClient.on('error', function (err) {
+        console.log('[Litefin Discovery] UDP socket error: ' + err.message);
+        try { udpClient.close(); } catch (_) {}
+    });
+
     // Bind the UDP socket — discovery probe is sent once the socket is ready
     udpClient.bind({ port: DISCOVERY_PORT }, function () {
         sendDiscoveryProbe();
@@ -345,6 +350,8 @@ var PLAYER_HTML = `<!doctype html>
     });
 </script>
 </body>
+</html>`;
+
 /**
  * Send a Wake-on-LAN (WOL) Magic Packet
  * ============================================================================
@@ -665,6 +672,9 @@ function searchDdgLite(title, year, langIso) {
 }
 
 var proxyServer = http.createServer(handler);
+proxyServer.on('error', function(err) {
+    console.log('[Litefin Proxy] HTTP proxy server error: ' + err.message);
+});
 proxyServer.listen(PORT, LISTEN_HOST, function() { 
     console.log('[Litefin Proxy] Server listening on ' + LISTEN_HOST + ':' + PORT);
 });
