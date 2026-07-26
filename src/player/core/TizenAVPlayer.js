@@ -487,10 +487,13 @@ export class TizenAVPlayer {
                 this._pendingSeekMs = startMs;
             }
 
+            // Some firmware resets display state during prepare — re-apply after.
+            this._createDisplay();
+
             // Prepare asynchronously
             await this._prepareAsync();
 
-            // Set up display rect only after preparation success
+            // Re-apply display rect after prepare (some firmware resets it).
             this._createDisplay();
 
             // A tiny delay avoids internal decoder race conditions
@@ -1309,12 +1312,34 @@ export class TizenAVPlayer {
         try {
             this._avplay.seekTo(
                 ms,
-                () => { if (onSuccess) onSuccess(); },
+                () => {
+                    if (onSuccess) onSuccess();
+                    this._assertActiveSubtitleTrack();
+                },
                 () => { if (onError) onError(new Error('seekTo failed')); }
             );
         } catch (e) {
             log.warn('_safeSeekTo threw synchronously:', e);
             if (onError) onError(e);
+        }
+    }
+
+    /**
+     * Re-assert the active native subtitle track after a seek completes.
+     * Some firmware drops the TEXT track selection during buffer flush, causing
+     * subtitles to go silent even though setSilentSubtitle(false) was called.
+     */
+    _assertActiveSubtitleTrack() {
+        if (!this._avplay || !this._isPrepared) return;
+        if (this._activeTizenSubtitleIndex === null || this._activeTizenSubtitleIndex === -1) return;
+
+        try {
+            this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
+            this._avplay.setSilentSubtitle(false);
+            this._lastSubtitleApiTime = Date.now();
+            log.debug('Post-seek subtitle track re-asserted:', this._activeTizenSubtitleIndex);
+        } catch (e) {
+            log.warn('Post-seek subtitle re-assertion failed:', e);
         }
     }
 
