@@ -686,7 +686,6 @@ progress.card-progress::-webkit-progress-value {
     background: rgba(var(--jf-btn-primary-focus-color-rgb), 0.15) !important;
     border-color: rgba(var(--jf-btn-primary-focus-color-rgb), 0.35) !important;
     color: var(--jf-btn-primary-focus-color) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .modal-option-btn.focused .track-badge.badge-success,

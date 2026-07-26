@@ -536,10 +536,6 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
        5 * 320px + 4 * 30px = 1600 + 120 = 1720px exactly. */
     margin-bottom: 30px;
     
-    -webkit-transition: -webkit-transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
-    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
-
-    
     /* Isolate each card's layout/paint for smoother focus transitions */
     contain: layout style paint;
 }
@@ -728,7 +724,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     background: rgba(255, 255, 255, 0.15) !important;
     -webkit-transform: scale(1.02);
     transform: scale(1.02); /* Slight pop to show selection */
-    box-shadow: 0 0 0 3px var(--jf-accent) !important; /* BOLD OUTER Focus Ring */
+    
     z-index: 10;
 }
 

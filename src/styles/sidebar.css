@@ -116,8 +116,6 @@ body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
 body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
 body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
     background: rgba(16, 16, 16, 0.4) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
 }
 
 body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,

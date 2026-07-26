@@ -33,7 +33,7 @@
 .offline-icon {
     color: var(--jf-error, #ff4b4b);
     margin-bottom: 40px;
-    filter: drop-shadow(0 0 20px rgba(255, 75, 75, 0.2));
+    text-shadow: 0 0 12px rgba(255, 75, 75, 0.4);
 }
 
 .offline-title {
@@ -49,7 +49,7 @@
     line-height: 1.5;
     color: var(--jf-text-secondary);
     margin-bottom: 60px;
-    max-width: 600px;
+    max-width: 800px;
     margin-left: auto;
     margin-right: auto;
 }
