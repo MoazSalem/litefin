@@ -407,11 +407,9 @@ class App {
         // Handle app visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // App going to background - on Tizen this may mean app is closing
+                // App going to background - player can suspend decoder state
                 log.debug('App hidden (background)');
                 eventBus.emit('app:hidden');
-                // Also emit beforeExit so active players can report stopped
-                eventBus.emit('app:beforeExit');
                 // Close WebSocket - user goes offline on server dashboard
                 api.closeWebSocket();
             } else {

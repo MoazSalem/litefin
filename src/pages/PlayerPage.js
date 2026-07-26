@@ -289,9 +289,15 @@ class PlayerPage extends Page {
             // Initialize the player
             await this._initPlayer();
 
-            // Listen for app close/hide events to report playback stopped
+            // Listen for app close events to report playback stopped
             this._onAppBeforeExit = () => this._handleAppExit();
             eventBus.on('app:beforeExit', this._onAppBeforeExit);
+
+            // Listen for app background/suspend events to suspend decoder
+            this._onAppHidden = () => this._handleAppHidden();
+            eventBus.on('app:hidden', this._onAppHidden);
+            this._onAppVisible = () => this._handleAppVisible();
+            eventBus.on('app:visible', this._onAppVisible);
 
             // ================================================================
             // REMOTE CONTROL HANDLERS
@@ -2597,6 +2603,103 @@ class PlayerPage extends Page {
         }
     }
 
+    /**
+     * Handle app going to background - suspend decoder and report paused progress.
+     * The decoder state is preserved via AVPlay suspend so playback can resume
+     * seamlessly when the user returns.
+     */
+    _handleAppHidden() {
+        if (!this._player || !this._item) return;
+
+        // Only suspend on Tizen where AVPlay supports suspend/restore
+        if (!this._isTizen()) {
+            return;
+        }
+
+        const mediaSource = this._player.getCurrentMediaSource();
+        const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
+        if (!playSessionId) return;
+
+        const positionTicks = this._player.getCurrentPositionTicks?.() || 0;
+        const backend = this._player._backend;
+
+        // Report paused progress via beacon so it survives app suspension
+        const serverUrl = api.serverUrl;
+        const accessToken = api.accessToken;
+        if (serverUrl && accessToken && positionTicks > 0) {
+            const progressPayload = {
+                ItemId: this._item.Id,
+                PlaySessionId: playSessionId,
+                MediaSourceId: mediaSource?.Id,
+                PositionTicks: Math.max(0, Math.round(Number(positionTicks)) || 0),
+                IsPaused: true,
+                IsMuted: Boolean(backend?.isMuted?.()),
+                VolumeLevel: Math.min(100, Math.max(0, Math.round(Number(backend?.getVolume?.())) || 100)),
+                EventName: 'pause',
+                PlayMethod: this._cachedPlayMethod || 'DirectPlay',
+                CanSeek: Boolean(mediaSource?.RunTimeTicks > 0)
+            };
+
+            try {
+                const progressUrl = `${serverUrl}/Sessions/Playing/Progress?ApiKey=${encodeURIComponent(accessToken)}`;
+                const blob = new Blob([JSON.stringify(progressPayload)], { type: 'application/json' });
+                navigator.sendBeacon(progressUrl, blob);
+            } catch (e) {
+                log.warn('Beacon progress report failed, falling back to async:', e);
+                api.reportPlaybackProgress(progressPayload).catch(() => {});
+            }
+        }
+
+        // Suspend the AVPlay decoder to preserve hardware state
+        if (typeof backend?.suspend === 'function') {
+            try {
+                backend.suspend();
+            } catch (e) {
+                log.warn('Failed to suspend AVPlay:', e);
+            }
+        }
+    }
+
+    /**
+     * Handle app returning to foreground - restore suspended decoder.
+     * If the decoder state was preserved, playback resumes seamlessly.
+     * If restoration fails (transcode expired), reload the stream.
+     */
+    async _handleAppVisible() {
+        if (!this._player || !this._item) return;
+
+        if (!this._isTizen()) return;
+
+        const backend = this._player._backend;
+        if (!backend || typeof backend.isSuspended !== 'function' || !backend.isSuspended()) return;
+
+        const url = backend.getCurrentUrl();
+        const mediaSource = this._player.getCurrentMediaSource();
+        const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
+
+        if (!url || !playSessionId) {
+            return;
+        }
+
+        const { success, wasPlaying } = await backend.restore(url, 0);
+
+        if (success) {
+            log.info('AVPlay restored from suspend');
+            if (wasPlaying) {
+                try {
+                    backend.unpause();
+                    this._reportPlaybackProgress('unpause');
+                } catch (e) {
+                    log.warn('Failed to resume after restore:', e);
+                }
+            }
+        } else {
+            log.warn('AVPlay restore failed, reporting stopped');
+            const positionTicks = this._player.getCurrentPositionTicks?.() || 0;
+            this._reportPlaybackStopped(mediaSource, positionTicks, false);
+        }
+    }
+
     // ========================================================================
     // Navigation
     // ========================================================================
@@ -2737,10 +2840,18 @@ class PlayerPage extends Page {
             this._subtitleTimeout = null;
         }
 
-        // Remove app exit listener
+        // Remove app lifecycle listeners
         if (this._onAppBeforeExit) {
             eventBus.off('app:beforeExit', this._onAppBeforeExit);
             this._onAppBeforeExit = null;
+        }
+        if (this._onAppHidden) {
+            eventBus.off('app:hidden', this._onAppHidden);
+            this._onAppHidden = null;
+        }
+        if (this._onAppVisible) {
+            eventBus.off('app:visible', this._onAppVisible);
+            this._onAppVisible = null;
         }
 
         // Remove remote control event listeners
