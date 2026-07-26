@@ -107,6 +107,15 @@ export class TizenAVPlayer {
         // waiting on onbufferingcomplete to refill the network pipeline.
         this._isNativeBuffering = false;
 
+        // Queue for operations that arrive during seek. Per Samsung docs, no
+        // AVPlay API calls are permitted between seekTo() and its callback.
+        // When play/pause is requested during seek, the operation is saved here
+        // and applied after the seek completes.
+        this._pendingOpAfterSeek = null;
+        // If a second seek arrives while one is in flight, queue it here and
+        // execute after the current seek finishes.
+        this._queuedSeekPositionMs = null;
+
         // ── Subtitle API Cooldown ────────────────────────────────────────────
         // Samsung's hardware decoder needs a settling period after
         // setSelectTrack('TEXT') / setSilentSubtitle() calls. Issuing seekTo()
@@ -1463,6 +1472,12 @@ export class TizenAVPlayer {
 
         if (!wasPlaying) return; // Already considered paused — nothing to do
 
+        // Queue 'pause' as the post-seek operation if a seek is in flight,
+        // so the intended state is preserved after the seek completes.
+        if (this._seekInProgress) {
+            this._pendingOpAfterSeek = 'pause';
+        }
+
         // Only call native pausing if AVPlay is actually in a PLAYING state.
         // During a seek or buffering phase, AVPlay is NOT in PLAYING state and
         // calling avplay.pause() throws PLAYER_ERROR_INVALID_OPERATION (code 15).
@@ -1506,20 +1521,19 @@ export class TizenAVPlayer {
         // Cancel any deferred pause — we want to play now.
         this._pendingPause = false;
 
+        if (this._seekInProgress) {
+            this._pendingOpAfterSeek = 'play';
+            this._isPlaying = true;
+            log.debug('unpause(): seek in progress — queued play for post-seek');
+            return;
+        }
+
         if (!this._isPlaying) {
             // Standard unpause path: was fully paused, go through the double-gate.
             this._isPlaying = true;
             this.onEvent({ type: 'play' });
             this._checkNativePlay();
         } else if (this._isPrepared) {
-            // Post-seek path: _isPlaying is already true (intent was never cleared)
-            // but Tizen may have stalled. Guard against calling play() while a seek
-            // is still in progress — the seek success callback will handle resume.
-            if (this._seekInProgress) {
-                log.debug('unpause(): seek in progress — deferring to seek callback');
-                return;
-            }
-
             // Directly resume native playback now that we know it's safe.
             try {
                 this._avplay.play();
@@ -1580,6 +1594,8 @@ export class TizenAVPlayer {
         this._isNativeBuffering = false;
         this._lastSubtitleApiTime = 0;
         this._deferredSeekTicks = null;
+        this._pendingOpAfterSeek = null;
+        this._queuedSeekPositionMs = null;
         if (this._deferredSeekTimerId !== null) {
             clearTimeout(this._deferredSeekTimerId);
             this._deferredSeekTimerId = null;
@@ -1653,6 +1669,19 @@ export class TizenAVPlayer {
      */
     seek(positionTicks, options = {}) {
         if (!this._avplay || !this._isPrepared) return;
+
+        // If a seek is already in flight, queue this one to run after it completes
+        // instead of attempting concurrent seeks which violate Samsung's AVPlay API
+        // contract (no API calls between seekTo and its callback).
+        if (this._seekInProgress) {
+            const targetTicks = positionTicks;
+            const targetMs = Math.floor(
+                Math.max(0, targetTicks - (this._currentPlayOptions?.transcodingOffsetTicks || 0)) / 10000
+            );
+            this._queuedSeekPositionMs = targetMs;
+            log.debug(`seek(): seek in progress — queued subsequent seek to ${targetMs}ms`);
+            return;
+        }
 
         try {
             if (options.suppressWaitingEvent) {
@@ -1810,20 +1839,48 @@ export class TizenAVPlayer {
                         }
                     }
 
+                    // ── Apply pending operation queued during seek ───────────────
+                    // If pause() or unpause() was called while the seek was in flight,
+                    // apply it now that the seek has completed.
+                    const pendingOp = this._pendingOpAfterSeek;
+                    this._pendingOpAfterSeek = null;
+                    if (pendingOp === 'pause') {
+                        this._isPlaying = false;
+                        this._isTizenPlaying = false;
+                        this._hasEmittedPlaying = false;
+                        log.debug('seek(): applied queued pause after seek');
+                    } else if (pendingOp === 'play') {
+                        this._isPlaying = true;
+                        this._isTizenPlaying = false;
+                        if (this._isPrepared && this._bufferingComplete) {
+                            this._checkNativePlay();
+                        }
+                        log.debug('seek(): applied queued play after seek');
+                    }
+
                     // Resume playback now that seek completed successfully.
-                    // We intentionally set _isTizenPlaying = false here (not at the
-                    // top of seek()) so that _checkNativePlay from onbufferingcomplete
-                    // does not call play() while seekTo is still in progress.
-                    if (wasPlayingBeforeSeek) {
+                    // Only resume normally if no pending op overrode the state.
+                    if (!pendingOp && wasPlayingBeforeSeek) {
                         this._isTizenPlaying = false;
                         this._checkNativePlay();
+                    }
+
+                    // ── Execute queued seek if another seek arrived in flight ────
+                    const queuedMs = this._queuedSeekPositionMs;
+                    if (queuedMs !== null) {
+                        this._queuedSeekPositionMs = null;
+                        if (this._avplay && this._isPrepared) {
+                            const queuedTicks = queuedMs * 10000;
+                            log.debug('seek(): executing queued seek after previous seek completed');
+                            this.seek(queuedTicks, { suppressWaitingEvent: true });
+                        }
                     }
 
                     // ── Post-Seek Safety Resume Net ──────────────────────────────
                     // On certain Tizen firmware, seekTo can leave the pipeline stuck
                     // in READY without firing buffering events. This safety timer
                     // re-asserts play() if the native layer hasn't resumed after 250ms.
-                    if (wasPlayingBeforeSeek) {
+                    if (wasPlayingBeforeSeek && !pendingOp) {
                         if (this._seekSafetyTimeoutId !== null) {
                             clearTimeout(this._seekSafetyTimeoutId);
                         }
@@ -1831,7 +1888,6 @@ export class TizenAVPlayer {
                             this._seekSafetyTimeoutId = null;
                             if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
                                 log.info('seek(): safety timeout fired, re-asserting native playback after skip/seek');
-                                // Force buffering complete as a last-resort fallback to ensure the gate passes
                                 this._bufferingComplete = true;
                                 this._checkNativePlay();
                             }
@@ -1848,15 +1904,41 @@ export class TizenAVPlayer {
                         this._bufferingCompleteDuringSeek = false;
                     }
 
+                    // Apply pending operation on error too
+                    const pendingOp = this._pendingOpAfterSeek;
+                    this._pendingOpAfterSeek = null;
+                    if (pendingOp === 'pause') {
+                        this._isPlaying = false;
+                        this._isTizenPlaying = false;
+                        this._hasEmittedPlaying = false;
+                    } else if (pendingOp === 'play') {
+                        this._isPlaying = true;
+                        this._isTizenPlaying = false;
+                        if (this._isPrepared && this._bufferingComplete) {
+                            this._checkNativePlay();
+                        }
+                    }
+
                     // Even on error, try to resume playback so the UI isn't stuck.
-                    if (wasPlayingBeforeSeek) {
+                    if (!pendingOp && wasPlayingBeforeSeek) {
                         log.warn('seek(): seekTo failed, trying to resume playback:', e);
                         this._isTizenPlaying = false;
                         this._checkNativePlay();
                     }
 
+                    // Execute queued seek on error too
+                    const queuedMs = this._queuedSeekPositionMs;
+                    if (queuedMs !== null) {
+                        this._queuedSeekPositionMs = null;
+                        if (this._avplay && this._isPrepared) {
+                            const queuedTicks = queuedMs * 10000;
+                            log.debug('seek(): executing queued seek after failed seek');
+                            this.seek(queuedTicks, { suppressWaitingEvent: true });
+                        }
+                    }
+
                     // Arm the safety net as a fallback.
-                    if (wasPlayingBeforeSeek) {
+                    if (wasPlayingBeforeSeek && !pendingOp) {
                         if (this._seekSafetyTimeoutId !== null) {
                             clearTimeout(this._seekSafetyTimeoutId);
                         }
@@ -1864,7 +1946,6 @@ export class TizenAVPlayer {
                             this._seekSafetyTimeoutId = null;
                             if (this._avplay && this._isPrepared && this._isPlaying && !this._isTizenPlaying) {
                                 log.info('seek(): error fallback safety timer fired');
-                                // Force buffering complete as a last-resort fallback
                                 this._bufferingComplete = true;
                                 this._checkNativePlay();
                             }
