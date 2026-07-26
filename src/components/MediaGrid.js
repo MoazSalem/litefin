@@ -134,6 +134,7 @@ class MediaGrid extends Component {
             this._btn = null;
         }
         if (this._gridEl) {
+            lazyLoader.clearContainer(this._gridEl);
             this._gridEl.removeEventListener('mousedown', this._handleActivate);
             this._gridEl.removeEventListener('click', this._handleActivate);
             this._gridEl = null;
