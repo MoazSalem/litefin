@@ -444,6 +444,51 @@ export class ApiClient {
 
                 log.error(`${msg}:`, error.message);
 
+                // =============================================================
+                // WAKE-ON-LAN ON REQUEST TIMEOUT / UNREACHABLE RETRY
+                // =============================================================
+                // If the user has enabled Wake-on-LAN on timeout and provided
+                // a valid MAC address, send a magic packet and retry the probe.
+                // =============================================================
+                const wolTimeoutEnabled = storage.getItem('pref:enableWolOnTimeout') === 'true';
+                const wolMac = storage.getItem('pref:wolMacAddress');
+
+                if (wolTimeoutEnabled && wolMac && !options._isWolTimeoutRetry) {
+                    log.info(`Request failed/timed out. Wake-on-LAN on timeout active. Broadcasting packet to ${wolMac}...`);
+
+                    try {
+                        // Send Wake-on-LAN Magic Packet
+                        sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
+
+                        // Retry loop: probe server status every 3s for up to 5 attempts (~15 seconds)
+                        const maxAttempts = 5;
+                        const retryDelayMs = 3000;
+
+                        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                            log.info(`Probing server status post-WOL (attempt ${attempt}/${maxAttempts})...`);
+                            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+
+                            try {
+                                const testUrl = `${this._serverUrl}/System/Info/Public`;
+                                const testRes = await fetch(testUrl, {
+                                    method: 'GET',
+                                    headers: { Accept: 'application/json' }
+                                });
+
+                                if (testRes.ok) {
+                                    log.info('Server responded to status probe! Re-executing failed API request...');
+                                    // Re-run original request with _isWolTimeoutRetry flag set to prevent recursion loops
+                                    return await this.request(endpoint, { ...options, _isWolTimeoutRetry: true }, isRetry);
+                                }
+                            } catch (probeErr) {
+                                log.debug(`Server status probe ${attempt}/${maxAttempts} failed — server still booting...`);
+                            }
+                        }
+                    } catch (wolCycleErr) {
+                        log.warn('Error during WOL timeout recovery cycle:', wolCycleErr);
+                    }
+                }
+
                 const networkError = new ServerUnreachableError(`${msg}. Please check your network and server status.`);
                 eventBus.emit('api:offline', { url: this._serverUrl, isTimeout });
                 throw networkError;
@@ -2186,6 +2231,111 @@ async function _discoverViaLunaService(onServerFound) {
 }
 
 /**
+ * Send Wake-on-LAN Magic Packet via background service
+ * ============================================================================
+ * Initiates a request to the local Node.js companion service to broadcast
+ * a Wake-on-LAN magic packet targeting the specified server MAC address.
+ * Pre-launches the Tizen background service if required to ensure the HTTP
+ * proxy is active.
+ * ============================================================================
+ * @param {string} macAddress - Target server MAC address (e.g., '00:11:22:33:44:55')
+ * @returns {Promise<boolean>} True if the magic packet was successfully dispatched
+ */
+export async function sendWakeOnLan(macAddress) {
+    if (!macAddress) {
+        log.warn('Wake-on-LAN requested, but no MAC address was provided');
+        return false;
+    }
+
+    log.info(`Initiating Wake-on-LAN command for MAC: ${macAddress}`);
+
+    // 1. WebOS implementation: dispatch Luna request to the background service
+    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+        log.info('Platform WebOS: Dispatching WOL request to Luna service org.litefin.app.service');
+
+        const sendLunaRequest = () =>
+            new Promise((resolve) => {
+                try {
+                    window.webOS.service.request('luna://org.litefin.app.service', {
+                        method: 'wol',
+                        parameters: { mac: macAddress },
+                        onSuccess(response) {
+                            log.info('Luna WOL request succeeded:', response);
+                            resolve({ success: true, response });
+                        },
+                        onFailure(err) {
+                            log.warn('Luna WOL request failed:', err);
+                            resolve({ success: false, err });
+                        }
+                    });
+                } catch (e) {
+                    log.error('Exception during Luna WOL request dispatch:', e);
+                    resolve({ success: false, err: e });
+                }
+            });
+
+        // First attempt to invoke Luna method
+        let res = await sendLunaRequest();
+
+        // If service is cold-booting, WebOS returns "org.litefin.app.service is not running" while starting it.
+        // Wait 600ms for the OS to initialize the Node.js background process and retry.
+        if (!res.success && res.err) {
+            const errStr = typeof res.err === 'string' ? res.err : res.err.errorText || JSON.stringify(res.err);
+            if (errStr.includes('not running')) {
+                log.info('Luna service process is cold-booting — waiting 600ms for startup retry...');
+                await new Promise((resolve) => setTimeout(resolve, 600));
+                res = await sendLunaRequest();
+            }
+        }
+
+        if (res.success) {
+            return true;
+        }
+    }
+
+    // 2. Tizen/HTTP Proxy implementation: fetch localhost:8123/wol
+    // We dynamically import PlayerSettings to prevent circular dependency cycles.
+    const { PlayerSettings } = await import('../utils/PlayerSettings.js');
+    const bgEnabled = PlayerSettings.get('enableBackgroundService') !== false;
+
+    if (bgEnabled) {
+        // Pre-launch ytresolver background service on Tizen if needed
+        if (typeof tizen !== 'undefined') {
+            try {
+                const appId = tizen.application.getCurrentApplication().appInfo.id;
+                const pkgId = appId.split('.')[0];
+                log.info(`Platform Tizen: Pre-launching ytresolver background service: ${pkgId}.ytresolver`);
+                tizen.application.launch(pkgId + '.ytresolver');
+                
+                // Allow a brief 500ms delay for the service to bind port and start listening
+                await new Promise((resolve) => setTimeout(resolve, 500));
+            } catch (preLaunchErr) {
+                log.warn('Failed to pre-launch Tizen background service for WOL:', preLaunchErr);
+            }
+        }
+
+        log.info('Dispatching WOL request to local HTTP proxy on port 8123');
+        try {
+            const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                // Keep-alive or short timeout since it is local loopback
+                timeout: 3000
+            });
+            const data = await res.json();
+            log.info('Local HTTP WOL response received:', data);
+            return !!(data && data.success);
+        } catch (fetchErr) {
+            log.warn('Failed to dispatch WOL request to local HTTP proxy:', fetchErr);
+            return false;
+        }
+    }
+
+    log.warn('WOL command skipped: background service is disabled or platform is unsupported');
+    return false;
+}
+
+/**
  * Discover Jellyfin servers on local network
  */
 export async function discoverServers(onProgress = null, onServerFound = null) {
@@ -2193,6 +2343,20 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
     cancelDiscovery();
 
     log.info('Starting server discovery...');
+
+    // =========================================================================
+    // WAKE-ON-LAN ON SERVER SCAN
+    // =========================================================================
+    // If enabled in settings, broadcast a Wake-on-LAN magic packet to wake
+    // sleeping servers on the local subnet while performing discovery.
+    // =========================================================================
+    const wolOnScanEnabled = storage.getItem('pref:enableWolOnServerScan') === 'true';
+    const wolMac = storage.getItem('pref:wolMacAddress');
+
+    if (wolOnScanEnabled && wolMac) {
+        log.info(`Server discovery initiated. Sending Wake-on-LAN packet to ${wolMac}...`);
+        sendWakeOnLan(wolMac).catch((e) => log.warn('Failed to send WOL on server discovery scan:', e));
+    }
 
     /*
      * =========================================================================
