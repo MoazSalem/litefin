@@ -444,6 +444,51 @@ export class ApiClient {
 
                 log.error(`${msg}:`, error.message);
 
+                // =============================================================
+                // WAKE-ON-LAN ON REQUEST TIMEOUT / UNREACHABLE RETRY
+                // =============================================================
+                // If the user has enabled Wake-on-LAN on timeout and provided
+                // a valid MAC address, send a magic packet and retry the probe.
+                // =============================================================
+                const wolTimeoutEnabled = storage.getItem('pref:enableWolOnTimeout') === 'true';
+                const wolMac = storage.getItem('pref:wolMacAddress');
+
+                if (wolTimeoutEnabled && wolMac && !options._isWolTimeoutRetry) {
+                    log.info(`Request failed/timed out. Wake-on-LAN on timeout active. Broadcasting packet to ${wolMac}...`);
+
+                    try {
+                        // Send Wake-on-LAN Magic Packet
+                        sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
+
+                        // Retry loop: probe server status every 3s for up to 5 attempts (~15 seconds)
+                        const maxAttempts = 5;
+                        const retryDelayMs = 3000;
+
+                        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                            log.info(`Probing server status post-WOL (attempt ${attempt}/${maxAttempts})...`);
+                            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+
+                            try {
+                                const testUrl = `${this._serverUrl}/System/Info/Public`;
+                                const testRes = await fetch(testUrl, {
+                                    method: 'GET',
+                                    headers: { Accept: 'application/json' }
+                                });
+
+                                if (testRes.ok) {
+                                    log.info('Server responded to status probe! Re-executing failed API request...');
+                                    // Re-run original request with _isWolTimeoutRetry flag set to prevent recursion loops
+                                    return await this.request(endpoint, { ...options, _isWolTimeoutRetry: true }, isRetry);
+                                }
+                            } catch (probeErr) {
+                                log.debug(`Server status probe ${attempt}/${maxAttempts} failed — server still booting...`);
+                            }
+                        }
+                    } catch (wolCycleErr) {
+                        log.warn('Error during WOL timeout recovery cycle:', wolCycleErr);
+                    }
+                }
+
                 const networkError = new ServerUnreachableError(`${msg}. Please check your network and server status.`);
                 eventBus.emit('api:offline', { url: this._serverUrl, isTimeout });
                 throw networkError;

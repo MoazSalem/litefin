@@ -1294,15 +1294,14 @@ class SettingsPage extends Page {
                 <!-- WAKE-ON-LAN (WOL) SERVER WAKE SETTINGS                  -->
                 <!-- ======================================================= -->
                 <!-- Allows the user to configure Litefin to send a Magic    -->
-                <!-- Packet on startup to boot their Jellyfin server from    -->
-                <!-- sleep/hibernation states.                               -->
+                <!-- Packet on startup or timeout to boot their server.       -->
                 <!-- ======================================================= -->
-                <h3 class="setting-section-title" data-i18n="WakeOnLanTitle">Wake-on-LAN (WOL)</h3>
+                <h3 class="setting-section-title" data-i18n="WakeOnLanTitle">${i18n.t('WakeOnLanTitle')}</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="WakeOnLanStartup">Wake-on-LAN on Startup</span>
-                        <span class="setting-description">Send a Wake-on-LAN magic packet to wake up the server when Litefin starts.</span>
+                        <span class="setting-name" data-i18n="WakeOnLanStartup">${i18n.t('WakeOnLanStartup')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanStartupDescription">${i18n.t('WakeOnLanStartupDescription')}</span>
                     </div>
                     <div class="setting-control">
                         <button class="toggle-switch ${storage.getItem('pref:enableWolOnStartup') === 'true' ? 'active' : ''}" 
@@ -1312,11 +1311,24 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Conditional container for MAC Address entry -->
-                <div class="setting-item" id="wol-mac-container" style="display: ${storage.getItem('pref:enableWolOnStartup') === 'true' ? '' : 'none'}">
+                <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="WolMacAddress">Server MAC Address</span>
-                        <span class="setting-description">Enter the MAC address of your server (e.g. 00:11:22:33:44:55 or raw hex 001122334455). Colons are added automatically.</span>
+                        <span class="setting-name" data-i18n="WakeOnLanTimeout">${i18n.t('WakeOnLanTimeout')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanTimeoutDescription">${i18n.t('WakeOnLanTimeoutDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolOnTimeout') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-on-timeout" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Conditional container for MAC Address entry -->
+                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WolMacAddress">${i18n.t('WolMacAddress')}</span>
+                        <span class="setting-description" data-i18n="WolMacAddressDescription">${i18n.t('WolMacAddressDescription')}</span>
                     </div>
                     <div class="setting-control">
                         <input id="input-wol-mac-address" type="text" class="focusable" tabindex="0" data-focusable="true" 
@@ -6402,14 +6414,17 @@ class SettingsPage extends Page {
             });
         }
 
-        // =====================================================================
-        // WAKE-ON-LAN (WOL) EVENTS
-        // =====================================================================
-        // Registers click listener to toggle Wake-on-LAN at application startup.
-        // When enabled, it reveals the MAC address input container row and
-        // triggers spatial navigator cache invalidation to ensure focused paths
-        // are updated dynamically on the TV layout.
-        // =====================================================================
+        // Helper function to update MAC address input container visibility
+        const updateWolMacVisibility = () => {
+            const wolStartup = storage.getItem('pref:enableWolOnStartup') === 'true';
+            const wolTimeout = storage.getItem('pref:enableWolOnTimeout') === 'true';
+            const macContainer = this.$('#wol-mac-container');
+            if (macContainer) {
+                macContainer.style.display = (wolStartup || wolTimeout) ? '' : 'none';
+            }
+            focusManager.invalidateCache('settings-content');
+        };
+
         const wolToggleBtn = this.$('#toggle-wol-on-startup');
         if (wolToggleBtn) {
             wolToggleBtn.addEventListener('click', () => {
@@ -6422,13 +6437,23 @@ class SettingsPage extends Page {
                 wolToggleBtn.classList.toggle('active', newValue);
 
                 // Synchronize visibility of the MAC address input field row
-                const macContainer = this.$('#wol-mac-container');
-                if (macContainer) {
-                    macContainer.style.display = newValue ? '' : 'none';
-                }
+                updateWolMacVisibility();
+            });
+        }
 
-                // Invalidate layout cache to permit spatial focus on the new element
-                focusManager.invalidateCache('settings-content');
+        const wolTimeoutToggleBtn = this.$('#toggle-wol-on-timeout');
+        if (wolTimeoutToggleBtn) {
+            wolTimeoutToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolOnTimeout') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolOnTimeout', newValue ? 'true' : 'false');
+                storage.flush();
+                wolTimeoutToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
             });
         }
 
