@@ -304,6 +304,9 @@ export class WebOSPlayer {
         video.removeAttribute('src');
         video.load();
 
+        // Ensure HLS manifest exists before assigning source
+        await MediaHelper.pollHlsManifest(options.url);
+
         // Use a <source> element with the MIME type hint so WebOS picks the
         // right codec path — without it, some versions skip the native HLS path.
         while (video.firstChild) {

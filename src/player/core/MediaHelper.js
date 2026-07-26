@@ -14,6 +14,9 @@
 import { storage } from '../../utils/StorageService.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { state } from '../../core/StateManager.js';
+import { logger } from '../../utils/Logger.js';
+
+const log = logger.create('MediaHelper');
 
 export const MediaHelper = {
     /**
@@ -518,6 +521,49 @@ export const MediaHelper = {
      */
     getCrossOriginValue(mediaSource) {
         return null; // Disable CORS checks for video element to avoid "Failed to initialize" on local networks
+    },
+
+    /**
+     * Poll an HLS manifest URL until the server writes #EXTM3U.
+     * Prevents backends from opening/loading a URL that the transcoder
+     * hasn't started writing yet, which causes unrecoverable decoder errors
+     * on some Smart TV platforms.
+     *
+     * @param {string} url - HLS playlist URL
+     * @param {Function} [shouldAbort] - Optional callback; return true to stop polling
+     * @returns {Promise<void>} Resolves when manifest is ready or timeout reached
+     */
+    async pollHlsManifest(url, shouldAbort) {
+        if (!url || !url.includes('.m3u8')) return;
+
+        const maxRetries = 30;
+        const delayMs = 500;
+
+        log.info(`Polling HLS manifest: ${url}`);
+
+        for (let i = 0; i < maxRetries; i++) {
+            if (typeof shouldAbort === 'function' && shouldAbort()) {
+                log.info('HLS polling aborted');
+                return;
+            }
+
+            try {
+                const response = await fetch(url, { method: 'GET' });
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text && text.includes('#EXTM3U')) {
+                        log.info(`HLS manifest ready after ${i * delayMs}ms`);
+                        return;
+                    }
+                }
+            } catch (e) {
+                // Server may still be starting up — retry
+            }
+
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+
+        log.warn(`HLS manifest polling timed out after ${maxRetries * delayMs}ms — proceeding`);
     }
 };
 

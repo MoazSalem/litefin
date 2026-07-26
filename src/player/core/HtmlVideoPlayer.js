@@ -425,6 +425,11 @@ export class HtmlVideoPlayer {
     async _playNative(video, options) {
         log.info('Using native playback');
 
+        // Ensure HLS manifest exists before assigning source
+        if (options.url && options.url.includes('.m3u8')) {
+            await MediaHelper.pollHlsManifest(options.url);
+        }
+
         // Set cross-origin if needed
         const crossOrigin = MediaHelper.getCrossOriginValue(options.mediaSource);
         if (crossOrigin) {
