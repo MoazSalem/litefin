@@ -174,6 +174,9 @@ export class TizenAVPlayer {
         this._deferredSeekTicks = null;
         this._deferredSeekTimerId = null;
 
+        // Initial buffer gate timeout ID (3s safety fallback)
+        this._initialBufferTimeoutId = null;
+
         // Check Tizen availability: prioritize webapis (Samsung Hardware API) over tizen (Universal API)
         // On most Samsung TVs, webapis.avplay is the direct hardware interface.
         const avplay = window.webapis?.avplay || window.tizen?.avplay || null;
@@ -617,6 +620,18 @@ export class TizenAVPlayer {
                 }, 2000);
             }
 
+            // Initial buffer gate: 3s timeout fallback.
+            // If onbufferingcomplete never fires (unstable network or firmware quirk),
+            // force the gate open so the stream starts instead of hanging in READY.
+            this._initialBufferTimeoutId = setTimeout(() => {
+                this._initialBufferTimeoutId = null;
+                if (this._avplay && this._isPrepared && !this._bufferingComplete) {
+                    log.warn('Initial buffer timeout (3s) — forcing play');
+                    this._bufferingComplete = true;
+                    this._checkNativePlay();
+                }
+            }, 3000);
+
             // Check if we can start native playback yet (requires buffering complete).
             this._checkNativePlay();
 
@@ -717,6 +732,10 @@ export class TizenAVPlayer {
                 // Buffering progress (0-100)
             },
             onbufferingcomplete: () => {
+                if (this._initialBufferTimeoutId) {
+                    clearTimeout(this._initialBufferTimeoutId);
+                    this._initialBufferTimeoutId = null;
+                }
                 log.info('Buffering complete (network threshold reached)');
                 this._bufferingComplete = true;
                 this._isNativeBuffering = false;
@@ -1679,6 +1698,10 @@ export class TizenAVPlayer {
         if (this._readyTrackTimeoutId) {
             clearTimeout(this._readyTrackTimeoutId);
             this._readyTrackTimeoutId = null;
+        }
+        if (this._initialBufferTimeoutId) {
+            clearTimeout(this._initialBufferTimeoutId);
+            this._initialBufferTimeoutId = null;
         }
 
         // Unconditionally cancel the seek safety timer on stop to avoid fires
