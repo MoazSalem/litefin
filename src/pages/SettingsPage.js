@@ -2626,7 +2626,11 @@ class SettingsPage extends Page {
                 value: 'playerPreviousChapter',
                 label: i18n.t('OptionPlayerPreviousChapter') || 'Player: Previous Chapter'
             },
-            { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' }
+            { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' },
+            {
+                value: 'sendWol',
+                label: i18n.t('OptionSendWakeOnLan') || 'Send Wake-on-LAN Packet'
+            }
         ];
 
         return `
