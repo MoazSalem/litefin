@@ -800,6 +800,11 @@ class LoginPage extends Page {
                 // No public users - show manual login with auto-redirect flag
                 this._goToManualLogin(true);
             }
+
+            // Ensure splash screen hides when user selection or manual login is shown
+            setTimeout(() => {
+                eventBus.emit('app:hideSplash');
+            }, 10);
         } catch (error) {
             // Connection failed - show server selection
             log.warn('Auto-connect failed, showing server selection', error);
@@ -817,6 +822,7 @@ class LoginPage extends Page {
             setTimeout(() => {
                 const connectBtn = this.$('.connect-btn');
                 if (connectBtn) connectBtn.focus();
+                eventBus.emit('app:hideSplash');
             }, 100);
         }
     }

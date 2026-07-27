@@ -281,6 +281,7 @@ const normalConfig = {
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
+    target: ['web', 'es5'],
     mode: 'production',
     performance: {
         maxAssetSize: 4000000,
