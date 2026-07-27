@@ -236,10 +236,11 @@ const normalConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -315,10 +316,11 @@ const legacyConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -415,10 +417,11 @@ const ultraLegacyConfig = {
         rules: [
             {
                 test: /\.m?js$/,
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -548,10 +551,11 @@ const normalOblongConfig = {
             {
                 // Transpile JS using Babel for Chromium 63
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
