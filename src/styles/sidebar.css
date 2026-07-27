@@ -247,7 +247,8 @@ body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
     transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
 }
 
-.sidebar.has-focus .sidebar-focus-indicator {
+.sidebar.expanded.has-focus .sidebar-focus-indicator,
+.sidebar:hover.has-focus .sidebar-focus-indicator {
     opacity: 1;
 }
 
