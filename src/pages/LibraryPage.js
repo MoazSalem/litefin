@@ -783,6 +783,10 @@ class LibraryPage extends Page {
             eventBus.off('focus:changed', this._onGridFocusChanged);
             this._onGridFocusChanged = null;
         }
+        if (this._gridFocusFrameId) {
+            cancelAnimationFrame(this._gridFocusFrameId);
+            this._gridFocusFrameId = null;
+        }
     }
 
     // ========================================================================
@@ -2322,49 +2326,73 @@ class LibraryPage extends Page {
         });
 
         // ====================================================================
-        // PROGRESSIVE DOM TRIGGER — focus:changed listener
+        // PROGRESSIVE DOM TRIGGER — focus:changed listener (Deferred)
         // ====================================================================
         // Fires after every focus change anywhere in the page. We filter to
         // cards inside the library-grid and check if we are close enough to
         // the bottom of the rendered DOM to warrant adding the next chunk.
         //
-        // We replace any previous listener stored on the instance so that
-        // re-renders (sort / filter change) don't accumulate duplicate handlers.
+        // PERFORMANCE: Evaluation and DOM chunk appends/prepends are deferred
+        // to requestAnimationFrame so that DOM layout reads (_measureGridRowHeight)
+        // and chunk insertions do not execute synchronously inside the keydown/
+        // focus transition stack, allowing the scroll animation to launch smoothly.
         // ====================================================================
         if (this._onGridFocusChanged) {
             eventBus.off('focus:changed', this._onGridFocusChanged);
+            if (this._gridFocusFrameId) {
+                cancelAnimationFrame(this._gridFocusFrameId);
+                this._gridFocusFrameId = null;
+            }
         }
         this._onGridFocusChanged = (element) => {
             // Only act on media-cards inside this grid
             if (!element || !grid.contains(element)) return;
             if (!element.classList.contains('media-card')) return;
 
-            // Find DOM index of the focused card (fast linear scan — window is small)
-            const allCards = grid.querySelectorAll('.media-card');
-            let domIndex = -1;
-            for (let i = 0; i < allCards.length; i++) {
-                if (allCards[i] === element) { domIndex = i; break; }
-            }
-            if (domIndex === -1) return;
-
-            // The card's index in the full items array
-            const itemIndex = this.state.gridWindowStart + domIndex;
-
-            // -----------------------------------------------------------------------
-            // DOWNWARD TRIGGER: within 2 rows of the bottom rendered boundary
-            // -----------------------------------------------------------------------
-            const appendThreshold = this.state.gridWindowEnd - (currentColumns * 2);
-            if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
-                this._appendGridChunk(grid, this.state.items, currentColumns);
+            // ================================================================
+            // DEFERRED GRID CHUNK EVALUATION
+            // ================================================================
+            // Cancel any pending frame request from rapid D-pad key holding.
+            // Defer chunk boundary checking and DOM chunking (_appendGridChunk /
+            // _prependGridChunk) to requestAnimationFrame so layout measurements
+            // and DOM mutations do not interrupt the focus transition paint or
+            // scroll animation setup on the main thread.
+            // ================================================================
+            if (this._gridFocusFrameId) {
+                cancelAnimationFrame(this._gridFocusFrameId);
             }
 
-            // -----------------------------------------------------------------------
-            // UPWARD TRIGGER: within 2 rows of the top rendered boundary
-            // -----------------------------------------------------------------------
-            const prependThreshold = this.state.gridWindowStart + (currentColumns * 2);
-            if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
-                this._prependGridChunk(grid, this.state.items, currentColumns);
-            }
+            this._gridFocusFrameId = requestAnimationFrame(() => {
+                this._gridFocusFrameId = null;
+                if (!grid || !document.contains(grid)) return;
+
+                // Find DOM index of the focused card (fast linear scan — window is small)
+                const allCards = grid.querySelectorAll('.media-card');
+                let domIndex = -1;
+                for (let i = 0; i < allCards.length; i++) {
+                    if (allCards[i] === element) { domIndex = i; break; }
+                }
+                if (domIndex === -1) return;
+
+                // The card's index in the full items array
+                const itemIndex = this.state.gridWindowStart + domIndex;
+
+                // -----------------------------------------------------------------------
+                // DOWNWARD TRIGGER: within 2 rows of the bottom rendered boundary
+                // -----------------------------------------------------------------------
+                const appendThreshold = this.state.gridWindowEnd - (currentColumns * 2);
+                if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                    this._appendGridChunk(grid, this.state.items, currentColumns);
+                }
+
+                // -----------------------------------------------------------------------
+                // UPWARD TRIGGER: within 2 rows of the top rendered boundary
+                // -----------------------------------------------------------------------
+                const prependThreshold = this.state.gridWindowStart + (currentColumns * 2);
+                if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                    this._prependGridChunk(grid, this.state.items, currentColumns);
+                }
+            });
         };
         eventBus.on('focus:changed', this._onGridFocusChanged);
 

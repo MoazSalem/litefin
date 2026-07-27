@@ -90,6 +90,17 @@ class ScrollController {
         this._horizontalScrollAnimationId = null;
 
         // ====================================================================
+        // NATIVE SCROLL ANIMATION STATE TRACKING
+        // ====================================================================
+        // Native container.scrollTo({ behavior: 'smooth' }) offloads the
+        // scroll animation to the native browser rendering thread.
+        // We track native scroll active state using a timer so isAnimating
+        // returns true throughout native scrolling, preventing LazyLoader
+        // from firing heavy image loads and DOM mutations mid-scroll.
+        // ====================================================================
+        this._nativeScrollActive = false;
+        this._nativeScrollTimeout = null;
+
         // PERFORMANCE: offsetTop cache to prevent DOM reflows on every keypress.
         //
         // getCumulativeOffsetTop() walks the offsetParent chain — each step
@@ -114,7 +125,11 @@ class ScrollController {
      * @returns {boolean}
      */
     get isAnimating() {
-        return this._verticalScrollAnimationId !== null || this._horizontalScrollAnimationId !== null;
+        return (
+            this._verticalScrollAnimationId !== null ||
+            this._horizontalScrollAnimationId !== null ||
+            this._nativeScrollActive === true
+        );
     }
 
     /**
@@ -122,7 +137,11 @@ class ScrollController {
      * @private
      */
     _checkScrollFinished() {
-        if (this._verticalScrollAnimationId === null && this._horizontalScrollAnimationId === null) {
+        if (
+            this._verticalScrollAnimationId === null &&
+            this._horizontalScrollAnimationId === null &&
+            !this._nativeScrollActive
+        ) {
             eventBus.emit('scroll:finished');
         }
     }
@@ -358,23 +377,44 @@ class ScrollController {
             }
 
             try {
+                // ============================================================
+                // NATIVE SCROLL ACTIVE STATE MANAGEMENT
+                // ============================================================
+                // Mark native vertical scroll active so isAnimating getter returns true.
+                // Reset any existing native scroll timeout so rapid keypresses keep
+                // isAnimating true throughout the continuous scrolling gesture.
+                // ============================================================
+                this._nativeScrollActive = true;
+                if (this._nativeScrollTimeout) {
+                    clearTimeout(this._nativeScrollTimeout);
+                }
+
                 container.scrollTo({
                     top: targetScroll,
                     behavior: 'smooth'
                 });
+
+                // Set a 250ms silence timer after invoking native scrollTo.
+                // Once native scroll settles, clear active state and emit scroll:finished.
+                this._nativeScrollTimeout = setTimeout(() => {
+                    this._nativeScrollActive = false;
+                    this._nativeScrollTimeout = null;
+                    this._checkScrollFinished();
+                }, 250);
 
                 // Prevent horizontal shifts on layout boundaries.
                 if (container.scrollLeft !== 0) {
                     container.scrollLeft = 0;
                 }
 
-                // DO NOT call _checkScrollFinished() here — the native smooth
-                // scroll is still in progress; scroll:finished would fire
-                // prematurely. The LazyLoader's native scroll event listener
-                // naturally handles cleanup via its scroll debounce after
-                // the animation settles.
                 return;
             } catch (nativeError) {
+                // Clear active native scroll state on failure to avoid stale locks
+                this._nativeScrollActive = false;
+                if (this._nativeScrollTimeout) {
+                    clearTimeout(this._nativeScrollTimeout);
+                    this._nativeScrollTimeout = null;
+                }
                 // Log warning and fall through to standard JS RAF smooth scroll fallback.
                 console.warn('[ScrollController] Native smooth scrollTo failed, falling back to JS RAF:', nativeError);
             }
@@ -513,6 +553,13 @@ class ScrollController {
                 this._verticalScrollAnimationId = null;
             }
             this._verticalScrollState = null;
+
+            // Clear any active native scroll timer and reset native state
+            if (this._nativeScrollTimeout) {
+                clearTimeout(this._nativeScrollTimeout);
+                this._nativeScrollTimeout = null;
+            }
+            this._nativeScrollActive = false;
         } else {
             if (this._horizontalScrollAnimationId) {
                 cancelAnimationFrame(this._horizontalScrollAnimationId);
