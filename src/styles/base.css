@@ -45,7 +45,7 @@
 
     /* Global Text Fallbacks (Crucial for ultra-legacy ponyfill stability) */
     --jf-text-primary: #ffffff;
-    --jf-text-secondary: #ffffffcc;
+    --jf-text-secondary: rgba(255, 255, 255, 0.8);
     --jf-text-tertiary: #666666;
 
     /* Legacy Aliases (Compatibility for untracked CSS files) */
