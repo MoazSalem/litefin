@@ -5,12 +5,52 @@
  * Polyfills for Web APIs missing in older Chromium versions that core-js does
  * not cover (core-js only polyfills JS language built-ins).
  *
- * These are bundled via webpack entry arrays for Normal (Chrome 63) and
- * Legacy (Chrome 47) builds. For Chrome 32 (Ultra-Legacy), these are provided
- * inline in index.ultra-legacy.html so they run before the webpack bundle.
- * Modern/Debug builds (Chrome 85+) do not include this file at all.
+ * Included in Webpack entry arrays for Normal and Legacy builds.
  * ============================================================================
  */
+
+// ----------------------------------------------------------------------------
+// Element.matches() — added in Chrome 34 (vendor-prefixed in earlier WebKit).
+// ----------------------------------------------------------------------------
+if (typeof Element !== 'undefined' && !Element.prototype.matches) {
+    Element.prototype.matches =
+        Element.prototype.msMatchesSelector ||
+        Element.prototype.webkitMatchesSelector ||
+        function (selector) {
+            const matches = (this.document || this.ownerDocument).querySelectorAll(selector);
+            let i = matches.length;
+            while (--i >= 0 && matches.item(i) !== this) {}
+            return i > -1;
+        };
+}
+
+// ----------------------------------------------------------------------------
+// Element.closest() — added in Chrome 41. Used extensively in FocusManager,
+// ScrollController, and pages for delegated event handling (e.target.closest).
+// ----------------------------------------------------------------------------
+if (typeof Element !== 'undefined' && !Element.prototype.closest) {
+    Element.prototype.closest = function (selector) {
+        let el = this;
+        while (el && el.nodeType === 1) {
+            if (el.matches ? el.matches(selector) : el.webkitMatchesSelector ? el.webkitMatchesSelector(selector) : false) {
+                return el;
+            }
+            el = el.parentElement || el.parentNode;
+        }
+        return null;
+    };
+}
+
+// ----------------------------------------------------------------------------
+// Element.remove() — added in Chrome 23 / WebKit 537+.
+// ----------------------------------------------------------------------------
+if (typeof Element !== 'undefined' && !Element.prototype.remove) {
+    Element.prototype.remove = function () {
+        if (this.parentNode) {
+            this.parentNode.removeChild(this);
+        }
+    };
+}
 
 // ----------------------------------------------------------------------------
 // AbortController — added in Chrome 66. Required for fetch timeout patterns
@@ -45,18 +85,54 @@ if (typeof NodeList !== 'undefined' && NodeList.prototype && !NodeList.prototype
 }
 
 // ----------------------------------------------------------------------------
-// Element.after() — added in Chrome 54. DOM mutation helper.
+// ChildNode.after() / before() / prepend() / append() — added in Chrome 54.
 // ----------------------------------------------------------------------------
-if (typeof Element !== 'undefined' && !Element.prototype.after) {
-    Element.prototype.after = function () {
-        const argArr = Array.prototype.slice.call(arguments);
-        const parent = this.parentNode;
-        if (parent) {
-            const next = this.nextSibling;
+if (typeof Element !== 'undefined') {
+    if (!Element.prototype.after) {
+        Element.prototype.after = function () {
+            const argArr = Array.prototype.slice.call(arguments);
+            const parent = this.parentNode;
+            if (parent) {
+                const next = this.nextSibling;
+                for (let i = 0; i < argArr.length; i++) {
+                    const node = typeof argArr[i] === 'string' ? document.createTextNode(argArr[i]) : argArr[i];
+                    parent.insertBefore(node, next);
+                }
+            }
+        };
+    }
+
+    if (!Element.prototype.before) {
+        Element.prototype.before = function () {
+            const argArr = Array.prototype.slice.call(arguments);
+            const parent = this.parentNode;
+            if (parent) {
+                for (let i = 0; i < argArr.length; i++) {
+                    const node = typeof argArr[i] === 'string' ? document.createTextNode(argArr[i]) : argArr[i];
+                    parent.insertBefore(node, this);
+                }
+            }
+        };
+    }
+
+    if (!Element.prototype.prepend) {
+        Element.prototype.prepend = function () {
+            const argArr = Array.prototype.slice.call(arguments);
+            const first = this.firstChild;
             for (let i = 0; i < argArr.length; i++) {
                 const node = typeof argArr[i] === 'string' ? document.createTextNode(argArr[i]) : argArr[i];
-                parent.insertBefore(node, next);
+                this.insertBefore(node, first);
             }
-        }
-    };
+        };
+    }
+
+    if (!Element.prototype.append) {
+        Element.prototype.append = function () {
+            const argArr = Array.prototype.slice.call(arguments);
+            for (let i = 0; i < argArr.length; i++) {
+                const node = typeof argArr[i] === 'string' ? document.createTextNode(argArr[i]) : argArr[i];
+                this.appendChild(node);
+            }
+        };
+    }
 }

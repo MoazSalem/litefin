@@ -549,15 +549,31 @@ class SmartHubManager {
         // Prepare list of sections to return to Samsung Smart Hub
         const sections = [];
 
-        /* ── Continue Watching (Merged) ───────────────────────────────────
-         * Interweaves partially-played items and next-up episodes chronologically. */
-        const tiles = mergedItems
-            .map((item) => this._buildTile(item))
-            .filter(Boolean); /* _buildTile returns null for unsupported types. */
+        /* ── Dedicated Section per Item ──────────────────────────────────
+         * Create an individual section for each item in the chronologically
+         * sorted list. For TV episodes, the section title is set to the SeriesName
+         * (e.g. "Hell's Paradise"), and for movies it is set to the Movie Name
+         * (e.g. "Ex Machina"). This guarantees that the items appear in their exact
+         * sorted section order on the TV home screen UI. */
+        for (const item of mergedItems) {
+            // Build the Samsung tile object for the item
+            const tile = this._buildTile(item);
 
-        // If we have valid tiles, add them under the 'Continue Watching' section.
-        if (tiles.length > 0) {
-            sections.push({ title: 'Continue Watching', tiles: tiles });
+            // Skip items that cannot be represented cleanly (e.g., missing thumbnail)
+            if (!tile) continue;
+
+            // Determine the section title based on media semantics
+            // TV episodes use the parent series name; Movies use their own title
+            const sectionTitle =
+                item.Type === 'Episode' && item.SeriesName
+                    ? item.SeriesName
+                    : (item.Name || 'Continue Watching');
+
+            // Add a dedicated section containing this item's tile
+            sections.push({
+                title: sectionTitle,
+                tiles: [tile]
+            });
         }
 
         return { sections };

@@ -1289,6 +1289,76 @@ class SettingsPage extends Page {
                     </div>
                 </div>
             </div>
+
+                <!-- ======================================================= -->
+                <!-- WAKE-ON-LAN (WOL) SERVER WAKE SETTINGS                  -->
+                <!-- ======================================================= -->
+                <!-- Allows the user to configure Litefin to send a Magic    -->
+                <!-- Packet on startup or timeout to boot their server.       -->
+                <!-- ======================================================= -->
+                <h3 class="setting-section-title" data-i18n="WakeOnLanTitle">${i18n.t('WakeOnLanTitle')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanStartup">${i18n.t('WakeOnLanStartup')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanStartupDescription">${i18n.t('WakeOnLanStartupDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolOnStartup') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-on-startup" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanTimeout">${i18n.t('WakeOnLanTimeout')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanTimeoutDescription">${i18n.t('WakeOnLanTimeoutDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolOnTimeout') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-on-timeout" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanServerScan">${i18n.t('WakeOnLanServerScan')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanServerScanDescription">${i18n.t('WakeOnLanServerScanDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolOnServerScan') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-on-scan" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Conditional container for MAC Address entry -->
+                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WolMacAddress">${i18n.t('WolMacAddress')}</span>
+                        <span class="setting-description" data-i18n="WolMacAddressDescription">${i18n.t('WolMacAddressDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <input id="input-wol-mac-address" type="text" class="focusable" tabindex="0" data-focusable="true" 
+                               placeholder="00:11:22:33:44:55" 
+                               value="${storage.getItem('pref:wolMacAddress') || ''}"
+                               style="
+                                   background: rgba(255, 255, 255, 0.05);
+                                   border: 1px solid rgba(255, 255, 255, 0.1);
+                                   color: #fff;
+                                   padding: 10px 14px;
+                                   border-radius: 6px;
+                                   font-size: 1rem;
+                                   width: 250px;
+                                   text-align: center;
+                               "/>
+                    </div>
+                </div>
         `;
     }
 
@@ -2547,6 +2617,9 @@ class SettingsPage extends Page {
         // Retrieve localized keys or fallback gracefully to default values.
         const scrollNavEnabled = storage.getItem('pref:hoverScrollNavigation') === 'true';
         const magicCursorEnabled = PlayerSettings.get('enableMagicCursor');
+        const enableScreenLockEnabled = PlayerSettings.get('enableScreenLock');
+
+        // Seekbar Hover Trickplay Preview Frame Row
         const hoverTrickplayEnabled = PlayerSettings.get('enableHoverTrickplay');
         const focusFirstItemEnabled = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
 
@@ -2597,7 +2670,11 @@ class SettingsPage extends Page {
                 value: 'playerPreviousChapter',
                 label: i18n.t('OptionPlayerPreviousChapter') || 'Player: Previous Chapter'
             },
-            { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' }
+            { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' },
+            {
+                value: 'sendWol',
+                label: i18n.t('OptionSendWakeOnLan') || 'Send Wake-on-LAN Packet'
+            }
         ];
 
         return `
@@ -2646,6 +2723,21 @@ class SettingsPage extends Page {
                         <button class="toggle-switch ${magicCursorEnabled ? 'active' : ''}" 
                                 id="toggle-magic-cursor" 
                                 data-setting="enableMagicCursor"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Playback Screen Lock Option Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableScreenLock">${i18n.t('EnableScreenLock') || 'Playback Screen Lock'}</span>
+                        <span class="setting-description" data-i18n="EnableScreenLockDescription">${i18n.t('EnableScreenLockDescription') || 'Enable a screen and input lock button in the player overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${enableScreenLockEnabled ? 'active' : ''}" 
+                                id="toggle-enable-screen-lock" 
+                                data-setting="enableScreenLock"
                                 tabindex="0">
                         </button>
                     </div>
@@ -6395,6 +6487,104 @@ class SettingsPage extends Page {
             });
         }
 
+        // Helper function to update MAC address input container visibility
+        const updateWolMacVisibility = () => {
+            const wolStartup = storage.getItem('pref:enableWolOnStartup') === 'true';
+            const wolTimeout = storage.getItem('pref:enableWolOnTimeout') === 'true';
+            const wolScan = storage.getItem('pref:enableWolOnServerScan') === 'true';
+            const macContainer = this.$('#wol-mac-container');
+            if (macContainer) {
+                macContainer.style.display = (wolStartup || wolTimeout || wolScan) ? '' : 'none';
+            }
+            focusManager.invalidateCache('settings-content');
+        };
+
+        const wolToggleBtn = this.$('#toggle-wol-on-startup');
+        if (wolToggleBtn) {
+            wolToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolOnStartup') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolOnStartup', newValue ? 'true' : 'false');
+                storage.flush();
+                wolToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        const wolTimeoutToggleBtn = this.$('#toggle-wol-on-timeout');
+        if (wolTimeoutToggleBtn) {
+            wolTimeoutToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolOnTimeout') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolOnTimeout', newValue ? 'true' : 'false');
+                storage.flush();
+                wolTimeoutToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        const wolScanToggleBtn = this.$('#toggle-wol-on-scan');
+        if (wolScanToggleBtn) {
+            wolScanToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolOnServerScan') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolOnServerScan', newValue ? 'true' : 'false');
+                storage.flush();
+                wolScanToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        // =====================================================================
+        // WOL SERVER MAC ADDRESS TEXT INPUT
+        // =====================================================================
+        // Registers change, input, and blur listeners to capture and save the
+        // server MAC address. Automatically formats raw hex digits into standard
+        // colon-delimited MAC address format (00:11:22:33:44:55) for TV remote ease.
+        // =====================================================================
+        const wolMacInput = this.$('#input-wol-mac-address');
+        if (wolMacInput) {
+            const formatMac = (val) => {
+                const hexOnly = val.replace(/[^0-9a-fA-F]/g, '').toUpperCase().slice(0, 12);
+                const pairs = hexOnly.match(/.{1,2}/g);
+                return pairs ? pairs.join(':') : hexOnly;
+            };
+
+            const saveWolMac = (forceFormat = false) => {
+                let currentVal = wolMacInput.value.trim();
+                const hexOnly = currentVal.replace(/[^0-9a-fA-F]/g, '');
+                
+                // Format automatically if full 12 hex digits are entered or on blur/change
+                if (forceFormat || hexOnly.length === 12) {
+                    const formatted = formatMac(currentVal);
+                    if (formatted) {
+                        currentVal = formatted;
+                        wolMacInput.value = formatted;
+                    }
+                }
+
+                storage.setItem('pref:wolMacAddress', currentVal);
+                storage.flush();
+                log.debug(`Saved WOL MAC Address: ${currentVal}`);
+            };
+
+            wolMacInput.addEventListener('input', () => saveWolMac(false));
+            wolMacInput.addEventListener('change', () => saveWolMac(true));
+            wolMacInput.addEventListener('blur', () => saveWolMac(true));
+        }
+
         // Toggle Auto-play Next Episode
         const autoNextBtn = this.$('#toggle-auto-next');
         if (autoNextBtn) {
@@ -8034,6 +8224,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('enableMagicCursor', newValue);
                 magicCursorToggle.classList.toggle('active', newValue);
                 log.info(`Magic Cursor set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Playback Screen Lock
+        const enableScreenLockToggle = this.$('#toggle-enable-screen-lock');
+        if (enableScreenLockToggle) {
+            enableScreenLockToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableScreenLock');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableScreenLock', newValue);
+                enableScreenLockToggle.classList.toggle('active', newValue);
+                log.info(`Playback Screen Lock set to: ${newValue}`);
             });
         }
 

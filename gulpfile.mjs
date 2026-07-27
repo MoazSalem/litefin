@@ -541,6 +541,35 @@ const buildPackage = gulp.series(
     )
 );
 
+// Build and package all Tizen variants
+const buildPackageTizen = gulp.series(
+    syncVersion,
+    cleanDist,
+    cleanWgt,
+    webpackAll,
+    gulp.parallel(
+        packageModern,
+        packageNormal,
+        packageNormalOblong,
+        packageLegacy,
+        packageUltraLegacy
+    )
+);
+
+// Build and package all WebOS variants
+const buildPackageWebosAll = gulp.series(
+    syncVersion,
+    cleanDist,
+    cleanIpk,
+    webpackAll,
+    gulp.parallel(
+        packageWebosModern,
+        packageWebos,
+        packageWebosLegacy,
+        packageWebosUltraLegacy
+    )
+);
+
 // Individual Tizen build+package tasks
 const buildPackageModern = gulp.series(syncVersion, cleanDist, cleanWgt, webpackModern, packageModern);
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormal, packageNormal);
@@ -634,6 +663,7 @@ export {
     packageWebosUltraLegacy,
     // Tizen build+package
     buildPackage,
+    buildPackageTizen,
     buildPackageModern,
     buildPackageNormal,
     buildPackageNormalOblong,
@@ -643,6 +673,7 @@ export {
     buildPackageDebug,
     // WebOS build+package
     buildPackageWebos,
+    buildPackageWebosAll,
     buildPackageWebosModern,
     buildPackageWebosLegacy,
     buildPackageWebosUltraLegacy,

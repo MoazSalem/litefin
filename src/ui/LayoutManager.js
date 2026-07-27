@@ -405,7 +405,7 @@ class LayoutManager {
             const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
             dynamicCss += `
             --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
-            --jf-text-secondary: ${isLight ? '#666666' : '#ffffffcc'};
+            --jf-text-secondary: ${isLight ? '#666666' : 'rgba(255, 255, 255, 0.8)'};
             --jf-text-tertiary: ${isLight ? '#888888' : '#666666'};
             
             --text-primary: var(--jf-text-primary);

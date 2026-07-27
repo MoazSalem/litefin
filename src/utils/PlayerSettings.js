@@ -543,7 +543,10 @@ const DEFAULTS = {
     osdHideBackButton: !platformInfo.isWeb,
 
     // Combine skip (seek, chapter, track) buttons into single buttons with multi-click actions
-    osdCombineSkipButtons: false
+    osdCombineSkipButtons: false,
+
+    // Enable screen lock button in the player overlay (next to play/pause)
+    enableScreenLock: false
 };
 
 /**

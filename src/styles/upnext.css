@@ -67,6 +67,22 @@
     -webkit-transform: translateZ(0) translateY(0);
 }
 
+/* 
+ * ============================================================================
+ * Visibility Sync with OSD
+ * ============================================================================
+ * After 5 seconds of initial floating display, UpNextDialog receives .sync-osd.
+ * When sync-osd is present and the main OSD controls auto-hide (.osd-is-hidden),
+ * the dialog smoothly hides along with the rest of the OSD interface.
+ * ============================================================================
+ */
+.player-osd.osd-is-hidden .upnext-dialog.sync-osd.visible {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateZ(0) translateY(0.75em);
+    -webkit-transform: translateZ(0) translateY(0.75em);
+}
+
 /* RTL: pin to bottom-left instead of bottom-right */
 [dir="rtl"] .upnext-dialog {
     right: auto;

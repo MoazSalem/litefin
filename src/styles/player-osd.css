@@ -233,7 +233,7 @@ html[data-osd-progress-color="theme-inverted"] {
 
 .osd-title-logo {
     object-fit: contain;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+    /* PERFORMANCE: Rely on header gradient overlay for image contrast instead of heavy GPU filter: drop-shadow */
     /* Force Hardware acceleration */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -1592,7 +1592,7 @@ body.lyrics-active .subtitle-overlay {
 }
 
 /* ============================================================================
-   SyncPlay Notification Overlay (Apple-Style)
+   SyncPlay Notification Overlay
    ============================================================================ */
 
 .osd-syncplay-notification {
@@ -1610,7 +1610,6 @@ body.lyrics-active .subtitle-overlay {
 }
 
 .osd-syncplay-notification-glass {
-    /* Sleek Apple-style frosted glass */
     background: rgba(30, 30, 30, 0.8);
 
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1642,7 +1641,6 @@ body.lyrics-active .subtitle-overlay {
     width: 100%;
     height: 100%;
     fill: currentColor;
-    filter: drop-shadow(0 0 8px rgba(var(--jf-accent-rgb, 0, 164, 220), 0.6));
 }
 
 .osd-syncplay-notification-text {

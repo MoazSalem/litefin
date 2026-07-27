@@ -592,16 +592,16 @@ class HomePage extends Page {
                  */
                 layout:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'portrait',
                 cardType:
                     lib.CollectionType === 'music' ||
-                        lib.CollectionType === 'livetv' ||
-                        lib.CollectionType === 'homevideos' ||
-                        lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'musicvideos'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -683,6 +683,9 @@ class HomePage extends Page {
             const cache = this._getValidCache();
             this._wasPageCached = !!cache;
 
+            // Track hero carousel promise so we can await it alongside P0/P1 rows
+            let heroPromise = null;
+
             if (cache) {
                 log.info('Restoring homepage from cache');
                 this._restoreFromCache(cache);
@@ -738,7 +741,7 @@ class HomePage extends Page {
                 const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
                 if (enableHero) {
                     this._insertHeroSkeleton();
-                    this._loadHeroCarousel().catch((err) => log.error('Hero carousel failed', err));
+                    heroPromise = this._loadHeroCarousel().catch((err) => log.error('Hero carousel failed', err));
                 }
 
                 // ─── Step 2b: Defer library thumb enrichment ─────────────────────
@@ -784,10 +787,11 @@ class HomePage extends Page {
             const priorityGroups = this._groupByPriority(descriptors);
             const priorities = Array.from(priorityGroups.keys()).sort((a, b) => a - b);
 
-            // Dismiss the spinner visually — skeletons are now visible.
-            // NOTE: We suppress the app:hideSplash event here. The overridden
-            // setLoading() below skips emitting it so the splash stays visible
-            // until _tryInitializeFocus() has placed focus on the correct row.
+            // NOTE: The overridden setLoading() suppresses the app:hideSplash
+            // event so the splash overlay stays active until _tryInitializeFocus()
+            // has run. We defer setLoading(false) until after Step 6 (P0+P1+hero)
+            // so the loading spinner does not disappear before critical content
+            // data arrives — otherwise bare skeletons flash on screen.
             //
             // [FOCUS RESTORATION FIX]: Keep the loading spinner active whenever
             // we have a saved focus target to restore — either from a back-button
@@ -797,20 +801,30 @@ class HomePage extends Page {
             // focus + scroll before revealing the page, to prevent the visible flash
             // of the page at scroll-top with no focused element.
             const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
-            if (!hasFocusTarget) {
-                this.setLoading(false);
-            }
 
-            // ─── Step 6: Render priority 0 + 1 (above-the-fold rows) ────────
-            // My Media (P0) + Continue Watching/Next Up (P1) are the first rows
-            // the user sees. We await these so we can reveal the page ASAP.
+            // ─── Step 6: Render priority 0 + 1 + hero carousel ────────────
+            // My Media (P0), Continue Watching/Next Up (P1), and the hero
+            // carousel are the first things the user sees. Await all of them
+            // before revealing the page so no bare skeletons flash.
             const earlyPriorities = [0, 1];
+            const earlyPromises = [];
             for (const p of earlyPriorities) {
                 const group = priorityGroups.get(p);
                 if (group) {
-                    await Promise.all(group.map((d) => this._loadAndRenderRow(d)));
-                    if (!this._isMounted) return;
+                    earlyPromises.push(...group.map((d) => this._loadAndRenderRow(d)));
                 }
+            }
+            if (heroPromise) {
+                earlyPromises.push(heroPromise);
+            }
+            await Promise.all(earlyPromises);
+            if (!this._isMounted) return;
+
+            // Dismiss the loading spinner now that critical content is rendered.
+            // If there's a focus target, _hideSplash() in Step 8 handles it after
+            // focus restoration — so we only dismiss here when there's no target.
+            if (!hasFocusTarget) {
+                this.setLoading(false);
             }
 
             // ─── Step 7: Fire library thumb enrichment (cosmetic, non-blocking) ─
