@@ -3208,8 +3208,9 @@ export default class OSDController extends Component {
             this._cacheFocusableElements();
 
             // Restore focus back to Play/Pause on the primary OSD playback controls
+            // without forcing the main OSD to show up if it was hidden.
             if (wasDialogFocused) {
-                this.show();
+                // Return focus target to controls row (Row 1) Play/Pause
                 this._currentFocusRow = 1;
                 const playIdx = this._findActionIndex('togglePlay');
                 this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
