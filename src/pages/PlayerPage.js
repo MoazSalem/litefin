@@ -1537,6 +1537,9 @@ class PlayerPage extends Page {
     _onPlaying() {
         log.info('Playing');
 
+        // Clear pause reporting interval if running
+        this._stopPauseReportTimer();
+
         this._osd?.updateHdrTheme();
 
         eventBus.emit('player:playing', { item: this._item });
@@ -1580,6 +1583,35 @@ class PlayerPage extends Page {
         this._isPaused = true;
         // Report paused state with explicit 'pause' event
         this._reportPlaybackProgress('pause');
+
+        // Start periodic heartbeat while paused so Jellyfin server doesn't kill transcoding (60s limit)
+        this._startPauseReportTimer();
+    }
+
+    /**
+     * Start a periodic timer to report progress while paused.
+     * Prevents Jellyfin server from terminating transcode sessions after 60s of inactivity.
+     * @private
+     */
+    _startPauseReportTimer() {
+        this._stopPauseReportTimer();
+        this._pauseReportTimer = setInterval(() => {
+            if (this._isPaused && this._hasReportedStart && !this._isExiting) {
+                log.info('[Pause Heartbeat] Reporting progress while paused to preserve transcode session');
+                this._reportPlaybackProgress('pause');
+            }
+        }, 10000);
+    }
+
+    /**
+     * Stop the periodic pause report timer.
+     * @private
+     */
+    _stopPauseReportTimer() {
+        if (this._pauseReportTimer) {
+            clearInterval(this._pauseReportTimer);
+            this._pauseReportTimer = null;
+        }
     }
 
     _onEnded() {
@@ -2135,10 +2167,13 @@ class PlayerPage extends Page {
         // Skip progress reporting until playback start has been reported — prevents
         // sending payloads before _currentPlayMethod is resolved, which would send
         // a null/undefined PlayMethod and cause the dashboard to show "Direct Play".
+        // IMPORTANT: We report progress periodically regardless of whether playback is paused
+        // or playing because Jellyfin server automatically terminates/kills transcoding sessions
+        // if no progress report is received for 60 seconds!
         if (this._hasReportedStart) {
             const now = Date.now();
             if (!this._lastReportTime || now - this._lastReportTime > 10000) {
-                this._reportPlaybackProgress();
+                this._reportPlaybackProgress(this._isPaused ? 'pause' : 'timeupdate');
                 this._lastReportTime = now;
             }
         }
@@ -3707,6 +3742,11 @@ class PlayerPage extends Page {
         await this._startPlayback();
 
         this._showLoading(false);
+    }
+
+    destroy() {
+        this._stopPauseReportTimer();
+        super.destroy();
     }
 }
 
