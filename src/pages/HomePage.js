@@ -159,13 +159,6 @@ class HomePage extends Page {
 
         // Mark as async page for Navigation State so scroll/focus restoration is deferred
         this._isAsyncPage = true;
-
-        /**
-         * Whether library thumbnail enrichment is pending after rows render.
-         * Set in the non-cache pipeline path; consumed in Step 7 post-render.
-         * @type {boolean}
-         */
-        this._deferredThumbEnrich = false;
     }
 
     render() {
@@ -686,8 +679,10 @@ class HomePage extends Page {
             const cache = this._getValidCache();
             this._wasPageCached = !!cache;
 
-            // Track hero carousel promise so we can await it alongside P0/P1 rows
+            // Track promises for hero carousel and library thumb enrichment
+            // so we can await them alongside P0/P1 rows in Step 6.
             let heroPromise = null;
+            let enrichPromise = null;
 
             if (cache) {
                 log.info('Restoring homepage from cache');
@@ -747,12 +742,15 @@ class HomePage extends Page {
                     heroPromise = this._loadHeroCarousel().catch((err) => log.error('Hero carousel failed', err));
                 }
 
-                // ─── Step 2b: Defer library thumb enrichment ─────────────────────
-                // Thumbnails are purely cosmetic. Schedule enrichment to run AFTER
-                // all rows render so it does not delay the critical rendering path.
+                // ─── Step 2b: Fire library thumb enrichment (parallel) ──────────
+                // Libraries are available — start enrichment immediately so the
+                // dynamic thumb URLs resolve before the library row renders below.
                 const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
-                this._deferredThumbEnrich =
-                    (thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0;
+                if ((thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0) {
+                    enrichPromise = this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode).catch((err) =>
+                        log.warn('Background thumb enrichment failed', err)
+                    );
+                }
             }
 
             // ─── Step 3: Build descriptors ────────────────────────────────────
@@ -795,7 +793,8 @@ class HomePage extends Page {
 
             // Find target focus row if restoring back-navigation state
             const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
-            const savedFocusObj = storage.getItem('pref:disableFocusRestore') !== 'true' ? state.get('home:lastFocusedItem') : null;
+            const savedFocusObj =
+                storage.getItem('pref:disableFocusRestore') !== 'true' ? state.get('home:lastFocusedItem') : null;
             const targetRowId = savedFocusObj ? savedFocusObj.rowId : null;
             const targetDescriptor = targetRowId ? descriptors.find((d) => d.id === targetRowId) : null;
 
@@ -817,6 +816,9 @@ class HomePage extends Page {
             if (heroPromise) {
                 earlyPromises.push(heroPromise);
             }
+            if (enrichPromise) {
+                earlyPromises.push(enrichPromise);
+            }
             await Promise.all(earlyPromises);
             if (!this._isMounted) return;
 
@@ -827,19 +829,7 @@ class HomePage extends Page {
                 this.setLoading(false);
             }
 
-            // ─── Step 7: Fire library thumb enrichment (cosmetic, non-blocking) ─
-            // My Media is now rendered — start loading dynamic library thumbnails
-            // immediately so they populate as soon as images resolve, rather than
-            // waiting for all background rows to complete.
-            if (this._deferredThumbEnrich) {
-                const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
-                this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode).catch((err) =>
-                    log.warn('Background thumb enrichment failed', err)
-                );
-                this._deferredThumbEnrich = false;
-            }
-
-            // ─── Step 8: Hide splash early + restore focus ───────────────────
+            // ─── Step 7: Hide splash early + restore focus ───────────────────
             // At this point My Media + content rows are visible. Reveal the page
             // so the user can start interacting while remaining rows load.
             requestAnimationFrame(() => {
@@ -1382,7 +1372,10 @@ class HomePage extends Page {
                     const rowEntry = this._rowRegistry.get(targetRowId);
                     if (rowEntry) {
                         savedCard = Array.from(rowEntry.sectionEl.querySelectorAll('.media-card')).find(
-                            (card) => String(card.dataset.itemId || '').replace(/-/g, '').toLowerCase() === targetId
+                            (card) =>
+                                String(card.dataset.itemId || '')
+                                    .replace(/-/g, '')
+                                    .toLowerCase() === targetId
                         );
                     }
                 }
@@ -1390,7 +1383,10 @@ class HomePage extends Page {
                 // Fall back to a global search
                 if (!savedCard) {
                     savedCard = Array.from(container.querySelectorAll('.media-card')).find(
-                        (card) => String(card.dataset.itemId || '').replace(/-/g, '').toLowerCase() === targetId
+                        (card) =>
+                            String(card.dataset.itemId || '')
+                                .replace(/-/g, '')
+                                .toLowerCase() === targetId
                     );
                 }
 
@@ -1407,7 +1403,10 @@ class HomePage extends Page {
                     const rowEntry = this._rowRegistry.get(targetRowId);
                     if (rowEntry) {
                         const itemIndex = rowEntry.virtualRow.items.findIndex(
-                            (item) => String(item.Id || '').replace(/-/g, '').toLowerCase() === targetId
+                            (item) =>
+                                String(item.Id || '')
+                                    .replace(/-/g, '')
+                                    .toLowerCase() === targetId
                         );
                         if (itemIndex !== -1) {
                             const node = rowEntry.virtualRow.focusByIndex(itemIndex);
@@ -2051,117 +2050,127 @@ class HomePage extends Page {
      * @param {'static'|'dynamic'} mode
      */
     async _enrichLibrariesWithDynamicThumbs(libraries, mode) {
-        // Process all libraries in parallel for maximum speed
+        if (!libraries || libraries.length === 0) return;
+
+        // Try single-pass batch fetch for all uncached libraries via Litefin plugin
+        const uncachedLibs = libraries.filter((lib) => {
+            if (mode === 'static') {
+                const cacheKey = `libThumb:${lib.Id}`;
+                const cachedUrl = storage.getItem(cacheKey);
+                if (cachedUrl) {
+                    lib._dynamicThumbUrl = cachedUrl;
+                    this._applyDynamicThumbToCard(lib.Id, cachedUrl, lib.Name);
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        let batchMap = null;
+        if (uncachedLibs.length > 0) {
+            const libIds = uncachedLibs.map((lib) => lib.Id);
+            const rawBatch = await api.getLibraryThumbnails(libIds);
+            if (rawBatch) {
+                batchMap = {};
+                for (const [key, val] of Object.entries(rawBatch)) {
+                    batchMap[key.replace(/-/g, '').toLowerCase()] = val;
+                }
+            }
+        }
+
+        // Process libraries using batched candidates or fallback queries
         await Promise.all(
             libraries.map(async (lib) => {
                 try {
                     const cacheKey = `libThumb:${lib.Id}`;
 
-                    // Static mode: check StorageService cache first (in-memory, zero disk I/O).
-                    // Using storage.getItem() instead of localStorage.getItem() so the read
-                    // comes from the in-memory Map rather than hitting the disk synchronously.
                     if (mode === 'static') {
                         const cachedUrl = storage.getItem(cacheKey);
                         if (cachedUrl) {
                             lib._dynamicThumbUrl = cachedUrl;
+                            this._applyDynamicThumbToCard(lib.Id, cachedUrl, lib.Name);
                             return;
                         }
                     }
 
-                    // ==========================================================
-                    // Dynamic Thumbnail Candidate Typing
-                    // ==========================================================
-                    // Map the library collection type to the most appropriate
-                    // Jellyfin item type that yields high-resolution artwork:
-                    //
-                    // - music: MusicAlbum works better than track/artist stubs.
-                    // - musicvideos: Query MusicVideo items recursively.
-                    // - livetv: Query TvChannel items to pull in channel logo artwork.
-                    // - photos: Include both Photo and Video contents since camera
-                    //   rolls naturally mix images and videos.
-                    // - homevideos: Query Video items recursively since they
-                    //   never have standard "Movie" or "Series" tags.
-                    // ==========================================================
-                    const includeItemTypes = (() => {
-                        switch (lib.CollectionType) {
-                            case 'music':
-                                return 'MusicAlbum';
-                            case 'musicvideos':
-                                return 'MusicVideo';
-                            case 'livetv':
-                                return 'TvChannel';
-                            case 'boxsets':
-                                return 'BoxSet';
-                            case 'photos':
-                                return 'Photo,Video';
-                            case 'homevideos':
-                                // Allow both photo and video items from home video libraries
-                                // to act as candidates for dynamic fallback thumbnail generation.
-                                return 'Photo,Video';
-                            case 'playlists':
-                                return 'Playlist';
-                            default:
-                                return 'Movie,Series';
+                    const normalizedId = String(lib.Id || '')
+                        .replace(/-/g, '')
+                        .toLowerCase();
+                    const batchEntry = batchMap ? batchMap[normalizedId] : undefined;
+
+                    // New plugin format: {Items: [...], ResolvedUrl: "..."}
+                    // Old format: flat array [{...}, ...] (backwards compat)
+                    const preResolvedUrl = batchEntry && !Array.isArray(batchEntry) ? batchEntry.ResolvedUrl : null;
+                    let items = batchEntry ? (Array.isArray(batchEntry) ? batchEntry : batchEntry.Items || []) : [];
+
+                    // Short-circuit: use pre-resolved URL from plugin directly
+                    if (preResolvedUrl) {
+                        lib._dynamicThumbUrl = preResolvedUrl;
+                        this._applyDynamicThumbToCard(lib.Id, preResolvedUrl, lib.Name);
+                        if (mode === 'static') {
+                            storage.setItem(cacheKey, preResolvedUrl);
                         }
-                    })();
-
-                    // ==========================================================
-                    // Dynamic Thumbnail Library Query
-                    // ==========================================================
-                    // Live TV (livetv) libraries are not standard folder structures
-                    // and do not have child items under a ParentId. Instead, they
-                    // store global TV Channels, which we fetch using the specialized
-                    // getLiveTvChannels API endpoint. Everything else uses standard
-                    // child item queries.
-                    // ==========================================================
-                    let response;
-                    if (lib.CollectionType === 'livetv') {
-                        // -----------------------------------------------------
-                        // Live TV Dynamic Thumbnail Randomization
-                        // -----------------------------------------------------
-                        // We query the first 50 channels with image types explicitly enabled
-                        // to guarantee that the server delivers proper ImageTags and aspect ratios.
-                        // Then we filter out any channels without valid images before shuffling
-                        // to ensure a successful rotating thumbnail selection.
-                        // -----------------------------------------------------
-                        const ltvResponse = await api.getLiveTvChannels({
-                            Limit: 50,
-                            EnableImageTypes: 'Primary,Thumb,Backdrop',
-                            Fields: 'ImageTags,BackdropImageTags'
-                        });
-
-                        // Extract channel items safely
-                        const ltvItems = ltvResponse?.Items || [];
-
-                        // Filter channels to only those with valid primary, thumb or backdrop artwork
-                        const validLtvItems = ltvItems.filter(
-                            (item) =>
-                                item.ImageTags?.Primary || item.ImageTags?.Thumb || item.BackdropImageTags?.length > 0
-                        );
-
-                        // Local shuffle to randomize the logo across loads
-                        const shuffledLtv = validLtvItems.sort(() => 0.5 - Math.random());
-                        response = { Items: shuffledLtv.slice(0, 5) };
-                    } else {
-                        response = await api.getItems({
-                            ParentId: lib.Id,
-                            SortBy: 'Random',
-                            Recursive: true,
-                            Limit: 5,
-                            Fields: 'BackdropImageTags,ImageTags',
-                            ImageTypeLimit: 1,
-                            IncludeItemTypes: includeItemTypes,
-                            EnableImageTypes: 'Backdrop,Thumb,Primary',
-                            Filters: 'HasImage' // Only items with guaranteed artwork
-                        });
+                        return;
                     }
 
-                    if (response?.Items?.length > 0) {
+                    // Fallback to individual API call if batch map didn't contain this library
+                    if (!batchMap || batchEntry === undefined) {
+                        const includeItemTypes = (() => {
+                            switch (lib.CollectionType) {
+                                case 'music':
+                                    return 'MusicAlbum';
+                                case 'musicvideos':
+                                    return 'MusicVideo';
+                                case 'livetv':
+                                    return 'TvChannel';
+                                case 'boxsets':
+                                    return 'BoxSet';
+                                case 'photos':
+                                case 'homevideos':
+                                    return 'Photo,Video';
+                                case 'playlists':
+                                    return 'Playlist';
+                                default:
+                                    return 'Movie,Series';
+                            }
+                        })();
+
+                        if (lib.CollectionType === 'livetv') {
+                            const ltvResponse = await api.getLiveTvChannels({
+                                Limit: 50,
+                                EnableImageTypes: 'Primary,Thumb,Backdrop',
+                                Fields: 'ImageTags,BackdropImageTags'
+                            });
+                            const ltvItems = ltvResponse?.Items || [];
+                            const validLtvItems = ltvItems.filter(
+                                (item) =>
+                                    item.ImageTags?.Primary ||
+                                    item.ImageTags?.Thumb ||
+                                    item.BackdropImageTags?.length > 0
+                            );
+                            items = validLtvItems.sort(() => 0.5 - Math.random()).slice(0, 5);
+                        } else {
+                            const response = await api.getItems({
+                                ParentId: lib.Id,
+                                SortBy: 'Random',
+                                Recursive: true,
+                                Limit: 5,
+                                Fields: 'BackdropImageTags,ImageTags',
+                                ImageTypeLimit: 1,
+                                IncludeItemTypes: includeItemTypes,
+                                EnableImageTypes: 'Backdrop,Thumb,Primary',
+                                Filters: 'HasImage'
+                            });
+                            items = response?.Items || [];
+                        }
+                    }
+
+                    if (items && items.length > 0) {
                         const { maxWidth, quality } = imageService.getParams('card-backdrop');
                         let resolvedUrl = null;
 
                         // Iterate candidates until we find a usable image URL
-                        for (const item of response.Items) {
+                        for (const item of items) {
                             if (lib.CollectionType === 'music') {
                                 // Music: album art (Primary) → Thumb → Backdrop
                                 if (item.ImageTags?.Primary) {
@@ -2184,89 +2193,46 @@ class HomePage extends Page {
                                     });
                                 }
                             } else if (lib.CollectionType === 'playlists') {
-                                // Playlists: use Primary images from items inside each playlist
-                                try {
-                                    const pResponse = await api.getPlaylistItems(item.Id, {
-                                        Limit: 20,
-                                        Fields: 'ImageTags'
+                                // Playlists: item's own Primary → Thumb → Backdrop
+                                if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
                                     });
-
-                                    const pItems = pResponse?.Items || [];
-                                    const shuffled = pItems.sort(() => 0.5 - Math.random());
-
-                                    for (const pItem of shuffled) {
-                                        if (pItem.ImageTags?.Primary) {
-                                            resolvedUrl = api.getImageUrl(pItem.Id, 'Primary', {
-                                                maxWidth,
-                                                quality,
-                                                tag: pItem.ImageTags.Primary
-                                            });
-                                            break;
-                                        }
-                                    }
-                                } catch (e) {
-                                    log.warn(`Failed to fetch items for playlist ${item.Id} for dynamic thumb`, e);
-                                }
-
-                                if (!resolvedUrl) {
-                                    if (item.ImageTags?.Primary) {
-                                        resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
-                                            maxWidth,
-                                            quality,
-                                            tag: item.ImageTags.Primary
-                                        });
-                                    } else if (item.BackdropImageTags?.length > 0) {
-                                        resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
-                                            maxWidth,
-                                            quality,
-                                            tag: item.BackdropImageTags[0]
-                                        });
-                                    }
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                } else if (item.BackdropImageTags?.length > 0) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.BackdropImageTags[0]
+                                    });
                                 }
                             } else if (lib.CollectionType === 'boxsets') {
-                                // Collections: use Primary images from items inside each collection
-                                try {
-                                    const cResponse = await api.getItems({
-                                        ParentId: item.Id,
-                                        SortBy: 'Random',
-                                        Recursive: true,
-                                        Limit: 20,
-                                        Fields: 'ImageTags',
-                                        ImageTypeLimit: 1,
-                                        EnableImageTypes: 'Primary'
+                                // Boxsets: item's own Primary → Thumb → Backdrop
+                                if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
                                     });
-
-                                    const cItems = cResponse?.Items || [];
-                                    const shuffled = cItems.sort(() => 0.5 - Math.random());
-
-                                    for (const cItem of shuffled) {
-                                        if (cItem.ImageTags?.Primary) {
-                                            resolvedUrl = api.getImageUrl(cItem.Id, 'Primary', {
-                                                maxWidth,
-                                                quality,
-                                                tag: cItem.ImageTags.Primary
-                                            });
-                                            break;
-                                        }
-                                    }
-                                } catch (e) {
-                                    log.warn(`Failed to fetch items for collection ${item.Id} for dynamic thumb`, e);
-                                }
-
-                                if (!resolvedUrl) {
-                                    if (item.ImageTags?.Primary) {
-                                        resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
-                                            maxWidth,
-                                            quality,
-                                            tag: item.ImageTags.Primary
-                                        });
-                                    } else if (item.BackdropImageTags?.length > 0) {
-                                        resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
-                                            maxWidth,
-                                            quality,
-                                            tag: item.BackdropImageTags[0]
-                                        });
-                                    }
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                } else if (item.BackdropImageTags?.length > 0) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.BackdropImageTags[0]
+                                    });
                                 }
                             } else if (
                                 lib.CollectionType === 'photos' ||
@@ -2274,13 +2240,6 @@ class HomePage extends Page {
                                 lib.CollectionType === 'musicvideos' ||
                                 lib.CollectionType === 'livetv'
                             ) {
-                                // ==========================================================
-                                // Photo, Home Videos, Music Videos & Live TV Fallbacks
-                                // ==========================================================
-                                // These libraries do not rely on standard theatrical backdrops.
-                                // Instead, we prioritize the Primary tag (photos, channel logos,
-                                // video snapshots) to immediately capture the authentic artwork.
-                                // ==========================================================
                                 if (item.ImageTags?.Primary) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                         maxWidth,
@@ -2295,12 +2254,7 @@ class HomePage extends Page {
                                     });
                                 }
                             } else {
-                                // ==========================================================
-                                // Standard Fallback Chain (Movies, Series, etc.)
-                                // ==========================================================
-                                // backdrop is always prioritized for library landscape cards
-                                // to create a dramatic theatrical header feel.
-                                // ==========================================================
+                                // Standard: Backdrop → Thumb → Primary
                                 if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
@@ -2400,6 +2354,7 @@ class HomePage extends Page {
 
                         if (resolvedUrl) {
                             lib._dynamicThumbUrl = resolvedUrl;
+                            this._applyDynamicThumbToCard(lib.Id, resolvedUrl, lib.Name);
                             // Persist the resolved URL via StorageService in static mode so
                             // subsequent home page loads skip the API call entirely.
                             // Using storage.setItem() (not localStorage directly) keeps the
@@ -2415,6 +2370,38 @@ class HomePage extends Page {
                 }
             })
         );
+    }
+
+    /**
+     * Updates the rendered library card's image to reflect the dynamic thumb URL,
+     * and adds the overlay label if missing. The overlay is normally baked into the
+     * card HTML at render time only when _dynamicThumbUrl was already set — since
+     * enrichment runs after render, we inject it here.
+     * @param {string} libId - Library ID
+     * @param {string} url - New dynamic thumbnail URL
+     * @param {string} [name] - Library display name (for overlay label)
+     */
+    _applyDynamicThumbToCard(libId, url, name) {
+        const lazyImg = document.querySelector(`.media-card[data-item-id="${libId}"] .lazy`);
+        if (!lazyImg) return;
+        if (lazyImg.dataset.src === url) return;
+
+        lazyImg.dataset.src = url;
+
+        if (!lazyImg.classList.contains('loaded') && !lazyImg.hasAttribute('data-lazy-loading')) {
+            lazyLoader.forceLoad(lazyImg);
+        } else if (lazyImg.classList.contains('loaded')) {
+            lazyImg.src = url;
+        }
+
+        // Insert overlay label if the card was rendered without it
+        const imageDiv = lazyImg.closest('.card-image');
+        if (imageDiv && name && !imageDiv.querySelector('.card-overlay-label')) {
+            imageDiv.insertAdjacentHTML(
+                'afterbegin',
+                `<div class="card-overlay-tint"></div><div class="card-overlay-label">${i18n.ensureBiDi(name)}</div>`
+            );
+        }
     }
 
     // =========================================================================
@@ -2456,7 +2443,10 @@ class HomePage extends Page {
     _restoreFromCache(cache) {
         this._libraries = cache.libraries;
 
-        if (cache.thumbUrls) {
+        // Only restore cached thumb URLs when in static mode — dynamic mode
+        // should show fresh images each load, and off mode should show none.
+        const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+        if (thumbMode === 'static' && cache.thumbUrls) {
             for (const lib of this._libraries) {
                 const url = cache.thumbUrls[lib.Id];
                 if (url) lib._dynamicThumbUrl = url;

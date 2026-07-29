@@ -548,18 +548,52 @@ export default class LibassWasmRenderer {
             return parseInt(line.split(':')[1], 10) || 0;
         };
 
-        const resX = getPlayRes('PlayResX');
-        const resY = getPlayRes('PlayResY');
+        let resX = getPlayRes('PlayResX');
+        let resY = getPlayRes('PlayResY');
+
+        // ====================================================================
+        // Patch missing or invalid PlayResX / PlayResY in [Script Info]
+        //
+        // When PlayResX or PlayResY is omitted or set to 0, libass defaults
+        // PlayResY to 288 and PlayResX to 384. If PlayResX was specified (e.g. 1920)
+        // without PlayResY, or if the header was omitted entirely, libass's
+        // internal coordinate calculations can produce distorted scaling.
+        // We inject safe standard defaults (384x288) if absent.
+        // ====================================================================
+        const safeResX = 384;
+        const safeResY = 288;
 
         if (resX <= 0 || resY <= 0) {
-            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — libass-wasm handles this natively, skipping patch`);
+            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — patching Script Info to ${safeResX}x${safeResY}`);
+
+            const scriptInfoIdx = lines.findIndex(l => /^\[Script Info\]/i.test(l.trim()));
+            const insertAt = scriptInfoIdx !== -1 ? scriptInfoIdx + 1 : 0;
+
+            const setPlayRes = (key, value) => {
+                const idx = lines.findIndex(l => new RegExp(`^${key}\\s*:`, 'i').test(l.trim()));
+                if (idx !== -1) {
+                    lines[idx] = `${key}: ${value}`;
+                } else {
+                    lines.splice(insertAt, 0, `${key}: ${value}`);
+                }
+            };
+
+            if (resX <= 0) {
+                setPlayRes('PlayResX', safeResX);
+                resX = safeResX;
+            }
+            if (resY <= 0) {
+                setPlayRes('PlayResY', safeResY);
+                resY = safeResY;
+            }
         }
 
         if (!this._enableStyleMods) {
-            // Style modifications disabled: return content as-is
-            return content;
+            // Style modifications disabled: return content with PlayRes patched
+            return lines.join('\n');
         }
 
+        const effectivePlayResY = resY > 0 ? resY : safeResY;
         let styleFormat = null;
 
         const processedLines = lines.map(line => {
@@ -579,9 +613,31 @@ export default class LibassWasmRenderer {
                 }
 
                 const sizeIdx = styleFormat.indexOf('Fontsize');
-                if (sizeIdx !== -1 && fontScale && fontScale !== 1.0) {
-                    const originalSize = parseFloat(parts[sizeIdx]) || 16;
-                    parts[sizeIdx] = String(originalSize * fontScale);
+                if (sizeIdx !== -1) {
+                    let size = parseFloat(parts[sizeIdx]) || 16;
+                    if (fontScale && fontScale !== 1.0) {
+                        size *= fontScale;
+                    }
+
+                    // ================================================================
+                    // PlayRes Fontsize Normalization for Undersized Subtitles
+                    // ----------------------------------------------------------------
+                    // Standard ASS dialogue fonts are sized at ~4.5% - 5.5% of PlayResY
+                    // (e.g. ~48-54px on 1080p, ~32-36px on 720p, ~13-16px on 288p).
+                    // Subtitles converted from SRT/VTT or authored with desktop pixel
+                    // sizes (e.g. 18-24px on a PlayResY: 1080 canvas) render at < 3.5%
+                    // of screen height, making them miniscule.
+                    // When style mods are active, auto-scale undersized Fontsize values
+                    // up to a comfortable 4.5% baseline ratio (~49px on 1080p).
+                    // ================================================================
+                    const sizeRatio = size / effectivePlayResY;
+                    if (sizeRatio < 0.035) {
+                        const normalizedSize = Math.round(effectivePlayResY * 0.045);
+                        log.info(`Normalizing undersized ASS Fontsize (${size}px on PlayResY ${effectivePlayResY}) -> ${normalizedSize}px`);
+                        size = normalizedSize;
+                    }
+
+                    parts[sizeIdx] = String(size);
                 }
 
                 const outlineIdx = styleFormat.indexOf('Outline');

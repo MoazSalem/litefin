@@ -261,7 +261,7 @@ export class ApiClient {
         if (storage.getItem('pref:showQualityBadges') === 'true' && options.params) {
             const fieldsKey = Object.keys(options.params).find((k) => k.toLowerCase() === 'fields');
             const isItemsEndpoint =
-                endpoint.includes('/Items') ||
+                (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
                 endpoint.includes('/Latest') ||
                 endpoint.includes('/Resume') ||
                 endpoint.includes('/NextUp') ||
@@ -822,6 +822,22 @@ export class ApiClient {
             return await this.get('/Litefin/Items/Latest', {
                 parentIds: parentIds.join(','),
                 ...params
+            }, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Batch fetch candidate thumbnail items for multiple parent library IDs in 1 request.
+     * @param {string[]} parentIds - Array of library parent GUIDs
+     * @returns {Promise<Object|null>} Object mapping parentId -> BaseItemDto[]
+     */
+    async getLibraryThumbnails(parentIds = []) {
+        if (!parentIds || parentIds.length === 0) return {};
+        try {
+            return await this.get('/Litefin/Items/Thumbnails', {
+                parentIds: parentIds.join(',')
             }, { warnOnError: true });
         } catch (e) {
             return null;
