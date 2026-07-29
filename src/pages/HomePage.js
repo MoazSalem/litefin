@@ -605,7 +605,10 @@ class HomePage extends Page {
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
-                fetchFn: async () => {
+                fetchFn: async function () {
+                    if (this._preFetchedItems) {
+                        return this._preFetchedItems.length > 0 ? this._preFetchedItems : null;
+                    }
                     try {
                         const params = hidePlayedInLatest ? { Filters: 'IsUnplayed' } : {};
                         params.Limit = homeRowLimit;
@@ -1064,6 +1067,43 @@ class HomePage extends Page {
      * @param {Map<number, RowDescriptor[]>} priorityGroups
      */
     async _loadBackgroundRows(remainingPriorities, priorityGroups) {
+        // ─── Batch Pre-fetch for Visible Latest Library Rows ─────────────
+        // Pre-fetch all visible latest library rows in 1 single HTTP request via Litefin plugin
+        const latestDescriptors = [];
+        for (const p of remainingPriorities) {
+            const group = priorityGroups.get(p) || [];
+            latestDescriptors.push(...group.filter((d) => d.id?.startsWith('latest-')));
+        }
+
+        if (latestDescriptors.length > 0) {
+            const libraryIds = latestDescriptors.map((d) => d.id.replace('latest-', ''));
+            const hidePlayed = storage.getItem('pref:hidePlayedInLatest') === 'true';
+            const homeRowLimit = parseInt(storage.getItem('pref:homeRowLimit') || '12', 10);
+
+            try {
+                const batchMap = await api.getBatchLatest(libraryIds, {
+                    limit: homeRowLimit,
+                    ...(hidePlayed ? { isPlayed: false } : {})
+                });
+
+                if (batchMap) {
+                    const normalizedMap = {};
+                    for (const [key, val] of Object.entries(batchMap)) {
+                        normalizedMap[key.replace(/-/g, '').toLowerCase()] = val;
+                    }
+
+                    latestDescriptors.forEach((d) => {
+                        const libId = d.id.replace('latest-', '').replace(/-/g, '').toLowerCase();
+                        if (normalizedMap[libId]) {
+                            d._preFetchedItems = normalizedMap[libId];
+                        }
+                    });
+                }
+            } catch (err) {
+                log.debug('Batch latest pre-fetch skipped or unavailable', err);
+            }
+        }
+
         for (const p of remainingPriorities) {
             if (!this._isMounted) return;
             const group = priorityGroups.get(p);

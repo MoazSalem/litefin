@@ -268,7 +268,8 @@ export class ApiClient {
                 endpoint.includes('/Upcoming') ||
                 endpoint.includes('/Similar') ||
                 endpoint.includes('/Episodes') ||
-                endpoint.includes('/Search/Hints');
+                endpoint.includes('/Search/Hints') ||
+                endpoint.includes('/MergedRows');
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
@@ -807,6 +808,24 @@ export class ApiClient {
             SortOrder: 'Descending',
             Limit: limit
         });
+    }
+
+    /**
+     * Batch fetch latest items for multiple parent library IDs in a single request.
+     * @param {string[]} parentIds - Array of library parent GUIDs
+     * @param {Object} [params] - Optional parameters (Limit, isPlayed, fields)
+     * @returns {Promise<Object>} Object mapping parentId -> BaseItemDto[]
+     */
+    async getBatchLatest(parentIds = [], params = {}) {
+        if (!parentIds || parentIds.length === 0) return {};
+        try {
+            return await this.get('/Litefin/Items/Latest', {
+                parentIds: parentIds.join(','),
+                ...params
+            }, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
