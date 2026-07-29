@@ -829,6 +829,19 @@ export class ApiClient {
     }
 
     /**
+     * Fetch curated Hero Carousel items (Movies & Series with backdrops) in a single optimized request.
+     * @param {Object} [params] - Optional query parameters (limit, ignoreWatched)
+     * @returns {Promise<Object|null>} QueryResult object with Items array or null on fallback
+     */
+    async getHomeHero(params = {}) {
+        try {
+            return await this.get('/Litefin/Hero', params, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
      * Get next up episodes
      */
     async getNextUp(params = {}) {

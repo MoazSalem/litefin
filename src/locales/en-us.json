@@ -252,6 +252,8 @@
     "OptionTriggerTimeFallback": "Time-based only",
     "Original": "Original",
     "People": "People",
+    "LabelUseBatchLatestPlugin": "Use Plugin for Home Libraries",
+    "UseBatchLatestPluginDescription": "Fetch all home screen library rows in a single batched HTTP request via the Litefin plugin. Improves home page load speed.",
     "PerformanceTweaks": "Performance Tweaks",
     "PerformanceValue": "Performance (Recommended)",
     "PhotoAlbums": "Photo Albums",

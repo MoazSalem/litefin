@@ -1075,7 +1075,8 @@ class HomePage extends Page {
             latestDescriptors.push(...group.filter((d) => d.id?.startsWith('latest-')));
         }
 
-        if (latestDescriptors.length > 0) {
+        const useBatchPlugin = storage.getItem('pref:useBatchLatestPlugin') !== 'false';
+        if (useBatchPlugin && latestDescriptors.length > 0) {
             const libraryIds = latestDescriptors.map((d) => d.id.replace('latest-', ''));
             const hidePlayed = storage.getItem('pref:hidePlayedInLatest') === 'true';
             const homeRowLimit = parseInt(storage.getItem('pref:homeRowLimit') || '12', 10);
@@ -1729,8 +1730,12 @@ class HomePage extends Page {
 
             let items = [];
 
-            if (ignoreWatched) {
-                // Fetch unplayed movies (IsUnplayed works correctly for Movies)
+            // Try single-pass fetch via Litefin Plugin endpoint
+            const pluginHero = await api.getHomeHero({ limit, ignoreWatched });
+            if (pluginHero && Array.isArray(pluginHero.Items) && pluginHero.Items.length > 0) {
+                items = pluginHero.Items;
+            } else if (ignoreWatched) {
+                // Fallback: Fetch unplayed movies (IsUnplayed works correctly for Movies)
                 const moviesResponse = await api.getItems({
                     SortBy: 'Random',
                     Recursive: true,
@@ -1766,7 +1771,7 @@ class HomePage extends Page {
                 const combined = [...movies, ...series];
                 items = combined.sort(() => Math.random() - 0.5).slice(0, limit);
             } else {
-                // No filter — single fetch for both types
+                // Fallback: No filter — single fetch for both types
                 const response = await api.getItems({
                     SortBy: 'Random',
                     Recursive: true,

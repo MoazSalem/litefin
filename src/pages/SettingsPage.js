@@ -1078,8 +1078,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                                <!-- Performance Tweaks Section -->
+                <!-- Performance Tweaks Section -->
                 <h3 class="setting-section-title" data-i18n="PerformanceTweaks">${i18n.t('PerformanceTweaks') || 'Performance Tweaks'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelUseBatchLatestPlugin">${i18n.t('LabelUseBatchLatestPlugin') || 'Use Plugin for Home Libraries'}</span>
+                        <span class="setting-description" data-i18n="UseBatchLatestPluginDescription">${i18n.t('UseBatchLatestPluginDescription') || 'Fetch all home screen library rows in a single batched HTTP request via the Litefin plugin. Improves home page load speed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:useBatchLatestPlugin') !== 'false' ? 'active' : ''}" 
+                                id="toggle-use-batch-latest-plugin" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
@@ -6230,6 +6243,18 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getDisableCardScaling();
                 layoutManager.setDisableCardScaling(newValue);
                 disableScalingBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Use Litefin Plugin for Home Libraries
+        const useBatchPluginBtn = this.$('#toggle-use-batch-latest-plugin');
+        if (useBatchPluginBtn) {
+            useBatchPluginBtn.addEventListener('click', () => {
+                const isCurrentlyEnabled = storage.getItem('pref:useBatchLatestPlugin') !== 'false';
+                const newValue = !isCurrentlyEnabled;
+                storage.setItem('pref:useBatchLatestPlugin', newValue ? 'true' : 'false');
+                useBatchPluginBtn.classList.toggle('active', newValue);
+                log.info(`Use Litefin Plugin for Home Libraries set to: ${newValue}`);
             });
         }
 
