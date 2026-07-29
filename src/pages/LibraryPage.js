@@ -943,6 +943,13 @@ class LibraryPage extends Page {
             grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode, shouldHideLabels);
         }
 
+        // Align limit to grid columns so the last rendered row is always full.
+        // Avoids visual partial-row gaps when navigating the grid via D-pad.
+        const alignCols = this.state.gridMode === 'dynamic' ? this.state.gridColumns : 0;
+        if (alignCols > 0) {
+            this.state.limit = Math.ceil(this.state.limit / alignCols) * alignCols;
+        }
+
         try {
             const params = {
                 SortBy: this.state.sortBy,
@@ -3781,9 +3788,11 @@ class LibraryPage extends Page {
             storage.setItem(`pref:library:gridMode:${this.state.libraryId}`, tempGridMode);
             storage.setItem(`pref:library:gridColumns:${this.state.libraryId}:${tempMode}`, tempColumns);
 
-            // Re-render and reload grid content
-            this._renderGrid(this.state.items);
+            // Re-fetch items with the aligned limit for the new column count,
+            // so every row renders full (no partial last row).
+            this.state.startIndex = 0;
             this._closeModal();
+            this._loadItems();
 
             log.info(
                 `[ViewMode] Applied configuration: Mode=${tempMode}, Grid=${tempGridMode}, Columns=${tempColumns}`
