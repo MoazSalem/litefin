@@ -1853,7 +1853,7 @@ export class WebOSPlayer {
             // We only escalate to _seekWithRetry when the position is truly
             // far off (e.g. video still stuck at 0 s when target is 420 s).
             // ----------------------------------------------------------------
-            if (drift > 10) {
+            if (drift >= 10) {
                 log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)} s, expected: ${target} s, drift: ${drift.toFixed(2)} s) — applying robust seek`);
                 this._seekWithRetry(target);
                 return; // suppress this playing event until seek resolves

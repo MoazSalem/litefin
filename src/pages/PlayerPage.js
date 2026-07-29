@@ -2920,19 +2920,23 @@ class PlayerPage extends Page {
             // from the player backend or the fallback parameters.
             let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
 
-            // If the video naturally completed (ended event was fired), we override
-            // the reported position with the total duration ticks of the media.
-            // This prevents minor timing differences between player backend and server
-            // from leaving the item unmarked as watched and failing scrobble sync.
-            if (this._isPlaybackEnded) {
-                const durationTicks =
-                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
-                if (durationTicks > 0) {
-                    log.info(
-                        `Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`
-                    );
-                    rawPosition = durationTicks;
-                }
+            // If the video naturally completed (ended event was fired) or the user
+            // watched >= 90% of the content (defensive heuristic for WebOS where
+            // ended may not fire on certain 4K HEVC streams), override the reported
+            // position with the total duration ticks of the media. This prevents
+            // minor timing differences between player backend and server from
+            // leaving the item unmarked as watched and failing scrobble sync.
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+            const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.9);
+            if (_isNearComplete) {
+                log.info(
+                    `Overriding positionTicks with durationTicks (${durationTicks})` +
+                        (this._isPlaybackEnded
+                            ? ' due to natural end of playback'
+                            : ' due to near-complete playback position')
+                );
+                rawPosition = durationTicks;
             }
 
             const positionTicks = Math.round(rawPosition);
@@ -3033,10 +3037,10 @@ class PlayerPage extends Page {
                 await api.reportPlaybackStopped(data);
             }
 
-            // 4. Clear server-side resume point if playback completed naturally
-            // This prevents stale caches on the server that require a restart to clear.
-            if (this._isPlaybackEnded && this._item?.Id && !this._item.isIntro) {
-                log.info('Playback completed naturally — deleting server resume point');
+            // 4. Clear server-side resume point if playback completed naturally or
+            // the user watched >= 90% of the content (defensive heuristic).
+            if (_isNearComplete && this._item?.Id && !this._item.isIntro) {
+                log.info('Playback completed — deleting server resume point');
                 api.deletePlaybackProgress(this._item.Id).catch((err) => {
                     log.warn('Failed to delete playback progress:', err);
                 });
@@ -3341,7 +3345,7 @@ class PlayerPage extends Page {
         log.info('Locking screen and remote controls');
         this._isScreenLocked = true;
         if (this._osd) this._osd.hide();
-        
+
         const overlay = this.$('#lock-overlay');
         const iconContainer = this.$('#lock-icon-inner');
         if (overlay) {
@@ -3361,12 +3365,12 @@ class PlayerPage extends Page {
         // Reset the press counter for the next lock cycle.
         this._unlockPressCount = 0;
         this._unlockLastPressTime = null;
-        
+
         const overlay = this.$('#lock-overlay');
         if (overlay) {
             overlay.classList.remove('visible');
         }
-        
+
         // Reset progress ring and icon back to locked state for next use.
         const progressBar = this.$('#lock-progress-bar');
         if (progressBar) {
@@ -3376,7 +3380,7 @@ class PlayerPage extends Page {
         if (iconContainer) {
             iconContainer.innerHTML = osdIcons.lock;
         }
-        
+
         // Show OSD briefly as feedback that it is unlocked
         if (this._osd) {
             this._osd.show();
@@ -3388,7 +3392,7 @@ class PlayerPage extends Page {
         const overlay = this.$('#lock-overlay');
         if (overlay) {
             overlay.classList.add('visible');
-            
+
             if (this._lockIndicatorTimeout) clearTimeout(this._lockIndicatorTimeout);
             this._lockIndicatorTimeout = setTimeout(() => {
                 if (!this._isHoldingUnlock && this._isScreenLocked) {
@@ -3418,13 +3422,13 @@ class PlayerPage extends Page {
      * Window resets if no press arrives within 1.5 seconds.
      */
     _handleUnlockPress() {
-        const PRESS_THRESHOLD = 5;      // presses (fast taps or one held key with autorepeat)
-        const PRESS_WINDOW_MS = 3000;   // window to collect them
+        const PRESS_THRESHOLD = 5; // presses (fast taps or one held key with autorepeat)
+        const PRESS_WINDOW_MS = 3000; // window to collect them
 
         const now = Date.now();
 
         // Reset counter if window expired.
-        if (this._unlockLastPressTime && (now - this._unlockLastPressTime) > PRESS_WINDOW_MS) {
+        if (this._unlockLastPressTime && now - this._unlockLastPressTime > PRESS_WINDOW_MS) {
             this._unlockPressCount = 0;
             // Reset progress ring when window expires.
             const progressBar = this.$('#lock-progress-bar');
@@ -3441,7 +3445,7 @@ class PlayerPage extends Page {
 
         const progressBar = this.$('#lock-progress-bar');
         if (progressBar) {
-            progressBar.style.strokeDashoffset = 283 - (progress * 283);
+            progressBar.style.strokeDashoffset = 283 - progress * 283;
         }
 
         const iconContainer = this.$('#lock-icon-inner');

@@ -1428,12 +1428,12 @@ export class JellyfinPlayer extends EventEmitter {
      * Stop playback
      */
     async stop() {
+        const item = this._currentItem;
+        const positionTicks = this.getCurrentPositionTicks();
+
         if (this._backend) {
             await this._backend.stop();
         }
-
-        const item = this._currentItem;
-        const positionTicks = this.getCurrentPositionTicks();
 
         // Only clear state if NOT restarting
         if (!this._isRestarting) {
