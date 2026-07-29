@@ -123,15 +123,25 @@ class PersonPage extends Page {
             const isArtist = this._person.Type === 'MusicArtist' || this._person.Type === 'Artist';
 
             if (isArtist) {
-                // 4a. Albums first (top), then Songs (bottom)
-                const albumsResult = await api.getArtistAlbums(this._personId);
-                const albums = albumsResult.Items || [];
-                log.debug('Loaded artist albums', { count: albums.length });
+                // 4a. Try single-pass query first (Albums + Songs)
+                const result = await api.getPersonItems(this._personId);
+                const items = result.Items || [];
 
-                const songsResult = await api.getArtistSongs(this._personId);
-                const songs = songsResult.Items || [];
-                log.debug('Loaded artist songs', { count: songs.length });
+                let albums = items.filter((i) => i.Type === 'MusicAlbum');
+                let songs = items.filter((i) => i.Type === 'Audio');
 
+                // Fallback to separate endpoints if neither type was returned (e.g. legacy server without plugin)
+                if (albums.length === 0 && songs.length === 0) {
+                    log.debug('Single-pass query returned no music items, calling fallback endpoints');
+                    const [albumsResult, songsResult] = await Promise.all([
+                        api.getArtistAlbums(this._personId),
+                        api.getArtistSongs(this._personId)
+                    ]);
+                    albums = albumsResult.Items || [];
+                    songs = songsResult.Items || [];
+                }
+
+                log.debug('Loaded artist works', { albums: albums.length, songs: songs.length });
                 this._renderArtistWorks(albums, songs);
             } else {
                 // 4a. Movies/Shows/Episodes (renders in visual order: Movies → Shows → Episodes)
@@ -476,6 +486,25 @@ class PersonPage extends Page {
      */
     async _loadRolesInBackground() {
         try {
+            // Check if items already have roles attached via Litefin plugin
+            const hasPrePopulatedRoles = this._items?.some((item) => item.People && item.People.length > 0);
+
+            if (hasPrePopulatedRoles) {
+                this._roleMap = new Map();
+                this._items.forEach((item) => {
+                    if (item.People) {
+                        const person = item.People.find((p) => p.Id === this._personId);
+                        if (person?.Role) {
+                            this._roleMap.set(item.Id, person.Role);
+                        }
+                    }
+                });
+                this._applyRolesToCards();
+                log.debug(`Applied ${this._roleMap.size} character roles from plugin single-pass response`);
+                return;
+            }
+
+            // Fallback: Fetch roles via secondary API request if plugin is not available
             const result = await api.getPersonItemsWithRoles(this._personId);
             const itemsWithPeople = result.Items || [];
 
@@ -493,7 +522,7 @@ class PersonPage extends Page {
             // Apply roles to visible cards
             this._applyRolesToCards();
 
-            log.debug(`Added ${this._roleMap.size} character roles`);
+            log.debug(`Added ${this._roleMap.size} character roles via fallback request`);
         } catch (error) {
             log.warn('Could not load character roles', error);
         }

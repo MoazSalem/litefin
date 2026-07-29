@@ -1066,18 +1066,21 @@ export class ApiClient {
     }
 
     async getPersonItems(personId) {
-        // Fetch items for this person - Movies, Series, Episodes only
-        // High limit to capture full filmography (some people have many appearances)
-        // Note: People field loaded separately via getPersonItemsWithRoles for performance
-        return this.get(`/Users/${this._userId}/Items`, {
-            PersonIds: personId,
-            IncludeItemTypes: 'Movie,Series,Episode',
-            Recursive: true,
-            Limit: 500,
-            Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
-            SortBy: 'PremiereDate',
-            SortOrder: 'Descending'
-        });
+        // Try custom Litefin plugin endpoint first (single request with roles pre-populated)
+        try {
+            return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 50 }, { warnOnError: true });
+        } catch (err) {
+            // Fallback to standard Jellyfin endpoint if plugin is not installed
+            return this.get(`/Users/${this._userId}/Items`, {
+                PersonIds: personId,
+                IncludeItemTypes: 'Movie,Series,Episode',
+                Recursive: true,
+                Limit: 500,
+                Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
+                SortBy: 'PremiereDate',
+                SortOrder: 'Descending'
+            });
+        }
     }
 
     // Separate call to get items with People field (for character roles)
@@ -1253,7 +1256,7 @@ export class ApiClient {
             SortBy: 'ProductionYear,SortName',
             SortOrder: 'Descending',
             Recursive: true,
-            Limit: 100,
+            Limit: 12,
             Fields: 'ProductionYear,AlbumArtist,Artists'
         };
 
@@ -1274,7 +1277,7 @@ export class ApiClient {
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             Recursive: true,
-            Limit: 200,
+            Limit: 12,
             Fields: 'ProductionYear,AlbumArtist,Artists,RunTimeTicks'
         };
 
