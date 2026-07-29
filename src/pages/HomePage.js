@@ -790,25 +790,19 @@ class HomePage extends Page {
             const priorityGroups = this._groupByPriority(descriptors);
             const priorities = Array.from(priorityGroups.keys()).sort((a, b) => a - b);
 
-            // NOTE: The overridden setLoading() suppresses the app:hideSplash
-            // event so the splash overlay stays active until _tryInitializeFocus()
-            // has run. We defer setLoading(false) until after Step 6 (P0+P1+hero)
-            // so the loading spinner does not disappear before critical content
-            // data arrives — otherwise bare skeletons flash on screen.
-            //
-            // [FOCUS RESTORATION FIX]: Keep the loading spinner active whenever
-            // we have a saved focus target to restore — either from a back-button
-            // navigation (_pendingNavState) or from sidebar/forward navigation where
-            // home:lastFocusedItem was stored. In both cases we must wait until
-            // _tryInitializeFocus() has run inside its double rAF and set the correct
-            // focus + scroll before revealing the page, to prevent the visible flash
-            // of the page at scroll-top with no focused element.
-            const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
+            // ─── Step 5.5: Batch pre-fetch latest library rows via plugin ────
+            await this._preFetchLatestRows(descriptors);
 
-            // ─── Step 6: Render priority 0 + 1 + hero carousel ────────────
-            // My Media (P0), Continue Watching/Next Up (P1), and the hero
-            // carousel are the first things the user sees. Await all of them
-            // before revealing the page so no bare skeletons flash.
+            // Find target focus row if restoring back-navigation state
+            const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
+            const savedFocusObj = storage.getItem('pref:disableFocusRestore') !== 'true' ? state.get('home:lastFocusedItem') : null;
+            const targetRowId = savedFocusObj ? savedFocusObj.rowId : null;
+            const targetDescriptor = targetRowId ? descriptors.find((d) => d.id === targetRowId) : null;
+
+            // ─── Step 6: Render priority 0 + 1 + hero + target focus row ──────
+            // My Media (P0), Continue Watching/Next Up (P1), Hero Carousel, and
+            // target focus row are rendered and awaited BEFORE revealing the page
+            // so focus restoration succeeds without flashes or skeleton resets.
             const earlyPriorities = [0, 1];
             const earlyPromises = [];
             for (const p of earlyPriorities) {
@@ -816,6 +810,9 @@ class HomePage extends Page {
                 if (group) {
                     earlyPromises.push(...group.map((d) => this._loadAndRenderRow(d)));
                 }
+            }
+            if (targetDescriptor && !earlyPriorities.includes(targetDescriptor.priority)) {
+                earlyPromises.push(this._loadAndRenderRow(targetDescriptor));
             }
             if (heroPromise) {
                 earlyPromises.push(heroPromise);
@@ -1066,45 +1063,62 @@ class HomePage extends Page {
      * @param {number[]} remainingPriorities - Priority values to load
      * @param {Map<number, RowDescriptor[]>} priorityGroups
      */
-    async _loadBackgroundRows(remainingPriorities, priorityGroups) {
-        // ─── Batch Pre-fetch for Visible Latest Library Rows ─────────────
-        // Pre-fetch all visible latest library rows in 1 single HTTP request via Litefin plugin
-        const latestDescriptors = [];
-        for (const p of remainingPriorities) {
-            const group = priorityGroups.get(p) || [];
-            latestDescriptors.push(...group.filter((d) => d.id?.startsWith('latest-')));
-        }
-
+    /**
+     * Pre-fetches all visible latest library rows in 1 single HTTP request via Litefin plugin.
+     * @param {RowDescriptor[]} descriptors
+     */
+    async _preFetchLatestRows(descriptors) {
         const useBatchPlugin = storage.getItem('pref:useBatchLatestPlugin') !== 'false';
-        if (useBatchPlugin && latestDescriptors.length > 0) {
-            const libraryIds = latestDescriptors.map((d) => d.id.replace('latest-', ''));
-            const hidePlayed = storage.getItem('pref:hidePlayedInLatest') === 'true';
-            const homeRowLimit = parseInt(storage.getItem('pref:homeRowLimit') || '12', 10);
+        if (!useBatchPlugin) return;
 
-            try {
-                const batchMap = await api.getBatchLatest(libraryIds, {
-                    limit: homeRowLimit,
-                    ...(hidePlayed ? { isPlayed: false } : {})
-                });
+        const latestDescriptors = (descriptors || []).filter((d) => d.id?.startsWith('latest-'));
+        if (latestDescriptors.length === 0) return;
 
-                if (batchMap) {
-                    const normalizedMap = {};
-                    for (const [key, val] of Object.entries(batchMap)) {
-                        normalizedMap[key.replace(/-/g, '').toLowerCase()] = val;
-                    }
+        const libraryIds = latestDescriptors.map((d) => d.id.replace('latest-', ''));
+        const hidePlayed = storage.getItem('pref:hidePlayedInLatest') === 'true';
+        const homeRowLimit = parseInt(storage.getItem('pref:homeRowLimit') || '12', 10);
 
-                    latestDescriptors.forEach((d) => {
-                        const libId = d.id.replace('latest-', '').replace(/-/g, '').toLowerCase();
-                        if (normalizedMap[libId]) {
-                            d._preFetchedItems = normalizedMap[libId];
-                        }
-                    });
+        try {
+            const batchMap = await api.getBatchLatest(libraryIds, {
+                limit: homeRowLimit,
+                ...(hidePlayed ? { isPlayed: false } : {})
+            });
+
+            if (batchMap) {
+                const normalizedMap = {};
+                for (const [key, val] of Object.entries(batchMap)) {
+                    normalizedMap[key.replace(/-/g, '').toLowerCase()] = val;
                 }
-            } catch (err) {
-                log.debug('Batch latest pre-fetch skipped or unavailable', err);
-            }
-        }
 
+                latestDescriptors.forEach((d) => {
+                    const libId = d.id.replace('latest-', '').replace(/-/g, '').toLowerCase();
+                    if (normalizedMap[libId]) {
+                        const items = normalizedMap[libId];
+                        items.forEach((item) => {
+                            if (item.Id) item.Id = String(item.Id).replace(/-/g, '').toLowerCase();
+                            if (item.ServerId) item.ServerId = String(item.ServerId).replace(/-/g, '').toLowerCase();
+                        });
+                        d._preFetchedItems = items;
+                    }
+                });
+            }
+        } catch (err) {
+            log.debug('Batch latest pre-fetch skipped or unavailable', err);
+        }
+    }
+
+    /**
+     * Loads remaining priority groups in the background after the splash overlay
+     * has been hidden. Rows within each priority group fire in parallel, but groups
+     * run sequentially to avoid overwhelming the TV's limited HTTP connection pool.
+     *
+     * Once all background rows complete, runs post-render cleanup (prewarm scroll
+     * cache, markReady, save page cache, library thumb enrichment).
+     *
+     * @param {number[]} remainingPriorities - Priority values to load
+     * @param {Map<number, RowDescriptor[]>} priorityGroups
+     */
+    async _loadBackgroundRows(remainingPriorities, priorityGroups) {
         for (const p of remainingPriorities) {
             if (!this._isMounted) return;
             const group = priorityGroups.get(p);
@@ -1357,7 +1371,8 @@ class HomePage extends Page {
             let restoredFocus = false;
 
             if (lastFocusedObj || legacyLastFocusedId) {
-                const targetId = lastFocusedObj ? lastFocusedObj.itemId : legacyLastFocusedId;
+                const rawTargetId = lastFocusedObj ? lastFocusedObj.itemId : legacyLastFocusedId;
+                const targetId = rawTargetId ? String(rawTargetId).replace(/-/g, '').toLowerCase() : null;
                 const targetRowId = lastFocusedObj ? lastFocusedObj.rowId : null;
 
                 let savedCard = null;
@@ -1366,13 +1381,17 @@ class HomePage extends Page {
                 if (targetRowId) {
                     const rowEntry = this._rowRegistry.get(targetRowId);
                     if (rowEntry) {
-                        savedCard = rowEntry.sectionEl.querySelector(`.media-card[data-item-id="${targetId}"]`);
+                        savedCard = Array.from(rowEntry.sectionEl.querySelectorAll('.media-card')).find(
+                            (card) => String(card.dataset.itemId || '').replace(/-/g, '').toLowerCase() === targetId
+                        );
                     }
                 }
 
                 // Fall back to a global search
                 if (!savedCard) {
-                    savedCard = container.querySelector(`.media-card[data-item-id="${targetId}"]`);
+                    savedCard = Array.from(container.querySelectorAll('.media-card')).find(
+                        (card) => String(card.dataset.itemId || '').replace(/-/g, '').toLowerCase() === targetId
+                    );
                 }
 
                 if (savedCard) {
@@ -1388,7 +1407,7 @@ class HomePage extends Page {
                     const rowEntry = this._rowRegistry.get(targetRowId);
                     if (rowEntry) {
                         const itemIndex = rowEntry.virtualRow.items.findIndex(
-                            (item) => String(item.Id) === String(targetId)
+                            (item) => String(item.Id || '').replace(/-/g, '').toLowerCase() === targetId
                         );
                         if (itemIndex !== -1) {
                             const node = rowEntry.virtualRow.focusByIndex(itemIndex);
