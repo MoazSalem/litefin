@@ -10,6 +10,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { imageService } from '../utils/ImageService.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -786,6 +787,15 @@ class LibraryPage extends Page {
         if (this._gridFocusFrameId) {
             cancelAnimationFrame(this._gridFocusFrameId);
             this._gridFocusFrameId = null;
+        }
+        if (this._onGridScroll) {
+            const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
+            scrollContainer?.removeEventListener('scroll', this._onGridScroll);
+            this._onGridScroll = null;
+        }
+        if (this._gridScrollFrameId) {
+            cancelAnimationFrame(this._gridScrollFrameId);
+            this._gridScrollFrameId = null;
         }
     }
 
@@ -2395,6 +2405,47 @@ class LibraryPage extends Page {
             });
         };
         eventBus.on('focus:changed', this._onGridFocusChanged);
+
+        // ====================================================================
+        // PROGRESSIVE DOM TRIGGER — native scroll listener (Mouse Wheel / Magic Remote)
+        // ====================================================================
+        // When using mouse wheel or LG Magic Remote pointer, focus:changed does
+        // not fire during scrolling. Listen to scroll events on the scroll container
+        // to detect position and append/prepend grid chunks as the user scrolls.
+        // ====================================================================
+        const scrollContainer = this.$('#library-scroll-container') || this.el.querySelector('.page-content');
+        if (scrollContainer) {
+            if (this._onGridScroll) {
+                scrollContainer.removeEventListener('scroll', this._onGridScroll);
+            }
+            this._onGridScroll = () => {
+                if (this._gridScrollFrameId) return;
+
+                this._gridScrollFrameId = requestAnimationFrame(() => {
+                    this._gridScrollFrameId = null;
+                    if (!grid || !document.contains(grid)) return;
+
+                    const containerHeight = scrollContainer.clientHeight;
+                    const scrollTop = scrollContainer.scrollTop;
+                    const scrollHeight = scrollContainer.scrollHeight;
+
+                    // Trigger append when within 1.5 screen heights of the bottom
+                    if (scrollTop + containerHeight >= scrollHeight - containerHeight * 1.5) {
+                        if (this.state.gridWindowEnd < this.state.items.length) {
+                            this._appendGridChunk(grid, this.state.items, currentColumns);
+                        }
+                    }
+
+                    // Trigger prepend when within 1.5 screen heights of top rendered items
+                    const spacer = grid.querySelector('#grid-top-spacer');
+                    const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+                    if (this.state.gridWindowStart > 0 && scrollTop <= spacerHeight + containerHeight * 1.5) {
+                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    }
+                });
+            };
+            scrollContainer.addEventListener('scroll', this._onGridScroll, { passive: true });
+        }
 
         // Register pagination footer — the grid's leaveDown points here.
         // Without this registration the section is a ghost and focus is silently
