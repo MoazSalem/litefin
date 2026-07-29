@@ -2346,7 +2346,7 @@ class DetailsPage extends Page {
                     Filters: 'IsUnplayed',
                     SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
-                    Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
@@ -2367,6 +2367,102 @@ class DetailsPage extends Page {
     }
 
     _renderNextUp() {
+        const episodeLayout = storage.getItem('pref:episodeLayout') || 'list';
+        if (episodeLayout === 'list') {
+            const container = this.$('#next-up-row');
+            const section = this.$('#next-up-section');
+            if (!section || !container || !this._nextUp || this._nextUp.length === 0) return;
+
+            section.classList.remove('hidden');
+            section.classList.remove('media-row');
+            container.classList.add('vertical-list');
+
+            let html = '<div class="episode-list-container" style="padding-bottom: 0;">';
+            this._nextUp.forEach((ep) => {
+                const progress =
+                    ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
+                        ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
+                        : 0;
+                const progressHtml = progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : '';
+
+                const imgUrl = api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality });
+                const episodeTitle = i18n.ensureBiDi(ep.Name);
+                const episodePrefix = ep.ParentIndexNumber && ep.IndexNumber ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. ` : ep.IndexNumber ? `${ep.IndexNumber}. ` : '';
+
+                const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                let runtimeText = '';
+                if (ep.RunTimeTicks) {
+                    const mins = Math.round(ep.RunTimeTicks / 600000000);
+                    runtimeText = `${mins}m`;
+                }
+                let endsAtText = '';
+                if (ep.RunTimeTicks) {
+                    const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                    const timeString = i18n.formatLocalTime(endTime);
+                    endsAtText = i18n.t('EndsAtValue', [timeString]);
+                }
+
+                html += `
+                    <div class="episode-row">
+                        <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                            <div class="episode-row-thumb">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
+                                ${progressHtml}
+                            </div>
+                            <div class="episode-row-info">
+                                <div class="episode-row-title">${episodePrefix}${episodeTitle}</div>
+                                <div class="episode-row-meta">
+                                    ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                    ${runtimeText ? `<span>${runtimeText}</span>` : ''}
+                                    ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                </div>
+                                <p class="episode-row-overview">${ep.Overview || ''}</p>
+                            </div>
+                        </button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+
+            container.onclick = (e) => {
+                const card = e.target.closest('.media-card');
+                if (card && card.dataset.itemId) {
+                    const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: 'details-next-up'
+                        });
+                    }
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
+            };
+
+            lazyLoader.observe(container);
+
+            const upwardLink = this._getPreviousVisibleSection('details-next-up')?.targetName || 'details-actions';
+            const nextSection = this._getNextVisibleSection('details-next-up');
+            const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+            this.registerFocusSection('details-next-up', container, {
+                orientation: 'vertical',
+                leaveUp: upwardLink,
+                leaveDown: leaveDownTarget,
+                leaveLeft: 'sidebar',
+                onEnter: (fromElement, options) => {
+                    if (!this._hasEnteredNextUpGrid) {
+                        this._hasEnteredNextUpGrid = true;
+                        return container.querySelector('.media-card');
+                    }
+                    return null;
+                }
+            });
+
+            this._updateLeaveDown(upwardLink, 'details-next-up');
+            return;
+        }
+
         this._renderVirtualRow({
             sectionId: 'next-up-section',
             listId: 'next-up-row',

@@ -7,7 +7,7 @@
 }
 
 /* Override DetailsPage grid for vertical episode list */
-#episodes-list.vertical-list {
+.vertical-list {
     display: block !important;
 }
 
@@ -86,7 +86,7 @@
     -webkit-transform: scale(1.02);
     transform: scale(1.02);
     /* Make it pop slightly less than grid cards */
-    background: var(--jf-card-bg-darker, rgba(0, 0, 0, 0.5));
+    background: var(--jf-card-bg-darker, rgba(0, 0, 0, 0.7));
     z-index: 10;
     outline: none;
 }
