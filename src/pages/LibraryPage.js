@@ -424,6 +424,27 @@ class LibraryPage extends Page {
                     const sectionConfig = focusManager.getSectionConfig(sectionId);
                     const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
 
+                    // If the saved focus item is beyond the first rendered chunk,
+                    // expand the rendered window so the card element exists in the
+                    // DOM and can be found by querySelector. Without this, focus
+                    // restoration silently fails for items past the initial chunk.
+                    const grid = this.$('#library-grid');
+                    if (grid && this.state.items && this.state._gridColumns) {
+                        const itemIndex = this.state.items.findIndex((item) => item.Id === targetId);
+                        if (itemIndex >= 0) {
+                            const columns = this.state._gridColumns;
+                            while (
+                                itemIndex >= this.state.gridWindowEnd &&
+                                this.state.gridWindowEnd < this.state.items.length
+                            ) {
+                                this._appendGridChunk(grid, this.state.items, columns);
+                            }
+                            while (itemIndex < this.state.gridWindowStart && this.state.gridWindowStart > 0) {
+                                this._prependGridChunk(grid, this.state.items, columns);
+                            }
+                        }
+                    }
+
                     const savedElement = sectionContainer.querySelector(
                         `[data-item-id="${targetId}"], [data-id="${targetId}"], [id="${targetId}"]`
                     );
@@ -2266,9 +2287,8 @@ class LibraryPage extends Page {
         //
         // Chunk sizing: (columns × 5 rows) gives ~2 visible screens worth of content.
         // ====================================================================
-        const columns = this.state.gridColumns || this._getDefaultColumnsForMode(
-            isLandscape ? 'thumb' : this.state.viewMode
-        );
+        const columns =
+            this.state.gridColumns || this._getDefaultColumnsForMode(isLandscape ? 'thumb' : this.state.viewMode);
 
         // Store rendering context + column count on state so _appendGridChunk
         // and _prependGridChunk can access them without re-deriving
@@ -2380,7 +2400,10 @@ class LibraryPage extends Page {
                 const allCards = grid.querySelectorAll('.media-card');
                 let domIndex = -1;
                 for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === element) { domIndex = i; break; }
+                    if (allCards[i] === element) {
+                        domIndex = i;
+                        break;
+                    }
                 }
                 if (domIndex === -1) return;
 
@@ -2390,7 +2413,7 @@ class LibraryPage extends Page {
                 // -----------------------------------------------------------------------
                 // DOWNWARD TRIGGER: within 2 rows of the bottom rendered boundary
                 // -----------------------------------------------------------------------
-                const appendThreshold = this.state.gridWindowEnd - (currentColumns * 2);
+                const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
                 if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
                     this._appendGridChunk(grid, this.state.items, currentColumns);
                 }
@@ -2398,7 +2421,7 @@ class LibraryPage extends Page {
                 // -----------------------------------------------------------------------
                 // UPWARD TRIGGER: within 2 rows of the top rendered boundary
                 // -----------------------------------------------------------------------
-                const prependThreshold = this.state.gridWindowStart + (currentColumns * 2);
+                const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
                 if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
                     this._prependGridChunk(grid, this.state.items, currentColumns);
                 }
