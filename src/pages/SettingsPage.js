@@ -2465,6 +2465,10 @@ class SettingsPage extends Page {
                     label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
                 },
                 {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
+                },
+                {
                     value: 'transparent',
                     label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
                 }
@@ -2489,6 +2493,10 @@ class SettingsPage extends Page {
                 {
                     value: 'semi',
                     label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
                 },
                 {
                     value: 'transparent',

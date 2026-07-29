@@ -386,6 +386,7 @@ class LayoutManager {
         let dynamicCss = `html[data-theme-mode="${this._themeMode}"] {
             --jf-accent: ${accents.accent};
             --jf-accent-rgb: ${accents.accentRgb};
+            --jf-accent-dark-rgb: ${accents.accentDarkRgb};
             --jf-accent-hover: ${accents.accentHover};
             --jf-accent-active: ${accents.accentActive};
             --jf-accent-light: ${accents.accentLight};

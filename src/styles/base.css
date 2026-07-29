@@ -44,6 +44,7 @@
     --jf-btn-primary-hover-border: #ffffff;
 
     /* Global Text Fallbacks (Crucial for ultra-legacy ponyfill stability) */
+    --jf-accent-dark-rgb: 20, 20, 30;
     --jf-text-primary: #ffffff;
     --jf-text-secondary: rgba(255, 255, 255, 0.8);
     --jf-text-tertiary: #666666;

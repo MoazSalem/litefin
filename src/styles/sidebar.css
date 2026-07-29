@@ -60,6 +60,11 @@
     background: rgba(16, 16, 16, 0.4) !important;
 }
 
+/* Tinted semi-transparent collapsed sidebar */
+.sidebar.tinted-semi-collapsed:not(.expanded):not(:hover) {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+}
+
 /* Transparent expanded sidebar */
 .sidebar.transparent-expanded.expanded,
 .sidebar.transparent-expanded:hover {
@@ -73,6 +78,12 @@
 .sidebar.semi-transparent-expanded.expanded,
 .sidebar.semi-transparent-expanded:hover {
     background: rgba(16, 16, 16, 0.4) !important;
+}
+
+/* Tinted semi-transparent expanded sidebar */
+.sidebar.tinted-semi-expanded.expanded,
+.sidebar.tinted-semi-expanded:hover {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.85) !important;
 }
 
 /* Black collapsed sidebar */
@@ -118,6 +129,11 @@ body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
     background: rgba(16, 16, 16, 0.4) !important;
 }
 
+body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed:hover {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+}
+
 body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,
 body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
     background: #000000 !important;
@@ -137,6 +153,11 @@ html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
     background: rgba(16, 16, 16, 0.4) !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed:hover {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
 }
 
 html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,

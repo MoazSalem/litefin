@@ -893,6 +893,7 @@
     "OptionCollapsedSidebarColorBlack": "Black",
     "OptionCollapsedSidebarColorSemi": "Semi-transparent",
     "OptionCollapsedSidebarColorTheme": "Follow Theme",
+    "OptionCollapsedSidebarColorTintedSemi": "Tinted Semi-transparent",
     "OptionCollapsedSidebarColorTransparent": "Transparent",
     "OptionDetailsLayoutBackdropLeft": "Cinematic Backdrop (Left Aligned)",
     "OptionDetailsLayoutBackdropMinimal": "Cinematic Backdrop (Centered)",
