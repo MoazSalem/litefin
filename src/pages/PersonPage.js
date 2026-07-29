@@ -98,6 +98,8 @@ class PersonPage extends Page {
     async _loadPersonDetails() {
         this.setLoading(true);
 
+        let hasFocusTarget = false;
+
         try {
             // ────────────────────────────────────────────────────────────
             // 1. Fetch person metadata + render text (blocking)
@@ -113,12 +115,19 @@ class PersonPage extends Page {
             this._setSmartBackdrop();
 
             // ────────────────────────────────────────────────────────────
-            // 3. Hide loading — text content is visible, images loading in bg
+            // 3. Check focus target — defer hiding loading until rows render
             // ────────────────────────────────────────────────────────────
-            this.setLoading(false);
+            const focusStateKey = `person:lastFocusedItem:${this._personId}`;
+            hasFocusTarget =
+                this._pendingNavState ||
+                (storage.getItem('pref:disableFocusRestore') !== 'true' && state.get(focusStateKey));
+
+            if (!hasFocusTarget) {
+                this.setLoading(false);
+            }
 
             // ────────────────────────────────────────────────────────────
-            // 4. Load works in visual order after loading is hidden
+            // 4. Load works in visual order
             // ────────────────────────────────────────────────────────────
             const isArtist = this._person.Type === 'MusicArtist' || this._person.Type === 'Artist';
 
@@ -165,6 +174,7 @@ class PersonPage extends Page {
         } catch (error) {
             log.error('Failed to load', error);
             this.showError('Failed to load person details');
+            this.setLoading(false);
         }
 
         // ────────────────────────────────────────────────────────────
@@ -204,6 +214,11 @@ class PersonPage extends Page {
 
             if (!restoredFocus) {
                 this.setActiveSection('person-fav-actions');
+            }
+
+            // Reveal page now that focus has been placed (or attempted)
+            if (hasFocusTarget) {
+                this.setLoading(false);
             }
         });
     }
