@@ -167,14 +167,50 @@ class DetailsPage extends Page {
 
                     <!-- Collection Movies (BoxSet) -->
                     <section class="details-collection-movies media-row hidden" id="collection-movies-section">
-                        <h2 class="row-title" data-i18n="Movies">Movies in Collection</h2>
+                        <h2 class="row-title" data-i18n="Movies">Movies</h2>
                         <div class="collection-row row-items" id="collection-movies-row"></div>
                     </section>
 
                     <!-- Collection Shows (BoxSet) -->
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
-                        <h2 class="row-title" data-i18n="ShowsInCollection">Shows in Collection</h2>
+                        <h2 class="row-title" data-i18n="Series">TV Shows</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
+                    </section>
+
+                    <!-- Collection Episodes (BoxSet) -->
+                    <section class="details-collection-episodes media-row hidden" id="collection-episodes-section">
+                        <h2 class="row-title" data-i18n="Episodes">Episodes</h2>
+                        <div class="collection-row row-items" id="collection-episodes-row"></div>
+                    </section>
+
+                    <!-- Collection Videos (BoxSet) -->
+                    <section class="details-collection-videos media-row hidden" id="collection-videos-section">
+                        <h2 class="row-title" data-i18n="Videos">Videos</h2>
+                        <div class="collection-row row-items" id="collection-videos-row"></div>
+                    </section>
+
+                    <!-- Collection Albums (BoxSet) -->
+                    <section class="details-collection-albums media-row hidden" id="collection-albums-section">
+                        <h2 class="row-title" data-i18n="Albums">Albums</h2>
+                        <div class="collection-row row-items" id="collection-albums-row"></div>
+                    </section>
+
+                    <!-- Collection Books (BoxSet) -->
+                    <section class="details-collection-books media-row hidden" id="collection-books-section">
+                        <h2 class="row-title" data-i18n="Books">Books</h2>
+                        <div class="collection-row row-items" id="collection-books-row"></div>
+                    </section>
+
+                    <!-- Sub-Collections (BoxSet) -->
+                    <section class="details-collection-subcollections media-row hidden" id="collection-subcollections-section">
+                        <h2 class="row-title" data-i18n="Collections">Collections</h2>
+                        <div class="collection-row row-items" id="collection-subcollections-row"></div>
+                    </section>
+
+                    <!-- Collection Other Items (BoxSet) -->
+                    <section class="details-collection-other media-row hidden" id="collection-other-section">
+                        <h2 class="row-title" data-i18n="HeaderOtherItems">Other Items</h2>
+                        <div class="collection-row row-items" id="collection-other-row"></div>
                     </section>
 
                     <!-- Playlist Items — shown when viewing a Playlist type item.
@@ -1076,6 +1112,12 @@ class DetailsPage extends Page {
             'details-rich-meta',
             'collection-movies-section',
             'collection-shows-section',
+            'collection-episodes-section',
+            'collection-videos-section',
+            'collection-albums-section',
+            'collection-books-section',
+            'collection-subcollections-section',
+            'collection-other-section',
             'details-playlist-items', // Playlist items grid (Playlist type)
             'details-next-up',
             'details-seasons',
@@ -1124,73 +1166,114 @@ class DetailsPage extends Page {
         }
 
         try {
-            const [movies, shows] = await Promise.all([
-                api.getItems({
-                    ParentId: this._itemId,
-                    IncludeItemTypes: 'Movie',
-                    Recursive: true,
-                    Fields: 'ProductionYear',
-                    SortBy: sortBy,
-                    SortOrder: 'Ascending',
-                    Limit: 100 // Increased limit to capture larger collections
-                }),
-                api.getItems({
-                    ParentId: this._itemId,
-                    IncludeItemTypes: 'Series',
-                    Recursive: true,
-                    Fields: 'ProductionYear',
-                    SortBy: sortBy,
-                    SortOrder: 'Ascending',
-                    Limit: 100
-                })
-            ]);
+            // Fetch direct child items of the collection (matching Jellyfin-web behavior)
+            const response = await api.getItems({
+                ParentId: this._itemId,
+                Recursive: false,
+                Fields: 'ProductionYear,PrimaryImageAspectRatio',
+                SortBy: sortBy,
+                SortOrder: 'Ascending',
+                Limit: 300
+            });
 
-            const hasMovies = movies.Items && movies.Items.length > 0;
-            const hasShows = shows.Items && shows.Items.length > 0;
+            const allItems = response.Items || [];
 
-            // Determine what is ABOVE the collection rows (use dynamic helper)
-            const aboveCollection =
-                this._getPreviousVisibleSection('collection-movies-section')?.targetName || 'details-rich-meta';
+            // Define collection item type categories in order (matching Jellyfin-web)
+            const categories = [
+                {
+                    key: 'movies',
+                    sectionId: 'collection-movies-section',
+                    listId: 'collection-movies-row',
+                    filter: (item) => item.Type === 'Movie',
+                    isLandscape: false,
+                    cardType: 'poster'
+                },
+                {
+                    key: 'shows',
+                    sectionId: 'collection-shows-section',
+                    listId: 'collection-shows-row',
+                    filter: (item) => item.Type === 'Series',
+                    isLandscape: false,
+                    cardType: 'poster'
+                },
+                {
+                    key: 'episodes',
+                    sectionId: 'collection-episodes-section',
+                    listId: 'collection-episodes-row',
+                    filter: (item) => item.Type === 'Episode',
+                    isLandscape: true,
+                    cardType: 'thumb'
+                },
+                {
+                    key: 'videos',
+                    sectionId: 'collection-videos-section',
+                    listId: 'collection-videos-row',
+                    filter: (item) => item.MediaType === 'Video' && item.Type !== 'Movie' && item.Type !== 'Series' && item.Type !== 'Episode',
+                    isLandscape: true,
+                    cardType: 'thumb'
+                },
+                {
+                    key: 'albums',
+                    sectionId: 'collection-albums-section',
+                    listId: 'collection-albums-row',
+                    filter: (item) => item.Type === 'MusicAlbum',
+                    isLandscape: false,
+                    cardType: 'square'
+                },
+                {
+                    key: 'books',
+                    sectionId: 'collection-books-section',
+                    listId: 'collection-books-row',
+                    filter: (item) => item.Type === 'Book',
+                    isLandscape: false,
+                    cardType: 'poster'
+                },
+                {
+                    key: 'subcollections',
+                    sectionId: 'collection-subcollections-section',
+                    listId: 'collection-subcollections-row',
+                    filter: (item) => item.Type === 'BoxSet',
+                    isLandscape: false,
+                    cardType: 'poster'
+                }
+            ];
 
-            // Render Rows with correct UP linking
-            if (hasMovies) {
+            let remainingItems = [...allItems];
+            const activeSections = [];
+
+            // Render categorized rows
+            for (const cat of categories) {
+                const categoryItems = remainingItems.filter(cat.filter);
+                remainingItems = remainingItems.filter((i) => !cat.filter(i));
+
+                if (categoryItems.length > 0) {
+                    this._renderCollectionRow(
+                        cat.sectionId,
+                        cat.listId,
+                        categoryItems,
+                        null,
+                        cat.isLandscape,
+                        cat.cardType
+                    );
+                    activeSections.push(cat.sectionId);
+                }
+            }
+
+            // Render leftover "Other Items" row if any exist
+            if (remainingItems.length > 0) {
                 this._renderCollectionRow(
-                    'collection-movies-section',
-                    'collection-movies-row',
-                    movies.Items,
-                    aboveCollection
+                    'collection-other-section',
+                    'collection-other-row',
+                    remainingItems,
+                    null,
+                    false,
+                    'poster'
                 );
-            }
-            if (hasShows) {
-                // Shows row's UP goes to Movies (if exists) or to whatever is above collection
-                const showsUpTarget = hasMovies ? 'collection-movies-section' : aboveCollection;
-                this._renderCollectionRow(
-                    'collection-shows-section',
-                    'collection-shows-row',
-                    shows.Items,
-                    showsUpTarget
-                );
+                activeSections.push('collection-other-section');
             }
 
-            // Link Focus chain (DOWN direction)
-            // Whatever is above -> Movies -> Shows -> Next section
-            let lastSection = aboveCollection;
-
-            if (hasMovies) {
-                this._updateLeaveDown(lastSection, 'collection-movies-section');
-                lastSection = 'collection-movies-section';
-            }
-
-            if (hasShows) {
-                this._updateLeaveDown(lastSection, 'collection-shows-section');
-                lastSection = 'collection-shows-section';
-            }
-
-            // Link last collection row to whatever is next (People, Similar, etc.)
-            const nextSection = this._getNextVisibleSection(lastSection);
-            if (nextSection) {
-                this._updateLeaveDown(lastSection, nextSection.targetName);
-            }
+            // Rebuild focus navigation chain across active sections
+            this._rebuildNavigationChain();
         } catch (e) {
             log.warn('Failed to load collection items', e);
         }
@@ -1350,13 +1433,14 @@ class DetailsPage extends Page {
         this._updateLeaveDown(upwardLink, focusSectionName);
     }
 
-    _renderCollectionRow(sectionId, listId, items, leaveUpTarget) {
+    _renderCollectionRow(sectionId, listId, items, leaveUpTarget, isLandscape = false, cardType = 'poster') {
         this._renderVirtualRow({
             sectionId: sectionId,
             listId: listId,
             items: items,
-            isLandscape: false,
-            renderCard: (item) => this._renderMediaCard(item, false, 'poster'),
+            isLandscape: isLandscape,
+            cardType: cardType,
+            renderCard: (item) => this._renderMediaCard(item, isLandscape, cardType),
             focusSectionName: sectionId,
             leaveUpTarget: leaveUpTarget || 'details-rich-meta'
         });
@@ -2865,6 +2949,36 @@ class DetailsPage extends Page {
                 elementId: '#collection-shows-row',
                 isVisible: () => isNotHidden('#collection-shows-section')
             },
+            {
+                name: 'collection-episodes-section',
+                elementId: '#collection-episodes-row',
+                isVisible: () => isNotHidden('#collection-episodes-section')
+            },
+            {
+                name: 'collection-videos-section',
+                elementId: '#collection-videos-row',
+                isVisible: () => isNotHidden('#collection-videos-section')
+            },
+            {
+                name: 'collection-albums-section',
+                elementId: '#collection-albums-row',
+                isVisible: () => isNotHidden('#collection-albums-section')
+            },
+            {
+                name: 'collection-books-section',
+                elementId: '#collection-books-row',
+                isVisible: () => isNotHidden('#collection-books-section')
+            },
+            {
+                name: 'collection-subcollections-section',
+                elementId: '#collection-subcollections-row',
+                isVisible: () => isNotHidden('#collection-subcollections-section')
+            },
+            {
+                name: 'collection-other-section',
+                elementId: '#collection-other-row',
+                isVisible: () => isNotHidden('#collection-other-section')
+            },
             // Playlist items — shown when the item is of Type 'Playlist'
             {
                 name: 'details-playlist-items',
@@ -2980,6 +3094,36 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#playlist-items-section')
             },
             // Collection rows (BoxSet contents) - in reverse order
+            {
+                name: 'collection-other-section',
+                elementId: '#collection-other-row',
+                isVisible: () => isNotHidden('#collection-other-section')
+            },
+            {
+                name: 'collection-subcollections-section',
+                elementId: '#collection-subcollections-row',
+                isVisible: () => isNotHidden('#collection-subcollections-section')
+            },
+            {
+                name: 'collection-books-section',
+                elementId: '#collection-books-row',
+                isVisible: () => isNotHidden('#collection-books-section')
+            },
+            {
+                name: 'collection-albums-section',
+                elementId: '#collection-albums-row',
+                isVisible: () => isNotHidden('#collection-albums-section')
+            },
+            {
+                name: 'collection-videos-section',
+                elementId: '#collection-videos-row',
+                isVisible: () => isNotHidden('#collection-videos-section')
+            },
+            {
+                name: 'collection-episodes-section',
+                elementId: '#collection-episodes-row',
+                isVisible: () => isNotHidden('#collection-episodes-section')
+            },
             {
                 name: 'collection-shows-section',
                 elementId: '#collection-shows-row',
