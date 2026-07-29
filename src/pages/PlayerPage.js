@@ -3469,6 +3469,9 @@ class PlayerPage extends Page {
     destroy() {
         log.info('destroy() called');
 
+        // Stop pause reporting heartbeat timer
+        this._stopPauseReportTimer();
+
         // Destroy player (this also calls stop internally)
         if (this._player?.destroy) {
             log.info('Destroying player instance');
@@ -3742,11 +3745,6 @@ class PlayerPage extends Page {
         await this._startPlayback();
 
         this._showLoading(false);
-    }
-
-    destroy() {
-        this._stopPauseReportTimer();
-        super.destroy();
     }
 }
 
