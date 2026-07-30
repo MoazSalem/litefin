@@ -2469,6 +2469,9 @@ class DetailsPage extends Page {
                         : 0;
                 const progressHtml = progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : '';
 
+                const playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(ep);
+                const qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(ep);
+
                 const imgUrl = api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality });
                 const episodeTitle = i18n.ensureBiDi(ep.Name);
                 const episodePrefix = ep.ParentIndexNumber && ep.IndexNumber ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. ` : ep.IndexNumber ? `${ep.IndexNumber}. ` : '';
@@ -2491,6 +2494,8 @@ class DetailsPage extends Page {
                         <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
                             <div class="episode-row-thumb">
                                 <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
+                                ${playedBadgeHtml}
+                                ${qualityBadgeHtml}
                                 ${progressHtml}
                             </div>
                             <div class="episode-row-info">
@@ -2649,6 +2654,9 @@ class DetailsPage extends Page {
                             ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>`
                             : '';
 
+                    const playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(ep);
+                    const qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(ep);
+
                     const imgUrl = api.getImageUrl(ep.Id, 'Primary', {
                         maxWidth: imageService.getParams('thumb').maxWidth,
                         quality: imageService.getParams('thumb').quality
@@ -2676,6 +2684,8 @@ class DetailsPage extends Page {
                             <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
                                 <div class="episode-row-thumb">
                                     <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
+                                    ${playedBadgeHtml}
+                                    ${qualityBadgeHtml}
                                     ${progressHtml}
                                 </div>
                                 <div class="episode-row-info">

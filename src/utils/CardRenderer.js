@@ -16,6 +16,103 @@ import { detailsIcons } from './Icons.js';
 
 class CardRenderer {
     /**
+     * Generate Played (Check Mark) Badge HTML if item is played
+     * @param {Object} item
+     * @returns {string} HTML string
+     */
+    static getPlayedBadgeHtml(item) {
+        if (!item || !item.UserData || !item.UserData.Played) return '';
+        const isMusic =
+            item.Type === 'MusicArtist' ||
+            item.Type === 'Artist' ||
+            item.Type === 'MusicAlbum' ||
+            item.Type === 'Audio';
+        if (isMusic) return '';
+        return `
+            <div class="played-badge">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+        `;
+    }
+
+    /**
+     * Generate Quality (Resolution/HDR) Badge HTML
+     * @param {Object} item
+     * @returns {string} HTML string
+     */
+    static getQualityBadgeHtml(item) {
+        if (!item) return '';
+        const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
+        if (!showQualityBadges) return '';
+
+        let width = item.Width;
+        let height = item.Height;
+        let isHdr = false;
+        let isDovi = false;
+
+        if (item.MediaSources && item.MediaSources.length > 0) {
+            const source = item.MediaSources[0];
+            if (source.Width) width = source.Width;
+            if (source.Height) height = source.Height;
+            if (source.MediaStreams) {
+                const videoStream = source.MediaStreams.find((s) => s.Type === 'Video');
+                if (videoStream) {
+                    if (videoStream.Width) width = videoStream.Width;
+                    if (videoStream.Height) height = videoStream.Height;
+                    const videoRange = videoStream.VideoRange || videoStream.VideoRangeType || '';
+                    const profile = videoStream.Profile || '';
+                    const title = videoStream.Title || videoStream.DisplayTitle || '';
+                    const codec = videoStream.Codec || '';
+
+                    const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
+                    if (checkString.includes('hdr')) isHdr = true;
+                    if (
+                        checkString.includes('dovi') ||
+                        checkString.includes('dolby vision') ||
+                        codec.toLowerCase().startsWith('dv')
+                    ) {
+                        isDovi = true;
+                    }
+                }
+            }
+        }
+
+        if (width || height) {
+            let resolutionLabel = '';
+            const maxDim = Math.max(width || 0, height || 0);
+            const minDim = Math.min(width || 0, height || 0);
+
+            if (maxDim >= 3000 || minDim >= 2000) {
+                resolutionLabel = '4K';
+            } else if (maxDim >= 1600 || minDim >= 900) {
+                resolutionLabel = '1080p';
+            } else if (maxDim >= 1000 || minDim >= 600) {
+                resolutionLabel = '720p';
+            } else if (maxDim > 0) {
+                resolutionLabel = 'SD';
+            }
+
+            let rangeLabel = '';
+            if (isDovi) {
+                rangeLabel = 'DV';
+            } else if (isHdr) {
+                rangeLabel = 'HDR';
+            }
+
+            if (rangeLabel) {
+                resolutionLabel = resolutionLabel ? `${resolutionLabel} ${rangeLabel}` : rangeLabel;
+            }
+
+            if (resolutionLabel) {
+                return `<div class="quality-badge">${resolutionLabel}</div>`;
+            }
+        }
+        return '';
+    }
+
+    /**
      * Create HTML string for a media card
      * @param {Object} item - The Jellyfin item object
      * @param {Object} options - Rendering options
@@ -437,22 +534,7 @@ class CardRenderer {
         }
 
         // Played Badge (Check Mark)
-        let playedBadgeHtml = '';
-        const isMusic =
-            item.Type === 'MusicArtist' ||
-            item.Type === 'Artist' ||
-            item.Type === 'MusicAlbum' ||
-            item.Type === 'Audio';
-
-        if (item.UserData && item.UserData.Played && !isMusic) {
-            playedBadgeHtml = `
-                <div class="played-badge">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                </div>
-            `;
-        }
+        let playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(item);
 
         // Video Badge (Center Play Icon)
         let videoBadgeHtml = '';
@@ -488,96 +570,7 @@ class CardRenderer {
         }
 
         // Quality Badge (Resolution/HDR)
-        let qualityBadgeHtml = '';
-        const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
-        if (showQualityBadges) {
-            let width = item.Width;
-            let height = item.Height;
-            let isHdr = false;
-            let isDovi = false;
-
-            /*
-             * Extract video streams from media source metadata to inspect the encoding range properties.
-             * This allows us to detect advanced color formats like Dolby Vision (DoVi) and HDR.
-             */
-            if (item.MediaSources && item.MediaSources.length > 0) {
-                const source = item.MediaSources[0];
-                if (source.Width) width = source.Width;
-                if (source.Height) height = source.Height;
-                if (source.MediaStreams) {
-                    const videoStream = source.MediaStreams.find((s) => s.Type === 'Video');
-                    if (videoStream) {
-                        if (videoStream.Width) width = videoStream.Width;
-                        if (videoStream.Height) height = videoStream.Height;
-                        const videoRange = videoStream.VideoRange || videoStream.VideoRangeType || '';
-                        const profile = videoStream.Profile || '';
-                        const title = videoStream.Title || videoStream.DisplayTitle || '';
-                        const codec = videoStream.Codec || '';
-
-                        // Combine stream attributes into normalized check strings
-                        const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
-
-                        /*
-                         * Check for standard High Dynamic Range (HDR) naming
-                         */
-                        if (checkString.includes('hdr')) {
-                            isHdr = true;
-                        }
-                        /*
-                         * Dolby Vision can be identified by:
-                         * - 'dovi' or 'dolby vision' in range/profile/title
-                         * - Codec identifiers starting with 'dv' (e.g. dvh1, dvhe)
-                         */
-                        if (
-                            checkString.includes('dovi') ||
-                            checkString.includes('dolby vision') ||
-                            codec.toLowerCase().startsWith('dv')
-                        ) {
-                            isDovi = true;
-                        }
-                    }
-                }
-            }
-
-            if (width || height) {
-                let resolutionLabel = '';
-                const maxDim = Math.max(width || 0, height || 0);
-                const minDim = Math.min(width || 0, height || 0);
-
-                /*
-                 * Resolve resolution boundaries based on dimensions.
-                 * We use relaxed bounds to account for cropped widescreen formats (e.g. 3834x1632 for 4K, 1920x800 for 1080p).
-                 */
-                if (maxDim >= 3000 || minDim >= 2000) {
-                    resolutionLabel = '4K';
-                } else if (maxDim >= 1600 || minDim >= 900) {
-                    resolutionLabel = '1080p';
-                } else if (maxDim >= 1000 || minDim >= 600) {
-                    resolutionLabel = '720p';
-                } else if (maxDim > 0) {
-                    resolutionLabel = 'SD';
-                }
-
-                /*
-                 * Determine the dynamic range suffix for the badge label.
-                 * Dolby Vision (DV) takes precedence as the premium format.
-                 */
-                let rangeLabel = '';
-                if (isDovi) {
-                    rangeLabel = 'DV';
-                } else if (isHdr) {
-                    rangeLabel = 'HDR';
-                }
-
-                if (rangeLabel) {
-                    resolutionLabel = resolutionLabel ? `${resolutionLabel} ${rangeLabel}` : rangeLabel;
-                }
-
-                if (resolutionLabel) {
-                    qualityBadgeHtml = `<div class="quality-badge">${resolutionLabel}</div>`;
-                }
-            }
-        }
+        let qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
 
         // --- 3. Text Generation ---
 
