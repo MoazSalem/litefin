@@ -809,6 +809,8 @@ class LibraryPage extends Page {
             cancelAnimationFrame(this._gridFocusFrameId);
             this._gridFocusFrameId = null;
         }
+        this._gridFocusPending = false;
+        this._gridFocusElement = null;
         if (this._onGridScroll) {
             const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
             scrollContainer?.removeEventListener('scroll', this._onGridScroll);
@@ -2391,7 +2393,10 @@ class LibraryPage extends Page {
                 const allCards = grid.querySelectorAll('.media-card');
                 let domIndex = -1;
                 for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === focusedElement) { domIndex = i; break; }
+                    if (allCards[i] === focusedElement) {
+                        domIndex = i;
+                        break;
+                    }
                 }
                 // domIndex < currentColumns means the card is in the first row
                 if (domIndex < 0 || domIndex >= currentColumns) return false;
@@ -2431,28 +2436,47 @@ class LibraryPage extends Page {
             if (!element || !grid.contains(element)) return;
             if (!element.classList.contains('media-card')) return;
 
-            // ================================================================
-            // DEFERRED GRID CHUNK EVALUATION
-            // ================================================================
-            // Cancel any pending frame request from rapid D-pad key holding.
-            // Defer chunk boundary checking and DOM chunking (_appendGridChunk /
-            // _prependGridChunk) to requestAnimationFrame so layout measurements
-            // and DOM mutations do not interrupt the focus transition paint or
-            // scroll animation setup on the main thread.
-            // ================================================================
-            if (this._gridFocusFrameId) {
-                cancelAnimationFrame(this._gridFocusFrameId);
-            }
+            // Always store the latest focused card so the queued rAF
+            // uses the most current element when it eventually fires.
+            this._gridFocusElement = element;
 
-            this._gridFocusFrameId = requestAnimationFrame(() => {
-                this._gridFocusFrameId = null;
+            // ================================================================
+            // DEFERRED GRID CHUNK EVALUATION (GATED)
+            // ================================================================
+            // PROBLEM: Every D-pad keypress fires focus:changed, which
+            // schedules a requestAnimationFrame. During rapid key holding,
+            // the old cancelAnimationFrame + reschedule pattern still
+            // processes every event's handler body and creates rAF queue
+            // pressure — all 5+ focus:changed listeners (LazyLoader,
+            // VirtualCardRow, FocusManager, etc.) already run synchronously
+            // per event, and adding more rAF scheduling on top multiplies
+            // the main-thread cost.
+            //
+            // FIX: Gate with a boolean flag. The FIRST event schedules a
+            // single rAF. All subsequent events while the flag is set just
+            // update _gridFocusElement — the queued rAF will read the
+            // latest element when it fires. This eliminates:
+            //   - Repeated cancelAnimationFrame calls
+            //   - Redundant requestAnimationFrame scheduling
+            //   - DOM checks (grid.contains, classList) on every event
+            // ================================================================
+            if (this._gridFocusPending) return;
+            this._gridFocusPending = true;
+
+            requestAnimationFrame(() => {
+                this._gridFocusPending = false;
                 if (!grid || !document.contains(grid)) return;
+
+                // Use the latest focused element (may have changed since
+                // the event was gated during rapid key holding)
+                const focusedElement = this._gridFocusElement;
+                if (!focusedElement || !grid.contains(focusedElement)) return;
 
                 // Find DOM index of the focused card (fast linear scan — window is small)
                 const allCards = grid.querySelectorAll('.media-card');
                 let domIndex = -1;
                 for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === element) {
+                    if (allCards[i] === focusedElement) {
                         domIndex = i;
                         break;
                     }
@@ -2880,7 +2904,7 @@ class LibraryPage extends Page {
 
         // Ideal first/last item index in the window
         const idealStart = Math.max(0, (currentRow - ROWS_ABOVE) * columns);
-        const idealEnd   = Math.min(items.length, (currentRow + ROWS_BELOW + 1) * columns);
+        const idealEnd = Math.min(items.length, (currentRow + ROWS_BELOW + 1) * columns);
 
         // -----------------------------------------------------------------------
         // TOP EVICTION
@@ -2905,8 +2929,7 @@ class LibraryPage extends Page {
                 // position is completely undisturbed
                 const spacer = grid.querySelector('#grid-top-spacer');
                 if (spacer) {
-                    spacer.style.height =
-                        `${Math.floor(this.state.gridWindowStart / columns) * rowHeight}px`;
+                    spacer.style.height = `${Math.floor(this.state.gridWindowStart / columns) * rowHeight}px`;
                 }
             }
         }
