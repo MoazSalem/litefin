@@ -1705,11 +1705,11 @@ export default class OSDController extends Component {
         }
 
         // Delegate to active 2nd-layer widget if focus is on Row -1 AND
-        // the currently focused element belongs to that widget.
+        // the currently focused element belongs to that widget and is visible.
         // Without the second check, pressing Right on the skip-outro button
         // (also in Row -1) would be incorrectly forwarded to the Up Next dialog
         // because activeMenu is set to upNextDialog for the whole session.
-        if (this._currentFocusRow === -1 && this.activeMenu && !this.activeMenu.isModal) {
+        if (this._currentFocusRow === -1 && this.activeMenu && this.activeMenu.isVisible && !this.activeMenu.isModal) {
             const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
             const menuOwnsElement = !this.activeMenu.$el || (focusedEl && this.activeMenu.$el.contains(focusedEl));
             if (menuOwnsElement && this.activeMenu.handleKey(key)) return true;
@@ -1871,12 +1871,10 @@ export default class OSDController extends Component {
             this.show();
 
             /*
-             * If focus is currently on the Controls row (Row 1) or Overlay row (Row -1),
-             * pressing Left or Right reveals the OSD and navigates between the visible buttons
-             * so the user can see what they are focusing. We only trigger direct arrow seeking
-             * if focus is NOT already sitting on control buttons.
+             * When the OSD is hidden, pressing Left or Right arrow key should always
+             * trigger direct seeking (rewind/fastForward) and park focus on the seekbar.
              */
-            if (seekWithArrows && (direction === 'left' || direction === 'right') && this._currentFocusRow !== 1 && this._currentFocusRow !== -1) {
+            if (seekWithArrows && (direction === 'left' || direction === 'right')) {
                 // Focus the seekbar so subsequent presses continue seeking
                 this._currentFocusRow = 2;
                 this._updateFocus();
