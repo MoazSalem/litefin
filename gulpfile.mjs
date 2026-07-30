@@ -176,20 +176,22 @@ function copySignatures(buildDir) {
 // ============================================================================
 
 /*
- * Strip service-related entries from the config.xml that was copied into a
- * build directory. Used for builds that don't ship the ytresolver background
- * service (ultra-legacy Tizen WGT and ultra-legacy WebOS IPK).
+ * Strip service-related entries and optional settings from the config.xml that
+ * was copied into a build directory. Used for builds that don't ship the
+ * ytresolver background service (ultra-legacy Tizen WGT / WebOS IPK without service).
  *
  * Removes:
  *   • <tizen:service> ... </tizen:service>  — the service registration block
  *   • <tizen:metadata key="...use.preview" value="bg_service"/>  — the Samsung
  *     preview metadata that flags this app as having a background service;
  *     meaningless (and potentially harmful) without the service itself.
+ *   • Optionally <tizen:setting ... /> — if stripSetting is true, removes setting tag
+ *     which causes installation errors on certain legacy hardware.
  *
  * We edit the COPY inside buildDir — the root config.xml is never touched,
  * so concurrent build tasks targeting other variants are unaffected.
  */
-function stripServiceFromConfig(buildDir) {
+function stripServiceFromConfig(buildDir, stripSetting = false) {
     const configPath = path.join(buildDir, 'config.xml');
 
     // Bail out gracefully if webpack hasn't copied the config yet
@@ -209,8 +211,17 @@ function stripServiceFromConfig(buildDir) {
     // the launcher the app has a background service, which no longer applies.
     xml = xml.replace(/<tizen:metadata[^>]*key="[^"]*use\.preview"[^>]*\/>\s*/g, '');
 
+    // Remove the Samsung preview privilege tag
+    xml = xml.replace(/<tizen:privilege[^>]*name="http:\/\/developer\.samsung\.com\/privilege\/preview"[^>]*\/>\s*/g, '');
+
+    // Optionally remove the tizen:setting tag if requested for no-service legacy builds.
+    // Handles both self-closing (<tizen:setting .../>) and explicit closing (<tizen:setting ...></tizen:setting>) tags.
+    if (stripSetting) {
+        xml = xml.replace(/<tizen:setting[\s\S]*?(?:\/>|<\/tizen:setting>)\s*/g, '');
+    }
+
     writeFileSync(configPath, xml, 'utf8');
-    console.info(`Stripped <tizen:service> and use.preview metadata from ${configPath}`);
+    console.info(`Stripped <tizen:service>, use.preview metadata, and preview privilege${stripSetting ? ' (and tizen:setting)' : ''} from ${configPath}`);
 }
 
 /*
@@ -266,7 +277,8 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
      * Instead, copy the build output to a uniquely-named staging directory,
      * strip the Tizen-only `config.xml` from the copy, then package from there.
      */
-    const stagingDir = `${buildDir}-webos-staging`;
+    const safeName = (finalName || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const stagingDir = `${buildDir}-webos-staging-${safeName}`;
 
     // Wipe any leftover staging dir from a previous failed run
     await del([stagingDir]);
@@ -450,11 +462,14 @@ async function packageWebosUltraLegacy() {
     const buildDir = 'dist/ultra-legacy';
     const ipkName = `Litefin-${version}-webOS-Ultra-Legacy.ipk`;
 
-    /*
-     * Ultra-legacy WebOS targets old webOS 1.x/2.x hardware that does not
-     * support the Luna service model used by the ytresolver service.
-     * Exclude the services/ directory from the IPK entirely.
-     */
+    console.info(`Creating ${ipkName}...`);
+    await createIpk(buildDir, '.', ipkName, /* includeServices */ true);
+}
+
+async function packageWebosUltraLegacyNoService() {
+    const buildDir = 'dist/ultra-legacy';
+    const ipkName = `Litefin-${version}-webOS-Ultra-Legacy-NoService.ipk`;
+
     console.info(`Creating ${ipkName}...`);
     await createIpk(buildDir, '.', ipkName, /* includeServices */ false);
 }
@@ -472,17 +487,38 @@ async function packageUltraLegacy() {
     const buildDir = 'dist/ultra-legacy';
     const wgtName = `Litefin-${version}-Tizen-Ultra-Legacy.wgt`;
 
-    /*
-     * Ultra-legacy targets Tizen 2.3 / Chrome 38 hardware where the background
-     * service runtime is unreliable or absent. Strip the <tizen:service> entry
-     * from the config.xml that webpack copied into the build dir, and do NOT
-     * include the services/ directory in the archive.
-     */
-    await stripServiceFromConfig(buildDir);
-
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
-    await createWgt(buildDir, wgtName, /* includeServices */ false);
+    await createWgt(buildDir, wgtName, /* includeServices */ true);
+}
+
+async function packageUltraLegacyNoService() {
+    const buildDir = 'dist/ultra-legacy';
+    const stagingDir = `${buildDir}-no-service-staging`;
+    const wgtName = `Litefin-${version}-Tizen-Ultra-Legacy-NoService.wgt`;
+
+    /*
+     * Stage a dedicated copy so modifying config.xml for No-Service does NOT
+     * mutate dist/ultra-legacy/config.xml used by standard packageUltraLegacy.
+     */
+    await del([stagingDir]);
+    console.info(`Staging No-Service Ultra Legacy build: ${buildDir} → ${stagingDir}`);
+    cpSync(buildDir, stagingDir, { recursive: true });
+
+    /*
+     * Ultra-legacy No Service targets Tizen / WebOS hardware without background service support
+     * or where service/metadata/settings tags cause installation failures.
+     * Strips <tizen:service>, use.preview metadata, preview privilege, and <tizen:setting> from config.xml.
+     */
+    await stripServiceFromConfig(stagingDir, /* stripSetting */ true);
+
+    copySignatures(stagingDir);
+    console.info(`Creating ${wgtName}...`);
+    try {
+        await createWgt(stagingDir, wgtName, /* includeServices */ false);
+    } finally {
+        await del([stagingDir]);
+    }
 }
 
 // ============================================================================
@@ -520,7 +556,7 @@ async function syncVersion() {
 // ============================================================================
 
 // Build and package all versions (default for npm run package)
-// Produces 5 WGT (Tizen) + 4 IPK (WebOS) in parallel
+// Produces 6 WGT (Tizen) + 5 IPK (WebOS) in parallel
 const buildPackage = gulp.series(
     syncVersion,
     cleanDist,
@@ -533,11 +569,13 @@ const buildPackage = gulp.series(
         packageNormalOblong,
         packageLegacy,
         packageUltraLegacy,
+        packageUltraLegacyNoService,
         // WebOS IPK
         packageWebosModern,
         packageWebos,
         packageWebosLegacy,
-        packageWebosUltraLegacy
+        packageWebosUltraLegacy,
+        packageWebosUltraLegacyNoService
     )
 );
 
@@ -552,7 +590,8 @@ const buildPackageTizen = gulp.series(
         packageNormal,
         packageNormalOblong,
         packageLegacy,
-        packageUltraLegacy
+        packageUltraLegacy,
+        packageUltraLegacyNoService
     )
 );
 
@@ -566,7 +605,8 @@ const buildPackageWebosAll = gulp.series(
         packageWebosModern,
         packageWebos,
         packageWebosLegacy,
-        packageWebosUltraLegacy
+        packageWebosUltraLegacy,
+        packageWebosUltraLegacyNoService
     )
 );
 
@@ -583,6 +623,13 @@ const buildPackageNormalOblong = gulp.series(
 const buildPackageTest = gulp.series(syncVersion, cleanDist, cleanWgt, webpackNormal, packageTest);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, cleanWgt, webpackLegacy, packageLegacy);
 const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, cleanWgt, webpackUltraLegacy, packageUltraLegacy);
+const buildPackageUltraLegacyNoService = gulp.series(
+    syncVersion,
+    cleanDist,
+    cleanWgt,
+    webpackUltraLegacy,
+    packageUltraLegacyNoService
+);
 const buildPackageDebug = gulp.series(syncVersion, cleanWgt, webpackDebug, packageDebug);
 
 // Individual WebOS build+package tasks
@@ -595,6 +642,13 @@ const buildPackageWebosUltraLegacy = gulp.series(
     cleanIpk,
     webpackUltraLegacy,
     packageWebosUltraLegacy
+);
+const buildPackageWebosUltraLegacyNoService = gulp.series(
+    syncVersion,
+    cleanDist,
+    cleanIpk,
+    webpackUltraLegacy,
+    packageWebosUltraLegacyNoService
 );
 
 // Combined Tizen + WebOS build+package tasks
@@ -626,6 +680,13 @@ const buildPackageCombinedUltraLegacy = gulp.series(
     webpackUltraLegacy,
     gulp.parallel(packageUltraLegacy, packageWebosUltraLegacy)
 );
+const buildPackageCombinedUltraLegacyNoService = gulp.series(
+    syncVersion,
+    cleanDist,
+    gulp.parallel(cleanWgt, cleanIpk),
+    webpackUltraLegacy,
+    gulp.parallel(packageUltraLegacyNoService, packageWebosUltraLegacyNoService)
+);
 
 // Just build (no packaging)
 const build = gulp.series(syncVersion, cleanDist, webpackAll);
@@ -655,12 +716,14 @@ export {
     packageTest,
     packageLegacy,
     packageUltraLegacy,
+    packageUltraLegacyNoService,
     packageDebug,
     // WebOS IPK packaging
     packageWebos,
     packageWebosModern,
     packageWebosLegacy,
     packageWebosUltraLegacy,
+    packageWebosUltraLegacyNoService,
     // Tizen build+package
     buildPackage,
     buildPackageTizen,
@@ -670,6 +733,7 @@ export {
     buildPackageTest,
     buildPackageLegacy,
     buildPackageUltraLegacy,
+    buildPackageUltraLegacyNoService,
     buildPackageDebug,
     // WebOS build+package
     buildPackageWebos,
@@ -677,11 +741,13 @@ export {
     buildPackageWebosModern,
     buildPackageWebosLegacy,
     buildPackageWebosUltraLegacy,
+    buildPackageWebosUltraLegacyNoService,
     // Combined Tizen + WebOS build+package
     buildPackageCombinedModern,
     buildPackageCombinedNormal,
     buildPackageCombinedLegacy,
     buildPackageCombinedUltraLegacy,
+    buildPackageCombinedUltraLegacyNoService,
     // Build only
     build,
     buildModern,
