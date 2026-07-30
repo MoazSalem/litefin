@@ -3354,7 +3354,7 @@ class DetailsPage extends Page {
                 }
             }
         } catch (error) {
-            log.warn('Failed to load item collections', error);
+            log.debug('Item has no collections or failed to fetch collections', error?.message || error);
             const section = this.$('#item-collections-section');
             if (section) {
                 section.classList.add('hidden');

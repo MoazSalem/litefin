@@ -400,6 +400,9 @@ export class ApiClient {
                     return this.request(endpoint, options, true);
                 }
 
+                if (options.warnOnError && response) {
+                    response._suppressErrorLog = true;
+                }
                 const error = await this._handleError(response);
                 throw error;
             }
@@ -535,10 +538,8 @@ export class ApiClient {
             // Could not read body at all — keep the "HTTP N" default
         }
 
-        // Log 400s at error level so they are always visible in the debug overlay
-        // even when general logging is disabled. The server reason is included so
-        // the developer can diagnose schema issues without needing DevTools.
-        if (response.status === 400) {
+        // Log 400s at error level only if not suppressed via warnOnError
+        if (response.status === 400 && !response._suppressErrorLog) {
             log.error(`Server rejected request (400 Bad Request): ${message}`);
         }
 
@@ -1064,14 +1065,19 @@ export class ApiClient {
         } catch (err) {
             // Fall back to the Litefin plugin endpoint if the native route is not found
             if (err.status === 404 || err.message?.includes('Not found')) {
-                log.info(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
-                return await this.get(
-                    `/Litefin/Items/${itemId}/Collections`,
-                    { ...defaults, ...params },
-                    { warnOnError: true }
-                );
+                log.debug(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
+                try {
+                    return await this.get(
+                        `/Litefin/Items/${itemId}/Collections`,
+                        { ...defaults, ...params },
+                        { warnOnError: true }
+                    );
+                } catch (fallbackErr) {
+                    return { Items: [] };
+                }
             }
-            throw err;
+            // A 400 Bad Request simply means the item is not part of any collection on this server version
+            return { Items: [] };
         }
     }
 
