@@ -199,42 +199,47 @@ class TizenAdapter {
             this._lastInputTime = Date.now();
             const keyCode = e.keyCode;
 
-            const activeElem = document.activeElement;
-            const isEditingInput =
-                activeElem &&
-                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA') &&
-                !(activeElem.readOnly || activeElem.hasAttribute('readonly'));
-
-            // Intercept Back (Tizen/WebOS) or Escape (Web) to exit editing mode
-            if (isEditingInput && (keyCode === 10009 || keyCode === 461 || keyCode === 27)) {
-                e.preventDefault();
-                activeElem.readOnly = true;
-                activeElem.setAttribute('readonly', 'true');
-                activeElem.blur();
-                return;
-            }
-
-            // Block Tizen's default spatial navigation unless user is typing in an input field or interacting with a select.
+            // Block Tizen's default spatial navigation unless user is typing in an input field.
             // Failing to prevent default allows the TV to natively jump its internal hardware focus
             // instantly before JS calculates the virtual row, triggering ghost focusin loops.
+            const activeElem = document.activeElement;
             const isTextInput =
                 activeElem &&
-                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') ||
-                 activeElem.tagName === 'TEXTAREA' ||
-                 activeElem.tagName === 'SELECT');
+                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA');
+
+            /*
+             * Space bar control helper:
+             * We only want to hijack the space bar if the player is actively rendering
+             * on screen. This prevents breaking standard browser scroll functionality
+             * on the settings, details, or library grid pages.
+             */
+            const isPlayerActive = window.location.hash.startsWith('#/player');
 
             if (!isTextInput) {
-                if (
-                    [TIZEN_KEYS.LEFT, TIZEN_KEYS.RIGHT, TIZEN_KEYS.UP, TIZEN_KEYS.DOWN, TIZEN_KEYS.ENTER].includes(
-                        keyCode
-                    )
-                ) {
+                const keysToPrevent = [
+                    TIZEN_KEYS.LEFT,
+                    TIZEN_KEYS.RIGHT,
+                    TIZEN_KEYS.UP,
+                    TIZEN_KEYS.DOWN,
+                    TIZEN_KEYS.ENTER
+                ];
+                if (isPlayerActive && keyCode === 32) {
+                    keysToPrevent.push(32);
+                }
+                if (keysToPrevent.includes(keyCode)) {
                     e.preventDefault();
                 }
             }
 
             // Map key codes to events
             switch (keyCode) {
+                // Space bar mapping for web/desktop players
+                case 32:
+                    if (!isTextInput && isPlayerActive) {
+                        e.preventDefault();
+                        eventBus.emit('key:playPause', e);
+                    }
+                    break;
                 // Navigation
                 case TIZEN_KEYS.LEFT:
                     eventBus.emit('key:left', e);
@@ -254,6 +259,13 @@ class TizenAdapter {
                 case TIZEN_KEYS.BACK:
                     e.preventDefault();
                     eventBus.emit('key:back', e);
+                    break;
+                case 27: // Escape
+                case 8: // Backspace
+                    if (!isTextInput) {
+                        e.preventDefault();
+                        eventBus.emit('key:back', e);
+                    }
                     break;
 
                 // Media controls
@@ -382,6 +394,12 @@ class TizenAdapter {
      */
     exit() {
         if (this._isTizen) {
+            // Flush all pending storage writes to disk before exiting.
+            // On Tizen 9.0+, Chromium 120 aggressively throttles background timers,
+            // so the debounced flush may never fire if the app is suspended. Without
+            // this explicit flush, critical keys (server URL, auth tokens) can be lost,
+            // causing the app to start fresh on next launch.
+            storage.flush();
             try {
                 tizen.application.getCurrentApplication().exit();
             } catch (e) {

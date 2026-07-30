@@ -149,7 +149,11 @@ class Sidebar extends Component {
         // Sidebar Logo clickability configuration
         this._updateLogoSettings();
         this._onLogoSettingsChanged = () => this._updateLogoSettings();
-        eventBus.on('prefChanged:logoSettings', this._onLogoSettingsChanged);
+        eventBus.on('pref:logoSettings', this._onLogoSettingsChanged);
+
+        this._updateSidebarItemsAlign();
+        this._onSidebarItemsAlignChanged = () => this._updateSidebarItemsAlign();
+        eventBus.on('pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged);
 
         this._updateAnimationMode();
         this._onAnimationModeChanged = () => this._updateAnimationMode();
@@ -175,7 +179,7 @@ class Sidebar extends Component {
         eventBus.on('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
 
         // ---------------------------------------------------------------------
-        // COLLAPSED SIDEBAR TRANSPARENT BACKGROUND CONFIGURATION
+        // COLLAPSED SIDEBAR BACKGROUND CONFIGURATION
         // ---------------------------------------------------------------------
         this.activePath = router.getCurrentPath() || '';
         this._updateTransparentCollapsed();
@@ -183,7 +187,8 @@ class Sidebar extends Component {
         this._onTransparentCollapsedChanged = () => {
             this._updateTransparentCollapsed();
         };
-        eventBus.on('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+        eventBus.on('pref:collapsedSidebarColor', this._onTransparentCollapsedChanged);
+        eventBus.on('pref:expandedSidebarColor', this._onTransparentCollapsedChanged);
 
         this._onHideLibraryHeaderChanged = () => {
             this._loadLibraries();
@@ -283,7 +288,7 @@ class Sidebar extends Component {
         }
 
         if (this._onLogoSettingsChanged) {
-            eventBus.off('prefChanged:logoSettings', this._onLogoSettingsChanged);
+            eventBus.off('pref:logoSettings', this._onLogoSettingsChanged);
         }
 
         if (this._onAnimationModeChanged) {
@@ -296,11 +301,16 @@ class Sidebar extends Component {
         }
 
         if (this._onTransparentCollapsedChanged) {
-            eventBus.off('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+            eventBus.off('pref:collapsedSidebarColor', this._onTransparentCollapsedChanged);
+            eventBus.off('pref:expandedSidebarColor', this._onTransparentCollapsedChanged);
         }
 
         if (this._onHideLibraryHeaderChanged) {
             eventBus.off('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
+        }
+
+        if (this._onSidebarItemsAlignChanged) {
+            eventBus.off('pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged);
         }
     }
 
@@ -341,24 +351,50 @@ class Sidebar extends Component {
      */
     setMode(mode) {
         this.el.classList.toggle('hidden', mode === 'hidden');
+        // Re-evaluate alignment once visibility changes (resolving clientHeight 0 state)
+        setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
 
     _updateLogoSettings() {
-        const isEnabled = storage.getItem('pref:logoSettings') === 'true';
+        let logoPref = storage.getItem('pref:logoSettings') || 'visible';
+        // Migrate old boolean values
+        if (logoPref === 'true') {
+            logoPref = 'settings';
+        } else if (logoPref === 'false') {
+            logoPref = 'visible';
+        }
+
         const logoHeader = this.el.querySelector('#sidebar-logo-header');
         const settingsBtn = this.el.querySelector('#sidebar-settings');
+        const homeBtn = this.el.querySelector('#sidebar-home');
 
         if (logoHeader) {
-            logoHeader.classList.toggle('sidebar-item', isEnabled);
-            logoHeader.setAttribute('data-focusable', isEnabled.toString());
-            logoHeader.setAttribute('tabindex', isEnabled ? '0' : '-1');
+            // Determine if logo is visible
+            const isLogoVisible = logoPref !== 'hidden';
+            logoHeader.style.display = isLogoVisible ? '' : 'none';
 
-            if (isEnabled) {
+            // Clickable status for logo
+            const isClickable = logoPref === 'settings' || logoPref === 'home';
+            logoHeader.classList.toggle('sidebar-item', isClickable);
+            logoHeader.setAttribute('data-focusable', isClickable.toString());
+            logoHeader.setAttribute('tabindex', isClickable ? '0' : '-1');
+
+            if (logoPref === 'settings') {
                 logoHeader.dataset.path = '/settings';
-                if (settingsBtn) settingsBtn.classList.add('hidden');
+            } else if (logoPref === 'home') {
+                logoHeader.dataset.path = '/home';
             } else {
                 delete logoHeader.dataset.path;
-                if (settingsBtn) settingsBtn.classList.remove('hidden');
+            }
+
+            // Show/hide settings button
+            if (settingsBtn) {
+                settingsBtn.classList.toggle('hidden', logoPref === 'settings');
+            }
+
+            // Show/hide home button
+            if (homeBtn) {
+                homeBtn.classList.toggle('hidden', logoPref === 'home');
             }
 
             // Invalidate cache since focusability of a header element changed
@@ -456,7 +492,6 @@ class Sidebar extends Component {
                 }
             });
 
-
             this._focusObserver.observe(this.el, {
                 attributes: true,
                 subtree: true,
@@ -489,7 +524,6 @@ class Sidebar extends Component {
             this._expandedByMouse = false;
             this._expand(false);
         });
-
 
         // Logo click handler
         this._bindItem(this.el.querySelector('#sidebar-logo-header'), () => {
@@ -541,11 +575,18 @@ class Sidebar extends Component {
     }
 
     _expand(expanded) {
+        if (storage.getItem('pref:sidebarMode') === 'collapsed') {
+            expanded = false;
+        }
         if (this.expanded === expanded) return;
         this.expanded = expanded;
 
         this.el.classList.toggle('expanded', expanded);
         this.el.classList.toggle('collapsed', !expanded);
+
+        // Recheck items alignment since library visibility changes between collapsed and expanded states
+        this._updateSidebarItemsAlign();
+        setTimeout(() => this._updateSidebarItemsAlign(), 0);
 
         // ====================================================================
         // COLLAPSE VISUAL RESET
@@ -579,7 +620,6 @@ class Sidebar extends Component {
                 document.activeElement.blur();
             }
         }
-
 
         const pageContainer = document.getElementById('page-container');
         if (pageContainer) {
@@ -642,6 +682,9 @@ class Sidebar extends Component {
              * any that the user has hidden are correctly suppressed.
              */
             this._applySidebarLayout();
+
+            // Re-evaluate alignment now that libraries are loaded and overflow metrics are active
+            setTimeout(() => this._updateSidebarItemsAlign(), 0);
 
             // Invalidate focus manager cache to discover dynamically added libraries
             focusManager.resetDOMCache();
@@ -709,12 +752,48 @@ class Sidebar extends Component {
         this.activePath = path;
         this._updateActiveState();
         this._updateTransparentCollapsed();
+        setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
 
     _updateTransparentCollapsed() {
-        const transparentCollapsed = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
-        const isSettings = (this.activePath || '').startsWith('/settings');
-        this.el.classList.toggle('transparent-collapsed', transparentCollapsed && !isSettings);
+        const colorPref = storage.getItem('pref:collapsedSidebarColor') || 'theme';
+        const expandedColorPref = storage.getItem('pref:expandedSidebarColor') || 'theme';
+        this.el.classList.toggle('transparent-collapsed', colorPref === 'transparent');
+        this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');
+        this.el.classList.toggle('tinted-semi-collapsed', colorPref === 'tinted-semi');
+        this.el.classList.toggle('black-collapsed', colorPref === 'black');
+        this.el.classList.toggle('transparent-expanded', expandedColorPref === 'transparent');
+        this.el.classList.toggle('semi-transparent-expanded', expandedColorPref === 'semi');
+        this.el.classList.toggle('tinted-semi-expanded', expandedColorPref === 'tinted-semi');
+        this.el.classList.toggle('black-expanded', expandedColorPref === 'black');
+    }
+
+    _updateSidebarItemsAlign() {
+        const alignPref = storage.getItem('pref:sidebarItemsAlign') || 'top';
+        const scrollContainer = this.el.querySelector('.sidebar-content');
+
+        let shouldAlign = false;
+        if (alignPref !== 'top' && scrollContainer) {
+            // Check if all sidebar items fit inside the scrollable view without overflow
+            const hasOverflow = scrollContainer.scrollHeight > scrollContainer.clientHeight;
+            shouldAlign = !hasOverflow;
+        }
+
+        const prevCenter = this.el.classList.contains('align-center');
+        const prevBottom = this.el.classList.contains('align-bottom');
+
+        this.el.classList.toggle('align-center', alignPref === 'center' && shouldAlign);
+        this.el.classList.toggle('align-bottom', alignPref === 'bottom' && shouldAlign);
+
+        const focused = this.el.querySelector('.sidebar-item.focused');
+        if (focused) {
+            // Update immediately for engines that reflow synchronously
+            this._updateIndicator(focused, { instant: true });
+            // And defer a 50ms update to ensure the TV rendering layout paint has fully settled
+            setTimeout(() => {
+                this._updateIndicator(focused, { instant: true });
+            }, 50);
+        }
     }
 
     _updateActiveState() {

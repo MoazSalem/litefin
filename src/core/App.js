@@ -121,6 +121,13 @@ class App {
             (trackMenuBgOpacity / 100).toFixed(2)
         );
 
+        // Initialize OSD background gradient opacity CSS variable
+        const osdGradientOpacity = PlayerSettings.get('osdGradientOpacity');
+        document.documentElement.style.setProperty(
+            '--osd-gradient-opacity',
+            (osdGradientOpacity / 100).toFixed(2)
+        );
+
         // 3.1. Initialize CSS vars polyfill (no-op on Chrome 49+, active on Tizen 3.0 / Chrome 47).
         //      Must run AFTER layoutManager.init() so the data-theme attribute and theme
         //      CSS variables are already present on <html> when the polyfill scans the DOM.
@@ -148,6 +155,13 @@ class App {
 
         // Wait for both to complete — they've been running in parallel
         await Promise.all([i18nPromise, authPromise]);
+
+        // Load UI font if it requires server fallback font
+        if (state.get('user:authenticated') && layoutManager.getUiFont() === 'fallback-font') {
+            import('../utils/FontLoader.js').then((module) => {
+                module.default.loadFont('fallback-font');
+            });
+        }
 
         // 4.5. Initialize Smart Hub Preview (Tizen 4+ only — gracefully no-ops on older
         //      hardware or other platforms. Must run after auth.init() so the manager can
@@ -341,6 +355,12 @@ class App {
                 document.body.classList.remove('sidebar-mode-hidden');
             }
 
+            if (sidebarMode === 'collapsed') {
+                document.body.classList.add('sidebar-mode-collapsed');
+            } else {
+                document.body.classList.remove('sidebar-mode-collapsed');
+            }
+
             this.sidebar.setMode('visible');
         }
     }
@@ -391,6 +411,12 @@ class App {
             cssVarsPolyfill.update();
         });
 
+        // Listen for OSD background gradient opacity changes
+        eventBus.on('pref:osdGradientOpacity', (value) => {
+            document.documentElement.style.setProperty('--osd-gradient-opacity', (value / 100).toFixed(2));
+            cssVarsPolyfill.update();
+        });
+
         // Handle back button / return key
         eventBus.on('key:back', () => {
             // 1. Check for standalone global overlays
@@ -431,12 +457,13 @@ class App {
         // Handle app visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // App going to background - on Tizen this may mean app is closing
+                // App going to background — pause playback and save state,
+                // but do NOT stop the session or report stopped. The player
+                // stays alive and the server-side session remains active so
+                // the user can resume when they return.
                 log.debug('App hidden (background)');
                 eventBus.emit('app:hidden');
-                // Also emit beforeExit so active players can report stopped
-                eventBus.emit('app:beforeExit');
-                // Close WebSocket - user goes offline on server dashboard
+                // Close WebSocket — user appears offline on server dashboard
                 api.closeWebSocket();
             } else {
                 log.debug('App visible (foreground)');
@@ -506,6 +533,14 @@ class App {
         // (covers fresh logins, not session restores which are handled in init())
         eventBus.on('auth:login', () => {
             log.info('User logged in - initializing plugin manager');
+
+            // If the UI font is fallback-font, load it now that we are authenticated
+            if (layoutManager.getUiFont() === 'fallback-font') {
+                import('../utils/FontLoader.js').then((module) => {
+                    module.default.loadFont('fallback-font');
+                });
+            }
+
             pluginManager
                 .init({
                     api,
@@ -556,12 +591,9 @@ class App {
 
                 let itemToPlay = item;
 
-                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, Playlist, BoxSet without movies/episodes),
+                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, BoxSet without movies/episodes),
                 // the API cannot play it directly. We must resolve it to the first playable audio track.
-                if (
-                    item &&
-                    ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Playlist', 'Artist', 'Person'].includes(item.Type)
-                ) {
+                if (item && ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Artist', 'Person'].includes(item.Type)) {
                     try {
                         const tracks = await api.getItems({
                             ParentId: item.Id,
@@ -582,6 +614,26 @@ class App {
                         }
                     } catch (e) {
                         log.error('Failed to resolve audio container tracks:', e);
+                        return;
+                    }
+                }
+
+                // Playlist items are containers with no direct MediaSource.
+                // Resolve to the first item and tag context so PlayQueue builds the full list.
+                if (item && item.Type === 'Playlist' && itemToPlay === item) {
+                    try {
+                        const result = await api.getPlaylistItems(item.Id, { Limit: 1 });
+                        if (result.Items && result.Items.length > 0) {
+                            itemToPlay = result.Items[0];
+                            itemToPlay.contextType = 'playlist';
+                            itemToPlay.contextId = item.Id;
+                            log.info('Resolved Playlist to first item:', itemToPlay.Name);
+                        } else {
+                            log.warn('Playlist is empty:', item.Id);
+                            return;
+                        }
+                    } catch (e) {
+                        log.error('Failed to resolve playlist:', e);
                         return;
                     }
                 }
@@ -839,11 +891,17 @@ class App {
                 const activeUserId = auth.getCurrentUser()?.Id;
                 const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
+                const skipProfilesOnce = storage.getItem('litefin:skip_profiles_once') === 'true';
+                if (skipProfilesOnce) {
+                    storage.removeItem('litefin:skip_profiles_once');
+                    storage.flush();
+                }
+
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
-                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin)) {
+                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin) && !skipProfilesOnce) {
                     // Multiple users stored, or the restored profile is PIN-locked —
                     // make them pick a profile (which enforces any PIN).
                     log.info(
@@ -851,8 +909,8 @@ class App {
                     );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Single user, no PIN — skip the profiles screen and go straight home
-                    log.info('Initial route: Authenticated (single user), navigating to HomePage');
+                    // Single user, no PIN, or skipped once — skip the profiles screen and go straight home
+                    log.info('Initial route: Authenticated, navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {
                     log.info('Initial route: No session, navigating to LoginPage');

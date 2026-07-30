@@ -6,24 +6,24 @@ Litefin features a clean, premium interface designed specifically for the 10-foo
 
 ### Home Screen
 
-![Home Screen](./Previews/1.png)
+![Home Screen](./previews/1.png)
 
 ### Sidebar Menu
 
-![Sidebar Menu](./Previews/2.png)
+![Sidebar Menu](./previews/2.png)
 
 ### Media Details Screen (With Sidebar Hidden)
 
-![Media Details Screen](./Previews/3.png)
+![Media Details Screen](./previews/3.png)
 
 ### Library Browsing Screen
 
-![Library Browsing Screen](./Previews/4.png)
+![Library Browsing Screen](./previews/4.png)
 
 ### Library Genres Screen
 
-![Library Genres Screen](./Previews/5.png)
+![Library Genres Screen](./previews/5.png)
 
 ### Player Screen (OSD)
 
-![Player Screen](./Previews/6.png)
+![Player Screen](./previews/6.png)

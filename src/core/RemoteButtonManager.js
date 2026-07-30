@@ -168,11 +168,57 @@ class RemoteButtonManager {
                 this._handlePlayerAction('nextChapter');
                 break;
 
+            case 'sendWol':
+                /*
+                 * ====================================================================
+                 * ACTION: SEND WAKE-ON-LAN MAGIC PACKET
+                 * ====================================================================
+                 * Triggers broadcasting a Wake-on-LAN Magic Packet targeting the
+                 * user-configured server MAC address stored in global preferences.
+                 * Shows immediate Toast feedback to the user on screen.
+                 * ====================================================================
+                 */
+                log.info('Send Wake-on-LAN Mapped: Initiating manual WOL packet dispatch.');
+                this._handleSendWolAction();
+                break;
+
             case 'none':
             default:
                 // No custom operation is configured, ignore key press
                 log.debug(`None Mapped: Colored key ${color} ignored.`);
                 break;
+        }
+    }
+
+    /**
+     * Handles manual Wake-on-LAN button trigger.
+     * Reads configured MAC address, sends packet, and shows Toast feedback.
+     * @private
+     */
+    async _handleSendWolAction() {
+        const macAddress = storage.getItem('pref:wolMacAddress');
+        if (!macAddress) {
+            log.warn('Manual WOL button pressed, but no MAC address is configured.');
+            toast.show(i18n.t('WolNoMacConfigured') || 'Wake-on-LAN: No MAC address set in settings', 4000);
+            return;
+        }
+
+        const initialMsg = i18n.t('SendingWolPacket') ? i18n.t('SendingWolPacket').replace('{0}', macAddress) : `Sending Wake-on-LAN packet to ${macAddress}...`;
+        toast.show(initialMsg, 3000);
+
+        try {
+            const { sendWakeOnLan } = await import('../api/ApiClient.js');
+            const success = await sendWakeOnLan(macAddress);
+            if (success) {
+                log.info(`Manual WOL packet dispatched successfully to ${macAddress}`);
+                toast.show(i18n.t('WolPacketSentSuccess') || 'Wake-on-LAN packet sent successfully! ✓', 3000);
+            } else {
+                log.warn('Manual WOL dispatch returned false');
+                toast.show(i18n.t('WolPacketSentFailed') || 'Failed to send Wake-on-LAN packet', 3000);
+            }
+        } catch (err) {
+            log.error('Error dispatching manual WOL packet:', err);
+            toast.show(i18n.t('WolPacketSentFailed') || 'Failed to send Wake-on-LAN packet', 3000);
         }
     }
 

@@ -224,9 +224,9 @@ class PluginWidgetHost {
                     /*
                      * ========================================================================
                      * LOCKOUT ACTIVE GUARD:
-                     * Prevent click event processing if the OSD is currently locked out 
-                     * (e.g. during track transition/cooldown phase). This blocks pointer 
-                     * clicks or synthesized click events from triggering skip actions 
+                     * Prevent click event processing if the OSD is currently locked out
+                     * (e.g. during track transition/cooldown phase). This blocks pointer
+                     * clicks or synthesized click events from triggering skip actions
                      * immediately after track loading.
                      * ========================================================================
                      */
@@ -265,8 +265,8 @@ class PluginWidgetHost {
                          * PREEMPTIVE FOCUS RESTORATION:
                          * Immediately shift OSD focus back to the Play/Pause playback controls.
                          * Selecting a segment skip action (like skip intro or skip outro) renders
-                         * the current overlay button defunct/obsolete (either because we seeked 
-                         * past it, or because the track is ending). Leaving focus stranded on 
+                         * the current overlay button defunct/obsolete (either because we seeked
+                         * past it, or because the track is ending). Leaving focus stranded on
                          * Row -1 causes navigation issues or carry-over bugs on next episode.
                          * ========================================================================
                          */
@@ -370,6 +370,12 @@ class PluginWidgetHost {
      */
     onTimeUpdate(positionTicks, durationTicks) {
         if (this._widgets.size === 0) return;
+
+        // Guard: During track transitions/lockouts, the player's position and duration
+        // are unreliable and may briefly reflect the previous track's end state.
+        if (this._osd && (this._osd._trackTransitionLockoutActive || (this._osd._playerPage && this._osd._playerPage._isSwitching))) {
+            return;
+        }
 
         let cacheInvalidated = false;
         // Track whether any widget just became visible (to trigger auto-focus)
@@ -504,7 +510,9 @@ class PluginWidgetHost {
                      * ========================================================================
                      */
                     if (this._osd && this._osd._focusRestoreLockout) {
-                        log.info(`Ignoring enter key on widget '${entry.widget.id}' during active focus restore lockout`);
+                        log.info(
+                            `Ignoring enter key on widget '${entry.widget.id}' during active focus restore lockout`
+                        );
                         return true;
                     }
 
@@ -534,7 +542,7 @@ class PluginWidgetHost {
                          * ========================================================================
                          * PREEMPTIVE FOCUS RESTORATION:
                          * Immediately pull focus back to the primary playback row after executing
-                         * the skip segment action. This ensures the focus border does not linger 
+                         * the skip segment action. This ensures the focus border does not linger
                          * on a button that is either about to hide or belongs to a track that is
                          * terminating, avoiding accidental double-skips.
                          * ========================================================================

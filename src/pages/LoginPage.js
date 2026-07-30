@@ -13,6 +13,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
 import { focusManager } from '../ui/FocusManager.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
@@ -22,6 +23,9 @@ import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
 
 const log = logger.create('Login');
+
+// Default Jellyfin port when user omits one
+const DEFAULT_PORT = 8096;
 
 // Login states — each maps to a data-section attribute on its panel
 const STATE = {
@@ -104,36 +108,15 @@ class LoginPage extends Page {
                     <!-- Server URL Form -->
                     <div class="login-section server-section" data-section="server">
                         <div class="server-input-container">
-                            <div class="server-fields-group">
-                                <select
-                                    id="server-protocol"
-                                    class="text-input tv-input server-protocol-input"
-                                    tabindex="0"
-                                >
-                                    <option value="http://">http://</option>
-                                    <option value="https://">https://</option>
-                                </select>
-                                <input
-                                    type="text"
-                                    id="server-host"
-                                    class="text-input tv-input server-host-input"
-                                    placeholder="192.168.x.x"
-                                    autocomplete="off"
-                                    readonly
-                                    tabindex="0"
-                                >
-                                <span class="port-separator">:</span>
-                                <input
-                                    type="text"
-                                    id="server-port"
-                                    class="text-input tv-input server-port-input"
-                                    placeholder="8096"
-                                    value="8096"
-                                    autocomplete="off"
-                                    readonly
-                                    tabindex="0"
-                                >
-                            </div>
+                            <input
+                                type="url"
+                                id="server-url"
+                                class="text-input tv-input server-url-input"
+                                placeholder="192.168.x.x"
+                                autocomplete="off"
+                                readonly
+                                tabindex="0"
+                            >
                             <button type="button" class="btn btn-primary connect-btn" tabindex="0">
                                 <span data-i18n="Connect">Connect</span>
                             </button>
@@ -302,38 +285,15 @@ class LoginPage extends Page {
                         <h2 class="section-title" data-i18n="HeaderConnectToServer">${i18n.t('HeaderConnectToServer')}</h2>
                         <label class="input-label" data-i18n="HeaderConnectToServer">${i18n.t('HeaderConnectToServer')}</label>
                         <div class="server-input-container">
-                            <div class="server-fields-group">
-                                <select
-                                    id="server-protocol"
-                                    class="text-input tv-input server-protocol-input"
-                                    tabindex="0"
-                                >
-                                    <option value="http://">http://</option>
-                                    <option value="https://">https://</option>
-                                </select>
-                                <div class="host-input-wrapper">
-                                    <input
-                                        type="text"
-                                        id="server-host"
-                                        class="text-input tv-input server-host-input"
-                                        placeholder="192.168.x.x"
-                                        autocomplete="off"
-                                        readonly
-                                        tabindex="0"
-                                    >
-                                </div>
-                                <span class="port-separator">:</span>
-                                <input
-                                    type="text"
-                                    id="server-port"
-                                    class="text-input tv-input server-port-input"
-                                    placeholder="8096"
-                                    value="8096"
-                                    autocomplete="off"
-                                    readonly
-                                    tabindex="0"
-                                >
-                            </div>
+                            <input
+                                type="url"
+                                id="server-url"
+                                class="text-input tv-input server-url-input"
+                                placeholder="192.168.x.x"
+                                autocomplete="off"
+                                readonly
+                                tabindex="0"
+                            >
                             <button type="button" class="btn btn-primary connect-btn" tabindex="0">
                                 <span data-i18n="Connect">Connect</span>
                             </button>
@@ -511,9 +471,7 @@ class LoginPage extends Page {
         this._hideError('users-error'); // Clear user selection errors
 
         // Get element references
-        this._serverProtocol = this.$('#server-protocol');
-        this._serverHost = this.$('#server-host');
-        this._serverPort = this.$('#server-port');
+        this._serverInput = this.$('#server-url');
         this._passwordInput = this.$('#password-input');
         this._manualUsername = this.$('#manual-username');
         this._manualPassword = this.$('#manual-password');
@@ -549,29 +507,19 @@ class LoginPage extends Page {
 
         if (savedUrl && !isKnownOffline) {
             // Server already saved and not known to be offline - skip server selection
-            const parsedUrl = this._splitUrl(savedUrl);
-            if (this._serverProtocol) this._serverProtocol.value = parsedUrl.protocol;
-            if (this._serverHost) this._serverHost.value = parsedUrl.host;
-            if (this._serverPort) this._serverPort.value = parsedUrl.port;
+            this._serverInput.value = savedUrl;
             this._autoConnectToSavedServer(savedUrl);
         } else {
             // No saved server or known offline - show server selection immediately
             if (savedUrl) {
-                const parsedUrl = this._splitUrl(savedUrl);
-                if (this._serverProtocol) this._serverProtocol.value = parsedUrl.protocol;
-                if (this._serverHost) this._serverHost.value = parsedUrl.host;
-                if (this._serverPort) this._serverPort.value = parsedUrl.port;
+                this._serverInput.value = savedUrl;
                 this._showError('server-error', i18n.t('ServerUnreachableMessage'));
-            } else {
-                if (this._serverProtocol) this._serverProtocol.value = 'http://';
-                if (this._serverHost) this._serverHost.value = '';
-                if (this._serverPort) this._serverPort.value = '8096';
             }
 
             this._startDiscovery();
             this._showState(STATE.SERVER);
             setTimeout(() => {
-                if (this._serverHost) this._serverHost.focus();
+                this._serverInput.focus();
             }, 100);
 
             // Ensure splash hides after switching states (if it was up)
@@ -664,72 +612,39 @@ class LoginPage extends Page {
             });
         }
 
-        // -------------------------------------------------------------
-        // Protocol Select Event Handlers
-        // -------------------------------------------------------------
-        this._serverProtocol?.addEventListener('change', () => {
-            // Remove native browser focus from select
-            this._serverProtocol.blur();
-            // Automatically focus the host field for smooth spatial navigation
-            if (this._serverHost) {
-                focusManager.focusElement(this._serverHost);
-            }
-        });
-
         // Enter key on inputs - just trigger click
         // On TV, Enter usually triggers click automatically on inputs/buttons
         // But we add specific click handler to unlock
-        this._serverHost?.addEventListener('click', (e) => {
-            if (this._serverHost.readOnly) {
+        this._serverInput?.addEventListener('click', (e) => {
+            if (this._serverInput.readOnly) {
                 // First interaction: enable editing and open keyboard
-                this._serverHost.readOnly = false;
-                this._serverHost.focus();
+                // e.preventDefault(); // Don't prevent default, let browser focus handle it if possible
+                this._serverInput.readOnly = false;
+                this._serverInput.focus();
             }
         });
 
         // Keydown for submitting only (Second Enter)
-        this._serverHost?.addEventListener('keydown', (e) => {
+        this._serverInput?.addEventListener('keydown', (e) => {
             if (e.keyCode === 13) {
-                if (!this._serverHost.readOnly) {
-                    // Submit if already editable and focus port field next
-                    this._serverHost.readOnly = true;
-                    if (this._serverPort) this._serverPort.focus();
+                if (!this._serverInput.readOnly) {
+                    // Submit if already editable
+                    this._serverInput.readOnly = true;
+                    this._connectToServer();
                 } else {
                     // If readonly, user pressed Enter.
-                    this._serverHost.click();
+                    // Explicitly trigger click logic if TV doesn't auto-click
+                    this._serverInput.click();
                 }
             }
         });
 
         // Restore readonly when input loses focus
-        this._serverHost?.addEventListener('blur', () => {
+        this._serverInput?.addEventListener('blur', () => {
             setTimeout(() => {
-                if (this._serverHost) this._serverHost.readOnly = true;
-            }, 200);
-        });
-
-        // Repeat handlers for port input field
-        this._serverPort?.addEventListener('click', (e) => {
-            if (this._serverPort.readOnly) {
-                this._serverPort.readOnly = false;
-                this._serverPort.focus();
-            }
-        });
-
-        this._serverPort?.addEventListener('keydown', (e) => {
-            if (e.keyCode === 13) {
-                if (!this._serverPort.readOnly) {
-                    this._serverPort.readOnly = true;
-                    this._connectToServer();
-                } else {
-                    this._serverPort.click();
-                }
-            }
-        });
-
-        this._serverPort?.addEventListener('blur', () => {
-            setTimeout(() => {
-                if (this._serverPort) this._serverPort.readOnly = true;
+                // Only lock if we really lost focus (not just to keyboard)
+                // but usually Tizen keyboard keeps focus on input
+                this._serverInput.readOnly = true;
             }, 200);
         });
 
@@ -759,8 +674,7 @@ class LoginPage extends Page {
         });
 
         // Enable arrow key cursor movement
-        this._enableInputNavigation(this._serverHost);
-        this._enableInputNavigation(this._serverPort);
+        this._enableInputNavigation(this._serverInput);
         this._enableInputNavigation(this._passwordInput);
         this._enableInputNavigation(this._manualUsername);
         this._enableInputNavigation(this._manualPassword);
@@ -886,6 +800,11 @@ class LoginPage extends Page {
                 // No public users - show manual login with auto-redirect flag
                 this._goToManualLogin(true);
             }
+
+            // Ensure splash screen hides when user selection or manual login is shown
+            setTimeout(() => {
+                eventBus.emit('app:hideSplash');
+            }, 10);
         } catch (error) {
             // Connection failed - show server selection
             log.warn('Auto-connect failed, showing server selection', error);
@@ -903,6 +822,7 @@ class LoginPage extends Page {
             setTimeout(() => {
                 const connectBtn = this.$('.connect-btn');
                 if (connectBtn) connectBtn.focus();
+                eventBus.emit('app:hideSplash');
             }, 100);
         }
     }
@@ -956,26 +876,62 @@ class LoginPage extends Page {
         this._hideError('users-error');
 
         // Ensure input is editable
-        if (this._serverProtocol) this._serverProtocol.value = 'http://';
-        if (this._serverHost) {
-            this._serverHost.readOnly = true; // Keep readonly until user presses Enter
-            this._serverHost.value = ''; // Clear input for fresh start
-        }
-        if (this._serverPort) {
-            this._serverPort.readOnly = true;
-            this._serverPort.value = '8096';
+        if (this._serverInput) {
+            this._serverInput.readOnly = true; // Keep readonly until user presses Enter
+            this._serverInput.value = ''; // Clear input for fresh start
         }
 
         this._startDiscovery();
 
         // Force focus with a slight delay to allow visibility transition
         setTimeout(() => {
-            if (this._serverHost) this._serverHost.focus();
+            if (this._serverInput) this._serverInput.focus();
         }, 150);
     }
 
+    /**
+     * Normalize a user-typed server address.
+     * Rules:
+     *   - Bare hostname/IP (no protocol) → prepend http://, append :8096
+     *   - Full URL with protocol (http:// or https://) → use as-is, no port added
+     *   - If user typed their own port, it is always respected
+     * @param {string} input - Raw user input
+     * @returns {string} Normalized server URL
+     */
+    _normalizeServerUrl(input) {
+        let url = input.trim();
+        if (!url) return '';
+
+        const hasProtocol = url.includes('://');
+
+        if (!hasProtocol) {
+            // Bare hostname/IP — add default protocol and port
+            url = `http://${url}`;
+            try {
+                const parsed = new URL(url);
+                if (!parsed.port) {
+                    parsed.port = String(DEFAULT_PORT);
+                }
+                let result = parsed.toString();
+                if (result.endsWith('/')) {
+                    result = result.slice(0, -1);
+                }
+                return result;
+            } catch {
+                return url;
+            }
+        }
+
+        // User typed a full URL with protocol — respect their choice, no port added
+        let result = url;
+        if (result.endsWith('/')) {
+            result = result.slice(0, -1);
+        }
+        return result;
+    }
+
     async _connectToServer() {
-        const url = this._getCombinedUrl();
+        const url = this._serverInput.value.trim();
 
         if (!url) {
             this._showError('server-error', i18n.t('EnterServerURL'));
@@ -986,21 +942,22 @@ class LoginPage extends Page {
         this._hideError('server-error');
 
         try {
-            this._serverUrl = url;
+            const serverUrl = this._normalizeServerUrl(url);
+            this._serverUrl = serverUrl;
 
             // Connect to server
             // Stop scanning first
             cancelDiscovery();
-            await auth.connectToServer(url);
+            await auth.connectToServer(serverUrl);
 
             // If we already have saved sessions for this server, jump straight to the profiles picker
             // This prevents prompting the user to login again for a server they've already authenticated with.
             // We ignore this shortcut if we're in "Add User" mode (where they explicitly want to add a NEW token).
             const savedServers = auth.getSavedServers();
-            const serverData = savedServers.find((s) => s.serverUrl === url);
+            const serverData = savedServers.find((s) => s.serverUrl === serverUrl);
 
             if (!this._isAddUserMode && serverData && serverData.sessions.length > 0) {
-                log.info(`Found ${serverData.sessions.length} saved sessions for ${url}, routing to profiles`);
+                log.info(`Found ${serverData.sessions.length} saved sessions for ${serverUrl}, routing to profiles`);
                 // Update session count so App.js routing logic handles back-navigation correctly
                 state.set('user:sessionCount', serverData.sessions.length);
                 router.navigate('/profiles', { replace: true });
@@ -1044,13 +1001,14 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                        src="${
+                                            user.PrimaryImageTag
+                                                ? api.getUserImageUrl(user.Id, {
+                                                      maxWidth: imageService.getParams('avatar').maxWidth,
+                                                      quality: imageService.getParams('avatar').quality
+                                                  })
+                                                : ''
+                                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -1065,13 +1023,14 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${user.PrimaryImageTag
-                            ? api.getUserImageUrl(user.Id, {
-                                maxWidth: imageService.getParams('avatar').maxWidth,
-                                quality: imageService.getParams('avatar').quality
-                            })
-                            : ''
-                        }"
+                                    src="${
+                                        user.PrimaryImageTag
+                                            ? api.getUserImageUrl(user.Id, {
+                                                  maxWidth: imageService.getParams('avatar').maxWidth,
+                                                  quality: imageService.getParams('avatar').quality
+                                              })
+                                            : ''
+                                    }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
@@ -1321,6 +1280,7 @@ class LoginPage extends Page {
                 router.navigate('/profiles', { replace: true });
             } else if (typeof tizen !== 'undefined') {
                 try {
+                    storage.flush();
                     tizen.application.getCurrentApplication().exit();
                 } catch (e) {
                     log.error('App exit failed:', e);
@@ -1677,11 +1637,8 @@ class LoginPage extends Page {
      */
     _selectDiscoveredServer(index) {
         const server = this._discoveredServers[index];
-        if (server && this._serverHost) {
-            const parsedUrl = this._splitUrl(server.address);
-            if (this._serverProtocol) this._serverProtocol.value = parsedUrl.protocol;
-            if (this._serverHost) this._serverHost.value = parsedUrl.host;
-            if (this._serverPort) this._serverPort.value = parsedUrl.port;
+        if (server && this._serverInput) {
+            this._serverInput.value = server.address;
 
             log.info(`Selected server ${server.name} (${server.address}) - initiating auto-connect`);
 
@@ -1826,85 +1783,6 @@ class LoginPage extends Page {
                 if (qcBtn) qcBtn.focus();
             }, 100);
         }
-    }
-
-    /**
-     * Helper to split any raw server URL into protocol, host, and port components.
-     * Excludes trailing slashes and handles default port fallbacks.
-     * @param {string} url - Unified server connection address
-     * @returns {Object} Object with individual decomposed elements
-     * @private
-     */
-    _splitUrl(url) {
-        let protocol = 'http://';
-        let host = '';
-        let port = '8096';
-
-        // Check if a valid URL string exists
-        if (url) {
-            if (url.startsWith('https://')) {
-                protocol = 'https://';
-                url = url.slice(8);
-            } else if (url.startsWith('http://')) {
-                protocol = 'http://';
-                url = url.slice(7);
-            }
-
-            // Split into IP/Domain and Port segment
-            const parts = url.split(':');
-            if (parts.length > 1) {
-                host = parts[0];
-                const portPart = parts[1].split('/')[0];
-                if (/^\d+$/.test(portPart)) {
-                    port = portPart;
-                } else {
-                    // Fallback to full string if format was irregular
-                    host = url;
-                    port = '8096';
-                }
-            } else {
-                host = url.split('/')[0];
-                port = protocol === 'https://' ? '443' : '8096';
-            }
-        }
-
-        return { protocol, host, port };
-    }
-
-    /**
-     * Recombines the protocol, host, and port inputs into a single connection URL.
-     * Sanitizes inputs to prevent protocol duplication or bad characters.
-     * @returns {string} Sanitized target URL
-     * @private
-     */
-    _getCombinedUrl() {
-        if (!this._serverHost) return '';
-        const protocol = this._serverProtocol?.value || 'http://';
-        let host = this._serverHost.value.trim();
-        let port = this._serverPort?.value.trim() || '';
-
-        // Strip any trailing slash character
-        host = host.replace(/\/$/, '');
-
-        // Strip accidental protocol prefixes entered by the user
-        host = host.replace(/^https?:\/\//, '');
-
-        // If the user typed or pasted a port inside the host field, decompose it
-        if (host.includes(':')) {
-            const parts = host.split(':');
-            host = parts[0];
-            if (parts[1]) {
-                const portPart = parts[1].split('/')[0];
-                if (/^\d+$/.test(portPart)) {
-                    port = portPart;
-                    if (this._serverPort) this._serverPort.value = port;
-                }
-            }
-        }
-
-        if (!host) return '';
-
-        return `${protocol}${host}${port ? `:${port}` : ''}`;
     }
 }
 

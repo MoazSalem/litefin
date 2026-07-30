@@ -6,45 +6,6 @@
  * ============================================================================
  */
 
-// ----------------------------------------------------------------------------
-// AbortController polyfill — must run before any imports to ensure
-// availability in ApiClient and server discovery on Tizen 5.0 (Chromium 63),
-// which shipped without AbortController. Tizen 5.5+ (Chromium 69) has it
-// natively, so the guard makes this a zero-cost no-op there.
-// ----------------------------------------------------------------------------
-if (typeof AbortController === 'undefined') {
-    /**
-     * Minimal AbortController polyfill.
-     * Covers the abort() + signal.aborted + onabort callback surface
-     * used by the fetch() timeout pattern in ApiClient.
-     */
-    window.AbortController = function AbortController() {
-        /** @type {AbortSignal} */
-        this.signal = Object.create(null);
-        this.signal.aborted = false;
-        this.signal.onabort = null;
-        this.signal.addEventListener = function () {};
-        this.signal.removeEventListener = function () {};
-        this.signal.dispatchEvent = function () {};
-
-        // Store a reference to signal on the controller so abort() can reach it
-        const _signal = this.signal;
-
-        /**
-         * Abort the associated request.
-         * Sets signal.aborted and fires the onabort callback if set.
-         */
-        this.abort = function () {
-            if (_signal.aborted) return;
-            _signal.aborted = true;
-            if (typeof _signal.onabort === 'function') {
-                // Dispatch a synthetic AbortError-like event
-                _signal.onabort({ type: 'abort', target: _signal });
-            }
-        };
-    };
-}
-
 // Import core modules
 import { app } from './core/App.js';
 import { logger } from './utils/Logger.js';
@@ -68,6 +29,7 @@ import './styles/upnext.css';
 import './styles/player-modals.css'; /* Chapters & Queue modal panels */
 import './styles/syncplay-menu.css'; /* SyncPlay group-selection overlay */
 import './styles/settings.css';
+import './styles/lock-overlay.css';
 import './styles/season.css';
 import './styles/offline.css';
 import './styles/profiles.css'; /* "Who's Watching" profile switcher */

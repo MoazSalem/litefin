@@ -84,11 +84,8 @@ function getProbedCodecs() {
             supportsCodec('video/mp4; codecs="mp2v.20.2"') ||
             supportsCodec('video/mpeg') ||
             supportsCodec('video/mp2t; codecs="mp2v.20.2"'),
-        mpegts:
-            supportsCodec('video/mp2t'),
-        mp2:
-            v.canPlayType('audio/mpeg; codecs="mp2"') !== '' ||
-            v.canPlayType('audio/mp4; codecs="mp2"') !== ''
+        mpegts: supportsCodec('video/mp2t'),
+        mp2: v.canPlayType('audio/mpeg; codecs="mp2"') !== '' || v.canPlayType('audio/mp4; codecs="mp2"') !== ''
     };
 
     return _codecCache;
@@ -225,7 +222,7 @@ export function getDeviceCapabilities() {
     //     native DTS decoding capabilities.
     // ────────────────────────────────────────────────────────────────────────
     const dtsSetting = PlayerSettings.get('enableDts');
-    const dts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : (webosVersion < 5);
+    const dts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : webosVersion < 5;
 
     const manualRes = PlayerSettings.get('maxResolution');
     if (manualRes && manualRes !== 'auto') {
@@ -447,7 +444,7 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.ac3) audioCodecs.push('ac3');
     audioCodecs.push('aac', 'mp3');
     if (enableMp2) audioCodecs.push('mp2');
-    // NOTE: aac_latm is deliberately omitted from WebOS's audioCodecs list because WebOS's 
+    // NOTE: aac_latm is deliberately omitted from WebOS's audioCodecs list because WebOS's
     // native HLS pipeline/MSE decoder stalls when playing raw aac_latm inside HLS streams.
     // Excluding it forces the server to copy the video stream (remux) and transcode the audio to eac3/ac3/aac.
     audioCodecs.push('flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le');
@@ -468,7 +465,7 @@ export function buildJellyfinProfile(options = {}) {
 
     const mkvVideoCodecs = [...generalVideoCodecs, 'msmpeg4v2'];
 
-     const webmVideoCodecs = [];
+    const webmVideoCodecs = [];
     if (caps.vp8) webmVideoCodecs.push('vp8');
     if (enableVP9) webmVideoCodecs.push('vp9');
     if (enableAV1) webmVideoCodecs.push('av1');
@@ -480,22 +477,25 @@ export function buildJellyfinProfile(options = {}) {
     // for Direct Play on webOS.
     //
     // CRITICAL DETAIL:
-    // We previously had an override block here that allowed TS, M2TS, AVI, WMV, 
-    // and MPG containers to direct play when using the native WebOSPlayer backend. 
-    // However, while the webOS hardware can play these containers locally (e.g. 
-    // via USB), the browser engine's HTML5 <video> tag does NOT support progressive 
-    // HTTP playback of these formats. Trying to Direct Play a static .ts file 
+    // We previously had an override block here that allowed TS, M2TS, AVI, WMV,
+    // and MPG containers to direct play when using the native WebOSPlayer backend.
+    // However, while the webOS hardware can play these containers locally (e.g.
+    // via USB), the browser engine's HTML5 <video> tag does NOT support progressive
+    // HTTP playback of these formats. Trying to Direct Play a static .ts file
     // results in a DEMUXER_ERROR_COULD_NOT_OPEN crash.
     //
-    // By removing them from Direct Play, we force the Jellyfin server to remux 
-    // them (Direct Stream) into standard HLS streams. Since webOS natively 
-    // supports HLS streaming, these files will play flawlessly and without quality 
-    // loss, as the server just repackages the container on-the-fly without 
+    // By removing them from Direct Play, we force the Jellyfin server to remux
+    // them (Direct Stream) into standard HLS streams. Since webOS natively
+    // supports HLS streaming, these files will play flawlessly and without quality
+    // loss, as the server just repackages the container on-the-fly without
     // transcoding the actual audio/video streams.
     // =========================================================================
     const directPlayProfiles = [];
 
-    if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
+    // Exclude DirectPlay profiles for modes that force server-side processing.
+    // transcodeVideo / transcodeAudio both bypass direct play entirely.
+    if (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') {
         // Standard web containers — available on both backends
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
@@ -592,7 +592,7 @@ export function buildJellyfinProfile(options = {}) {
         transAudioCodecsArr.push('ac3');
     } else if (preferredTranscodeCodec === 'force_mp3') {
         // Only MP3
-        transAudioCodecsArr.push('mp3');    
+        transAudioCodecsArr.push('mp3');
     } else {
         // Only AAC
         transAudioCodecsArr.push('aac');
@@ -619,10 +619,31 @@ export function buildJellyfinProfile(options = {}) {
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        // Video copy for quality, audio transcoded via transAudioCodecs above.
-        // AllowAudioStreamCopy=false (set in _getPlaybackInfo remux case) ensures
-        // the server transcodes audio even when the source codec is in the list.
+        // -----------------------------------------------------------------------
+        // Change Container / Remux:
+        //   Video → copy verbatim ('copy' tells Jellyfin to stream video as-is)
+        //   Audio → transcoded to preferred codec via transAudioCodecsArr above
+        // -----------------------------------------------------------------------
         transVideoCodecs = 'copy';
+    } else if (playbackMode === 'transcodeAudio') {
+        // -----------------------------------------------------------------------
+        // Transcode Audio Only:
+        //   Video → copy verbatim (same as remux — 'copy' passes video through)
+        //   Audio → always re-encoded to the preferred transcode target codec
+        // -----------------------------------------------------------------------
+        transVideoCodecs = 'copy';
+    } else if (playbackMode === 'transcodeVideo') {
+        // -----------------------------------------------------------------------
+        // Transcode Video Only:
+        //   Video → always re-encoded to H264 (clear VideoCodec to force encode)
+        //   Audio → copy verbatim (all audio codecs declared in AudioCodec so
+        //           the server selects whichever the source has and copies it)
+        // -----------------------------------------------------------------------
+        //
+        // NOTE: We intentionally do NOT set 'copy' for transVideoCodecs because
+        // that would tell Jellyfin to copy the video. Instead we use a minimal
+        // list ('h264') so the server knows it must re-encode everything else.
+        transVideoCodecs = 'h264'; // Force video re-encode to H264
     }
 
     const transcodingProfiles = [];
@@ -675,7 +696,8 @@ export function buildJellyfinProfile(options = {}) {
             // 'waiting' events. BreakOnNonKeyFrames is never safe on this platform.
             // Exception: fMP4 is already forced-IDR by the muxer; and remux mode
             // passes the stream through as-is so we must not override it either.
-            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false // always false for TS on WebOS
+            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false, // always false for TS on WebOS
+            EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
         });
     }
 
@@ -747,7 +769,8 @@ export function buildJellyfinProfile(options = {}) {
                     ? PlayerSettings.get('html5SegmentLength') || 2
                     : PlayerSettings.get('webosSegmentLength') || 6,
                 // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
-                BreakOnNonKeyFrames: false
+                BreakOnNonKeyFrames: false,
+                EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
             });
         }
     }

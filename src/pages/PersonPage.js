@@ -11,6 +11,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
+import { storage } from '../utils/StorageService.js';
 import MediaGrid from '../components/MediaGrid.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
@@ -97,34 +98,64 @@ class PersonPage extends Page {
     async _loadPersonDetails() {
         this.setLoading(true);
 
+        let hasFocusTarget = false;
+
         try {
-            // 1. Fetch Person Details
+            // ────────────────────────────────────────────────────────────
+            // 1. Fetch person metadata + render text (blocking)
+            // ────────────────────────────────────────────────────────────
             this._person = await api.getPerson(this._personId);
             this.title = this._person.Name;
 
             this._renderPersonInfo();
 
-            // 2. Determine if this is a music artist or an actor/person
+            // ────────────────────────────────────────────────────────────
+            // 2. Fire poster/backdrop (non-blocking, fire-and-forget)
+            // ────────────────────────────────────────────────────────────
+            this._setSmartBackdrop();
+
+            // ────────────────────────────────────────────────────────────
+            // 3. Check focus target — defer hiding loading until rows render
+            // ────────────────────────────────────────────────────────────
+            const focusStateKey = `person:lastFocusedItem:${this._personId}`;
+            hasFocusTarget =
+                this._pendingNavState ||
+                (storage.getItem('pref:disableFocusRestore') !== 'true' && state.get(focusStateKey));
+
+            if (!hasFocusTarget) {
+                this.setLoading(false);
+            }
+
+            // ────────────────────────────────────────────────────────────
+            // 4. Load works in visual order
+            // ────────────────────────────────────────────────────────────
             const isArtist = this._person.Type === 'MusicArtist' || this._person.Type === 'Artist';
 
             if (isArtist) {
-                // --- Music Artist Mode: load Albums and Songs ---
-                const [albumsResult, songsResult] = await Promise.all([
-                    api.getArtistAlbums(this._personId),
-                    api.getArtistSongs(this._personId)
-                ]);
+                // 4a. Try single-pass query first (Albums + Songs)
+                const result = await api.getPersonItems(this._personId);
+                const items = result.Items || [];
 
-                log.debug('Loaded artist content', {
-                    albums: albumsResult.Items?.length ?? 0,
-                    songs: songsResult.Items?.length ?? 0
-                });
+                let albums = items.filter((i) => i.Type === 'MusicAlbum');
+                let songs = items.filter((i) => i.Type === 'Audio');
 
-                this._renderArtistWorks(albumsResult.Items || [], songsResult.Items || []);
+                // Fallback to separate endpoints if neither type was returned (e.g. legacy server without plugin)
+                if (albums.length === 0 && songs.length === 0) {
+                    log.debug('Single-pass query returned no music items, calling fallback endpoints');
+                    const [albumsResult, songsResult] = await Promise.all([
+                        api.getArtistAlbums(this._personId),
+                        api.getArtistSongs(this._personId)
+                    ]);
+                    albums = albumsResult.Items || [];
+                    songs = songsResult.Items || [];
+                }
+
+                log.debug('Loaded artist works', { albums: albums.length, songs: songs.length });
+                this._renderArtistWorks(albums, songs);
             } else {
-                // --- Actor / Crew Mode: load Movies/Shows/Episodes ---
+                // 4a. Movies/Shows/Episodes (renders in visual order: Movies → Shows → Episodes)
                 const result = await api.getPersonItems(this._personId);
                 this._items = result.Items || [];
-
                 log.debug('Loaded items', {
                     total: this._items.length,
                     movies: this._items.filter((i) => i.Type === 'Movie').length,
@@ -134,49 +165,62 @@ class PersonPage extends Page {
 
                 this._renderWorks();
 
-                // Background: Fetch role names and update UI when ready
+                // Re-apply backdrop now that _items is populated (for work-based fallback)
+                this._setSmartBackdrop();
+
+                // 4b. Background: Fetch role names and update UI when ready
                 this._loadRolesInBackground();
             }
-
-            // Set background (Person's own, or fallback to best work for actors)
-            this._setSmartBackdrop();
         } catch (error) {
             log.error('Failed to load', error);
             this.showError('Failed to load person details');
-        } finally {
             this.setLoading(false);
-
-            // Focus Nav restored or default
-            requestAnimationFrame(() => {
-                const stateKey = `person:lastFocusedItem:${this._personId}`;
-                const lastFocusedObj = state.get(stateKey);
-                let restoredFocus = false;
-
-                if (lastFocusedObj) {
-                    const targetId = lastFocusedObj.itemId;
-                    const sectionId = lastFocusedObj.sectionId;
-
-                    const sectionConfig = focusManager.getSectionConfig(sectionId);
-                    const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
-
-                    const savedCard = sectionContainer.querySelector(
-                        `[data-item-id="${targetId}"], [data-id="${targetId}"]`
-                    );
-
-                    if (savedCard) {
-                        this.setActiveSection(sectionId, false);
-                        focusManager.focusElement(savedCard, { instantScroll: true });
-                        restoredFocus = true;
-                    }
-
-                    state.delete(stateKey);
-                }
-
-                if (!restoredFocus) {
-                    this.setActiveSection('person-fav-actions');
-                }
-            });
         }
+
+        // ────────────────────────────────────────────────────────────
+        // 5. Focus restoration (runs after works are in DOM)
+        // ────────────────────────────────────────────────────────────
+        requestAnimationFrame(() => {
+            const stateKey = `person:lastFocusedItem:${this._personId}`;
+            let lastFocusedObj = null;
+
+            if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                lastFocusedObj = state.get(stateKey);
+            } else {
+                state.delete(stateKey);
+            }
+
+            let restoredFocus = false;
+
+            if (lastFocusedObj) {
+                const targetId = lastFocusedObj.itemId;
+                const sectionId = lastFocusedObj.sectionId;
+
+                const sectionConfig = focusManager.getSectionConfig(sectionId);
+                const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
+
+                const savedCard = sectionContainer.querySelector(
+                    `[data-item-id="${targetId}"], [data-id="${targetId}"]`
+                );
+
+                if (savedCard) {
+                    this.setActiveSection(sectionId, false);
+                    focusManager.focusElement(savedCard, { instantScroll: true });
+                    restoredFocus = true;
+                }
+
+                state.delete(stateKey);
+            }
+
+            if (!restoredFocus) {
+                this.setActiveSection('person-fav-actions');
+            }
+
+            // Reveal page now that focus has been placed (or attempted)
+            if (hasFocusTarget) {
+                this.setLoading(false);
+            }
+        });
     }
 
     _setSmartBackdrop() {
@@ -188,8 +232,17 @@ class PersonPage extends Page {
         // for graceful degradation (the artist's own poster/backdrop will be used if available).
         const backdropUrl = BackdropManager.getPersonBackdropUrl(this._person, this._items || []);
 
+        // Resolve backdrop blurhash from person object
+        let backdropBlurHash = '';
+        if (this._person.ImageBlurHashes?.Backdrop) {
+            const keys = Object.keys(this._person.ImageBlurHashes.Backdrop);
+            if (keys.length > 0) {
+                backdropBlurHash = this._person.ImageBlurHashes.Backdrop[keys[0]];
+            }
+        }
+
         if (backdropUrl) {
-            BackdropManager.applyBackdrop(backdropEl, backdropUrl);
+            BackdropManager.applyBackdrop(backdropEl, backdropUrl, backdropBlurHash);
         }
     }
 
@@ -255,21 +308,68 @@ class PersonPage extends Page {
         if (posterContainer) {
             if ((p.ImageTags && p.ImageTags.Primary) || isArtist) {
                 const params = imageService.getParams('details-poster');
-                const url = api.getImageUrl(p.Id, 'Primary', {
+                const posterUrl = api.getImageUrl(p.Id, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
                     ...(p.ImageTags?.Primary ? { tag: p.ImageTags.Primary } : {})
                 });
 
-                posterContainer.innerHTML = `<img src="${url}" alt="${p.Name}" />`;
-                const imgEl = posterContainer.querySelector('img');
-                if (imgEl) {
-                    imgEl.onload = () => imgEl.classList.add('loaded');
-                    imgEl.onerror = () => {
-                        imgEl.style.display = 'none';
-                        posterContainer.insertAdjacentHTML('afterbegin', fallbackHtml);
-                    };
+                // Poster BlurHash
+                const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+                let posterBlurHash = '';
+                if (!isBlurHashDisabled && p.ImageBlurHashes?.Primary) {
+                    const keys = Object.keys(p.ImageBlurHashes.Primary);
+                    if (keys.length > 0) {
+                        posterBlurHash = p.ImageBlurHashes.Primary[keys[0]];
+                    }
                 }
+
+                posterContainer.innerHTML = '';
+
+                if (posterBlurHash) {
+                    const posterCanvas = document.createElement('canvas');
+                    posterCanvas.className = 'blurhash-canvas poster-blurhash';
+                    posterCanvas.style.position = 'absolute';
+                    posterCanvas.style.top = '0';
+                    posterCanvas.style.left = '0';
+                    posterCanvas.style.width = '100%';
+                    posterContainer.appendChild(posterCanvas);
+
+                    import('../utils/BlurHashDecoder.js')
+                        .then(({ default: BlurHashDecoder }) => {
+                            const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
+                            if (pixels && posterCanvas) {
+                                posterCanvas.width = 32;
+                                posterCanvas.height = 48;
+                                const ctx = posterCanvas.getContext('2d');
+                                const imageData = ctx.createImageData(32, 48);
+                                imageData.data.set(pixels);
+                                ctx.putImageData(imageData, 0, 0);
+                            }
+                        })
+                        .catch((err) => log.error('Failed to decode poster blurhash', err));
+                }
+
+                const img = new Image();
+                img.onload = () => {
+                    img.classList.add('loaded');
+                    if (posterBlurHash) {
+                        const canvas = posterContainer.querySelector('.poster-blurhash');
+                        if (canvas) {
+                            canvas.style.opacity = '0';
+                            setTimeout(() => {
+                                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                            }, 250);
+                        }
+                    }
+                };
+                img.onerror = () => {
+                    img.style.display = 'none';
+                    posterContainer.insertAdjacentHTML('afterbegin', fallbackHtml);
+                };
+                img.src = posterUrl;
+                img.alt = p.Name;
+                posterContainer.appendChild(img);
             } else {
                 posterContainer.innerHTML = fallbackHtml;
             }
@@ -401,6 +501,25 @@ class PersonPage extends Page {
      */
     async _loadRolesInBackground() {
         try {
+            // Check if items already have roles attached via Litefin plugin
+            const hasPrePopulatedRoles = this._items?.some((item) => item.People && item.People.length > 0);
+
+            if (hasPrePopulatedRoles) {
+                this._roleMap = new Map();
+                this._items.forEach((item) => {
+                    if (item.People) {
+                        const person = item.People.find((p) => p.Id === this._personId);
+                        if (person?.Role) {
+                            this._roleMap.set(item.Id, person.Role);
+                        }
+                    }
+                });
+                this._applyRolesToCards();
+                log.debug(`Applied ${this._roleMap.size} character roles from plugin single-pass response`);
+                return;
+            }
+
+            // Fallback: Fetch roles via secondary API request if plugin is not available
             const result = await api.getPersonItemsWithRoles(this._personId);
             const itemsWithPeople = result.Items || [];
 
@@ -418,7 +537,7 @@ class PersonPage extends Page {
             // Apply roles to visible cards
             this._applyRolesToCards();
 
-            log.debug(`Added ${this._roleMap.size} character roles`);
+            log.debug(`Added ${this._roleMap.size} character roles via fallback request`);
         } catch (error) {
             log.warn('Could not load character roles', error);
         }
@@ -760,10 +879,12 @@ class PersonPage extends Page {
         if (!card.dataset.itemId) return;
 
         const stateKey = `person:lastFocusedItem:${this._personId}`;
-        state.set(stateKey, {
-            itemId: card.dataset.itemId,
-            sectionId: sectionId
-        });
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            state.set(stateKey, {
+                itemId: card.dataset.itemId,
+                sectionId: sectionId
+            });
+        }
 
         router.navigate(`/details/${card.dataset.itemId}`);
     }

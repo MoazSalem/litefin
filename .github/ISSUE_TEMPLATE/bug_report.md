@@ -25,8 +25,8 @@ A clear and concise description of what you expected to happen.
 - **Platform**: [e.g. Tizen, webOS]
 - **Device Model**: [e.g. UN65KU6300, OLED55C1PUB]
 - **Model Year**: [e.g. 2016, 2021]
-- **Litefin Build**: [e.g. Normal, Legacy, Ultra Legacy, ES6]
-- **Litefin Version**: [e.g. 0.8.111]
+- **Litefin Build**: [e.g. Normal, Legacy, Ultra Legacy, Modern]
+- **Litefin Version**: [e.g. 1.2.33]
 
 **Server Information**
 

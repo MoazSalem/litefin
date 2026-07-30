@@ -23,12 +23,14 @@
      * CSS smooth-scroll conflicts with JS ScrollTo and causes laggy behavior. */
     scroll-behavior: auto;
 
-    /* GPU acceleration hints for smooth scrolling on TV devices */
+    /* NOTE: transform: translateZ(0) and will-change: scroll-position were
+     * intentionally removed. On Tizen 9.0's GPU compositor, they force a
+     * compositor layer allocation for the entire scroll container that must
+     * be invalidated and recreated on every layout change (card append/prepend,
+     * spacer resize). This causes more GPU memory pressure and repainting than
+     * the default non-layerized scroll path. Tizen 9.0's browser handles
+     * overflow-y: auto scrolling efficiently without these hints. */
     -webkit-overflow-scrolling: touch;
-    transform: translateZ(0);
-    will-change: scroll-position;
-    
-    display: block; /* Standard block layout eliminates Tizen 5.0 collapsing bugs */
 }
 
 /* --- Header Section --- */
@@ -84,10 +86,10 @@
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
-    background-color: rgba(40, 40, 40, 0.8);
-    /* Match Resume/Icon btn in details */
-    color: var(--jf-text-primary);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    background: var(--jf-action-btn-bg);
+    background-clip: padding-box;
+    border: 2px solid var(--jf-action-btn-border) !important;
+    color: var(--jf-action-btn-color);
     font-size: 20px;
     font-weight: 600;
     cursor: pointer;
@@ -181,9 +183,9 @@
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
-    background-color: rgba(40, 40, 40, 0.8);
-    color: var(--jf-text-primary);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    background: var(--jf-action-btn-bg);
+    border: 2px solid var(--jf-action-btn-border) !important;
+    color: var(--jf-action-btn-color);
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
@@ -536,13 +538,6 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
        5 * 320px + 4 * 30px = 1600 + 120 = 1720px exactly. */
     margin-bottom: 30px;
     
-    /* Premium Apple-style spring transition for focus 'pop' */
-    /* Premium Apple-style spring transition for focus 'pop'
-       Mandatory -webkit- prefixing for Chromium 32 compatibility. */
-    -webkit-transition: -webkit-transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
-    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
-
-    
     /* Isolate each card's layout/paint for smoother focus transitions */
     contain: layout style paint;
 }
@@ -652,7 +647,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     margin-right: 10px !important;
     margin-left: 10px !important;
     margin-bottom: 25px !important;
-    border-radius: 20px !important; /* Deeper, more premium Apple-style curve */
+    border-radius: 20px !important;
     -webkit-border-radius: 20px !important;
     background-clip: padding-box !important;
 }
@@ -731,7 +726,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     background: rgba(255, 255, 255, 0.15) !important;
     -webkit-transform: scale(1.02);
     transform: scale(1.02); /* Slight pop to show selection */
-    box-shadow: 0 0 0 3px var(--jf-accent) !important; /* BOLD OUTER Focus Ring */
+    
     z-index: 10;
 }
 
@@ -967,7 +962,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 .media-card:focus,
 .media-card.focused,
 .media-card:hover {
-    transform: scale(1.05); /* Slightly less aggressive scale for larger cards to avoid pixelation */
+    transform: scale(1.02); /* Slightly less aggressive scale for larger cards to avoid pixelation */
     z-index: 10;
 }
 
@@ -1090,9 +1085,9 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     padding: 20px 48px;
     margin: 0 20px;
     /* Spacing for Tizen */
-    background-color: rgba(60, 60, 60, 0.8);
-    color: var(--text-primary);
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: var(--jf-action-btn-bg);
+    border: 2px solid var(--jf-action-btn-border) !important;
+    color: var(--jf-action-btn-color);
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
@@ -1152,11 +1147,6 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     /* gap: 20px; GAP NOT SUPPORTED IN TIZEN 4 (Chrome 56) */
     transform: scale(0.9);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Spacer helpers for Flexbox gap polyfill */
-.library-modal>* {
-    margin-bottom: 20px;
 }
 
 .library-modal> :last-child {
@@ -1493,8 +1483,9 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
 }
 
 /* Actions Footer */
-.modal-actions {
-    padding: 30px 40px;
+.modal-actions-library {
+    padding: 0px 30px;
+    padding-top: 20px;
     background: rgba(0, 0, 0, 0.2);
     display: flex;
     justify-content: flex-end;
@@ -1538,13 +1529,9 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     will-change: transform;
 }
 
-/*
- * ── MODAL ACTION APPLY STATE ─────────────────────────────────────────────────
- * Styles positive action buttons (e.g. Apply) using dynamic button variables.
- */
 .modal-action-btn.apply {
-    background-color: var(--jf-btn-primary-bg) !important;
-    color: var(--jf-btn-primary-color) !important;
+    background-color: hsla(0, 0%, 100%, .1);
+    color: var(--jf-text-primary);
 }
 
 .modal-action-btn.clear,

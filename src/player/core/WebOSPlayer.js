@@ -136,6 +136,10 @@ export class WebOSPlayer {
         this._robustSeekPending  = false;
         this._cancelRobustResume = false;
 
+        // ---- Audio normalization (Web Audio API) ----
+        this._audioContext = null;
+        this._gainNode = null;
+
         log.info('WebOSPlayer constructed');
     }
 
@@ -315,7 +319,76 @@ export class WebOSPlayer {
             await this._playNativeDirect(video, options);
         }
 
+        this._applyAudioNormalization(options);
         this._currentSrc = options.url;
+    }
+
+    /**
+     * Apply audio normalization (TrackGain / AlbumGain) using the Web Audio API.
+     * Only applies to audio-only items. The gain value comes from the server
+     * metadata (NormalizationGain / albumNormalizationGain).
+     * @private
+     * @param {Object} options - Play options (item, mediaSource)
+     */
+    _applyAudioNormalization(options) {
+        log.info('Audio normalization: entered, mode=' + PlayerSettings.get('audioNormalization') + ' itemType=' + (options.item?.MediaType || options.item?.Type || 'unknown'));
+
+        const mode = PlayerSettings.get('audioNormalization');
+        if (mode === 'Off') {
+            log.info('Audio normalization: mode is Off, skipping');
+            return;
+        }
+
+        const isAudioItem = options.item?.MediaType === 'Audio' || options.item?.Type === 'AudioBook';
+        if (!isAudioItem) {
+            log.info('Audio normalization: not an audio item, skipping');
+            return;
+        }
+
+        const video = this._videoElement;
+        if (!video) {
+            log.info('Audio normalization: no video element');
+            return;
+        }
+
+        let normalizationGain;
+        if (mode === 'TrackGain') {
+            normalizationGain = options.item?.NormalizationGain
+                ?? options.mediaSource?.albumNormalizationGain;
+        } else if (mode === 'AlbumGain') {
+            normalizationGain = options.mediaSource?.albumNormalizationGain
+                ?? options.item?.NormalizationGain;
+        }
+
+        if (normalizationGain == null) {
+            log.info('Audio normalization: no gain value available');
+            return;
+        }
+
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) {
+                log.warn('Audio normalization: Web Audio API not available');
+                return;
+            }
+
+            if (!this._audioContext) {
+                this._audioContext = new AudioContext();
+            }
+
+            const source = this._audioContext.createMediaElementSource(video);
+            const gainNode = this._audioContext.createGain();
+            const gainValue = Math.pow(10, normalizationGain / 20);
+            gainNode.gain.value = gainValue;
+
+            source.connect(gainNode);
+            gainNode.connect(this._audioContext.destination);
+
+            this._gainNode = gainNode;
+            log.info(`Audio normalization: applied ${mode} gain of ${gainValue} (${normalizationGain} dB)`);
+        } catch (e) {
+            log.error('Audio normalization: failed to create gain node', e);
+        }
     }
 
     /**
@@ -345,23 +418,31 @@ export class WebOSPlayer {
         video.removeAttribute('src');
         video.load();
 
+        // ====================================================================
+        // MEDIA FRAGMENT RESUME:
+        // Append `#t=seconds` to the url for HLS streaming to hint the native HLS demuxer
+        // to download chunks starting from the resume position immediately.
+        // ====================================================================
+        let url = options.url;
+        const seconds = (options.playerStartPositionTicks || 0) / 10000000;
+        if (seconds > 0) {
+            log.info(`WebOSPlayer: Appending media fragment #t=${seconds} to native HLS URL`);
+            url += `#t=${seconds}`;
+        }
+
         // Use a <source> element with the MIME type hint so WebOS picks the
         // right codec path — without it, some versions skip the native HLS path.
         while (video.firstChild) {
             video.removeChild(video.firstChild);
         }
         const source = document.createElement('source');
-        source.src  = options.url;
+        source.src  = url;
         source.type = 'application/vnd.apple.mpegURL';
         video.appendChild(source);
 
         video.load();
 
         return new Promise((resolve, reject) => {
-            /**
-             * Wait for 'canplay' before calling video.play() so we don't
-             * trigger an Autoplay Policy error before the manifest is parsed.
-             */
             const onCanPlay = () => {
                 video.removeEventListener('canplay', onCanPlay);
                 video.removeEventListener('error', onLoadError);
@@ -369,19 +450,7 @@ export class WebOSPlayer {
                 // Attempt tracks after metadata is loaded
                 this._applyInitialTracks(options);
 
-                const playPromise = video.play();
-                if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                    playPromise
-                        .then(() => {
-                            this._applyRobustResume(video, options.playerStartPositionTicks);
-                            resolve();
-                        })
-                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
-                } else {
-                    // Older browsers (Chrome < 50) don't return a Promise from play()
-                    this._applyRobustResume(video, options.playerStartPositionTicks);
-                    resolve();
-                }
+                this._resumeSeekThenPlay(video, options, resolve, reject);
             };
 
             const onLoadError = () => {
@@ -431,6 +500,19 @@ export class WebOSPlayer {
             video.removeChild(video.firstChild);
         }
 
+        // ====================================================================
+        // MEDIA FRAGMENT RESUME:
+        // We append the media fragment `#t=seconds` to the direct play URL.
+        // This instructs the WebOS media pipeline to start demuxing/decoding
+        // from the resume position right from the first packet load.
+        // ====================================================================
+        let url = options.url;
+        const seconds = (options.playerStartPositionTicks || 0) / 10000000;
+        if (seconds > 0) {
+            log.info(`WebOSPlayer: Appending media fragment #t=${seconds} to native DirectPlay URL`);
+            url += `#t=${seconds}`;
+        }
+
         // ── Dolby Vision hint path ───────────────────────────────────────────
         // Detect DoVi from the media stream metadata passed down via options.
         const videoStream = options.mediaSource?.MediaStreams?.find(s => s.Type === 'Video');
@@ -451,21 +533,21 @@ export class WebOSPlayer {
             if (canPlayDv) {
                 log.info('WebOSPlayer: DoVi content detected — using dvh1 codec hint to activate DV decoder pipeline');
                 const source = document.createElement('source');
-                source.src  = options.url;
+                source.src  = url;
                 source.type = dvHint;
                 video.appendChild(source);
             } else {
                 // canPlayType rejected the codec — fall back to raw src so
                 // the native pipeline still gets a chance to probe it.
                 log.warn('WebOSPlayer: DoVi detected but canPlayType("dvh1") returned false — falling back to raw src (dev browser?)');
-                video.src = options.url;
+                video.src = url;
             }
         } else {
             // Standard path: direct src assignment for all non-DoVi containers.
             // Using <source> with MIME types like 'video/x-matroska' causes the
             // Chromium layer to silently reject the source before the media
             // pipeline sees it, so we avoid it here.
-            video.src = options.url;
+            video.src = url;
         }
 
         video.load();
@@ -480,18 +562,7 @@ export class WebOSPlayer {
                 // player, so doing it here (before play()) ensures the array is ready.
                 this._applyInitialTracks(options);
 
-                const playPromise = video.play();
-                if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                    playPromise
-                        .then(() => {
-                            this._applyRobustResume(video, options.playerStartPositionTicks);
-                            resolve();
-                        })
-                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
-                } else {
-                    this._applyRobustResume(video, options.playerStartPositionTicks);
-                    resolve();
-                }
+                this._resumeSeekThenPlay(video, options, resolve, reject);
             };
 
             const onError = () => {
@@ -745,6 +816,17 @@ export class WebOSPlayer {
             return;
         }
 
+        // ====================================================================
+        // MEDIA FRAGMENT CHECK:
+        // If the media fragment seek already succeeded natively and the video
+        // is close to the resume target, we skip the robust seek retry loop.
+        // ====================================================================
+        if (Math.abs(video.currentTime - resumeSeconds) < 2) {
+            log.info('WebOSPlayer: Robust resume target already reached (via media fragment). Skipping retry loop.');
+            this._robustSeekTarget = null;
+            return;
+        }
+
         const tryApply = () => {
             if (this._cancelRobustResume || this._robustSeekTarget === null) return;
 
@@ -752,7 +834,12 @@ export class WebOSPlayer {
             if (resumeSeconds >= 5) {
                 // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
                 if (video.readyState >= 3 && video.seekable.length > 0) {
-                    this._seekWithRetry(resumeSeconds);
+                    // Don't start a retry loop if _onPlaying's drift detection already started one
+                    if (!this._robustSeekPending) {
+                        this._seekWithRetry(resumeSeconds);
+                    } else {
+                        log.debug('WebOSPlayer: Robust resume already pending from _onPlaying, skipping');
+                    }
                 } else {
                     setTimeout(tryApply, 300);
                 }
@@ -762,7 +849,11 @@ export class WebOSPlayer {
         tryApply();
     }
 
-    _seekWithRetry(time, attempts = 5) {
+    _seekWithRetry(time, maxRetries = 3) {
+        if (this._robustSeekPending) {
+            log.debug('WebOSPlayer: Seek already pending, skipping concurrent retry');
+            return;
+        }
         this._robustSeekPending = true;
         let tries = 0;
         const video = this._videoElement;
@@ -781,26 +872,125 @@ export class WebOSPlayer {
                 video.currentTime = time;
             } catch (e) {}
 
+            // ----------------------------------------------------------------
+            // Wait 3 seconds per attempt before checking the result.
+            //
+            // We use a generous 10-second acceptance window (matching
+            // JellyfinPlayer's own resume-verification threshold) rather than a
+            // tight 2-second window. Two things widen the apparent gap:
+            //
+            //   1. WebOS hardware seeks to the nearest keyframe, not the exact
+            //      requested timestamp — typically landing 1-5 s away.
+            //
+            //   2. The video keeps playing during the 3-second wait interval,
+            //      so by the time we sample currentTime it has advanced another
+            //      ~3 s past the seek landing point.
+            //
+            // Combined worst-case drift: 5 s (keyframe) + 3 s (playback) = 8 s.
+            // A 10-second window safely covers this while still correctly
+            // identifying genuine failures (video stuck at 0, target at 420 s).
+            // ----------------------------------------------------------------
             setTimeout(() => {
                 if (this._cancelRobustResume) return;
 
-                if (Math.abs(video.currentTime - time) < 2) {
-                    log.debug('WebOSPlayer: Seek successful on attempt', tries);
+                // Measure how far currentTime landed from our requested target.
+                const drift = Math.abs(video.currentTime - time);
+
+                if (drift < 10) {
+                    // Within 10 s of target — seek landed on a keyframe boundary
+                    // and the video has been playing forward. Accept as success.
+                    log.debug(`WebOSPlayer: Seek accepted on attempt ${tries} (drift ${drift.toFixed(2)} s from target ${time} s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
                     if (!video.paused) this._onPlaying();
-                } else if (tries < attempts) {
-                    log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
+                } else if (tries < maxRetries) {
+                    // Still far from target — video may not have seeked yet.
+                    log.debug(`WebOSPlayer: Seek still off (current: ${video.currentTime.toFixed(2)} s, target: ${time} s, drift: ${drift.toFixed(2)} s) — retrying, attempt ${tries + 1}`);
                     attempt();
                 } else {
-                    log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
+                    // All retries exhausted and still far from target — genuine failure.
+                    log.warn(`WebOSPlayer: Seek failed after ${maxRetries} retries (final drift: ${drift.toFixed(2)} s from target ${time} s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
+
+                    // Emit event so JellyfinPlayer can restart with Remux mode
+                    this.onEvent({
+                        type: 'resumeseekfailed',
+                        data: { targetPositionTicks: Math.round(time * 10000000) }
+                    });
+
                     if (!video.paused) this._onPlaying();
                 }
-            }, 500);
+            }, 3000);
         };
         attempt();
+    }
+
+    /**
+     * Resume seek-then-play helper.
+     *
+     * Called from both _playNativeHls and _playNativeDirect canplay handlers.
+     * Seeks to the resume target BEFORE calling play(), and waits for the seeked
+     * event to confirm the seek took effect. On WebOS Chromium, calling play()
+     * first and then seeking to an unbuffered position silently discards the
+     * seek — the native media pipeline starts playback from 0 and ignores the
+     * currentTime assignment.
+     *
+     * @private
+     * @param {HTMLVideoElement} video
+     * @param {Object}           options  - Play options
+     * @param {Function}         resolve  - Promise resolve
+     * @param {Function}         reject   - Promise reject
+     */
+    _resumeSeekThenPlay(video, options, resolve, reject) {
+        const resumeSeconds = this._robustSeekTarget;
+        if (resumeSeconds !== null && resumeSeconds !== undefined && resumeSeconds > 0) {
+            log.info('WebOSPlayer: Applying resume seek at canplay for', resumeSeconds, 's');
+
+            let seekCompleted = false;
+            let seekTimeout = null;
+
+            const onSeeked = () => {
+                video.removeEventListener('seeked', onSeeked);
+                if (seekTimeout) clearTimeout(seekTimeout);
+                seekCompleted = true;
+                log.debug('WebOSPlayer: Seek completed before play');
+                this._doPlayWithResume(video, options, resolve, reject);
+            };
+
+            video.addEventListener('seeked', onSeeked);
+            video.currentTime = resumeSeconds;
+
+            seekTimeout = setTimeout(() => {
+                video.removeEventListener('seeked', onSeeked);
+                if (!seekCompleted) {
+                    log.warn('WebOSPlayer: Seek at canplay timed out — starting playback from current position');
+                    this._doPlayWithResume(video, options, resolve, reject);
+                }
+            }, 10000);
+        } else {
+            this._doPlayWithResume(video, options, resolve, reject);
+        }
+    }
+
+    /**
+     * Play the video and apply the robust resume safety net.
+     * Extracted so both _resumeSeekThenPlay and the no-seek path converge.
+     * @private
+     */
+    _doPlayWithResume(video, options, resolve, reject) {
+        const playPromise = video.play();
+        if (playPromise !== undefined && typeof playPromise.then === 'function') {
+            playPromise
+                .then(() => {
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                })
+                .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+        } else {
+            this._applyRobustResume(video, options.playerStartPositionTicks);
+            resolve();
+        }
     }
 
     /**
@@ -890,6 +1080,24 @@ export class WebOSPlayer {
                 parent.appendChild(video);
                 log.debug('stop(): video element cycled out/in DOM to flush GPU surface');
             }
+        }
+
+        // Clean up audio normalization
+        if (this._gainNode) {
+            try {
+                this._gainNode.disconnect();
+            } catch (e) {
+                // ignore
+            }
+            this._gainNode = null;
+        }
+        if (this._audioContext) {
+            try {
+                this._audioContext.close();
+            } catch (e) {
+                // ignore
+            }
+            this._audioContext = null;
         }
 
         this._currentSrc         = null;
@@ -1630,13 +1838,28 @@ export class WebOSPlayer {
     _onPlaying() {
         if (this._robustSeekTarget !== null && this._robustSeekTarget !== undefined) {
             const target = this._robustSeekTarget;
-            // If we drifted past the target
-            if (Math.abs(this.getCurrentTime() - target) > 2) {
-                log.info(`WebOSPlayer: Detected position drift (current: ${this.getCurrentTime()}, expected: ${target}), applying robust seek`);
+            const current = this.getCurrentTime();
+            const drift   = Math.abs(current - target);
+
+            // ----------------------------------------------------------------
+            // Drift gate: use a 10-second window (matching JellyfinPlayer's
+            // resume-verification threshold) instead of a tight 2-second one.
+            //
+            // WebOS hardware seeks to the nearest keyframe, which can be up to
+            // 5 s away from the requested time. If the video is already within
+            // 10 s of the target when 'playing' fires, the seek (or media-
+            // fragment hint) worked — no retry needed.
+            //
+            // We only escalate to _seekWithRetry when the position is truly
+            // far off (e.g. video still stuck at 0 s when target is 420 s).
+            // ----------------------------------------------------------------
+            if (drift >= 10) {
+                log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)} s, expected: ${target} s, drift: ${drift.toFixed(2)} s) — applying robust seek`);
                 this._seekWithRetry(target);
-                return; // suppress this playing event
+                return; // suppress this playing event until seek resolves
             } else {
-                // No drift, we are good.
+                // Close enough — keyframe boundary or minor offset. Accept.
+                log.debug(`WebOSPlayer: Resume target reached (current: ${current.toFixed(2)} s, target: ${target} s, drift: ${drift.toFixed(2)} s). Clearing seek guard.`);
                 this._robustSeekTarget = null;
             }
         }

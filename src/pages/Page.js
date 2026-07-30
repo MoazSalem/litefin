@@ -15,6 +15,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
 import { navigationState } from '../core/NavigationState.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('Page');
@@ -186,6 +187,11 @@ class Page extends Component {
      * Clean up the page
      */
     destroy() {
+        // Clean up lazy loader observers before removing DOM
+        if (this.el) {
+            lazyLoader.clearContainer(this.el);
+        }
+
         // Unregister focus sections
         for (const name of this._focusSections) {
             focusManager.unregister(name);

@@ -75,6 +75,7 @@ html[data-layout-login="modern"] .login-tagline {
     line-height: 1.4;
 }
 
+/* Right Content Area Base */
 html[data-layout-login="modern"] .login-section {
     flex: 1;
     display: flex;

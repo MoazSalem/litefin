@@ -57,7 +57,7 @@ class LayoutManager {
         this._loginPageLayout = 'classic';
 
         // Current theme mode
-        // Ambient Glow is now the default theme mode for a premium glassmorphic Apple TV style look.
+        // Ambient Glow is now the default theme mode for a premium glassmorphic look.
         this._themeMode = THEME_MODES.AMBIENT;
 
         // Current theme color (HEX)
@@ -74,8 +74,6 @@ class LayoutManager {
 
         // Card label text scale multiplier
         this._cardLabelScale = 1.0;
-
-
 
         // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
         this._lowVramMode = false;
@@ -388,6 +386,7 @@ class LayoutManager {
         let dynamicCss = `html[data-theme-mode="${this._themeMode}"] {
             --jf-accent: ${accents.accent};
             --jf-accent-rgb: ${accents.accentRgb};
+            --jf-accent-dark-rgb: ${accents.accentDarkRgb};
             --jf-accent-hover: ${accents.accentHover};
             --jf-accent-active: ${accents.accentActive};
             --jf-accent-light: ${accents.accentLight};
@@ -407,7 +406,7 @@ class LayoutManager {
             const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
             dynamicCss += `
             --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
-            --jf-text-secondary: ${isLight ? '#666666' : '#999999'};
+            --jf-text-secondary: ${isLight ? '#666666' : 'rgba(255, 255, 255, 0.8)'};
             --jf-text-tertiary: ${isLight ? '#888888' : '#666666'};
             
             --text-primary: var(--jf-text-primary);
@@ -433,7 +432,7 @@ class LayoutManager {
             --jf-divider: ${tints.divider};
             --jf-navbar-bg: ${tints.background};`;
         } else if (this._themeMode === THEME_MODES.AMBIENT) {
-            // Elegant, matte ultra-dark background matching Apple's Human Interface Guidelines.
+            // Elegant, matte ultra-dark background.
             // A deeply saturated charcoal canvas serves as the foundation.
             // Translucent material cards absorb the dynamically-cast ambient gradients.
             dynamicCss += `
@@ -506,6 +505,13 @@ class LayoutManager {
         if (font && font !== 'default') document.documentElement.setAttribute('data-ui-font', font);
         else document.documentElement.removeAttribute('data-ui-font');
         if (save) storage.setItem('litefin:uiFont', font);
+
+        // Load the fallback font dynamically if selected
+        if (font === 'fallback-font') {
+            import('../utils/FontLoader.js').then((module) => {
+                module.default.loadFont('fallback-font');
+            });
+        }
     }
 
     getRoundedCorners() {
@@ -571,8 +577,6 @@ class LayoutManager {
         return this._cardLabelScale;
     }
 
-
-
     /**
      * Get the active button style configuration
      * @returns {string} One of: 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb'
@@ -583,14 +587,23 @@ class LayoutManager {
 
     /**
      * Sets the active button style theme and updates HTML attributes immediately.
-     * Follows Apple's visual clarity recommendations, ensuring high legibility
-     * and premium spring-like focus behaviors.
      * @param {string} style - Selected button style
      * @param {boolean} [save=true] - If true, persist value to localStorage
      */
     setButtonStyle(style, save = true) {
         // Validation check for allowed styles to avoid any UI/rendering inconsistencies
-        if (!['theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+        if (
+            ![
+                'theme-default',
+                'theme-inverted',
+                'monochrome-bw',
+                'monochrome-wb',
+                'white-accent',
+                'black-accent',
+                'accent-white',
+                'accent-black'
+            ].includes(style)
+        ) {
             log.warn(`Invalid button style type specified: "${style}"`);
             return;
         }
@@ -702,7 +715,19 @@ class LayoutManager {
     }
 
     setOsdButtonStyle(style, save = true) {
-        if (!['follow-global', 'theme-default', 'theme-inverted', 'monochrome-bw', 'monochrome-wb', 'white-accent', 'black-accent', 'accent-white', 'accent-black'].includes(style)) {
+        if (
+            ![
+                'follow-global',
+                'theme-default',
+                'theme-inverted',
+                'monochrome-bw',
+                'monochrome-wb',
+                'white-accent',
+                'black-accent',
+                'accent-white',
+                'accent-black'
+            ].includes(style)
+        ) {
             log.warn(`Invalid OSD button style specified: "${style}"`);
             return;
         }
@@ -738,7 +763,9 @@ class LayoutManager {
     }
 
     setOsdButtonShape(shape, save = true) {
-        if (!['circle', 'rounded-square', 'squircle', 'organic-leaf', 'hexagon', 'outline', 'icon-only'].includes(shape)) {
+        if (
+            !['circle', 'rounded-square', 'squircle', 'organic-leaf', 'hexagon', 'outline', 'icon-only'].includes(shape)
+        ) {
             log.warn(`Invalid OSD button shape specified: "${shape}"`);
             return;
         }
@@ -818,8 +845,6 @@ class LayoutManager {
         log.info(`OSD seek bar progress color updated: ${color}`);
         eventBus.emit('osdSeekBarProgressColor:changed', { color });
     }
-
-
 
     /**
      * Enable or disable Low VRAM Mode

@@ -2,7 +2,6 @@
  * ============================================================================
  * Litefin Tizen - Ambient Glow Mode
  * ============================================================================
- * An Apple / macOS inspired theme mode that creates a highly premium,
  * immersive dynamic background glow matching the active accent color.
  * Surfaces are set to semi-translucent material variables for a gorgeous,
  * integrated volumetric layout.
@@ -69,7 +68,7 @@
  * behind the collapsed sidebar and settings side menus instead of clipping.
  */
 [data-theme-mode="ambient"] body {
-    /* 1. Base Apple-inspired deep charcoal color layer */
+    /* 1. Base deep charcoal color layer */
     background-color: var(--jf-background) !important;
     
     /* 2. Composed volumetric light layers reflecting the active accent */
@@ -153,13 +152,50 @@
 
 [data-theme-mode="ambient"] .sidebar.expanded,
 [data-theme-mode="ambient"] .sidebar:hover {
-    /* 1. Seamless Apple-style solid gradient when expanded */
+    /* 1. Seamless solid gradient when expanded */
     /* Flows from a rich accent glow (15%) at the top-left to a deep matte charcoal at the bottom-right */
     /* Layered over solid base color #0a0b0c to prevent background elements from bleeding through */
     background: linear-gradient(135deg,rgba(var(--jf-accent-rgb),0) 0,rgba(var(--jf-accent-rgb),.2) 50%,rgba(5,5,6,.99) 150%),#0a0b0c!important;
     
     /* 2. Keep shadows off to maintain flawless scroll frames */
     box-shadow: none !important;
+}
+
+/* User preference overrides for ambient theme mode */
+[data-theme-mode="ambient"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    background: transparent !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.semi-transparent-collapsed:not(.expanded):not(:hover) {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.tinted-semi-collapsed:not(.expanded):not(:hover) {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.black-collapsed:not(.expanded):not(:hover) {
+    background: #000000 !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.transparent-expanded.expanded,
+[data-theme-mode="ambient"] .sidebar.transparent-expanded:hover {
+    background: transparent !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.semi-transparent-expanded.expanded,
+[data-theme-mode="ambient"] .sidebar.semi-transparent-expanded:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.tinted-semi-expanded.expanded,
+[data-theme-mode="ambient"] .sidebar.tinted-semi-expanded:hover {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.85) !important;
+}
+
+[data-theme-mode="ambient"] .sidebar.black-expanded.expanded,
+[data-theme-mode="ambient"] .sidebar.black-expanded:hover {
+    background: #000000 !important;
 }
 
 [data-theme-mode="ambient"] .settings-sidebar {
@@ -192,8 +228,6 @@
  * ============================================================================
  * HIGH-CONTRAST FOCUS ACCESSIBILITY OVERRIDES
  * ============================================================================
- * On macOS and Apple-inspired systems, focus states must remain beautifully
- * legible even when placed on top of high-vibrancy colored backing layers.
  * Since the sliding focus indicator capsule is colored using --jf-accent (the
  * active accent color, e.g. vibrant pink/red), any text or SVGs on top of it
  * must be forced to use --jf-primary-btn-color (typically pure white) to 

@@ -280,7 +280,7 @@ export class SyncPlayGroupMenu {
         // ====================================================================
         // Update Header Icon Active State
         // ====================================================================
-        // We set the innerHTML to the unified group icon and toggle the active 
+        // We set the innerHTML to the unified group icon and toggle the active
         // class, allowing CSS to dynamically display the filled/outline state.
         const iconContainer = this._overlay.querySelector('.syncplay-icon');
         if (iconContainer) {

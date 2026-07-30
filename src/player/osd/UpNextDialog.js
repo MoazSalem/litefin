@@ -72,6 +72,14 @@ export default class UpNextDialog extends BaseMenu {
          * @type {number}
          */
         this._initialSecondsRemaining = 0;
+
+        /**
+         * Timer reference for the 5-second OSD sync window.
+         * After floating independently for 5 seconds, the dialog syncs its
+         * visibility with the OSD controls.
+         * @type {number|null}
+         */
+        this._syncTimer = null;
     }
 
     // =========================================================================
@@ -118,17 +126,24 @@ export default class UpNextDialog extends BaseMenu {
 
         // Locate the countdown text wrapper inside our card template
         const countdownEl = this.$el.querySelector('.upnext-countdown');
-        
+
         // Ensure the element is found before manipulating it
         if (countdownEl) {
+            // Read active style to determine formatting
+            const style = PlayerSettings.get('nextUpDialogStyle') || 'normal';
             // =================================================================
             // AutoPlay State Branching
             // =================================================================
             // Read active preference to see if automatic queue traversal is active.
             if (PlayerSettings.get('enableNextEpisodeAutoPlay')) {
-                // Autoplay is enabled: show the standard live countdown text
-                // "Starting in 28s" - falls back gracefully to default translation
-                countdownEl.textContent = i18n.t('NextEpisodeStartsIn', [secondsRemaining]);
+                // If it is button, we wrap it in parentheses for the button label context, e.g. " (15s)"
+                if (style === 'button') {
+                    countdownEl.textContent = ` (${secondsRemaining}s)`;
+                } else {
+                    // Autoplay is enabled: show the standard live countdown text
+                    // "Starting in 28s" - falls back gracefully to default translation
+                    countdownEl.textContent = i18n.t('NextEpisodeStartsIn', [secondsRemaining]);
+                }
             } else {
                 // Autoplay is disabled: blank out countdown to avoid false promises
                 countdownEl.textContent = '';
@@ -145,54 +160,125 @@ export default class UpNextDialog extends BaseMenu {
      * Following the exact pattern used by PlaybackInfo.render().
      */
     render() {
-        const html = `
-            <div class="upnext-dialog" id="upNextDialog">
-                <!-- Content row: thumbnail + text info side by side -->
-                <div class="upnext-content-row">
-                    <!-- Small thumbnail of the next episode (16:9 aspect ratio) -->
-                    <div class="upnext-thumbnail-wrap">
-                        <img class="upnext-thumbnail" alt="" />
-                        <!-- Episode number badge overlaid on the thumbnail (e.g. S2E5) -->
-                        <span class="upnext-badge"></span>
-                    </div>
+        const style = PlayerSettings.get('nextUpDialogStyle') || 'normal';
+        let html = '';
 
-                    <!-- Text info block beside the thumbnail -->
-                    <div class="upnext-info">
-                        <!-- Persistent "UP NEXT" eyelet label -->
-                        <span class="upnext-label">${i18n.t('HeaderUpNext')}</span>
-
-                        <!-- Series name (secondary line above episode title) -->
-                        <span class="upnext-series"></span>
-
-                        <!-- Episode title (primary, larger text) -->
-                        <span class="upnext-title"></span>
-
-                        <!-- Combined rating + countdown row -->
-                        <div class="upnext-meta">
-                            <!-- Content rating badge (e.g. TV-MA, PG-13) -->
-                            <span class="upnext-rating"></span>
-                            <!-- Countdown: "Starting in 28s" -->
-                            <span class="upnext-countdown"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Action buttons: Play Now and Hide -->
-                <div class="upnext-actions">
+        if (style === 'button') {
+            /*
+             * Button Style:
+             * Renders as a single skip-intro style pill button with localized CTA text,
+             * countdown, and arrow micro-animation.
+             */
+            html = `
+                <div class="upnext-dialog upnext-style-button" id="upNextDialog">
                     <button
                         class="upnext-btn upnext-btn-play"
                         tabindex="0"
                         data-upnext-action="play"
-                    >${i18n.t('ButtonPlay')}</button>
-
-                    <button
-                        class="upnext-btn upnext-btn-hide"
-                        tabindex="0"
-                        data-upnext-action="hide"
-                    >${i18n.t('ButtonHide')}</button>
+                    >
+                        <span class="upnext-compact-label">${i18n.t('StartNextEpisode') || 'Start Next Episode'}</span>
+                        <span class="upnext-countdown"></span>
+                    </button>
                 </div>
-            </div>
-        `;
+            `;
+        } else if (style === 'compact') {
+            /*
+             * Compact Style:
+             * Renders Play Now and Hide buttons with only the episode name, as compact as possible.
+             */
+            html = `
+                <div class="upnext-dialog upnext-style-compact" id="upNextDialog">
+                    <div class="upnext-content-row">
+                        <div class="upnext-info">
+                            <span class="upnext-title"></span>
+                            <div class="upnext-meta">
+                                <span class="upnext-countdown"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="upnext-actions">
+                        <button
+                            class="upnext-btn upnext-btn-play"
+                            tabindex="0"
+                            data-upnext-action="play"
+                        >${i18n.t('ButtonPlay')}</button>
+                        <button
+                            class="upnext-btn upnext-btn-hide"
+                            tabindex="0"
+                            data-upnext-action="hide"
+                        >${i18n.t('ButtonHide')}</button>
+                    </div>
+                </div>
+            `;
+        } else if (style === 'no_image') {
+            /*
+             * No Image Style:
+             * Identical to the standard layout but omits the thumbnail wrap.
+             */
+            html = `
+                <div class="upnext-dialog upnext-style-no-image" id="upNextDialog">
+                    <div class="upnext-content-row">
+                        <div class="upnext-info">
+                            <span class="upnext-label">${i18n.t('HeaderUpNext')}</span>
+                            <span class="upnext-series"></span>
+                            <span class="upnext-title"></span>
+                            <div class="upnext-meta">
+                                <span class="upnext-rating"></span>
+                                <span class="upnext-countdown"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="upnext-actions">
+                        <button
+                            class="upnext-btn upnext-btn-play"
+                            tabindex="0"
+                            data-upnext-action="play"
+                        >${i18n.t('ButtonPlay')}</button>
+                        <button
+                            class="upnext-btn upnext-btn-hide"
+                            tabindex="0"
+                            data-upnext-action="hide"
+                        >${i18n.t('ButtonHide')}</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            /*
+             * Normal Style:
+             * Standard layout with thumbnail + details metadata.
+             */
+            html = `
+                <div class="upnext-dialog" id="upNextDialog">
+                    <div class="upnext-content-row">
+                        <div class="upnext-thumbnail-wrap">
+                            <img class="upnext-thumbnail" alt="" />
+                            <span class="upnext-badge"></span>
+                        </div>
+                        <div class="upnext-info">
+                            <span class="upnext-label">${i18n.t('HeaderUpNext')}</span>
+                            <span class="upnext-series"></span>
+                            <span class="upnext-title"></span>
+                            <div class="upnext-meta">
+                                <span class="upnext-rating"></span>
+                                <span class="upnext-countdown"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="upnext-actions">
+                        <button
+                            class="upnext-btn upnext-btn-play"
+                            tabindex="0"
+                            data-upnext-action="play"
+                        >${i18n.t('ButtonPlay')}</button>
+                        <button
+                            class="upnext-btn upnext-btn-hide"
+                            tabindex="0"
+                            data-upnext-action="hide"
+                        >${i18n.t('ButtonHide')}</button>
+                    </div>
+                </div>
+            `;
+        }
 
         // Inject into the shared overlay container (same as PlaybackInfo / SubtitleOffset)
         const overlays = this.osd._osdEl.querySelector('.osd-overlays');
@@ -200,15 +286,27 @@ export default class UpNextDialog extends BaseMenu {
             const temp = document.createElement('div');
             temp.innerHTML = html.trim();
             this.$el = temp.firstElementChild;
+
+            // Set customization scale CSS property variable
+            const scale = PlayerSettings.get('nextUpDialogScale') || 1.0;
+            this.$el.style.setProperty('--upnext-scale', scale);
+
             overlays.appendChild(this.$el);
 
             // Wire click handlers for mouse/touch users
-            this.$el.querySelector('[data-upnext-action="play"]').addEventListener('click', () => {
-                this._triggerPlayNow();
-            });
-            this.$el.querySelector('[data-upnext-action="hide"]').addEventListener('click', () => {
-                this.osd.hideUpNext();
-            });
+            const playBtn = this.$el.querySelector('[data-upnext-action="play"]');
+            if (playBtn) {
+                playBtn.addEventListener('click', () => {
+                    this._triggerPlayNow();
+                });
+            }
+
+            const hideBtn = this.$el.querySelector('[data-upnext-action="hide"]');
+            if (hideBtn) {
+                hideBtn.addEventListener('click', () => {
+                    this.osd.hideUpNext();
+                });
+            }
         }
 
         // Populate with whatever item was already set
@@ -226,9 +324,20 @@ export default class UpNextDialog extends BaseMenu {
         // Lazy-render on first show
         if (!this.$el) {
             this.render();
+        } else {
+            // Update scale if already rendered
+            const scale = PlayerSettings.get('nextUpDialogScale') || 1.0;
+            this.$el.style.setProperty('--upnext-scale', scale);
         }
 
         if (!this.$el) return; // Bail if render failed (no overlay container yet)
+
+        // Clear any existing sync timer and strip sync-osd class so it shows independently at first
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+            this._syncTimer = null;
+        }
+        this.$el.classList.remove('sync-osd');
 
         // Call BaseMenu.show() to add .visible class
         super.show();
@@ -239,12 +348,36 @@ export default class UpNextDialog extends BaseMenu {
 
         // Rebuild overlay focus cache so D-pad navigation sees these buttons
         this.osd._cacheFocusableElements();
+
+        /*
+         * =====================================================================
+         * VISIBILITY SYNC WITH OSD:
+         * Float independently for 5 seconds upon first appearing. After 5 seconds,
+         * attach the .sync-osd class so the dialog hides and shows together
+         * with the main OSD control interface.
+         * =====================================================================
+         */
+        this._syncTimer = setTimeout(() => {
+            this._syncTimer = null;
+            if (this.isVisible && this.$el) {
+                this.$el.classList.add('sync-osd');
+            }
+        }, 5000);
     }
 
     /**
-     * Hide the dialog and clean up the countdown timer.
+     * Hide the dialog and clean up the countdown timer and sync state.
      */
     hide() {
+        // Clear sync timer and remove sync class on hide
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+            this._syncTimer = null;
+        }
+        if (this.$el) {
+            this.$el.classList.remove('sync-osd');
+        }
+
         // Call BaseMenu.hide() to remove .visible class
         super.hide();
 
@@ -276,10 +409,12 @@ export default class UpNextDialog extends BaseMenu {
         const prevAction = isRTL ? 'right' : 'left';
         const nextAction = isRTL ? 'left' : 'right';
 
+        const buttons = this.$el?.querySelectorAll('.upnext-btn') || [];
+
         switch (key) {
             case prevAction: {
                 // Move from Hide → Play Now, or exit left to other overlay widgets
-                if (this._focusedButton > 0) {
+                if (this._focusedButton > 0 && buttons.length > 1) {
                     this._focusedButton--;
                     this._updateButtonFocus();
                     return true;
@@ -290,7 +425,7 @@ export default class UpNextDialog extends BaseMenu {
 
             case nextAction: {
                 // Move from Play Now → Hide, or exit right to other overlay widgets
-                if (this._focusedButton < 1) {
+                if (this._focusedButton < buttons.length - 1 && buttons.length > 1) {
                     this._focusedButton++;
                     this._updateButtonFocus();
                     return true;
@@ -327,6 +462,10 @@ export default class UpNextDialog extends BaseMenu {
      * Clean up when the OSD is destroyed.
      */
     destroy() {
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+            this._syncTimer = null;
+        }
         this._stopCountdown();
         super.destroy();
     }
@@ -349,16 +488,37 @@ export default class UpNextDialog extends BaseMenu {
         // ---- Episode title --------------------------------------------------
         const titleEl = this.$el.querySelector('.upnext-title');
         if (titleEl) {
-            // For episodes use "Episode N – Name", fallback to raw Name
-            const epNum = item.IndexNumber ? `E${item.IndexNumber}` : '';
-            const epName = item.Name || '';
-            titleEl.textContent = epNum && epName ? `${epNum} – ${epName}` : epName;
+            const style = PlayerSettings.get('nextUpDialogStyle') || 'normal';
+            const pad = (num) => String(num || 0).padStart(2, '0');
+            const season = item.ParentIndexNumber != null ? `S${pad(item.ParentIndexNumber)}` : '';
+            const ep = item.IndexNumber != null ? `E${pad(item.IndexNumber)}` : '';
+            const badgePrefix = season && ep ? `${season}${ep}` : (season || ep);
+
+            if ((style === 'no_image' || style === 'compact') && badgePrefix) {
+                titleEl.textContent = `${badgePrefix} - ${item.Name || ''}`;
+            } else {
+                titleEl.textContent = item.Name || '';
+            }
+        }
+        // ---- Compact Label (button style CTA) -------------------------------
+        const compactLabelEl = this.$el.querySelector('.upnext-compact-label');
+        if (compactLabelEl) {
+            const pad = (num) => String(num || 0).padStart(2, '0');
+            const season = item.ParentIndexNumber != null ? `S${pad(item.ParentIndexNumber)}` : '';
+            const ep = item.IndexNumber != null ? `E${pad(item.IndexNumber)}` : '';
+            const badgePrefix = season && ep ? `${season}${ep}` : (season || ep);
+
+            if (badgePrefix) {
+                compactLabelEl.textContent = `${i18n.t('ButtonStart') || 'Start'} ${badgePrefix}`;
+            } else {
+                compactLabelEl.textContent = i18n.t('StartNextEpisode') || 'Start Next Episode';
+            }
         }
 
         // ---- Series name (parent series title) ------------------------------
         const seriesEl = this.$el.querySelector('.upnext-series');
         if (seriesEl) {
-            seriesEl.textContent = item.SeriesName || '';
+            seriesEl.style.display = 'none';
         }
 
         // ---- Episode badge (e.g. "S02E05") ----------------------------------
@@ -458,6 +618,11 @@ export default class UpNextDialog extends BaseMenu {
         if (!this.$el) return;
 
         const buttons = this.$el.querySelectorAll('.upnext-btn');
+
+        // Force focus index to 0 if there is only 1 button (e.g., button mode)
+        if (buttons.length === 1) {
+            this._focusedButton = 0;
+        }
 
         /*
          * IMPORTANT: Clear .focused from the ENTIRE OSD overlay section first.

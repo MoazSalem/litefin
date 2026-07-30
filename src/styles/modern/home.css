@@ -441,22 +441,6 @@ html[data-layout-media-rows="modern"] .media-card.focused .card-overlay-label {
 }
 
 /* =========================================================================
-   Animations
-   ========================================================================= */
-
-@-webkit-keyframes focusPulse {
-    0% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
-    50% { box-shadow: inset 0 0 0 5px var(--jf-accent); opacity: 0.85; }
-    100% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
-}
-
-@keyframes focusPulse {
-    0% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
-    50% { box-shadow: inset 0 0 0 5px var(--jf-accent); opacity: 0.85; }
-    100% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
-}
-
-/* =========================================================================
    Modern Progress Bar (Floating Style)
    ========================================================================= */
 
@@ -498,10 +482,6 @@ html[data-layout-media-rows="modern"] .quality-badge {
     top: 22px;
     z-index: 5;
     font-weight: 700;
-    
-    /* PERFORMANCE: Replaced 15px blur shadow with highly optimized 4px shadow to save GPU composition bandwidth. */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-    
     pointer-events: none;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -548,27 +528,11 @@ html[data-layout-media-rows="modern"] .played-badge ~ .quality-badge,
 html[data-layout-media-rows="modern"] .count-badge ~ .quality-badge {
     right: 74px;
 }
-html[data-layout-media-rows="modern"] .media-row--skeleton .card-image {
-    background: linear-gradient(90deg, 
-        var(--jf-surface, rgba(255,255,255,0.05)) 25%, 
-        var(--jf-surface-hover, rgba(255,255,255,0.1)) 50%, 
-        var(--jf-surface, rgba(255,255,255,0.05)) 75%
-    );
-    background-size: 200% 100%;
-    animation: modern-shimmer 2s infinite linear;
-}
-
-@keyframes modern-shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
 /* =========================================================================
    Modern Gradient Fallback Expansion Improvements
    ========================================================================= */
 
 /* 
-   Apple-Style Initials Dissolve Transition:
    When a poster using a fallback gradient is hovered or D-pad focused, it
    smoothly expands to 600px width. We dissolve the initials (opacity: 0)
    with a clean ease curve so they don't overlap or clash with the beautiful

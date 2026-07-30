@@ -91,7 +91,10 @@ const DEFAULTS = {
     enableFlacInVideo: false,
 
     // Audio normalization mode ('Off', 'TrackGain', 'AlbumGain')
-    audioNormalization: 'Off',
+    audioNormalization: 'TrackGain',
+
+    // Disable VBR audio encoding (force CBR)
+    disableVbrAudio: false,
 
     // =========================================================================
     // VIDEO SETTINGS
@@ -115,6 +118,9 @@ const DEFAULTS = {
 
     // Remember tracks for session (automatically carry active audio and subtitle to next episode)
     rememberTracksForSession: true,
+
+    // Prefer external subtitle tracks over internal ones
+    preferExternalSubtitles: false,
 
     // Subtitle text size ('small', 'medium', 'large', 'larger', 'extralarge', 'custom')
     subtitleSize: 'medium',
@@ -158,6 +164,8 @@ const DEFAULTS = {
                         limited hardware, but doesn't support complex typesetting.
          'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
                          accurate styling and drawing support.
+         'assjs'      — Lightweight DOM-based renderer (ass.js). Uses browser
+                        native font fallback. Experimental on Tizen AVPlay.
        ------------------------------------------------------------------------- */
     assRenderer: 'libjass',
 
@@ -191,6 +199,10 @@ const DEFAULTS = {
     // Enable user-defined outline and shadow thickness overrides for ASS
     subtitleOverrideAssOutlineShadow: false,
 
+    // Master toggle for ASS style modifications (font, outline, shadow, scaling, spacing).
+    // When disabled, ASS subtitles render using their original embedded styles as-is.
+    enableAssStyleModifications: false,
+
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
 
@@ -219,6 +231,14 @@ const DEFAULTS = {
        affecting the standard readability of subtitles in SDR content.
        ------------------------------------------------------------------------- */
     subtitleTextOpacityHdr: 100,
+
+    /* -------------------------------------------------------------------------
+       OSD HDR DARKER WHITE
+       -------------------------------------------------------------------------
+       Toggle to make the whole OSD darker in HDR by overriding white/light-grey
+       elements with subtitle dark grey color instead.
+       ------------------------------------------------------------------------- */
+    osdHdrDarkerWhite: true,
 
     // Subtitle background color
     subtitleTextBackground: 'transparent',
@@ -403,6 +423,15 @@ const DEFAULTS = {
      */
     enableNextUpDialog: true,
 
+    // Up Next dialog layout style ('normal', 'no_image', 'compact', 'button')
+    nextUpDialogStyle: 'normal',
+
+    // Up Next dialog scale multiplier (e.g. 0.75, 1.0, 1.25, 1.5)
+    nextUpDialogScale: 1.0,
+
+    // Up Next dialog trigger point mode ('default', 'time_fallback', 'seconds_20', 'seconds_30')
+    nextUpTriggerMode: 'default',
+
     // Show trickplay (sprite-sheet) thumbnail previews when scrubbing through videos.
     // Disable to skip all trickplay calculations and image fetches entirely.
     enableTrickplay: true,
@@ -465,6 +494,12 @@ const DEFAULTS = {
     // Preview/next-episode teaser segment action
     skipActionPreview: 'None',
 
+    // Segment data source preference ('both', 'server', 'chapters')
+    //   'both'     — Merge Intro-Skipper server plugin & Chapter markers (default)
+    //   'server'   — Only use Intro-Skipper server plugin
+    //   'chapters' — Only use Chapter markers (disable server-reported segments)
+    skipSegmentSource: 'both',
+
     // Show show/movie logo in OSD instead of text title
     osdShowLogo: false,
 
@@ -478,7 +513,40 @@ const DEFAULTS = {
     osdLogoSize: 'medium',
 
     // Background opacity of the track menus (0-100)
-    osdTrackMenuBgOpacity: 85
+    osdTrackMenuBgOpacity: 85,
+
+    // Background gradient opacity of the OSD (0-100)
+    osdGradientOpacity: 75,
+
+    // Position of playback control buttons relative to seek bar ('above', 'below')
+    osdButtonsLocation: 'above',
+
+    // Layout configuration of player OSD buttons ('left', 'centered')
+    osdLayout: 'left',
+
+    // Toggle states for showing/hiding specific player buttons
+    osdHideFavorite: true,
+    osdHideInfo: true,
+
+    /*
+     * =========================================================================
+     * BACK BUTTON VISIBILITY DEFAULT
+     * =========================================================================
+     * For native TV apps (Tizen / WebOS), we hide the OSD back button by default
+     * (true) since physical remotes provide a dedicated hardware Back key.
+     *
+     * For desktop/mobile web browsers, we display the OSD back button by default
+     * (false) to ensure users have a clear visual navigation path to return
+     * to the details page without relying on keyboard shortcuts or browser back.
+     * =========================================================================
+     */
+    osdHideBackButton: !platformInfo.isWeb,
+
+    // Combine skip (seek, chapter, track) buttons into single buttons with multi-click actions
+    osdCombineSkipButtons: false,
+
+    // Enable screen lock button in the player overlay (next to play/pause)
+    enableScreenLock: false
 };
 
 /**

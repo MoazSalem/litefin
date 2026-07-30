@@ -22,7 +22,8 @@
 :root {
     --osd-text-color: var(--jf-text-primary, #fff);
     --osd-accent-color: var(--jf-accent);
-    --osd-gradient-dark: rgba(0, 0, 0, 0.75);
+    --osd-gradient-opacity: 0.75;
+    --osd-gradient-dark: rgba(0, 0, 0, 1);
     --osd-slider-bg: rgba(255, 255, 255, 0.3);
     --osd-slider-progress: var(--jf-btn-primary-bg);
     --osd-btn-hover: var(--jf-button-hover, rgba(255, 255, 255, 0.1));
@@ -149,7 +150,6 @@ html[data-osd-progress-color="theme-inverted"] {
     top: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(180deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
     padding: 2.4em 2.4em 4.8em;
     /* 2em*1.2, 4em*1.2 */
     display: -webkit-box;
@@ -158,6 +158,20 @@ html[data-osd-progress-color="theme-inverted"] {
     justify-content: space-between;
     -webkit-box-align: center;
     align-items: center;
+    z-index: 1;
+}
+
+.osd-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(180deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
+    opacity: var(--osd-gradient-opacity, 0.75);
+    z-index: -1;
+    pointer-events: none;
 }
 
 .osd-header-left {
@@ -219,7 +233,7 @@ html[data-osd-progress-color="theme-inverted"] {
 
 .osd-title-logo {
     object-fit: contain;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+    /* PERFORMANCE: Rely on header gradient overlay for image contrast instead of heavy GPU filter: drop-shadow */
     /* Force Hardware acceleration */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -314,8 +328,7 @@ html[data-osd-progress-color="theme-inverted"] {
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
-    padding: 6em 2.4em 3em;
+    padding: 10em 2.4em 3em;
     /* 5em*1.2, 2em*1.2, 2.5em*1.2 */
     display: -webkit-box;
     display: -webkit-flex;
@@ -324,10 +337,24 @@ html[data-osd-progress-color="theme-inverted"] {
     -webkit-box-direction: normal;
     -webkit-flex-direction: column;
     flex-direction: column;
+    z-index: 1;
+}
+
+.osd-bottom::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
+    opacity: var(--osd-gradient-opacity, 0.75);
+    z-index: -1;
+    pointer-events: none;
 }
 
 .player-osd .osd-bottom > * + * {
-    margin-top: 1.8em;
+    margin-top: 1.0em;
 }
 
 /* Controls Row (above slider) */
@@ -366,7 +393,7 @@ html[data-osd-progress-color="theme-inverted"] {
 }
 
 .player-osd .osd-ends-at {
-    margin-left: 2.4em;
+    margin-left: 1.4em;
     /* Increased spacing to separate from buttons */
     font-size: 1.2em;
     /* 1em * 1.2 */
@@ -645,14 +672,18 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     min-width: 5em;
     /* Enough for 00:00:00 with tabular-nums */
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    height: 36px; /* Match seek bar container height for perfect vertical centering */
+    line-height: 1;
 }
 
 .osd-time-current {
-    text-align: right;
+    justify-content: flex-start;
 }
 
 .osd-time-total {
-    text-align: left;
+    justify-content: flex-end;
 }
 
 .osd-slider-container {
@@ -670,8 +701,13 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 /* Seek Tooltip - Shows target time above seekbar during seeking */
 .osd-seek-tooltip {
     position: absolute;
-    top: -60px;
-    /* -50px * 1.2 */
+    /* 
+     * Anchor tooltip using bottom edge rather than fixed top pixel offset.
+     * This guarantees consistent vertical clearance above the seek thumb 
+     * across all TV screen resolutions and font rendering engines (including Tizen).
+     */
+    top: auto;
+    bottom: calc(100% + 14px);
     left: 50%;
     transform: translateX(-50%);
     background: var(--osd-gradient-dark, rgba(0, 0, 0, 0.9));
@@ -718,9 +754,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     /* Let content size the box; JS will set exact thumb dimensions */
     white-space: nowrap;
     padding: 8px 8px 12px;
-    /* Anchor tooltip so the bottom edge sits above the seekbar */
-    top: auto;
-    bottom: calc(100% + 12px);
+    /* Tooltip inherits bottom: calc(100% + 14px) from base class */
 }
 
 /*
@@ -958,7 +992,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .track-menu {
     background: transparent;
     padding: 1.8em;
-    min-width: 600px;
+    min-width: 750px;
     max-width: 90vw;
     max-height: 70vh;
     overflow-y: auto;
@@ -1104,14 +1138,6 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 #debug-overlay .log-info {
     color: #fff;
-}
-
-/* ============================================================================
-   Subtitle Quick Settings Layout Fixes
-   ============================================================================ */
-
-.subtitle-settings-menu {
-    min-width: 650px !important;
 }
 
 /* Internal layout for settings items within the standard .track-option */
@@ -1566,7 +1592,7 @@ body.lyrics-active .subtitle-overlay {
 }
 
 /* ============================================================================
-   SyncPlay Notification Overlay (Apple-Style)
+   SyncPlay Notification Overlay
    ============================================================================ */
 
 .osd-syncplay-notification {
@@ -1584,7 +1610,6 @@ body.lyrics-active .subtitle-overlay {
 }
 
 .osd-syncplay-notification-glass {
-    /* Sleek Apple-style frosted glass */
     background: rgba(30, 30, 30, 0.8);
 
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1616,7 +1641,6 @@ body.lyrics-active .subtitle-overlay {
     width: 100%;
     height: 100%;
     fill: currentColor;
-    filter: drop-shadow(0 0 8px rgba(var(--jf-accent-rgb, 0, 164, 220), 0.6));
 }
 
 .osd-syncplay-notification-text {
@@ -1917,5 +1941,127 @@ html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
     display: inline-block !important;
 }
 
+/* ============================================================================
+   OSD BUTTONS BELOW SEEKBAR LAYOUT
+   ============================================================================ */
+.osd-bottom.buttons-below {
+    display: flex;
+    flex-direction: column;
+}
+.osd-bottom.buttons-below .osd-controls-row {
+    order: 2;
+    margin-top: 1.0em !important;
+    margin-bottom: 0 !important;
+}
+.osd-bottom.buttons-below .osd-slider-row {
+    order: 1;
+    margin-top: 0 !important;
+}
 
+/* ============================================================================
+   OSD CENTERED LAYOUT
+   ============================================================================ */
+.osd-bottom.osd-layout-centered .osd-controls-row {
+    position: relative !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    min-height: 86.4px !important;
+}
+.osd-bottom.osd-layout-centered .osd-ends-at {
+    margin-left: 0.6em !important;
+}
+.osd-bottom.osd-layout-centered .osd-controls-left {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+.osd-bottom.osd-layout-centered .osd-controls-right {
+    display: flex !important;
+    align-items: center !important;
+}
+.osd-bottom.osd-layout-centered .osd-spacer {
+    display: none !important;
+}
 
+/* ============================================================================
+   OSD HDR Darker White Overrides
+   ----------------------------------------------------------------------------
+   Overrides bright white text, headers, icons, and muted elements with dark grey (#a9a9a9).
+   Prevents eye strain in high-brightness HDR modes.
+   Note: --osd-slider-progress is intentionally preserved so user/theme seek bar colors remain untouched.
+   ============================================================================ */
+.player-osd.hdr-darker-white {
+    /* Mute default white text color variables for high dynamic range */
+    --osd-text-color: #a9a9a9 !important;
+    /* Soften seek bar thumb background handle */
+    --osd-thumb-bg: #a9a9a9 !important;
+    /* Mute primary container text fallback */
+    --jf-text-primary: #a9a9a9 !important;
+    /* Adjust unfilled track background to subtle dark grey */
+    --osd-slider-bg: rgba(169, 169, 169, 0.3) !important;
+}
+
+.player-osd.hdr-darker-white .osd-time,
+.player-osd.hdr-darker-white .osd-clock,
+.player-osd.hdr-darker-white .osd-title,
+.player-osd.hdr-darker-white .osd-title-secondary,
+.player-osd.hdr-darker-white .osd-ends-at,
+.player-osd.hdr-darker-white .osd-seek-tooltip-text,
+.player-osd.hdr-darker-white .chapters-modal__title,
+.player-osd.hdr-darker-white .chapters-modal__count,
+.player-osd.hdr-darker-white .queue-modal__title,
+.player-osd.hdr-darker-white .queue-modal__count,
+.player-osd.hdr-darker-white .chapter-row__name,
+.player-osd.hdr-darker-white .chapter-row__time,
+.player-osd.hdr-darker-white .queue-row__name,
+.player-osd.hdr-darker-white .queue-row__subtitle,
+.player-osd.hdr-darker-white .queue-row__number,
+.player-osd.hdr-darker-white .track-menu-title,
+.player-osd.hdr-darker-white .osd-modal-header h2,
+.player-osd.hdr-darker-white .lyrics-modal h2,
+.player-osd.hdr-darker-white .lyrics-line,
+.player-osd.hdr-darker-white .description-modal h2,
+.player-osd.hdr-darker-white .description-overview,
+.player-osd.hdr-darker-white .playback-info-title,
+.player-osd.hdr-darker-white .playback-info-value,
+.player-osd.hdr-darker-white .setting-name,
+.player-osd.hdr-darker-white .setting-description,
+.player-osd.hdr-darker-white .track-option:not(.focused):not(.selected),
+.player-osd.hdr-darker-white .osd-btn:not(:focus):not(.focused):not(.magic-hover):not(.active) {
+    color: #a9a9a9 !important;
+}
+
+.player-osd.hdr-darker-white .osd-btn:not(:focus):not(.focused):not(.magic-hover):not(.active) svg,
+.player-osd.hdr-darker-white .osd-btn:not(:focus):not(.focused):not(.magic-hover):not(.active) .osd-icon {
+    fill: #a9a9a9 !important;
+    color: #a9a9a9 !important;
+}
+
+/* HDR overrides for body-level track-menu-overlay elements
+   (track menus are appended to document.body, not inside .player-osd) */
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) {
+    color: #a9a9a9 !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) svg {
+    fill: #a9a9a9 !important;
+    color: #a9a9a9 !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .track-badge {
+    color: #a9a9a9 !important;
+    border-color: rgba(169, 169, 169, 0.3) !important;
+    background: rgba(169, 169, 169, 0.1) !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .track-option-secondary,
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .track-badges,
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .sub-setting-label,
+body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selected) .sub-setting-value {
+    color: #a9a9a9 !important;
+}
+body.hdr-darker-white .track-menu-overlay .track-menu-title {
+    color: #a9a9a9 !important;
+}

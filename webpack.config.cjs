@@ -32,17 +32,17 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 /**
  * Factory function to generate Webpack plugins required for different tiers.
  * Supports customizing the application icon source.
- * 
+ *
  * @param {string} tier - The build tier ('modern' or 'legacy')
  * @param {object} [options] - Additional options to configure build output
- * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'icon.png')
+ * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'assets/icon.png')
  */
 function getPlugins(tier, options = {}) {
     // Determine the build tier, falling back to 'modern' by default
     const buildTier = tier || 'modern';
-    
-    // Retrieve the source icon path, defaulting to standard icon.png
-    const iconSrc = options.iconSrc || 'icon.png';
+
+    // Retrieve the source icon path, defaulting to standard icon.png in assets/
+    const iconSrc = options.iconSrc || 'assets/icon.png';
 
     // Build files pattern list for CopyWebpackPlugin
     const patterns = [
@@ -50,8 +50,11 @@ function getPlugins(tier, options = {}) {
         { from: 'config.xml', to: 'config.xml' },
         // Copy WebOS app info to root of build directory
         { from: 'appinfo.json', to: 'appinfo.json' },
-        // Copy selected icon file as icon.png to root of build directory
-        { from: iconSrc, to: 'icon.png' },
+        // Copy selected icon file as assets/icon.png to built directory
+        { from: iconSrc, to: 'assets/icon.png' },
+        // Copy WebOS icons from root assets/ to build assets/
+        { from: 'assets/icon-80.png', to: 'assets/icon-80.png' },
+        { from: 'assets/icon-130.png', to: 'assets/icon-130.png' },
         // Copy general assets (images, resources, etc.)
         { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
         // Copy translation localization files
@@ -79,7 +82,7 @@ function getPlugins(tier, options = {}) {
             },
             {
                 from: 'node_modules/@jellyfin/libass-wasm/dist/js/default.woff2',
-                to: 'js/default.woff2',
+                to: 'assets/fonts/default.woff2',
                 noErrorOnMissing: true
             }
         );
@@ -103,17 +106,27 @@ function getPlugins(tier, options = {}) {
 }
 
 // ============================================================================
-// ES6 build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Modern build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Formerly referred to as the "ES6" build tier. Renamed to "Modern" to ensure
+// non-technical users can easily distinguish this as the appropriate package
+// for newer/modern television models.
 // ============================================================================
-const es6Config = {
-    name: 'es6',
+const modernConfig = {
+    // Unique identifier for this configuration used in the CLI build command
+    name: 'modern',
+    // Output production bundle optimization
     mode: 'production',
-    performance: { hints: false },
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // No source maps — keeps the bundle lean for production deployment
     entry: './src/index.js',
 
     output: {
-        path: path.resolve(__dirname, 'dist/es6'),
+        // Output directly into the user-friendly modern folder within dist
+        path: path.resolve(__dirname, 'dist/modern'),
         filename: 'js/[name].js',
         clean: true
     },
@@ -200,8 +213,13 @@ const debugConfig = {
 const normalConfig = {
     name: 'normal',
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // No source maps — production build
-    entry: './src/index.js',
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
 
     output: {
         path: path.resolve(__dirname, 'dist/normal'),
@@ -218,10 +236,11 @@ const normalConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -262,8 +281,19 @@ const normalConfig = {
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
+    target: ['web', 'es5'],
     mode: 'production',
-    entry: ['url-search-params-polyfill', './src/index.js'],
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
+    entry: [
+        'url-search-params-polyfill',
+        './src/utils/DomPolyfills.js',
+        './src/utils/AssJsPolyfills.js',
+        './src/index.js'
+    ],
 
     output: {
         path: path.resolve(__dirname, 'dist/legacy'),
@@ -287,10 +317,11 @@ const legacyConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -339,6 +370,11 @@ const ultraLegacyConfig = {
     name: 'ultra-legacy',
     target: ['web', 'es5'],
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     entry: [
         /*
          * POLYFILL LOAD ORDER — CRITICAL for Chrome 32 / Tizen 2.x:
@@ -382,10 +418,11 @@ const ultraLegacyConfig = {
         rules: [
             {
                 test: /\.m?js$/,
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -487,8 +524,13 @@ const normalOblongConfig = {
     name: 'normal-oblong',
     // Run in production mode for optimization
     mode: 'production',
+    performance: {
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
+        hints: 'warning'
+    },
     // The main app entry point
-    entry: './src/index.js',
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
 
     output: {
         // Output to the specific normal-oblong folder in dist
@@ -510,10 +552,11 @@ const normalOblongConfig = {
             {
                 // Transpile JS using Babel for Chromium 63
                 test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -548,10 +591,10 @@ const normalOblongConfig = {
         ]
     },
 
-    // Load plugins with the modern tier configuration, selecting icon_oblong.png
-    plugins: getPlugins('modern', { iconSrc: 'icon_oblong.png' })
+    // Load plugins with the modern tier configuration, selecting icon_oblong.png from assets/
+    plugins: getPlugins('modern', { iconSrc: 'assets/icon_oblong.png' })
 };
 
 // Export all configs. Run a specific one with --config-name <name>.
 // e.g. npx webpack --config webpack.config.cjs --config-name debug
-module.exports = [es6Config, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];
+module.exports = [modernConfig, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig, normalOblongConfig];

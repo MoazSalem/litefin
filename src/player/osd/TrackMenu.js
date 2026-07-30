@@ -203,8 +203,7 @@ export default class TrackMenu extends BaseMenu {
                 this.updateFocus();
                 return true;
             case 'enter':
-                // Rely on native click event which is triggered by the browser on Enter
-                // The buttons have 'click' event listeners attached in render()
+                this.handleEnter();
                 return true;
             case 'back':
             case 'left':
@@ -213,6 +212,18 @@ export default class TrackMenu extends BaseMenu {
                 return true;
         }
         return false;
+    }
+
+    handleEnter() {
+        if (this.type === 'subtitles') {
+            if (this.focusIndex === 0) {
+                this.switchMode();
+            } else {
+                this.selectTrack(this.focusIndex - 1);
+            }
+        } else {
+            this.selectTrack(this.focusIndex);
+        }
     }
 
     switchMode() {

@@ -131,7 +131,7 @@ export default class SettingsMenu extends BaseMenu {
                 this.updateFocus();
                 return true;
             case 'enter':
-                // Rely on native click event which is triggered by the browser on Enter
+                this.handleEnter();
                 return true;
             case 'back':
             case 'left':

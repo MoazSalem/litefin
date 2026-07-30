@@ -7,7 +7,7 @@
 }
 
 /* Override DetailsPage grid for vertical episode list */
-#episodes-list.vertical-list {
+.vertical-list {
     display: block !important;
 }
 
@@ -27,7 +27,7 @@
 .episode-row {
     display: flex;
     align-items: center;
-    height: 220px;
+    height: 250px;
     margin-bottom: 24px;
     /* PERFORMANCE: Isolate layout calculations */
     /* 'strict' might be too aggressive if content changes size, but 'content' is safer */
@@ -45,7 +45,7 @@
     flex: 1;
     display: flex;
     height: 100%;
-    background: var(--jf-card-bg, rgba(255, 255, 255, 0.05));
+    background: var(--jf-card-bg-darker, rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65));
     border-radius: var(--jf-border-radius);
     overflow: hidden;
     cursor: pointer;
@@ -86,10 +86,9 @@
     -webkit-transform: scale(1.02);
     transform: scale(1.02);
     /* Make it pop slightly less than grid cards */
-    background: var(--jf-card-bg-hover);
+    background: var(--jf-card-bg-darker, rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.85));
     z-index: 10;
     outline: none;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .episode-row-card:focus::after,
@@ -119,7 +118,7 @@
 /* Episode Info Section */
 .episode-row-info {
     flex: 1;
-    padding: 20px 24px;
+    padding: 18px 24px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -136,7 +135,7 @@
 }
 
 .episode-row-title {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 600;
     color: var(--jf-text-primary);
     white-space: nowrap;
@@ -146,7 +145,7 @@
 }
 
 .episode-row-meta {
-    font-size: 1.15rem;
+    font-size: 1.2rem;
     color: var(--jf-text-secondary);
     margin-bottom: 10px;
     display: flex;
@@ -166,14 +165,14 @@
 }
 
 .episode-row-rating svg {
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     margin-right: 4px;
     fill: currentColor;
 }
 
 .episode-row-overview {
-    font-size: 1.15rem;
+    font-size: 1.3rem;
     color: var(--jf-text-secondary);
     line-height: 1.5;
     display: -webkit-box;

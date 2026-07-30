@@ -11,6 +11,7 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('WebOSAdapter');
@@ -202,40 +203,45 @@ class WebOSAdapter {
                 this._setCursorActive(false);
             }
 
+            // Block WebOS default spatial navigation/scrolling unless user is typing in an input field.
             const activeElem = document.activeElement;
-            const isEditingInput =
-                activeElem &&
-                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA') &&
-                !(activeElem.readOnly || activeElem.hasAttribute('readonly'));
-
-            // Intercept Back (Tizen/WebOS) or Escape (Web) to exit editing mode
-            if (isEditingInput && (keyCode === 10009 || keyCode === 461 || keyCode === 27)) {
-                e.preventDefault();
-                activeElem.readOnly = true;
-                activeElem.setAttribute('readonly', 'true');
-                activeElem.blur();
-                return;
-            }
-
-            // Block WebOS default spatial navigation/scrolling unless user is typing in an input field or interacting with a select.
             const isTextInput =
                 activeElem &&
-                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') ||
-                 activeElem.tagName === 'TEXTAREA' ||
-                 activeElem.tagName === 'SELECT');
+                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA');
+
+            /*
+             * Space bar control helper:
+             * We only want to hijack the space bar if the player is actively rendering
+             * on screen. This prevents breaking standard browser scroll functionality
+             * on the settings, details, or library grid pages.
+             */
+            const isPlayerActive = window.location.hash.startsWith('#/player');
 
             if (!isTextInput) {
-                if (
-                    [WEBOS_KEYS.LEFT, WEBOS_KEYS.RIGHT, WEBOS_KEYS.UP, WEBOS_KEYS.DOWN, WEBOS_KEYS.ENTER].includes(
-                        keyCode
-                    )
-                ) {
+                const keysToPrevent = [
+                    WEBOS_KEYS.LEFT,
+                    WEBOS_KEYS.RIGHT,
+                    WEBOS_KEYS.UP,
+                    WEBOS_KEYS.DOWN,
+                    WEBOS_KEYS.ENTER
+                ];
+                if (isPlayerActive && keyCode === 32) {
+                    keysToPrevent.push(32);
+                }
+                if (keysToPrevent.includes(keyCode)) {
                     e.preventDefault();
                 }
             }
 
             // Map key codes to eventBus events
             switch (keyCode) {
+                // Space bar mapping for web/desktop players
+                case 32:
+                    if (!isTextInput && isPlayerActive) {
+                        e.preventDefault();
+                        eventBus.emit('key:playPause', e);
+                    }
+                    break;
                 // Navigation
                 case WEBOS_KEYS.LEFT:
                     eventBus.emit('key:left', e);
@@ -256,6 +262,13 @@ class WebOSAdapter {
                     // LG requires preventDefault on 461 to prevent the app from closing immediately
                     e.preventDefault();
                     eventBus.emit('key:back', e);
+                    break;
+                case 27: // Escape
+                case 8: // Backspace
+                    if (!isTextInput) {
+                        e.preventDefault();
+                        eventBus.emit('key:back', e);
+                    }
                     break;
 
                 case WEBOS_KEYS.PLAY:
@@ -424,6 +437,8 @@ class WebOSAdapter {
      */
     exit() {
         if (this._isWebOS) {
+            // Flush all pending storage writes to disk before exiting.
+            storage.flush();
             log.info('Exiting application via webOS.platformBack()');
             if (window.webOS && typeof window.webOS.platformBack === 'function') {
                 window.webOS.platformBack();

@@ -207,7 +207,7 @@ export class JellyfinPlayer extends EventEmitter {
         // "Auto" (null) means Unlimited/Direct Play.
         this._manualBitrate = PlayerSettings.get('maxBitrateInternet') || null;
         this._isRestarting = false; // Flag to suppress stop events during manual quality change
-        this._playbackMode = 'auto'; // Current playback mode ('auto', 'directPlay', 'transcode', 'remux')
+        this._playbackMode = 'auto'; // Current playback mode ('auto', 'directPlay', 'transcode', 'remux', 'transcodeVideo', 'transcodeAudio')
         
         // ────────────────────────────────────────────────────────────────────
         // Initial Playback Mode Store
@@ -464,8 +464,10 @@ export class JellyfinPlayer extends EventEmitter {
         // Sync internal state
         if (event.type === PlayerEvent.PAUSE) {
             this._isPaused = true;
+            this._subtitleManager?.pause();
         } else if (event.type === PlayerEvent.PLAY || event.type === PlayerEvent.PLAYING) {
             this._isPaused = false;
+            this._subtitleManager?.play();
         }
 
         // Handle timeupdate — tick the SubtitleManager to update cues
@@ -590,6 +592,49 @@ export class JellyfinPlayer extends EventEmitter {
                         this._audioRestartInProgress = false;
                     }
                     this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { audioStreamIndex: targetIndex });
+                })();
+            }
+            return;
+        }
+
+        // ── HtmlVideoPlayer: DirectPlay resume seek failed ─────────────────────
+        //
+        // When the HtmlVideoPlayer backend fails to seek to the resume position
+        // during DirectPlay (common on WebOS Chromium where #t= fragments are
+        // ignored and programmatic seeks to unbuffered positions silently fail),
+        // the backend emits resumeseekfailed. We restart playback in Remux mode
+        // so the server streams from the target position, making the seek reliable.
+        if (event.type === 'resumeseekfailed') {
+            const targetTicks = event.data?.targetPositionTicks;
+            const currentPosTicks = this.getCurrentPositionTicks();
+            const effectiveTicks = targetTicks || currentPosTicks;
+
+            log.warn('resumeseekfailed: DirectPlay resume failed at', (currentPosTicks / 10000000).toFixed(2),
+                's. Restarting with Remux at target', (effectiveTicks / 10000000).toFixed(2), 's');
+
+            if (this._currentPlayOptions && !this._isRestarting) {
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    startPositionTicks: effectiveTicks,
+                    playbackMode: 'remux'
+                };
+
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions = restartOptions;
+                this._isRestarting = true;
+
+                this.emit(PlayerEvent.RESTARTING);
+
+                (async () => {
+                    try {
+                        await this.stop();
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await this.play(restartOptions);
+                    } catch (e) {
+                        log.error('resumeseekfailed restart failed:', e);
+                    } finally {
+                        this._isRestarting = false;
+                    }
                 })();
             }
             return;
@@ -827,11 +872,57 @@ export class JellyfinPlayer extends EventEmitter {
                             if (!forced) forced = subtitleStreams.find(s => s.IsForced);
                             if (forced) chosenIndex = forced.Index;
                         } else if (subtitleMode === 'Always') {
-                            let best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
-                            if (!best) best = subtitleStreams.find(s => s.Language === prefLang);
-                            if (!best) best = subtitleStreams.find(s => s.IsDefault || s.IsForced);
-                            if (!best && subtitleStreams.length > 0) best = subtitleStreams[0];
-                            if (best) chosenIndex = best.Index;
+                            let best = undefined;
+
+                            // -----------------------------------------------------------------
+                            // Preference check: If 'preferExternalSubtitles' is enabled,
+                            // attempt to isolate and choose external subtitle streams first.
+                            // -----------------------------------------------------------------
+                            if (PlayerSettings.get('preferExternalSubtitles')) {
+                                const externalStreams = subtitleStreams.filter(s => s.IsExternal);
+                                if (externalStreams.length > 0) {
+                                    // 1. Search for external stream matching preferred language (default/forced first)
+                                    best = externalStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                                    
+                                    // 2. Search for external stream matching preferred language generally
+                                    if (!best) {
+                                        best = externalStreams.find(s => s.Language === prefLang);
+                                    }
+                                    
+                                    // 3. Search for external stream with undetermined/unknown/empty language codes
+                                    if (!best) {
+                                        best = externalStreams.find(s => {
+                                            const lang = (s.Language || '').toLowerCase();
+                                            return !lang || lang === 'und' || lang === 'unknown' || lang === 'none';
+                                        });
+                                    }
+                                }
+                            }
+
+                            // -----------------------------------------------------------------
+                            // Fallback path: If 'preferExternalSubtitles' is disabled or no
+                            // matching external tracks were resolved, run standard selection.
+                            // -----------------------------------------------------------------
+                            if (!best) {
+                                // Prefer internal/external matching user preferred language (default/forced first)
+                                best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                                // Fallback to matching user preferred language generally
+                                if (!best) {
+                                    best = subtitleStreams.find(s => s.Language === prefLang);
+                                }
+                                // Fallback to default or forced subtitle tracks in general
+                                if (!best) {
+                                    best = subtitleStreams.find(s => s.IsDefault || s.IsForced);
+                                }
+                                // Fallback to the first available track in the list
+                                if (!best && subtitleStreams.length > 0) {
+                                    best = subtitleStreams[0];
+                                }
+                            }
+
+                            if (best) {
+                                chosenIndex = best.Index;
+                            }
                         } else if (subtitleMode === 'Smart') {
                             // Smart = Show if audio is NOT in the preferred subtitle language.
                             if (prefLang !== 'none' && audioLang !== prefLang && audioLang !== 'und') {
@@ -1337,12 +1428,12 @@ export class JellyfinPlayer extends EventEmitter {
      * Stop playback
      */
     async stop() {
+        const item = this._currentItem;
+        const positionTicks = this.getCurrentPositionTicks();
+
         if (this._backend) {
             await this._backend.stop();
         }
-
-        const item = this._currentItem;
-        const positionTicks = this.getCurrentPositionTicks();
 
         // Only clear state if NOT restarting
         if (!this._isRestarting) {
@@ -2281,6 +2372,20 @@ export class JellyfinPlayer extends EventEmitter {
         return this._currentMediaSource;
     }
 
+    /**
+     * Retrieves the user-facing name of the currently active subtitle rendering engine.
+     * Delegates the lookup directly to the internal SubtitleManager instance.
+     * 
+     * @returns {string} Human-readable subtitle renderer name.
+     */
+    getSubtitleRendererName() {
+        // Delegate to subtitle manager if initialized; otherwise return 'None'.
+        if (this._subtitleManager) {
+            return this._subtitleManager.getSubtitleRendererName();
+        }
+        return 'None';
+    }
+
     /* =========================================================================
        HDR DETECTION UTILITY
        =========================================================================
@@ -2598,10 +2703,17 @@ export class JellyfinPlayer extends EventEmitter {
 
     /**
      * Force a specific playback mode and restart if playing
-     * @param {string} mode - 'auto', 'directPlay', 'transcode', 'remux'
+     * @param {string} mode - 'auto', 'directPlay', 'transcode', 'remux',
+     *                        'transcodeVideo', 'transcodeAudio'
      */
     async setPlaybackMode(mode) {
-        if (!['auto', 'directPlay', 'transcode', 'remux'].includes(mode)) return;
+        // ----------------------------------------------------------------
+        // Validate the incoming mode against the full supported set.
+        // 'transcodeVideo' → copy video + transcode audio (partial transcode)
+        // 'transcodeAudio' → transcode video + copy audio (partial transcode)
+        // ----------------------------------------------------------------
+        if (!['auto', 'directPlay', 'transcode', 'remux', 'transcodeVideo', 'transcodeAudio'].includes(mode)) return;
+
         
         if (this._playbackMode === mode) return;
 

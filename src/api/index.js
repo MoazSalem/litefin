@@ -4,7 +4,7 @@
  * ============================================================================
  */
 
-export { api, discoverServers, cancelDiscovery, testServer, ServerUnreachableError } from './ApiClient.js';
+export { api, discoverServers, cancelDiscovery, testServer, ServerUnreachableError, sendWakeOnLan } from './ApiClient.js';
 export { auth } from './AuthManager.js';
 export {
     getDeviceProfile,
