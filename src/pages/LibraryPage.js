@@ -2086,6 +2086,10 @@ class LibraryPage extends Page {
         const grid = this.$('#library-grid');
         if (!grid) return;
 
+        // Invalidate the CardRenderer HTML cache — items or view options may
+        // have changed since the last render (new data, view mode switch, etc.)
+        CardRenderer.clearCache();
+
         // Cleanup: Hide horizontal rows if they exist and restore grid
         const rowsContainer = this.$('#library-rows');
         if (rowsContainer) {
@@ -2324,6 +2328,13 @@ class LibraryPage extends Page {
 
         // Render the first chunk immediately — this is what the user sees on load
         this._appendGridChunk(grid, items, columns);
+
+        // Eagerly measure row height while layout is already being computed
+        // from the initial render. This caches gridCardRowHeight before any
+        // user interaction, so _syncGridWindow and _prependGridChunk never
+        // need to force a synchronous layout reflow by reading offsetTop
+        // during a focus change or scroll event on the hot path.
+        this._measureGridRowHeight(grid, columns);
 
         // Lazy Load Images (observe the initial chunk)
         lazyLoader.observe(grid);

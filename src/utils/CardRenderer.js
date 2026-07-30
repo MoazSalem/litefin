@@ -16,6 +16,25 @@ import { detailsIcons } from './Icons.js';
 
 class CardRenderer {
     /**
+     * HTML output cache: keyed by item.Id, scoped to the current render context.
+     * Invalidated automatically when options change or clearCache() is called.
+     * Prevents redundant image URL resolution, BlurHash lookup, quality badge
+     * computation, and string building when cards are re-rendered for the same
+     * data (e.g. progressive grid chunk append/prepend after focus changes).
+     */
+    static _htmlCache = new Map();
+    static _htmlCacheKey = null;
+
+    /**
+     * Clear the HTML output cache. Call this when items, viewMode, columns,
+     * or any other rendering option changes.
+     */
+    static clearCache() {
+        this._htmlCache.clear();
+        this._htmlCacheKey = null;
+    }
+
+    /**
      * Generate Played (Check Mark) Badge HTML if item is played
      * @param {Object} item
      * @returns {string} HTML string
@@ -122,11 +141,28 @@ class CardRenderer {
      */
     static createCardHtml(item, options = {}) {
         const { isLandscape = false, type = 'poster', contextType = null, isGrid = false, cardWidth = null } = options;
+
+        // ------------------------------------------------------------------
+        // HTML OUTPUT CACHE
+        // ------------------------------------------------------------------
+        // If the rendering context (options that affect HTML output) has not
+        // changed, return the cached HTML for this item — skipping image URL
+        // resolution, BlurHash lookup, quality badge iteration, and string
+        // building. Cache key incorporates every option that changes output.
+        // ------------------------------------------------------------------
+        const cacheKey = `${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}`;
+        if (CardRenderer._htmlCacheKey !== cacheKey) {
+            CardRenderer._htmlCache.clear();
+            CardRenderer._htmlCacheKey = cacheKey;
+        }
+        const itemId = item.Id;
+        const cached = CardRenderer._htmlCache.get(itemId);
+        if (cached !== undefined) return cached;
+
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         let imageUrl = '';
         let imageInnerHtml = '';
-        const itemId = item.Id;
 
         // Captures which image type+tag was resolved for BlurHash lookup
         let resolvedImageType = '';
@@ -865,7 +901,7 @@ class CardRenderer {
             ${qualityBadgeHtml}
         `;
 
-        return `
+        const html = `
             <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" tabindex="0">
                 <div class="card-image">
                     ${imagePart}
@@ -915,6 +951,10 @@ class CardRenderer {
                 }
             </button>
         `;
+
+        // Cache the output for reuse during this render context
+        CardRenderer._htmlCache.set(itemId, html);
+        return html;
     }
 
     /**
