@@ -492,69 +492,83 @@ class LazyLoader {
         const currentCard = startImg.closest('.media-card');
         if (!currentCard) return;
 
-        let limit = 20;
-        if (currentCard.parentElement && currentCard.parentElement.classList.contains('view-small-poster')) {
-            limit += 7;
-        }
+        // ----------------------------------------------------------------
+        // STAGGERED PRELOAD: current row, previous row, then next row
+        // ----------------------------------------------------------------
+        // Reads the grid column count from a data attribute set by
+        // LibraryPage._renderGrid(). Falls back to 5 if not present.
+        //
+        // Phase 1 (immediate, this frame):
+        //   columns forward + 1 backward — covers Right in current row
+        //   and one Left press. Cost: columns + 1.
+        //
+        // Phase 2 (next rAF, deferred):
+        //   columns - 1 more backward — completes a full previous row
+        //   so pressing Up lands on fully-preloaded items.
+        //
+        // Phase 3 (next rAF after Phase 2, chained):
+        //   columns forward — covers the row below for Down navigation.
+        // ----------------------------------------------------------------
+        const grid = currentCard.closest('#library-grid');
+        const columns = parseInt(grid?.dataset.gridColumns, 10) || 5;
 
-        const backwardCount = Math.min(5, limit - 1);
-        const forwardCount = limit - backwardCount;
-
-        const pending = [];
-
-        // Preload forward siblings (most common navigation direction)
+        // Phase 1: current row forward + 1 backward (immediate)
         let nextCard = currentCard.nextElementSibling;
-        let nextCount = 0;
-        while (nextCard && nextCount < forwardCount) {
+        let count = 0;
+        while (nextCard && count < columns) {
             const img = nextCard.querySelector('img[data-src]');
-            if (img) {
-                pending.push(img);
-            }
+            if (img) this._loadImage(img);
             nextCard = nextCard.nextElementSibling;
-            nextCount++;
+            count++;
         }
 
-        // Preload backward siblings so navigating up/left also shows loaded images
-        let prevCard = currentCard.previousElementSibling;
-        let prevCount = 0;
-        const backwardPending = [];
-        while (prevCard && prevCount < backwardCount) {
+        const prevCard = currentCard.previousElementSibling;
+        if (prevCard) {
             const img = prevCard.querySelector('img[data-src]');
-            if (img) {
-                backwardPending.push(img);
-            }
-            prevCard = prevCard.previousElementSibling;
-            prevCount++;
+            if (img) this._loadImage(img);
         }
-        // Reverse so nearest cards load first
-        pending.push(...backwardPending.reverse());
 
-        if (!pending.length) return;
-
-        // ================================================================
-        // STAGGERED LOADING: Load 5 images per setTimeout tick (0ms delay).
-        // ================================================================
-        // Loading all 20 at once causes 20 simultaneous opacity: 0 → 1 CSS
-        // transitions, which forces 20 compositor layer promotions in a single
-        // frame — directly producing the Layerize spike in the profile.
-        // By chunking 5 per tick, the compositor processes each batch across
-        // separate scheduler ticks, spreading the layer cost over multiple frames.
-        // ================================================================
-        const CHUNK_SIZE = 5;
-        let offset = 0;
-
-        const loadChunk = () => {
-            const end = Math.min(offset + CHUNK_SIZE, pending.length);
-            for (let i = offset; i < end; i++) {
-                this._loadImage(pending[i]);
-            }
-            offset = end;
-            if (offset < pending.length) {
-                setTimeout(loadChunk, 0);
+        // Helper to load images from a starting sibling, up to `limit` cards
+        const loadSiblings = (start, limit, backwards) => {
+            let card = start;
+            let count = 0;
+            while (card && count < limit) {
+                const img = card.querySelector('img[data-src]');
+                if (img) this._loadImage(img);
+                card = backwards ? card.previousElementSibling : card.nextElementSibling;
+                count++;
             }
         };
 
-        loadChunk();
+        // Cancel any pending deferred preload from a previous focus change
+        // so stale rAFs don't pile up (e.g. rapid D-pad holding).
+        if (this._deferredPreloadFrameId) {
+            cancelAnimationFrame(this._deferredPreloadFrameId);
+            this._deferredPreloadFrameId = null;
+        }
+
+        // Schedule deferred phases (chained: Phase 2 -> Phase 3)
+        const schedulePhase3 = () => {
+            if (nextCard) {
+                this._deferredPreloadFrameId = requestAnimationFrame(() => {
+                    this._deferredPreloadFrameId = null;
+                    loadSiblings(nextCard, columns, false);
+                });
+            }
+        };
+
+        if (prevCard) {
+            // Phase 2: complete the previous row
+            this._deferredPreloadFrameId = requestAnimationFrame(() => {
+                this._deferredPreloadFrameId = null;
+                loadSiblings(prevCard.previousElementSibling, columns - 1, true);
+                // Chain: Phase 3 runs after Phase 2
+                schedulePhase3();
+            });
+        } else {
+            // No previous row, skip straight to Phase 3
+            schedulePhase3();
+        }
     }
 
     /**
@@ -613,6 +627,12 @@ class LazyLoader {
      */
     clearContainer(container) {
         if (!container) return;
+
+        // Cancel any pending deferred preload for the next row
+        if (this._deferredPreloadFrameId) {
+            cancelAnimationFrame(this._deferredPreloadFrameId);
+            this._deferredPreloadFrameId = null;
+        }
 
         // Remove pending loads that belong to this container
         this._pendingLoads.forEach((type, target) => {

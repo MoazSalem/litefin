@@ -23,12 +23,14 @@
      * CSS smooth-scroll conflicts with JS ScrollTo and causes laggy behavior. */
     scroll-behavior: auto;
 
-    /* GPU acceleration hints for smooth scrolling on TV devices */
+    /* NOTE: transform: translateZ(0) and will-change: scroll-position were
+     * intentionally removed. On Tizen 9.0's GPU compositor, they force a
+     * compositor layer allocation for the entire scroll container that must
+     * be invalidated and recreated on every layout change (card append/prepend,
+     * spacer resize). This causes more GPU memory pressure and repainting than
+     * the default non-layerized scroll path. Tizen 9.0's browser handles
+     * overflow-y: auto scrolling efficiently without these hints. */
     -webkit-overflow-scrolling: touch;
-    transform: translateZ(0);
-    will-change: scroll-position;
-    
-    display: block; /* Standard block layout eliminates Tizen 5.0 collapsing bugs */
 }
 
 /* --- Header Section --- */

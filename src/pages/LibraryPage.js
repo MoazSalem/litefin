@@ -800,26 +800,23 @@ class LibraryPage extends Page {
         this.$('#library-tabs')?.removeEventListener('click', this._onTabClick);
         this.$('#alpha-picker')?.removeEventListener('click', this._onAlphaClick);
 
-        // Clean up the progressive grid DOM trigger listener to prevent leaks
+        // Clean up the merged grid evaluation listeners
         if (this._onGridFocusChanged) {
             eventBus.off('focus:changed', this._onGridFocusChanged);
             this._onGridFocusChanged = null;
         }
-        if (this._gridFocusFrameId) {
-            cancelAnimationFrame(this._gridFocusFrameId);
-            this._gridFocusFrameId = null;
-        }
-        this._gridFocusPending = false;
-        this._gridFocusElement = null;
         if (this._onGridScroll) {
             const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
             scrollContainer?.removeEventListener('scroll', this._onGridScroll);
             this._onGridScroll = null;
         }
-        if (this._gridScrollFrameId) {
-            cancelAnimationFrame(this._gridScrollFrameId);
-            this._gridScrollFrameId = null;
+        if (this._gridEvalFrameId) {
+            cancelAnimationFrame(this._gridEvalFrameId);
+            this._gridEvalFrameId = null;
         }
+        this._gridEvalPending = false;
+        this._gridFocusElement = null;
+        this._gridScrollTop = null;
     }
 
     // ========================================================================
@@ -2311,6 +2308,7 @@ class LibraryPage extends Page {
             cardWidth
         };
         this.state._gridColumns = columns;
+        grid.dataset.gridColumns = columns;
 
         // Reset the sliding window — a fresh _renderGrid always starts from zero
         this.state.gridWindowStart = 0;
@@ -2424,120 +2422,36 @@ class LibraryPage extends Page {
         });
 
         // ====================================================================
-        // PROGRESSIVE DOM TRIGGER — focus:changed listener (Deferred)
+        // MERGED PROGRESSIVE DOM TRIGGER — shared evaluation engine
         // ====================================================================
-        // Fires after every focus change anywhere in the page. We filter to
-        // cards inside the library-grid and check if we are close enough to
-        // the bottom of the rendered DOM to warrant adding the next chunk.
+        // Combines the two former evaluation paths (focus:changed for D-pad,
+        // native scroll for mouse/magic remote) into a SINGLE rAF-backed
+        // evaluation point. Both paths write their latest input to shared
+        // state and call _scheduleGridEval(), which guarantees at most one
+        // evaluation per frame regardless of how many input events fire.
         //
-        // PERFORMANCE: Evaluation and DOM chunk appends/prepends are deferred
-        // to requestAnimationFrame so that DOM layout reads (_measureGridRowHeight)
-        // and chunk insertions do not execute synchronously inside the keydown/
-        // focus transition stack, allowing the scroll animation to launch smoothly.
+        // This eliminates:
+        //   1. Double append/prepend when both scroll and focus fire in
+        //      the same frame (e.g. scroll ends → focus settles on a card)
+        //   2. Duplicate _syncGridWindow calls operating on stale DOM
+        //   3. Separate rAF IDs competing for the same work
         // ====================================================================
+        this._gridEvalPending = false;
+        this._gridEvalFrameId = null;
+        this._gridFocusElement = null;
+        this._gridScrollTop = null;
+
         if (this._onGridFocusChanged) {
             eventBus.off('focus:changed', this._onGridFocusChanged);
-            if (this._gridFocusFrameId) {
-                cancelAnimationFrame(this._gridFocusFrameId);
-                this._gridFocusFrameId = null;
-            }
         }
         this._onGridFocusChanged = (element) => {
-            // Only act on media-cards inside this grid
             if (!element || !grid.contains(element)) return;
             if (!element.classList.contains('media-card')) return;
-
-            // Always store the latest focused card so the queued rAF
-            // uses the most current element when it eventually fires.
             this._gridFocusElement = element;
-
-            // ================================================================
-            // DEFERRED GRID CHUNK EVALUATION (GATED)
-            // ================================================================
-            // PROBLEM: Every D-pad keypress fires focus:changed, which
-            // schedules a requestAnimationFrame. During rapid key holding,
-            // the old cancelAnimationFrame + reschedule pattern still
-            // processes every event's handler body and creates rAF queue
-            // pressure — all 5+ focus:changed listeners (LazyLoader,
-            // VirtualCardRow, FocusManager, etc.) already run synchronously
-            // per event, and adding more rAF scheduling on top multiplies
-            // the main-thread cost.
-            //
-            // FIX: Gate with a boolean flag. The FIRST event schedules a
-            // single rAF. All subsequent events while the flag is set just
-            // update _gridFocusElement — the queued rAF will read the
-            // latest element when it fires. This eliminates:
-            //   - Repeated cancelAnimationFrame calls
-            //   - Redundant requestAnimationFrame scheduling
-            //   - DOM checks (grid.contains, classList) on every event
-            // ================================================================
-            if (this._gridFocusPending) return;
-            this._gridFocusPending = true;
-
-            requestAnimationFrame(() => {
-                this._gridFocusPending = false;
-                if (!grid || !document.contains(grid)) return;
-
-                // Use the latest focused element (may have changed since
-                // the event was gated during rapid key holding)
-                const focusedElement = this._gridFocusElement;
-                if (!focusedElement || !grid.contains(focusedElement)) return;
-
-                // Find DOM index of the focused card (fast linear scan — window is small)
-                const allCards = grid.querySelectorAll('.media-card');
-                let domIndex = -1;
-                for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === focusedElement) {
-                        domIndex = i;
-                        break;
-                    }
-                }
-                if (domIndex === -1) return;
-
-                // The card's index in the full items array
-                const itemIndex = this.state.gridWindowStart + domIndex;
-
-                // -----------------------------------------------------------------------
-                // DIRECTION ISOLATION — same fix as the scroll listener
-                // -----------------------------------------------------------------------
-                // Without direction tracking, moving UP near the top fires prepend which
-                // evicts from the bottom. If the eviction pushes windowEnd < items.length,
-                // the downward threshold becomes true for the same itemIndex, firing append
-                // which evicts from the top again — cards oscillate and never settle.
-                // -----------------------------------------------------------------------
-                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
-                this._lastFocusItemIndex = itemIndex;
-
-                if (movingDown) {
-                    // DOWNWARD: append when within 2 rows of the bottom rendered boundary
-                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
-                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
-                        this._appendGridChunk(grid, this.state.items, currentColumns);
-                    }
-                } else {
-                    // UPWARD: prepend when within 2 rows of the top rendered boundary
-                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
-                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
-                        this._prependGridChunk(grid, this.state.items, currentColumns);
-                    }
-                }
-
-                // Position-based eviction: keep exactly ROWS_ABOVE rows behind and
-                // ROWS_BELOW rows ahead — one row evicted per row of movement,
-                // always off-screen and therefore completely invisible
-                const currentRow = Math.floor(itemIndex / currentColumns);
-                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
-            });
+            this._scheduleGridEval();
         };
         eventBus.on('focus:changed', this._onGridFocusChanged);
 
-        // ====================================================================
-        // PROGRESSIVE DOM TRIGGER — native scroll listener (Mouse Wheel / Magic Remote)
-        // ====================================================================
-        // When using mouse wheel or LG Magic Remote pointer, focus:changed does
-        // not fire during scrolling. Listen to scroll events on the scroll container
-        // to detect position and append/prepend grid chunks as the user scrolls.
-        // ====================================================================
         const scrollContainer = this.$('#library-scroll-container') || this.el.querySelector('.page-content');
         if (scrollContainer) {
             if (this._onGridScroll) {
@@ -2545,66 +2459,8 @@ class LibraryPage extends Page {
             }
             this._lastGridScrollTop = 0;
             this._onGridScroll = () => {
-                if (this._gridScrollFrameId) return;
-
-                this._gridScrollFrameId = requestAnimationFrame(() => {
-                    this._gridScrollFrameId = null;
-                    if (!grid || !document.contains(grid)) return;
-
-                    const scrollTop = scrollContainer.scrollTop;
-                    const containerHeight = scrollContainer.clientHeight;
-                    const scrollHeight = scrollContainer.scrollHeight;
-
-                    // ----------------------------------------------------------------
-                    // DIRECTION ISOLATION — the critical bug fix
-                    // ----------------------------------------------------------------
-                    // Without direction tracking, appending adds cards which grows the
-                    // spacer. The new spacerHeight then makes the prepend condition true
-                    // on the very next scroll event, which removes cards from the bottom
-                    // (including the ones just added). This causes the "flash then
-                    // disappear" effect and the "won't load past 41" stuck-window bug.
-                    //
-                    // Fix: only check append when moving DOWN, prepend when moving UP.
-                    // The two paths are mutually exclusive per scroll event.
-                    // ----------------------------------------------------------------
-                    const scrollingDown = scrollTop > (this._lastGridScrollTop || 0);
-                    this._lastGridScrollTop = scrollTop;
-
-                    if (scrollingDown) {
-                        // DOWNWARD: Append when within 1.5 viewport heights of the
-                        // bottom edge of currently-rendered content
-                        const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
-                        if (distanceFromBottom <= containerHeight * 1.5) {
-                            if (this.state.gridWindowEnd < this.state.items.length) {
-                                this._appendGridChunk(grid, this.state.items, currentColumns);
-                            }
-                        }
-                    } else {
-                        // UPWARD: Prepend when within 1.5 viewport heights of the
-                        // top edge of rendered content (just past the spacer)
-                        const spacer = grid.querySelector('#grid-top-spacer');
-                        const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
-                        const distanceFromRenderedTop = scrollTop - spacerHeight;
-                        if (this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
-                            this._prependGridChunk(grid, this.state.items, currentColumns);
-                        }
-                    }
-
-                    // Position-based eviction via _syncGridWindow — estimate current row
-                    // from scroll position so eviction is tied to where the user IS,
-                    // not to when a chunk boundary was hit.
-                    const rowHeight = this.state.gridCardRowHeight;
-                    if (rowHeight) {
-                        const spacer = grid.querySelector('#grid-top-spacer');
-                        const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
-                        // Rows scrolled past the start of rendered content, plus rows hidden above spacer
-                        const scrolledPastRenderedTop = Math.max(0, scrollTop - spacerHeight);
-                        const currentRow =
-                            Math.floor(scrolledPastRenderedTop / rowHeight) +
-                            Math.floor(this.state.gridWindowStart / currentColumns);
-                        this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
-                    }
-                });
+                this._gridScrollTop = scrollContainer.scrollTop;
+                this._scheduleGridEval();
             };
             scrollContainer.addEventListener('scroll', this._onGridScroll, { passive: true });
         }
@@ -2869,6 +2725,135 @@ class LibraryPage extends Page {
         // Eviction from the bottom is handled by _syncGridWindow — same
         // position-based approach, symmetric to the top eviction.
         return this.state.gridWindowStart > 0;
+    }
+
+    /**
+     * =========================================================================
+     * SCHEDULE GRID EVALUATION (shared by focus:changed + scroll)
+     * =========================================================================
+     * Single rAF-backed evaluation point that handles both D-pad navigation
+     * (via _gridFocusElement) and mouse/magic remote scrolling (via
+     * _gridScrollTop). Uses one pending flag + one rAF ID so at most one
+     * evaluation executes per frame, regardless of how many input events fire.
+     *
+     * Both focus:changed and scroll handlers delegate to this method, storing
+     * their latest input on shared state before scheduling. The downstream
+     * _evaluateGrid() reads the most current values from both sources.
+     * =========================================================================
+     */
+    _scheduleGridEval() {
+        if (this._gridEvalPending) return;
+        this._gridEvalPending = true;
+        this._gridEvalFrameId = requestAnimationFrame(() => {
+            this._gridEvalFrameId = null;
+            this._gridEvalPending = false;
+            this._evaluateGrid();
+        });
+    }
+
+    /**
+     * =========================================================================
+     * EVALUATE GRID BOUNDARIES (merged focus + scroll evaluation)
+     * =========================================================================
+     * Reads the latest position input from either focus:changed (D-pad) or
+     * scroll (mouse/magic remote), checks append/prepend thresholds, and
+     * synchronises the sliding window. Runs at most once per frame.
+     *
+     * Priority: focus-based evaluation (D-pad) takes precedence over
+     * scroll-based evaluation when both sources have recent data. This is
+     * correct because a D-pad move that happens during a scroll always
+     * represents the user's explicit intent.
+     * =========================================================================
+     */
+    _evaluateGrid() {
+        const grid = this.$('#library-grid');
+        if (!grid || !document.contains(grid)) return;
+
+        const currentColumns = this.state._gridColumns;
+        if (!currentColumns) return;
+
+        const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
+        let currentRow = -1;
+
+        // ------------------------------------------------------------------
+        // PRIORITY 1: Focus-based evaluation (D-pad navigation)
+        // ------------------------------------------------------------------
+        const focusedElement = this._gridFocusElement;
+        if (focusedElement && grid.contains(focusedElement)) {
+            const allCards = grid.querySelectorAll('.media-card');
+            let domIndex = -1;
+            for (let i = 0; i < allCards.length; i++) {
+                if (allCards[i] === focusedElement) {
+                    domIndex = i;
+                    break;
+                }
+            }
+            if (domIndex >= 0) {
+                const itemIndex = this.state.gridWindowStart + domIndex;
+
+                // Direction isolation: only append when moving down,
+                // only prepend when moving up (prevents oscillation)
+                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
+                this._lastFocusItemIndex = itemIndex;
+
+                if (movingDown) {
+                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
+                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                } else {
+                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
+                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    }
+                }
+
+                currentRow = Math.floor(itemIndex / currentColumns);
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+                return;
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // PRIORITY 2: Scroll-based evaluation (mouse wheel / magic remote)
+        // ------------------------------------------------------------------
+        if (scrollContainer && this._gridScrollTop !== null) {
+            const scrollTop = this._gridScrollTop;
+            this._gridScrollTop = null; // Consume the scroll input
+
+            const containerHeight = scrollContainer.clientHeight;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const rowHeight = this.state.gridCardRowHeight;
+
+            const scrollingDown = scrollTop > (this._lastGridScrollTop || 0);
+            this._lastGridScrollTop = scrollTop;
+
+            if (scrollingDown) {
+                const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
+                if (distanceFromBottom <= containerHeight * 1.5) {
+                    if (this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                }
+            } else {
+                const spacer = grid.querySelector('#grid-top-spacer');
+                const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+                const distanceFromRenderedTop = scrollTop - spacerHeight;
+                if (this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
+                    this._prependGridChunk(grid, this.state.items, currentColumns);
+                }
+            }
+
+            if (rowHeight) {
+                const spacer = grid.querySelector('#grid-top-spacer');
+                const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+                const scrolledPastRenderedTop = Math.max(0, scrollTop - spacerHeight);
+                currentRow =
+                    Math.floor(scrolledPastRenderedTop / rowHeight) +
+                    Math.floor(this.state.gridWindowStart / currentColumns);
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+            }
+        }
     }
 
     /**
