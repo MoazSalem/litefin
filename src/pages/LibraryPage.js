@@ -2311,6 +2311,11 @@ class LibraryPage extends Page {
         this.state.gridWindowEnd = 0;
         this.state.gridCardRowHeight = null; // Force re-measure on next append
 
+        // Reset direction cursors so stale positions from a previous page render
+        // don't immediately fire spurious append/prepend on the fresh grid
+        this._lastFocusItemIndex = 0;
+        this._lastGridScrollTop = 0;
+
         // Clear the grid and inject the spacer that maintains scroll position
         // when top rows are evicted from the DOM. Height starts at 0px.
         grid.innerHTML = '<div id="grid-top-spacer" style="height:0;width:100%;flex:0 0 100%"></div>';
@@ -2359,7 +2364,47 @@ class LibraryPage extends Page {
             leaveDown: 'library-pagination',
             leaveLeft: 'sidebar',
             selector: '.media-card',
-            scrollOffsetTop: 100
+            scrollOffsetTop: 100,
+
+            // =================================================================
+            // VIRTUAL GRID EDGE GUARD
+            // =================================================================
+            // When the user presses UP on the first rendered DOM row, FocusManager
+            // would normally fire leaveUp because no card exists above in the DOM.
+            // But if gridWindowStart > 0 there ARE real items above — they were
+            // just evicted from the DOM to keep the node count small.
+            //
+            // We intercept the UP move here (before FocusManager acts on it),
+            // prepend the missing rows back into the DOM, and return false.
+            // FocusManager then re-queries the grid (cache was invalidated by
+            // _hookGridCards) and finds the card directly above — allowing it
+            // to move focus there naturally, just as if the rows had always been
+            // in the DOM. The result: no accidental focus jumps to tabs/controls
+            // while holding UP through a windowed grid.
+            // =================================================================
+            onMove: (direction, focusedElement) => {
+                if (direction !== 'up') return false;
+                if (this.state.gridWindowStart <= 0) return false;
+                if (!focusedElement) return false;
+
+                // Are we on the FIRST rendered row?
+                const allCards = grid.querySelectorAll('.media-card');
+                let domIndex = -1;
+                for (let i = 0; i < allCards.length; i++) {
+                    if (allCards[i] === focusedElement) { domIndex = i; break; }
+                }
+                // domIndex < currentColumns means the card is in the first row
+                if (domIndex < 0 || domIndex >= currentColumns) return false;
+
+                // Prepend the evicted rows synchronously. _hookGridCards inside
+                // _prependGridChunk calls focusManager.invalidateCache() so
+                // FocusManager will re-query after we return false.
+                this._prependGridChunk(grid, this.state.items, currentColumns);
+
+                // Return false — FocusManager proceeds with its UP move,
+                // re-queries the grid, and lands on the card above correctly.
+                return false;
+            }
         });
 
         // ====================================================================
@@ -2418,20 +2463,35 @@ class LibraryPage extends Page {
                 const itemIndex = this.state.gridWindowStart + domIndex;
 
                 // -----------------------------------------------------------------------
-                // DOWNWARD TRIGGER: within 2 rows of the bottom rendered boundary
+                // DIRECTION ISOLATION — same fix as the scroll listener
                 // -----------------------------------------------------------------------
-                const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
-                if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
-                    this._appendGridChunk(grid, this.state.items, currentColumns);
+                // Without direction tracking, moving UP near the top fires prepend which
+                // evicts from the bottom. If the eviction pushes windowEnd < items.length,
+                // the downward threshold becomes true for the same itemIndex, firing append
+                // which evicts from the top again — cards oscillate and never settle.
+                // -----------------------------------------------------------------------
+                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
+                this._lastFocusItemIndex = itemIndex;
+
+                if (movingDown) {
+                    // DOWNWARD: append when within 2 rows of the bottom rendered boundary
+                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
+                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                } else {
+                    // UPWARD: prepend when within 2 rows of the top rendered boundary
+                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
+                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    }
                 }
 
-                // -----------------------------------------------------------------------
-                // UPWARD TRIGGER: within 2 rows of the top rendered boundary
-                // -----------------------------------------------------------------------
-                const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
-                if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
-                    this._prependGridChunk(grid, this.state.items, currentColumns);
-                }
+                // Position-based eviction: keep exactly ROWS_ABOVE rows behind and
+                // ROWS_BELOW rows ahead — one row evicted per row of movement,
+                // always off-screen and therefore completely invisible
+                const currentRow = Math.floor(itemIndex / currentColumns);
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
             });
         };
         eventBus.on('focus:changed', this._onGridFocusChanged);
@@ -2448,6 +2508,7 @@ class LibraryPage extends Page {
             if (this._onGridScroll) {
                 scrollContainer.removeEventListener('scroll', this._onGridScroll);
             }
+            this._lastGridScrollTop = 0;
             this._onGridScroll = () => {
                 if (this._gridScrollFrameId) return;
 
@@ -2455,22 +2516,58 @@ class LibraryPage extends Page {
                     this._gridScrollFrameId = null;
                     if (!grid || !document.contains(grid)) return;
 
-                    const containerHeight = scrollContainer.clientHeight;
                     const scrollTop = scrollContainer.scrollTop;
+                    const containerHeight = scrollContainer.clientHeight;
                     const scrollHeight = scrollContainer.scrollHeight;
 
-                    // Trigger append when within 1.5 screen heights of the bottom
-                    if (scrollTop + containerHeight >= scrollHeight - containerHeight * 1.5) {
-                        if (this.state.gridWindowEnd < this.state.items.length) {
-                            this._appendGridChunk(grid, this.state.items, currentColumns);
+                    // ----------------------------------------------------------------
+                    // DIRECTION ISOLATION — the critical bug fix
+                    // ----------------------------------------------------------------
+                    // Without direction tracking, appending adds cards which grows the
+                    // spacer. The new spacerHeight then makes the prepend condition true
+                    // on the very next scroll event, which removes cards from the bottom
+                    // (including the ones just added). This causes the "flash then
+                    // disappear" effect and the "won't load past 41" stuck-window bug.
+                    //
+                    // Fix: only check append when moving DOWN, prepend when moving UP.
+                    // The two paths are mutually exclusive per scroll event.
+                    // ----------------------------------------------------------------
+                    const scrollingDown = scrollTop > (this._lastGridScrollTop || 0);
+                    this._lastGridScrollTop = scrollTop;
+
+                    if (scrollingDown) {
+                        // DOWNWARD: Append when within 1.5 viewport heights of the
+                        // bottom edge of currently-rendered content
+                        const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
+                        if (distanceFromBottom <= containerHeight * 1.5) {
+                            if (this.state.gridWindowEnd < this.state.items.length) {
+                                this._appendGridChunk(grid, this.state.items, currentColumns);
+                            }
+                        }
+                    } else {
+                        // UPWARD: Prepend when within 1.5 viewport heights of the
+                        // top edge of rendered content (just past the spacer)
+                        const spacer = grid.querySelector('#grid-top-spacer');
+                        const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+                        const distanceFromRenderedTop = scrollTop - spacerHeight;
+                        if (this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
+                            this._prependGridChunk(grid, this.state.items, currentColumns);
                         }
                     }
 
-                    // Trigger prepend when within 1.5 screen heights of top rendered items
-                    const spacer = grid.querySelector('#grid-top-spacer');
-                    const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
-                    if (this.state.gridWindowStart > 0 && scrollTop <= spacerHeight + containerHeight * 1.5) {
-                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    // Position-based eviction via _syncGridWindow — estimate current row
+                    // from scroll position so eviction is tied to where the user IS,
+                    // not to when a chunk boundary was hit.
+                    const rowHeight = this.state.gridCardRowHeight;
+                    if (rowHeight) {
+                        const spacer = grid.querySelector('#grid-top-spacer');
+                        const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+                        // Rows scrolled past the start of rendered content, plus rows hidden above spacer
+                        const scrolledPastRenderedTop = Math.max(0, scrollTop - spacerHeight);
+                        const currentRow =
+                            Math.floor(scrolledPastRenderedTop / rowHeight) +
+                            Math.floor(this.state.gridWindowStart / currentColumns);
+                        this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
                     }
                 });
             };
@@ -2667,36 +2764,8 @@ class LibraryPage extends Page {
             this._hookGridCards(newCards);
         }
 
-        // -----------------------------------------------------------------------
-        // WINDOW EVICTION — remove rows from the top once we exceed the cap
-        // -----------------------------------------------------------------------
-        const windowRows = Math.ceil((this.state.gridWindowEnd - this.state.gridWindowStart) / columns);
-
-        if (windowRows > MAX_WINDOW_ROWS) {
-            // Measure row height before evicting (cached after first call)
-            const rowHeight = this._measureGridRowHeight(grid, columns);
-            if (rowHeight) {
-                // How many rows we are over the cap
-                const rowsToEvict = windowRows - MAX_WINDOW_ROWS;
-                const cardsToEvict = rowsToEvict * columns;
-
-                // Remove the top N cards (they are directly after the spacer)
-                const allCards = grid.querySelectorAll('.media-card');
-                for (let i = 0; i < Math.min(cardsToEvict, allCards.length); i++) {
-                    allCards[i].remove();
-                }
-
-                // Grow the spacer by exactly the height of the evicted rows.
-                // This keeps the total scroll height and viewport position stable.
-                this.state.gridWindowStart += cardsToEvict;
-                const spacer = grid.querySelector('#grid-top-spacer');
-                if (spacer) {
-                    const newSpacerHeight = Math.floor(this.state.gridWindowStart / columns) * rowHeight;
-                    spacer.style.height = `${newSpacerHeight}px`;
-                }
-            }
-        }
-
+        // Eviction is handled by _syncGridWindow (position-based, one row at a
+        // time, always off-screen) rather than here inside the append operation.
         return this.state.gridWindowEnd < items.length;
     }
 
@@ -2762,24 +2831,103 @@ class LibraryPage extends Page {
         const newCards = Array.from(allCards).slice(0, chunkSize);
         this._hookGridCards(newCards);
 
-        // -----------------------------------------------------------------------
-        // WINDOW EVICTION from the bottom to maintain the cap
-        // -----------------------------------------------------------------------
-        const windowRows = Math.ceil((this.state.gridWindowEnd - this.state.gridWindowStart) / columns);
-        if (windowRows > MAX_WINDOW_ROWS) {
-            const rowsToEvict = windowRows - MAX_WINDOW_ROWS;
-            const cardsToEvict = rowsToEvict * columns;
+        // Eviction from the bottom is handled by _syncGridWindow — same
+        // position-based approach, symmetric to the top eviction.
+        return this.state.gridWindowStart > 0;
+    }
 
-            // Remove the last N cards in the grid
-            const updatedCards = grid.querySelectorAll('.media-card');
-            const totalCards = updatedCards.length;
-            for (let i = totalCards - 1; i >= totalCards - cardsToEvict && i >= 0; i--) {
-                updatedCards[i].remove();
+    /**
+     * =========================================================================
+     * POSITION-BASED GRID WINDOW SYNC
+     * =========================================================================
+     * Called after every D-pad move or scroll event with the current "row" the
+     * user is on (0-indexed from the start of the full items array).
+     *
+     * Computes the ideal window based on fixed lookahead/lookbehind constants:
+     *   ROWS_ABOVE  — rows to keep rendered above the current view
+     *   ROWS_BELOW  — rows to keep rendered below the current view
+     *
+     * By tying eviction to the current position rather than to append/prepend
+     * operations, we get:
+     *   • Top eviction always happens exactly 1 row above the off-screen area
+     *     → completely invisible to the user (it's already scrolled past)
+     *   • No batch eviction of 3 rows at once — always exactly 1 row removed
+     *     per row the user advances
+     *   • Bottom eviction mirrors the same behaviour when scrolling up
+     *
+     * @param {HTMLElement} grid         - The #library-grid container element
+     * @param {Array}       items        - Full items array
+     * @param {number}      columns      - Grid column count
+     * @param {number}      currentRow   - Current row index (0-based) in items[]
+     * =========================================================================
+     */
+    _syncGridWindow(grid, items, columns, currentRow) {
+        if (!grid || !items || !columns) return;
+
+        // -----------------------------------------------------------------------
+        // WINDOW CONSTANTS
+        // -----------------------------------------------------------------------
+        // ROWS_ABOVE: rows to keep rendered above the current row.
+        //   2 rows = ~2 screen-heights of backward buffer. When the user is on
+        //   row N, rows 0..(N-3) are off-screen and safe to evict.
+        //
+        // ROWS_BELOW: rows to keep rendered below the current row.
+        //   5 rows = ~1.5 screen-heights of forward buffer before the next
+        //   _appendGridChunk fires.
+        // -----------------------------------------------------------------------
+        const ROWS_ABOVE = 2;
+        const ROWS_BELOW = 5;
+
+        // Ideal first/last item index in the window
+        const idealStart = Math.max(0, (currentRow - ROWS_ABOVE) * columns);
+        const idealEnd   = Math.min(items.length, (currentRow + ROWS_BELOW + 1) * columns);
+
+        // -----------------------------------------------------------------------
+        // TOP EVICTION
+        // -----------------------------------------------------------------------
+        // If the window starts too early (rows are now behind the ROWS_ABOVE
+        // buffer), remove exactly one row at a time so each eviction corresponds
+        // to exactly one row of advancement — invisible because that row is
+        // already above the viewport.
+        // -----------------------------------------------------------------------
+        if (this.state.gridWindowStart < idealStart) {
+            const rowHeight = this._measureGridRowHeight(grid, columns);
+            if (rowHeight) {
+                const cardsToEvict = idealStart - this.state.gridWindowStart;
+                const allCards = grid.querySelectorAll('.media-card');
+                const count = Math.min(cardsToEvict, allCards.length);
+                for (let i = 0; i < count; i++) {
+                    allCards[i].remove();
+                }
+                this.state.gridWindowStart += count;
+
+                // Grow the top spacer by the same pixel amount so the scroll
+                // position is completely undisturbed
+                const spacer = grid.querySelector('#grid-top-spacer');
+                if (spacer) {
+                    spacer.style.height =
+                        `${Math.floor(this.state.gridWindowStart / columns) * rowHeight}px`;
+                }
             }
-            this.state.gridWindowEnd -= cardsToEvict;
         }
 
-        return this.state.gridWindowStart > 0;
+        // -----------------------------------------------------------------------
+        // BOTTOM EVICTION
+        // -----------------------------------------------------------------------
+        // Mirror of the top eviction — removes rendered rows from the bottom
+        // that have fallen outside the ROWS_BELOW buffer when scrolling up.
+        // Also happens invisibly because those rows are below the viewport.
+        // -----------------------------------------------------------------------
+        if (this.state.gridWindowEnd > idealEnd) {
+            const cardsToEvict = this.state.gridWindowEnd - idealEnd;
+            const allCards = grid.querySelectorAll('.media-card');
+            const total = allCards.length;
+            const count = Math.min(cardsToEvict, total);
+            for (let i = total - 1; i >= total - count && i >= 0; i--) {
+                allCards[i].remove();
+            }
+            this.state.gridWindowEnd -= count;
+        }
     }
 
     _renderHorizontalRows(rows) {
