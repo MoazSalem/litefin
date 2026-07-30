@@ -1870,7 +1870,13 @@ export default class OSDController extends Component {
         if (wasHidden) {
             this.show();
 
-            if (seekWithArrows && (direction === 'left' || direction === 'right')) {
+            /*
+             * If focus is currently on the Controls row (Row 1) or Overlay row (Row -1),
+             * pressing Left or Right reveals the OSD and navigates between the visible buttons
+             * so the user can see what they are focusing. We only trigger direct arrow seeking
+             * if focus is NOT already sitting on control buttons.
+             */
+            if (seekWithArrows && (direction === 'left' || direction === 'right') && this._currentFocusRow !== 1 && this._currentFocusRow !== -1) {
                 // Focus the seekbar so subsequent presses continue seeking
                 this._currentFocusRow = 2;
                 this._updateFocus();
