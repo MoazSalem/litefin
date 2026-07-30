@@ -77,7 +77,7 @@ class PersonPage extends Page {
 
                             <!-- Bio -->
                             <div class="details-overview">
-                                <p class="overview-text line-clamp-6" id="person-bio"></p>
+                                <div class="overview-text line-clamp-6" id="person-bio"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -405,7 +405,7 @@ class PersonPage extends Page {
         const bioEl = this.$('#person-bio');
         if (bioEl) {
             // Assign biography overview content safely
-            bioEl.textContent = p.Overview || '';
+            bioEl.innerHTML = p.Overview || '';
             // Initially ensure standard clamp class is applied
             bioEl.classList.add('line-clamp-6');
         }

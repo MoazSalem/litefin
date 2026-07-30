@@ -153,7 +153,7 @@ class DetailsPage extends Page {
 
                             <!-- Overview -->
                             <div class="details-overview">
-                                <p class="overview-text line-clamp-6"></p>
+                                <div class="overview-text line-clamp-6"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -2071,7 +2071,7 @@ class DetailsPage extends Page {
             taglineEl.style.display = tagline ? 'block' : 'none';
         }
 
-        overviewEl.textContent = item.Overview || '';
+        overviewEl.innerHTML = item.Overview || '';
 
         // Reset state
         overviewEl.classList.add('line-clamp-6');
@@ -2505,7 +2505,7 @@ class DetailsPage extends Page {
                                     ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                     ${endsAtText ? `<span>${endsAtText}</span>` : ''}
                                 </div>
-                                <p class="episode-row-overview">${ep.Overview || ''}</p>
+                                <div class="episode-row-overview">${ep.Overview || ''}</div>
                             </div>
                         </button>
                     </div>

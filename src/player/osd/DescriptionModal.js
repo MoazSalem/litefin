@@ -109,7 +109,7 @@ export default class DescriptionModal extends BaseMenu {
 
                     ${tagline ? `<p class="description-modal__tagline">${tagline}</p>` : ''}
                     
-                    <p class="description-modal__overview">${overview}</p>
+                    <div class="description-modal__overview">${overview}</div>
                 </div>
                 <div class="description-modal__footer">
                     Press Back or OK to Resume
