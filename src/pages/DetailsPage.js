@@ -23,6 +23,7 @@ import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
 import AddToTargetModal from '../components/AddToTargetModal.js';
+import DescriptionModal from '../components/DescriptionModal.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -2883,30 +2884,18 @@ class DetailsPage extends Page {
     }
 
     /**
-     * Toggles the overview description layout between truncated and expanded states.
+     * Opens the full overview description in a scrollable dialog modal.
      */
     _showFullOverview() {
-        // Fetch references to structural elements
-        const overviewEl = this.$('.overview-text');
-        const seeMoreBtn = this.$('.see-more-btn');
-        if (!overviewEl || !seeMoreBtn) return;
+        if (!this._item) return;
 
-        // Toggle lines clamp styling
-        const isExpanded = !overviewEl.classList.contains('line-clamp-6');
-
-        if (isExpanded) {
-            // Apply line clamping to keep layout neat and clean
-            overviewEl.classList.add('line-clamp-6');
-            seeMoreBtn.textContent = i18n.t('ShowMore');
-            this.el.scrollTop = 0; // Reset scroll view hierarchy
-        } else {
-            // Remove line clamping limits to reveal full description block
-            overviewEl.classList.remove('line-clamp-6');
-            seeMoreBtn.textContent = i18n.t('ShowLess');
-        }
-
-        // Direct focus manager to maintain focus on action button
-        focusManager.focusElement(seeMoreBtn);
+        DescriptionModal.show(
+            {
+                title: this._item.Name,
+                overview: this._item.Overview
+            },
+            this
+        );
     }
 
     _checkOverviewTruncation() {

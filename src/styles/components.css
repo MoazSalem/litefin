@@ -1886,3 +1886,44 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
     }
 }
 
+/* ==========================================================================
+   Description Dialog Modal Styling
+   ========================================================================== */
+.description-dialog-modal {
+    width: 1350px;
+    max-width: 96%;
+    max-height: 88vh;
+}
+
+.description-dialog-modal .modal-header h2 {
+    font-size: 2rem;
+    padding: 20px 24px;
+}
+
+.description-dialog-content {
+    padding: 36px 48px;
+    font-size: 1.65rem;
+    line-height: 1.8;
+    color: var(--jf-text-primary);
+    outline: none;
+    border-radius: var(--jf-border-radius);
+    max-height: calc(88vh - 110px);
+}
+
+.description-dialog-content:focus,
+.description-dialog-content.focused {
+    box-shadow: inset 0 0 0 3px var(--jf-accent);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.description-dialog-text {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--jf-text-primary);
+    font-size: 1.65rem;
+}
+
+
+
+
