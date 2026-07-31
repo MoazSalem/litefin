@@ -67,7 +67,9 @@ function getPlugins(tier, options = {}) {
          * will silently fall through to the HTTP scan on WebOS.
          * The file is a no-op on non-WebOS platforms so safe to include in all builds.
          */
-        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
+        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' },
+        // Copy early boot diagnostic backup logger for all builds
+        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' }
     ];
 
     if (buildTier === 'modern') {
