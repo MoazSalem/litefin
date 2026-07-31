@@ -508,7 +508,26 @@ class LoginPage extends Page {
         if (savedUrl && !isKnownOffline) {
             // Server already saved and not known to be offline - skip server selection
             this._serverInput.value = savedUrl;
+
+            /*
+             * WebOS 4.0-4.4 freeze fix: the splash screen must be dismissed
+             * as soon as the loading state is visible, NOT after the server
+             * probe completes. On slow/offline servers the probe can take 6-20s,
+             * during which the splash would otherwise remain up and the device
+             * appears completely frozen to the user.
+             *
+             * We emit hideSplash here with a tiny delay so that:
+             *   1. _autoConnectToSavedServer() has shown STATE.LOADING first
+             *   2. The loading spinner is composited and visible to the user
+             *   3. The splash fade-out transition runs over the spinner, not a black screen
+             *
+             * The redundant hideSplash calls inside _autoConnectToSavedServer's
+             * success/error branches remain as a safety net for the final transition.
+             */
             this._autoConnectToSavedServer(savedUrl);
+            setTimeout(() => {
+                eventBus.emit('app:hideSplash');
+            }, 80);
         } else {
             // No saved server or known offline - show server selection immediately
             if (savedUrl) {
@@ -760,8 +779,16 @@ class LoginPage extends Page {
     }
 
     /**
-     * Auto-connect to a saved server on app startup
-     * Skips server selection and goes straight to user list
+     * Auto-connect to a saved server on app startup.
+     * Skips server selection and goes straight to user list.
+     *
+     * IMPORTANT: The splash screen is dismissed by the caller (onMounted)
+     * BEFORE this method's async work begins. Do NOT call hideSplash inside
+     * this method's try-block opening — the caller has already done it at
+     * the right moment (when the loading spinner is first visible).
+     * The hideSplash calls at the end of the success/error paths are kept
+     * as safety nets for the final UI state transitions only.
+     *
      * @param {string} savedUrl - The saved server URL
      */
     async _autoConnectToSavedServer(savedUrl) {

@@ -23,17 +23,21 @@
     /* ---------------------------------------------------------------------- */
     /* CONFIG                                                                   */
     /* ---------------------------------------------------------------------- */
-    const BL_MAX_LINES = 300;
-    const BL_MAX_STORE = 6000;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var BL_MAX_LINES = 300;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var BL_MAX_STORE = 6000;
 
     /* ---------------------------------------------------------------------- */
     /* CREATE THE RAW DOM PANEL                                                 */
     /* ---------------------------------------------------------------------- */
-    const panel = document.createElement('div');
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var panel = document.createElement('div');
     panel.id = 'bl';
 
     /* Individual property assignments — no cssText with CSS vars */
-    const ps = panel.style;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var ps = panel.style;
     ps.position = 'fixed';
     ps.top = '0';
     ps.left = '0';
@@ -57,7 +61,8 @@
      * We only show the panel when debug_overlay_enabled is set, so normal
      * users never see it.
      */
-    let _debugActive = false;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var _debugActive = false;
     try {
         _debugActive = localStorage.getItem('debug_overlay_enabled') === 'true';
     } catch (e) {}
@@ -66,15 +71,19 @@
     /* Append to <html> — <body> may not exist yet at this point */
     (document.head || document.documentElement).appendChild(panel);
 
-    let lineCount = 0;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var lineCount = 0;
 
     /* ---------------------------------------------------------------------- */
     /* _write(level, args)                                                      */
     /* ---------------------------------------------------------------------- */
     function _write(level, args) {
-        let msg = '';
-        for (let i = 0; i < args.length; i++) {
-            const a = args[i];
+        // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+        var msg = '';
+        // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+        for (var i = 0; i < args.length; i++) {
+            // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+            var a = args[i];
             if (a === null) {
                 msg += 'null ';
                 continue;
@@ -96,7 +105,8 @@
 
         /* Persist to localStorage — survives crashes/reboots */
         try {
-            let stored = localStorage.getItem('bl_log') || '';
+            // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+            var stored = localStorage.getItem('bl_log') || '';
             stored += new Date().toLocaleTimeString() + ' [' + level + '] ' + msg + '\n';
             if (stored.length > BL_MAX_STORE) {
                 stored = stored.slice(stored.length - BL_MAX_STORE);
@@ -105,7 +115,8 @@
         } catch (e) {}
 
         /* Render a row to the DOM panel */
-        const row = document.createElement('div');
+        // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+        var row = document.createElement('div');
         row.style.borderBottom = '1px solid #1a1a1a';
         row.style.padding = '1px 0';
 
@@ -127,10 +138,14 @@
     /* ---------------------------------------------------------------------- */
     /* MONKEYPATCH console.* — safe wrappers that never throw                  */
     /* ---------------------------------------------------------------------- */
-    const _origLog = console.log;
-    const _origInfo = console.info;
-    const _origWarn = console.warn;
-    const _origError = console.error;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var _origLog = console.log;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var _origInfo = console.info;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var _origWarn = console.warn;
+    // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+    var _origError = console.error;
 
     console.log = function () {
         _write('LOG', arguments);
