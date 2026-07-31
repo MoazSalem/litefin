@@ -154,7 +154,7 @@ class DetailsPage extends Page {
 
                             <!-- Overview -->
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6"></div>
+                                <div class="overview-text line-clamp-6" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -2073,6 +2073,7 @@ class DetailsPage extends Page {
         }
 
         overviewEl.innerHTML = item.Overview || '';
+        overviewEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
 
         // Reset state
         overviewEl.classList.add('line-clamp-6');

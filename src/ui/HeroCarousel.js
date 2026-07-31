@@ -187,7 +187,7 @@ class HeroCarousel {
                     <div class="hero-meta-row">
                         ${metaHtml}
                     </div>
-                    <div class="hero-description">${i18n.ensureBiDi(item.Overview || '')}</div>
+                    <div class="hero-description" tabindex="-1">${i18n.ensureBiDi(item.Overview || '')}</div>
                 </div>
             </div>
         `;

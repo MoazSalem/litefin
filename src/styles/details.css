@@ -804,6 +804,13 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     white-space: pre-line;
 }
 
+.overview-text a {
+    pointer-events: none;
+    cursor: default;
+    text-decoration: none;
+    color: inherit;
+}
+
 .line-clamp-6 {
     display: -webkit-box;
     -webkit-line-clamp: 6;

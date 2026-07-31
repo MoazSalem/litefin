@@ -78,7 +78,7 @@ class PersonPage extends Page {
 
                             <!-- Bio -->
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6" id="person-bio"></div>
+                                <div class="overview-text line-clamp-6" id="person-bio" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -407,6 +407,7 @@ class PersonPage extends Page {
         if (bioEl) {
             // Assign biography overview content safely
             bioEl.innerHTML = p.Overview || '';
+            bioEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
             // Initially ensure standard clamp class is applied
             bioEl.classList.add('line-clamp-6');
         }
