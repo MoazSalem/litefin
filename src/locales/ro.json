@@ -277,6 +277,8 @@
     "Raised": "Ridicat",
     "RecommendationBecauseYouLike": "Pentru că vă place {0}",
     "RefreshMetadata": "Actualizați metadatele",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Transferă automat pistele audio și de subtitrare active la următorul episod.",
     "Remuxing": "Remuxare",
     "Repeat": "Repetă",
@@ -352,6 +354,7 @@
     "Videos": "Videoclipuri",
     "Writer": "Scriitor",
     "Writers": "Scriitori",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minute",
     "1Minute": "1 minut",

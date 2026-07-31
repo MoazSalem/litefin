@@ -277,6 +277,8 @@
     "Raised": "Ardaithe",
     "RecommendationBecauseYouLike": "Mar is maith leat {0}",
     "RefreshMetadata": "Athnuaigh meiteashonraí",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Athphacáistiú",
     "Repeat": "Athdhéan",

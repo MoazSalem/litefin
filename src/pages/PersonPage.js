@@ -17,6 +17,7 @@ import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { logger } from '../utils/Logger.js';
@@ -77,7 +78,7 @@ class PersonPage extends Page {
 
                             <!-- Bio -->
                             <div class="details-overview">
-                                <p class="overview-text line-clamp-6" id="person-bio"></p>
+                                <div class="overview-text line-clamp-6" id="person-bio" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -405,7 +406,8 @@ class PersonPage extends Page {
         const bioEl = this.$('#person-bio');
         if (bioEl) {
             // Assign biography overview content safely
-            bioEl.textContent = p.Overview || '';
+            bioEl.innerHTML = p.Overview || '';
+            bioEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
             // Initially ensure standard clamp class is applied
             bioEl.classList.add('line-clamp-6');
         }
@@ -470,25 +472,15 @@ class PersonPage extends Page {
 
             // Hook up clean click and touch activation behavior
             seeMoreBtn.onclick = () => {
-                // Determine if we are currently expanded or collapsed
-                const isExpanded = !bioEl.classList.contains('line-clamp-6');
+                if (!this._person) return;
 
-                if (isExpanded) {
-                    // Collapse: Restrict lines back to clamp class and update text
-                    bioEl.classList.add('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowMore');
-
-                    // Reset scroll back to top of the page view
-                    const page = this.$('.page-content');
-                    if (page) page.scrollTop = 0;
-                } else {
-                    // Expand: Remove restriction to let browser render full text height
-                    bioEl.classList.remove('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowLess');
-                }
-
-                // Immediately focus the button to prevent remote focus loss during layout shifts
-                focusManager.focusElement(seeMoreBtn);
+                DescriptionModal.show(
+                    {
+                        title: this._person.Name,
+                        overview: this._person.Overview
+                    },
+                    this
+                );
             };
         } else {
             // If the biography is short and does not overflow, hide the button completely

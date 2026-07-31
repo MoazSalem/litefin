@@ -222,6 +222,13 @@
     letter-spacing: 0.01em;
 }
 
+.description-modal__overview a {
+    pointer-events: none;
+    cursor: default;
+    text-decoration: none;
+    color: inherit;
+}
+
 /* Close instruction for TV users */
 .description-modal__footer {
     padding: 20px 50px;

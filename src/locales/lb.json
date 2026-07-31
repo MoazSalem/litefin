@@ -277,6 +277,8 @@
     "Raised": "Héichgezunn",
     "RecommendationBecauseYouLike": "Empfehlung well Dir {0} gären hutt",
     "RefreshMetadata": "Metadaten aktualiséieren",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remuxen",
     "Repeat": "Wiederhuelen",

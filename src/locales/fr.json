@@ -277,6 +277,8 @@
     "Raised": "Surélevé",
     "RecommendationBecauseYouLike": "Parce que vous aimez {0}",
     "RefreshMetadata": "Actualiser les métadonnées",
+    "RememberLastActiveUser": "Se souvenir du dernier utilisateur actif",
+    "RememberLastActiveUserDescription": "Se connecter automatiquement en tant que dernier utilisateur actif au démarrage, en contournant l'écran de sélection de l'utilisateur.",
     "RememberTracksForSessionDescription": "Reporter automatiquement vos pistes audio et sous-titres actives sur l'épisode suivant.",
     "Remuxing": "Remultiplexage",
     "Repeat": "Répéter",
@@ -352,6 +354,7 @@
     "Videos": "Vidéos",
     "Writer": "Scénariste",
     "Writers": "Scénaristes",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minutes",
     "1Minute": "1 minute",

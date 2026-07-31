@@ -277,6 +277,8 @@
     "Raised": "Выпуклая",
     "RecommendationBecauseYouLike": "Ибо вам нравится «{0}»",
     "RefreshMetadata": "Обновить метаданные",
+    "RememberLastActiveUser": "Запомнить последнего активного пользователя",
+    "RememberLastActiveUserDescription": "Автоматически входить под именем последнего активного пользователя при запуске, минуя экран выбора пользователя.",
     "RememberTracksForSessionDescription": "Автоматически переносить активные звуковые дорожки и субтитры на следующую серию.",
     "Remuxing": "Ремуксинг",
     "Repeat": "Повтор",

@@ -277,6 +277,8 @@
     "Raised": "Opphøyet",
     "RecommendationBecauseYouLike": "Fordi du liker {0}",
     "RefreshMetadata": "Oppdater metadata",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Ompakking",
     "Repeat": "Gjenta",

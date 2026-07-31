@@ -277,6 +277,8 @@
     "Raised": "ഉയർത്തി",
     "RecommendationBecauseYouLike": "കാരണം നിങ്ങൾ {0} ഇഷ്ടപ്പെടുന്നു",
     "RefreshMetadata": "മെറ്റാഡാറ്റ പുതുക്കുക",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "റീമാക്സിംഗ്",
     "Repeat": "ആവർത്തിച്ച്",

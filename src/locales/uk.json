@@ -277,6 +277,8 @@
     "Raised": "Піднятий",
     "RecommendationBecauseYouLike": "Тому що вам подобається {0}",
     "RefreshMetadata": "Оновити метадані",
+    "RememberLastActiveUser": "Запам'ятати останнього активного користувача",
+    "RememberLastActiveUserDescription": "Автоматично входити під ім'ям останнього активного користувача під час запуску, минаючи екран вибору користувача.",
     "RememberTracksForSessionDescription": "Автоматично переносити активні звукові доріжки та субтитри на наступну серію.",
     "Remuxing": "Ремуксування",
     "Repeat": "Повторювати",

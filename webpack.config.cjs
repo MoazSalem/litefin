@@ -5,7 +5,7 @@
  * Triple-build system supporting:
  * - Native build (Tizen 6.0+): No transpilation, pure ES6+
  * - Modern build (Tizen 5.0+): Transpiled for Chromium 69
- * - Legacy build (Tizen 3.0+): Transpiled for Chromium 47 (ES5)
+ * - Legacy build (Tizen 3.0+): Transpiled for Chromium 38 (ES5)
  * ============================================================================
  */
 
@@ -67,7 +67,9 @@ function getPlugins(tier, options = {}) {
          * will silently fall through to the HTTP scan on WebOS.
          * The file is a no-op on non-WebOS platforms so safe to include in all builds.
          */
-        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
+        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' },
+        // Copy early boot diagnostic backup logger for all builds
+        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' }
     ];
 
     if (buildTier === 'modern') {
@@ -235,8 +237,8 @@ const normalConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -277,7 +279,7 @@ const normalConfig = {
 };
 
 // ============================================================================
-// Legacy build - Tizen 3.0+ / webOS 4.0+ (Chromium 47, ES5)
+// Legacy build - Tizen 3.0+ / webOS 4.0+ (Chromium 38, true ES5)
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
@@ -316,8 +318,8 @@ const legacyConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -326,7 +328,7 @@ const legacyConfig = {
                             [
                                 '@babel/preset-env',
                                 {
-                                    targets: { chrome: '47' },
+                                    targets: { chrome: '38' },
                                     useBuiltIns: 'usage',
                                     corejs: 3
                                 }
@@ -393,6 +395,8 @@ const ultraLegacyConfig = {
         'core-js/es/array/from', // Array.from — spread/iterator polyfill
         'whatwg-fetch', // fetch() for Tizen 2.x / WebOS 1.x
         'url-search-params-polyfill', // URLSearchParams for Chrome 32
+        './src/utils/DomPolyfills.js',
+        './src/utils/AssJsPolyfills.js',
         './src/index.js'
     ],
 
@@ -551,8 +555,8 @@ const normalOblongConfig = {
         rules: [
             {
                 // Transpile JS using Babel for Chromium 63
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {

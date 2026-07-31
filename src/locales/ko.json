@@ -277,6 +277,8 @@
     "Raised": "양각",
     "RecommendationBecauseYouLike": "{0} 을(를) 좋아하기 때문에",
     "RefreshMetadata": "메타데이터 새로 고침",
+    "RememberLastActiveUser": "마지막 사용 사용자 기억",
+    "RememberLastActiveUserDescription": "시작할 때 사용자 선택 화면을 건너뛰고 마지막 활성 사용자로 자동 로그인합니다.",
     "RememberTracksForSessionDescription": "활성화된 오디오 및 자막 트랙을 다음 에피소드로 자동으로 이어갑니다.",
     "Remuxing": "리먹싱",
     "Repeat": "반복",

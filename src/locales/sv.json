@@ -277,6 +277,8 @@
     "Raised": "Upphöjd",
     "RecommendationBecauseYouLike": "Eftersom du gillar {0}",
     "RefreshMetadata": "Uppdatera metadata",
+    "RememberLastActiveUser": "Kom ihåg senaste aktiva användare",
+    "RememberLastActiveUserDescription": "Logga in automatiskt som den senaste aktiva användaren vid start, förbi användarvalsskärmen.",
     "RememberTracksForSessionDescription": "Bär automatiskt med dina aktiva ljud- och undertextspår till nästa avsnitt.",
     "Remuxing": "Ommultiplexering",
     "Repeat": "Upprepa",
@@ -352,6 +354,7 @@
     "Videos": "Videor",
     "Writer": "Författare",
     "Writers": "Författare",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minuter",
     "1Minute": "1 Minut",

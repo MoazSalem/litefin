@@ -277,6 +277,8 @@
     "Raised": "Өргөгдсөн",
     "RecommendationBecauseYouLike": "Та {0}-г таалагддаг учраас",
     "RefreshMetadata": "Metadata-г шинэчлэх",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remux хийх",
     "Repeat": "Давтах",

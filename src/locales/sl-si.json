@@ -277,6 +277,8 @@
     "Raised": "Dvignjeni",
     "RecommendationBecauseYouLike": "Ker vam je všeč {0}",
     "RefreshMetadata": "Osveži metapodatke",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remuxing",
     "Repeat": "Ponovi",

@@ -277,6 +277,8 @@
     "Raised": "浮き上がり",
     "RecommendationBecauseYouLike": "{0} がお気に入りのため",
     "RefreshMetadata": "メタデータをリフレッシュ",
+    "RememberLastActiveUser": "最後のログインユーザーを記憶",
+    "RememberLastActiveUserDescription": "起動時に最後のログインユーザーとして自動的にログインし、ユーザー選択画面をスキップします。",
     "RememberTracksForSessionDescription": "アクティブなオーディオおよび字幕トラックを次のエピソードに自動的に引き継ぎます。",
     "Remuxing": "リミキシング",
     "Repeat": "リピート",
@@ -352,6 +354,7 @@
     "Videos": "動画",
     "Writer": "著書",
     "Writers": "脚本",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10分",
     "1Minute": "1分",
