@@ -897,19 +897,28 @@ class App {
                     storage.flush();
                 }
 
+                /*
+                 * Check user preference: "Remember Last Active User".
+                 * When enabled, the app skips the profile picker on launch and boots directly
+                 * into the last active session (unless protected by a local PIN).
+                 * Default: disabled (false). Adheres to Apple Human Interface Guidelines
+                 * for frictionless user experience and user control.
+                 */
+                const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
-                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin) && !skipProfilesOnce) {
-                    // Multiple users stored, or the restored profile is PIN-locked —
+                } else if (isAuthenticated && ((sessionCount > 1 && !rememberLastUser) || activeHasPin) && !skipProfilesOnce) {
+                    // Multiple users stored (and remember last user is disabled), or the restored profile is PIN-locked —
                     // make them pick a profile (which enforces any PIN).
                     log.info(
-                        `Initial route: navigating to ProfilesPage (sessions=${sessionCount}, pinLocked=${activeHasPin})`
+                        `Initial route: navigating to ProfilesPage (sessions=${sessionCount}, pinLocked=${activeHasPin}, rememberLastUser=${rememberLastUser})`
                     );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Single user, no PIN, or skipped once — skip the profiles screen and go straight home
+                    // Single user, no PIN, rememberLastUser active, or skipped once — skip the profiles screen and go straight home
                     log.info('Initial route: Authenticated, navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {

@@ -4573,6 +4573,13 @@ class SettingsPage extends Page {
         const userId = user?.Id;
         const hasPin = userId ? pinManager.hasPin(userId) : false;
 
+        /*
+         * Check whether auto-login for the last active user is enabled.
+         * Default: disabled (false). Adheres to Apple Human Interface Guidelines
+         * for explicit user consent and minimal friction control elements.
+         */
+        const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Account">${i18n.t('Account')}</h2>
@@ -4606,6 +4613,16 @@ class SettingsPage extends Page {
                 `
                 : ''
             }
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RememberLastActiveUser">${i18n.t('RememberLastActiveUser')}</span>
+                        <span class="setting-description" data-i18n="RememberLastActiveUserDescription">${i18n.t('RememberLastActiveUserDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${rememberLastUser ? 'active' : ''}" id="toggle-remember-last-user" tabindex="0"></button>
+                    </div>
+                </div>
 
                 <div class="setting-actions centered">
                     <!-- Navigate to the Who's Watching screen to pick a different profile -->
@@ -5838,6 +5855,29 @@ class SettingsPage extends Page {
             });
         }
 
+        // ==========================================
+        // REMEMBER LAST ACTIVE USER TOGGLE (Account tab)
+        // ==========================================
+        // Controls whether the application automatically boots into the last active
+        // user profile, skipping the "Who's Watching" selection screen on app launch.
+        // Follows Apple Human Interface Guidelines for intuitive binary toggle controls.
+        const rememberLastUserToggle = this.$('#toggle-remember-last-user');
+        if (rememberLastUserToggle) {
+            rememberLastUserToggle.addEventListener('click', () => {
+                // Read current stored boolean status
+                const isCurrentlyActive = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
+                // Invert the setting state
+                const nextState = !isCurrentlyActive;
+
+                // Save preference to local storage
+                storage.setItem('pref:rememberLastActiveUser', nextState);
+
+                // Update UI toggle switch state smoothly with CSS transitions
+                rememberLastUserToggle.classList.toggle('active', nextState);
+            });
+        }
+
         // Toggle My Media
         const myMediaBtn = this.$('#toggle-my-media');
         if (myMediaBtn) {
@@ -6598,7 +6638,7 @@ class SettingsPage extends Page {
             const saveWolMac = (forceFormat = false) => {
                 let currentVal = wolMacInput.value.trim();
                 const hexOnly = currentVal.replace(/[^0-9a-fA-F]/g, '');
-                
+
                 // Format automatically if full 12 hex digits are entered or on blur/change
                 if (forceFormat || hexOnly.length === 12) {
                     const formatted = formatMac(currentVal);
