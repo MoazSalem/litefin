@@ -277,6 +277,8 @@
     "Raised": "Rilievo",
     "RecommendationBecauseYouLike": "Poiché ti piace {0}",
     "RefreshMetadata": "Aggiorna metadati",
+    "RememberLastActiveUser": "Ricorda l'ultimo utente attivo",
+    "RememberLastActiveUserDescription": "Accedi automaticamente come ultimo utente attivo all'avvio, ignorando la schermata di selezione dell'utente.",
     "RememberTracksForSessionDescription": "Applica automaticamente le tracce audio e i sottotitoli attivi all'episodio successivo.",
     "Remuxing": "Rimodellamento",
     "Repeat": "Ripeti",
@@ -352,6 +354,7 @@
     "Videos": "Video",
     "Writer": "Scrittore",
     "Writers": "Scrittori",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minuti",
     "1Minute": "1 Minuto",

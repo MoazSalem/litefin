@@ -277,6 +277,8 @@
     "Raised": "Tõstetud",
     "RecommendationBecauseYouLike": "Sest sulle meeldib {0}",
     "RefreshMetadata": "Värskenda metaandmed",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Konvertimine",
     "Repeat": "Korda",

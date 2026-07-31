@@ -277,6 +277,8 @@
     "Raised": "Издигнуто",
     "RecommendationBecauseYouLike": "Зато што вам се свиђа {0}",
     "RefreshMetadata": "Освежите метаподатке",
+    "RememberLastActiveUser": "Запамти последњег активног корисника",
+    "RememberLastActiveUserDescription": "Аутоматски се пријавите као последњи активни корисник при покретању, заобилазећи екран за избор корисника.",
     "RememberTracksForSessionDescription": "Аутоматски преноси активне аудио записе и титлове у следећу епизоду.",
     "Remuxing": "Ремуксовање",
     "Repeat": "Понови",

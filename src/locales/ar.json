@@ -277,6 +277,8 @@
     "Raised": "رفع",
     "RecommendationBecauseYouLike": "لأنك أحببت {0}",
     "RefreshMetadata": "قم بتحديث البيانات الوصفية",
+    "RememberLastActiveUser": "تذكر آخر مستخدم نشط",
+    "RememberLastActiveUserDescription": "تسجيل الدخول تلقائيًا كآخر مستخدم نشط عند بدء التشغيل، متجاوزًا شاشة تحديد المستخدم.",
     "RememberTracksForSessionDescription": "نقل المسارات الصوتية ومسارات الترجمة النشطة تلقائيًا إلى الحلقة التالية.",
     "Remuxing": "إعادة",
     "Repeat": "كرر",

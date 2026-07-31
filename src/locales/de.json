@@ -277,6 +277,8 @@
     "Raised": "Erhöht",
     "RecommendationBecauseYouLike": "Weil dir {0} gefällt",
     "RefreshMetadata": "Metadaten aktualisieren",
+    "RememberLastActiveUser": "Letzten aktiven Benutzer merken",
+    "RememberLastActiveUserDescription": "Meldet sich beim Start automatisch als letzter aktiver Benutzer an und umgeht den Benutzerauswahlbildschirm.",
     "RememberTracksForSessionDescription": "Aktive Audio- und Untertitelspuren automatisch für die nächste Episode übernehmen.",
     "Remuxing": "Remuxen",
     "Repeat": "Wiederholen",
@@ -352,6 +354,7 @@
     "Videos": "Videos",
     "Writer": "Autor",
     "Writers": "Autoren",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minuten",
     "1Minute": "1 Minute",

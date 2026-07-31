@@ -277,6 +277,8 @@
     "Raised": "Criado",
     "RecommendationBecauseYouLike": "Porque você curtiu {0}",
     "RefreshMetadata": "Atualizar metadados",
+    "RememberLastActiveUser": "Lembrar do último usuário ativo",
+    "RememberLastActiveUserDescription": "Entrar automaticamente como o último usuário ativo na inicialização, ignorando a tela de seleção de usuário.",
     "RememberTracksForSessionDescription": "Carregar automaticamente suas faixas de áudio e legendas ativas para o próximo episódio.",
     "Remuxing": "Remuxar",
     "Repeat": "Repetir",
@@ -352,6 +354,7 @@
     "Videos": "Vídeos",
     "Writer": "Escritor",
     "Writers": "Escritores",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minutos",
     "1Minute": "1 Minuto",

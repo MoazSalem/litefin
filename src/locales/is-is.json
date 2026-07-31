@@ -277,6 +277,8 @@
     "Raised": "Raised",
     "RecommendationBecauseYouLike": "Af því að þér líkar {0}",
     "RefreshMetadata": "Endurhlaða lýsigögn",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remuxing",
     "Repeat": "Endurtaka",

@@ -277,6 +277,8 @@
     "Raised": "Dinaikkan",
     "RecommendationBecauseYouLike": "Karena kamu suka {0}",
     "RefreshMetadata": "Segarkan metadata",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remixing",
     "Repeat": "Ulangi",

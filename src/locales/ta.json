@@ -277,6 +277,8 @@
     "Raised": "எழுப்பப்பட்ட",
     "RecommendationBecauseYouLike": "நீங்கள் {0} ஐ விரும்புவதால்",
     "RefreshMetadata": "மெட்டாடேட்டாவைப் புதுப்பிக்கவும்",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "ரீமக்ஸ்",
     "Repeat": "மீண்டும்",

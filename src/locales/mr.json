@@ -277,6 +277,8 @@
     "Raised": "Raised",
     "RecommendationBecauseYouLike": "तुम्हाला {0} आवडले म्हणून",
     "RefreshMetadata": "मेटाडॅटा ताजे करा",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remuxing",
     "Repeat": "Repeat",

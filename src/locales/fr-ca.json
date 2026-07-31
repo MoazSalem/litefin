@@ -277,6 +277,8 @@
     "Raised": "Élevé",
     "RecommendationBecauseYouLike": "Parce que vous aimez {0}",
     "RefreshMetadata": "Actualiser les métadonnées",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remultiplexage",
     "Repeat": "Répéter",

@@ -277,6 +277,8 @@
     "Raised": "Nhô Lên",
     "RecommendationBecauseYouLike": "Bởi vì bạn thích {0}",
     "RefreshMetadata": "Làm mới dữ liệu mô tả",
+    "RememberLastActiveUser": "Ghi nhớ người dùng hoạt động cuối cùng",
+    "RememberLastActiveUserDescription": "Tự động đăng nhập với tư cách là người dùng hoạt động cuối cùng khi khởi động, bỏ qua màn hình chọn người dùng.",
     "RememberTracksForSessionDescription": "Tự động chuyển các bản âm thanh và phụ đề đang hoạt động của bạn sang tập tiếp theo.",
     "Remuxing": "Pha Trộn",
     "Repeat": "Lặp lại",
@@ -352,6 +354,7 @@
     "Videos": "Video",
     "Writer": "Người viết",
     "Writers": "Người viết",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 phút",
     "1Minute": "1 phút",

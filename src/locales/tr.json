@@ -277,6 +277,8 @@
     "Raised": "Yükseltilmiş",
     "RecommendationBecauseYouLike": "{0} sevdiğiniz için",
     "RefreshMetadata": "Meta veriyi yenile",
+    "RememberLastActiveUser": "Son Aktif Kullanıcıyı Hatırla",
+    "RememberLastActiveUserDescription": "Başlangıçta kullanıcı seçim ekranını atlayarak otomatik olarak son aktif kullanıcı olarak oturum açın.",
     "RememberTracksForSessionDescription": "Aktif ses ve altyazı parçalarınızı otomatik olarak bir sonraki bölüme taşıyın.",
     "Remuxing": "Kapsayıcı Değiştirme",
     "Repeat": "Tekrarla",
@@ -352,6 +354,7 @@
     "Videos": "Videolar",
     "Writer": "Yazar",
     "Writers": "Senaristler",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Dakika",
     "1Minute": "1 Dakika",

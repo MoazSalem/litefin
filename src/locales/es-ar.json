@@ -277,6 +277,8 @@
     "Raised": "Elevado",
     "RecommendationBecauseYouLike": "Porque te gusta {0}",
     "RefreshMetadata": "Actualizar metadatos",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remezclado",
     "Repeat": "Repetir",

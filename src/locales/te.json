@@ -277,6 +277,8 @@
     "Raised": "పెంచింది",
     "RecommendationBecauseYouLike": "మీకు {0} ఇష్టం కాబట్టి",
     "RefreshMetadata": "మెటాడేటాను రిఫ్రెష్ చేయండి",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "రీమక్సింగ్",
     "Repeat": "పునరావృతం చేయండి",

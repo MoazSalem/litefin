@@ -277,6 +277,8 @@
     "Raised": "مطرح شده",
     "RecommendationBecauseYouLike": "برای اینکه تو {0} را نیز دوست داری",
     "RefreshMetadata": "تازه کردن متادیتا",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "بازسازی",
     "Repeat": "تکرار",

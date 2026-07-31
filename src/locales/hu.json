@@ -277,6 +277,8 @@
     "Raised": "Emelt",
     "RecommendationBecauseYouLike": "Mert tetszett a(z) {0}",
     "RefreshMetadata": "Metaadat frissítése",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remuxolás",
     "Repeat": "Ismétlés",

@@ -277,6 +277,8 @@
     "Raised": "Goratuak",
     "RecommendationBecauseYouLike": "{0} gustatu zaizunez",
     "RefreshMetadata": "Metadatuak eguneratzea",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remuxing",
     "Repeat": "Errepikatu",

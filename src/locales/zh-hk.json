@@ -277,6 +277,8 @@
     "Raised": "浮凸",
     "RecommendationBecauseYouLike": "因為你鍾意 {0}",
     "RefreshMetadata": "更新媒體詳細資料",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "重新封裝",
     "Repeat": "重複播放",

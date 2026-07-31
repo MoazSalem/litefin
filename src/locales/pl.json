@@ -277,6 +277,8 @@
     "Raised": "Wypukły",
     "RecommendationBecauseYouLike": "Bo polubiłeś {0}",
     "RefreshMetadata": "Odśwież metadane",
+    "RememberLastActiveUser": "Zapamiętaj ostatnio aktywnego użytkownika",
+    "RememberLastActiveUserDescription": "Automatycznie loguj jako ostatnio aktywnego użytkownika przy uruchamianiu, pomijając ekran wyboru użytkownika.",
     "RememberTracksForSessionDescription": "Automatycznie przenoś aktywne ścieżki audio i napisy do następnego odcinka.",
     "Remuxing": "Remuksowanie",
     "Repeat": "Powtórz",
@@ -352,6 +354,7 @@
     "Videos": "Wideo",
     "Writer": "Scenarzysta",
     "Writers": "Scenarzyści",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minut",
     "1Minute": "1 minuta",

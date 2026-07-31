@@ -277,6 +277,8 @@
     "Raised": "Verhoogd",
     "RecommendationBecauseYouLike": "Omdat je {0} leuk vindt",
     "RefreshMetadata": "Metadata vernieuwen",
+    "RememberLastActiveUser": "Laatst actieve gebruiker onthouden",
+    "RememberLastActiveUserDescription": "Meld u bij het opstarten automatisch aan als de laatst actieve gebruiker en sla het gebruikersselectiescherm over.",
     "RememberTracksForSessionDescription": "Neem automatisch je actieve audio- en ondertitelssporen mee naar de volgende aflevering.",
     "Remuxing": "Remuxen",
     "Repeat": "Herhaling",
@@ -352,6 +354,7 @@
     "Videos": "Video's",
     "Writer": "Schrijver",
     "Writers": "Schrijvers",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minuten",
     "1Minute": "1 Minuut",

@@ -277,6 +277,8 @@
     "Raised": "Uzdignuto",
     "RecommendationBecauseYouLike": "Zato što volite {0}",
     "RefreshMetadata": "Osvježi metapodatke",
+    "RememberLastActiveUser": "Zapamti zadnjeg aktivnog korisnika",
+    "RememberLastActiveUserDescription": "Automatski se prijavite kao zadnji aktivni korisnik pri pokretanju, zaobilazeći zaslon za odabir korisnika.",
     "RememberTracksForSessionDescription": "Automatski prenosi aktivne audio zapise i titlove u sljedeću epizodu.",
     "Remuxing": "Pretvaranje",
     "Repeat": "Ponovi",
@@ -352,6 +354,7 @@
     "Videos": "Videozapisi",
     "Writer": "Pisac",
     "Writers": "Pisci",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minuta",
     "1Minute": "1 minuta",

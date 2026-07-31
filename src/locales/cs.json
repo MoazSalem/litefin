@@ -277,6 +277,8 @@
     "Raised": "Vystupující",
     "RecommendationBecauseYouLike": "Protože se vám líbí {0}",
     "RefreshMetadata": "Aktualizovat metadata",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Remuxování",
     "Repeat": "Opakovat",

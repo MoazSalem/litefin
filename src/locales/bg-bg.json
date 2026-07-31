@@ -277,6 +277,8 @@
     "Raised": "Повишено",
     "RecommendationBecauseYouLike": "Защото сте харесали {0}",
     "RefreshMetadata": "Опресняване на метаданните",
+    "RememberLastActiveUser": "Remember Last Active User",
+    "RememberLastActiveUserDescription": "Automatically log in as the last active user on startup, bypassing the user selection screen.",
     "RememberTracksForSessionDescription": "Automatically carry your active audio and subtitle tracks to the next episode.",
     "Remuxing": "Ремуксиране",
     "Repeat": "Повтаряне",

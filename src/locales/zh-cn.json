@@ -277,6 +277,8 @@
     "Raised": "提高",
     "RecommendationBecauseYouLike": "因为你喜欢 {0}",
     "RefreshMetadata": "刷新元数据",
+    "RememberLastActiveUser": "记住上次活动用户",
+    "RememberLastActiveUserDescription": "在启动时自动以登录上次活动的用户，跳过用户选择屏幕。",
     "RememberTracksForSessionDescription": "自动将当前活动的音频和字幕轨道应用到下一集。",
     "Remuxing": "转封装",
     "Repeat": "循环模式",
