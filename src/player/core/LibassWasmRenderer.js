@@ -278,7 +278,7 @@ export default class LibassWasmRenderer {
                 prescaleHeightLimit: 1080,
                 maxRenderHeight: maxHeight,
                 resizeVariation: 0.2,
-                renderAhead: this._isVirtual ? 100 : 50
+                renderAhead: this._isVirtual ? 100 : 90
             };
 
             this._octopus = new SubtitlesOctopus(options);
