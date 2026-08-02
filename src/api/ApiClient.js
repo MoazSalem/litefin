@@ -528,7 +528,7 @@ export class ApiClient {
                     message = data.message || data.Message || message;
                 } catch {
                     // Not JSON — use raw text as the error message (trim to 200 chars max)
-                    const trimmed = bodyText.trim();
+                    const trimmed = (bodyText || '').trim();
                     if (trimmed) {
                         message = trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed;
                     }
@@ -2064,7 +2064,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
                 const info = JSON.parse(xhr.responseText);
 
                 let serverName = info.ServerName;
-                if (!serverName || serverName.trim() === '') {
+                if (!serverName || typeof serverName !== 'string' || serverName.trim() === '') {
                     // Fall back to hostname extracted from the address URL
                     try {
                         serverName = new URL(address).hostname;

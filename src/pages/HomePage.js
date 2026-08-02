@@ -1690,10 +1690,17 @@ class HomePage extends Page {
             placeholder.classList.add('style-compact');
         }
 
-        // Read theme color for skeleton backgrounds
-        const primaryRgb =
-            getComputedStyle(document.documentElement).getPropertyValue('--jf-primary-btn-color-rgb').trim() ||
-            '255, 255, 255';
+        // -------------------------------------------------------------------------
+        // Safe Theme Color Retrieval for Legacy Environments
+        // -------------------------------------------------------------------------
+        // On ultra-legacy webviews (such as Tizen 3.0 or legacy WebOS WebKit engines),
+        // CSSStyleDeclaration.getPropertyValue() returns null when custom CSS properties
+        // are not natively resolved or prior to polyfill injection. Calling .trim()
+        // directly on null triggers a fatal startup exception:
+        // "ERR: Cannot read property 'trim' of null".
+        // -------------------------------------------------------------------------
+        const rawPrimaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--jf-primary-btn-color-rgb');
+        const primaryRgb = (rawPrimaryRgb ? rawPrimaryRgb.trim() : '') || '255, 255, 255';
 
         placeholder.innerHTML = `
             <div id="hero-carousel-container" 
