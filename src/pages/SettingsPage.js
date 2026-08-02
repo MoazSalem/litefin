@@ -2695,6 +2695,10 @@ class SettingsPage extends Page {
             {
                 value: 'sendWol',
                 label: i18n.t('OptionSendWakeOnLan') || 'Send Wake-on-LAN Packet'
+            },
+            {
+                value: 'randomItem',
+                label: i18n.t('OptionRandomItem') || 'Open Random Item'
             }
         ];
 

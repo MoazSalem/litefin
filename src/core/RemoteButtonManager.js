@@ -76,6 +76,10 @@ class RemoteButtonManager {
         switch (action) {
             case 'home':
                 // 1. Reset current page state and clear all navigation history stack entries
+                if (this._isPlayerActive()) {
+                    log.info('Home Mapped: Ignored because video playback is currently active.');
+                    break;
+                }
                 log.info('Home Mapped: Resetting route to /home and purging history stack.');
                 router.reset('/home');
                 break;
@@ -182,6 +186,23 @@ class RemoteButtonManager {
                 this._handleSendWolAction();
                 break;
 
+            case 'randomItem':
+                /*
+                 * ====================================================================
+                 * ACTION: OPEN RANDOM ITEM
+                 * ====================================================================
+                 * Fetches a random library item via API and navigates to its details.
+                 * Matches the behavior of the sidebar Random button.
+                 * ====================================================================
+                 */
+                if (this._isPlayerActive()) {
+                    log.info('Random Item Mapped: Ignored because video playback is currently active.');
+                    break;
+                }
+                log.info('Random Item Mapped: Fetching and navigating to a random library item.');
+                this._handleRandomItemAction();
+                break;
+
             case 'none':
             default:
                 // No custom operation is configured, ignore key press
@@ -220,6 +241,36 @@ class RemoteButtonManager {
             log.error('Error dispatching manual WOL packet:', err);
             toast.show(i18n.t('WolPacketSentFailed') || 'Failed to send Wake-on-LAN packet', 3000);
         }
+    }
+
+    /**
+     * Handles opening a random library item.
+     * @private
+     */
+    async _handleRandomItemAction() {
+        try {
+            const { api } = await import('../api/ApiClient.js');
+            log.info('Fetching random item for remote button action...');
+            const item = await api.getRandomItem();
+            if (item && item.Id) {
+                log.info(`Random item found: ${item.Name} (${item.Id})`);
+                router.navigate(`/details/${item.Id}`);
+            } else {
+                log.warn('No random item returned.');
+            }
+        } catch (err) {
+            log.error('Failed to fetch random item from remote button shortcut:', err);
+        }
+    }
+
+    /**
+     * Helper to check if playback is currently active in the foreground.
+     * @returns {boolean}
+     * @private
+     */
+    _isPlayerActive() {
+        const currentPage = router.getCurrentPage();
+        return !!(currentPage && (currentPage.constructor.name === 'PlayerPage' || currentPage._osd || currentPage.osd));
     }
 
     /**
