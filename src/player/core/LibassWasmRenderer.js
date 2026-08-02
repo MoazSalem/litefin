@@ -257,6 +257,7 @@ export default class LibassWasmRenderer {
 
             const dropAnimations = PlayerSettings.get('subtitleAssDropAnimations') === true;
             const prescaleFactor = parseFloat(PlayerSettings.get('subtitleAssPrescaleFactor')) || 0.8;
+            const renderAhead = parseInt(PlayerSettings.get('subtitleAssRenderAhead'), 10) || 90;
             const maxHeight = Math.min(2160, typeof screen !== 'undefined' ? (screen.height || 1080) : 1080);
 
             const options = {
@@ -278,7 +279,7 @@ export default class LibassWasmRenderer {
                 prescaleHeightLimit: 1080,
                 maxRenderHeight: maxHeight,
                 resizeVariation: 0.2,
-                renderAhead: this._isVirtual ? 100 : 90
+                renderAhead: this._isVirtual ? 100 : renderAhead
             };
 
             this._octopus = new SubtitlesOctopus(options);

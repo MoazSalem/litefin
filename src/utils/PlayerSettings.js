@@ -178,6 +178,11 @@ const DEFAULTS = {
     // Scale down the subtitle canvas to improve performance (1.0 = full res)
     subtitleAssPrescaleFactor: 0.8,
 
+    // Pre-render buffer size in MB for libass-wasm (HTML5 path). Octopus skips
+    // caching any single event larger than renderAhead * 0.3, so low values
+    // force large \p1 vector drawings to re-render every frame
+    subtitleAssRenderAhead: 90,
+
     // Global font scale multiplier for ASS subtitles
     subtitleFontScale: 1.0,
 

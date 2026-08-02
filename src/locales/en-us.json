@@ -396,6 +396,8 @@
     "AssFontFamily": "ASS Format Font Family",
     "AssPrescaleFactor": "Subtitle Canvas Scale",
     "AssPrescaleFactorDescription": "Lower = better performance but softer text (1.0 = full resolution).",
+    "AssRenderAhead": "Subtitle Pre-render Buffer",
+    "AssRenderAheadDescription": "Memory for pre-rendered subtitles. Larger = smoother complex typesetting (big signs, masks), smaller = less memory use.",
     "AssRenderer": "ASS Subtitle Renderer",
     "AssRendererDescription": "Choose the rendering engine for ASS/SSA subtitle styling.",
     "Auto": "Auto",

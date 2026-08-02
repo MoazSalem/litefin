@@ -4014,6 +4014,27 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="ass-render-ahead-container" style="display: ${PlayerSettings.get('assRenderer') === 'libass-wasm' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AssRenderAhead">${i18n.t('AssRenderAhead') || 'Subtitle Pre-render Buffer'}</span>
+                        <span class="setting-description" data-i18n="AssRenderAheadDescription">${i18n.t('AssRenderAheadDescription') || 'Memory for pre-rendered subtitles. Larger = smoother complex typesetting (big signs, masks), smaller = less memory use.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'ass-render-ahead-select',
+            [
+                { value: 30, label: '30 MB (lowest memory)' },
+                { value: 50, label: '50 MB' },
+                { value: 70, label: '70 MB' },
+                { value: 90, label: '90 MB (recommended)' },
+                { value: 120, label: '120 MB' },
+                { value: 150, label: '150 MB (largest buffer)' }
+            ],
+            PlayerSettings.get('subtitleAssRenderAhead')
+        )}
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelPgsPlaybackMode">${i18n.t('LabelPgsPlaybackMode') || 'PGS Subtitle Engine'}</span>
@@ -7572,6 +7593,7 @@ class SettingsPage extends Page {
             'subtitle-font-ass-select': { key: 'subtitleFontAss', type: 'player' },
             'ass-renderer-select': { key: 'assRenderer', type: 'player' },
             'ass-prescale-factor-select': { key: 'subtitleAssPrescaleFactor', type: 'player' },
+            'ass-render-ahead-select': { key: 'subtitleAssRenderAhead', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
             'subtitle-color-select-hdr': { key: 'subtitleTextColorHdr', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
@@ -7907,7 +7929,8 @@ class SettingsPage extends Page {
                                 'tizenSegmentLength',
                                 'html5MaxBufferLength',
                                 'html5MaxMaxBufferLength',
-                                'html5SegmentLength'
+                                'html5SegmentLength',
+                                'subtitleAssRenderAhead'
                             ];
 
                             let val = newValue;
@@ -7929,8 +7952,10 @@ class SettingsPage extends Page {
                                 const isLibass = newValue === 'libass-wasm';
                                 const animContainer = this.$('#ass-drop-animations-container');
                                 const scaleContainer = this.$('#ass-prescale-factor-container');
+                                const renderAheadContainer = this.$('#ass-render-ahead-container');
                                 if (animContainer) animContainer.style.display = isLibass ? '' : 'none';
                                 if (scaleContainer) scaleContainer.style.display = isLibass ? '' : 'none';
+                                if (renderAheadContainer) renderAheadContainer.style.display = isLibass ? '' : 'none';
                                 focusManager.invalidateCache('settings-content');
                             }
 
