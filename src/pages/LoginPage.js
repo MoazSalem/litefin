@@ -8,7 +8,7 @@
  */
 
 import Page from './Page.js';
-import { auth, api, discoverServers, cancelDiscovery, ServerUnreachableError } from '../api/index.js';
+import { auth, api, discoverServers, cancelDiscovery, ServerUnreachableError, hasBackgroundDiscoveryService } from '../api/index.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
@@ -54,6 +54,7 @@ class LoginPage extends Page {
         this._serverUrl = '';
         this._discoveredServers = []; // Servers found via LAN discovery
         this._isDiscovering = false;
+        this._hasSearchedManually = false; // Track if manual search fallback was triggered
         this._isLoggingIn = false;
 
         // Quick Connect polling state
@@ -486,6 +487,9 @@ class LoginPage extends Page {
         // Bind events
         this._bindEvents();
 
+        // Update search / refresh button icon depending on discovery capabilities
+        this._updateRefreshButtonIcon();
+
         // Setup focus sections
         this._setupFocus();
 
@@ -561,7 +565,7 @@ class LoginPage extends Page {
         // Refresh discovery button
         this.$('#refresh-discovery')?.addEventListener('click', () => {
             if (!this._isDiscovering) {
-                this._startDiscovery();
+                this._startDiscovery({ isManual: true });
             }
         });
 
@@ -1393,13 +1397,50 @@ class LoginPage extends Page {
     // ========================================================================
 
     /**
-     * Start LAN server discovery in the background
+     * Start LAN server discovery in the background.
+     * If device has no background UDP discovery service and this is an automatic startup call
+     * (isManual = false), we skip the heavy HTTP subnet scan to prevent older TV hardware lag.
+     * @param {Object} [options={}] - Discovery options
+     * @param {boolean} [options.isManual=false] - Whether discovery was manually requested by clicking search/refresh button
      */
-    async _startDiscovery() {
+    async _startDiscovery(options = {}) {
+        const isManual = options.isManual === true;
+        if (isManual) {
+            this._hasSearchedManually = true;
+        }
+
+        const hasBgService = hasBackgroundDiscoveryService();
+
+        // If automatic startup discovery is requested on a device WITHOUT background UDP service,
+        // skip the automatic HTTP scan to prevent TV slowdown / UI lag.
+        if (!isManual && !hasBgService) {
+            log.info('LoginPage: No background discovery service available — skipping auto HTTP scan to prevent TV slowdown.');
+            this._isDiscovering = false;
+
+            // Load and render saved servers if available
+            this._discoveredServers = [];
+            const savedServers = auth.getSavedServers();
+            if (savedServers && savedServers.length > 0) {
+                savedServers.forEach((saved) => {
+                    const fallbackName = saved.serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                    this._discoveredServers.push({
+                        name: saved.serverName || fallbackName,
+                        address: saved.serverUrl,
+                        version: null,
+                        isSaved: true
+                    });
+                });
+            }
+            this._renderDiscoveredServers();
+            this._updateRefreshButtonIcon();
+            return;
+        }
+
         if (this._isDiscovering) return;
         this._isDiscovering = true;
+        this._updateRefreshButtonIcon();
 
-        log.info('LoginPage: Starting server discovery...');
+        log.info(`LoginPage: Starting server discovery (isManual=${isManual})...`);
 
         // Initialize with saved servers first
         this._discoveredServers = [];
@@ -1445,7 +1486,8 @@ class LoginPage extends Page {
                             this._renderDiscoveredServers();
                         }
                     }
-                }
+                },
+                { isManual, allowHttpFallback: isManual }
             );
 
             // Ensure final list is synced, but preserve our saved servers
@@ -1474,6 +1516,48 @@ class LoginPage extends Page {
 
             // Trigger a re-render of servers to immediately hide the scan progress indicator
             this._renderDiscoveredServers();
+            this._updateRefreshButtonIcon();
+        }
+    }
+
+    /**
+     * Update the refresh/search button icon based on background service availability
+     * and manual search state.
+     * If the platform lacks a background UDP discovery service AND manual search has
+     * not been triggered yet, display the Search icon. Otherwise, display Refresh icon.
+     * @private
+     */
+    _updateRefreshButtonIcon() {
+        const btn = this.$('#refresh-discovery');
+        if (!btn) return;
+
+        const hasBgService = hasBackgroundDiscoveryService();
+        // If device has no background UDP service and manual search has not been run yet, show search icon
+        const showSearchIcon = !hasBgService && !this._hasSearchedManually;
+
+        const searchSvg = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+        `;
+
+        const refreshSvg = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+        `;
+
+        if (showSearchIcon) {
+            btn.innerHTML = searchSvg;
+            btn.title = i18n.t('Search') || 'Search';
+            btn.setAttribute('aria-label', i18n.t('Search') || 'Search');
+        } else {
+            btn.innerHTML = refreshSvg;
+            btn.title = i18n.t('Refresh') || 'Refresh';
+            btn.setAttribute('aria-label', i18n.t('Refresh') || 'Refresh');
         }
     }
 

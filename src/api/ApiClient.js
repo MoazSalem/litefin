@@ -2393,13 +2393,53 @@ export async function sendWakeOnLan(macAddress) {
 }
 
 /**
- * Discover Jellyfin servers on local network
+ * Check if the current device/platform has a background UDP discovery service.
+ * - WebOS: true if Luna service is available (window.webOS.service)
+ * - Tizen: true if running on Tizen and background service is enabled
+ * - Others: false
+ *
+ * @returns {boolean} True if background UDP discovery service is present
  */
-export async function discoverServers(onProgress = null, onServerFound = null) {
+export function hasBackgroundDiscoveryService() {
+    // 1. WebOS Luna Service check
+    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+        return true;
+    }
+
+    // 2. Tizen HTTP Proxy / Discovery Service check
+    if (typeof tizen !== 'undefined') {
+        try {
+            const bgEnabled = storage.getItem('player:enableBackgroundService') !== 'false';
+            return bgEnabled;
+        } catch (_) {
+            return true;
+        }
+    }
+
+    // 3. Platforms without background UDP discovery service
+    return false;
+}
+
+/**
+ * Discover Jellyfin servers on local network
+ *
+ * @param {Function|null} onProgress - Optional callback receiving (checked, total)
+ * @param {Function|null} onServerFound - Optional callback receiving server info object
+ * @param {Object|boolean} [options={}] - Discovery options or allowHttpFallback flag
+ * @param {boolean} [options.isManual=false] - True if user manually triggered search via button
+ * @param {boolean} [options.allowHttpFallback] - Allow falling back to subnet HTTP scan
+ */
+export async function discoverServers(onProgress = null, onServerFound = null, options = {}) {
+    // Parse options object or boolean flag for backwards compatibility
+    const isManual = typeof options === 'object' && options !== null ? !!options.isManual : false;
+    const allowHttpFallback = typeof options === 'object' && options !== null && 'allowHttpFallback' in options
+        ? !!options.allowHttpFallback
+        : isManual;
+
     // Cancel any existing scan first
     cancelDiscovery();
 
-    log.info('Starting server discovery...');
+    log.info(`Starting server discovery (isManual=${isManual}, allowHttpFallback=${allowHttpFallback})...`);
 
     // =========================================================================
     // WAKE-ON-LAN ON SERVER SCAN
@@ -2440,7 +2480,11 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
             return lunaServers;
         }
 
-        log.warn('Luna service unavailable — falling back to HTTP scan');
+        log.warn('Luna service unavailable');
+        if (!allowHttpFallback) {
+            log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+            return [];
+        }
     }
 
     /*
@@ -2477,10 +2521,24 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
                 return tizenServers;
             }
 
-            log.warn('Tizen /discover unavailable — falling back to HTTP scan');
+            log.warn('Tizen /discover unavailable');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         } else {
-            log.info('Background service disabled — skipping Tizen /discover, using HTTP scan');
+            log.info('Background service disabled — skipping Tizen /discover');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         }
+    }
+
+    // Check if HTTP fallback scan is permitted
+    if (!allowHttpFallback) {
+        log.info('No background discovery service available and HTTP fallback disabled — skipping HTTP subnet scan');
+        return [];
     }
 
     // =========================================================================
