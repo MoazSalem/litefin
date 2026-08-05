@@ -151,6 +151,7 @@ class PlayerPage extends Page {
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
                             <button class="btn btn-secondary focusable" id="error-playback-mode-btn" tabindex="0">Playback Mode</button>
+                            <button class="btn btn-secondary focusable" id="error-html5-backend-btn" tabindex="0">Use HTML5 Player</button>
                             <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
@@ -279,6 +280,9 @@ class PlayerPage extends Page {
             // This makes body/app transparent so hardware video plane is visible
             document.body.classList.add('player-active');
             document.documentElement.classList.add('player-active');
+
+            // Expose debug helper to force player error screen anytime via console
+            window.__forcePlayerError = (msg = 'Simulated playback error for UI testing') => this._showError(msg);
 
             // Parallelize font loading and item details loading
             const fontId = SubtitleStyles.getCurrentFontId();
@@ -828,11 +832,11 @@ class PlayerPage extends Page {
      * Directly imports JellyfinPlayer as an ES module — no UMD bundle or
      * window global required.
      */
-    async _initPlayer() {
-        log.info('_initPlayer called');
+    async _initPlayer(forcedBackend = null) {
+        log.info('_initPlayer called, forcedBackend:', forcedBackend);
 
         // Resolve backend choice
-        const playerBackend = PlayerSettings.get('playerBackend') || 'auto';
+        const playerBackend = forcedBackend || PlayerSettings.get('playerBackend') || 'auto';
         let useTizenPlayer = this._isTizen();
 
         if (playerBackend === 'avplay') {
@@ -848,7 +852,8 @@ class PlayerPage extends Page {
             container: this.$('#player-container'),
             serverUrl: api.serverUrl,
             authToken: api.accessToken,
-            useTizenPlayer: useTizenPlayer
+            useTizenPlayer: useTizenPlayer,
+            ...(forcedBackend ? { playerBackend: forcedBackend } : {})
         });
         log.info('Player initialized:', !!this._player);
 
@@ -2643,13 +2648,22 @@ class PlayerPage extends Page {
     }
 
     _showError(message) {
+        // Expose debug helper on window so the user or developer can trigger the dialog anytime
+        window.__forcePlayerError = (msg = 'Simulated playback error for UI testing') => this._showError(msg);
+
         this._showLoading(false);
 
         // Ensure focus manager is resumed so we can interact with error buttons
         focusManager.resume();
 
-        // Hide OSD if it's visible
+        // Hide OSD and active submenus if visible
         if (this._osd) {
+            if (this._osd.activeMenu) {
+                try {
+                    this._osd.activeMenu.hide();
+                } catch (e) {}
+                this._osd.activeMenu = null;
+            }
             this._osd.hide?.();
         }
 
@@ -2665,6 +2679,7 @@ class PlayerPage extends Page {
             // Bind buttons
             const retryBtn = this.$('#error-retry-btn');
             const playbackModeBtn = this.$('#error-playback-mode-btn');
+            const html5BackendBtn = this.$('#error-html5-backend-btn');
             const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
@@ -2677,13 +2692,18 @@ class PlayerPage extends Page {
                 playbackModeBtn.onclick = () => this._openPlaybackModeMenuFromError();
             }
 
+            if (html5BackendBtn) {
+                html5BackendBtn.onclick = () => this._retryWithHtml5Backend();
+            }
+
             if (backBtn) {
                 backBtn.onclick = () => router.back();
             }
 
-            // Register Focus Section
+            // Register Focus Section as a 2x2 Grid
             focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
-                orientation: 'horizontal',
+                orientation: 'grid',
+                columns: 2,
                 enterTo: 'last-focused'
             });
 
@@ -2736,6 +2756,60 @@ class PlayerPage extends Page {
         } catch (error) {
             log.error('Retry failed:', error);
             this._showError(error.message || 'Retry failed. Check your connection.');
+        }
+    }
+
+    /**
+     * Retry playback using the HTML5 player backend for this single playback session.
+     * Re-creates the JellyfinPlayer instance with forced HTML5 backend without modifying
+     * persistent user settings.
+     */
+    async _retryWithHtml5Backend() {
+        log.info('Retrying playback with explicit HTML5 player backend override...');
+        
+        // Hide error overlay and unregister focus section
+        const errorEl = this.$('#player-error');
+        if (errorEl) {
+            errorEl.classList.add('hidden');
+            focusManager.unregister('player-error');
+        }
+
+        focusManager.resume();
+
+        if (this._osd) {
+            if (this._osd.activeMenu) {
+                try {
+                    this._osd.activeMenu.hide();
+                } catch (e) {}
+                this._osd.activeMenu = null;
+            }
+            this._osd.hide();
+        }
+
+        try {
+            this._showLoading(true);
+
+            // Destroy existing player instance cleanly if active
+            if (this._player) {
+                try {
+                    await this._player.destroy();
+                } catch (destroyErr) {
+                    log.warn('Error destroying existing player during HTML5 backend switch:', destroyErr);
+                }
+                this._player = null;
+            }
+
+            // Initialize player with forced HTML5 backend setting override
+            // Note: _initPlayer creates JellyfinPlayer and binds all event listeners properly
+            await this._initPlayer('html5');
+
+            // Restart playback
+            await this._startPlayback();
+
+            this._showLoading(false);
+        } catch (error) {
+            log.error('HTML5 backend retry failed:', error);
+            this._showError(error.message || 'HTML5 playback retry failed.');
         }
     }
 
@@ -2869,7 +2943,8 @@ class PlayerPage extends Page {
                     if (errorEl) {
                         errorEl.classList.remove('hidden');
                         focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
-                            orientation: 'horizontal',
+                            orientation: 'grid',
+                            columns: 2,
                             enterTo: 'last-focused'
                         });
                         const retryBtn = errorEl.querySelector('#error-retry-btn');

@@ -1581,13 +1581,17 @@ export default class OSDController extends Component {
 
     handleInput(key, e) {
         // ====================================================================
-        // INPUT PROCESSING TRANSITION GUARD
+        // INPUT PROCESSING TRANSITION & ERROR GUARD
         // ====================================================================
-        // If the parent PlayerPage is transitioning between tracks, swallow all
-        // remote navigation, clicks, and keys immediately. This isolates the 
-        // OSD UI from any stray inputs or focus resets caused by cycling 
-        // the video element out of/into the DOM.
+        // If the playback error overlay is visible, or if parent PlayerPage is switching,
+        // swallow OSD inputs so focus remains on the error modal options.
         // ====================================================================
+        const errorEl = document.getElementById('player-error');
+        if (errorEl && !errorEl.classList.contains('hidden')) {
+            log.debug('OSDController: Ignoring input key event while player error screen is active:', key);
+            return true;
+        }
+
         if (this._playerPage && this._playerPage._isSwitching) {
             log.debug('OSDController: Ignoring input key event during active track switch:', key);
             return true;

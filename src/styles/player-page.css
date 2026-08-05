@@ -189,13 +189,6 @@ body.lyrics-active .audio-player-center {
     pointer-events: auto;
 }
 
-/* Glassmorphism Utility */
-.glass-panel {
-    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8)) !important;
-    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2)) !important;
-}
-
-/* Glass Panel for Error */
 .error-panel {
     width: 960px;
     padding: 50px 60px;
@@ -276,18 +269,19 @@ body.lyrics-active .audio-player-center {
 }
 
 .error-actions {
-    display: -webkit-flex;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
     width: 100%;
-    -webkit-justify-content: center;
+    max-width: 720px;
     justify-content: center;
 }
 
 .error-actions .btn {
-    flex: 1;
-    height: 72px;
+    width: 100%;
+    height: 68px;
     border-radius: var(--jf-border-radius-lg);
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 500;
     white-space: nowrap;
     padding: 0 20px;
@@ -297,14 +291,14 @@ body.lyrics-active .audio-player-center {
     align-items: center;
     -webkit-justify-content: center;
     justify-content: center;
-    margin: 0 10px;
-    /* Use margin instead of gap for Tizen compatibility */
+    box-sizing: border-box;
     transition: all 0.2s ease;
 }
 
 .error-actions .btn-primary {
     background: var(--jf-primary-btn-bg, #fff);
     color: var(--jf-primary-btn-color, #000);
+    margin: 12px;
 }
 
 .error-actions .btn-primary:focus,

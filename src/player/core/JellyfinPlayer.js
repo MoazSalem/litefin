@@ -192,6 +192,7 @@ export class JellyfinPlayer extends EventEmitter {
         this.serverUrl = options.serverUrl;
         this.authToken = options.authToken;
         this.useTizenPlayer = options.useTizenPlayer || false;
+        this.forcedPlayerBackend = options.playerBackend || null;
 
         // ====================================================================
         // State
@@ -284,7 +285,7 @@ export class JellyfinPlayer extends EventEmitter {
     _initBackend() {
         // Detect Tizen AVPlay API (present on either namespace depending on Tizen version)
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
-        const backendSetting = PlayerSettings.get('playerBackend') || 'auto';
+        const backendSetting = this.forcedPlayerBackend || PlayerSettings.get('playerBackend') || 'auto';
 
         log.info(
             'Initializing backend — useTizenPlayer:', this.useTizenPlayer,
