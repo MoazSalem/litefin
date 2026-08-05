@@ -4322,6 +4322,7 @@ class SettingsPage extends Page {
                 { value: 'none', label: i18n.t('None') },
                 { value: 'uniform', label: i18n.t('Uniform') },
                 { value: 'border', label: i18n.t('Border') },
+                { value: 'uniform_border', label: i18n.t('UniformBorders') || 'Uniform + borders' },
                 { value: 'dropshadow', label: i18n.t('DropShadow') },
                 { value: 'raised', label: i18n.t('Raised') },
                 { value: 'depressed', label: i18n.t('Depressed') }
@@ -4331,7 +4332,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' ? '' : 'none'}">
+                <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' || PlayerSettings.get('subtitleDropShadow') === 'uniform_border' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BorderWidth">${i18n.t('BorderWidth')}</span>
                         <span class="setting-description" data-i18n="BorderWidthDescription">${i18n.t('BorderWidthDescription')}</span>
@@ -4343,6 +4344,22 @@ class SettingsPage extends Page {
             1,
             20,
             1
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-border-opacity-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' || PlayerSettings.get('subtitleDropShadow') === 'uniform_border' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BorderOpacity">${i18n.t('BorderOpacity')}</span>
+                        <span class="setting-description" data-i18n="BorderOpacityDescription">${i18n.t('BorderOpacityDescription')}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+            'subtitle-border-opacity',
+            PlayerSettings.get('subtitleBorderOpacity') ?? 100,
+            0,
+            100,
+            5
         )}
                     </div>
                 </div>
@@ -7208,6 +7225,7 @@ class SettingsPage extends Page {
             'subtitle-text-opacity': 'subtitleTextOpacity',
             'subtitle-text-opacity-hdr': 'subtitleTextOpacityHdr',
             'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
+            'subtitle-border-opacity': 'subtitleBorderOpacity',
             'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
             'subtitle-shadow-blur': 'subtitleDropShadowBlur',
             'subtitle-custom-pos': 'subtitleVerticalPositionCustom',
@@ -8030,7 +8048,14 @@ class SettingsPage extends Page {
                             if (id === 'subtitle-shadow-select') {
                                 const borderWidthContainer = document.getElementById('subtitle-border-width-container');
                                 if (borderWidthContainer) {
-                                    borderWidthContainer.style.display = newValue === 'border' ? '' : 'none';
+                                    borderWidthContainer.style.display =
+                                        newValue === 'border' || newValue === 'uniform_border' ? '' : 'none';
+                                }
+
+                                const borderOpacityContainer = document.getElementById('subtitle-border-opacity-container');
+                                if (borderOpacityContainer) {
+                                    borderOpacityContainer.style.display =
+                                        newValue === 'border' || newValue === 'uniform_border' ? '' : 'none';
                                 }
 
                                 const opacityContainer = document.getElementById('subtitle-shadow-opacity-container');

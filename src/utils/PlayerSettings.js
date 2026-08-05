@@ -132,6 +132,7 @@ const DEFAULTS = {
     subtitleWeight: 'normal',
 
     // Subtitle drop shadow ('none', 'uniform', 'dropshadow', 'raised', 'depressed', 'border')
+    // Subtitle shadow style (uniform, border, uniform_border, dropshadow, raised, depressed, none)
     subtitleDropShadow: 'uniform',
 
     // Drop shadow color
@@ -143,8 +144,11 @@ const DEFAULTS = {
     // Drop shadow blur radius (px)
     subtitleDropShadowBlur: 6,
 
-    // Subtitle border width (px, used when subtitleDropShadow is 'border')
+    // Subtitle border width (px, used when subtitleDropShadow is 'border' or 'uniform_border')
     subtitleBorderWidth: 3,
+
+    // Subtitle border opacity (0-100, used when subtitleDropShadow is 'border' or 'uniform_border')
+    subtitleBorderOpacity: 100,
 
     // Custom subtitle font (empty = system default)
     subtitleFont: '',
