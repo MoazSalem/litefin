@@ -2478,7 +2478,7 @@ class DetailsPage extends Page {
                 const episodeTitle = i18n.ensureBiDi(ep.Name);
                 const episodePrefix = ep.ParentIndexNumber && ep.IndexNumber ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. ` : ep.IndexNumber ? `${ep.IndexNumber}. ` : '';
 
-                const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
                 let runtimeText = '';
                 if (ep.RunTimeTicks) {
                     const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -2668,7 +2668,7 @@ class DetailsPage extends Page {
                     );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
-                    const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
                     let runtimeText = '';
                     if (ep.RunTimeTicks) {
                         const mins = Math.round(ep.RunTimeTicks / 600000000);
