@@ -1277,6 +1277,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="theme-song-once-item" style="display: ${storage.getItem('pref:playThemeSongs') === 'true' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelPlayThemeSongsOnce">${i18n.t('LabelPlayThemeSongsOnce') || 'Play Theme Songs Once'}</span>
+                        <span class="setting-description" data-i18n="PlayThemeSongsOnceDescription">${i18n.t('PlayThemeSongsOnceDescription') || 'Play background theme songs only once instead of looping continuously.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:playThemeSongsOnce') !== 'false' ? 'active' : ''}" 
+                                id="toggle-play-theme-songs-once" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item" id="theme-song-volume-item" style="display: ${storage.getItem('pref:playThemeSongs') === 'true' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ThemeSongVolume">${i18n.t('ThemeSongVolume') || 'Theme Song Volume'}</span>
@@ -6414,17 +6427,37 @@ class SettingsPage extends Page {
                 playThemeSongsBtn.classList.toggle('active', newValue);
                 log.info(`Play Theme Songs background audio set to: ${newValue}`);
 
-                // Toggle visibility of the companion volume control element.
-                // If the overall theme song playback is disabled, the volume setting
-                // is redundant and is hidden visually from the Settings page.
+                // Toggle visibility of the companion settings (volume and play-once).
+                // If the overall theme song playback is disabled, these sub-settings
+                // are redundant and hidden visually from the Settings page.
                 const volumeContainer = this.$('#theme-song-volume-item');
+                const onceContainer = this.$('#theme-song-once-item');
                 if (volumeContainer) {
                     volumeContainer.style.display = newValue ? '' : 'none';
-
-                    // Invalidate settings content focus mapping cache so navigation
-                    // remains stable on Samsung/LG TV hardware.
-                    focusManager.invalidateCache('settings-content');
                 }
+                if (onceContainer) {
+                    onceContainer.style.display = newValue ? '' : 'none';
+                }
+
+                // Invalidate settings content focus mapping cache so navigation
+                // remains stable on Samsung/LG TV hardware.
+                focusManager.invalidateCache('settings-content');
+            });
+        }
+
+        const playThemeSongsOnceBtn = this.$('#toggle-play-theme-songs-once');
+        if (playThemeSongsOnceBtn) {
+            playThemeSongsOnceBtn.addEventListener('click', () => {
+                // Read current setting state (defaults to true / play once)
+                const isEnabled = storage.getItem('pref:playThemeSongsOnce') !== 'false';
+                const newValue = !isEnabled;
+
+                // Save setting value into persistent browser storage
+                storage.setItem('pref:playThemeSongsOnce', newValue ? 'true' : 'false');
+
+                // Update switch element visual presentation
+                playThemeSongsOnceBtn.classList.toggle('active', newValue);
+                log.info(`Play Theme Songs Once set to: ${newValue}`);
             });
         }
 
