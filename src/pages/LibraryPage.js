@@ -2755,14 +2755,18 @@ class LibraryPage extends Page {
      * =========================================================================
      * EVALUATE GRID BOUNDARIES (merged focus + scroll evaluation)
      * =========================================================================
-     * Reads the latest position input from either focus:changed (D-pad) or
-     * scroll (mouse/magic remote), checks append/prepend thresholds, and
-     * synchronises the sliding window. Runs at most once per frame.
+     * Runs at most once per frame via _scheduleGridEval(). Evaluates grid
+     * append/prepend boundaries based on the user's current position.
      *
-     * Priority: focus-based evaluation (D-pad) takes precedence over
-     * scroll-based evaluation when both sources have recent data. This is
-     * correct because a D-pad move that happens during a scroll always
-     * represents the user's explicit intent.
+     * CRITICAL PRIORITY: If a scroll event is pending (_gridScrollTop is not
+     * null), the SCROLL-based evaluation runs. This is the correct priority
+     * for webOS magic-remote / mouse-wheel users who scroll WITHOUT changing
+     * focus: focus:changed never fires during their scrolling, so focus-based
+     * evaluation alone would never append rows and the grid would appear
+     * stuck at its initial chunk (the reported "only 5 rows" bug).
+     *
+     * When no scroll input is pending, focus-based evaluation (D-pad)
+     * determines the position instead.
      * =========================================================================
      */
     _evaluateGrid() {
@@ -2773,50 +2777,14 @@ class LibraryPage extends Page {
         if (!currentColumns) return;
 
         const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
-        let currentRow = -1;
-
-        // ------------------------------------------------------------------
-        // PRIORITY 1: Focus-based evaluation (D-pad navigation)
-        // ------------------------------------------------------------------
         const focusedElement = this._gridFocusElement;
-        if (focusedElement && grid.contains(focusedElement)) {
-            const allCards = grid.querySelectorAll('.media-card');
-            let domIndex = -1;
-            for (let i = 0; i < allCards.length; i++) {
-                if (allCards[i] === focusedElement) {
-                    domIndex = i;
-                    break;
-                }
-            }
-            if (domIndex >= 0) {
-                const itemIndex = this.state.gridWindowStart + domIndex;
-
-                // Direction isolation: only append when moving down,
-                // only prepend when moving up (prevents oscillation)
-                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
-                this._lastFocusItemIndex = itemIndex;
-
-                if (movingDown) {
-                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
-                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
-                        this._appendGridChunk(grid, this.state.items, currentColumns);
-                    }
-                } else {
-                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
-                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
-                        this._prependGridChunk(grid, this.state.items, currentColumns);
-                    }
-                }
-
-                currentRow = Math.floor(itemIndex / currentColumns);
-                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
-                return;
-            }
-        }
 
         // ------------------------------------------------------------------
-        // PRIORITY 2: Scroll-based evaluation (mouse wheel / magic remote)
+        // PRIORITY 1: Scroll-based evaluation (pending scroll event)
         // ------------------------------------------------------------------
+        // Runs whenever a scroll event is pending, regardless of focus state.
+        // This is essential for mouse-wheel / magic-remote scrolling where
+        // focus does not move and focus:changed never fires.
         if (scrollContainer && this._gridScrollTop !== null) {
             const scrollTop = this._gridScrollTop;
             this._gridScrollTop = null; // Consume the scroll input
@@ -2848,9 +2816,60 @@ class LibraryPage extends Page {
                 const spacer = grid.querySelector('#grid-top-spacer');
                 const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
                 const scrolledPastRenderedTop = Math.max(0, scrollTop - spacerHeight);
-                currentRow =
+                const currentRow =
                     Math.floor(scrolledPastRenderedTop / rowHeight) +
                     Math.floor(this.state.gridWindowStart / currentColumns);
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+            }
+
+            // Keep the focus-based direction cursor in sync so the next
+            // D-pad move compares against the current position rather than
+            // a stale value from before the scroll.
+            if (focusedElement && grid.contains(focusedElement)) {
+                const allCards = grid.querySelectorAll('.media-card');
+                for (let i = 0; i < allCards.length; i++) {
+                    if (allCards[i] === focusedElement) {
+                        this._lastFocusItemIndex = this.state.gridWindowStart + i;
+                        break;
+                    }
+                }
+            }
+            return;
+        }
+
+        // ------------------------------------------------------------------
+        // PRIORITY 2: Focus-based evaluation (D-pad navigation)
+        // ------------------------------------------------------------------
+        if (focusedElement && grid.contains(focusedElement)) {
+            const allCards = grid.querySelectorAll('.media-card');
+            let domIndex = -1;
+            for (let i = 0; i < allCards.length; i++) {
+                if (allCards[i] === focusedElement) {
+                    domIndex = i;
+                    break;
+                }
+            }
+            if (domIndex >= 0) {
+                const itemIndex = this.state.gridWindowStart + domIndex;
+
+                // Direction isolation: only append when moving down,
+                // only prepend when moving up (prevents oscillation)
+                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
+                this._lastFocusItemIndex = itemIndex;
+
+                if (movingDown) {
+                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
+                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                } else {
+                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
+                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    }
+                }
+
+                const currentRow = Math.floor(itemIndex / currentColumns);
                 this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
             }
         }
