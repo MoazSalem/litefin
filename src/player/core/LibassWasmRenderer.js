@@ -60,6 +60,29 @@ function getAvailableFonts() {
 
 export default class LibassWasmRenderer {
     /**
+     * Runtime capability check for WebAssembly support.
+     * Evaluates whether the current browser engine possesses WebAssembly support
+     * and is capable of compiling a basic WASM binary.
+     *
+     * @returns {boolean} True if WebAssembly execution is supported.
+     */
+    static isSupported() {
+        try {
+            // Validate the presence of the global WebAssembly object and instantiate API
+            if (typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function') {
+                // Instantiate a minimal 8-byte WASM binary module to verify runtime compilation capability
+                const module = new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+                if (module instanceof WebAssembly.Module) {
+                    return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
+                }
+            }
+        } catch (e) {
+            // Trapped execution or instantiation failure indicates lack of WebAssembly support
+        }
+        return false;
+    }
+
+    /**
      * @param {Object} options
      * @param {HTMLElement} options.container - Container element that wraps the video
      * @param {HTMLVideoElement} [options.video] - The video element (for VideoClock sync)
@@ -68,6 +91,11 @@ export default class LibassWasmRenderer {
      * @param {number} [options.videoFrameRate] - Video framerate (for render sync)
      */
     constructor({ container, video, width, height, videoFrameRate, getTime, avplayLatency }) {
+        // Assert WebAssembly capability prior to performing hardware or DOM setup
+        if (!LibassWasmRenderer.isSupported()) {
+            throw new Error('LibassWasmRenderer is not supported on this platform (WebAssembly unavailable)');
+        }
+
         this._container = container;
         this._videoElement = video || null;
         this._isVirtual = !video;

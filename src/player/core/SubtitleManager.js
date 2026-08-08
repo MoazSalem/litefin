@@ -864,11 +864,20 @@ export default class SubtitleManager {
                 return;
             }
 
-            // Select and initialize ASS subtitle rendering backend
+            // Select and initialize ASS subtitle rendering backend with WASM feature gating
             const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
             let TargetRendererClass;
+            
+            // Check if the user selected libass-wasm as the preferred renderer
             if (preferredEngine === 'libass-wasm') {
-                TargetRendererClass = LibassWasmRenderer;
+                // Verify hardware/browser support for WebAssembly execution at runtime
+                if (LibassWasmRenderer.isSupported()) {
+                    TargetRendererClass = LibassWasmRenderer;
+                } else {
+                    // Fall back to libjass DOM rendering if the engine lacks WebAssembly capability
+                    log.warn('libass-wasm requested but WebAssembly is not supported on this platform; falling back to ASSRenderer (libjass)');
+                    TargetRendererClass = ASSRenderer;
+                }
             } else if (preferredEngine === 'assjs') {
                 TargetRendererClass = ASSJSRenderer;
             } else {

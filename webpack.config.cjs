@@ -72,7 +72,10 @@ function getPlugins(tier, options = {}) {
         { from: 'src/backup-logger.js', to: 'js/backup-logger.js' }
     ];
 
-    if (buildTier === 'modern') {
+    // Include libass-wasm worker assets for both modern and legacy build tiers.
+    // Legacy tier includes the WASM workers for newer devices running legacy builds,
+    // with runtime WebAssembly feature gating falling back to libjass on unsupported hardware.
+    if (buildTier === 'modern' || buildTier === 'legacy') {
         patterns.push(
             {
                 from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.js',
@@ -355,14 +358,8 @@ const legacyConfig = {
         ]
     },
 
-    // Legacy tier: LibassWasmRenderer is stubbed — no WASM workers are shipped.
-    plugins: [
-        ...getPlugins('legacy'),
-        new webpack.NormalModuleReplacementPlugin(
-            /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
-            path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
-        )
-    ]
+    // Legacy tier: Ships full LibassWasmRenderer and WASM workers with runtime feature detection.
+    plugins: getPlugins('legacy')
 };
 
 // ============================================================================
