@@ -968,6 +968,23 @@ export class ApiClient {
     }
 
     /**
+     * Fetch additional video parts for multi-part video items (e.g. Part 2, Part 3 of a multi-disc movie).
+     * Jellyfin server endpoint: GET /Videos/{itemId}/AdditionalParts
+     *
+     * @param {string} itemId - The primary video item ID
+     * @returns {Promise<Object>} Paginated query result containing additional part items
+     */
+    async getAdditionalParts(itemId) {
+        /*
+         * Multi-part items in Jellyfin allow split video files (e.g., Lord of the Rings Disc 1 & Disc 2)
+         * to be grouped under a single library entry while preserving individual stream files.
+         */
+        return this.get(`/Videos/${itemId}/AdditionalParts`, {
+            UserId: this._userId
+        });
+    }
+
+    /**
      * Get items inside a server-managed Playlist.
      *
      * We use the dedicated /Playlists/{id}/Items endpoint rather than the

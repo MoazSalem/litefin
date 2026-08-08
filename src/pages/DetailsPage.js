@@ -246,6 +246,12 @@ class DetailsPage extends Page {
                         <div class="season-episodes-row row-items" id="more-from-season-row"></div>
                     </section>
 
+                    <!-- Additional Parts (Multi-part movies/videos) -->
+                    <section class="details-additional-parts media-row hidden" id="additional-parts-section">
+                        <h2 class="row-title" data-i18n="AdditionalParts">Additional Parts</h2>
+                        <div class="additional-parts-row row-items" id="additional-parts-row"></div>
+                    </section>
+
                     <!-- Cast & Crew -->
                     <section class="details-people media-row hidden" id="people-section">
                         <h2 class="row-title" data-i18n="HeaderCastAndCrew">Cast & Crew</h2>
@@ -863,6 +869,11 @@ class DetailsPage extends Page {
             if (peopleSection) peopleSection.classList.add('hidden');
         }
 
+        // Additional Parts for multi-part video items (e.g. multi-part movies)
+        if (['Movie', 'Video'].includes(this._item?.Type) || this._item?.PartCount > 1) {
+            await this._loadAdditionalParts();
+        }
+
         // Special Features
         if (['Movie', 'Series', 'Season', 'Episode', 'Trailer', 'MusicVideo'].includes(this._item.Type)) {
             await this._loadSpecialFeatures();
@@ -1125,6 +1136,7 @@ class DetailsPage extends Page {
             'details-episodes',
             'details-songs',
             'more-from-season-section',
+            'details-additional-parts', // Multi-part movie/video section
             'details-people',
             'details-special-features',
             'artists-section',
@@ -1982,8 +1994,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                  ? item.OriginalTitle
-                  : ''
+                    ? item.OriginalTitle
+                    : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -2994,20 +3006,26 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#episodes-section')
             },
             {
-                name: 'details-songs',
-                elementId: '#songs-list',
-                isVisible: () => isNotHidden('#songs-section')
-            },
-            {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
+            },
+            // Additional video parts (multi-part movies/videos)
+            {
+                name: 'details-additional-parts',
+                elementId: '#additional-parts-row',
+                isVisible: () => isNotHidden('#additional-parts-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
+            },
+            {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
             },
             {
                 name: 'artists-section',
@@ -3065,20 +3083,26 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#artists-section')
             },
             {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
+            },
+            {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            // Additional video parts (multi-part movies/videos)
+            {
+                name: 'details-additional-parts',
+                elementId: '#additional-parts-row',
+                isVisible: () => isNotHidden('#additional-parts-section')
+            },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
-            },
-            {
-                name: 'details-songs',
-                elementId: '#songs-list',
-                isVisible: () => isNotHidden('#songs-section')
             },
             {
                 name: 'details-episodes',
@@ -3087,12 +3111,14 @@ class DetailsPage extends Page {
             },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
+
             // Playlist items — reverse position mirrors _getNextVisibleSection
             {
                 name: 'details-playlist-items',
                 elementId: '#playlist-items-list',
                 isVisible: () => isNotHidden('#playlist-items-section')
             },
+
             // Collection rows (BoxSet contents) - in reverse order
             {
                 name: 'collection-other-section',
@@ -3202,12 +3228,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                      this._item.SeasonName.toLowerCase().startsWith('season ')
-                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                          : /^\d+$/.test(this._item.SeasonName)
+                    this._item.SeasonName.toLowerCase().startsWith('season ')
+                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                        : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                  ])
+                ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
@@ -3330,6 +3356,85 @@ class DetailsPage extends Page {
         });
     }
 
+    /**
+     * Fetch additional video parts for multi-part items (e.g. Part 2, Part 3 of a multi-disc movie).
+     * Populates the Additional Parts section so users can view or start playback from any part.
+     */
+    async _loadAdditionalParts() {
+        if (!['Movie', 'Video'].includes(this._item?.Type) && !(this._item?.PartCount > 1)) {
+            return;
+        }
+
+        try {
+            log.info('Fetching additional parts for item ID:', this._itemId);
+
+            // Primary item ID to query additional parts for
+            const targetId = this._item.PrimaryItemId || this._itemId;
+            const response = await api.getAdditionalParts(targetId);
+            const additionalParts = response?.Items || [];
+
+            if (additionalParts.length > 0) {
+                log.info(`Loaded ${additionalParts.length} additional video part(s) for item ${targetId}`);
+
+                // If current item is the primary item (Part 1), compile full list [this._item, ...additionalParts]
+                const allParts = [this._item, ...additionalParts];
+
+                // Ensure each part has clean display indexing if missing from server payload
+                allParts.forEach((part, index) => {
+                    if (!part.PartIndex) {
+                        part.PartIndex = index + 1;
+                    }
+                });
+
+                this._renderAdditionalParts(allParts);
+            }
+        } catch (error) {
+            log.warn('Failed to load additional parts for item:', error);
+        }
+    }
+
+    /**
+     * Render the Additional Parts row using Virtual Card Row.
+     * Allows selecting and initiating playback directly from any specific part.
+     * @param {Object[]} parts - Array of video part items
+     */
+    _renderAdditionalParts(parts) {
+        const section = this.$('#additional-parts-section');
+        const container = this.$('#additional-parts-row');
+
+        if (!section || !container || !parts || parts.length === 0) return;
+
+        // Reveal the section on the Details Page
+        section.classList.remove('hidden');
+
+        // Render virtual horizontal card row for additional parts
+        this._renderVirtualRow({
+            sectionId: 'additional-parts-section',
+            listId: 'additional-parts-row',
+            items: parts,
+            isLandscape: true,
+            cardType: 'thumb',
+            renderCard: (partItem) => {
+                // Ensure card displays Part suffix if available
+                const partLabel = partItem.PartIndex ? ` (Part ${partItem.PartIndex})` : '';
+                const displayItem = {
+                    ...partItem,
+                    Name: partItem.Name?.includes('Part') ? partItem.Name : `${this._item.Name}${partLabel}`
+                };
+                return this._renderMediaCard(displayItem, true, 'thumb');
+            },
+            focusSectionName: 'details-additional-parts',
+            onClick: (card) => {
+                const targetItemId = card.dataset.itemId || card.dataset.id;
+                if (targetItemId) {
+                    log.info('Additional part card selected, launching playback from part ID:', targetItemId);
+                    const partToPlay = parts.find((p) => p.Id === targetItemId) || this._item;
+                    this._play({ targetItem: partToPlay });
+                }
+            }
+        });
+    }
+
     async _loadItemCollections() {
         try {
             const cacheKey = `details:collections:${this._itemId}`;
@@ -3378,8 +3483,12 @@ class DetailsPage extends Page {
         });
     }
 
-    async _play({ resume = false, isShufflePlay = false, ghostMode = false } = {}) {
-        let itemToPlay = this._item;
+    async _play({ resume = false, isShufflePlay = false, ghostMode = false, targetItem = null } = {}) {
+        /*
+         * Allow initiating playback directly from a specific target item (e.g. Part 2 or Part 3
+         * selected from the Additional Parts section on the details page).
+         */
+        let itemToPlay = targetItem || this._item;
 
         // If it's a Live TV Program, play the parent Channel instead
         if (this._item.Type === 'Program' && this._item.ChannelId) {
@@ -3967,14 +4076,14 @@ class DetailsPage extends Page {
             </div>
         `
                 : options
-                      .map((opt, i) => {
-                          return `
+                    .map((opt, i) => {
+                        return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-                      })
-                      .join('');
+                    })
+                    .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -4290,8 +4399,8 @@ class DetailsPage extends Page {
                     // begin processing before we re-render the sections.
                     setTimeout(() => {
                         if (!this._isMounted) return;
-                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => {});
-                        this._loadMoreFromSeason().catch(() => {});
+                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => { });
+                        this._loadMoreFromSeason().catch(() => { });
                     }, 500);
                 }
 
