@@ -8,7 +8,14 @@
  */
 
 import Page from './Page.js';
-import { auth, api, discoverServers, cancelDiscovery, ServerUnreachableError, hasBackgroundDiscoveryService } from '../api/index.js';
+import {
+    auth,
+    api,
+    discoverServers,
+    cancelDiscovery,
+    ServerUnreachableError,
+    hasBackgroundDiscoveryService
+} from '../api/index.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
@@ -930,26 +937,35 @@ class LoginPage extends Page {
      * @returns {string} Normalized server URL
      */
     _normalizeServerUrl(input) {
-        let url = input.trim();
+        const url = input.trim();
         if (!url) return '';
 
         const hasProtocol = url.includes('://');
 
         if (!hasProtocol) {
-            // Bare hostname/IP — add default protocol and port
-            url = `http://${url}`;
+            // Bare hostname/IP — prepend http://, and append :8096 only when the
+            // user did not type an explicit port.
+            const prefixed = `http://${url}`;
             try {
-                const parsed = new URL(url);
-                if (!parsed.port) {
-                    parsed.port = String(DEFAULT_PORT);
-                }
-                let result = parsed.toString();
+                // Validate by parsing, but build the output manually below since
+                // URL.toString() drops default ports (80/443) from serialization.
+                new URL(prefixed);
+
+                // Split the authority (host:port) from any path/subpath
+                const slashIdx = prefixed.indexOf('/', prefixed.indexOf('://') + 3);
+                const authority = slashIdx === -1 ? prefixed.slice(7) : prefixed.slice(7, slashIdx);
+                const path = slashIdx === -1 ? '' : prefixed.slice(slashIdx);
+
+                const hasExplicitPort = /:\d+$/.test(authority);
+                const host = hasExplicitPort ? authority : `${authority}:${DEFAULT_PORT}`;
+
+                let result = `http://${host}${path}`;
                 if (result.endsWith('/')) {
                     result = result.slice(0, -1);
                 }
                 return result;
             } catch {
-                return url;
+                return prefixed;
             }
         }
 
@@ -1414,7 +1430,9 @@ class LoginPage extends Page {
         // If automatic startup discovery is requested on a device WITHOUT background UDP service,
         // skip the automatic HTTP scan to prevent TV slowdown / UI lag.
         if (!isManual && !hasBgService) {
-            log.info('LoginPage: No background discovery service available — skipping auto HTTP scan to prevent TV slowdown.');
+            log.info(
+                'LoginPage: No background discovery service available — skipping auto HTTP scan to prevent TV slowdown.'
+            );
             this._isDiscovering = false;
 
             // Load and render saved servers if available
