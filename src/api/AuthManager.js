@@ -299,21 +299,21 @@ class AuthManager {
         // =====================================================================
         let user = null;
         let serverInfoResolved = false;
-        
+
         // Define retry constraints: 6 attempts spaced by 3 seconds if WOL is active.
-        const maxAttempts = (enableWol && wolMac) ? 6 : 1;
+        const maxAttempts = enableWol && wolMac ? 6 : 1;
         const retryDelayMs = 3000;
 
         try {
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
                     log.info(`Validating token by fetching current user (attempt ${attempt}/${maxAttempts})...`);
-                    
+
                     // Fire getPublicInfo in parallel with getCurrentUser.
                     // We use shorter timeouts on retries to fail-fast and move onto the next try.
                     const currentTimeout = attempt === 1 ? 5000 : 3000;
                     const userPromise = api.getCurrentUser({ timeout: currentTimeout });
-                    
+
                     const serverInfoPromise = api
                         .getPublicInfo()
                         .then((info) => {
@@ -330,15 +330,16 @@ class AuthManager {
                     try {
                         await serverInfoPromise;
                     } catch (_) {}
-                    
+
                     // Break out of the retry loop upon successful connection
                     break;
                 } catch (error) {
                     log.warn(`Token validation failed on attempt ${attempt}/${maxAttempts}:`, error);
 
                     // Check if this error represents a network/routing unreachability condition.
-                    const isUnreachable = error instanceof ServerUnreachableError || 
-                                         (error.status === undefined && error.message && error.message.toLowerCase().includes('fetch'));
+                    const isUnreachable =
+                        error instanceof ServerUnreachableError ||
+                        (error.status === undefined && error.message && error.message.toLowerCase().includes('fetch'));
 
                     // If this is the last allowed attempt, or the error is a definitive failure
                     // (like 401/403 Unauthorized which won't change on retry), propagate it.
@@ -439,7 +440,7 @@ class AuthManager {
         }
 
         // Set max retry attempts: 6 attempts spaced by 3 seconds if WOL is active
-        const maxAttempts = (enableWol && wolMac) ? 6 : 1;
+        const maxAttempts = enableWol && wolMac ? 6 : 1;
         const retryDelayMs = 3000;
         let lastError = null;
 
@@ -713,8 +714,9 @@ class AuthManager {
     async switchUser(userId) {
         log.info(`Switching to user ${userId}...`);
 
-        // Invalidate homepage data cache — it belongs to the previous user/server
-        state.delete('home:pageCache');
+        // Invalidate all user-scoped home state (page cache, libraries, focus) —
+        // libraries differ per user, so the previous user's cached list must not leak.
+        state.clearByPrefix('home:');
 
         const sessions = this._loadSessions();
         const session = sessions.find((s) => s.userId === userId);
@@ -793,8 +795,9 @@ class AuthManager {
     async logout() {
         log.info('Logging out current user...');
 
-        // Invalidate homepage data cache — user-specific data no longer applies
-        state.delete('home:pageCache');
+        // Invalidate all user-scoped home state (page cache, libraries, focus) —
+        // it belongs to the user being logged out.
+        state.clearByPrefix('home:');
 
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
         const sessions = this._loadSessions();
