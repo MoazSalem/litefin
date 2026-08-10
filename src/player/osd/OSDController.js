@@ -72,7 +72,7 @@ export default class OSDController extends Component {
         this._seekStartTime = null;
         this._seekDebounceTimer = null;
 
-        // Focus State
+        // Focus & Track State
         // Row -1: Overlays (persistent widgets)
         // Row 0: Header (Back)
         // Row 1: Controls
@@ -80,6 +80,10 @@ export default class OSDController extends Component {
         this._currentFocusRow = 1;
         this._currentFocusIndex = 2; // Default to Play/Pause
         this._trackTransitionLockoutActive = false;
+
+        this._currentAudioIndex = -1;
+        this._currentSubtitleIndex = -1;
+        this._currentSecondarySubtitleIndex = -1;
 
         this._cachedOverlayRow = [];
         this._cachedHeaderRow = [];
