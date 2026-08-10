@@ -1342,6 +1342,34 @@ export class JellyfinPlayer extends EventEmitter {
                     }
                     this._playSetupInProgress = false;
                 }
+
+                /*
+                 * -----------------------------------------------------------------
+                 * Secondary Subtitle Re-application (awaitTracks path)
+                 * -----------------------------------------------------------------
+                 * setMediaContext() clears all SubtitleManager state — including
+                 * the secondary track and its cue list — as it sets up a fresh
+                 * session. After the primary subtitle is loaded we must explicitly
+                 * re-fetch and re-apply the secondary track so it is not lost
+                 * across remux/restart events (e.g. audio track switches).
+                 *
+                 * We call _subtitleManager.setSecondaryTrack() directly rather than
+                 * setSecondarySubtitleStreamIndex() to bypass the equality guard —
+                 * that guard blocks re-fetching when the index hasn't changed, but
+                 * the cue list has been wiped by setMediaContext() and MUST be
+                 * re-loaded regardless.
+                 *
+                 * Fire-and-forget secondary loading since its delay does not
+                 * affect video decode or initial frame display.
+                 * -----------------------------------------------------------------
+                 */
+                if (this._currentSecondarySubtitleStreamIndex !== undefined &&
+                    this._currentSecondarySubtitleStreamIndex !== null &&
+                    this._currentSecondarySubtitleStreamIndex !== -1) {
+                    log.info('[Play-Flow] Re-applying secondary subtitle after session restart:', this._currentSecondarySubtitleStreamIndex);
+                    this._subtitleManager.setSecondaryTrack(this._currentSecondarySubtitleStreamIndex)
+                        .catch(err => log.warn('[Play-Flow] Secondary subtitle re-application failed:', err));
+                }
             }
 
             // ====================================================================
@@ -1389,6 +1417,33 @@ export class JellyfinPlayer extends EventEmitter {
                 this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex)
                     .catch((err) => log.warn('Initial subtitle setup failed:', err))
                     .finally(() => { this._playSetupInProgress = false; });
+            }
+
+            /*
+             * -------------------------------------------------------------------------
+             * Secondary Subtitle Re-application (standard async path)
+             * -------------------------------------------------------------------------
+             * This mirrors the awaitTracks path above. setMediaContext() resets
+             * SubtitleManager's secondary state on every new play() call, including
+             * playback restarts triggered by audio track switches that force a remux.
+             *
+             * We call _subtitleManager.setSecondaryTrack() directly to bypass the
+             * equality guard in setSecondarySubtitleStreamIndex(), which would
+             * otherwise skip re-loading when the same index is passed again after
+             * the cue list has been cleared by setMediaContext().
+             *
+             * Fire-and-forget; secondary cues arriving slightly late is acceptable
+             * since they are a supplemental overlay over the primary subtitle.
+             * -------------------------------------------------------------------------
+             */
+            if (!awaitTracks &&
+                !isAudioItemSetup &&
+                this._currentSecondarySubtitleStreamIndex !== undefined &&
+                this._currentSecondarySubtitleStreamIndex !== null &&
+                this._currentSecondarySubtitleStreamIndex !== -1) {
+                log.info('[Play-Flow] Re-applying secondary subtitle after session restart:', this._currentSecondarySubtitleStreamIndex);
+                this._subtitleManager.setSecondaryTrack(this._currentSecondarySubtitleStreamIndex)
+                    .catch(err => log.warn('[Play-Flow] Secondary subtitle re-application failed:', err));
             }
         } catch (error) {
             log.error('Playback error caught:', error);
