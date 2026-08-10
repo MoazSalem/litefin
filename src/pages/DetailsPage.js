@@ -2284,41 +2284,47 @@ class DetailsPage extends Page {
             }
         }
 
-        // Upgrade to primary style
-        resumeBtn.classList.remove('btn-secondary');
-        resumeBtn.classList.add('btn-primary');
+        // The label/style/focus handoff below only applies when Resume is actually
+        // the active button (i.e. a resume point exists) — guard it the same way
+        // visibility was gated above so it doesn't steal focus from Play when there's
+        // nothing to resume.
+        if (userData.PlaybackPositionTicks > 0) {
+            // Upgrade to primary style
+            resumeBtn.classList.remove('btn-secondary');
+            resumeBtn.classList.add('btn-primary');
 
-        // Retrieve the resume position from UserData playback position.
-        // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
-        const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
+            // Retrieve the resume position from UserData playback position.
+            // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
+            const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
 
-        // Define a variable to store our sleekly formatted timestamp string.
-        let timeString = '';
+            // Define a variable to store our sleekly formatted timestamp string.
+            let timeString = '';
 
-        // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
-        // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
-        if (resumeTime >= 60) {
-            // Compute the absolute number of whole hours.
-            const hours = Math.floor(resumeTime / 60);
-            // Calculate the remaining minutes left over.
-            const minutes = resumeTime % 60;
+            // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
+            // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
+            if (resumeTime >= 60) {
+                // Compute the absolute number of whole hours.
+                const hours = Math.floor(resumeTime / 60);
+                // Calculate the remaining minutes left over.
+                const minutes = resumeTime % 60;
 
-            // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
-            // show only the hour to maintain a clean and beautiful minimal aesthetic.
-            timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-        } else {
-            // Under 60 minutes, display in simple minute format (e.g., "45m").
-            timeString = `${resumeTime}m`;
+                // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
+                // show only the hour to maintain a clean and beautiful minimal aesthetic.
+                timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+            } else {
+                // Under 60 minutes, display in simple minute format (e.g., "45m").
+                timeString = `${resumeTime}m`;
+            }
+
+            // Apply localization to the formatted time label to construct the full button label text.
+            const resumeLabel = i18n.t('ResumeAt', [timeString]);
+
+            // Update the inner HTML of the resume button with a play icon and the formatted label.
+            resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
+
+            // We hid the Play button, so move focus to the Resume button.
+            resumeBtn.focus();
         }
-
-        // Apply localization to the formatted time label to construct the full button label text.
-        const resumeLabel = i18n.t('ResumeAt', [timeString]);
-
-        // Update the inner HTML of the resume button with a play icon and the formatted label.
-        resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
-
-        // If we hid the Play button, try to move focus to the Resume button.
-        resumeBtn.focus();
 
         // Watched button
         if (watchedBtn) {
