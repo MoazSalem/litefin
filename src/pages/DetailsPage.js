@@ -586,6 +586,16 @@ class DetailsPage extends Page {
                 this._deferredLoading = true;
             } else {
                 this.setLoading(false);
+
+                // No restore target, so the page is about to become interactive right
+                // now — before secondary content (cast, similar, collections) below has
+                // even started loading. Force focus onto Resume immediately rather than
+                // waiting for the deferred block further down, which only runs once all
+                // of that secondary content finishes. Otherwise there's a multi-second
+                // window where the page looks ready but focus is still on the default
+                // Play button, and a fast OK press starts playback from scratch instead
+                // of resuming.
+                this._resumeFocusForced = this._focusResumeButton();
             }
 
             // ────────────────────────────────────────────────────────────────────────
@@ -673,12 +683,8 @@ class DetailsPage extends Page {
                         // triggers the base-class restore itself, and the Resume-button
                         // fallback below would be skipped without ever taking its place.
                         this.restoreScrollFocusWhenReady();
-                    } else if (this._item.UserData?.PlaybackPositionTicks > 0) {
-                        const resumeBtn = this.$('.resume-btn');
-                        if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
-                            log.info('Forcing focus to Resume button');
-                            focusManager.focusElement(resumeBtn);
-                        }
+                    } else if (!this._resumeFocusForced) {
+                        this._focusResumeButton();
                     }
                 }
 
@@ -696,6 +702,21 @@ class DetailsPage extends Page {
             this.showError(i18n.t('FailedToLoadDetails'));
             this.setLoading(false);
         }
+    }
+
+    /**
+     * Focus the Resume button if the item has playback progress and the button
+     * is visible. Returns whether focus was actually forced.
+     */
+    _focusResumeButton() {
+        if (!(this._item.UserData?.PlaybackPositionTicks > 0)) return false;
+
+        const resumeBtn = this.$('.resume-btn');
+        if (!resumeBtn || resumeBtn.classList.contains('hidden')) return false;
+
+        log.info('Forcing focus to Resume button');
+        focusManager.focusElement(resumeBtn);
+        return true;
     }
 
     _showVersionSelectionMenu() {
