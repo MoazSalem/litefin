@@ -3156,6 +3156,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OkShowOsdOnly">${i18n.t('OkShowOsdOnly') || 'OK Shows OSD Only'}</span>
+                        <span class="setting-description" data-i18n="OkShowOsdOnlyDescription">${i18n.t('OkShowOsdOnlyDescription') || 'When the player controls are hidden, pressing OK will only show them instead of also running the focused action.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('okShowOsdOnly') ? 'active' : ''}"
+                                id="toggle-ok-show-osd-only"
+                                data-setting="okShowOsdOnly"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="KeepFocusOnSubtitleOffset">${i18n.t('KeepFocusOnSubtitleOffset') || 'Pin Subtitle Offset'}</span>
                         <span class="setting-description" data-i18n="KeepFocusOnSubtitleOffsetDescription">${i18n.t('KeepFocusOnSubtitleOffsetDescription') || 'Prevent the player controls from auto-hiding while the subtitle offset menu is open.'}</span>
                     </div>
@@ -6792,6 +6806,18 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('osdHideShowName', newValue);
                 hideShowNameBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle OK Shows OSD Only (don't execute the focused action, e.g.
+        // Play/Pause, on the OK press that wakes a hidden OSD)
+        const okShowOsdOnlyBtn = this.$('#toggle-ok-show-osd-only');
+        if (okShowOsdOnlyBtn) {
+            okShowOsdOnlyBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('okShowOsdOnly');
+                const newValue = !currentValue;
+                PlayerSettings.set('okShowOsdOnly', newValue);
+                okShowOsdOnlyBtn.classList.toggle('active', newValue);
             });
         }
 
