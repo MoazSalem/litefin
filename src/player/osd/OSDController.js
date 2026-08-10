@@ -1644,8 +1644,17 @@ export default class OSDController extends Component {
              * Since we discard the TV browser's synthesized ghost clicks globally
              * to prevent double-execution, we must execute the focused action
              * entirely in JavaScript during the wake-up sequence.
+             *
+             * EXCEPTION: when the "okShowOsdOnly" setting is enabled, this
+             * dispatch is skipped for the main OSD rows (Play/Pause, seekbar, back)
+             * so the first OK press only reveals the controls — the user must press
+             * OK again once the desired button holds focus. Overlay widgets (Row -1,
+             * e.g. skip-intro/up-next) are unaffected: those are transient prompts
+             * where OK is expected to act immediately.
              * ========================================================================
              */
+            const showOsdOnly = PlayerSettings.get('okShowOsdOnly') === true;
+
             if (this._currentFocusRow === -1) {
                 // Overlay row (Row -1): a plugin widget (e.g. skip-intro) holds focus.
                 // The widget's container has a click listener registered by PluginWidgetHost
@@ -1679,29 +1688,34 @@ export default class OSDController extends Component {
                 }
 
                 // Widget is hidden/gone — recover: reset row to controls and
-                // execute play/pause as the user's intent for this wakeup press.
+                // execute play/pause as the user's intent for this wakeup press
+                // (unless the wake-up press is only supposed to show the controls).
                 this._currentFocusRow = 1;
                 const playIdx = this._findActionIndex('togglePlay');
                 if (playIdx !== -1) this._currentFocusIndex = playIdx;
                 this._updateFocus();
-                this._executeAction('togglePlay');
+                if (!showOsdOnly) this._executeAction('togglePlay');
             } else if (this._currentFocusRow === 2) {
                 // Seekbar row: OK = toggle play/pause
-                this._executeAction('togglePlay');
+                if (!showOsdOnly) this._executeAction('togglePlay');
             } else if (this._currentFocusRow === 1) {
                 // Controls row: execute focused action (e.g. play/pause or subtitles)
-                const controls = this._getControls();
-                const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
-                if (btn?.dataset?.action) {
-                    this._executeAction(btn.dataset.action);
+                if (!showOsdOnly) {
+                    const controls = this._getControls();
+                    const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                    }
                 }
             } else if (this._currentFocusRow === 0) {
                 // Header row (back button)
-                const btn = this._cachedHeaderRow[0];
-                if (btn?.dataset?.action) {
-                    this._executeAction(btn.dataset.action);
-                } else {
-                    this._executeAction('exit');
+                if (!showOsdOnly) {
+                    const btn = this._cachedHeaderRow[0];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                    } else {
+                        this._executeAction('exit');
+                    }
                 }
             }
 

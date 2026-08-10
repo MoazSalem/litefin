@@ -469,6 +469,25 @@ const DEFAULTS = {
      */
     osdFocusRestoreMode: 'always',
 
+    /*
+     * OK/Enter Wake-Up Behavior
+     * -------------------------------------------------------------------------
+     * Whether the OK/Enter press that reveals a hidden OSD only shows the
+     * controls, instead of also running the action that holds focus at that
+     * moment. Only affects that first wake-up press — once the controls are
+     * visible, OK always runs the focused action regardless of this setting.
+     *
+     *   false (default) — Reveals the OSD AND runs the pre-parked focused
+     *                     action, which is Play/Pause by default. This means
+     *                     the very first OK press during playback pauses the
+     *                     video.
+     *   true            — Reveals the controls only. No action runs on that
+     *                     first press; the user presses OK again once the
+     *                     desired button holds focus. Prevents accidentally
+     *                     pausing playback just to check the floating controls.
+     */
+    okShowOsdOnly: false,
+
     // Keep focus on subtitle offset menu (prevent auto-hide)
     keepFocusOnSubtitleOffset: true,
 

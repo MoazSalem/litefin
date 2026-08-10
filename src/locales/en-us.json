@@ -208,6 +208,8 @@
     "NoOptionsAvailable": "No options available",
     "Normal": "Normal",
     "Off": "Off",
+    "OkShowOsdOnly": "OK Shows OSD Only",
+    "OkShowOsdOnlyDescription": "When the player controls are hidden, pressing OK will only show them instead of also running the focused action.",
     "Option3D": "3D",
     "OptionBluray": "BD",
     "OptionDateAdded": "Date Added",
