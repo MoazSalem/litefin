@@ -665,8 +665,15 @@ class DetailsPage extends Page {
                     state.delete(stateKey);
                 }
 
-                if (!restoredFocus && !this._pendingNavState) {
-                    if (this._item.UserData?.PlaybackPositionTicks > 0) {
+                if (!restoredFocus) {
+                    if (this._pendingNavState) {
+                        // A Back-navigation left us a section/index to restore (e.g.
+                        // returning from Settings via the sidebar). Consume it now —
+                        // otherwise it just sits here forever, since DetailsPage never
+                        // triggers the base-class restore itself, and the Resume-button
+                        // fallback below would be skipped without ever taking its place.
+                        this.restoreScrollFocusWhenReady();
+                    } else if (this._item.UserData?.PlaybackPositionTicks > 0) {
                         const resumeBtn = this.$('.resume-btn');
                         if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
                             log.info('Forcing focus to Resume button');
