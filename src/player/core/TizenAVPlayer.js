@@ -20,6 +20,38 @@ const log = logger.create('TizenAVPlayer');
 const TIZEN_VERSION = detectTizenVersion();
 const DEVICE_CAPS = getDeviceCapabilities();
 
+// ────────────────────────────────────────────────────────────────────────────
+// Audio Capability Detection Helpers
+// ────────────────────────────────────────────────────────────────────────────
+// Evaluates user settings ('enable', 'disable', 'auto') for high-end audio
+// formats. On 'auto', we dynamically query getDeviceCapabilities() to see
+// if the current TV hardware actually advertises native decoding capability
+// for DTS and TrueHD.
+// ────────────────────────────────────────────────────────────────────────────
+const isTrueHdSupported = () => {
+    const setting = PlayerSettings.get('enableTrueHd');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.truehd;
+    } catch (e) {
+        return false;
+    }
+};
+
+const isDtsSupported = () => {
+    const setting = PlayerSettings.get('enableDts');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.dts;
+    } catch (e) {
+        return false;
+    }
+};
+
 // ============================================================================
 // TizenAVPlayer Class
 // ============================================================================
@@ -1142,43 +1174,44 @@ export class TizenAVPlayer {
      */
     _findTizenAudioIndex(streamIndex) {
         try {
+            // Query Tizen AVPlay for native track information
             const trackInfo = this._avplay.getTotalTrackInfo();
 
-            // Tizen returns objects like { type: 'AUDIO', index: 0, extra_info: ... }
+            // Filter down to available AUDIO type track metadata objects from AVPlay
             const audioTracks = trackInfo.filter((t) => t.type === 'AUDIO');
 
-            // We need to map Jellyfin StreamIndex to Tizen's index
-            // Strategy: Assume Tizen and Jellyfin see audio tracks in the same order
+            // Verify that we have media source metadata available for mapping
             if (!this._currentPlayOptions?.mediaSource?.MediaStreams) {
                 log.warn('No MediaStreams info to map audio index');
                 return null;
             }
 
-            // Find which N-th audio track this is in Jellyfin MediaSource
+            // Extract all audio streams from the Jellyfin MediaSource metadata
             let jellyfinAudioStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
                 (s) => s.Type === 'Audio'
             );
 
-            // If Tizen has fewer audio tracks, it usually silently dropped unsupported ones (DTS/TrueHD)
-            if (audioTracks.length > 0 && jellyfinAudioStreams.length > audioTracks.length) {
-                log.debug('Tizen audio track count mismatch, filtering unsupported codecs');
-                jellyfinAudioStreams = jellyfinAudioStreams.filter(s => {
-                    const c = (s.Codec || '').toLowerCase();
-                    return !c.includes('truehd') && !c.includes('dts');
-                });
-            }
+            // Filter out unsupported passthrough audio formats (TrueHD/DTS)
+            // Tizen AVPlay omits unsupported DTS/TrueHD tracks from getTotalTrackInfo().
+            jellyfinAudioStreams = jellyfinAudioStreams.filter((track) => {
+                const codec = (track.Codec || '').toLowerCase();
+                if (codec === 'truehd' && !isTrueHdSupported()) return false;
+                if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
+                return true;
+            });
 
+            // Find position of target streamIndex inside the filtered audio stream list
             const targetStreamIndexInAudioList = jellyfinAudioStreams.findIndex((s) => s.Index === streamIndex);
 
             if (targetStreamIndexInAudioList === -1) {
-                log.warn('Requested audio stream index not found in MediaSource:', streamIndex);
+                log.warn('Requested audio stream index not found in filtered MediaSource:', streamIndex);
                 return null;
             }
 
-            // Select the N-th available audio track in Tizen
+            // Map relative position to Tizen's physical native track index
             if (audioTracks[targetStreamIndexInAudioList]) {
                 const tizenIndex = audioTracks[targetStreamIndexInAudioList].index;
-                log.debug(`Mapped Jellyfin Audio ${streamIndex} to Tizen index ${tizenIndex}`);
+                log.debug(`Mapped Jellyfin Audio Stream ${streamIndex} to Tizen index ${tizenIndex}`);
                 return parseInt(tizenIndex, 10);
             }
 
@@ -1613,45 +1646,66 @@ export class TizenAVPlayer {
     // ========================================================================
 
     /**
-     * Set audio stream index
-     * @param {number} index - Audio stream index
+     * Set audio stream by backend-visible list index.
+     *
+     * Converts 0-based listIndex (from JellyfinPlayer._getBackendAudioTrackListIndex)
+     * to the corresponding Jellyfin StreamIndex, then uses _findTizenAudioIndex to select
+     * the exact Tizen AVPlay native track.
+     *
+     * @param {number} listIndex - 0-based index into backend-visible audio streams
      */
-    setAudioStreamIndex(index) {
+    setAudioStreamIndex(listIndex) {
+        // Validate AVPlay hardware instance availability
         if (!this._avplay) {
             log.error('No avplay instance');
             return;
         }
+
+        // Validate player state
         if (!this._isPrepared) {
             log.error('Player not prepared');
             return;
         }
 
         try {
-            const tracks = this._avplay.getTotalTrackInfo();
-            const audioTracks = tracks.filter((t) => t.type === 'AUDIO');
+            // Retrieve backend-visible Jellyfin audio streams (matching JellyfinPlayer._getBackendAudioTracks)
+            const mediaStreams = this._currentPlayOptions?.mediaSource?.MediaStreams || [];
+            const jellyfinAudioStreams = mediaStreams.filter((s) => {
+                if (s.Type !== 'Audio') return false;
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'truehd' && !isTrueHdSupported()) return false;
+                if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
+                return true;
+            });
 
-            if (index >= 0 && index < audioTracks.length) {
-                const track = audioTracks[index];
+            // Find target stream object at requested listIndex
+            const targetStream = jellyfinAudioStreams[listIndex];
+            if (!targetStream) {
+                log.error('Invalid audio list index:', listIndex, 'max:', jellyfinAudioStreams.length - 1);
+                return;
+            }
 
-                // Per Samsung docs, setSelectTrack('AUDIO', ...) is only valid in
-                // PLAYING state for HLS/DASH. Defer via _pendingAudioIndex if not.
-                let avplayState = 'UNKNOWN';
-                try { avplayState = this._avplay.getState(); } catch (_) {}
-                if (avplayState !== 'PLAYING') {
-                    log.debug(`Audio track ${track.index} deferred — AVPlay state is '${avplayState}', not PLAYING`);
-                    const jellyfinStreamIndex = this._currentPlayOptions?.mediaSource?.MediaStreams
-                        ?.filter(s => s.Type === 'Audio')?.[index]?.Index;
-                    if (jellyfinStreamIndex !== undefined) {
-                        this._pendingAudioIndex = jellyfinStreamIndex;
-                    }
-                    this._currentAudioStreamIndex = index;
-                    return;
-                }
+            const streamIndex = targetStream.Index;
 
-                this._avplay.setSelectTrack('AUDIO', track.index);
-                this._currentAudioStreamIndex = index;
+            // Per Samsung docs, setSelectTrack('AUDIO', ...) is only valid in PLAYING state for HLS/DASH.
+            // If AVPlay is not in PLAYING state, store the Jellyfin StreamIndex for deferred execution.
+            let avplayState = 'UNKNOWN';
+            try { avplayState = this._avplay.getState(); } catch (_) {}
+            if (avplayState !== 'PLAYING') {
+                log.debug(`Audio track Stream ${streamIndex} (list index ${listIndex}) deferred — AVPlay state is '${avplayState}', not PLAYING`);
+                this._pendingAudioIndex = streamIndex;
+                this._currentAudioStreamIndex = listIndex;
+                return;
+            }
+
+            // Map Jellyfin StreamIndex to native Tizen AVPlay track index
+            const tizenAudioIndex = this._findTizenAudioIndex(streamIndex);
+            if (tizenAudioIndex !== null) {
+                this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                this._currentAudioStreamIndex = listIndex;
+                log.info(`TizenAVPlayer: Selected AUDIO list index ${listIndex} (Stream ${streamIndex}) → native Tizen index ${tizenAudioIndex}`);
             } else {
-                log.error('Invalid audio index:', index, 'max:', audioTracks.length - 1);
+                log.warn(`TizenAVPlayer: Could not find Tizen audio track for list index ${listIndex} (Stream ${streamIndex})`);
             }
         } catch (e) {
             log.error('Set audio track failed:', e);

@@ -2212,28 +2212,35 @@ export class JellyfinPlayer extends EventEmitter {
     /**
      * Get audio tracks as exposed by the current native backend.
      *
-     * Jellyfin keeps original stream IDs, including tracks the WebOS native
-     * audioTracks API will not expose when passthrough codecs are disabled.
-     * Counting those hidden tracks shifts the backend list index by one.
+     * Native media engines (WebOS HTML5 video and Tizen AVPlay) keep original
+     * container stream IDs, but omit tracks that cannot be output natively when
+     * passthrough audio codecs (e.g., DTS and TrueHD) are disabled or unsupported.
+     * Including those omitted streams shifts the 0-based backend track list index,
+     * which causes the player to select the wrong audio track on in-player switching.
      *
      * @param {Object} [mediaSource]
      * @returns {Array} Backend-visible audio streams
      * @private
      */
     _getBackendAudioTracks(mediaSource = this._currentMediaSource) {
+        // Retrieve all audio streams attached to the current media source
         const tracks = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
 
-        if (this._backendType !== 'webos') {
+        // For backends without track filtering quirks (e.g. desktop HTML5), return all streams
+        if (this._backendType !== 'webos' && this._backendType !== 'tizen') {
             return tracks;
         }
 
+        // Filter out passthrough audio formats that the hardware pipeline omits from native track lists
         return tracks.filter((track) => {
             const codec = (track.Codec || '').toLowerCase();
 
+            // Omit Dolby TrueHD if passthrough/decoding is disabled or unsupported by hardware
             if (codec === 'truehd' && !isTrueHdSupported()) {
                 return false;
             }
 
+            // Omit DTS / DTS-HD / DCA streams if passthrough/decoding is disabled or unsupported
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
                 return false;
             }
