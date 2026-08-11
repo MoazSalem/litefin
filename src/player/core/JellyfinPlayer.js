@@ -1737,9 +1737,9 @@ export class JellyfinPlayer extends EventEmitter {
         // DirectPlay: native backend audio switching (no restart needed)
         // =====================================================================
 
-        // Both Tizen (AVPlay) and HtmlVideoPlayer work with 0-based list
-        // indices of available audio tracks, NOT the raw Jellyfin stream ID.
-        // Convert here so both backends share the same simple interface.
+        // HTML5 and WebOS expect a 0-based backend track-list index. Tizen
+        // expects the raw Jellyfin stream ID so it can resolve the matching
+        // AVPlay-native track index through its startup/pending track mapper.
         const tracks = this._getBackendAudioTracks();
         const listIndex = this._getBackendAudioTrackListIndex(index);
 
@@ -1749,8 +1749,13 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
-        log.debug('Converting StreamID', index, 'to list index', listIndex);
-        this._backend?.setAudioStreamIndex(listIndex);
+        if (this._backendType === 'tizen') {
+            log.debug('Passing StreamID', index, 'to Tizen native track mapper');
+            this._backend?.setAudioStreamIndex(index);
+        } else {
+            log.debug('Converting StreamID', index, 'to list index', listIndex);
+            this._backend?.setAudioStreamIndex(listIndex);
+        }
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { audioStreamIndex: index });
     }

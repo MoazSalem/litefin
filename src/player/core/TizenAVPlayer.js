@@ -1614,9 +1614,9 @@ export class TizenAVPlayer {
 
     /**
      * Set audio stream index
-     * @param {number} index - Audio stream index
+     * @param {number} streamIndex - Jellyfin audio stream index
      */
-    setAudioStreamIndex(index) {
+    setAudioStreamIndex(streamIndex) {
         if (!this._avplay) {
             log.error('No avplay instance');
             return;
@@ -1626,33 +1626,13 @@ export class TizenAVPlayer {
             return;
         }
 
+        // Reuse the startup selection path so live switches resolve the raw
+        // Jellyfin stream ID to the matching AVPlay-native track index.
+        this._currentAudioStreamIndex = streamIndex;
+        this._pendingAudioIndex = streamIndex;
+
         try {
-            const tracks = this._avplay.getTotalTrackInfo();
-            const audioTracks = tracks.filter((t) => t.type === 'AUDIO');
-
-            if (index >= 0 && index < audioTracks.length) {
-                const track = audioTracks[index];
-
-                // Per Samsung docs, setSelectTrack('AUDIO', ...) is only valid in
-                // PLAYING state for HLS/DASH. Defer via _pendingAudioIndex if not.
-                let avplayState = 'UNKNOWN';
-                try { avplayState = this._avplay.getState(); } catch (_) {}
-                if (avplayState !== 'PLAYING') {
-                    log.debug(`Audio track ${track.index} deferred — AVPlay state is '${avplayState}', not PLAYING`);
-                    const jellyfinStreamIndex = this._currentPlayOptions?.mediaSource?.MediaStreams
-                        ?.filter(s => s.Type === 'Audio')?.[index]?.Index;
-                    if (jellyfinStreamIndex !== undefined) {
-                        this._pendingAudioIndex = jellyfinStreamIndex;
-                    }
-                    this._currentAudioStreamIndex = index;
-                    return;
-                }
-
-                this._avplay.setSelectTrack('AUDIO', track.index);
-                this._currentAudioStreamIndex = index;
-            } else {
-                log.error('Invalid audio index:', index, 'max:', audioTracks.length - 1);
-            }
+            this._applyPendingTracks();
         } catch (e) {
             log.error('Set audio track failed:', e);
         }
