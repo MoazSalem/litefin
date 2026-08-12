@@ -1105,7 +1105,7 @@ body {
 .count-badge.media-source-count-badge {
     background-color: var(--jf-accent, #00a4dc);
     color: var(--jf-accent-content-color, #ffffff);
-    font-size: 1rem;
+    font-size: 1.1rem;
 }
 
 .played-badge {
