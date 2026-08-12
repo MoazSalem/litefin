@@ -1861,13 +1861,14 @@ class DetailsPage extends Page {
      * ========================================================================
      * Background Theme Song Loader and Player
      * ========================================================================
-     * Dynamically queries the theme media associated with the active item.
-     * If a theme song is available, compiles the stream source URL and initiates
-     * background score looping via ThemeSongPlayer.
+     * Dynamically queries the theme media associated with the active item on the server.
+     * Works for any media type (Movies, Series, Seasons, Episodes, Collections, etc.).
+     * If a theme song is available, compiles the authenticated stream source URL and initiates
+     * background score playback via ThemeSongPlayer.
      */
     async _playThemeSong() {
-        // Assert that the loaded item supports theme media playback
-        if (!['Series', 'Season', 'Episode'].includes(this._item.Type)) {
+        // Assert that the item details are fully loaded into memory before querying API
+        if (!this._item) {
             return;
         }
 
