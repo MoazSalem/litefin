@@ -1750,7 +1750,7 @@ class HomePage extends Page {
             // client-side by checking UserData.Played.
             const ignoreWatched = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
             const fields =
-                'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds';
+                'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds,MediaSourceCount';
             const imageTypes = 'Primary,Backdrop,Logo';
 
             let items = [];

@@ -956,7 +956,7 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating',
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
             };

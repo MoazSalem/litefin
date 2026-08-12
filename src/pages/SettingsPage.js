@@ -1677,6 +1677,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowMediaSourceCounts">${i18n.t('ShowMediaSourceCounts') || 'Show Version Counts'}</span>
+                        <span class="setting-description" data-i18n="ShowMediaSourceCountsDescription">${i18n.t('ShowMediaSourceCountsDescription') || 'Display a badge showing the number of available video versions on media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showMediaSourceCounts') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-show-media-source-counts" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowQualityBadges">${i18n.t('ShowQualityBadges') || 'Show Quality Badges'}</span>
                         <span class="setting-description" data-i18n="ShowQualityBadgesDescription">${i18n.t('ShowQualityBadgesDescription') || 'Display quality badges (e.g. 4K, 1080p, HDR) on media poster cards.'}</span>
                     </div>
@@ -6077,6 +6090,18 @@ class SettingsPage extends Page {
 
                 // Log settings adjustment for user session diagnostics.
                 log.info(`Hide Episode Counts set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Show Media Source Counts (Versions)
+        const showMediaSourceCountsBtn = this.$('#toggle-show-media-source-counts');
+        if (showMediaSourceCountsBtn) {
+            showMediaSourceCountsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showMediaSourceCounts') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showMediaSourceCounts', newValue);
+                showMediaSourceCountsBtn.classList.toggle('active', newValue);
+                log.info(`Show Version Counts set to: ${newValue}`);
             });
         }
 

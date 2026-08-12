@@ -258,7 +258,7 @@ export class ApiClient {
         }
 
         // Conditionally request quality/resolution metadata if enabled
-        if (storage.getItem('pref:showQualityBadges') === 'true' && options.params) {
+        if (options.params) {
             const fieldsKey = Object.keys(options.params).find((k) => k.toLowerCase() === 'fields');
             const isItemsEndpoint =
                 (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
@@ -269,16 +269,27 @@ export class ApiClient {
                 endpoint.includes('/Similar') ||
                 endpoint.includes('/Episodes') ||
                 endpoint.includes('/Search/Hints') ||
+                endpoint.includes('/Persons') ||
                 endpoint.includes('/MergedRows');
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
                 const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
-                ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
-                    if (!fieldsList.includes(f)) {
-                        fieldsList.push(f);
+                
+                if (storage.getItem('pref:showQualityBadges') === 'true') {
+                    ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
+                        if (!fieldsList.includes(f)) {
+                            fieldsList.push(f);
+                        }
+                    });
+                }
+
+                if (storage.getItem('pref:showMediaSourceCounts') !== 'false') {
+                    if (!fieldsList.includes('MediaSourceCount')) {
+                        fieldsList.push('MediaSourceCount');
                     }
-                });
+                }
+
                 options.params[targetKey] = fieldsList.join(',');
             }
         }
@@ -716,7 +727,7 @@ export class ApiClient {
             SortOrder: 'Ascending',
             IncludeItemTypes: '',
             Recursive: true,
-            Fields: 'BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'BackdropImageTags,ParentBackdropImageTags,MediaSourceCount',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             Limit: 100

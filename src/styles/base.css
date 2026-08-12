@@ -1102,6 +1102,12 @@ body {
     z-index: 8;
 }
 
+.count-badge.media-source-count-badge {
+    background-color: var(--jf-accent, #00a4dc);
+    color: var(--jf-accent-content-color, #ffffff);
+    font-size: 1rem;
+}
+
 .played-badge {
     position: absolute;
     bottom: 12px;
@@ -1167,6 +1173,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.count-badge ~ .quality-badge {
+    right: 60px;
 }
 
 

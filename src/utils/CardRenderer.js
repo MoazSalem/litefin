@@ -561,12 +561,16 @@ class CardRenderer {
         // It is optional and can be disabled via preferences to declutter the UI.
         let badgeHtml = '';
 
-        // Fetch the user preference (defaults to false, meaning counts are shown by default)
+        // Fetch user preferences for badges
         const hideEpisodeCounts = storage.getItem('pref:hideEpisodeCounts') === 'true';
+        const showMediaSourceCounts = storage.getItem('pref:showMediaSourceCounts') !== 'false';
 
-        // Only render the count badge if the user hasn't explicitly disabled it
+        // Only render the unplayed count badge if the user hasn't explicitly disabled it
         if (!hideEpisodeCounts && item.UserData && item.UserData.UnplayedItemCount > 0) {
             badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
+        } else if (showMediaSourceCounts && item.MediaSourceCount > 1) {
+            // Render media source version count badge (e.g. for items with multiple versions like Movies/Episodes)
+            badgeHtml = `<div class="count-badge media-source-count-badge">${item.MediaSourceCount}</div>`;
         }
 
         // Played Badge (Check Mark)

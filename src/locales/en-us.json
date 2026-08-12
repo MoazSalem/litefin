@@ -312,6 +312,8 @@
     "Series": "TV Shows",
     "Settings": "Settings",
     "ShowLess": "Show less",
+    "ShowMediaSourceCounts": "Show Version Counts",
+    "ShowMediaSourceCountsDescription": "Display a badge showing the number of available video versions on media cards.",
     "ShowMore": "Show more",
     "Shuffle": "Shuffle",
     "SimpleLoaderDescription": "Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.",
