@@ -77,14 +77,44 @@ If Litefin is useful to you, please consider supporting the development:
           <b>Paul Becker</b>
         </a>
       </td>
-      <td align="center" width="160">
+     <td align="center" width="160">
+        <a href="https://github.com/massoncl">
+          <img src="https://github.com/massoncl.png?s=100" width="80" alt="massoncl" />
+          <br />
+          <b>Clément Masson</b>
+        </a>
+      </td>
+     <td align="center" width="160">
+        <a href="https://github.com/Scoty">
+          <img src="https://github.com/Scoty.png?s=100" width="80" alt="Scoty" />
+          <br />
+          <b>Anton Antonov</b>
+        </a>
+      </td>
+     <td align="center" width="160">
         <a href="https://github.com/meric426">
           <img src="https://github.com/meric426.png?s=100" width="80" alt="Martin Ericson" />
           <br />
           <b>Martin Ericson</b>
         </a>
       </td>
+       <td align="center" width="160">
+        <a href="https://github.com/pzmarzly">
+          <img  src="https://github.com/pzmarzly.png?s=100" width="80" alt="pzmarzly" />
+          <br />
+          <b>Paweł Zmarzły</b>
+        </a>
+      </td>
+       </tr>
+    <tr>
       <td align="center" width="160">
+        <a href="https://github.com/witks">
+          <img src="https://github.com/witks.png?s=100" width="80" alt="witks" />
+          <br />
+          <b>witek</b>
+        </a>
+      </td>
+     <td align="center" width="160">
         <a href="https://github.com/DatAres37">
           <img src="https://github.com/DatAres37.png?s=100" width="80" alt="DatAres37" />
           <br />
@@ -98,16 +128,7 @@ If Litefin is useful to you, please consider supporting the development:
           <b>Dani Tesler</b>
         </a>
       </td>
-       </tr>
-    <tr>
       <td align="center" width="160">
-        <a href="https://github.com/witks">
-          <img src="https://github.com/witks.png?s=100" width="80" alt="witks" />
-          <br />
-          <b>witek</b>
-        </a>
-      </td>
-       <td align="center" width="160">
         <a href="https://github.com/h3xler">
           <img src="https://github.com/h3xler.png?s=100" width="80" alt="h3xler" />
           <br />
