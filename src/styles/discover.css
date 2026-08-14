@@ -1,0 +1,126 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Discover Page and Status Badges
+ * ============================================================================
+ */
+
+/* ========================================================================
+   Generic card status badge, fed by item._statusBadge
+   ======================================================================== */
+
+.card-status-badge {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    /* Matches every other card badge. Without it the poster paints over the
+       badge as soon as it loads, since both live in .card-image. */
+    z-index: 8;
+    padding: 3px 8px;
+    border-radius: var(--jf-border-radius, 6px);
+    background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.75));
+    color: var(--jf-text-primary);
+    font-size: 0.7em;
+    font-weight: 600;
+    line-height: 1.4;
+    max-width: calc(100% - 16px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Available: emphasized, it is the most useful state to spot at a glance */
+.card-status-badge--seerr-5 {
+    background: var(--jf-success, #4caf50);
+    color: var(--jf-accent-content-color, #ffffff);
+}
+
+/* Requested, processing, partially available */
+.card-status-badge--seerr-2,
+.card-status-badge--seerr-3,
+.card-status-badge--seerr-4 {
+    background: var(--jf-accent, #00a4dc);
+    color: var(--jf-accent-content-color, #ffffff);
+}
+
+/* ========================================================================
+   Discover page
+   ======================================================================== */
+
+.discover-content {
+    padding: 0 60px;
+}
+
+.discover-controls {
+    padding: 24px 0 8px;
+}
+
+.discover-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    min-height: 40vh;
+    color: var(--jf-text-secondary);
+    text-align: center;
+}
+
+.discover-message .discover-message-actions {
+    display: flex;
+    gap: 16px;
+}
+
+/* ========================================================================
+   Request modal
+   ======================================================================== */
+
+.seerr-modal-body {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.seerr-modal-status {
+    color: var(--jf-accent);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.seerr-modal-overview {
+    color: var(--jf-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.seerr-season-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 6px;
+    border: 2px solid transparent;
+    border-radius: var(--jf-border-radius, 6px);
+    background: var(--jf-card-bg, rgba(255, 255, 255, 0.06));
+    color: var(--jf-text-primary);
+    font-size: 1em;
+    text-align: left;
+}
+
+.seerr-season-row.focused {
+    border-color: var(--jf-accent);
+}
+
+.seerr-season-row.is-selected {
+    background: var(--jf-accent);
+    color: var(--jf-accent-content-color, #ffffff);
+}
+
+.seerr-season-row.is-locked {
+    opacity: 0.5;
+}
+
+.seerr-season-meta {
+    color: inherit;
+    font-size: 0.85em;
+    opacity: 0.8;
+}

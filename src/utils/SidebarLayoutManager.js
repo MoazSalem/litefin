@@ -32,6 +32,7 @@ const STATIC_ITEMS = [
     { id: 'livetv', label: 'Live TV', hidden: true },
     { id: 'random', label: 'Random' },
     { id: 'favorites', label: 'Favorites' },
+    { id: 'discover', label: 'SeerrDiscover' },
     { id: 'search', label: 'Search' },
     { id: 'settings', label: 'Settings' },
     { id: 'librariesContainer', label: 'Libraries' }

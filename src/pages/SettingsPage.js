@@ -32,6 +32,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { seerr } from '../api/JellyseerrClient.js';
 
 const log = logger.create('SettingsPage');
 
@@ -116,6 +117,11 @@ class SettingsPage extends Page {
                 icon: settingsIcons.plugins
             },
             {
+                id: 'seerr',
+                label: i18n.t('Seerr'),
+                icon: settingsIcons.seerr
+            },
+            {
                 id: 'account',
                 label: i18n.t('Account'),
                 icon: settingsIcons.account
@@ -197,6 +203,8 @@ class SettingsPage extends Page {
                 return this._renderPluginsTab();
             case 'backup':
                 return this._renderBackupTab();
+            case 'seerr':
+                return this._renderSeerrTab();
             default:
                 return this._renderAppearanceTab();
         }
@@ -265,6 +273,41 @@ class SettingsPage extends Page {
                 ${content}
             </div>
         `;
+    }
+
+    _renderSeerrTab() {
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title" data-i18n="Seerr">${i18n.t('Seerr')}</h2>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SeerrServerIntegration">${i18n.t('SeerrServerIntegration')}</span>
+                        <span class="setting-description" data-i18n="SeerrServerIntegrationDescription">${i18n.t('SeerrServerIntegrationDescription')}</span>
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" id="seerr-status-line">${i18n.t('SeerrDisconnected')}</h3>
+            </div>
+        `;
+    }
+
+    _setSeerrStatusText(text) {
+        const line = this.$('#seerr-status-line');
+        if (line) line.textContent = text;
+    }
+
+    /** Queries the Litefin server plugin to reflect the Seerr integration state. */
+    async _refreshSeerrStatus() {
+        try {
+            const status = await seerr.status(true);
+            this._setSeerrStatusText(
+                i18n.t(status.available ? 'SeerrServerIntegrationConnected' : 'SeerrServerIntegrationUnavailable')
+            );
+        } catch (err) {
+            log.warn('Seerr server integration status check failed', err);
+            this._setSeerrStatusText(i18n.t('SeerrServerIntegrationUnavailable'));
+        }
     }
 
     _renderAppearanceTab() {
@@ -7210,6 +7253,10 @@ class SettingsPage extends Page {
                 await pluginManager.setPluginEnabled(pluginId, true);
             });
         });
+
+        if (this.activeTab === 'seerr') {
+            this._refreshSeerrStatus();
+        }
     }
 
     /**

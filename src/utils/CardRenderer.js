@@ -184,7 +184,12 @@ class CardRenderer {
         // By default, we expect an image. We DO NOT render the fallback DOM yet to save memory.
         imageInnerHtml = '';
 
-        if (type === 'person') {
+        // Poster supplied verbatim by an external provider. Same idea as
+        // _dynamicThumbUrl below: skip Jellyfin URL building, which is
+        // meaningless for a remote item.
+        if (item._imageUrl) {
+            imageUrl = item._imageUrl;
+        } else if (type === 'person') {
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
             const isArtist = item.Type === 'MusicArtist' || item.Type === 'Artist';
 
@@ -612,6 +617,13 @@ class CardRenderer {
         // Quality Badge (Resolution/HDR)
         let qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
 
+        // Caller-supplied, already translated. Generic on purpose: the renderer
+        // has no business knowing where the status came from.
+        let statusBadgeHtml = '';
+        if (item._statusBadge && item._statusBadge.label) {
+            statusBadgeHtml = `<div class="card-status-badge card-status-badge--${item._statusBadge.variant}">${item._statusBadge.label}</div>`;
+        }
+
         // --- 3. Text Generation ---
 
         let titleText = i18n.ensureBiDi(item.Name);
@@ -903,6 +915,7 @@ class CardRenderer {
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
             ${qualityBadgeHtml}
+            ${statusBadgeHtml}
         `;
 
         const html = `
