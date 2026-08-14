@@ -34,6 +34,8 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
 import { buildJellyfinProfile } from './DeviceProfile.js';
+import { focusManager } from '../ui/FocusManager.js';
+import { imageCache } from '../utils/ImageCache.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('AuthManager');
@@ -714,9 +716,30 @@ class AuthManager {
     async switchUser(userId) {
         log.info(`Switching to user ${userId}...`);
 
-        // Invalidate all user-scoped home state (page cache, libraries, focus) —
-        // libraries differ per user, so the previous user's cached list must not leak.
+        /*
+         * ====================================================================
+         * FULL USER-SCOPED STATE & CACHE INVALIDATION
+         * ====================================================================
+         * When switching user accounts, we MUST wipe all cached view models,
+         * row structures, details pages, search results, and focus positions
+         * associated with the previous session. Each Jellyfin user has different
+         * library permissions, watched indicators, and custom row orderings.
+         * Failure to clear all prefixes causes cross-account state contamination.
+         * ====================================================================
+         */
         state.clearByPrefix('home:');
+        state.clearByPrefix('library:');
+        state.clearByPrefix('details:');
+        state.clearByPrefix('favorites:');
+        state.clearByPrefix('search:');
+        state.clearByPrefix('person:');
+        state.clearByPrefix('player:');
+
+        // Clear focus memory so old user's spatial focus targets don't persist
+        focusManager.clearMemory();
+
+        // Abort in-flight prewarm requests and clear image cache
+        imageCache.clear();
 
         const sessions = this._loadSessions();
         const session = sessions.find((s) => s.userId === userId);
@@ -795,9 +818,26 @@ class AuthManager {
     async logout() {
         log.info('Logging out current user...');
 
-        // Invalidate all user-scoped home state (page cache, libraries, focus) —
-        // it belongs to the user being logged out.
+        /*
+         * ====================================================================
+         * FULL USER-SCOPED STATE & CACHE INVALIDATION
+         * ====================================================================
+         * Wipe all stored session state and focus memories for the user being logged out.
+         * ====================================================================
+         */
         state.clearByPrefix('home:');
+        state.clearByPrefix('library:');
+        state.clearByPrefix('details:');
+        state.clearByPrefix('favorites:');
+        state.clearByPrefix('search:');
+        state.clearByPrefix('person:');
+        state.clearByPrefix('player:');
+
+        // Clear focus manager memory
+        focusManager.clearMemory();
+
+        // Abort in-flight prewarm requests and clear image cache
+        imageCache.clear();
 
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
         const sessions = this._loadSessions();
