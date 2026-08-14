@@ -81,6 +81,9 @@ export class JellyseerrClient {
             if (method === 'POST') {
                 return await api.post(`${API_ROOT}${path}`, options.body);
             }
+            if (method === 'DELETE') {
+                return await api.delete(`${API_ROOT}${path}`);
+            }
             return await api.get(`${API_ROOT}${path}`);
         } catch (err) {
             log.warn(`Request failed: ${method} ${path}`, err);
@@ -172,11 +175,44 @@ export class JellyseerrClient {
      * @param {Array<number>} [params.seasons]
      * @returns {Promise<Object>}
      */
-    async createRequest({ mediaType, tmdbId, seasons }) {
+    async createRequest({ mediaType, tmdbId, seasons, serverId, profileId, rootFolder, languageProfileId, is4k }) {
         const body = { mediaType, mediaId: tmdbId };
         if (mediaType === 'tv') body.seasons = seasons || [];
+        if (serverId != null) body.serverId = serverId;
+        if (profileId != null) body.profileId = profileId;
+        if (rootFolder) body.rootFolder = rootFolder;
+        if (languageProfileId != null) body.languageProfileId = languageProfileId;
+        body.is4k = !!is4k;
         log.info(`Requesting ${mediaType} ${tmdbId}${seasons ? ` seasons ${seasons.join(',')}` : ''}`);
         return this._request('/Requests', { method: 'POST', body });
+    }
+
+    async requestOptions(mediaType) {
+        const user = await this._request('/User');
+        if (!((user.permissions || 0) & (2 | 8192))) return null;
+        const servers = await this._request(`/Services/${mediaType}`);
+        const details = await Promise.all(
+            servers.map((server) => this._request(`/Services/${mediaType}/${server.id}`))
+        );
+        return { servers, details };
+    }
+
+    async isWatchlisted(mediaType, tmdbId) {
+        const payload = await this._request('/Watchlist');
+        return this._resultsOf(payload).some(
+            (entry) => Number(entry.tmdbId) === Number(tmdbId) && entry.mediaType === mediaType
+        );
+    }
+
+    async addToWatchlist(item) {
+        return this._request('/Watchlist', {
+            method: 'POST',
+            body: { tmdbId: item._tmdbId, mediaType: item._mediaType, title: item.Name }
+        });
+    }
+
+    async removeFromWatchlist(item) {
+        return this._request(`/Watchlist/${item._mediaType}/${item._tmdbId}`, { method: 'DELETE' });
     }
 }
 

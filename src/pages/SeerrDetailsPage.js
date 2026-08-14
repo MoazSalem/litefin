@@ -14,6 +14,7 @@ import { seerr } from '../api/JellyseerrClient.js';
 import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { toast } from '../ui/Toast.js';
 import { storage } from '../utils/StorageService.js';
 import { detailsIcons } from '../utils/Icons.js';
 import { i18n } from '../utils/i18n.js';
@@ -35,6 +36,7 @@ class SeerrDetailsPage extends Page {
         super();
         this._isAsyncPage = true;
         this._item = null;
+        this._isWatchlisted = false;
     }
 
     render() {
@@ -58,6 +60,9 @@ class SeerrDetailsPage extends Page {
                             <section class="details-actions" id="actions">
                                 <button class="btn btn-primary seerr-request-btn" tabindex="0">
                                     <span>${i18n.t('SeerrRequest')}</span>
+                                </button>
+                                <button class="btn seerr-watchlist-btn" tabindex="0">
+                                    <span>${i18n.t('SeerrAddToWatchlist')}</span>
                                 </button>
                             </section>
                             <div class="details-overview">
@@ -88,6 +93,11 @@ class SeerrDetailsPage extends Page {
         this.setLoading(true);
         try {
             this._item = await seerr.details(mediaType, tmdbId);
+            try {
+                this._isWatchlisted = await seerr.isWatchlisted(mediaType, tmdbId);
+            } catch (err) {
+                log.warn('Unable to load Seerr watchlist state', err);
+            }
             this.title = this._item.Name;
             this._renderDetails();
             this._bindActions();
@@ -148,6 +158,7 @@ class SeerrDetailsPage extends Page {
 
         this.$('#details-info-col').classList.add('visible');
         this._updateRequestButton();
+        this._updateWatchlistButton();
     }
 
     _bindActions() {
@@ -164,6 +175,23 @@ class SeerrDetailsPage extends Page {
             });
         });
 
+        this.$('.seerr-watchlist-btn')?.addEventListener('click', async () => {
+            const button = this.$('.seerr-watchlist-btn');
+            button.disabled = true;
+            try {
+                if (this._isWatchlisted) await seerr.removeFromWatchlist(this._item);
+                else await seerr.addToWatchlist(this._item);
+                this._isWatchlisted = !this._isWatchlisted;
+                this._updateWatchlistButton();
+                toast.show(i18n.t(this._isWatchlisted ? 'SeerrAddedToWatchlist' : 'SeerrRemovedFromWatchlist'));
+            } catch (err) {
+                log.warn('Unable to update Seerr watchlist', err);
+                toast.show(i18n.t('SeerrWatchlistFailed'));
+            } finally {
+                button.disabled = false;
+            }
+        });
+
         this.$('.see-more-btn')?.addEventListener('click', () => {
             DescriptionModal.show(
                 { title: escapeHtml(this._item.Name), overview: escapeHtml(this._item.Overview) },
@@ -175,9 +203,10 @@ class SeerrDetailsPage extends Page {
     _registerFocus() {
         const requestButton = this.$('.seerr-request-btn');
         const hasRequestAction = requestButton && !requestButton.classList.contains('hidden');
+        const hasAction = hasRequestAction || !!this.$('.seerr-watchlist-btn');
         const hasOverviewAction = !this.$('.see-more-btn')?.classList.contains('hidden');
 
-        if (hasRequestAction) {
+        if (hasAction) {
             this.registerFocusSection('seerr-details-actions', this.$('#actions'), {
                 orientation: 'horizontal',
                 leaveLeft: 'sidebar',
@@ -187,12 +216,12 @@ class SeerrDetailsPage extends Page {
         if (hasOverviewAction) {
             this.registerFocusSection('seerr-details-overview', this.$('.details-overview'), {
                 orientation: 'vertical',
-                leaveUp: hasRequestAction ? 'seerr-details-actions' : null,
+                leaveUp: hasAction ? 'seerr-details-actions' : null,
                 leaveLeft: 'sidebar'
             });
         }
 
-        if (hasRequestAction) this.setActiveSection('seerr-details-actions');
+        if (hasAction) this.setActiveSection('seerr-details-actions');
         else if (hasOverviewAction) this.setActiveSection('seerr-details-overview');
     }
 
@@ -201,9 +230,16 @@ class SeerrDetailsPage extends Page {
         if (!button) return;
         const requestable =
             this._item._seerrStatus === SEERR_STATUS.NOT_REQUESTED ||
-            this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE;
+            this._item._seerrStatus === SEERR_STATUS.UNKNOWN ||
+            this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE ||
+            this._item._seerrStatus === SEERR_STATUS.DELETED;
         button.classList.toggle('hidden', !requestable);
         button.tabIndex = requestable ? 0 : -1;
+    }
+
+    _updateWatchlistButton() {
+        const label = this.$('.seerr-watchlist-btn span');
+        if (label) label.textContent = i18n.t(this._isWatchlisted ? 'SeerrRemoveFromWatchlist' : 'SeerrAddToWatchlist');
     }
 
     _renderStatus() {

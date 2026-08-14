@@ -46,6 +46,7 @@ class SeerrRequestModal {
                     ${statusKey ? `<p class="seerr-modal-status">${i18n.t(statusKey)}</p>` : ''}
                     <p class="seerr-modal-overview">${item.Overview || ''}</p>
                     <div class="seerr-seasons" id="seerr-seasons"></div>
+                    <div class="seerr-request-options" id="seerr-request-options"></div>
                 </div>
                 <div class="modal-actions">
                     ${
@@ -93,6 +94,8 @@ class SeerrRequestModal {
             selectedSeasons = await SeerrRequestModal._renderSeasons(overlay, item, requestBtn);
         }
 
+        const requestOptions = await SeerrRequestModal._renderRequestOptions(overlay, item);
+
         if (requestBtn) {
             requestBtn.addEventListener('click', async () => {
                 if (isTv && selectedSeasons.length === 0) return;
@@ -101,7 +104,8 @@ class SeerrRequestModal {
                     await seerr.createRequest({
                         mediaType: item._mediaType,
                         tmdbId: item._tmdbId,
-                        seasons: isTv ? selectedSeasons.slice() : undefined
+                        seasons: isTv ? selectedSeasons.slice() : undefined,
+                        ...requestOptions()
                     });
                     toast.show(i18n.t('SeerrRequestSent'));
                     if (onRequested) onRequested(SEERR_STATUS.PENDING);
@@ -121,6 +125,173 @@ class SeerrRequestModal {
                 }
             });
         }
+    }
+
+    static async _renderRequestOptions(overlay, item) {
+        const container = overlay.querySelector('#seerr-request-options');
+        let options;
+        try {
+            options = await seerr.requestOptions(item._mediaType);
+        } catch (err) {
+            log.warn('Could not load advanced request options', err);
+            return () => ({});
+        }
+        if (!options || options.servers.length === 0) return () => ({});
+
+        let selectedServer = options.servers.find((server) => server.isDefault && !server.is4k) || options.servers[0];
+        let selectedProfile = null;
+        let selectedRootFolder = null;
+        container.innerHTML = `
+            <button class="modal-option-btn seerr-option-select" id="seerr-server" tabindex="0">
+                <span>${i18n.t('SeerrServer')}</span><span class="seerr-option-value"></span>
+            </button>
+            <button class="modal-option-btn seerr-option-select" id="seerr-profile" tabindex="0">
+                <span>${i18n.t('SeerrQualityProfile')}</span><span class="seerr-option-value"></span>
+            </button>
+            <button class="modal-option-btn seerr-option-select" id="seerr-root-folder" tabindex="0">
+                <span>${i18n.t('SeerrRootFolder')}</span><span class="seerr-option-value"></span>
+            </button>
+        `;
+        const serverButton = container.querySelector('#seerr-server');
+        const profileButton = container.querySelector('#seerr-profile');
+        const rootButton = container.querySelector('#seerr-root-folder');
+
+        const sync = () => {
+            const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+            selectedProfile =
+                detail?.profiles?.find((profile) => profile.id === detail.server.activeProfileId) ||
+                detail?.profiles?.[0] ||
+                null;
+            selectedRootFolder =
+                detail?.rootFolders?.find((folder) => folder.path === detail.server.activeDirectory) ||
+                detail?.rootFolders?.[0] ||
+                null;
+            serverButton.querySelector('.seerr-option-value').textContent =
+                `${selectedServer.name}${selectedServer.is4k ? ' (4K)' : ''}`;
+            profileButton.querySelector('.seerr-option-value').textContent = selectedProfile?.name || '-';
+            rootButton.querySelector('.seerr-option-value').textContent = selectedRootFolder?.path || '-';
+            profileButton.disabled = !selectedProfile;
+            rootButton.disabled = !selectedRootFolder;
+        };
+
+        serverButton.addEventListener('click', async () => {
+            const choice = await SeerrRequestModal._chooseOption(
+                i18n.t('SeerrServer'),
+                options.servers.map((server) => ({
+                    value: server,
+                    label: `${server.name}${server.is4k ? ' (4K)' : ''}`,
+                    selected: server.id === selectedServer.id
+                }))
+            );
+            if (choice) {
+                selectedServer = choice;
+                sync();
+            }
+        });
+        profileButton.addEventListener('click', async () => {
+            const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+            const choice = await SeerrRequestModal._chooseOption(
+                i18n.t('SeerrQualityProfile'),
+                (detail?.profiles || []).map((profile) => ({
+                    value: profile,
+                    label: profile.name,
+                    selected: profile.id === selectedProfile?.id
+                }))
+            );
+            if (choice) {
+                selectedProfile = choice;
+                profileButton.querySelector('.seerr-option-value').textContent = choice.name;
+            }
+        });
+        rootButton.addEventListener('click', async () => {
+            const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+            const choice = await SeerrRequestModal._chooseOption(
+                i18n.t('SeerrRootFolder'),
+                (detail?.rootFolders || []).map((folder) => ({
+                    value: folder,
+                    label: folder.path,
+                    selected: folder.path === selectedRootFolder?.path
+                }))
+            );
+            if (choice) {
+                selectedRootFolder = choice;
+                rootButton.querySelector('.seerr-option-value').textContent = choice.path;
+            }
+        });
+        sync();
+        focusManager.invalidateCache('__trap__');
+
+        return () => {
+            const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+            return {
+                serverId: selectedServer.id,
+                profileId: selectedProfile?.id,
+                rootFolder: selectedRootFolder?.path,
+                languageProfileId: detail?.server.activeLanguageProfileId,
+                is4k: !!detail?.server.is4k
+            };
+        };
+    }
+
+    static _chooseOption(title, choices) {
+        return new Promise((resolve) => {
+            const opener = document.activeElement;
+            const subOverlay = document.createElement('div');
+            subOverlay.className = 'modal-overlay visible';
+            subOverlay.innerHTML = `
+                <div class="settings-modal seerr-option-modal" role="dialog" aria-modal="true">
+                    <div class="modal-header"><h2></h2></div>
+                    <div class="modal-options">
+                        ${choices
+                            .map(
+                                (choice, index) => `
+                            <button class="modal-option-btn ${choice.selected ? 'selected' : ''}"
+                                    data-index="${index}" tabindex="0"></button>`
+                            )
+                            .join('')}
+                    </div>
+                </div>`;
+            subOverlay.querySelector('h2').textContent = title;
+            subOverlay.querySelectorAll('.modal-option-btn').forEach((button) => {
+                button.textContent = choices[parseInt(button.dataset.index, 10)].label;
+            });
+            document.body.appendChild(subOverlay);
+
+            const currentPage = router.getCurrentPage();
+            const oldOnBack = currentPage ? currentPage.onBack : null;
+            const close = (value) => {
+                if (currentPage && currentPage.onBack === onBack) currentPage.onBack = oldOnBack;
+                focusManager.popTrap();
+                subOverlay.remove();
+                const parentPanel = document.querySelector(`#${OVERLAY_ID} .seerr-modal`);
+                if (parentPanel) {
+                    focusManager.register('__trap__', parentPanel, {
+                        orientation: 'grid',
+                        leaveUp: null,
+                        leaveDown: null,
+                        leaveLeft: null,
+                        leaveRight: null
+                    });
+                    focusManager.setActiveSection('__trap__');
+                }
+                if (opener && document.body.contains(opener)) {
+                    focusManager.focusElement(opener);
+                }
+                resolve(value);
+            };
+            const onBack = () => {
+                close(null);
+                return true;
+            };
+            if (currentPage) currentPage.onBack = onBack;
+
+            focusManager.pushTrap(subOverlay.querySelector('.seerr-option-modal'));
+            subOverlay.querySelectorAll('.modal-option-btn').forEach((button) => {
+                button.addEventListener('click', () => close(choices[parseInt(button.dataset.index, 10)].value));
+            });
+            const initial = subOverlay.querySelector('.modal-option-btn.selected, .modal-option-btn');
+            if (initial) focusManager.focusElement(initial);
+        });
     }
 
     /**

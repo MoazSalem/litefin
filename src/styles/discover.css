@@ -91,6 +91,27 @@
     margin-bottom: 16px;
 }
 
+.seerr-request-options {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.seerr-option-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+}
+
+.seerr-option-value {
+    color: var(--jf-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .seerr-season-row {
     display: flex;
     align-items: center;
