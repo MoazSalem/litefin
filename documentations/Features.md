@@ -18,6 +18,7 @@ Litefin has evolved through over 300 technical milestones. Below is a categorize
 - **Intro/Recap Skipping**: Automatic detection and skip controls for TV show intros and recaps via server-side Intro Skipper plugin.
 - **Local Intros**: Play custom local intro videos before media items.
 - **MDBList Ratings**: IMDb, Rotten Tomatoes, Metacritic, Trakt, TMDB, and Letterboxd ratings displayed on cards and hero carousel.
+- **Seerr Integration**: Discover trending and popular movies and series, search the Seerr catalogue, and submit requests — including per-season requests for series — directly from the TV. Requires the Litefin Jellyfin server plugin; the server keeps the Seerr API key private and attributes requests to the authenticated Jellyfin user.
 - **Screensaver**: Dimming and title-hide after inactivity, ported from Jellyfin Web with TV optimizations.
 - **Server Discovery**: 3-tier automatic discovery (webOS Luna Service → Tizen HTTP Service → subnet HTTP scan) plus manual connection. Background service for Tizen.
 
