@@ -1095,6 +1095,18 @@ class SettingsPage extends Page {
                 </div>
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="UseItemsForSearch">${i18n.t('UseItemsForSearch') || 'Use Items API for Search'}</span>
+                        <span class="setting-description" data-i18n="UseItemsForSearchDescription">${i18n.t('UseItemsForSearchDescription') || 'Query the /Items API instead of /Search/Hints for global search. Required by certain server plugins.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:useItemsForSearch') === 'true' ? 'active' : ''}" 
+                                id="toggle-use-items-for-search" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
                         <span class="setting-description" data-i18n="VerticalScrollModeDescription">${i18n.t('VerticalScrollModeDescription') || 'Choose how vertical page scrolling is animated (JS RAF, Native/Smooth, or GPU Accelerated).'}</span>
                     </div>
@@ -6368,6 +6380,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:useBatchLatestPlugin', newValue ? 'true' : 'false');
                 useBatchPluginBtn.classList.toggle('active', newValue);
                 log.info(`Use Litefin Plugin for Home Libraries set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Use Items API for Search
+        const useItemsForSearchBtn = this.$('#toggle-use-items-for-search');
+        if (useItemsForSearchBtn) {
+            useItemsForSearchBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:useItemsForSearch') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:useItemsForSearch', newValue.toString());
+                useItemsForSearchBtn.classList.toggle('active', newValue);
+                log.info(`Use Items API for Search set to: ${newValue}`);
             });
         }
 

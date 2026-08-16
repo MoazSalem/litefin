@@ -358,6 +358,8 @@
     "Unknown": "Unknown",
     "Unplayed": "Unplayed",
     "UseBatchLatestPluginDescription": "Fetch all home screen library rows in a single batched HTTP request via the Litefin plugin. Improves home page load speed.",
+    "UseItemsForSearch": "Use Items API for Search",
+    "UseItemsForSearchDescription": "Query the /Items API instead of /Search/Hints for global search. Required by certain server plugins.",
     "Video": "Video",
     "Videos": "Videos",
     "Writer": "Writer",
