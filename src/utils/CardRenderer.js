@@ -13,6 +13,7 @@ import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
 import { detailsIcons } from './Icons.js';
+import { platformInfo } from './PlatformInfo.js';
 
 class CardRenderer {
     /**
@@ -68,9 +69,16 @@ class CardRenderer {
 
         let width = item.Width;
         let height = item.Height;
+
+        // Dynamic range flags for metadata inspection
         let isHdr = false;
+        let isHdr10Plus = false;
         let isDovi = false;
 
+        /*
+         * Extract video stream attributes from media source container metadata.
+         * We inspect VideoRange, VideoRangeType, Profile, Title, and Codec strings.
+         */
         if (item.MediaSources && item.MediaSources.length > 0) {
             const source = item.MediaSources[0];
             if (source.Width) width = source.Width;
@@ -85,8 +93,31 @@ class CardRenderer {
                     const title = videoStream.Title || videoStream.DisplayTitle || '';
                     const codec = videoStream.Codec || '';
 
+                    // Build a unified inspection string across stream metadata
                     const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
-                    if (checkString.includes('hdr')) isHdr = true;
+
+                    /*
+                     * 1. Detect HDR10+ specific signaling
+                     */
+                    if (
+                        checkString.includes('hdr10plus') ||
+                        checkString.includes('hdr10+') ||
+                        checkString.includes('hdr10p') ||
+                        checkString.includes('doviwithhdr10plus')
+                    ) {
+                        isHdr10Plus = true;
+                    }
+
+                    /*
+                     * 2. Detect standard HDR / HDR10 signaling
+                     */
+                    if (checkString.includes('hdr')) {
+                        isHdr = true;
+                    }
+
+                    /*
+                     * 3. Detect Dolby Vision (DoVi) signaling
+                     */
                     if (
                         checkString.includes('dovi') ||
                         checkString.includes('dolby vision') ||
@@ -103,6 +134,9 @@ class CardRenderer {
             const maxDim = Math.max(width || 0, height || 0);
             const minDim = Math.min(width || 0, height || 0);
 
+            /*
+             * Classify resolution using relaxed boundaries to account for widescreen cropping
+             */
             if (maxDim >= 3000 || minDim >= 2000) {
                 resolutionLabel = '4K';
             } else if (maxDim >= 1600 || minDim >= 900) {
@@ -113,11 +147,33 @@ class CardRenderer {
                 resolutionLabel = 'SD';
             }
 
+            /*
+             * Determine dynamic range label prioritization based on target OS platform:
+             *
+             * On Samsung Tizen TVs, Dolby Vision hardware decoders do not exist.
+             * Tizen AVPlay renders the fallback layer (HDR10 or HDR10+) natively.
+             * Therefore, when running on Tizen (platformInfo.isTizen), we prioritize HDR10+ / HDR
+             * over DV so the quality badge accurately reflects what the TV actually renders.
+             *
+             * On non-Tizen platforms (e.g. webOS / Web), DV is prioritized as the top tier.
+             */
             let rangeLabel = '';
-            if (isDovi) {
-                rangeLabel = 'DV';
-            } else if (isHdr) {
-                rangeLabel = 'HDR';
+            if (platformInfo.isTizen) {
+                if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                } else if (isDovi) {
+                    rangeLabel = 'DV';
+                }
+            } else {
+                if (isDovi) {
+                    rangeLabel = 'DV';
+                } else if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                }
             }
 
             if (rangeLabel) {
