@@ -3274,11 +3274,11 @@ class PlayerPage extends Page {
         }
         this._isExiting = true;
 
-        try {
-            // Capture session info BEFORE stopping (stop clears internal state)
-            const mediaSource = this._player?.getCurrentMediaSource?.();
-            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        // Capture session info BEFORE stopping (stop clears internal state)
+        const mediaSource = this._player?.getCurrentMediaSource?.();
+        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
+        try {
             // Notify plugins that playback is ending — they clean up OSD widgets
             pluginManager.notifyPlayerStop();
 
@@ -3321,8 +3321,35 @@ class PlayerPage extends Page {
 
         // Invalidate stale caches so pages reload fresh data after playback
         if (this._item) {
-            // Clear the ETag cache so the next API requests get fresh 200
-            // responses instead of stale 304-cached bodies.
+            try {
+                // Update cached played/progress state across library:state:* caches without deleting state
+                // so focus restoration and grid state are preserved when returning to library pages.
+                const itemId = this._item.Id;
+                const durationTicks =
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                const isNearComplete =
+                    this._isPlaybackEnded || (durationTicks > 0 && positionTicks >= durationTicks * 0.9);
+
+                const allState = state.getAll();
+                for (const [key, val] of Object.entries(allState)) {
+                    if (key.startsWith('library:state:') && val?.stateData?.items) {
+                        const match = val.stateData.items.find(({ Id }) => Id === itemId);
+                        if (match) {
+                            match.UserData = match.UserData || {};
+                            if (isNearComplete) {
+                                match.UserData.Played = true;
+                                match.UserData.PlaybackPositionTicks = 0;
+                                match.UserData.UnplayedItemCount = 0;
+                            } else if (positionTicks > 0) {
+                                match.UserData.PlaybackPositionTicks = positionTicks;
+                            }
+                        }
+                    }
+                }
+            } catch (cacheErr) {
+                log.warn('Failed to patch library state cache on stop:', cacheErr);
+            }
+
             api.clearEtagCache();
 
             // Invalidate home page's rendered row cache
