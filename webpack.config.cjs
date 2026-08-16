@@ -69,7 +69,9 @@ function getPlugins(tier, options = {}) {
          */
         { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' },
         // Copy early boot diagnostic backup logger for all builds
-        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' }
+        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' },
+        // Copy early DOM and ES2015 polyfills script for all builds
+        { from: 'src/early-polyfills.js', to: 'js/early-polyfills.js' }
     ];
 
     // Include libass-wasm worker assets for both modern and legacy build tiers.
@@ -514,6 +516,10 @@ const ultraLegacyConfig = {
             new webpack.NormalModuleReplacementPlugin(
                 /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
                 path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+            ),
+            new webpack.NormalModuleReplacementPlugin(
+                /src[\/\\]player[\/\\]core[\/\\]ASSJSRenderer\.js$/,
+                path.resolve(__dirname, 'src/player/core/ASSJSRenderer.legacy.js')
             )
         );
 
