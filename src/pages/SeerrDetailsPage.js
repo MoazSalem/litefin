@@ -93,6 +93,16 @@ class SeerrDetailsPage extends Page {
         this.setLoading(true);
         try {
             this._item = await seerr.details(mediaType, tmdbId);
+            if (mediaType === 'tv') {
+                try {
+                    const seasons = await seerr.tvSeasons(tmdbId);
+                    this._hasUnrequestedSeasons = seasons.some(
+                        (s) => s.status === SEERR_STATUS.NOT_REQUESTED || s.status === SEERR_STATUS.DELETED
+                    );
+                } catch (e) {
+                    this._hasUnrequestedSeasons = true;
+                }
+            }
             try {
                 this._isWatchlisted = await seerr.isWatchlisted(mediaType, tmdbId);
             } catch (err) {
@@ -228,13 +238,28 @@ class SeerrDetailsPage extends Page {
     _updateRequestButton() {
         const button = this.$('.seerr-request-btn');
         if (!button) return;
-        const requestable =
-            this._item._seerrStatus === SEERR_STATUS.NOT_REQUESTED ||
-            this._item._seerrStatus === SEERR_STATUS.UNKNOWN ||
-            this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE ||
-            this._item._seerrStatus === SEERR_STATUS.DELETED;
+        const isTv = this._item._mediaType === 'tv';
+        let requestable;
+        if (isTv) {
+            requestable = this._item._seerrStatus !== SEERR_STATUS.AVAILABLE && this._hasUnrequestedSeasons !== false;
+        } else {
+            requestable =
+                this._item._seerrStatus === SEERR_STATUS.NOT_REQUESTED ||
+                this._item._seerrStatus === SEERR_STATUS.UNKNOWN ||
+                this._item._seerrStatus === SEERR_STATUS.DELETED;
+        }
         button.classList.toggle('hidden', !requestable);
         button.tabIndex = requestable ? 0 : -1;
+
+        const isPartialOrPending =
+            isTv &&
+            (this._item._seerrStatus === SEERR_STATUS.PENDING ||
+                this._item._seerrStatus === SEERR_STATUS.PROCESSING ||
+                this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE);
+        const span = button.querySelector('span');
+        if (span) {
+            span.textContent = i18n.t(isPartialOrPending ? 'SeerrRequestMore' : 'SeerrRequest');
+        }
     }
 
     _updateWatchlistButton() {

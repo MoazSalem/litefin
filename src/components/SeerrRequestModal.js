@@ -8,7 +8,7 @@
  */
 
 import { seerr } from '../api/JellyseerrClient.js';
-import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
+import { SEERR_STATUS, seerrStatusKey, seerrSeasonStatusKey } from '../api/seerrNormalize.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
 import { toast } from '../ui/Toast.js';
@@ -37,23 +37,32 @@ class SeerrRequestModal {
         const isAvailable = item._seerrStatus === SEERR_STATUS.AVAILABLE;
         const statusKey = seerrStatusKey(item._seerrStatus);
 
+        const isPartialOrPending =
+            isTv &&
+            (item._seerrStatus === SEERR_STATUS.PENDING ||
+                item._seerrStatus === SEERR_STATUS.PROCESSING ||
+                item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE);
+        const requestBtnLabel = i18n.t(isPartialOrPending ? 'SeerrRequestMore' : 'SeerrRequest');
+
+        const itemTitle = `${item.Name}${item.ProductionYear ? ` (${item.ProductionYear})` : ''}`;
+        const modalHeaderTitle = isTv ? `${i18n.t('SeerrRequestSeries')} - ${itemTitle}` : i18n.t('SeerrRequestMovie');
+
         overlay.innerHTML = `
             <div class="settings-modal seerr-modal" role="dialog" aria-modal="true">
                 <div class="modal-header">
-                    <h2>${item.Name}${item.ProductionYear ? ` (${item.ProductionYear})` : ''}</h2>
+                    <h2>${modalHeaderTitle}</h2>
                 </div>
                 <div class="modal-options seerr-modal-body">
+                    ${!isTv ? `<h3 class="seerr-item-title">${itemTitle}</h3>` : ''}
                     ${statusKey ? `<p class="seerr-modal-status">${i18n.t(statusKey)}</p>` : ''}
-                    <p class="seerr-modal-overview">${item.Overview || ''}</p>
                     <div class="seerr-seasons" id="seerr-seasons"></div>
                     <div class="seerr-request-options" id="seerr-request-options"></div>
                 </div>
                 <div class="modal-actions">
-                    ${
-                        isAvailable
-                            ? ''
-                            : `<button class="modal-action-btn" id="btn-seerr-request" tabindex="0">${i18n.t('SeerrRequest')}</button>`
-                    }
+                    ${isAvailable
+                ? ''
+                : `<button class="modal-action-btn" id="btn-seerr-request" tabindex="0">${requestBtnLabel}</button>`
+            }
                     <button class="modal-action-btn" id="btn-seerr-close" tabindex="0">${i18n.t('ButtonBack')}</button>
                 </div>
             </div>
@@ -98,7 +107,14 @@ class SeerrRequestModal {
 
         if (requestBtn) {
             requestBtn.addEventListener('click', async () => {
-                if (isTv && selectedSeasons.length === 0) return;
+                if (isTv && selectedSeasons.length === 0) {
+                    const errorEl = overlay.querySelector('#seerr-season-error');
+                    if (errorEl) {
+                        errorEl.classList.remove('hidden');
+                        errorEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    return;
+                }
                 requestBtn.disabled = true;
                 try {
                     await seerr.createRequest({
@@ -243,12 +259,12 @@ class SeerrRequestModal {
                     <div class="modal-header"><h2></h2></div>
                     <div class="modal-options">
                         ${choices
-                            .map(
-                                (choice, index) => `
+                    .map(
+                        (choice, index) => `
                             <button class="modal-option-btn ${choice.selected ? 'selected' : ''}"
                                     data-index="${index}" tabindex="0"></button>`
-                            )
-                            .join('')}
+                    )
+                    .join('')}
                     </div>
                 </div>`;
             subOverlay.querySelector('h2').textContent = title;
@@ -315,7 +331,12 @@ class SeerrRequestModal {
         if (seasons.length === 0) return selected;
 
         // A season already available or already requested cannot be re-requested
-        const isLocked = (s) => s.status >= SEERR_STATUS.PENDING;
+        const isLocked = (s) => s.status > SEERR_STATUS.NOT_REQUESTED && s.status !== SEERR_STATUS.DELETED;
+
+        if (seasons.every((s) => isLocked(s)) && requestBtn) {
+            requestBtn.classList.add('hidden');
+            requestBtn.tabIndex = -1;
+        }
 
         container.innerHTML = `
             <button class="seerr-season-row" id="seerr-season-all" tabindex="0">
@@ -323,23 +344,34 @@ class SeerrRequestModal {
             </button>
             ${seasons
                 .map(
-                    (s) => `
-                <button class="seerr-season-row ${isLocked(s) ? 'is-locked' : ''}"
-                        data-season="${s.seasonNumber}" tabindex="0" ${isLocked(s) ? 'disabled' : ''}>
+                    (s) => {
+                        const locked = isLocked(s);
+                        const statusKey = seerrSeasonStatusKey(s.status);
+                        const statusText = i18n.t(statusKey);
+                        return `
+                <button class="seerr-season-row ${locked ? 'is-locked' : ''}"
+                        data-season="${s.seasonNumber}" tabindex="0" ${locked ? 'disabled' : ''}>
                     <span class="seerr-season-name">${s.name}</span>
                     <span class="seerr-season-meta">
-                        ${isLocked(s) ? i18n.t(seerrStatusKey(s.status)) : i18n.t('SeerrSeasonEpisodes', [s.episodeCount])}
+                        <span class="seerr-season-episodes">${i18n.t('SeerrSeasonEpisodes', [s.episodeCount])}</span>
+                        <span class="seerr-season-badge seerr-season-badge--${s.status}">${statusText}</span>
                     </span>
                 </button>
-            `
+            `;
+                    }
                 )
                 .join('')}
+            <div class="seerr-season-error hidden" id="seerr-season-error">
+                <span>${i18n.t('SeerrMustSelectSeason')}</span>
+            </div>
         `;
 
         const syncRequestBtn = () => {
-            if (requestBtn) requestBtn.disabled = selected.length === 0;
+            const errorEl = container.querySelector('#seerr-season-error');
+            if (errorEl && selected.length > 0) {
+                errorEl.classList.add('hidden');
+            }
         };
-        syncRequestBtn();
 
         const toggle = (btn, seasonNumber) => {
             const idx = selected.indexOf(seasonNumber);

@@ -79,16 +79,20 @@
     overflow-y: auto;
 }
 
+.seerr-item-title {
+    color: var(--jf-text-primary);
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 12px;
+    margin-left: 20px;
+}
+
 .seerr-modal-status {
     color: var(--jf-accent);
     font-weight: 600;
-    margin-bottom: 8px;
-}
-
-.seerr-modal-overview {
-    color: var(--jf-text-secondary);
-    line-height: 1.5;
-    margin-bottom: 16px;
+    margin-bottom: 15px;
+    margin-left: 6px;
 }
 
 .seerr-request-options {
@@ -117,14 +121,20 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding: 12px 16px;
-    margin-bottom: 6px;
+    padding: 14px 20px;
+    margin-bottom: 8px;
     border: 2px solid transparent;
-    border-radius: var(--jf-border-radius, 6px);
+    border-radius: var(--jf-border-radius, 8px);
     background: var(--jf-card-bg, rgba(255, 255, 255, 0.06));
     color: var(--jf-text-primary);
-    font-size: 1em;
+    font-size: 1.15rem;
+    font-weight: 600;
     text-align: left;
+}
+
+.seerr-season-name {
+    font-size: 1.05em;
+    font-weight: 600;
 }
 
 .seerr-season-row.focused {
@@ -137,11 +147,64 @@
 }
 
 .seerr-season-row.is-locked {
-    opacity: 0.5;
+    opacity: 0.55;
 }
 
 .seerr-season-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     color: inherit;
-    font-size: 0.85em;
-    opacity: 0.8;
+    font-size: 0.95em;
+    opacity: 0.95;
+}
+
+.seerr-season-badge {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 0.9em;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+/* Status 0 (Not Requested): Neutral pill */
+.seerr-season-badge--0,
+.seerr-season-badge--1 {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* Status 2 (Requested), 3 (Processing), 4 (Partially Available): Accent blue pill */
+.seerr-season-badge--2,
+.seerr-season-badge--3,
+.seerr-season-badge--4 {
+    background: rgba(0, 164, 220, 0.25);
+    color: #64b5f6;
+}
+
+/* Status 5 (Available): Green pill */
+.seerr-season-badge--5 {
+    background: rgba(76, 175, 80, 0.25);
+    color: #81c784;
+}
+
+/* Status 6 (Deleted): Orange pill */
+.seerr-season-badge--6 {
+    background: rgba(255, 152, 0, 0.25);
+    color: #ffb74d;
+}
+
+.seerr-season-error {
+    color: #ff5252;
+    font-size: 0.9em;
+    font-weight: 600;
+    margin-top: 10px;
+    padding: 10px 14px;
+    border-radius: var(--jf-border-radius, 6px);
+    background: rgba(255, 82, 82, 0.15);
+    border: 1px solid rgba(255, 82, 82, 0.35);
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }

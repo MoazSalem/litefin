@@ -152,19 +152,41 @@ export class JellyseerrClient {
         const detail = await this._request(`/Tv/${tmdbId}`);
         const seasons = (detail && detail.seasons) || [];
         const seasonStatuses = {};
+
         const infoSeasons = (detail && detail.mediaInfo && detail.mediaInfo.seasons) || [];
         infoSeasons.forEach((season) => {
-            seasonStatuses[season.seasonNumber] = season.status;
+            const sNum = season.seasonNumber ?? season.season_number;
+            if (sNum != null) {
+                seasonStatuses[Number(sNum)] = season.status ?? 0;
+            }
+        });
+
+        const requests = (detail && detail.mediaInfo && detail.mediaInfo.requests) || [];
+        requests.forEach((req) => {
+            const reqSeasons = req.seasons || [];
+            reqSeasons.forEach((s) => {
+                const sNum = s.seasonNumber ?? s.season_number;
+                if (sNum != null) {
+                    const numKey = Number(sNum);
+                    if (!seasonStatuses[numKey] || seasonStatuses[numKey] === 0) {
+                        seasonStatuses[numKey] = s.status || req.status || 2;
+                    }
+                }
+            });
         });
 
         return seasons
-            .filter((season) => season.seasonNumber > 0)
-            .map((season) => ({
-                seasonNumber: season.seasonNumber,
-                name: season.name || `Season ${season.seasonNumber}`,
-                episodeCount: season.episodeCount || 0,
-                status: seasonStatuses[season.seasonNumber] || 0
-            }));
+            .filter((season) => (season.seasonNumber ?? season.season_number) > 0)
+            .map((season) => {
+                const sNum = Number(season.seasonNumber ?? season.season_number);
+                const status = seasonStatuses[sNum] || season.status || season.mediaInfo?.status || 0;
+                return {
+                    seasonNumber: sNum,
+                    name: season.name || `Season ${sNum}`,
+                    episodeCount: season.episodeCount ?? season.episode_count ?? 0,
+                    status: status
+                };
+            });
     }
 
     /**

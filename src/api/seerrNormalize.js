@@ -65,6 +65,26 @@ export function seerrStatusKey(status) {
 }
 
 /**
+ * i18n key for season status indicator (including Not Requested).
+ * @param {number} [status] - MediaStatus value
+ * @returns {string}
+ */
+export function seerrSeasonStatusKey(status) {
+    switch (status) {
+        case SEERR_STATUS.PENDING:
+            return 'SeerrStatusPending';
+        case SEERR_STATUS.PROCESSING:
+            return 'SeerrStatusProcessing';
+        case SEERR_STATUS.PARTIALLY_AVAILABLE:
+            return 'SeerrStatusPartial';
+        case SEERR_STATUS.AVAILABLE:
+            return 'SeerrStatusAvailable';
+        default:
+            return 'SeerrStatusNotRequested';
+    }
+}
+
+/**
  * Extracts the year from a TMDB date ('1999-03-30'). Returns undefined rather
  * than NaN on missing or malformed input, so cards never render "NaN".
  * @param {string} [dateStr]
