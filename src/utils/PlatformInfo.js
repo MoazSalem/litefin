@@ -99,7 +99,10 @@ class PlatformInfo {
                 chromeVersion = 69; // Tizen 5.0+ supports Grid
             else if (tizenVer >= 3)
                 chromeVersion = 47; // Tizen 3/4 support Flexbox
-            else chromeVersion = 34; // Tizen 2.x
+            // Tizen 2.x (e.g. 2.4.0) runs an ancient pure WebKit engine (WebKit 538.1) without Chromium branding.
+            // Setting chromeVersion to 26 ensures `isAncientChrome` (< 32) evaluates to true,
+            // which in turn stamps `data-layout-quirks="c26"` onto <html> for layout rendering patches.
+            else chromeVersion = 26; // Tizen 2.x (pure WebKit engine)
         } else if (/Tizen|Web[O0]?S|NetCast|LG[ -]?Browser/i.test(navigator.userAgent)) {
             // Ancient Tizen (2.4) and WebOS (1.x/2.x) use pure WebKit without Chrome branding.
             // Setting this to 26 ensures quirks mode (data-layout-quirks="c26") is enabled.
