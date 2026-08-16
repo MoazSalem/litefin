@@ -275,7 +275,7 @@ progress.card-progress::-webkit-progress-bar {
 }
 
 progress.card-progress::-webkit-progress-value {
-    /* Premium Apple-style gradient */
+    /* Premium gradient */
     background: linear-gradient(90deg, var(--jf-accent) 0%, var(--jf-accent-hover) 100%);
     /* Ensure sharp edges for the value bar */
     border-radius: 0;
@@ -324,7 +324,7 @@ progress.card-progress::-webkit-progress-value {
     z-index: 1;
 }
 
-/* Gradient Variants (Apple-style) */
+/* Gradient Variants */
 .grad-1 {
     background: linear-gradient(135deg, #007aff 0%, #004a99 100%);
 }
@@ -642,7 +642,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 
-/* Base Badge Styling: Clean, Apple-style pills with glassmorphism */
+/* Base Badge Styling */
 .track-badge {
     display: inline-flex;
     align-items: center;
@@ -686,7 +686,6 @@ progress.card-progress::-webkit-progress-value {
     background: rgba(var(--jf-btn-primary-focus-color-rgb), 0.15) !important;
     border-color: rgba(var(--jf-btn-primary-focus-color-rgb), 0.35) !important;
     color: var(--jf-btn-primary-focus-color) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .modal-option-btn.focused .track-badge.badge-success,
@@ -1887,6 +1886,45 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
     }
 }
 
+
+/* ==========================================================================
+   Description Dialog Modal Styling
+   ========================================================================== */
+.description-dialog-modal {
+    width: 1350px;
+    max-width: 96%;
+    max-height: 88vh;
+}
+
+.description-dialog-modal .modal-header h2 {
+    font-size: 2rem;
+    padding: 20px 24px;
+}
+
+.description-dialog-content {
+    padding: 36px 48px;
+    font-size: 1.65rem;
+    line-height: 1.8;
+    color: var(--jf-text-primary);
+    outline: none;
+    border-radius: var(--jf-border-radius);
+    max-height: calc(88vh - 110px);
+}
+
+.description-dialog-content:focus,
+.description-dialog-content.focused {
+    box-shadow: inset 0 0 0 3px var(--jf-accent);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.description-dialog-text {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--jf-text-primary);
+    font-size: 1.65rem;
+}
+
 /*
  * ── Chrome 26 Quirks Overrides: Modals & Media Fallbacks ────────────────────
  * Older browser engines lacking flexbox display defaults will stick modals to the 
@@ -1918,4 +1956,7 @@ html[data-layout-quirks="c26"] .media-fallback {
     -webkit-box-align: center !important;
     -webkit-box-pack: center !important;
 }
+
+
+
 

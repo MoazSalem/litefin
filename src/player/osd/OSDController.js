@@ -72,7 +72,7 @@ export default class OSDController extends Component {
         this._seekStartTime = null;
         this._seekDebounceTimer = null;
 
-        // Focus State
+        // Focus & Track State
         // Row -1: Overlays (persistent widgets)
         // Row 0: Header (Back)
         // Row 1: Controls
@@ -80,6 +80,10 @@ export default class OSDController extends Component {
         this._currentFocusRow = 1;
         this._currentFocusIndex = 2; // Default to Play/Pause
         this._trackTransitionLockoutActive = false;
+
+        this._currentAudioIndex = -1;
+        this._currentSubtitleIndex = -1;
+        this._currentSecondarySubtitleIndex = -1;
 
         this._cachedOverlayRow = [];
         this._cachedHeaderRow = [];
@@ -346,6 +350,9 @@ export default class OSDController extends Component {
             this._currentFocusIndex = initialPlayIdx;
         }
 
+        // Apply initial HDR theme state
+        this.updateHdrTheme();
+
         // Start hidden
         this.hide();
     }
@@ -354,6 +361,7 @@ export default class OSDController extends Component {
         this._stopUpdates();
         if (this._updateTimer) clearInterval(this._updateTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
+        document.body.classList.remove('hdr-darker-white');
         import('../../core/EventBus.js').then(({ eventBus }) => {
             eventBus.off('playqueue:updated', this._boundHandleQueueUpdate);
             if (this._boundSyncPlayButtonState) {
@@ -428,6 +436,9 @@ export default class OSDController extends Component {
                         <div class="osd-ends-at" id="osdEndsAt"></div>
                         <div class="osd-spacer"></div>
                         <div class="osd-controls-right">
+                            ${PlayerSettings.get('enableScreenLock') ? `
+                            <button class="osd-btn" data-action="lock" tabindex="0" id="osdLockBtn" aria-label="Lock Screen">${osdIcons.lock}</button>
+                            ` : ''}
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${osdIcons.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${osdIcons.audiotrack}</button>
                             <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
@@ -880,6 +891,32 @@ export default class OSDController extends Component {
     }
 
     /**
+     * ========================================================================
+     * OSD HDR Theme Updater
+     * ========================================================================
+     * Adjusts the overall OSD background contrast and overrides bright white
+     * highlights/text/icons with a softer dark grey color.
+     * Prevents eye strain when watching HDR/Dolby Vision content.
+     * ========================================================================
+     */
+    updateHdrTheme() {
+        if (!this._osdEl) return;
+
+        const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+        const darkerWhiteEnabled = PlayerSettings.get('osdHdrDarkerWhite') ?? true;
+
+        if (isHdr && darkerWhiteEnabled) {
+            this._osdEl.classList.add('hdr-darker-white');
+            document.body.classList.add('hdr-darker-white');
+            log.info('OSD HDR Darker White theme active');
+        } else {
+            this._osdEl.classList.remove('hdr-darker-white');
+            document.body.classList.remove('hdr-darker-white');
+            log.info('OSD HDR Darker White theme inactive');
+        }
+    }
+
+    /**
      * Called by PluginWidgetHost when a plugin widget becomes visible.
      * Moves OSD focus to the overlay row (Row -1) and shows the OSD,
      * so the button is immediately reachable with a single Enter press.
@@ -1279,8 +1316,16 @@ export default class OSDController extends Component {
             this._cacheFocusableElements();
 
             this.show(); // Restore OSD visibility
-            // The menu.hide() call internally updates OSD focus row/index 
-            // and calls _updateFocus()
+
+            // Lock out enter/click inputs for 350ms to absorb any ghost key presses or trailing clicks
+            this._focusRestoreLockout = true;
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+            }, 350);
         }
     }
 
@@ -1540,13 +1585,17 @@ export default class OSDController extends Component {
 
     handleInput(key, e) {
         // ====================================================================
-        // INPUT PROCESSING TRANSITION GUARD
+        // INPUT PROCESSING TRANSITION & ERROR GUARD
         // ====================================================================
-        // If the parent PlayerPage is transitioning between tracks, swallow all
-        // remote navigation, clicks, and keys immediately. This isolates the 
-        // OSD UI from any stray inputs or focus resets caused by cycling 
-        // the video element out of/into the DOM.
+        // If the playback error overlay is visible, or if parent PlayerPage is switching,
+        // swallow OSD inputs so focus remains on the error modal options.
         // ====================================================================
+        const errorEl = document.getElementById('player-error');
+        if (errorEl && !errorEl.classList.contains('hidden')) {
+            log.debug('OSDController: Ignoring input key event while player error screen is active:', key);
+            return true;
+        }
+
         if (this._playerPage && this._playerPage._isSwitching) {
             log.debug('OSDController: Ignoring input key event during active track switch:', key);
             return true;
@@ -1599,8 +1648,17 @@ export default class OSDController extends Component {
              * Since we discard the TV browser's synthesized ghost clicks globally
              * to prevent double-execution, we must execute the focused action
              * entirely in JavaScript during the wake-up sequence.
+             *
+             * EXCEPTION: when the "okShowOsdOnly" setting is enabled, this
+             * dispatch is skipped for the main OSD rows (Play/Pause, seekbar, back)
+             * so the first OK press only reveals the controls — the user must press
+             * OK again once the desired button holds focus. Overlay widgets (Row -1,
+             * e.g. skip-intro/up-next) are unaffected: those are transient prompts
+             * where OK is expected to act immediately.
              * ========================================================================
              */
+            const showOsdOnly = PlayerSettings.get('okShowOsdOnly') === true;
+
             if (this._currentFocusRow === -1) {
                 // Overlay row (Row -1): a plugin widget (e.g. skip-intro) holds focus.
                 // The widget's container has a click listener registered by PluginWidgetHost
@@ -1634,29 +1692,34 @@ export default class OSDController extends Component {
                 }
 
                 // Widget is hidden/gone — recover: reset row to controls and
-                // execute play/pause as the user's intent for this wakeup press.
+                // execute play/pause as the user's intent for this wakeup press
+                // (unless the wake-up press is only supposed to show the controls).
                 this._currentFocusRow = 1;
                 const playIdx = this._findActionIndex('togglePlay');
                 if (playIdx !== -1) this._currentFocusIndex = playIdx;
                 this._updateFocus();
-                this._executeAction('togglePlay');
+                if (!showOsdOnly) this._executeAction('togglePlay');
             } else if (this._currentFocusRow === 2) {
                 // Seekbar row: OK = toggle play/pause
-                this._executeAction('togglePlay');
+                if (!showOsdOnly) this._executeAction('togglePlay');
             } else if (this._currentFocusRow === 1) {
                 // Controls row: execute focused action (e.g. play/pause or subtitles)
-                const controls = this._getControls();
-                const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
-                if (btn?.dataset?.action) {
-                    this._executeAction(btn.dataset.action);
+                if (!showOsdOnly) {
+                    const controls = this._getControls();
+                    const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                    }
                 }
             } else if (this._currentFocusRow === 0) {
                 // Header row (back button)
-                const btn = this._cachedHeaderRow[0];
-                if (btn?.dataset?.action) {
-                    this._executeAction(btn.dataset.action);
-                } else {
-                    this._executeAction('exit');
+                if (!showOsdOnly) {
+                    const btn = this._cachedHeaderRow[0];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                    } else {
+                        this._executeAction('exit');
+                    }
                 }
             }
 
@@ -1664,11 +1727,11 @@ export default class OSDController extends Component {
         }
 
         // Delegate to active 2nd-layer widget if focus is on Row -1 AND
-        // the currently focused element belongs to that widget.
+        // the currently focused element belongs to that widget and is visible.
         // Without the second check, pressing Right on the skip-outro button
         // (also in Row -1) would be incorrectly forwarded to the Up Next dialog
         // because activeMenu is set to upNextDialog for the whole session.
-        if (this._currentFocusRow === -1 && this.activeMenu && !this.activeMenu.isModal) {
+        if (this._currentFocusRow === -1 && this.activeMenu && this.activeMenu.isVisible && !this.activeMenu.isModal) {
             const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
             const menuOwnsElement = !this.activeMenu.$el || (focusedEl && this.activeMenu.$el.contains(focusedEl));
             if (menuOwnsElement && this.activeMenu.handleKey(key)) return true;
@@ -1829,6 +1892,10 @@ export default class OSDController extends Component {
         if (wasHidden) {
             this.show();
 
+            /*
+             * When the OSD is hidden, pressing Left or Right arrow key should always
+             * trigger direct seeking (rewind/fastForward) and park focus on the seekbar.
+             */
             if (seekWithArrows && (direction === 'left' || direction === 'right')) {
                 // Focus the seekbar so subsequent presses continue seeking
                 this._currentFocusRow = 2;
@@ -2269,6 +2336,10 @@ export default class OSDController extends Component {
             case 'togglePlay':
                 if (this._player.togglePlay) this._player.togglePlay();
                 this.updatePlayPauseButton();
+                break;
+            case 'lock':
+                log.info('OSD lock action triggered');
+                this.emit('lock');
                 break;
             case 'rewind': {
                 const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack;
@@ -3049,12 +3120,18 @@ export default class OSDController extends Component {
             this._cacheFocusableElements();
 
             /* 
-             * Focus Management:
-             * We do NOT reset _currentFocusRow to -1 here. By leaving it at Row 1 (Controls),
-             * the lyrics button STAYS focused while the modal is open. This allows the user
-             * to see what they clicked, and more importantly, ensures that our new 
-             * 'toggle' logic (clicking the same button again) actually works.
+             * -----------------------------------------------------------------
+             * LYRICS MODAL FOCUS TRANSITION
+             * -----------------------------------------------------------------
+             * Shift focus from the controls row to the overlay row (Row -1),
+             * targeting the close button in the lyrics modal header. This
+             * allows immediate keyboard navigation and D-pad control.
+             * -----------------------------------------------------------------
              */
+            this._currentFocusRow = -1;
+            const closeBtn = this.lyricsModal.el?.querySelector('.osd-offset-close');
+            const closeIdx = closeBtn ? this._cachedOverlayRow.indexOf(closeBtn) : -1;
+            this._currentFocusIndex = closeIdx !== -1 ? closeIdx : 0;
             this._updateFocus();
         } else {
             if (this.activeMenu === this.lyricsModal) {
@@ -3157,8 +3234,9 @@ export default class OSDController extends Component {
             this._cacheFocusableElements();
 
             // Restore focus back to Play/Pause on the primary OSD playback controls
+            // without forcing the main OSD to show up if it was hidden.
             if (wasDialogFocused) {
-                this.show();
+                // Return focus target to controls row (Row 1) Play/Pause
                 this._currentFocusRow = 1;
                 const playIdx = this._findActionIndex('togglePlay');
                 this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;

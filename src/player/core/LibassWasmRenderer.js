@@ -27,9 +27,16 @@ const getAbsoluteUrl = (relPath) => new URL(relPath, window.location.href).href;
 let _availableFonts = null;
 function getAvailableFonts() {
     if (_availableFonts) return _availableFonts;
+    const defaultFontUrl = getAbsoluteUrl('assets/fonts/Roboto.woff2');
     _availableFonts = {
-        'roboto': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
-        'liberation sans': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
+        'roboto': defaultFontUrl,
+        'liberation sans': defaultFontUrl,
+        'arial': defaultFontUrl,
+        'arial unicode ms': defaultFontUrl,
+        'sans-serif': defaultFontUrl,
+        'tahoma': defaultFontUrl,
+        'verdana': defaultFontUrl,
+        'segoe ui': defaultFontUrl,
         'courier prime': getAbsoluteUrl('assets/fonts/CourierPrime.woff2'),
         'merriweather': getAbsoluteUrl('assets/fonts/Merriweather.woff2'),
         'inconsolata': getAbsoluteUrl('assets/fonts/Inconsolata.woff2'),
@@ -53,6 +60,29 @@ function getAvailableFonts() {
 
 export default class LibassWasmRenderer {
     /**
+     * Runtime capability check for WebAssembly support.
+     * Evaluates whether the current browser engine possesses WebAssembly support
+     * and is capable of compiling a basic WASM binary.
+     *
+     * @returns {boolean} True if WebAssembly execution is supported.
+     */
+    static isSupported() {
+        try {
+            // Validate the presence of the global WebAssembly object and instantiate API
+            if (typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function') {
+                // Instantiate a minimal 8-byte WASM binary module to verify runtime compilation capability
+                const module = new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+                if (module instanceof WebAssembly.Module) {
+                    return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
+                }
+            }
+        } catch (e) {
+            // Trapped execution or instantiation failure indicates lack of WebAssembly support
+        }
+        return false;
+    }
+
+    /**
      * @param {Object} options
      * @param {HTMLElement} options.container - Container element that wraps the video
      * @param {HTMLVideoElement} [options.video] - The video element (for VideoClock sync)
@@ -60,13 +90,26 @@ export default class LibassWasmRenderer {
      * @param {number} [options.height] - Video height (required if video not provided)
      * @param {number} [options.videoFrameRate] - Video framerate (for render sync)
      */
-    constructor({ container, video, width, height, videoFrameRate }) {
+    constructor({ container, video, width, height, videoFrameRate, getTime, avplayLatency }) {
+        // Assert WebAssembly capability prior to performing hardware or DOM setup
+        if (!LibassWasmRenderer.isSupported()) {
+            throw new Error('LibassWasmRenderer is not supported on this platform (WebAssembly unavailable)');
+        }
+
         this._container = container;
         this._videoElement = video || null;
         this._isVirtual = !video;
         this._videoWidth = width || 1920;
         this._videoHeight = height || 1080;
         this._videoFrameRate = videoFrameRate || 24;
+        this._getTime = typeof getTime === 'function' ? getTime : null;
+        // AVPlay's getCurrentTime() leads the actual displayed frame by
+        // the hardware decode pipeline depth (~1-2 frames). Default 0.06s
+        // (60ms ~1.5 frames at 24fps) for AVPlay mode; override via
+        // constructor if tuning for a different device.
+        this._avplayLatency = typeof avplayLatency === 'number'
+            ? Math.max(0, avplayLatency)
+            : (this._isVirtual ? 0.06 : 0);
 
         this._fontFamily = null;
         this._fontClass = null;
@@ -76,6 +119,11 @@ export default class LibassWasmRenderer {
         this._lineHeight = 0;
         this._letterSpacing = 0;
         this._bottomOffset = 0;
+
+        // Whether to apply style modifications (font/outline/shadow overrides,
+        // dialogue stripping, Fontsize scaling, bottom offset). Default off.
+        this._enableStyleMods = false;
+        this._prevEnableStyleMods = false;
 
         this._octopus = null;
         this._wrapper = null;
@@ -88,11 +136,6 @@ export default class LibassWasmRenderer {
         this._lastProcessedHash = null;
         this._lastProcessedResult = null;
 
-        /* rAF smooth-render state (virtual/Tizen AVPlay mode only) */
-        this._rafId = null;
-        this._lastTickTime = 0;
-        this._lastTickWallTime = 0;
-        this._playbackRate = 1.0;
         this._seekPending = false;
         /* throttle: skip setCurrentTime if time moved < 20ms */
         this._MIN_TICK_DELTA = 0.020;
@@ -109,29 +152,82 @@ export default class LibassWasmRenderer {
             (this._isVirtual ? ' (AVPlay/Manual mode)' : ' (HTML5/Auto mode)'));
     }
 
+    /**
+     * Configure whether ASS style modifications are enabled.
+     *
+     * @param {Object} config
+     * @param {boolean} [config.enableModifications=false] - Apply style overrides,
+     *        dialogue stripping, Fontsize scaling, and bottom offset.
+     */
+    setStyleConfig({ enableModifications } = {}) {
+        this._enableStyleMods = enableModifications === true;
+        log.debug(`LibassWasmRenderer style config: modifications=${this._enableStyleMods}`);
+    }
+
+    /**
+     * Get the current playback time from the platform's native time source.
+     * Priority: injected callback > AVPlay direct.
+     * @returns {number} Current time in seconds, or -1 if unavailable.
+     * @private
+     */
+    _getPlatformTime() {
+        if (typeof this._getTime === 'function') {
+            return this._getTime();
+        }
+        try {
+            const avplay = window.webapis?.avplay || window.tizen?.avplay;
+            if (avplay && typeof avplay.getCurrentTime === 'function') {
+                const timeMs = Number(avplay.getCurrentTime());
+                if (!isNaN(timeMs) && timeMs >= 0) {
+                    // AVPlay's getCurrentTime() reflects the decode pipeline
+                    // position, which is slightly ahead of the actual displayed
+                    // frame. Subtract the configured pipeline latency so
+                    // subtitles align with what's on screen.
+                    return (timeMs / 1000) - this._avplayLatency;
+                }
+            }
+        } catch (e) {}
+        return -1;
+    }
+
+    /**
+     * Replace the static proxy with a getter-based one so Octopus's internal
+     * oneshotRender() rAF loop reads the real AVPlay time on every frame.
+     *
+     * This eliminates the need for a separate rAF loop — no duplicate frame
+     * work, no interpolation drift, and the time is always frame-accurate.
+     * @private
+     */
+    _setupVirtualProxy() {
+        const self = this;
+        const oldCurrentTime = this._videoProxy.currentTime;
+        Object.defineProperty(this._videoProxy, 'currentTime', {
+            get() {
+                const t = self._getPlatformTime();
+                return t >= 0 ? t : oldCurrentTime;
+            },
+            configurable: true
+        });
+    }
+
     tick(timeSeconds) {
         this._lastTime = timeSeconds;
         if (this._isVirtual && this._octopus) {
             const offsetTime = timeSeconds - this._delaySeconds;
 
-            // Handle pending seek — do a clean reset without pushing -1 to the worker
             if (this._seekPending) {
                 this._seekPending = false;
-                this._octopus.lastRenderTime = -999999;
             }
 
-            // Gate: skip if the time hasn't moved enough (avoids flooding the worker)
-            if (Math.abs(offsetTime - this._videoProxy.currentTime) < this._MIN_TICK_DELTA) {
+            // Gate: skip if the player tick time is close to the real AVPlay
+            // time already seen by Octopus's internal rAF loop. This avoids
+            // redundant setCurrentTime calls (the getter returns raw AVPlay
+            // time; delay is applied separately via offsetTime).
+            if (Math.abs(timeSeconds - this._videoProxy.currentTime) < this._MIN_TICK_DELTA) {
                 return;
             }
 
-            this._videoProxy.currentTime = offsetTime;
             this._octopus.setCurrentTime(offsetTime);
-            this._lastTickTime = offsetTime;
-            this._lastTickWallTime = performance.now();
-
-            // Start the smooth rAF render loop if not already running
-            this._startSmoothRender();
         }
     }
 
@@ -216,8 +312,18 @@ export default class LibassWasmRenderer {
             this._octopus = new SubtitlesOctopus(options);
 
             if (this._isVirtual) {
+                this._setupVirtualProxy();
                 this._octopus.video = this._videoProxy;
                 log.info('Injected virtual video proxy into SubtitlesOctopus (AVPlay mode)');
+
+                // Start the oneshotRender rAF loop. Octopus only starts this
+                // loop inside resetRenderAheadCache(), which is called from
+                // setTrack()/setTrackByUrl(). Since we pass subContent in
+                // options instead of calling setTrack(), the loop never starts
+                // automatically — leaving subtitles jerky (~250ms updates from
+                // tick() only). This gives us 60fps per-frame time reads via
+                // the virtual proxy getter.
+                this._octopus.resetRenderAheadCache(false);
             }
 
             if (!this._isVirtual && this._octopus.canvasParent) {
@@ -252,30 +358,46 @@ export default class LibassWasmRenderer {
     }
 
     async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.8, shadowThickness = 0.5, lineHeight = 0, letterSpacing = 0, bottomOffset = 0) {
-        log.info(`LibassWasmRenderer.setFontStyles: family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);
+        log.info(`LibassWasmRenderer.setFontStyles: family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}, enableMods=${this._enableStyleMods}`);
 
-        const styleRequiresReparse =
-            this._fontFamily !== fontFamily ||
-            this._fontScale !== fontScale ||
-            this._outlineThickness !== outlineThickness ||
-            this._shadowThickness !== shadowThickness;
+        const modsToggled = this._enableStyleMods !== this._prevEnableStyleMods;
+        this._prevEnableStyleMods = this._enableStyleMods;
 
-        this._fontClass = className;
-        this._fontFamily = fontFamily;
-        this._fontScale = fontScale;
-        this._outlineThickness = outlineThickness;
-        this._shadowThickness = shadowThickness;
-        this._lineHeight = lineHeight;
-        this._letterSpacing = letterSpacing;
-        this._bottomOffset = bottomOffset;
+        if (this._enableStyleMods) {
+            const styleRequiresReparse =
+                this._fontFamily !== fontFamily ||
+                this._fontScale !== fontScale ||
+                this._outlineThickness !== outlineThickness ||
+                this._shadowThickness !== shadowThickness ||
+                modsToggled;
 
-        this._updateWrapperStyles();
+            this._fontClass = className;
+            this._fontFamily = fontFamily;
+            this._fontScale = fontScale;
+            this._outlineThickness = outlineThickness;
+            this._shadowThickness = shadowThickness;
+            this._lineHeight = lineHeight;
+            this._letterSpacing = letterSpacing;
+            this._bottomOffset = bottomOffset;
 
-        if (this._rawContent && styleRequiresReparse) {
-            // Invalidate hash so setTrack re-processes the content
-            this._lastProcessedHash = null;
-            log.info('Re-preprocessing ASS content for SubtitlesOctopus...');
-            await this.setTrack(this._rawContent);
+            this._updateWrapperStyles();
+
+            if (this._rawContent && styleRequiresReparse) {
+                // Invalidate hash so setTrack re-processes the content
+                this._lastProcessedHash = null;
+                log.info('Re-preprocessing ASS content for SubtitlesOctopus...');
+                await this.setTrack(this._rawContent);
+            }
+        } else {
+            this._updateWrapperStyles();
+
+            // If mods were just turned off, re-process from original (unmodified)
+            // content so SubtitlesOctopus renders with original embedded styles.
+            if (modsToggled && this._rawContent) {
+                this._lastProcessedHash = null;
+                log.info('Style modifications disabled — re-processing ASS with original content');
+                await this.setTrack(this._rawContent);
+            }
         }
     }
 
@@ -315,11 +437,25 @@ export default class LibassWasmRenderer {
         // Flag the next tick() to reset the worker state cleanly instead of
         // calling setCurrentTime(-1) which floods the worker and causes freezes.
         this._seekPending = true;
-        log.info('SubtitlesOctopus canvas cleared on seek (deferred reset)');
+
+        // Break Octopus prerender deadlock: reset the render request flag and
+        // increment the iteration so stale in-flight worker responses are ignored.
+        // Without this, oneshotState.renderRequested stays true after seek and
+        // blocks all future prerender requests — subtitles never reappear.
+        if (this._octopus && this._octopus.oneshotState) {
+            this._octopus.oneshotState.renderRequested = false;
+            this._octopus.oneshotState.iteration++;
+            this._octopus.oneshotState.requestNextTimestamp = -1;
+            this._octopus.oneshotState.displayedEvent = null;
+            this._octopus.oneshotState.restart = true;
+            this._octopus.renderedItems = [];
+            this._octopus.lastRenderTime = -999999;
+        }
+
+        log.info('SubtitlesOctopus canvas cleared (seek reset — prerender deadlock broken)');
     }
 
     destroy() {
-        this._stopSmoothRender();
         window.removeEventListener('resize', this._onWindowResize);
         this._teardownOctopus();
         this._removeDOM();
@@ -380,47 +516,6 @@ export default class LibassWasmRenderer {
         }
     }
 
-    /**
-     * Start a requestAnimationFrame loop that smoothly advances the subtitle
-     * render time between coarse tick() calls. Without this the canvas only
-     * updates every ~250ms (Tizen timeupdate throttle) causing visible stutter.
-     * @private
-     */
-    _startSmoothRender() {
-        if (this._rafId !== null) return;
-        const SMOOTH_INTERVAL = 0.033;
-        const MAX_ADVANCE = 0.100;
-        const loop = () => {
-            if (!this._octopus || !this._isVirtual || this._seekPending) {
-                this._rafId = null;
-                return;
-            }
-            const elapsed = Math.min(
-                (performance.now() - this._lastTickWallTime) / 1000,
-                MAX_ADVANCE
-            );
-            const estimatedTime = this._lastTickTime + (elapsed * this._playbackRate);
-            const currentProxyTime = this._videoProxy.currentTime;
-            if (Math.abs(estimatedTime - currentProxyTime) >= SMOOTH_INTERVAL) {
-                this._videoProxy.currentTime = estimatedTime;
-                this._octopus.setCurrentTime(estimatedTime);
-            }
-            this._rafId = requestAnimationFrame(loop);
-        };
-        this._rafId = requestAnimationFrame(loop);
-    }
-
-    /**
-     * Cancel the smooth render loop.
-     * @private
-     */
-    _stopSmoothRender() {
-        if (this._rafId !== null) {
-            cancelAnimationFrame(this._rafId);
-            this._rafId = null;
-        }
-    }
-
     _resizeRenderer() {
         if (!this._canvas || !this._wrapper) return;
 
@@ -465,7 +560,7 @@ export default class LibassWasmRenderer {
         const target = this._wrapper || (this._octopus && this._octopus.canvasParent);
         if (!target) return;
 
-        if (this._bottomOffset) {
+        if (this._enableStyleMods && this._bottomOffset) {
             log.debug(`Applying translateY offset translation: ${-this._bottomOffset}px`);
             target.style.transform = `translateY(${-this._bottomOffset}px)`;
         } else {
@@ -476,24 +571,35 @@ export default class LibassWasmRenderer {
     _preProcessAssContent(content, fontFamily, fontScale = 1.0, outlineThickness = 0.8, shadowThickness = 0.5) {
         if (!content) return content;
 
-        log.debug('Pre-processing ASS content for SubtitlesOctopus...');
+        log.debug(`Pre-processing ASS content for SubtitlesOctopus... enableStyleMods=${this._enableStyleMods}`);
 
         const lines = content.split(/\r?\n/);
 
+        // libass-wasm handles missing PlayRes natively — skip injection.
+        // Just warn so developers know the file is non-compliant.
         const getPlayRes = (key) => {
             const line = lines.find(l => new RegExp(`^${key}\\s*:`, 'i').test(l.trim()));
             if (!line) return -1;
             return parseInt(line.split(':')[1], 10) || 0;
         };
 
-        const resX = getPlayRes('PlayResX');
-        const resY = getPlayRes('PlayResY');
+        let resX = getPlayRes('PlayResX');
+        let resY = getPlayRes('PlayResY');
 
+        // ====================================================================
+        // Patch missing or invalid PlayResX / PlayResY in [Script Info]
+        //
+        // When PlayResX or PlayResY is omitted or set to 0, libass defaults
+        // PlayResY to 288 and PlayResX to 384. If PlayResX was specified (e.g. 1920)
+        // without PlayResY, or if the header was omitted entirely, libass's
+        // internal coordinate calculations can produce distorted scaling.
+        // We inject safe standard defaults (384x288) if absent.
+        // ====================================================================
         const safeResX = 384;
         const safeResY = 288;
 
         if (resX <= 0 || resY <= 0) {
-            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — patching to ${safeResX}x${safeResY}`);
+            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — patching Script Info to ${safeResX}x${safeResY}`);
 
             const scriptInfoIdx = lines.findIndex(l => /^\[Script Info\]/i.test(l.trim()));
             const insertAt = scriptInfoIdx !== -1 ? scriptInfoIdx + 1 : 0;
@@ -507,10 +613,25 @@ export default class LibassWasmRenderer {
                 }
             };
 
-            setPlayRes('PlayResX', safeResX);
-            setPlayRes('PlayResY', safeResY);
+            if (resX <= 0) {
+                setPlayRes('PlayResX', safeResX);
+                resX = safeResX;
+            }
+            if (resY <= 0) {
+                setPlayRes('PlayResY', safeResY);
+                resY = safeResY;
+            }
         }
 
+        const isFfmpegScript = /Script generated by FFmpeg|Lavc|libass/i.test(content);
+        const shouldModifyStyles = this._enableStyleMods || isFfmpegScript || (fontScale && fontScale !== 1.0);
+
+        if (!shouldModifyStyles) {
+            // Style modifications disabled & not an FFmpeg script: return content with PlayRes patched
+            return lines.join('\n');
+        }
+
+        const effectivePlayResY = resY > 0 ? resY : safeResY;
         let styleFormat = null;
 
         const processedLines = lines.map(line => {
@@ -525,30 +646,55 @@ export default class LibassWasmRenderer {
                 const parts = line.substring(line.indexOf(':') + 1).split(',');
                 const fontIdx = styleFormat.indexOf('Fontname');
 
-                if (fontIdx !== -1 && fontFamily && fontFamily !== 'null') {
+                if (this._enableStyleMods && fontIdx !== -1 && fontFamily && fontFamily !== 'null') {
                     parts[fontIdx] = fontFamily;
                 }
 
                 const sizeIdx = styleFormat.indexOf('Fontsize');
-                if (sizeIdx !== -1 && fontScale && fontScale !== 1.0) {
-                    const originalSize = parseFloat(parts[sizeIdx]) || 16;
-                    parts[sizeIdx] = String(originalSize * fontScale);
+                if (sizeIdx !== -1) {
+                    let size = parseFloat(parts[sizeIdx]) || 16;
+                    const appliedScale = (fontScale && fontScale !== 1.0) ? fontScale : 1.0;
+                    size *= appliedScale;
+
+                    // ================================================================
+                    // PlayRes Fontsize Normalization for Undersized Subtitles
+                    // ----------------------------------------------------------------
+                    // Standard TV dialogue subtitles should be ~7.5% of PlayResY
+                    // (~81px on 1080p, ~54px on 720p, ~22px on 288p).
+                    // FFmpeg and auto-converters generate ASS scripts with PlayResY: 288
+                    // and Fontsize: 16 (only 5.5% height), or PlayResY: 1080 and Fontsize: 20
+                    // (< 2% height), making subtitles look miniscule on screen.
+                    // If the font size ratio is undersized (< 7.0% of PlayResY),
+                    // auto-scale it up to a comfortable ~7.5% baseline ratio.
+                    // ================================================================
+                    const minRatio = 0.075;
+                    const sizeRatio = size / (effectivePlayResY * appliedScale);
+
+                    if (sizeRatio < 0.070) {
+                        const normalizedSize = Math.round(effectivePlayResY * minRatio * appliedScale);
+                        log.info(`Normalizing undersized ASS Fontsize (${parts[sizeIdx]}px on PlayResY ${effectivePlayResY}, isFfmpeg=${isFfmpegScript}) -> ${normalizedSize}px`);
+                        size = normalizedSize;
+                    }
+
+                    parts[sizeIdx] = String(size);
                 }
 
-                const outlineIdx = styleFormat.indexOf('Outline');
-                if (outlineIdx !== -1 && outlineThickness !== null && outlineThickness !== undefined) {
-                    parts[outlineIdx] = String(outlineThickness);
-                }
+                if (this._enableStyleMods) {
+                    const outlineIdx = styleFormat.indexOf('Outline');
+                    if (outlineIdx !== -1 && outlineThickness !== null && outlineThickness !== undefined) {
+                        parts[outlineIdx] = String(outlineThickness);
+                    }
 
-                const shadowIdx = styleFormat.indexOf('Shadow');
-                if (shadowIdx !== -1 && shadowThickness !== null && shadowThickness !== undefined) {
-                    parts[shadowIdx] = String(shadowThickness);
+                    const shadowIdx = styleFormat.indexOf('Shadow');
+                    if (shadowIdx !== -1 && shadowThickness !== null && shadowThickness !== undefined) {
+                        parts[shadowIdx] = String(shadowThickness);
+                    }
                 }
 
                 return 'Style: ' + parts.join(',');
             }
 
-            if (trimmed.startsWith('Dialogue:')) {
+            if (this._enableStyleMods && trimmed.startsWith('Dialogue:')) {
                 return line.replace(/\\(fn|bord|shad|s?out|s?shad)[^\\})]+(?=[\\})])/g, '');
             }
 

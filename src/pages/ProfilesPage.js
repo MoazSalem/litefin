@@ -5,7 +5,6 @@
  * Full-screen profile switcher page. Shown at startup when multiple sessions
  * are stored, or when the user clicks their name in the Sidebar.
  *
- * Design follows Apple Human Interface Guidelines:
  * - Large, generous avatar tiles spaced for easy TV navigation
  * - Muted accent-on-dark palette that lets avatars breathe
  * - Spring-style focus animations (cubic-bezier with overshoot)
@@ -25,6 +24,7 @@ import { logger } from '../utils/Logger.js';
 import { imageService } from '../utils/ImageService.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('ProfilesPage');
 
@@ -335,9 +335,28 @@ class ProfilesPage extends Page {
 
         try {
             await auth.switchUser(userId);
+
+            // If settings per user is enabled, perform a hard reload to cleanly boot
+            // the app into the new user's isolated configuration.
+            if (storage.getItem('litefin:settings_per_user') === 'true') {
+                storage.setItem('litefin:skip_profiles_once', 'true');
+                storage.flush();
+                const href = window.location.href;
+                const protocol = window.location.protocol;
+                let entryUrl;
+                if (protocol === 'file:') {
+                    entryUrl = href.split('#')[0];
+                } else {
+                    entryUrl = window.location.origin + window.location.pathname;
+                }
+                window.location.href = entryUrl;
+                return;
+            }
+
             // AuthManager emits auth:login which initialises plugins.
-            // Navigate to home without history so Back doesn't loop back here.
-            router.navigate('/home', { replace: true });
+            // Reset router history completely so the previous user's back stack and navigation
+            // state entries are purged, preventing state leaks or back-button loops.
+            router.reset('/home');
         } catch (e) {
             log.error('Failed to switch user:', e);
             this._isSwitching = false;

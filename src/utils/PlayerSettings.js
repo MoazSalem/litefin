@@ -132,6 +132,7 @@ const DEFAULTS = {
     subtitleWeight: 'normal',
 
     // Subtitle drop shadow ('none', 'uniform', 'dropshadow', 'raised', 'depressed', 'border')
+    // Subtitle shadow style (uniform, border, uniform_border, dropshadow, raised, depressed, none)
     subtitleDropShadow: 'uniform',
 
     // Drop shadow color
@@ -143,8 +144,11 @@ const DEFAULTS = {
     // Drop shadow blur radius (px)
     subtitleDropShadowBlur: 6,
 
-    // Subtitle border width (px, used when subtitleDropShadow is 'border')
+    // Subtitle border width (px, used when subtitleDropShadow is 'border' or 'uniform_border')
     subtitleBorderWidth: 3,
+
+    // Subtitle border opacity (0-100, used when subtitleDropShadow is 'border' or 'uniform_border')
+    subtitleBorderOpacity: 100,
 
     // Custom subtitle font (empty = system default)
     subtitleFont: '',
@@ -164,6 +168,8 @@ const DEFAULTS = {
                         limited hardware, but doesn't support complex typesetting.
          'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
                          accurate styling and drawing support.
+         'assjs'      — Lightweight DOM-based renderer (ass.js). Uses browser
+                        native font fallback. Experimental on Tizen AVPlay.
        ------------------------------------------------------------------------- */
     assRenderer: 'libjass',
 
@@ -197,6 +203,10 @@ const DEFAULTS = {
     // Enable user-defined outline and shadow thickness overrides for ASS
     subtitleOverrideAssOutlineShadow: false,
 
+    // Master toggle for ASS style modifications (font, outline, shadow, scaling, spacing).
+    // When disabled, ASS subtitles render using their original embedded styles as-is.
+    enableAssStyleModifications: false,
+
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
 
@@ -225,6 +235,14 @@ const DEFAULTS = {
        affecting the standard readability of subtitles in SDR content.
        ------------------------------------------------------------------------- */
     subtitleTextOpacityHdr: 100,
+
+    /* -------------------------------------------------------------------------
+       OSD HDR DARKER WHITE
+       -------------------------------------------------------------------------
+       Toggle to make the whole OSD darker in HDR by overriding white/light-grey
+       elements with subtitle dark grey color instead.
+       ------------------------------------------------------------------------- */
+    osdHdrDarkerWhite: true,
 
     // Subtitle background color
     subtitleTextBackground: 'transparent',
@@ -451,6 +469,25 @@ const DEFAULTS = {
      */
     osdFocusRestoreMode: 'always',
 
+    /*
+     * OK/Enter Wake-Up Behavior
+     * -------------------------------------------------------------------------
+     * Whether the OK/Enter press that reveals a hidden OSD only shows the
+     * controls, instead of also running the action that holds focus at that
+     * moment. Only affects that first wake-up press — once the controls are
+     * visible, OK always runs the focused action regardless of this setting.
+     *
+     *   false (default) — Reveals the OSD AND runs the pre-parked focused
+     *                     action, which is Play/Pause by default. This means
+     *                     the very first OK press during playback pauses the
+     *                     video.
+     *   true            — Reveals the controls only. No action runs on that
+     *                     first press; the user presses OK again once the
+     *                     desired button holds focus. Prevents accidentally
+     *                     pausing playback just to check the floating controls.
+     */
+    okShowOsdOnly: false,
+
     // Keep focus on subtitle offset menu (prevent auto-hide)
     keepFocusOnSubtitleOffset: true,
 
@@ -480,6 +517,12 @@ const DEFAULTS = {
     // Preview/next-episode teaser segment action
     skipActionPreview: 'None',
 
+    // Segment data source preference ('both', 'server', 'chapters')
+    //   'both'     — Merge Intro-Skipper server plugin & Chapter markers (default)
+    //   'server'   — Only use Intro-Skipper server plugin
+    //   'chapters' — Only use Chapter markers (disable server-reported segments)
+    skipSegmentSource: 'both',
+
     // Show show/movie logo in OSD instead of text title
     osdShowLogo: false,
 
@@ -495,6 +538,9 @@ const DEFAULTS = {
     // Background opacity of the track menus (0-100)
     osdTrackMenuBgOpacity: 85,
 
+    // Background gradient opacity of the OSD (0-100)
+    osdGradientOpacity: 75,
+
     // Position of playback control buttons relative to seek bar ('above', 'below')
     osdButtonsLocation: 'above',
 
@@ -504,10 +550,26 @@ const DEFAULTS = {
     // Toggle states for showing/hiding specific player buttons
     osdHideFavorite: true,
     osdHideInfo: true,
-    osdHideBackButton: true,
+
+    /*
+     * =========================================================================
+     * BACK BUTTON VISIBILITY DEFAULT
+     * =========================================================================
+     * For native TV apps (Tizen / WebOS), we hide the OSD back button by default
+     * (true) since physical remotes provide a dedicated hardware Back key.
+     *
+     * For desktop/mobile web browsers, we display the OSD back button by default
+     * (false) to ensure users have a clear visual navigation path to return
+     * to the details page without relying on keyboard shortcuts or browser back.
+     * =========================================================================
+     */
+    osdHideBackButton: !platformInfo.isWeb,
 
     // Combine skip (seek, chapter, track) buttons into single buttons with multi-click actions
-    osdCombineSkipButtons: false
+    osdCombineSkipButtons: false,
+
+    // Enable screen lock button in the player overlay (next to play/pause)
+    enableScreenLock: false
 };
 
 /**

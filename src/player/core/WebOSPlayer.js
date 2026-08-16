@@ -416,7 +416,6 @@ export class WebOSPlayer {
     async _playNativeHls(video, options) {
         // Clear any stale source first
         video.removeAttribute('src');
-        video.load();
 
         // ====================================================================
         // MEDIA FRAGMENT RESUME:
@@ -661,7 +660,7 @@ export class WebOSPlayer {
         log.info('  - hls active:', !!hls);
         log.info('  - options.audioStreamIndex:', options.audioStreamIndex);
         log.info('  - options.audioTrackListIndex:', options.audioTrackListIndex);
-        
+
         if (hls) {
             log.info('  - Hls.js Audio Tracks:');
             (hls.audioTracks || []).forEach((t, idx) => {
@@ -733,10 +732,10 @@ export class WebOSPlayer {
                     // the server-resolved preference track, but for progressive DirectPlay,
                     // the TV natively plays whatever track is designated default in the file.
                     const defaultIndex = this._getContainerDefaultAudioIndex(options.mediaSource);
-                    
+
                     // Track stream index requested by the player UI
                     const requestedIndex = options.audioStreamIndex;
-                    
+
                     // Compare requested index against container default index
                     const isDefaultTrack = (defaultIndex !== undefined && Number(requestedIndex) === Number(defaultIndex));
 
@@ -926,52 +925,85 @@ export class WebOSPlayer {
         attempt();
     }
 
-    /**
-     * Resume seek-then-play helper.
-     *
-     * Called from both _playNativeHls and _playNativeDirect canplay handlers.
-     * Seeks to the resume target BEFORE calling play(), and waits for the seeked
-     * event to confirm the seek took effect. On WebOS Chromium, calling play()
-     * first and then seeking to an unbuffered position silently discards the
-     * seek — the native media pipeline starts playback from 0 and ignores the
-     * currentTime assignment.
-     *
-     * @private
-     * @param {HTMLVideoElement} video
-     * @param {Object}           options  - Play options
-     * @param {Function}         resolve  - Promise resolve
-     * @param {Function}         reject   - Promise reject
-     */
-    _resumeSeekThenPlay(video, options, resolve, reject) {
-        const resumeSeconds = this._robustSeekTarget;
-        if (resumeSeconds !== null && resumeSeconds !== undefined && resumeSeconds > 0) {
-            log.info('WebOSPlayer: Applying resume seek at canplay for', resumeSeconds, 's');
+     /**
+      * Resume seek-then-play helper.
+      *
+      * Called from both _playNativeHls and _playNativeDirect canplay handlers.
+      * First checks if the media fragment (#t=) already positioned the playhead.
+      * If not, performs an explicit seek and waits for the seeked event.
+      * On WebOS Chromium, calling play() first and then seeking to an unbuffered
+      * position silently discards the seek — the native media pipeline starts
+      * playback from 0 and ignores the currentTime assignment. This is why we
+      * must seek before play().
+      *
+      * @private
+      * @param {HTMLVideoElement} video
+      * @param {Object}           options  - Play options
+      * @param {Function}         resolve  - Promise resolve
+      * @param {Function}         reject   - Promise reject
+      */
+     _resumeSeekThenPlay(video, options, resolve, reject) {
+         const resumeSeconds = this._robustSeekTarget;
+         if (resumeSeconds !== null && resumeSeconds !== undefined && resumeSeconds > 0) {
+             log.info('WebOSPlayer: Applying resume seek at canplay for', resumeSeconds, 's');
 
-            let seekCompleted = false;
-            let seekTimeout = null;
+             // ====================================================================
+             // MEDIA FRAGMENT CHECK:
+             // The #t= fragment in the URL already hints the native pipeline to
+             // start downloading from the resume position. Check if it worked by
+             // verifying the playhead is close to the target.
+             // ====================================================================
+             try {
+                 if (Math.abs(video.currentTime - resumeSeconds) < 2) {
+                     log.info('WebOSPlayer: Media fragment already positioned the playhead — skipping explicit seek.');
+                     this._doPlayWithResume(video, options, resolve, reject);
+                     return;
+                 }
+             } catch (e) {
+                 // Defensive: accessing currentTime may throw on some exotic platforms.
+                 log.error('WebOSPlayer: currentTime read threw during fragment check', e);
+             }
 
-            const onSeeked = () => {
-                video.removeEventListener('seeked', onSeeked);
-                if (seekTimeout) clearTimeout(seekTimeout);
-                seekCompleted = true;
-                log.debug('WebOSPlayer: Seek completed before play');
-                this._doPlayWithResume(video, options, resolve, reject);
-            };
+             // ====================================================================
+             // FALLBACK SEEK (only if fragment didn't work):
+             // Media fragment failed or wasn't used. Explicitly seek to resume target.
+             // This avoids racing between URL-level and playback-layer positioning.
+             // ====================================================================
+             log.info('WebOSPlayer: Media fragment did not position playhead — falling back to explicit seek');
 
-            video.addEventListener('seeked', onSeeked);
-            video.currentTime = resumeSeconds;
+             let seekCompleted = false;
+             let seekTimeout = null;
 
-            seekTimeout = setTimeout(() => {
-                video.removeEventListener('seeked', onSeeked);
-                if (!seekCompleted) {
-                    log.warn('WebOSPlayer: Seek at canplay timed out — starting playback from current position');
-                    this._doPlayWithResume(video, options, resolve, reject);
-                }
-            }, 10000);
-        } else {
-            this._doPlayWithResume(video, options, resolve, reject);
-        }
-    }
+             const onSeeked = () => {
+                 video.removeEventListener('seeked', onSeeked);
+                 if (seekTimeout) clearTimeout(seekTimeout);
+                 seekCompleted = true;
+                 log.debug('WebOSPlayer: Explicit seek completed');
+                 this._doPlayWithResume(video, options, resolve, reject);
+             };
+
+             video.addEventListener('seeked', onSeeked);
+
+             try {
+                 video.currentTime = resumeSeconds;
+             } catch (e) {
+                 // Some implementations throw synchronously for impossible/early seeks.
+                 log.error('WebOSPlayer: Setting currentTime threw during resume seek', e);
+             }
+
+             // Shorter safety net: 3s is sufficient on most devices and avoids
+             // long UI freezes when the media fragment already worked.
+             seekTimeout = setTimeout(() => {
+                 video.removeEventListener('seeked', onSeeked);
+                 if (!seekCompleted) {
+                     log.warn('WebOSPlayer: Explicit seek timed out (3s) — starting playback from current position');
+                     this._doPlayWithResume(video, options, resolve, reject);
+                 }
+             }, 3000);
+         } else {
+             this._doPlayWithResume(video, options, resolve, reject);
+         }
+     }
 
     /**
      * Play the video and apply the robust resume safety net.
@@ -1330,21 +1362,21 @@ export class WebOSPlayer {
     _getContainerDefaultAudioIndex(mediaSource) {
         // Guard check: Ensure mediaSource and MediaStreams are present
         if (!mediaSource || !mediaSource.MediaStreams) return undefined;
-        
+
         // Filter streams to supported audio formats matching player settings
         const audioStreams = mediaSource.MediaStreams.filter(s => {
             if (s.Type !== 'Audio') return false;
             const codec = (s.Codec || '').toLowerCase();
-            
+
             // Exclude TrueHD audio formats if disabled in settings
             if (codec === 'truehd' && !isTrueHdSupported()) return false;
-            
+
             // Exclude DTS / DCA audio formats if disabled in settings
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
-            
+
             return true;
         });
-        
+
         // Find the stream explicitly marked as default in the container metadata,
         // or default to the first available audio track if none are marked.
         const defaultStream = audioStreams.find(s => s.IsDefault) || audioStreams[0];
@@ -1401,7 +1433,7 @@ export class WebOSPlayer {
         const jellyfinAudioStreams = mediaStreams.filter(s => {
             if (s.Type !== 'Audio') return false;
             const codec = (s.Codec || '').toLowerCase();
-            
+
             // Exclude passthrough formats that the WebOS system cannot decode natively
             if (codec === 'truehd' && !isTrueHdSupported()) return false;
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
@@ -1417,7 +1449,7 @@ export class WebOSPlayer {
         jellyfinAudioStreams.forEach((s, idx) => {
             log.info(`    * [${idx}] Index: ${s.Index}, Lang: ${s.Language}, Codec: ${s.Codec}, IsDefault: ${s.IsDefault}`);
         });
-        
+
         log.info('  - Native audioTracks count:', nativeTracks.length);
         for (let i = 0; i < nativeTracks.length; i++) {
             const t = nativeTracks[i];
@@ -1444,7 +1476,7 @@ export class WebOSPlayer {
         // ====================================================================
         const targetLang = (targetStream.Language || '').toLowerCase().trim();
         if (targetLang && targetLang !== 'und' && targetLang !== 'unknown') {
-            
+
             // ISO 639-2 (3-letter) -> ISO 639-1 (2-letter) Mapping Dictionary
             const ISO_MAP = {
                 'eng': 'en', 'zho': 'zh', 'chi': 'zh', 'spa': 'es', 'fre': 'fr', 'fra': 'fr',
@@ -1473,10 +1505,10 @@ export class WebOSPlayer {
                     log.info(`    * Native track [${i}] language is empty, skipping`);
                     continue;
                 }
-                
+
                 const normNative = normalize(nativeLang);
                 log.info(`    * Native track [${i}] language = ${nativeLang}, normalized = ${normNative}`);
-                
+
                 // Compare values using strict equality and substring matching
                 if (normNative === normTarget || normNative.startsWith(normTarget) || normTarget.startsWith(normNative)) {
                     log.info(`      -> Match found at index ${i}`);
@@ -1513,7 +1545,7 @@ export class WebOSPlayer {
         // WebOS moves the container's default audio track to native index 0.
         // The remaining non-default tracks shift down in relative container order.
         // ====================================================================
-        // Fetch the container's actual default audio stream index instead of 
+        // Fetch the container's actual default audio stream index instead of
         // the server-preferred DefaultAudioStreamIndex. WebOS's native player
         // shifts the file's container-defined default track to index 0.
         const defaultStreamIndex = this._getContainerDefaultAudioIndex(this._currentPlayOptions?.mediaSource);
@@ -1522,7 +1554,7 @@ export class WebOSPlayer {
             // Find default track list position in Jellyfin list
             const defaultListIndex = jellyfinAudioStreams.findIndex(s => s.Index === defaultStreamIndex);
             log.info('    * defaultListIndex in jellyfin streams =', defaultListIndex);
-            
+
             if (defaultListIndex !== -1) {
                 // If requested track is the default one, map directly to native index 0
                 if (listIndex === defaultListIndex) {
@@ -1853,7 +1885,7 @@ export class WebOSPlayer {
             // We only escalate to _seekWithRetry when the position is truly
             // far off (e.g. video still stuck at 0 s when target is 420 s).
             // ----------------------------------------------------------------
-            if (drift > 10) {
+            if (drift >= 10) {
                 log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)} s, expected: ${target} s, drift: ${drift.toFixed(2)} s) — applying robust seek`);
                 this._seekWithRetry(target);
                 return; // suppress this playing event until seek resolves

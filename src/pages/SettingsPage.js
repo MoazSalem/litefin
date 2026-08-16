@@ -470,7 +470,7 @@ class SettingsPage extends Page {
                 'theme-mode-select',
                 [
                     // ====================================================================
-                    // Ambient Glow Theme Mode (Mac/Apple TV inspired dynamic accent gradients)
+                    // Ambient Glow Theme Mode
                     // ====================================================================
                     { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' },
 
@@ -638,6 +638,20 @@ class SettingsPage extends Page {
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="PlayerOsd">${i18n.t('PlayerOsd') || 'Player Osd'}</h3>
                 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdHdrDarkerWhite">${i18n.t('OsdHdrDarkerWhite') || 'OSD HDR Darker White'}</span>
+                        <span class="setting-description" data-i18n="OsdHdrDarkerWhiteDescription">${i18n.t('OsdHdrDarkerWhiteDescription') || 'Override white OSD elements with a softer dark grey inside HDR content to prevent eye strain.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('osdHdrDarkerWhite') !== false ? 'active' : ''}" 
+                                 id="osd-hdr-darker-white-toggle" 
+                                 data-setting="osdHdrDarkerWhite"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelShowLogoInOsd">${i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD'}</span>
@@ -1064,8 +1078,33 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                                <!-- Performance Tweaks Section -->
+                <!-- Performance Tweaks Section -->
                 <h3 class="setting-section-title" data-i18n="PerformanceTweaks">${i18n.t('PerformanceTweaks') || 'Performance Tweaks'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelUseBatchLatestPlugin">${i18n.t('LabelUseBatchLatestPlugin') || 'Use Plugin for Home Libraries'}</span>
+                        <span class="setting-description" data-i18n="UseBatchLatestPluginDescription">${i18n.t('UseBatchLatestPluginDescription') || 'Fetch all home screen library rows in a single batched HTTP request via the Litefin plugin. Improves home page load speed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:useBatchLatestPlugin') !== 'false' ? 'active' : ''}" 
+                                id="toggle-use-batch-latest-plugin" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UseItemsForSearch">${i18n.t('UseItemsForSearch') || 'Use Items API for Search'}</span>
+                        <span class="setting-description" data-i18n="UseItemsForSearchDescription">${i18n.t('UseItemsForSearchDescription') || 'Query the /Items API instead of /Search/Hints for global search. Required by certain server plugins.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:useItemsForSearch') === 'true' ? 'active' : ''}" 
+                                id="toggle-use-items-for-search" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
@@ -1240,11 +1279,24 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelPlayThemeSongs">${i18n.t('LabelPlayThemeSongs') || 'Play Theme Songs'}</span>
-                        <span class="setting-description" data-i18n="PlayThemeSongsDescription">${i18n.t('PlayThemeSongsDescription') || 'Play show theme songs in the background when viewing details pages.'}</span>
+                        <span class="setting-description" data-i18n="PlayThemeSongsDescription">${i18n.t('PlayThemeSongsDescription') || 'Play theme songs in the background when viewing details pages.'}</span>
                     </div>
                     <div class="setting-control">
                         <button class="toggle-switch ${storage.getItem('pref:playThemeSongs') === 'true' ? 'active' : ''}" 
                                 id="toggle-play-theme-songs" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="theme-song-once-item" style="display: ${storage.getItem('pref:playThemeSongs') === 'true' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelPlayThemeSongsOnce">${i18n.t('LabelPlayThemeSongsOnce') || 'Play Theme Songs Once'}</span>
+                        <span class="setting-description" data-i18n="PlayThemeSongsOnceDescription">${i18n.t('PlayThemeSongsOnceDescription') || 'Play background theme songs only once instead of looping continuously.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:playThemeSongsOnce') !== 'false' ? 'active' : ''}" 
+                                id="toggle-play-theme-songs-once" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -1275,6 +1327,76 @@ class SettingsPage extends Page {
                     </div>
                 </div>
             </div>
+
+                <!-- ======================================================= -->
+                <!-- WAKE-ON-LAN (WOL) SERVER WAKE SETTINGS                  -->
+                <!-- ======================================================= -->
+                <!-- Allows the user to configure Litefin to send a Magic    -->
+                <!-- Packet on startup or timeout to boot their server.       -->
+                <!-- ======================================================= -->
+                <h3 class="setting-section-title" data-i18n="WakeOnLanTitle">${i18n.t('WakeOnLanTitle')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanStartup">${i18n.t('WakeOnLanStartup')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanStartupDescription">${i18n.t('WakeOnLanStartupDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolOnStartup') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-on-startup" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanTimeout">${i18n.t('WakeOnLanTimeout')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanTimeoutDescription">${i18n.t('WakeOnLanTimeoutDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolOnTimeout') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-on-timeout" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanServerScan">${i18n.t('WakeOnLanServerScan')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanServerScanDescription">${i18n.t('WakeOnLanServerScanDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolOnServerScan') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-on-scan" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Conditional container for MAC Address entry -->
+                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WolMacAddress">${i18n.t('WolMacAddress')}</span>
+                        <span class="setting-description" data-i18n="WolMacAddressDescription">${i18n.t('WolMacAddressDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <input id="input-wol-mac-address" type="text" class="focusable" tabindex="0" data-focusable="true" 
+                               placeholder="00:11:22:33:44:55" 
+                               value="${storage.getItem('pref:wolMacAddress') || ''}"
+                               style="
+                                   background: rgba(255, 255, 255, 0.05);
+                                   border: 1px solid rgba(255, 255, 255, 0.1);
+                                   color: #fff;
+                                   padding: 10px 14px;
+                                   border-radius: 6px;
+                                   font-size: 1rem;
+                                   width: 250px;
+                                   text-align: center;
+                               "/>
+                    </div>
+                </div>
         `;
     }
 
@@ -1370,6 +1492,16 @@ class SettingsPage extends Page {
                 {
                     value: 'posterRight',
                     label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned'
+                },
+                {
+                    value: 'backdropMinimal',
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
+                },
+                {
+                    value: 'backdropLeft',
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
                 }
             ],
             storage.getItem('pref:detailsLayout') || 'posterLeft'
@@ -1393,6 +1525,22 @@ class SettingsPage extends Page {
                 { value: 'below', label: i18n.t('OsdButtonsBelow') || 'Below Seek Bar' }
             ],
             PlayerSettings.get('osdButtonsLocation') || 'above'
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdGradientOpacity">${i18n.t('LabelOsdGradientOpacity') || 'OSD Background Gradient Opacity'}</span>
+                        <span class="setting-description" data-i18n="OsdGradientOpacityDescription">${i18n.t('OsdGradientOpacityDescription') || 'Adjust the opacity of the top and bottom dark gradient overlays on the player.'}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+            'osd-gradient-opacity',
+            PlayerSettings.get('osdGradientOpacity') ?? 75,
+            0,
+            100,
+            5
         )}
                     </div>
                 </div>
@@ -1541,6 +1689,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowMediaSourceCounts">${i18n.t('ShowMediaSourceCounts') || 'Show Version Counts'}</span>
+                        <span class="setting-description" data-i18n="ShowMediaSourceCountsDescription">${i18n.t('ShowMediaSourceCountsDescription') || 'Display a badge showing the number of available video versions on media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showMediaSourceCounts') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-show-media-source-counts" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowQualityBadges">${i18n.t('ShowQualityBadges') || 'Show Quality Badges'}</span>
                         <span class="setting-description" data-i18n="ShowQualityBadgesDescription">${i18n.t('ShowQualityBadgesDescription') || 'Display quality badges (e.g. 4K, 1080p, HDR) on media poster cards.'}</span>
                     </div>
@@ -1571,7 +1732,7 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="UseSeasonBadgesDescription">${i18n.t('UseSeasonBadgesDescription') || 'Display the season name/number badge on season cards.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:useSeasonBadges') !== 'false' ? 'active' : ''}" 
+                         <button class="toggle-switch ${storage.getItem('pref:useSeasonBadges') === 'true' ? 'active' : ''}" 
                                  id="toggle-use-season-badges" 
                                  tabindex="0">
                         </button>
@@ -1685,6 +1846,22 @@ class SettingsPage extends Page {
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
 
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EpisodeLayout">${i18n.t('EpisodeLayout') || 'Episode Layout'}</span>
+                        <span class="setting-description">Choose the layout mode for TV show episodes on Season details pages.</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'episode-layout-select',
+                [
+                    { value: 'grid', label: i18n.t('EpisodeLayoutGrid') || 'Grid' },
+                    { value: 'list', label: i18n.t('EpisodeLayoutList') || 'List with Details' }
+                ],
+                storage.getItem('pref:episodeLayout') || 'list'
+            )}
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1704,7 +1881,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
+                <div class="setting-item ${storage.getItem('pref:detailsLayout') === 'backdropMinimal' || storage.getItem('pref:detailsLayout') === 'backdropLeft' ? 'hidden' : ''}" id="details-title-style-container">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
                         <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
@@ -1760,8 +1937,8 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="SecondaryTitleSecondaryColorDescription">${i18n.t('SecondaryTitleSecondaryColorDescription') || 'Use the secondary text color for the episode number and show name secondary title on the details page instead of the primary accent color.'}</span>
                     </div>
                     <div class="setting-control">
-                        <!-- Tactile fluid toggle switch matching Apple & TV navigation design guidelines -->
-                        <button class="toggle-switch ${storage.getItem('pref:secondaryTitleSecondaryColor') === 'true' ? 'active' : ''}" 
+                        <!-- Tactile fluid toggle switch -->
+                        <button class="toggle-switch ${storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false' ? 'active' : ''}" 
                                 id="toggle-secondary-title-color" 
                                 tabindex="0">
                         </button>
@@ -1865,9 +2042,49 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideGhostMode">${i18n.t('LabelHideGhostMode') || 'Hide Ghost Mode Button'}</span>
+                        <span class="setting-description" data-i18n="HideGhostModeDescription">${i18n.t('HideGhostModeDescription') || 'Hide the ghost mode (incognito play) button on the item details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideGhostMode') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-ghost-mode" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="HomeScreen">${i18n.t('HomeScreen')}</h3>
+
+                <!-- Home Rows Item Limit setting -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHomeRowsLimit">${i18n.t('LabelHomeRowsLimit') || 'Home Rows Limit'}</span>
+                        <span class="setting-description" data-i18n="HomeRowsLimitDescription">${i18n.t('HomeRowsLimitDescription') || 'Maximum number of items displayed per row on the home screen.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'home-rows-limit-select',
+                [
+                    { value: 30, label: i18n.t('ItemCountValue', [30]) || '30 items' },
+                    { value: 25, label: i18n.t('ItemCountValue', [25]) || '25 items' },
+                    { value: 20, label: i18n.t('ItemCountValue', [20]) || '20 items' },
+                    { value: 15, label: i18n.t('ItemCountValue', [15]) || '15 items' },
+                    {
+                        value: 12,
+                        label:
+                            (i18n.t('ItemCountValue', [12]) || '12 items') +
+                            ` (${i18n.t('Default') || 'Default'})`
+                    },
+                    { value: 10, label: i18n.t('ItemCountValue', [10]) || '10 items' },
+                    { value: 8, label: i18n.t('ItemCountValue', [8]) || '8 items' }
+                ],
+                parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10)
+            )}
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -2189,7 +2406,7 @@ class SettingsPage extends Page {
                   =============================================================================
                   This control allows the user to filter the hero carousel items, hiding any
                   movies or series that the user has already marked as watched (played) in their
-                  Jellyfin library database. Fits seamlessly with Apple-style premium toggles.
+                  Jellyfin library database.
                 -->
                 <div class="setting-item" id="hero-carousel-ignore-watched-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
                     <div class="setting-label">
@@ -2242,10 +2459,30 @@ class SettingsPage extends Page {
             'sidebar-mode-select',
             [
                 { value: 'shown', label: i18n.t('AlwaysShown') || 'Always Shown' },
+                { value: 'collapsed', label: i18n.t('AlwaysCollapsed') || 'Always Collapsed' },
                 { value: 'hidden', label: i18n.t('AlwaysHidden') || 'Always Hidden' },
                 { value: 'mixed', label: i18n.t('MixedMode') || 'Hidden in Details' }
             ],
             storage.getItem('pref:sidebarMode') || 'shown'
+        )}
+                    </div>
+                </div>
+
+                <!-- Sidebar Items Alignment Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSidebarItemsAlign">${i18n.t('LabelSidebarItemsAlign') || 'Sidebar Items Alignment'}</span>
+                        <span class="setting-description" data-i18n="SidebarItemsAlignDescription">${i18n.t('SidebarItemsAlignDescription') || 'Choose the vertical alignment of items inside the sidebar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'sidebar-items-align-select',
+            [
+                { value: 'top', label: i18n.t('OptionSidebarItemsAlignTop') || 'Top' },
+                { value: 'center', label: i18n.t('OptionSidebarItemsAlignCenter') || 'Center' },
+                { value: 'bottom', label: i18n.t('OptionSidebarItemsAlignBottom') || 'Bottom' }
+            ],
+            storage.getItem('pref:sidebarItemsAlign') || 'top'
         )}
                     </div>
                 </div>
@@ -2262,17 +2499,91 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Clickable Logo Section -->
+                <!-- Collapsed Sidebar Color Section -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="SidebarLogoSettings">${i18n.t('SidebarLogoSettings') || 'Clickable Logo'}</span>
-                        <span class="setting-description" data-i18n="SidebarLogoSettingsDescription">${i18n.t('SidebarLogoSettingsDescription') || 'Allow the top Litefin logo to be selected to open settings.'}</span>
+                        <span class="setting-name" data-i18n="LabelCollapsedSidebarColor">${i18n.t('LabelCollapsedSidebarColor') || 'Collapsed Sidebar Color'}</span>
+                        <span class="setting-description" data-i18n="CollapsedSidebarColorDescription">${i18n.t('CollapsedSidebarColorDescription') || 'Choose the background transparency or style for the collapsed sidebar.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:logoSettings') === 'true' ? 'active' : ''}" 
-                                 id="toggle-sidebar-logo-settings" 
-                                 tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+            'collapsed-sidebar-color-select',
+            [
+                { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
+                { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
+            ],
+            storage.getItem('pref:collapsedSidebarColor') || 'theme'
+        )}
+                    </div>
+                </div>
+
+                <!-- Expanded Sidebar Color Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelExpandedSidebarColor">${i18n.t('LabelExpandedSidebarColor') || 'Expanded Sidebar Color'}</span>
+                        <span class="setting-description" data-i18n="ExpandedSidebarColorDescription">${i18n.t('ExpandedSidebarColorDescription') || 'Choose the background transparency or style for the expanded sidebar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'expanded-sidebar-color-select',
+            [
+                { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
+                { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
+            ],
+            storage.getItem('pref:expandedSidebarColor') || 'theme'
+        )}
+                    </div>
+                </div>
+
+                <!-- Litefin Logo Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLogoSettings">${i18n.t('LabelLogoSettings') || 'Litefin Logo'}</span>
+                        <span class="setting-description" data-i18n="LogoSettingsDescription">${i18n.t('LogoSettingsDescription') || 'Choose how the top sidebar logo behaves and what buttons are visible.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'sidebar-logo-settings-select',
+            [
+                { value: 'visible', label: i18n.t('OptionLogoSettingsVisible') || 'Visible' },
+                {
+                    value: 'settings',
+                    label: i18n.t('OptionLogoSettingsSettings') || 'Visible as Settings'
+                },
+                { value: 'home', label: i18n.t('OptionLogoSettingsHome') || 'Visible as Home' },
+                { value: 'hidden', label: i18n.t('OptionLogoSettingsHidden') || 'Hidden' }
+            ],
+            (() => {
+                const val = storage.getItem('pref:logoSettings') || 'visible';
+                if (val === 'true') return 'settings';
+                if (val === 'false') return 'visible';
+                return val;
+            })()
+        )}
                     </div>
                 </div>
 
@@ -2324,21 +2635,7 @@ class SettingsPage extends Page {
                                   tabindex="0">
                         </button>
                     </div>
-                </div>
-
-                <!-- Transparent Collapsed Sidebar Section -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="TransparentCollapsedSidebar">${i18n.t('TransparentCollapsedSidebar') || 'Transparent Collapsed Sidebar'}</span>
-                        <span class="setting-description" data-i18n="TransparentCollapsedSidebarDescription">${i18n.t('TransparentCollapsedSidebarDescription') || 'Make the collapsed sidebar background transparent for all themes.'}</span>
-                    </div>
-                    <div class="setting-control">
-                          <button class="toggle-switch ${storage.getItem('pref:transparentCollapsedSidebar') === 'true' ? 'active' : ''}" 
-                                  id="toggle-transparent-collapsed-sidebar" 
-                                  tabindex="0">
-                        </button>
-                    </div>
-                </div>
+                </div
 
                 <h3 class="setting-section-title" data-i18n="SidebarLayoutOrder" style="margin-top: 40px;">${i18n.t('SidebarLayoutOrder') || 'Sidebar Layout'}</h3>
                 <!-- Loaded dynamically via _setupSidebarLayoutUI -->
@@ -2367,7 +2664,7 @@ class SettingsPage extends Page {
      * =========================================================================
      * Premium Controls and Remote Button Mapping Configuration Pane
      * =========================================================================
-     * Provides a sleek, Apple-inspired interface to configure user interface
+     * Provides a sleek, interface to configure user interface
      * interaction behaviors (e.g. scroll wheel list navigation, hover-activated
      * seek trickplay seekbars) and physical TV remote controller color buttons
      * (Red, Green, Yellow, Blue). Fully responsive, layout-aware, and aligned
@@ -2379,6 +2676,9 @@ class SettingsPage extends Page {
         // Retrieve localized keys or fallback gracefully to default values.
         const scrollNavEnabled = storage.getItem('pref:hoverScrollNavigation') === 'true';
         const magicCursorEnabled = PlayerSettings.get('enableMagicCursor');
+        const enableScreenLockEnabled = PlayerSettings.get('enableScreenLock');
+
+        // Seekbar Hover Trickplay Preview Frame Row
         const hoverTrickplayEnabled = PlayerSettings.get('enableHoverTrickplay');
         const focusFirstItemEnabled = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
 
@@ -2429,7 +2729,15 @@ class SettingsPage extends Page {
                 value: 'playerPreviousChapter',
                 label: i18n.t('OptionPlayerPreviousChapter') || 'Player: Previous Chapter'
             },
-            { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' }
+            { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' },
+            {
+                value: 'sendWol',
+                label: i18n.t('OptionSendWakeOnLan') || 'Send Wake-on-LAN Packet'
+            },
+            {
+                value: 'randomItem',
+                label: i18n.t('OptionRandomItem') || 'Open Random Item'
+            }
         ];
 
         return `
@@ -2478,6 +2786,21 @@ class SettingsPage extends Page {
                         <button class="toggle-switch ${magicCursorEnabled ? 'active' : ''}" 
                                 id="toggle-magic-cursor" 
                                 data-setting="enableMagicCursor"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Playback Screen Lock Option Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableScreenLock">${i18n.t('EnableScreenLock') || 'Playback Screen Lock'}</span>
+                        <span class="setting-description" data-i18n="EnableScreenLockDescription">${i18n.t('EnableScreenLockDescription') || 'Enable a screen and input lock button in the player overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${enableScreenLockEnabled ? 'active' : ''}" 
+                                id="toggle-enable-screen-lock" 
+                                data-setting="enableScreenLock"
                                 tabindex="0">
                         </button>
                     </div>
@@ -2588,8 +2911,6 @@ class SettingsPage extends Page {
         const audioSettingsHtml =
             currentBackend !== 'tizen'
                 ? `
-                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDisableVbrAudioEncoding">${i18n.t('LabelDisableVbrAudioEncoding') || 'Disable VBR audio encoding'}</span>
@@ -2671,6 +2992,28 @@ class SettingsPage extends Page {
                 { value: 500000, label: i18n.t('BitrateKbps', ['500']) }
             ],
             currentBitrate
+        )}
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AllowedAudioChannels">${i18n.t('AllowedAudioChannels') || 'Maximum Audio Channels'}</span>
+                        <span class="setting-description" data-i18n="AllowedAudioChannelsDescription">${i18n.t('AllowedAudioChannelsDescription') || 'Configure maximum audio channels for video playback. Defaults to 5.1 (6 channels).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'allowed-audio-channels-select',
+            [
+                { value: -1, label: i18n.t('AudioChannelsAuto') || 'Auto (No Limit)' },
+                { value: 8, label: i18n.t('AudioChannels71') || '7.1 Channels' },
+                { value: 6, label: i18n.t('AudioChannels51') || '5.1 Channels (Default)' },
+                { value: 2, label: i18n.t('AudioChannels20') || 'Stereo 2.0' },
+                { value: 1, label: i18n.t('AudioChannels10') || 'Mono 1.0' }
+            ],
+            PlayerSettings.get('allowedAudioChannels') ?? 6
         )}
                     </div>
                 </div>
@@ -2858,6 +3201,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OkShowOsdOnly">${i18n.t('OkShowOsdOnly') || 'OK Shows OSD Only'}</span>
+                        <span class="setting-description" data-i18n="OkShowOsdOnlyDescription">${i18n.t('OkShowOsdOnlyDescription') || 'When the player controls are hidden, pressing OK will only show them instead of also running the focused action.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('okShowOsdOnly') ? 'active' : ''}"
+                                id="toggle-ok-show-osd-only"
+                                data-setting="okShowOsdOnly"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="KeepFocusOnSubtitleOffset">${i18n.t('KeepFocusOnSubtitleOffset') || 'Pin Subtitle Offset'}</span>
                         <span class="setting-description" data-i18n="KeepFocusOnSubtitleOffsetDescription">${i18n.t('KeepFocusOnSubtitleOffsetDescription') || 'Prevent the player controls from auto-hiding while the subtitle offset menu is open.'}</span>
                     </div>
@@ -2885,6 +3242,34 @@ class SettingsPage extends Page {
                     margin: -12px 0 20px 0;
                     line-height: 1.4;
                 ">${i18n.t('SegmentSkippingDescription') || 'Choose what happens when playback enters a detected segment. Requires the intro-skipper server plugin.'}</p>
+
+                <!-- Segment Data Source -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSkipSegmentSource">${i18n.t('LabelSkipSegmentSource') || 'Segment Data Source'}</span>
+                        <span class="setting-description" data-i18n="SkipSegmentSourceDescription">${i18n.t('SkipSegmentSourceDescription') || 'Choose whether to use the intro-skipper server plugin, video chapter markers, or combine both.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'segment-source-select',
+            [
+                {
+                    value: 'both',
+                    label: i18n.t('SegmentSourceBoth') || 'Server Plugin & Chapters (Merged)'
+                },
+                {
+                    value: 'server',
+                    label: i18n.t('SegmentSourceServer') || 'Server Plugin Only (intro-skipper)'
+                },
+                {
+                    value: 'chapters',
+                    label: i18n.t('SegmentSourceChapters') || 'Chapters Only (Disable Server Plugin)'
+                }
+            ],
+            PlayerSettings.get('skipSegmentSource') || 'both'
+        )}
+                    </div>
+                </div>
 
                 <!-- Intro segment action -->
                 <div class="setting-item">
@@ -3135,9 +3520,8 @@ class SettingsPage extends Page {
                 ],
                 PlayerSettings.get('transcodeAudioCodec') || 'auto'
             )}
-                    </div>
-                </div>
-
+            </div>
+        </div>
                 <!-- ============================================================
                      EAC3 FORCE STATE
                      canPlayType returns '' for EAC3 on many WebOS/browser builds
@@ -3662,6 +4046,7 @@ class SettingsPage extends Page {
             'ass-renderer-select',
             [
                 { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
+                { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' },
                 { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
             ],
             PlayerSettings.get('assRenderer')
@@ -3995,6 +4380,7 @@ class SettingsPage extends Page {
                 { value: 'none', label: i18n.t('None') },
                 { value: 'uniform', label: i18n.t('Uniform') },
                 { value: 'border', label: i18n.t('Border') },
+                { value: 'uniform_border', label: i18n.t('UniformBorders') || 'Uniform + borders' },
                 { value: 'dropshadow', label: i18n.t('DropShadow') },
                 { value: 'raised', label: i18n.t('Raised') },
                 { value: 'depressed', label: i18n.t('Depressed') }
@@ -4004,7 +4390,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' ? '' : 'none'}">
+                <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' || PlayerSettings.get('subtitleDropShadow') === 'uniform_border' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BorderWidth">${i18n.t('BorderWidth')}</span>
                         <span class="setting-description" data-i18n="BorderWidthDescription">${i18n.t('BorderWidthDescription')}</span>
@@ -4016,6 +4402,22 @@ class SettingsPage extends Page {
             1,
             20,
             1
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-border-opacity-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' || PlayerSettings.get('subtitleDropShadow') === 'uniform_border' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BorderOpacity">${i18n.t('BorderOpacity')}</span>
+                        <span class="setting-description" data-i18n="BorderOpacityDescription">${i18n.t('BorderOpacityDescription')}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+            'subtitle-border-opacity',
+            PlayerSettings.get('subtitleBorderOpacity') ?? 100,
+            0,
+            100,
+            5
         )}
                     </div>
                 </div>
@@ -4063,6 +4465,21 @@ class SettingsPage extends Page {
                 <!-- Advanced ASS Settings -->
                 <h3 class="setting-section-title" data-i18n="AdvancedAssSettings">${i18n.t('AdvancedAssSettings')}</h3>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableAssStyleModifications">${i18n.t('EnableAssStyleModifications') || 'Enable ASS Style Overrides'}</span>
+                        <span class="setting-description" data-i18n="EnableAssStyleModificationsDescription">${i18n.t('EnableAssStyleModificationsDescription') || 'When disabled, ASS subtitles render with their original embedded styles (font, outline, shadow, scaling, spacing are all kept as-authored).'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableAssStyleModifications') === true ? 'active' : ''}" 
+                                 id="toggle-enable-ass-style-mods" 
+                                 data-setting="enableAssStyleModifications"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div id="ass-style-mods-subsettings" style="display: ${PlayerSettings.get('enableAssStyleModifications') === true ? '' : 'none'}">
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="OverrideAssFonts">${i18n.t('OverrideAssFonts')}</span>
@@ -4237,6 +4654,7 @@ class SettingsPage extends Page {
         )}
                     </div>
                 </div>
+                </div>
             </div>
         `;
     }
@@ -4246,6 +4664,13 @@ class SettingsPage extends Page {
         const serverUrl = auth.getSavedServerUrl();
         const userId = user?.Id;
         const hasPin = userId ? pinManager.hasPin(userId) : false;
+
+        /*
+         * Check whether auto-login for the last active user is enabled.
+         * Default: disabled (false). Adheres to Apple Human Interface Guidelines
+         * for explicit user consent and minimal friction control elements.
+         */
+        const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
 
         return `
             <div class="settings-tab-content">
@@ -4280,6 +4705,16 @@ class SettingsPage extends Page {
                 `
                 : ''
             }
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RememberLastActiveUser">${i18n.t('RememberLastActiveUser')}</span>
+                        <span class="setting-description" data-i18n="RememberLastActiveUserDescription">${i18n.t('RememberLastActiveUserDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${rememberLastUser ? 'active' : ''}" id="toggle-remember-last-user" tabindex="0"></button>
+                    </div>
+                </div>
 
                 <div class="setting-actions centered">
                     <!-- Navigate to the Who's Watching screen to pick a different profile -->
@@ -4416,23 +4851,13 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="CheckForUpdatesDesc">${i18n.t('CheckForUpdatesDesc') || 'Trigger a manual check for new releases on GitHub.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-secondary btn-small focusable" id="btn-check-updates" tabindex="0" data-i18n="CheckForUpdatesNow" data-focusable="true" style="width: auto; min-width: 120px;">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-check-updates" tabindex="0" data-focusable="true" style="width: auto; min-width: 120px;">
                             ${i18n.t('CheckForUpdatesNow')}
                         </button>
                     </div>
                 </div>
 
-                <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
-                        <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="btn btn-danger btn-small" id="btn-reset-settings" tabindex="0">
-                            ${i18n.t('ButtonResetAll') || 'Reset All'}
-                        </button>
-                    </div>
-                </div>
+
             </div>
         `;
     }
@@ -4450,6 +4875,20 @@ class SettingsPage extends Page {
                 ">
                     ${i18n.t('BackupDescription') || 'Synchronize your application settings and preferences across all your devices by backing them up to your Jellyfin server.'}
                 </p>
+
+                <!-- Settings Per User Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSettingsPerUser">${i18n.t('LabelSettingsPerUser') || 'Settings Per User'}</span>
+                        <span class="setting-description" data-i18n="SettingsPerUserDescription">${i18n.t('SettingsPerUserDescription') || 'Store distinct settings and preferences for each logged-in user profile.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('litefin:settings_per_user') === 'true' ? 'active' : ''}" 
+                                id="toggle-settings-per-user" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Status / Dropdown Item -->
                 <div class="setting-item">
@@ -4484,6 +4923,37 @@ class SettingsPage extends Page {
                 <!-- Dynamic Action Area -->
                 <div id="backup-actions-container">
                     <!-- Populated dynamically -->
+                </div>
+
+                ${storage.getItem('litefin:settings_per_user') === 'true'
+                ? `
+                <!-- Reset to Global Settings (Visible only when settings per user is enabled) -->
+                <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelResetUserToGlobal">${i18n.t('LabelResetUserToGlobal') || 'Reset Profile Settings to Global'}</span>
+                        <span class="setting-description" data-i18n="LabelResetUserToGlobalDescription">${i18n.t('LabelResetUserToGlobalDescription') || 'Discard all custom settings for this profile and copy the current global settings.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-secondary btn-small focusable" id="btn-reset-user-to-global" tabindex="0" data-focusable="true">
+                            ${i18n.t('ButtonResetToGlobal') || 'Reset to Global'}
+                        </button>
+                    </div>
+                </div>
+                `
+                : ''
+            }
+
+                <!-- Reset Section -->
+                <div class="setting-item" style="${storage.getItem('litefin:settings_per_user') === 'true' ? 'margin-top: 20px;' : 'margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
+                        <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-danger btn-small focusable" id="btn-reset-settings" tabindex="0" data-focusable="true">
+                            ${i18n.t('ButtonResetAll') || 'Reset All'}
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -4726,7 +5196,11 @@ class SettingsPage extends Page {
 
             // Gather all user configuration options from memory cache/localStorage
             for (const key of keys) {
-                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:')) {
+                if (
+                    !excludedKeys.includes(key) &&
+                    !key.startsWith('serverPlugin:available:') &&
+                    !key.startsWith('litefin:user_settings_')
+                ) {
                     const value = storage.getItem(key);
                     if (value !== null) {
                         backupData[key] = value;
@@ -4865,7 +5339,11 @@ class SettingsPage extends Page {
             ];
 
             for (const key of keys) {
-                if (!excludedKeys.includes(key) && !key.startsWith('serverPlugin:available:')) {
+                if (
+                    !excludedKeys.includes(key) &&
+                    !key.startsWith('serverPlugin:available:') &&
+                    !key.startsWith('litefin:user_settings_')
+                ) {
                     const value = storage.getItem(key);
                     if (value !== null) {
                         backupData[key] = value;
@@ -4994,10 +5472,15 @@ class SettingsPage extends Page {
             storage.removeItem('image_preset');
             storage.removeItem('image_details_preset');
 
-            // Clear all non-sensitive litefin: keys currently set in storage
+            // Clear all non-sensitive litefin: keys currently set in storage, preserving user settings objects
             const keysToClear = storage
                 .keys()
-                .filter((key) => key.startsWith('litefin:') && !excludedKeys.includes(key));
+                .filter(
+                    (key) =>
+                        key.startsWith('litefin:') &&
+                        !excludedKeys.includes(key) &&
+                        !key.startsWith('litefin:user_settings_')
+                );
             for (const key of keysToClear) {
                 storage.removeItem(key);
             }
@@ -5322,6 +5805,22 @@ class SettingsPage extends Page {
         } else if (this.activeTab === 'backup') {
             this._updateBackupStatusDisplay();
         }
+
+        // Initial visibility check for Details Page Title Style setting based on current layout setting
+        const currentDetailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        this._updateDetailsTitleStyleVisibility(currentDetailsLayout);
+    }
+
+    _updateDetailsTitleStyleVisibility(layout) {
+        const container = this.$('#details-title-style-container');
+        if (container) {
+            if (layout === 'backdropMinimal' || layout === 'backdropLeft') {
+                container.classList.add('hidden');
+            } else {
+                container.classList.remove('hidden');
+            }
+            focusManager.invalidateCache('settings-content');
+        }
     }
 
     _bindEvents() {
@@ -5353,6 +5852,19 @@ class SettingsPage extends Page {
         // ==========================================
         // BACKUP & RESTORE EVENTS
         // ==========================================
+        const settingsPerUserToggle = this.$('#toggle-settings-per-user');
+        if (settingsPerUserToggle) {
+            settingsPerUserToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('litefin:settings_per_user') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('litefin:settings_per_user', newValue.toString());
+                settingsPerUserToggle.classList.toggle('active', newValue);
+                log.info(`Settings Per User set to: ${newValue}`);
+                // Safely trigger a hard reload of the application to apply storage routing
+                this._triggerHardReload();
+            });
+        }
+
         const btnBackupNow = this.$('#btn-backup-now');
         if (btnBackupNow) {
             btnBackupNow.addEventListener('click', async () => {
@@ -5435,14 +5947,45 @@ class SettingsPage extends Page {
             });
         }
 
+        // ==========================================
+        // REMEMBER LAST ACTIVE USER TOGGLE (Account tab)
+        // ==========================================
+        // Controls whether the application automatically boots into the last active
+        // user profile, skipping the "Who's Watching" selection screen on app launch.
+        // Follows Apple Human Interface Guidelines for intuitive binary toggle controls.
+        const rememberLastUserToggle = this.$('#toggle-remember-last-user');
+        if (rememberLastUserToggle) {
+            rememberLastUserToggle.addEventListener('click', () => {
+                // Read current stored boolean status
+                const isCurrentlyActive = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
+                // Invert the setting state
+                const nextState = !isCurrentlyActive;
+
+                // Save preference to local storage
+                storage.setItem('pref:rememberLastActiveUser', nextState);
+
+                // Update UI toggle switch state smoothly with CSS transitions
+                rememberLastUserToggle.classList.toggle('active', nextState);
+            });
+        }
+
         // Toggle My Media
         const myMediaBtn = this.$('#toggle-my-media');
         if (myMediaBtn) {
             myMediaBtn.addEventListener('click', () => {
+                // Determine whether the My Media section is currently hidden
                 const isHidden = storage.getItem('pref:hideMyMedia') === 'true';
                 const newValue = !isHidden;
+
+                // Persist the updated preference value locally
                 storage.setItem('pref:hideMyMedia', newValue);
+
+                // Toggle active state classes to visual element transitions
                 myMediaBtn.classList.toggle('active', newValue);
+
+                // Clear the homepage pageCache so the updated layout loads on next visit
+                state.delete('home:pageCache');
             });
         }
 
@@ -5476,6 +6019,14 @@ class SettingsPage extends Page {
             });
         }
 
+        // Reset User Settings to Global Button
+        const resetUserToGlobalBtn = this.$('#btn-reset-user-to-global');
+        if (resetUserToGlobalBtn) {
+            resetUserToGlobalBtn.addEventListener('click', () => {
+                this._showResetUserToGlobalConfirmation();
+            });
+        }
+
         // Toggle Rounded Corners
         const roundedCornersBtn = this.$('#toggle-rounded-corners');
         if (roundedCornersBtn) {
@@ -5497,21 +6048,52 @@ class SettingsPage extends Page {
             });
         }
 
+        // =====================================================================
+        // TOGGLE HIDE GHOST MODE BUTTON
+        // =====================================================================
+        // Registers the click event handler for the Ghost Mode visibility toggle.
+        // Reading/writing via the browser storage abstraction ensures the details page
+        // can dynamically render actions based on the stored preference state.
+        // =====================================================================
+        const hideGhostModeBtn = this.$('#toggle-hide-ghost-mode');
+        if (hideGhostModeBtn) {
+            hideGhostModeBtn.addEventListener('click', () => {
+                // Fetch the current setting value from persistent storage, defaulting to false.
+                const isHidden = storage.getItem('pref:hideGhostMode') === 'true';
+                const newValue = !isHidden;
+
+                // Write updated state back to database storage.
+                storage.setItem('pref:hideGhostMode', newValue.toString());
+
+                // Instantly update the visual active state using the iOS-style slider transition.
+                hideGhostModeBtn.classList.toggle('active', newValue);
+                log.info(`Hide Ghost Mode Button set to: ${newValue}`);
+            });
+        }
+
         // ==========================================
         // TOGGLE FORCE EXPANDABLE POSTERS (MODERN)
         // ==========================================
         // Accesses the DOM toggle switch to let the user force every row in their
-        // homepage to use the Apple-inspired expanding poster card layout.
+        // homepage to use the expanding poster card layout.
         // Toggling this will persist the value to local storage so the Home Page layout
         // engine applies the configuration seamlessly when the user returns.
         const forceExpandablePostersBtn = this.$('#toggle-home-force-expandable-posters');
         if (forceExpandablePostersBtn) {
             forceExpandablePostersBtn.addEventListener('click', () => {
+                // Determine whether the expandable posters preference is currently active
                 const isEnabled = storage.getItem('pref:homeForceExpandablePosters') === 'true';
                 const newValue = !isEnabled;
+
+                // Save updated preference key into browser storage
                 storage.setItem('pref:homeForceExpandablePosters', newValue.toString());
+
+                // Toggle active style class for switch indicator animation
                 forceExpandablePostersBtn.classList.toggle('active', newValue);
                 log.info(`Force Expandable Posters on Home set to: ${newValue}`);
+
+                // Clear the homepage pageCache so the card layouts refresh instantly on navigation
+                state.delete('home:pageCache');
             });
         }
 
@@ -5522,7 +6104,6 @@ class SettingsPage extends Page {
         // Accesses the DOM element representing our toggle button for hiding unplayed
         // episode count badges on media cards. When interacted with, this event listener
         // will toggle the user's preference state, persist it to localStorage, and
-        // update the button's toggle class to provide instant Apple-style tactile feedback.
         const hideEpisodeCountsBtn = this.$('#toggle-hide-episode-counts');
 
         // Ensure the button is present in the current view layout before binding.
@@ -5540,6 +6121,18 @@ class SettingsPage extends Page {
 
                 // Log settings adjustment for user session diagnostics.
                 log.info(`Hide Episode Counts set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Show Media Source Counts (Versions)
+        const showMediaSourceCountsBtn = this.$('#toggle-show-media-source-counts');
+        if (showMediaSourceCountsBtn) {
+            showMediaSourceCountsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showMediaSourceCounts') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showMediaSourceCounts', newValue);
+                showMediaSourceCountsBtn.classList.toggle('active', newValue);
+                log.info(`Show Version Counts set to: ${newValue}`);
             });
         }
 
@@ -5575,8 +6168,8 @@ class SettingsPage extends Page {
         const useSeasonBadgesBtn = this.$('#toggle-use-season-badges');
         if (useSeasonBadgesBtn) {
             useSeasonBadgesBtn.addEventListener('click', () => {
-                // Determine whether season badges are currently enabled (defaults to true)
-                const isEnabled = storage.getItem('pref:useSeasonBadges') !== 'false';
+                // Determine whether season badges are currently enabled (defaults to false)
+                const isEnabled = storage.getItem('pref:useSeasonBadges') === 'true';
                 const newValue = !isEnabled;
 
                 // Save updated preference key
@@ -5633,11 +6226,19 @@ class SettingsPage extends Page {
         const hideLiveTvBtn = this.$('#toggle-hide-livetv-home');
         if (hideLiveTvBtn) {
             hideLiveTvBtn.addEventListener('click', () => {
+                // Determine whether Live TV is currently hidden in My Media
                 const isHidden = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
                 const newValue = !isHidden;
+
+                // Save updated preference key into local storage
                 storage.setItem('pref:hideLiveTvInMyMedia', newValue);
+
+                // Toggle active style class for visual switch transitions
                 hideLiveTvBtn.classList.toggle('active', newValue);
                 log.info(`Hide Live TV in My Media set to: ${newValue}`);
+
+                // Clear the homepage pageCache so the updated layout loads on next visit
+                state.delete('home:pageCache');
             });
         }
 
@@ -5669,9 +6270,14 @@ class SettingsPage extends Page {
         const mergeResumeNextUpBtn = this.$('#toggle-merge-resume-nextup');
         if (mergeResumeNextUpBtn) {
             mergeResumeNextUpBtn.addEventListener('click', () => {
+                // Determine whether we merge resume items and next up items
                 const isEnabled = storage.getItem('pref:mergeResumeNextUp') === 'true';
                 const newValue = !isEnabled;
+
+                // Save updated preference key into browser storage
                 storage.setItem('pref:mergeResumeNextUp', newValue);
+
+                // Toggle active style class for switch indicator animation
                 mergeResumeNextUpBtn.classList.toggle('active', newValue);
                 log.info(`Merge Resume and Next Up set to: ${newValue}`);
 
@@ -5681,6 +6287,9 @@ class SettingsPage extends Page {
 
                 // Invalidate focus cache to keep navigation stable
                 focusManager.invalidateCache('settings-content');
+
+                // Clear the homepage pageCache so the rows layout can be re-rendered with the new merged structure
+                state.delete('home:pageCache');
             });
         }
 
@@ -5704,9 +6313,14 @@ class SettingsPage extends Page {
         const heroCarouselBtn = this.$('#toggle-hero-carousel');
         if (heroCarouselBtn) {
             heroCarouselBtn.addEventListener('click', () => {
+                // Determine whether the Hero Carousel is currently active
                 const isEnabled = storage.getItem('pref:heroCarousel') !== 'false';
                 const newValue = !isEnabled;
+
+                // Save updated preference key into browser storage
                 storage.setItem('pref:heroCarousel', newValue.toString());
+
+                // Toggle active style class for switch indicator animation
                 heroCarouselBtn.classList.toggle('active', newValue);
 
                 // =====================================================================
@@ -5750,6 +6364,9 @@ class SettingsPage extends Page {
                 // target issues on spatial navigators when toggles change the layout height.
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
+
+                // Clear the homepage pageCache so the hero section responds immediately
+                state.delete('home:pageCache');
             });
         }
 
@@ -5770,6 +6387,30 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getDisableCardScaling();
                 layoutManager.setDisableCardScaling(newValue);
                 disableScalingBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Use Litefin Plugin for Home Libraries
+        const useBatchPluginBtn = this.$('#toggle-use-batch-latest-plugin');
+        if (useBatchPluginBtn) {
+            useBatchPluginBtn.addEventListener('click', () => {
+                const isCurrentlyEnabled = storage.getItem('pref:useBatchLatestPlugin') !== 'false';
+                const newValue = !isCurrentlyEnabled;
+                storage.setItem('pref:useBatchLatestPlugin', newValue ? 'true' : 'false');
+                useBatchPluginBtn.classList.toggle('active', newValue);
+                log.info(`Use Litefin Plugin for Home Libraries set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Use Items API for Search
+        const useItemsForSearchBtn = this.$('#toggle-use-items-for-search');
+        if (useItemsForSearchBtn) {
+            useItemsForSearchBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:useItemsForSearch') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:useItemsForSearch', newValue.toString());
+                useItemsForSearchBtn.classList.toggle('active', newValue);
+                log.info(`Use Items API for Search set to: ${newValue}`);
             });
         }
 
@@ -5885,17 +6526,37 @@ class SettingsPage extends Page {
                 playThemeSongsBtn.classList.toggle('active', newValue);
                 log.info(`Play Theme Songs background audio set to: ${newValue}`);
 
-                // Toggle visibility of the companion volume control element.
-                // If the overall theme song playback is disabled, the volume setting
-                // is redundant and is hidden visually from the Settings page.
+                // Toggle visibility of the companion settings (volume and play-once).
+                // If the overall theme song playback is disabled, these sub-settings
+                // are redundant and hidden visually from the Settings page.
                 const volumeContainer = this.$('#theme-song-volume-item');
+                const onceContainer = this.$('#theme-song-once-item');
                 if (volumeContainer) {
                     volumeContainer.style.display = newValue ? '' : 'none';
-
-                    // Invalidate settings content focus mapping cache so navigation
-                    // remains stable on Samsung/LG TV hardware.
-                    focusManager.invalidateCache('settings-content');
                 }
+                if (onceContainer) {
+                    onceContainer.style.display = newValue ? '' : 'none';
+                }
+
+                // Invalidate settings content focus mapping cache so navigation
+                // remains stable on Samsung/LG TV hardware.
+                focusManager.invalidateCache('settings-content');
+            });
+        }
+
+        const playThemeSongsOnceBtn = this.$('#toggle-play-theme-songs-once');
+        if (playThemeSongsOnceBtn) {
+            playThemeSongsOnceBtn.addEventListener('click', () => {
+                // Read current setting state (defaults to true / play once)
+                const isEnabled = storage.getItem('pref:playThemeSongsOnce') !== 'false';
+                const newValue = !isEnabled;
+
+                // Save setting value into persistent browser storage
+                storage.setItem('pref:playThemeSongsOnce', newValue ? 'true' : 'false');
+
+                // Update switch element visual presentation
+                playThemeSongsOnceBtn.classList.toggle('active', newValue);
+                log.info(`Play Theme Songs Once set to: ${newValue}`);
             });
         }
 
@@ -5951,11 +6612,19 @@ class SettingsPage extends Page {
         const heroCarouselMdbBtn = this.$('#toggle-hero-carousel-mdb');
         if (heroCarouselMdbBtn) {
             heroCarouselMdbBtn.addEventListener('click', () => {
+                // Determine whether the Hero Carousel has MDB ratings enabled
                 const isEnabled = storage.getItem('pref:heroCarouselMdbList') !== 'false';
                 const newValue = !isEnabled;
+
+                // Save updated preference key into browser storage
                 storage.setItem('pref:heroCarouselMdbList', newValue.toString());
+
+                // Toggle active style class for switch indicator animation
                 heroCarouselMdbBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel MDBList set to: ${newValue}`);
+
+                // Clear the homepage pageCache so ratings populate correctly on next visit
+                state.delete('home:pageCache');
             });
         }
 
@@ -5978,6 +6647,9 @@ class SettingsPage extends Page {
                 // Toggle active state classes to visual elements.
                 heroCarouselIgnoreWatchedBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Ignore Watched set to: ${newValue}`);
+
+                // Clear the homepage pageCache to refresh randomized hero pool selections
+                state.delete('home:pageCache');
             });
         }
 
@@ -5997,9 +6669,14 @@ class SettingsPage extends Page {
         const hidePlayedLatestBtn = this.$('#toggle-hide-played-latest');
         if (hidePlayedLatestBtn) {
             hidePlayedLatestBtn.addEventListener('click', async () => {
+                // Determine whether to filter out played items from the latest list
                 const isHidden = storage.getItem('pref:hidePlayedInLatest') === 'true';
                 const newValue = !isHidden;
+
+                // Save preference locally
                 storage.setItem('pref:hidePlayedInLatest', newValue);
+
+                // Toggle active class on toggle switch element
                 hidePlayedLatestBtn.classList.toggle('active', newValue);
 
                 // Sync preference with Jellyfin server so it's applied securely
@@ -6013,7 +6690,108 @@ class SettingsPage extends Page {
                 } catch (e) {
                     log.error('Failed to sync HidePlayedInLatest to server', e);
                 }
+
+                // Clear the homepage pageCache so latest items are refreshed instantly on next visit
+                state.delete('home:pageCache');
             });
+        }
+
+        // Helper function to update MAC address input container visibility
+        const updateWolMacVisibility = () => {
+            const wolStartup = storage.getItem('pref:enableWolOnStartup') === 'true';
+            const wolTimeout = storage.getItem('pref:enableWolOnTimeout') === 'true';
+            const wolScan = storage.getItem('pref:enableWolOnServerScan') === 'true';
+            const macContainer = this.$('#wol-mac-container');
+            if (macContainer) {
+                macContainer.style.display = (wolStartup || wolTimeout || wolScan) ? '' : 'none';
+            }
+            focusManager.invalidateCache('settings-content');
+        };
+
+        const wolToggleBtn = this.$('#toggle-wol-on-startup');
+        if (wolToggleBtn) {
+            wolToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolOnStartup') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolOnStartup', newValue ? 'true' : 'false');
+                storage.flush();
+                wolToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        const wolTimeoutToggleBtn = this.$('#toggle-wol-on-timeout');
+        if (wolTimeoutToggleBtn) {
+            wolTimeoutToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolOnTimeout') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolOnTimeout', newValue ? 'true' : 'false');
+                storage.flush();
+                wolTimeoutToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        const wolScanToggleBtn = this.$('#toggle-wol-on-scan');
+        if (wolScanToggleBtn) {
+            wolScanToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolOnServerScan') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolOnServerScan', newValue ? 'true' : 'false');
+                storage.flush();
+                wolScanToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        // =====================================================================
+        // WOL SERVER MAC ADDRESS TEXT INPUT
+        // =====================================================================
+        // Registers change, input, and blur listeners to capture and save the
+        // server MAC address. Automatically formats raw hex digits into standard
+        // colon-delimited MAC address format (00:11:22:33:44:55) for TV remote ease.
+        // =====================================================================
+        const wolMacInput = this.$('#input-wol-mac-address');
+        if (wolMacInput) {
+            const formatMac = (val) => {
+                const hexOnly = val.replace(/[^0-9a-fA-F]/g, '').toUpperCase().slice(0, 12);
+                const pairs = hexOnly.match(/.{1,2}/g);
+                return pairs ? pairs.join(':') : hexOnly;
+            };
+
+            const saveWolMac = (forceFormat = false) => {
+                let currentVal = wolMacInput.value.trim();
+                const hexOnly = currentVal.replace(/[^0-9a-fA-F]/g, '');
+
+                // Format automatically if full 12 hex digits are entered or on blur/change
+                if (forceFormat || hexOnly.length === 12) {
+                    const formatted = formatMac(currentVal);
+                    if (formatted) {
+                        currentVal = formatted;
+                        wolMacInput.value = formatted;
+                    }
+                }
+
+                storage.setItem('pref:wolMacAddress', currentVal);
+                storage.flush();
+                log.debug(`Saved WOL MAC Address: ${currentVal}`);
+            };
+
+            wolMacInput.addEventListener('input', () => saveWolMac(false));
+            wolMacInput.addEventListener('change', () => saveWolMac(true));
+            wolMacInput.addEventListener('blur', () => saveWolMac(true));
         }
 
         // Toggle Auto-play Next Episode
@@ -6099,6 +6877,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle OK Shows OSD Only (don't execute the focused action, e.g.
+        // Play/Pause, on the OK press that wakes a hidden OSD)
+        const okShowOsdOnlyBtn = this.$('#toggle-ok-show-osd-only');
+        if (okShowOsdOnlyBtn) {
+            okShowOsdOnlyBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('okShowOsdOnly');
+                const newValue = !currentValue;
+                PlayerSettings.set('okShowOsdOnly', newValue);
+                okShowOsdOnlyBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Keep Focus On Subtitle Offset
         const keepFocusOffsetBtn = this.$('#toggle-keep-focus-subtitle-offset');
         if (keepFocusOffsetBtn) {
@@ -6111,6 +6901,23 @@ class SettingsPage extends Page {
         }
 
         // Toggle ASS Font Override
+        // Toggle ASS Style Modifications master switch
+        const assStyleModsBtn = this.$('#toggle-enable-ass-style-mods');
+        if (assStyleModsBtn) {
+            assStyleModsBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableAssStyleModifications') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('enableAssStyleModifications', newValue);
+                assStyleModsBtn.classList.toggle('active', newValue);
+
+                // Update visibility of the sub-settings container
+                const subsContainer = this.$('#ass-style-mods-subsettings');
+                if (subsContainer) subsContainer.style.display = newValue ? '' : 'none';
+
+                focusManager.invalidateCache();
+            });
+        }
+
         const assFontOverrideBtn = this.$('#toggle-subtitle-override-ass-fonts');
         if (assFontOverrideBtn) {
             assFontOverrideBtn.addEventListener('click', () => {
@@ -6512,6 +7319,7 @@ class SettingsPage extends Page {
             'subtitle-text-opacity': 'subtitleTextOpacity',
             'subtitle-text-opacity-hdr': 'subtitleTextOpacityHdr',
             'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
+            'subtitle-border-opacity': 'subtitleBorderOpacity',
             'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
             'subtitle-shadow-blur': 'subtitleDropShadowBlur',
             'subtitle-custom-pos': 'subtitleVerticalPositionCustom',
@@ -6522,7 +7330,8 @@ class SettingsPage extends Page {
             'subtitle-letter-spacing': 'subtitleLetterSpacing',
             'subtitle-bottom-offset': 'subtitleBottomOffset',
             'subtitle-custom-size': 'subtitleSizeCustomValue',
-            'osd-track-menu-bg-opacity': 'osdTrackMenuBgOpacity'
+            'osd-track-menu-bg-opacity': 'osdTrackMenuBgOpacity',
+            'osd-gradient-opacity': 'osdGradientOpacity'
         };
 
         this.$$('.setting-slider').forEach((slider) => {
@@ -6950,6 +7759,8 @@ class SettingsPage extends Page {
             'truehd-force-select': { type: 'player', key: 'enableTrueHd' },
             /* Transcode target codec — used by all three device profiles (Tizen, WebOS, Web) */
             'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
+            /* Maximum audio channels — used by all three device profiles (Tizen, WebOS, Web) */
+            'allowed-audio-channels-select': { type: 'player', key: 'allowedAudioChannels' },
             /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
             'eac3-force-select': { type: 'player', key: 'enableEac3' },
             /* MP2 force-state override — corrects false positives or forces transcoding to avoid stalls */
@@ -6968,6 +7779,7 @@ class SettingsPage extends Page {
             'next-up-dialog-trigger-select': { type: 'player', key: 'nextUpTriggerMode' },
 
             // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
+            'segment-source-select': { type: 'player', key: 'skipSegmentSource' },
             'segment-action-intro-select': { type: 'player', key: 'skipActionIntro' },
             'segment-action-outro-select': { type: 'player', key: 'skipActionOutro' },
             'segment-action-recap-select': { type: 'player', key: 'skipActionRecap' },
@@ -6986,10 +7798,12 @@ class SettingsPage extends Page {
             'html5-segment-length-select': { type: 'player', key: 'html5SegmentLength' },
 
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
+            'home-rows-limit-select': { key: 'pref:homeRowsLimit', type: 'local', triggerEvent: true },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
             'details-layout-select': { key: 'pref:detailsLayout', type: 'local' },
+            'episode-layout-select': { key: 'pref:episodeLayout', type: 'local' },
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
@@ -7008,7 +7822,11 @@ class SettingsPage extends Page {
             'osd-unfocused-button-style-select': { key: 'litefin:osdUnfocusedButtonStyle', type: 'local' },
             'osd-seekbar-thumb-color-select': { key: 'litefin:osdSeekBarThumbColor', type: 'local' },
             'osd-seekbar-progress-color-select': { key: 'litefin:osdSeekBarProgressColor', type: 'local' },
-            'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' }
+            'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' },
+            'collapsed-sidebar-color-select': { key: 'pref:collapsedSidebarColor', type: 'local', triggerEvent: true },
+            'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true },
+            'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true },
+            'sidebar-items-align-select': { key: 'pref:sidebarItemsAlign', type: 'local', triggerEvent: true }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -7124,6 +7942,22 @@ class SettingsPage extends Page {
                         } else if (id === 'sidebar-mode-select') {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
+                            document.body.classList.toggle('sidebar-mode-collapsed', newValue === 'collapsed');
+
+                            if (newValue === 'collapsed') {
+                                // Enable Show Collapsed Library Icons
+                                storage.setItem('pref:showCollapsedLibraryIcons', 'true');
+                                const collIconsToggle = this.$('#toggle-show-collapsed-library-icons');
+                                if (collIconsToggle) collIconsToggle.classList.add('active');
+                                eventBus.emit('prefChanged:showCollapsedLibraryIcons', true);
+
+                                // Enable Hide Sidebar Library Header
+                                storage.setItem('pref:hideSidebarLibraryHeader', 'true');
+                                const hideHeaderToggle = this.$('#toggle-hide-sidebar-library-header');
+                                if (hideHeaderToggle) hideHeaderToggle.classList.add('active');
+                                eventBus.emit('prefChanged:hideSidebarLibraryHeader', true);
+                            }
+
                             focusManager.invalidateCache('sidebar');
                             focusManager.invalidateCache('home');
                         } else if (id === 'icon-style-select') {
@@ -7138,6 +7972,25 @@ class SettingsPage extends Page {
                             this._triggerHardReload();
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
+
+                            // Invalidate the homepage page cache if settings that affect the home page contents change.
+                            // This ensures the next navigation to the home page has fresh content loaded.
+                            const homepageLocalKeys = [
+                                'pref:nextUpMaxDays',
+                                'pref:heroCarouselStyle',
+                                'pref:heroCarouselCount',
+                                'pref:heroCarouselInterval'
+                            ];
+                            if (homepageLocalKeys.includes(settingConfig.key)) {
+                                log.info(
+                                    `Invalidating home page cache due to local setting change: ${settingConfig.key}`
+                                );
+                                state.delete('home:pageCache');
+                            }
+
+                            if (settingConfig.key === 'pref:detailsLayout') {
+                                this._updateDetailsTitleStyleVisibility(newValue);
+                            }
 
                             if (settingConfig.triggerEvent) {
                                 eventBus.emit(settingConfig.key, newValue);
@@ -7159,6 +8012,14 @@ class SettingsPage extends Page {
                                 if (libraryThumbContainer) {
                                     libraryThumbContainer.style.display = newValue === 'static' ? '' : 'none';
                                     focusManager.invalidateCache('settings-content');
+                                }
+
+                                // Clear cached thumb URLs so stale images don't linger
+                                storage.clearByPrefix('libThumb:');
+                                const pageCache = state.get('home:pageCache');
+                                if (pageCache && pageCache.thumbUrls) {
+                                    pageCache.thumbUrls = {};
+                                    state.set('home:pageCache', pageCache);
                                 }
                             }
 
@@ -7283,7 +8144,14 @@ class SettingsPage extends Page {
                             if (id === 'subtitle-shadow-select') {
                                 const borderWidthContainer = document.getElementById('subtitle-border-width-container');
                                 if (borderWidthContainer) {
-                                    borderWidthContainer.style.display = newValue === 'border' ? '' : 'none';
+                                    borderWidthContainer.style.display =
+                                        newValue === 'border' || newValue === 'uniform_border' ? '' : 'none';
+                                }
+
+                                const borderOpacityContainer = document.getElementById('subtitle-border-opacity-container');
+                                if (borderOpacityContainer) {
+                                    borderOpacityContainer.style.display =
+                                        newValue === 'border' || newValue === 'uniform_border' ? '' : 'none';
                                 }
 
                                 const opacityContainer = document.getElementById('subtitle-shadow-opacity-container');
@@ -7414,6 +8282,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Switch for OSD HDR Darker White
+        const osdHdrDarkerWhiteToggle = this.$('#osd-hdr-darker-white-toggle');
+        if (osdHdrDarkerWhiteToggle) {
+            osdHdrDarkerWhiteToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHdrDarkerWhite') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHdrDarkerWhite', newValue);
+                osdHdrDarkerWhiteToggle.classList.toggle('active', newValue);
+                log.info(`OSD HDR Darker White set to: ${newValue}`);
+            });
+        }
+
         // Toggle Switch for Confirm App Exit
         const confirmExitToggle = this.$('#toggle-confirm-exit');
         if (confirmExitToggle) {
@@ -7435,19 +8315,6 @@ class SettingsPage extends Page {
                 storage.setItem('pref:loopOverflowingText', newValue.toString());
                 loopOverflowingTextToggle.classList.toggle('active', newValue);
                 log.info(`Loop Overflowing Text set to: ${newValue}`);
-            });
-        }
-
-        // Toggle Switch for Sidebar Clickable Logo
-        const logoSettingsToggle = this.$('#toggle-sidebar-logo-settings');
-        if (logoSettingsToggle) {
-            logoSettingsToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:logoSettings') === 'true';
-                const newValue = !currentValue;
-                storage.setItem('pref:logoSettings', newValue.toString());
-                logoSettingsToggle.classList.toggle('active', newValue);
-                eventBus.emit('prefChanged:logoSettings', newValue);
-                log.info(`Clickable Logo set to: ${newValue}`);
             });
         }
 
@@ -7530,19 +8397,6 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Transparent Collapsed Sidebar
-        const transparentCollapsedSidebarToggle = this.$('#toggle-transparent-collapsed-sidebar');
-        if (transparentCollapsedSidebarToggle) {
-            transparentCollapsedSidebarToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
-                const newValue = !currentValue;
-                storage.setItem('pref:transparentCollapsedSidebar', newValue.toString());
-                transparentCollapsedSidebarToggle.classList.toggle('active', newValue);
-                eventBus.emit('prefChanged:transparentCollapsedSidebar', newValue);
-                log.info(`Transparent Collapsed Sidebar set to: ${newValue}`);
-            });
-        }
-
         // Toggle Switch for Hide Sidebar Library Header
         const hideSidebarLibraryHeaderToggle = this.$('#toggle-hide-sidebar-library-header');
         if (hideSidebarLibraryHeaderToggle) {
@@ -7604,6 +8458,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Switch for Playback Screen Lock
+        const enableScreenLockToggle = this.$('#toggle-enable-screen-lock');
+        if (enableScreenLockToggle) {
+            enableScreenLockToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableScreenLock');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableScreenLock', newValue);
+                enableScreenLockToggle.classList.toggle('active', newValue);
+                log.info(`Playback Screen Lock set to: ${newValue}`);
+            });
+        }
+
         // Toggle Switch for Scroll Navigation
         const hoverScrollNavToggle = this.$('#toggle-hover-scroll-nav');
         if (hoverScrollNavToggle) {
@@ -7660,7 +8526,7 @@ class SettingsPage extends Page {
         }
 
         // =====================================================================
-        // Apple HIG Guidelines: Tactile Toggle Event Handling - Secondary Title Color
+        // Tactile Toggle Event Handling - Secondary Title Color
         // =====================================================================
         // Registers click handler for the secondary details title color switch.
         // Reading current state from localStorage key, toggles value, and persists
@@ -7670,8 +8536,8 @@ class SettingsPage extends Page {
         const secondaryTitleColorToggle = this.$('#toggle-secondary-title-color');
         if (secondaryTitleColorToggle) {
             secondaryTitleColorToggle.addEventListener('click', () => {
-                // Read from local storage (defaults to false)
-                const currentValue = storage.getItem('pref:secondaryTitleSecondaryColor') === 'true';
+                // Read from local storage (defaults to true)
+                const currentValue = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
                 // Toggle state
                 const newValue = !currentValue;
 
@@ -8429,6 +9295,85 @@ class SettingsPage extends Page {
         overlay.onclick = (e) => {
             if (e.target === overlay) closeDialog();
         };
+    }
+
+    /**
+     * Show a confirmation dialog before resetting current profile settings to global.
+     * @private
+     */
+    _showResetUserToGlobalConfirmation() {
+        const prevFocus = focusManager.getFocused();
+        const prevSection = focusManager.getActiveSection();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'reset-user-to-global-dialog';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        overlay.innerHTML = `
+            <div class="settings-modal exit-dialog-modal" role="dialog" aria-modal="true" aria-label="${i18n.t('LabelResetUserToGlobal')}">
+                <div class="modal-header">
+                    <h2>${i18n.t('LabelResetUserToGlobal')}</h2>
+                </div>
+                <div class="modal-content" style="padding: 0 24px 24px; color: var(--text-color); font-size: 1.1rem; text-align: center;">
+                    ${i18n.t('ResetUserToGlobalWarning')}
+                </div>
+                <div class="modal-actions" id="reset-user-dialog-actions" style="margin-top: 0; justify-content: center; gap: 16px;">
+                    <button class="modal-action-btn" id="reset-user-dialog-no" tabindex="0">
+                        ${i18n.t('ButtonCancel') || 'Cancel'}
+                    </button>
+                    <button class="modal-action-btn danger-btn" id="reset-user-dialog-yes" tabindex="0">
+                        ${i18n.t('ButtonResetToGlobal') || 'Reset to Global'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const closeDialog = () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 300);
+            focusManager.unregister('reset-user-dialog-actions');
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        focusManager.register('reset-user-dialog-actions', overlay.querySelector('#reset-user-dialog-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first' // Focus Cancel safely
+        });
+
+        focusManager.setActiveSection('reset-user-dialog-actions');
+
+        overlay.querySelector('#reset-user-dialog-no').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+        };
+
+        overlay.querySelector('#reset-user-dialog-yes').onclick = (e) => {
+            e.stopPropagation();
+            log.info('User confirmed reset profile settings to global.');
+            this._handleResetUserToGlobal();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeDialog();
+        };
+    }
+
+    /**
+     * Reset the active user settings back to global preferences and hard reload.
+     * @private
+     */
+    _handleResetUserToGlobal() {
+        const activeUserId = storage.getItem('litefin:activeUserId');
+        if (activeUserId) {
+            storage.removeItem(`litefin:user_settings_${activeUserId}`);
+            storage.setItem('litefin:skip_profiles_once', 'true');
+            storage.flush();
+            this._triggerHardReload();
+        }
     }
 
     /**

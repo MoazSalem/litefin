@@ -395,15 +395,13 @@ export function buildJellyfinProfile(options = {}) {
         maxBitrate = 40000000;
     }
 
-    // Keep as integer — the Jellyfin server TranscodingProfileDto schema expects
-    // MaxAudioChannels, MinSegments and SegmentLength to be integers, not strings.
-    // Sending a string (e.g. "6") triggers a JSON-schema validation 400 Bad Request
-    // on strict server versions.
-    const maxAudioChannels = caps.maxAudioChannels;
+    // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
+    const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
+    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
-    const maxAudioChannelsStr = String(caps.maxAudioChannels);
+    const maxAudioChannelsStr = String(maxAudioChannels);
 
     // -------------------------------------------------------------------------
     // fMP4 HLS preference resolution
@@ -504,7 +502,10 @@ export function buildJellyfinProfile(options = {}) {
     // =========================================================================
     const directPlayProfiles = [];
 
-    if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
+    // Exclude DirectPlay profiles for modes that force server-side processing.
+    // transcodeVideo / transcodeAudio both bypass direct play entirely.
+    if (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') {
         // Standard web containers — available on both backends
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
@@ -628,10 +629,31 @@ export function buildJellyfinProfile(options = {}) {
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        // Video copy for quality, audio transcoded via transAudioCodecs above.
-        // AllowAudioStreamCopy=false (set in _getPlaybackInfo remux case) ensures
-        // the server transcodes audio even when the source codec is in the list.
+        // -----------------------------------------------------------------------
+        // Change Container / Remux:
+        //   Video → copy verbatim ('copy' tells Jellyfin to stream video as-is)
+        //   Audio → transcoded to preferred codec via transAudioCodecsArr above
+        // -----------------------------------------------------------------------
         transVideoCodecs = 'copy';
+    } else if (playbackMode === 'transcodeAudio') {
+        // -----------------------------------------------------------------------
+        // Transcode Audio Only:
+        //   Video → copy verbatim (same as remux — 'copy' passes video through)
+        //   Audio → always re-encoded to the preferred transcode target codec
+        // -----------------------------------------------------------------------
+        transVideoCodecs = 'copy';
+    } else if (playbackMode === 'transcodeVideo') {
+        // -----------------------------------------------------------------------
+        // Transcode Video Only:
+        //   Video → always re-encoded to H264 (clear VideoCodec to force encode)
+        //   Audio → copy verbatim (all audio codecs declared in AudioCodec so
+        //           the server selects whichever the source has and copies it)
+        // -----------------------------------------------------------------------
+        //
+        // NOTE: We intentionally do NOT set 'copy' for transVideoCodecs because
+        // that would tell Jellyfin to copy the video. Instead we use a minimal
+        // list ('h264') so the server knows it must re-encode everything else.
+        transVideoCodecs = 'h264'; // Force video re-encode to H264
     }
 
     const transcodingProfiles = [];

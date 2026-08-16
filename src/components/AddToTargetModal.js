@@ -208,7 +208,7 @@ class AddToTargetModal {
                     IncludeItemTypes: cfg.itemType,
                     Recursive: true,
                     Limit: 200,
-                    Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+                    Fields: ''
                 });
                 this._targets = response.Items || [];
             } catch (e) {

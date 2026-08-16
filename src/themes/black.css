@@ -12,7 +12,7 @@
     --jf-overlay-bg: rgba(0, 0, 0, 0.95);
 
     --jf-text-primary: #ffffff;
-    --jf-text-secondary: #999999;
+    --jf-text-secondary: rgba(255, 255, 255, 0.8);
     --jf-text-tertiary: #666666;
     --jf-text-disabled: #444444;
 

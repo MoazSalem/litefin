@@ -23,12 +23,14 @@
      * CSS smooth-scroll conflicts with JS ScrollTo and causes laggy behavior. */
     scroll-behavior: auto;
 
-    /* GPU acceleration hints for smooth scrolling on TV devices */
+    /* NOTE: transform: translateZ(0) and will-change: scroll-position were
+     * intentionally removed. On Tizen 9.0's GPU compositor, they force a
+     * compositor layer allocation for the entire scroll container that must
+     * be invalidated and recreated on every layout change (card append/prepend,
+     * spacer resize). This causes more GPU memory pressure and repainting than
+     * the default non-layerized scroll path. Tizen 9.0's browser handles
+     * overflow-y: auto scrolling efficiently without these hints. */
     -webkit-overflow-scrolling: touch;
-    transform: translateZ(0);
-    will-change: scroll-position;
-    
-    display: block; /* Standard block layout eliminates Tizen 5.0 collapsing bugs */
 }
 
 /* --- Header Section --- */
@@ -536,13 +538,6 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
        5 * 320px + 4 * 30px = 1600 + 120 = 1720px exactly. */
     margin-bottom: 30px;
     
-    /* Premium Apple-style spring transition for focus 'pop' */
-    /* Premium Apple-style spring transition for focus 'pop'
-       Mandatory -webkit- prefixing for Chromium 32 compatibility. */
-    -webkit-transition: -webkit-transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
-    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
-
-    
     /* Isolate each card's layout/paint for smoother focus transitions */
     contain: layout style paint;
 }
@@ -652,7 +647,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     margin-right: 10px !important;
     margin-left: 10px !important;
     margin-bottom: 25px !important;
-    border-radius: 20px !important; /* Deeper, more premium Apple-style curve */
+    border-radius: 20px !important;
     -webkit-border-radius: 20px !important;
     background-clip: padding-box !important;
 }
@@ -731,7 +726,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     background: rgba(255, 255, 255, 0.15) !important;
     -webkit-transform: scale(1.02);
     transform: scale(1.02); /* Slight pop to show selection */
-    box-shadow: 0 0 0 3px var(--jf-accent) !important; /* BOLD OUTER Focus Ring */
+    
     z-index: 10;
 }
 
@@ -967,7 +962,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 .media-card:focus,
 .media-card.focused,
 .media-card:hover {
-    transform: scale(1.05); /* Slightly less aggressive scale for larger cards to avoid pixelation */
+    transform: scale(1.02); /* Slightly less aggressive scale for larger cards to avoid pixelation */
     z-index: 10;
 }
 

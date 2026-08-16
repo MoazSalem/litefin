@@ -5,7 +5,7 @@
  * Triple-build system supporting:
  * - Native build (Tizen 6.0+): No transpilation, pure ES6+
  * - Modern build (Tizen 5.0+): Transpiled for Chromium 69
- * - Legacy build (Tizen 3.0+): Transpiled for Chromium 47 (ES5)
+ * - Legacy build (Tizen 3.0+): Transpiled for Chromium 38 (ES5)
  * ============================================================================
  */
 
@@ -32,7 +32,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 /**
  * Factory function to generate Webpack plugins required for different tiers.
  * Supports customizing the application icon source.
- * 
+ *
  * @param {string} tier - The build tier ('modern' or 'legacy')
  * @param {object} [options] - Additional options to configure build output
  * @param {string} [options.iconSrc] - The source path of the app icon (defaults to 'assets/icon.png')
@@ -40,7 +40,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 function getPlugins(tier, options = {}) {
     // Determine the build tier, falling back to 'modern' by default
     const buildTier = tier || 'modern';
-    
+
     // Retrieve the source icon path, defaulting to standard icon.png in assets/
     const iconSrc = options.iconSrc || 'assets/icon.png';
 
@@ -67,10 +67,15 @@ function getPlugins(tier, options = {}) {
          * will silently fall through to the HTTP scan on WebOS.
          * The file is a no-op on non-WebOS platforms so safe to include in all builds.
          */
-        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
+        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' },
+        // Copy early boot diagnostic backup logger for all builds
+        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' }
     ];
 
-    if (buildTier === 'modern') {
+    // Include libass-wasm worker assets for both modern and legacy build tiers.
+    // Legacy tier includes the WASM workers for newer devices running legacy builds,
+    // with runtime WebAssembly feature gating falling back to libjass on unsupported hardware.
+    if (buildTier === 'modern' || buildTier === 'legacy') {
         patterns.push(
             {
                 from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.js',
@@ -219,7 +224,7 @@ const normalConfig = {
         hints: 'warning'
     },
     // No source maps — production build
-    entry: './src/index.js',
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
 
     output: {
         path: path.resolve(__dirname, 'dist/normal'),
@@ -235,11 +240,12 @@ const normalConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -276,17 +282,23 @@ const normalConfig = {
 };
 
 // ============================================================================
-// Legacy build - Tizen 3.0+ / webOS 4.0+ (Chromium 47, ES5)
+// Legacy build - Tizen 3.0+ / webOS 4.0+ (Chromium 38, true ES5)
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
+    target: ['web', 'es5'],
     mode: 'production',
     performance: {
         maxAssetSize: 4000000,
         maxEntrypointSize: 4000000,
         hints: 'warning'
     },
-    entry: ['url-search-params-polyfill', './src/index.js'],
+    entry: [
+        'url-search-params-polyfill',
+        './src/utils/DomPolyfills.js',
+        './src/utils/AssJsPolyfills.js',
+        './src/index.js'
+    ],
 
     output: {
         path: path.resolve(__dirname, 'dist/legacy'),
@@ -309,16 +321,17 @@ const legacyConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
                                 {
-                                    targets: { chrome: '47' },
+                                    targets: { chrome: '38' },
                                     useBuiltIns: 'usage',
                                     corejs: 3
                                 }
@@ -345,14 +358,8 @@ const legacyConfig = {
         ]
     },
 
-    // Legacy tier: LibassWasmRenderer is stubbed — no WASM workers are shipped.
-    plugins: [
-        ...getPlugins('legacy'),
-        new webpack.NormalModuleReplacementPlugin(
-            /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
-            path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
-        )
-    ]
+    // Legacy tier: Ships full LibassWasmRenderer and WASM workers with runtime feature detection.
+    plugins: getPlugins('legacy')
 };
 
 // ============================================================================
@@ -385,6 +392,8 @@ const ultraLegacyConfig = {
         'core-js/es/array/from', // Array.from — spread/iterator polyfill
         'whatwg-fetch', // fetch() for Tizen 2.x / WebOS 1.x
         'url-search-params-polyfill', // URLSearchParams for Chrome 32
+        './src/utils/DomPolyfills.js',
+        './src/utils/AssJsPolyfills.js',
         './src/index.js'
     ],
 
@@ -410,10 +419,11 @@ const ultraLegacyConfig = {
         rules: [
             {
                 test: /\.m?js$/,
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',
@@ -529,7 +539,7 @@ const normalOblongConfig = {
         hints: 'warning'
     },
     // The main app entry point
-    entry: './src/index.js',
+    entry: ['./src/utils/DomPolyfills.js', './src/utils/AssJsPolyfills.js', './src/index.js'],
 
     output: {
         // Output to the specific normal-oblong folder in dist
@@ -550,11 +560,12 @@ const normalOblongConfig = {
         rules: [
             {
                 // Transpile JS using Babel for Chromium 63
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
+                        compact: true,
                         presets: [
                             [
                                 '@babel/preset-env',

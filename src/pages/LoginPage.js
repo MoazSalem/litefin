@@ -8,11 +8,19 @@
  */
 
 import Page from './Page.js';
-import { auth, api, discoverServers, cancelDiscovery, ServerUnreachableError } from '../api/index.js';
+import {
+    auth,
+    api,
+    discoverServers,
+    cancelDiscovery,
+    ServerUnreachableError,
+    hasBackgroundDiscoveryService
+} from '../api/index.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
 import { focusManager } from '../ui/FocusManager.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
@@ -53,6 +61,7 @@ class LoginPage extends Page {
         this._serverUrl = '';
         this._discoveredServers = []; // Servers found via LAN discovery
         this._isDiscovering = false;
+        this._hasSearchedManually = false; // Track if manual search fallback was triggered
         this._isLoggingIn = false;
 
         // Quick Connect polling state
@@ -485,6 +494,9 @@ class LoginPage extends Page {
         // Bind events
         this._bindEvents();
 
+        // Update search / refresh button icon depending on discovery capabilities
+        this._updateRefreshButtonIcon();
+
         // Setup focus sections
         this._setupFocus();
 
@@ -507,7 +519,26 @@ class LoginPage extends Page {
         if (savedUrl && !isKnownOffline) {
             // Server already saved and not known to be offline - skip server selection
             this._serverInput.value = savedUrl;
+
+            /*
+             * WebOS 4.0-4.4 freeze fix: the splash screen must be dismissed
+             * as soon as the loading state is visible, NOT after the server
+             * probe completes. On slow/offline servers the probe can take 6-20s,
+             * during which the splash would otherwise remain up and the device
+             * appears completely frozen to the user.
+             *
+             * We emit hideSplash here with a tiny delay so that:
+             *   1. _autoConnectToSavedServer() has shown STATE.LOADING first
+             *   2. The loading spinner is composited and visible to the user
+             *   3. The splash fade-out transition runs over the spinner, not a black screen
+             *
+             * The redundant hideSplash calls inside _autoConnectToSavedServer's
+             * success/error branches remain as a safety net for the final transition.
+             */
             this._autoConnectToSavedServer(savedUrl);
+            setTimeout(() => {
+                eventBus.emit('app:hideSplash');
+            }, 80);
         } else {
             // No saved server or known offline - show server selection immediately
             if (savedUrl) {
@@ -541,7 +572,7 @@ class LoginPage extends Page {
         // Refresh discovery button
         this.$('#refresh-discovery')?.addEventListener('click', () => {
             if (!this._isDiscovering) {
-                this._startDiscovery();
+                this._startDiscovery({ isManual: true });
             }
         });
 
@@ -759,8 +790,16 @@ class LoginPage extends Page {
     }
 
     /**
-     * Auto-connect to a saved server on app startup
-     * Skips server selection and goes straight to user list
+     * Auto-connect to a saved server on app startup.
+     * Skips server selection and goes straight to user list.
+     *
+     * IMPORTANT: The splash screen is dismissed by the caller (onMounted)
+     * BEFORE this method's async work begins. Do NOT call hideSplash inside
+     * this method's try-block opening — the caller has already done it at
+     * the right moment (when the loading spinner is first visible).
+     * The hideSplash calls at the end of the success/error paths are kept
+     * as safety nets for the final UI state transitions only.
+     *
      * @param {string} savedUrl - The saved server URL
      */
     async _autoConnectToSavedServer(savedUrl) {
@@ -799,6 +838,11 @@ class LoginPage extends Page {
                 // No public users - show manual login with auto-redirect flag
                 this._goToManualLogin(true);
             }
+
+            // Ensure splash screen hides when user selection or manual login is shown
+            setTimeout(() => {
+                eventBus.emit('app:hideSplash');
+            }, 10);
         } catch (error) {
             // Connection failed - show server selection
             log.warn('Auto-connect failed, showing server selection', error);
@@ -816,6 +860,7 @@ class LoginPage extends Page {
             setTimeout(() => {
                 const connectBtn = this.$('.connect-btn');
                 if (connectBtn) connectBtn.focus();
+                eventBus.emit('app:hideSplash');
             }, 100);
         }
     }
@@ -884,36 +929,52 @@ class LoginPage extends Page {
 
     /**
      * Normalize a user-typed server address.
-     * - If no protocol is given, defaults to http://
-     * - If no port is given, defaults to 8096
-     * - If the user typed their own protocol/port, those are respected
+     * Rules:
+     *   - Bare hostname/IP (no protocol) → prepend http://, append :8096
+     *   - Full URL with protocol (http:// or https://) → use as-is, no port added
+     *   - If user typed their own port, it is always respected
      * @param {string} input - Raw user input
      * @returns {string} Normalized server URL
      */
     _normalizeServerUrl(input) {
-        let url = input.trim();
+        const url = input.trim();
         if (!url) return '';
 
-        // Prepend default protocol if none provided
-        if (!url.includes('://')) {
-            url = `http://${url}`;
+        const hasProtocol = url.includes('://');
+
+        if (!hasProtocol) {
+            // Bare hostname/IP — prepend http://, and append :8096 only when the
+            // user did not type an explicit port.
+            const prefixed = `http://${url}`;
+            try {
+                // Validate by parsing, but build the output manually below since
+                // URL.toString() drops default ports (80/443) from serialization.
+                new URL(prefixed);
+
+                // Split the authority (host:port) from any path/subpath
+                const slashIdx = prefixed.indexOf('/', prefixed.indexOf('://') + 3);
+                const authority = slashIdx === -1 ? prefixed.slice(7) : prefixed.slice(7, slashIdx);
+                const path = slashIdx === -1 ? '' : prefixed.slice(slashIdx);
+
+                const hasExplicitPort = /:\d+$/.test(authority);
+                const host = hasExplicitPort ? authority : `${authority}:${DEFAULT_PORT}`;
+
+                let result = `http://${host}${path}`;
+                if (result.endsWith('/')) {
+                    result = result.slice(0, -1);
+                }
+                return result;
+            } catch {
+                return prefixed;
+            }
         }
 
-        try {
-            const parsed = new URL(url);
-            if (!parsed.port) {
-                parsed.port = String(DEFAULT_PORT);
-            }
-            // URL.toString() always appends a trailing / — strip it
-            let result = parsed.toString();
-            if (result.endsWith('/')) {
-                result = result.slice(0, -1);
-            }
-            return result;
-        } catch {
-            // If URL parsing fails, return as-is (validation will catch it)
-            return url;
+        // User typed a full URL with protocol — respect their choice, no port added
+        let result = url;
+        if (result.endsWith('/')) {
+            result = result.slice(0, -1);
         }
+        return result;
     }
 
     async _connectToServer() {
@@ -1266,6 +1327,7 @@ class LoginPage extends Page {
                 router.navigate('/profiles', { replace: true });
             } else if (typeof tizen !== 'undefined') {
                 try {
+                    storage.flush();
                     tizen.application.getCurrentApplication().exit();
                 } catch (e) {
                     log.error('App exit failed:', e);
@@ -1351,13 +1413,52 @@ class LoginPage extends Page {
     // ========================================================================
 
     /**
-     * Start LAN server discovery in the background
+     * Start LAN server discovery in the background.
+     * If device has no background UDP discovery service and this is an automatic startup call
+     * (isManual = false), we skip the heavy HTTP subnet scan to prevent older TV hardware lag.
+     * @param {Object} [options={}] - Discovery options
+     * @param {boolean} [options.isManual=false] - Whether discovery was manually requested by clicking search/refresh button
      */
-    async _startDiscovery() {
+    async _startDiscovery(options = {}) {
+        const isManual = options.isManual === true;
+        if (isManual) {
+            this._hasSearchedManually = true;
+        }
+
+        const hasBgService = hasBackgroundDiscoveryService();
+
+        // If automatic startup discovery is requested on a device WITHOUT background UDP service,
+        // skip the automatic HTTP scan to prevent TV slowdown / UI lag.
+        if (!isManual && !hasBgService) {
+            log.info(
+                'LoginPage: No background discovery service available — skipping auto HTTP scan to prevent TV slowdown.'
+            );
+            this._isDiscovering = false;
+
+            // Load and render saved servers if available
+            this._discoveredServers = [];
+            const savedServers = auth.getSavedServers();
+            if (savedServers && savedServers.length > 0) {
+                savedServers.forEach((saved) => {
+                    const fallbackName = saved.serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                    this._discoveredServers.push({
+                        name: saved.serverName || fallbackName,
+                        address: saved.serverUrl,
+                        version: null,
+                        isSaved: true
+                    });
+                });
+            }
+            this._renderDiscoveredServers();
+            this._updateRefreshButtonIcon();
+            return;
+        }
+
         if (this._isDiscovering) return;
         this._isDiscovering = true;
+        this._updateRefreshButtonIcon();
 
-        log.info('LoginPage: Starting server discovery...');
+        log.info(`LoginPage: Starting server discovery (isManual=${isManual})...`);
 
         // Initialize with saved servers first
         this._discoveredServers = [];
@@ -1403,7 +1504,8 @@ class LoginPage extends Page {
                             this._renderDiscoveredServers();
                         }
                     }
-                }
+                },
+                { isManual, allowHttpFallback: isManual }
             );
 
             // Ensure final list is synced, but preserve our saved servers
@@ -1432,6 +1534,48 @@ class LoginPage extends Page {
 
             // Trigger a re-render of servers to immediately hide the scan progress indicator
             this._renderDiscoveredServers();
+            this._updateRefreshButtonIcon();
+        }
+    }
+
+    /**
+     * Update the refresh/search button icon based on background service availability
+     * and manual search state.
+     * If the platform lacks a background UDP discovery service AND manual search has
+     * not been triggered yet, display the Search icon. Otherwise, display Refresh icon.
+     * @private
+     */
+    _updateRefreshButtonIcon() {
+        const btn = this.$('#refresh-discovery');
+        if (!btn) return;
+
+        const hasBgService = hasBackgroundDiscoveryService();
+        // If device has no background UDP service and manual search has not been run yet, show search icon
+        const showSearchIcon = !hasBgService && !this._hasSearchedManually;
+
+        const searchSvg = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+        `;
+
+        const refreshSvg = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+        `;
+
+        if (showSearchIcon) {
+            btn.innerHTML = searchSvg;
+            btn.title = i18n.t('Search') || 'Search';
+            btn.setAttribute('aria-label', i18n.t('Search') || 'Search');
+        } else {
+            btn.innerHTML = refreshSvg;
+            btn.title = i18n.t('Refresh') || 'Refresh';
+            btn.setAttribute('aria-label', i18n.t('Refresh') || 'Refresh');
         }
     }
 

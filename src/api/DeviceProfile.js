@@ -54,7 +54,8 @@ export function clearCapabilitiesCache() {
  *
  * @param {Object} [options={}] - Options for profile generation
  * @param {number} [options.manualBitrate] - Optional overrides for max bitrate
- * @param {string} [options.playbackMode='auto'] - 'auto', 'directPlay', 'transcode', 'remux'
+ * @param {string} [options.playbackMode='auto'] - 'auto', 'directPlay', 'transcode', 'remux',
+ *                                                 'transcodeVideo', 'transcodeAudio'
  * @returns {Object} A Jellyfin-compatible DeviceProfile
  */
 export function buildJellyfinProfile(options = {}) {

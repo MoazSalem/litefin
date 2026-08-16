@@ -3,7 +3,7 @@
  * Litefin Tizen - Background Theme Song Player
  * ============================================================================
  * Optimized HTML5 background audio controller singleton.
- * Orchestrates premium, Apple-style smooth volumetric fades on TV systems,
+ * Orchestrates premium, smooth volumetric fades on TV systems,
  * ensuring hardware decoders are cleanly initialized and released.
  * ============================================================================
  */
@@ -44,7 +44,6 @@ class ThemeSongPlayer {
         // ====================================================================
         // Playback Conflict Preventer
         // ====================================================================
-        // Under Apple's HIG principles, media experiences should be seamless.
         // We listen to the global application EventBus for any 'player:play' events.
         // As soon as video or trailer playback begins, we instantly silence the
         // background theme music to avoid conflicting overlapping audio tracks.
@@ -64,8 +63,20 @@ class ThemeSongPlayer {
         log.debug('Initializing HTML5 Audio element instance');
         this._audio = new Audio();
 
-        // Set standard properties for continuous background score ambiance
-        this._audio.loop = true;
+        // ====================================================================
+        // Audio Element Initialization & Lifecycle Listeners
+        // ====================================================================
+        // Initial loop state will be dynamically overwritten in play() based
+        // on the user's preference (pref:playThemeSongsOnce).
+        this._audio.loop = false;
+
+        // Listen for the track completion event when looping is disabled.
+        // Once the theme music reaches the end, reset active track references.
+        this._audio.addEventListener('ended', () => {
+            log.info('Theme song playback finished single cycle');
+            this._currentUrl = null;
+            this._ownerId = null;
+        });
 
         // Ensure volume starts fully silent for visual-auditory transition sync
         this._audio.volume = 0;
@@ -101,6 +112,17 @@ class ThemeSongPlayer {
         log.info('Starting theme song playback for owner', ownerId);
         this._currentUrl = url;
         this._ownerId = ownerId;
+
+        // ====================================================================
+        // Configure Loop Mode Based on User Preference
+        // ====================================================================
+        // Check if the user opted to play theme songs only once.
+        // Defaults to true (play once), so looping is disabled unless the user
+        // explicitly set 'pref:playThemeSongsOnce' to 'false' in Settings.
+        // ====================================================================
+        const playOnce = storage.getItem('pref:playThemeSongsOnce') !== 'false';
+        this._audio.loop = !playOnce;
+        log.debug(`Theme song audio loop mode set to: ${this._audio.loop} (playOnce: ${playOnce})`);
 
         try {
             // Load the new stream path into the HTML5 controller
@@ -227,11 +249,10 @@ class ThemeSongPlayer {
 
     /**
      * Interpolates volume from 0 to the user-configured target volume level
-     * for a premium, Apple-style smooth entry transition.
      */
     _fadeIn() {
         // Read the user's custom volume preference from local storage.
-        // Under Apple's HIG principles, sound levels should default to a comfortable,
+        // sound levels should default to a comfortable,
         // ambient level (30% or 0.3) rather than blasting at 100%.
         const targetVolume = parseFloat(storage.getItem('pref:themeSongVolume') || '0.3');
 

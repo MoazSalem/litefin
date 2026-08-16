@@ -35,6 +35,13 @@ class LazyLoader {
         // Queue elements that intersect during active scrolling animations or events
         this._pendingLoads = new Map();
 
+        // ── BlurHash decode queue ───────────────────────────────────────────
+        // Prevents micro-freeze storms on low-end TV CPUs by throttling
+        // BlurHash DCT inversions to at most N per animation frame.
+        this._blurHashQueue = [];
+        this._blurHashProcessing = false;
+        this._maxBlurhashPerFrame = 2;
+
         this._init();
     }
 
@@ -152,7 +159,6 @@ class LazyLoader {
                             if (this._isScrolling()) {
                                 this._pendingLoads.set(target, type);
                             } else {
-                                // Load immediately if the user is stationary
                                 if (type === 'row') {
                                     this._loadRow(target);
                                 } else {
@@ -264,26 +270,23 @@ class LazyLoader {
 
         const images = row.querySelectorAll('img[data-src]');
         images.forEach((img) => {
+            if (img.classList.contains('loaded')) return;
+            if (img.hasAttribute('data-lazy-loading')) return;
+
             this._decodeAndDrawBlurhash(img);
 
-            img.src = img.dataset.src;
             img.onload = () => {
                 img.classList.add('loaded');
+                img.removeAttribute('data-lazy-loading');
 
-                // Strip the loading shimmer from the parent wrapper element
-                // to reveal the successfully loaded image underneath.
                 const parent = img.parentElement;
                 if (parent) {
                     parent.classList.remove('skeleton-shimmer');
 
-                    // Stop tracking this element for shimmer animation pausing
-                    // — it no longer has the shimmer class so observation is wasted.
                     if (this._shimmerObserver) {
                         this._shimmerObserver.unobserve(parent);
                     }
 
-                    // If this is a standard card-image container, trigger the fade-out
-                    // transition on the placeholder BlurHash canvas before removing it.
                     if (parent.classList.contains('card-image')) {
                         const canvas = parent.querySelector('.blurhash-canvas');
                         if (canvas) {
@@ -292,42 +295,43 @@ class LazyLoader {
                         }
                     }
                 }
-
-                img.removeAttribute('data-src');
             };
             img.onerror = () => {
+                img.removeAttribute('data-lazy-loading');
                 this._handleImageError(img);
             };
+
+            img.src = img.dataset.src;
         });
 
-        // Stop observing this row since we loaded it
         if (this.observer) {
             this.observer.unobserve(row);
         }
     }
 
     _loadImage(img) {
-        if (!img || !img.dataset.src) return;
+        if (!img || !img.dataset.src || img.classList.contains('loaded')) return;
+        // Prevent re-entering while a load is in-flight.
+        // The IntersectionObserver may fire before onload completes on
+        // eagerly loaded images; setting src again can abort the fetch
+        // on older Chromium (Tizen 3/4), causing the image to never load.
+        if (img.hasAttribute('data-lazy-loading')) return;
+        img.setAttribute('data-lazy-loading', '');
 
         this._decodeAndDrawBlurhash(img);
 
-        img.src = img.dataset.src;
         img.onload = () => {
             img.classList.add('loaded');
+            img.removeAttribute('data-lazy-loading');
 
-            // Strip the loading shimmer from the parent wrapper element
-            // to reveal the successfully loaded image underneath.
             const parent = img.parentElement;
             if (parent) {
                 parent.classList.remove('skeleton-shimmer');
 
-                // Stop tracking shimmer animation for this element
                 if (this._shimmerObserver) {
                     this._shimmerObserver.unobserve(parent);
                 }
 
-                // If this is a standard card-image container, trigger the fade-out
-                // transition on the placeholder BlurHash canvas before removing it.
                 if (parent.classList.contains('card-image')) {
                     const canvas = parent.querySelector('.blurhash-canvas');
                     if (canvas) {
@@ -336,12 +340,13 @@ class LazyLoader {
                     }
                 }
             }
-
-            img.removeAttribute('data-src');
         };
         img.onerror = () => {
+            img.removeAttribute('data-lazy-loading');
             this._handleImageError(img);
         };
+
+        img.src = img.dataset.src;
 
         if (this.observer) {
             this.observer.unobserve(img);
@@ -349,8 +354,11 @@ class LazyLoader {
     }
 
     /**
-     * Decode and draw the BlurHash string onto the sibling canvas element.
-     * Run asynchronously to keep the main thread and D-pad event loops responsive on TV hardware.
+     * Enqueue a BlurHash canvas for deferred, throttled decoding.
+     * Instead of decoding every card's BlurHash immediately (which causes
+     * micro-freeze storms on single-core TV CPUs when 30+ cards load at once),
+     * we process at most `_maxBlurhashPerFrame` per animation frame.
+     *
      * @param {HTMLImageElement} img - The image element being loaded
      * @private
      */
@@ -367,25 +375,52 @@ class LazyLoader {
         // Mark it decoded immediately to prevent duplicate decoding attempts
         canvas.classList.add('blurhash-decoded');
 
-        // Defer decoding to keep UI/focus animations perfectly butter-smooth
-        setTimeout(() => {
-            // Decoded dimensions are kept extremely small (20x20) for optimal CPU/GPU usage
-            const width = 20;
-            const height = 20;
+        // Enqueue for throttled batch processing instead of firing 30+
+        // concurrent setTimeout(0) tasks that freeze the main thread.
+        this._blurHashQueue.push({ canvas, blurHashStr });
+        this._processBlurHashQueue();
+    }
 
-            const pixels = BlurHashDecoder.decode(blurHashStr, width, height);
-            if (!pixels) return;
+    /**
+     * Process pending BlurHash decodes at a throttled rate.
+     * Drains up to `_maxBlurhashPerFrame` items per rAF cycle.
+     * @private
+     */
+    _processBlurHashQueue() {
+        if (this._blurHashProcessing) return;
+        if (this._blurHashQueue.length === 0) return;
 
-            // Prepare the 2D canvas context and write pixels
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                const imgData = ctx.createImageData(width, height);
-                imgData.data.set(pixels);
-                ctx.putImageData(imgData, 0, 0);
+        this._blurHashProcessing = true;
+
+        const processBatch = () => {
+            const batch = this._blurHashQueue.splice(0, this._maxBlurhashPerFrame);
+
+            for (const { canvas, blurHashStr } of batch) {
+                // Decoded dimensions are kept extremely small (20x20)
+                const width = 20;
+                const height = 20;
+
+                const pixels = BlurHashDecoder.decode(blurHashStr, width, height);
+                if (!pixels) continue;
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const imgData = ctx.createImageData(width, height);
+                    imgData.data.set(pixels);
+                    ctx.putImageData(imgData, 0, 0);
+                }
             }
-        }, 0);
+
+            if (this._blurHashQueue.length > 0) {
+                requestAnimationFrame(processBatch);
+            } else {
+                this._blurHashProcessing = false;
+            }
+        };
+
+        requestAnimationFrame(processBatch);
     }
 
     /**
@@ -393,9 +428,15 @@ class LazyLoader {
      * @param {HTMLElement} img
      */
     _handleImageError(img) {
+        // Prevent browser from retrying the broken URL
+        const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        img.src = placeholder;
+        img.onerror = null;
+        img.onload = null;
+        img.removeAttribute('data-src');
+        img.removeAttribute('data-lazy-loading');
         img.style.display = 'none';
 
-        // Extract fallback dataset attached by CardRenderer
         const parent = img.parentElement;
         const isSupportedParent =
             parent &&
@@ -406,14 +447,11 @@ class LazyLoader {
         if (isSupportedParent) {
             const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
-            // Remove shimmer
             parent.classList.remove('skeleton-shimmer');
 
-            // Remove any dynamic overlays (tints/labels) and BlurHash canvases that might conflict with the fallback
             const overlays = parent.querySelectorAll('.card-overlay-tint, .card-overlay-label, .blurhash-canvas');
             overlays.forEach((el) => el.remove());
 
-            // Construct and inject fallback if attributes exist
             const gradNum = img.dataset.fbGrad;
             const initials = img.dataset.fbInit;
             const name = img.dataset.fbName;
@@ -426,7 +464,6 @@ class LazyLoader {
                         ${!isModern ? `<div class="media-fallback-name">${name}</div>` : ''}
                     </div>
                 `;
-                // Insert at the beginning so overlays (like progress/badges) render on top
                 parent.insertAdjacentHTML('afterbegin', fallbackHtml);
             }
         }
@@ -452,59 +489,86 @@ class LazyLoader {
     _batchPreloadImages(startImg) {
         if (!startImg) return;
 
-        // Find parent card to traverse siblings
         const currentCard = startImg.closest('.media-card');
         if (!currentCard) return;
 
-        // Collect the next N siblings that still have unloaded images
+        // ----------------------------------------------------------------
+        // STAGGERED PRELOAD: current row, previous row, then next row
+        // ----------------------------------------------------------------
+        // Reads the grid column count from a data attribute set by
+        // LibraryPage._renderGrid(). Falls back to 5 if not present.
+        //
+        // Phase 1 (immediate, this frame):
+        //   columns forward + 1 backward — covers Right in current row
+        //   and one Left press. Cost: columns + 1.
+        //
+        // Phase 2 (next rAF, deferred):
+        //   columns - 1 more backward — completes a full previous row
+        //   so pressing Up lands on fully-preloaded items.
+        //
+        // Phase 3 (next rAF after Phase 2, chained):
+        //   columns forward — covers the row below for Down navigation.
+        // ----------------------------------------------------------------
+        const grid = currentCard.closest('#library-grid');
+        const columns = parseInt(grid?.dataset.gridColumns, 10) || 5;
+
+        // Phase 1: current row forward + 1 backward (immediate)
         let nextCard = currentCard.nextElementSibling;
         let count = 0;
-
-        // Default preload is 20 images. Dense small-poster grids load 6 more.
-        let limit = 20;
-        if (currentCard.parentElement && currentCard.parentElement.classList.contains('view-small-poster')) {
-            limit += 7;
-        }
-
-        // Collect all target img elements without touching the DOM yet
-        const pending = [];
-        while (nextCard && count < limit) {
+        while (nextCard && count < columns) {
             const img = nextCard.querySelector('img[data-src]');
-            if (img) {
-                pending.push(img);
-            }
+            if (img) this._loadImage(img);
             nextCard = nextCard.nextElementSibling;
             count++;
         }
 
-        if (!pending.length) return;
+        const prevCard = currentCard.previousElementSibling;
+        if (prevCard) {
+            const img = prevCard.querySelector('img[data-src]');
+            if (img) this._loadImage(img);
+        }
 
-        // ================================================================
-        // STAGGERED LOADING: Load 5 images per setTimeout tick (0ms delay).
-        // ================================================================
-        // Loading all 20 at once causes 20 simultaneous opacity: 0 → 1 CSS
-        // transitions, which forces 20 compositor layer promotions in a single
-        // frame — directly producing the Layerize spike in the profile.
-        // By chunking 5 per tick, the compositor processes each batch across
-        // separate scheduler ticks, spreading the layer cost over multiple frames.
-        // ================================================================
-        const CHUNK_SIZE = 5;
-        let offset = 0;
-
-        const loadChunk = () => {
-            const end = Math.min(offset + CHUNK_SIZE, pending.length);
-            for (let i = offset; i < end; i++) {
-                this._loadImage(pending[i]);
-            }
-            offset = end;
-            if (offset < pending.length) {
-                // Schedule the next chunk asynchronously — zero delay ensures
-                // the browser gets to commit the current batch before starting the next.
-                setTimeout(loadChunk, 0);
+        // Helper to load images from a starting sibling, up to `limit` cards
+        const loadSiblings = (start, limit, backwards) => {
+            let card = start;
+            let count = 0;
+            while (card && count < limit) {
+                const img = card.querySelector('img[data-src]');
+                if (img) this._loadImage(img);
+                card = backwards ? card.previousElementSibling : card.nextElementSibling;
+                count++;
             }
         };
 
-        loadChunk();
+        // Cancel any pending deferred preload from a previous focus change
+        // so stale rAFs don't pile up (e.g. rapid D-pad holding).
+        if (this._deferredPreloadFrameId) {
+            cancelAnimationFrame(this._deferredPreloadFrameId);
+            this._deferredPreloadFrameId = null;
+        }
+
+        // Schedule deferred phases (chained: Phase 2 -> Phase 3)
+        const schedulePhase3 = () => {
+            if (nextCard) {
+                this._deferredPreloadFrameId = requestAnimationFrame(() => {
+                    this._deferredPreloadFrameId = null;
+                    loadSiblings(nextCard, columns, false);
+                });
+            }
+        };
+
+        if (prevCard) {
+            // Phase 2: complete the previous row
+            this._deferredPreloadFrameId = requestAnimationFrame(() => {
+                this._deferredPreloadFrameId = null;
+                loadSiblings(prevCard.previousElementSibling, columns - 1, true);
+                // Chain: Phase 3 runs after Phase 2
+                schedulePhase3();
+            });
+        } else {
+            // No previous row, skip straight to Phase 3
+            schedulePhase3();
+        }
     }
 
     /**
@@ -521,7 +585,7 @@ class LazyLoader {
         // This ensures the initial viewport is populated even if IntersectionObserver fails.
         let eagerLoadCount = 25;
         if (container.classList.contains('view-small-poster')) {
-            eagerLoadCount += 2; // 27 items
+            eagerLoadCount += 2;
         }
 
         for (let i = 0; i < Math.min(images.length, eagerLoadCount); i++) {
@@ -534,27 +598,61 @@ class LazyLoader {
             return;
         }
 
-        images.forEach((img) => {
-            // Only observe if NOT inside a lazy row (avoid double observation)
+        images.forEach((img, index) => {
+            // Skip eagerly loaded images to avoid observing + loading them twice
+            if (index < eagerLoadCount) return;
             if (!img.closest('[data-lazy-row]')) {
                 this.observer.observe(img);
             }
         });
 
         // Observe lazy rows (horizontal scrollers)
-        // This solves horizontal clipping issues by loading the whole row when it enters the viewport
         const rows = container.querySelectorAll('[data-lazy-row]');
         rows.forEach((row) => this.observer.observe(row));
 
         // ====================================================================
         // SHIMMER OBSERVATION: Register all skeleton shimmer wrappers so
         // their CSS animations are paused when scrolled out of viewport.
-        // Only .card-image parents have the shimmer — text skeleton lines
-        // (.skeleton-line.skeleton-shimmer) are cheap and not worth tracking.
         // ====================================================================
         if (this._shimmerObserver) {
             const shimmers = container.querySelectorAll('.card-image.skeleton-shimmer');
             shimmers.forEach((el) => this._shimmerObserver.observe(el));
+        }
+    }
+
+    /**
+     * Unobserve all lazy-load elements within a container and clear pending loads.
+     * Call this when a component/page is destroyed to prevent stale observer entries.
+     * @param {HTMLElement} container
+     */
+    clearContainer(container) {
+        if (!container) return;
+
+        // Cancel any pending deferred preload for the next row
+        if (this._deferredPreloadFrameId) {
+            cancelAnimationFrame(this._deferredPreloadFrameId);
+            this._deferredPreloadFrameId = null;
+        }
+
+        // Remove pending loads that belong to this container
+        this._pendingLoads.forEach((type, target) => {
+            if (container.contains(target)) {
+                this._pendingLoads.delete(target);
+            }
+        });
+
+        // Unobserve all images tracked by the main observer
+        if (this.observer) {
+            const images = container.querySelectorAll('img.lazy, img[data-src]');
+            images.forEach((img) => this.observer.unobserve(img));
+            const rows = container.querySelectorAll('[data-lazy-row]');
+            rows.forEach((row) => this.observer.unobserve(row));
+        }
+
+        // Unobserve shimmers tracked by the shimmer observer
+        if (this._shimmerObserver) {
+            const shimmers = container.querySelectorAll('.card-image.skeleton-shimmer');
+            shimmers.forEach((el) => this._shimmerObserver.unobserve(el));
         }
     }
 
@@ -564,7 +662,7 @@ class LazyLoader {
      * @private
      */
     observeElement(img) {
-        if (!img || !img.dataset.src) return;
+        if (!img || !img.dataset.src || img.classList.contains('loaded')) return;
 
         if (!this.observer) {
             this.forceLoad(img);

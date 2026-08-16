@@ -41,7 +41,6 @@ const CROSSFADE_DURATION_MS = 300;
  */
 const PHOTO_FIELDS = [
     'DateCreated',
-    'PrimaryImageAspectRatio',
     'Width',
     'Height',
     'CameraMake',

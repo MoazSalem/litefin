@@ -31,6 +31,7 @@ class LiveTvPage extends Page {
         this._currentTab = 'suggestions';
         this._tabData = new Map(); // Cache data for tabs
         this._virtualRows = [];
+        this._mediaGrids = [];
         this._isMounted = false;
         this._isAsyncPage = true;
 
@@ -167,7 +168,7 @@ class LiveTvPage extends Page {
         this.restoreScrollFocusWhenReady();
     }
 
-    onDestroy() {
+    destroy() {
         this._isMounted = false;
         if (this._resizeHandler) {
             window.removeEventListener('resize', this._resizeHandler);
@@ -176,6 +177,9 @@ class LiveTvPage extends Page {
             if (row && row.destroy) row.destroy();
         });
         this._virtualRows = [];
+        this._mediaGrids.forEach((g) => g.destroy());
+        this._mediaGrids = [];
+        super.destroy();
     }
 
     _setupTabHandlers() {
@@ -327,11 +331,13 @@ class LiveTvPage extends Page {
         const container = this.$('#livetv-content');
         container.innerHTML = '<div class="page-loading"><div class="loading-spinner"></div></div>';
 
-        // Clean up previous tab's virtual rows and focus sections
+        // Clean up previous tab's virtual rows, media grids, and focus sections
         this._virtualRows.forEach((row) => {
             if (row && row.destroy) row.destroy();
         });
         this._virtualRows = [];
+        this._mediaGrids.forEach((g) => g.destroy());
+        this._mediaGrids = [];
 
         for (const name of this._focusSections) {
             if (name !== 'livetv-tabs' && name !== 'livetv-pagination') {
@@ -383,7 +389,7 @@ class LiveTvPage extends Page {
             userId: api.userId,
             limit: 24,
             enableImageTypes: 'Primary,Thumb,Backdrop',
-            fields: 'PrimaryImageAspectRatio,CanSelfDelete,SortName'
+            fields: 'CanSelfDelete,SortName'
         });
 
         if (!this._isMounted) return;
@@ -456,6 +462,7 @@ class LiveTvPage extends Page {
 
         container.innerHTML = grid.render();
         grid.onMounted();
+        this._mediaGrids.push(grid);
 
         const gridItemsEl = this.$('#livetv-channels-grid-items');
         if (gridItemsEl) {
@@ -511,6 +518,7 @@ class LiveTvPage extends Page {
 
         container.innerHTML = grid.render();
         grid.onMounted();
+        this._mediaGrids.push(grid);
 
         const gridItemsEl = this.$('#livetv-recordings-grid-items');
         if (gridItemsEl) {

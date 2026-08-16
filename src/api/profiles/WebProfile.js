@@ -270,7 +270,9 @@ export function buildJellyfinProfile(options = {}) {
             (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
     }
 
-    const maxAudioChannels = String(caps.maxAudioChannels);
+    // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
+    const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
+    const maxAudioChannels = String((userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels);
 
     const dtsSetting = PlayerSettings.get('enableDts');
     const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
@@ -308,7 +310,10 @@ export function buildJellyfinProfile(options = {}) {
 
     const directPlayProfiles = [];
 
-    if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
+    // Exclude DirectPlay profiles for modes that force server-side processing.
+    // transcodeVideo / transcodeAudio both bypass direct play entirely.
+    if (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') {
         // MP4 / M4V / MOV
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
@@ -407,10 +412,27 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.mpeg2video) transVideoCodecs += ',mpeg2video';
 
     if (playbackMode === 'remux') {
-        // Keep the custom resolved transcode audio codec list so that the server
-        // transcodes the audio to the user's preferred target codec (e.g. EAC3)
-        // instead of falling back to default browser codecs in audioCodecString.
+        // -----------------------------------------------------------------------
+        // Change Container / Remux:
+        //   Video → copy (all codecs through), audio uses preferred transcode
+        //   target (avoids the server falling back to default browser codecs).
+        // -----------------------------------------------------------------------
         transVideoCodecs = generalVideoCodecs.join(',');
+    } else if (playbackMode === 'transcodeAudio') {
+        // -----------------------------------------------------------------------
+        // Transcode Audio Only:
+        //   Video → copy verbatim (same as remux — all codecs allowed through)
+        //   Audio → always re-encoded to the preferred transcode target codec
+        // -----------------------------------------------------------------------
+        transVideoCodecs = generalVideoCodecs.join(',');
+    } else if (playbackMode === 'transcodeVideo') {
+        // -----------------------------------------------------------------------
+        // Transcode Video Only:
+        //   Video → always re-encoded to H264
+        //   Audio → copy verbatim (all audio codecs declared, so the server
+        //           passes the original track through without re-encoding)
+        // -----------------------------------------------------------------------
+        transVideoCodecs = 'h264'; // Force video re-encode; audio will copy
     }
 
     const broadTransVideo = [transVideoCodecs, enableAV1 ? 'av1' : '', enableVP9 ? 'vp9' : '']

@@ -20,11 +20,11 @@ import { storage } from '../utils/StorageService.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { sidebarIcons, getLibraryIcon } from '../utils/Icons.js';
 
-const log = logger.create('Sidebar');
+const log = logger.create( 'Sidebar' );
 
 class Sidebar extends Component {
-    constructor(options = {}) {
-        super(options);
+    constructor( options = {} ) {
+        super( options );
 
         this.expanded = false;
         this.libraries = [];
@@ -128,32 +128,36 @@ class Sidebar extends Component {
         this._updateActiveState();
 
         // Hydrate DOM with translations
-        i18n.translateDOM(this.el);
+        i18n.translateDOM( this.el );
 
         // Listen for auth events to update user profile
-        eventBus.on('auth:login', this._onAuthChange.bind(this));
-        eventBus.on('auth:logout', this._onAuthChange.bind(this));
-        eventBus.on('auth:restored', this._onAuthChange.bind(this));
+        eventBus.on( 'auth:login', this._onAuthChange.bind( this ) );
+        eventBus.on( 'auth:logout', this._onAuthChange.bind( this ) );
+        eventBus.on( 'auth:restored', this._onAuthChange.bind( this ) );
 
         // Listen for SyncPlay state changes to update the sidebar button
-        this._onSyncPlayEnabled = () => this._updateSyncPlayBtn(true);
-        this._onSyncPlayDisabled = () => this._updateSyncPlayBtn(false);
-        eventBus.on('syncplay:enabled', this._onSyncPlayEnabled);
-        eventBus.on('syncplay:disabled', this._onSyncPlayDisabled);
+        this._onSyncPlayEnabled = () => this._updateSyncPlayBtn( true );
+        this._onSyncPlayDisabled = () => this._updateSyncPlayBtn( false );
+        eventBus.on( 'syncplay:enabled', this._onSyncPlayEnabled );
+        eventBus.on( 'syncplay:disabled', this._onSyncPlayDisabled );
 
         // Initialize visibility in case the plugin is disabled at startup
         // The default active state is retrieved dynamically from the Manager if it exists,
         //. but fallback to false if it hasn't started yet.
-        this._updateSyncPlayBtn(window.__syncPlayManager?.isActive || false);
+        this._updateSyncPlayBtn( window.__syncPlayManager?.isActive || false );
 
         // Sidebar Logo clickability configuration
         this._updateLogoSettings();
         this._onLogoSettingsChanged = () => this._updateLogoSettings();
-        eventBus.on('prefChanged:logoSettings', this._onLogoSettingsChanged);
+        eventBus.on( 'pref:logoSettings', this._onLogoSettingsChanged );
+
+        this._updateSidebarItemsAlign();
+        this._onSidebarItemsAlignChanged = () => this._updateSidebarItemsAlign();
+        eventBus.on( 'pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged );
 
         this._updateAnimationMode();
         this._onAnimationModeChanged = () => this._updateAnimationMode();
-        eventBus.on('prefChanged:disableSidebarAnimation', this._onAnimationModeChanged);
+        eventBus.on( 'prefChanged:disableSidebarAnimation', this._onAnimationModeChanged );
 
         // ---------------------------------------------------------------------
         // COLLAPSED SIDEBAR LIBRARY SHORTCUT ICONS CONFIGURATION
@@ -163,19 +167,19 @@ class Sidebar extends Component {
         // root sidebar container. Register event bus subscription to listen for
         // user changes dynamically and perform clean layout hot-reloads.
         // ---------------------------------------------------------------------
-        const showLibIcons = storage.getItem('pref:showCollapsedLibraryIcons') === 'true';
-        this.el.classList.toggle('show-lib-icons-collapsed', showLibIcons);
+        const showLibIcons = storage.getItem( 'pref:showCollapsedLibraryIcons' ) === 'true';
+        this.el.classList.toggle( 'show-lib-icons-collapsed', showLibIcons );
 
-        this._onShowLibIconsChanged = (newValue) => {
+        this._onShowLibIconsChanged = ( newValue ) => {
             const enabled = newValue === true || newValue === 'true';
-            this.el.classList.toggle('show-lib-icons-collapsed', enabled);
+            this.el.classList.toggle( 'show-lib-icons-collapsed', enabled );
             // Re-apply DOM layout to refresh cache
             this._applySidebarLayout();
         };
-        eventBus.on('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
+        eventBus.on( 'prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged );
 
         // ---------------------------------------------------------------------
-        // COLLAPSED SIDEBAR TRANSPARENT BACKGROUND CONFIGURATION
+        // COLLAPSED SIDEBAR BACKGROUND CONFIGURATION
         // ---------------------------------------------------------------------
         this.activePath = router.getCurrentPath() || '';
         this._updateTransparentCollapsed();
@@ -183,12 +187,13 @@ class Sidebar extends Component {
         this._onTransparentCollapsedChanged = () => {
             this._updateTransparentCollapsed();
         };
-        eventBus.on('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+        eventBus.on( 'pref:collapsedSidebarColor', this._onTransparentCollapsedChanged );
+        eventBus.on( 'pref:expandedSidebarColor', this._onTransparentCollapsedChanged );
 
         this._onHideLibraryHeaderChanged = () => {
             this._loadLibraries();
         };
-        eventBus.on('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
+        eventBus.on( 'prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged );
 
         // ── Sidebar Layout customization ──────────────────────────────────────
         // Hot-reload the sidebar layout when the user saves changes in Settings.
@@ -196,13 +201,13 @@ class Sidebar extends Component {
             // Re-apply order/visibility and update the default focus target
             this._applySidebarLayout();
         };
-        eventBus.on('prefChanged:sidebarLayout', this._onSidebarLayoutChanged);
+        eventBus.on( 'prefChanged:sidebarLayout', this._onSidebarLayoutChanged );
 
         // Resolve the default focus item from saved prefs (falls back to 'home')
         const defaultFocusId = sidebarLayoutManager.getDefaultFocus();
 
         // Register focus
-        focusManager.register('sidebar', this.el, {
+        focusManager.register( 'sidebar', this.el, {
             orientation: 'vertical',
             selector: '.sidebar-item',
             /*
@@ -212,95 +217,100 @@ class Sidebar extends Component {
              * immediately without re-registering the entire section.
              */
             defaultFocusSelector: `#sidebar-${defaultFocusId}`,
-            onMove: (direction, focusedEl) => {
+            onMove: ( direction, focusedEl ) => {
                 const isRtl = document.documentElement.dir === 'rtl';
                 const exitDirection = isRtl ? 'left' : 'right';
 
-                if (direction === exitDirection) {
-                    const pageContainer = document.getElementById('page-container');
-                    if (!pageContainer) return false;
+                if ( direction === exitDirection ) {
+                    const pageContainer = document.getElementById( 'page-container' );
+                    if ( !pageContainer ) return false;
 
                     // 1. Try to resume previous section (Smart Resume)
                     const prevSection = focusManager.getPreviousSection();
-                    if (prevSection) {
-                        const config = focusManager.getSectionConfig(prevSection);
+                    if ( prevSection ) {
+                        const config = focusManager.getSectionConfig( prevSection );
                         // Check if section still exists and is part of the current page structure
-                        if (config && pageContainer.contains(config.container)) {
+                        if ( config && pageContainer.contains( config.container ) ) {
                             // Pass null as 3rd arg to force Memory restore instead of Spatial
-                            focusManager.setActiveSection(prevSection, true, null);
+                            focusManager.setActiveSection( prevSection, true, null );
                             return true;
                         }
                     }
 
                     // 2. Fallback: Find first visible focusable to identify valid section
                     const selector = 'button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-                    const candidates = pageContainer.querySelectorAll(selector);
-                    const target = Array.from(candidates).find((el) => el.offsetParent !== null);
+                    const candidates = pageContainer.querySelectorAll( selector );
+                    const target = Array.from( candidates ).find( ( el ) => el.offsetParent !== null );
 
-                    if (target) {
-                        const section = focusManager.getSectionForElement(target);
-                        if (section) {
-                            focusManager.setActiveSection(section, true, null);
+                    if ( target ) {
+                        const section = focusManager.getSectionForElement( target );
+                        if ( section ) {
+                            focusManager.setActiveSection( section, true, null );
                             return true;
                         }
                     }
                 }
                 return false;
             }
-        });
+        } );
 
         // Apply the layout immediately after registration so the first render
         // already reflects the user's saved order and visibility prefs.
         this._applySidebarLayout();
 
         // Listen for route changes
-        eventBus.on('router:navigate', this._onNavigate.bind(this));
+        eventBus.on( 'router:navigate', this._onNavigate.bind( this ) );
 
         // Initial setup of indicator
         this._updateIndicator();
     }
 
     onDestroyed() {
-        if (this._focusObserver) {
+        if ( this._focusObserver ) {
             this._focusObserver.disconnect();
             this._focusObserver = null;
         }
-        focusManager.unregister('sidebar');
-        eventBus.off('router:navigate', this._onNavigate.bind(this));
+        focusManager.unregister( 'sidebar' );
+        eventBus.off( 'router:navigate', this._onNavigate.bind( this ) );
 
         // Remove auth listeners
-        eventBus.off('auth:login', this._onAuthChange.bind(this));
-        eventBus.off('auth:logout', this._onAuthChange.bind(this));
-        eventBus.off('auth:restored', this._onAuthChange.bind(this));
+        eventBus.off( 'auth:login', this._onAuthChange.bind( this ) );
+        eventBus.off( 'auth:logout', this._onAuthChange.bind( this ) );
+        eventBus.off( 'auth:restored', this._onAuthChange.bind( this ) );
 
         // Remove SyncPlay listeners
-        if (this._onSyncPlayEnabled) eventBus.off('syncplay:enabled', this._onSyncPlayEnabled);
-        if (this._onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
+        if ( this._onSyncPlayEnabled ) eventBus.off( 'syncplay:enabled', this._onSyncPlayEnabled );
+        if ( this._onSyncPlayDisabled ) eventBus.off( 'syncplay:disabled', this._onSyncPlayDisabled );
 
         // Remove sidebar layout hot-reload listener
-        if (this._onSidebarLayoutChanged) {
-            eventBus.off('prefChanged:sidebarLayout', this._onSidebarLayoutChanged);
+        if ( this._onSidebarLayoutChanged ) {
+            eventBus.off( 'prefChanged:sidebarLayout', this._onSidebarLayoutChanged );
         }
 
-        if (this._onLogoSettingsChanged) {
-            eventBus.off('prefChanged:logoSettings', this._onLogoSettingsChanged);
+        if ( this._onLogoSettingsChanged ) {
+            eventBus.off( 'pref:logoSettings', this._onLogoSettingsChanged );
         }
 
-        if (this._onAnimationModeChanged) {
-            eventBus.off('prefChanged:disableSidebarAnimation', this._onAnimationModeChanged);
+        if ( this._onAnimationModeChanged ) {
+            eventBus.off( 'prefChanged:disableSidebarAnimation', this._onAnimationModeChanged );
         }
 
         // Unsubscribe from preference change events cleanly
-        if (this._onShowLibIconsChanged) {
-            eventBus.off('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
+        if ( this._onShowLibIconsChanged ) {
+            eventBus.off( 'prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged );
         }
 
-        if (this._onTransparentCollapsedChanged) {
-            eventBus.off('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+        if ( this._onTransparentCollapsedChanged ) {
+            eventBus.off( 'pref:collapsedSidebarColor', this._onTransparentCollapsedChanged );
+            eventBus.off( 'pref:expandedSidebarColor', this._onTransparentCollapsedChanged );
         }
 
-        if (this._onHideLibraryHeaderChanged) {
-            eventBus.off('prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged);
+        if ( this._onHideLibraryHeaderChanged ) {
+            eventBus.off( 'prefChanged:hideSidebarLibraryHeader', this._onHideLibraryHeaderChanged );
+        }
+
+        if ( this._onSidebarItemsAlignChanged ) {
+            eventBus.off( 'pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged );
         }
     }
 
@@ -308,27 +318,27 @@ class Sidebar extends Component {
      * Handle auth changes (login/logout)
      */
     _onAuthChange() {
-        const userBtn = this.el.querySelector('#sidebar-user');
-        if (userBtn) {
+        const userBtn = this.el.querySelector( '#sidebar-user' );
+        if ( userBtn ) {
             // Update Avatar
-            const avatarContainer = userBtn.querySelector('.user-avatar-container');
-            if (avatarContainer) {
+            const avatarContainer = userBtn.querySelector( '.user-avatar-container' );
+            if ( avatarContainer ) {
                 avatarContainer.innerHTML = this._renderUserAvatar();
             }
             // Update Name
-            const nameSpan = userBtn.querySelector('.sidebar-user-name');
-            if (nameSpan) {
+            const nameSpan = userBtn.querySelector( '.sidebar-user-name' );
+            if ( nameSpan ) {
                 nameSpan.textContent = this._getUserName();
             }
         }
 
         // Reload libraries if logged in
-        if (auth.isAuthenticated()) {
+        if ( auth.isAuthenticated() ) {
             this._loadLibraries();
         } else {
             // Clear libraries on logout
-            const container = this.el.querySelector('#sidebar-libraries');
-            if (container) {
+            const container = this.el.querySelector( '#sidebar-libraries' );
+            if ( container ) {
                 container.innerHTML = '';
                 focusManager.resetDOMCache();
             }
@@ -339,8 +349,10 @@ class Sidebar extends Component {
      * Set visibility mode
      * @param {'visible'|'hidden'} mode
      */
-    setMode(mode) {
-        this.el.classList.toggle('hidden', mode === 'hidden');
+    setMode( mode ) {
+        this.el.classList.toggle( 'hidden', mode === 'hidden' );
+        // Re-evaluate alignment once visibility changes (resolving clientHeight 0 state)
+        setTimeout( () => this._updateSidebarItemsAlign(), 0 );
     }
 
     _updateLogoSettings() {
@@ -350,34 +362,74 @@ class Sidebar extends Component {
         // we must NOT silently swallow it and leave boot frozen.
         // ---------------------------------------------------------------
         try {
-            const isEnabled = storage.getItem('pref:logoSettings') === 'true';
-            const logoHeader = this.el.querySelector('#sidebar-logo-header');
-            const settingsBtn = this.el.querySelector('#sidebar-settings');
+            const isEnabled = storage.getItem( 'pref:logoSettings' ) === 'true';
+            const logoHeader = this.el.querySelector( '#sidebar-logo-header' );
 
-            if (logoHeader) {
+            if ( logoHeader ) {
                 // Toggle whether logo header acts as a focusable sidebar item
-                logoHeader.classList.toggle('sidebar-item', isEnabled);
-                logoHeader.setAttribute('data-focusable', isEnabled.toString());
-                logoHeader.setAttribute('tabindex', isEnabled ? '0' : '-1');
+                logoHeader.classList.toggle( 'sidebar-item', isEnabled );
+                logoHeader.setAttribute( 'data-focusable', isEnabled.toString() );
+                logoHeader.setAttribute( 'tabindex', isEnabled ? '0' : '-1' );
 
                 /*
                  * On older webOS web engines (like webOS 2.x), mutating or deleting
                  * properties on the dataset object directly can throw TypeErrors.
                  * We use standard setAttribute and removeAttribute calls instead.
                  */
-                if (isEnabled) {
-                    logoHeader.setAttribute('data-path', '/settings');
-                    if (settingsBtn) settingsBtn.classList.add('hidden');
+                if ( isEnabled ) {
+                    logoHeader.setAttribute( 'data-path', '/settings' );
+                    if ( settingsBtn ) settingsBtn.classList.add( 'hidden' );
                 } else {
-                    logoHeader.removeAttribute('data-path');
-                    if (settingsBtn) settingsBtn.classList.remove('hidden');
+                    logoHeader.removeAttribute( 'data-path' );
+                    if ( settingsBtn ) settingsBtn.classList.remove( 'hidden' );
                 }
 
                 // Invalidate cache since focusability of a header element changed
-                focusManager.invalidateCache('sidebar');
+                focusManager.invalidateCache( 'sidebar' );
+                let logoPref = storage.getItem( 'pref:logoSettings' ) || 'visible';
+                // Migrate old boolean values
+                if ( logoPref === 'true' ) {
+                    logoPref = 'settings';
+                } else if ( logoPref === 'false' ) {
+                    logoPref = 'visible';
+                }
+
+                const logoHeader = this.el.querySelector( '#sidebar-logo-header' );
+                const settingsBtn = this.el.querySelector( '#sidebar-settings' );
+                const homeBtn = this.el.querySelector( '#sidebar-home' );
+
+                if ( logoHeader ) {
+                    // Determine if logo is visible
+                    const isLogoVisible = logoPref !== 'hidden';
+                    logoHeader.style.display = isLogoVisible ? '' : 'none';
+
+                    // Clickable status for logo
+                    const isClickable = logoPref === 'settings' || logoPref === 'home';
+                    logoHeader.classList.toggle( 'sidebar-item', isClickable );
+                    logoHeader.setAttribute( 'data-focusable', isClickable.toString() );
+                    logoHeader.setAttribute( 'tabindex', isClickable ? '0' : '-1' );
+
+                    if ( logoPref === 'settings' ) {
+                        logoHeader.dataset.path = '/settings';
+                    } else if ( logoPref === 'home' ) {
+                        logoHeader.dataset.path = '/home';
+                    } else {
+                        delete logoHeader.dataset.path;
+                    }
+
+                    // Show/hide settings button
+                    if ( settingsBtn ) {
+                        settingsBtn.classList.toggle( 'hidden', logoPref === 'settings' );
+                    }
+
+                    // Show/hide home button
+                    if ( homeBtn ) {
+                        homeBtn.classList.toggle( 'hidden', logoPref === 'home' );
+                    }
+                }
             }
-        } catch (err) {
-            log.error('Failed to update sidebar logo settings due to DOM error:', err);
+        } catch ( err ) {
+            log.error( 'Failed to update sidebar logo settings due to DOM error:', err );
         }
     }
 
@@ -386,8 +438,8 @@ class Sidebar extends Component {
      * @private
      */
     _updateAnimationMode() {
-        const disabled = storage.getItem('pref:disableSidebarAnimation') === 'true';
-        this.el.classList.toggle('no-animation', disabled);
+        const disabled = storage.getItem( 'pref:disableSidebarAnimation' ) === 'true';
+        this.el.classList.toggle( 'no-animation', disabled );
     }
 
     /**
@@ -399,38 +451,38 @@ class Sidebar extends Component {
      * @param {Function} callback - Activation handler
      * @private
      */
-    _bindItem(el, callback) {
-        if (!el) return;
+    _bindItem( el, callback ) {
+        if ( !el ) return;
 
         let lastActiveTime = 0;
-        const handleActivate = (e) => {
+        const handleActivate = ( e ) => {
             const now = Date.now();
-            if (now - lastActiveTime < 400) return;
+            if ( now - lastActiveTime < 400 ) return;
             lastActiveTime = now;
 
-            callback(e);
+            callback( e );
         };
 
         // Pointer/Magic Remote: snap to mousedown for zero lag
-        el.onmousedown = (e) => {
-            if (e.button === 0) {
+        el.onmousedown = ( e ) => {
+            if ( e.button === 0 ) {
                 // Left click only
-                handleActivate(e);
+                handleActivate( e );
             }
         };
 
         // D-pad/Synthetic: fallback to onclick
-        el.onclick = (e) => {
-            handleActivate(e);
+        el.onclick = ( e ) => {
+            handleActivate( e );
         };
     }
 
     _bindEvents() {
-        if (!this.el) return;
+        if ( !this.el ) return;
 
         // MutationObserver to watch for focus changes (used to expand/collapse sidebar)
-        if (!this._focusObserver) {
-            this._focusObserver = new MutationObserver((mutations) => {
+        if ( !this._focusObserver ) {
+            this._focusObserver = new MutationObserver( ( mutations ) => {
                 // ── Feedback-loop guard ───────────────────────────────────────
                 // The MutationObserver watches the entire sidebar subtree, which
                 // includes this.el itself. When _expand() toggles 'expanded' /
@@ -442,40 +494,40 @@ class Sidebar extends Component {
                 // Rule: only react to class changes on *child* elements (the
                 // sidebar items). Mutations on the root element are always caused
                 // by _expand() itself and must be ignored to break the loop.
-                const hasChildMutation = mutations.some((m) => m.target !== this.el);
-                if (!hasChildMutation) return;
+                const hasChildMutation = mutations.some( ( m ) => m.target !== this.el );
+                if ( !hasChildMutation ) return;
 
-                const focusedItem = this.el.querySelector('.focused');
+                const focusedItem = this.el.querySelector( '.focused' );
                 const hasFocus = !!focusedItem;
 
-                if (focusedItem) {
+                if ( focusedItem ) {
                     // Automatically scroll the sidebar container so the newly focused item is in view
-                    focusedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    focusedItem.scrollIntoView( { behavior: 'smooth', block: 'nearest' } );
                 }
 
                 // Update indicator FIRST while transition is still disabled (collapsed state)
                 // to ensure it snaps to the correct position before we expand.
-                this._updateIndicator(focusedItem);
+                this._updateIndicator( focusedItem );
 
                 // Then handle expansion — but ONLY via D-pad/keyboard focus paths.
                 // When the mouse is hovering, hover already opened the sidebar and
                 // we must NOT let the MutationObserver re-expand it on mouseleave
                 // (which clears .focused). The _expandedByMouse flag separates
                 // the two independent open mechanisms cleanly.
-                if (!this._expandedByMouse) {
-                    if (hasFocus) {
-                        this._expand(true);
+                if ( !this._expandedByMouse ) {
+                    if ( hasFocus ) {
+                        this._expand( true );
                     } else {
-                        this._expand(false);
+                        this._expand( false );
                     }
                 }
-            });
+            } );
 
-            this._focusObserver.observe(this.el, {
+            this._focusObserver.observe( this.el, {
                 attributes: true,
                 subtree: true,
-                attributeFilter: ['class']
-            });
+                attributeFilter: [ 'class' ]
+            } );
         }
 
         // ── Mouse hover expand/collapse ───────────────────────────────────
@@ -492,73 +544,80 @@ class Sidebar extends Component {
         //   • Mouse physically leaving the sidebar = always collapse. Period.
         //   • D-pad entering the sidebar = MutationObserver handles expand/collapse.
         //   • Both paths are mutually exclusive in practice (D-pad users don't hover).
-        this.el.addEventListener('mouseenter', () => {
+        this.el.addEventListener( 'mouseenter', () => {
             this._expandedByMouse = true;
-            this._expand(true);
-        });
-        this.el.addEventListener('mouseleave', () => {
+            this._expand( true );
+        } );
+        this.el.addEventListener( 'mouseleave', () => {
             // Always collapse when the mouse leaves — no .focused guard, no flag check.
             // If the user is navigating via D-pad, this event never fires so D-pad
             // behaviour is completely unaffected.
             this._expandedByMouse = false;
-            this._expand(false);
-        });
+            this._expand( false );
+        } );
 
         // Logo click handler
-        this._bindItem(this.el.querySelector('#sidebar-logo-header'), () => {
-            router.navigate('/settings');
-        });
+        this._bindItem( this.el.querySelector( '#sidebar-logo-header' ), () => {
+            router.navigate( '/settings' );
+        } );
 
         // Navigation Clicks for other standard items
-        const items = this.el.querySelectorAll('.sidebar-item');
-        items.forEach((item) => {
-            if (item.id === 'sidebar-logo-header') return; // Handled above
+        const items = this.el.querySelectorAll( '.sidebar-item' );
+        items.forEach( ( item ) => {
+            if ( item.id === 'sidebar-logo-header' ) return; // Handled above
 
-            this._bindItem(item, () => {
+            this._bindItem( item, () => {
                 const path = item.dataset.path;
-                if (path) {
-                    if (path === '/home') {
-                        router.reset(path);
+                if ( path ) {
+                    if ( path === '/home' ) {
+                        router.reset( path );
                     } else {
-                        router.navigate(path);
+                        router.navigate( path );
                     }
-                } else if (item.id === 'sidebar-user') {
+                } else if ( item.id === 'sidebar-user' ) {
                     // Clicking the user profile tile opens the "Who's Watching" profiles screen.
                     // From there the user can switch profiles, add a user, or switch servers.
-                    router.navigate('/profiles');
-                } else if (item.id === 'sidebar-syncplay') {
+                    router.navigate( '/profiles' );
+                } else if ( item.id === 'sidebar-syncplay' ) {
                     // Open the SyncPlay group menu overlay (works from any screen)
                     syncPlayGroupMenu.open();
-                } else if (item.id === 'sidebar-random') {
+                } else if ( item.id === 'sidebar-random' ) {
                     this._onRandomClick();
-                } else if (item.id === 'sidebar-logout') {
+                } else if ( item.id === 'sidebar-logout' ) {
                     // AuthManager.logout() handles the routing based on remaining sessions:
                     //   • Other sessions remain → auth:switchToProfiles → App.js routes to /profiles
                     //   • No sessions remain    → auth:logout           → App.js routes to /login
                     // auth.logout();
                 }
-            });
-        });
+            } );
+        } );
 
         // Sync indicator during scrolling
-        const contentContainer = this.el.querySelector('.sidebar-content');
-        if (contentContainer) {
-            contentContainer.addEventListener('scroll', () => {
-                const focused = this.el.querySelector('.sidebar-item.focused');
+        const contentContainer = this.el.querySelector( '.sidebar-content' );
+        if ( contentContainer ) {
+            contentContainer.addEventListener( 'scroll', () => {
+                const focused = this.el.querySelector( '.sidebar-item.focused' );
                 // Only sync if the focused element is actually INSIDE the scrolling container
-                if (focused && contentContainer.contains(focused)) {
-                    this._updateIndicator(focused, { instant: true });
+                if ( focused && contentContainer.contains( focused ) ) {
+                    this._updateIndicator( focused, { instant: true } );
                 }
-            });
+            } );
         }
     }
 
-    _expand(expanded) {
-        if (this.expanded === expanded) return;
+    _expand( expanded ) {
+        if ( storage.getItem( 'pref:sidebarMode' ) === 'collapsed' ) {
+            expanded = false;
+        }
+        if ( this.expanded === expanded ) return;
         this.expanded = expanded;
 
-        this.el.classList.toggle('expanded', expanded);
-        this.el.classList.toggle('collapsed', !expanded);
+        this.el.classList.toggle( 'expanded', expanded );
+        this.el.classList.toggle( 'collapsed', !expanded );
+
+        // Recheck items alignment since library visibility changes between collapsed and expanded states
+        this._updateSidebarItemsAlign();
+        setTimeout( () => this._updateSidebarItemsAlign(), 0 );
 
         // ====================================================================
         // COLLAPSE VISUAL RESET
@@ -566,9 +625,9 @@ class Sidebar extends Component {
         // When collapsing, we must ensure all focus indicators and focus state
         // classes are immediately removed from the sidebar DOM elements.
         // --------------------------------------------------------------------
-        if (!expanded) {
+        if ( !expanded ) {
             // Hide the sliding focus indicator wrapper
-            this.el.classList.remove('has-focus');
+            this.el.classList.remove( 'has-focus' );
 
             // Strip the .focused class from all sidebar items (static and library ones).
             // This is critical when double-clicking or clicking the already-active
@@ -576,9 +635,9 @@ class Sidebar extends Component {
             // the focus never shifts to a page element, leaving the sidebar item
             // permanently marked as focused. Removing it here restores the clean,
             // unselected collapsed state visually.
-            this.el.querySelectorAll('.focused').forEach((el) => {
-                el.classList.remove('focused');
-            });
+            this.el.querySelectorAll( '.focused' ).forEach( ( el ) => {
+                el.classList.remove( 'focused' );
+            } );
 
             // ====================================================================
             // NATIVE BROWSER FOCUS DEFEAT
@@ -588,43 +647,43 @@ class Sidebar extends Component {
             // focus remains, triggering theme selectors like `.sidebar-item:focus`
             // (often with !important). Blurring it removes the native :focus state.
             // --------------------------------------------------------------------
-            if (this.el.contains(document.activeElement)) {
+            if ( this.el.contains( document.activeElement ) ) {
                 document.activeElement.blur();
             }
         }
 
-        const pageContainer = document.getElementById('page-container');
-        if (pageContainer) {
-            pageContainer.classList.toggle('sidebar-expanded', expanded);
+        const pageContainer = document.getElementById( 'page-container' );
+        if ( pageContainer ) {
+            pageContainer.classList.toggle( 'sidebar-expanded', expanded );
         }
     }
 
     async _loadLibraries() {
-        if (!auth.isAuthenticated()) return;
+        if ( !auth.isAuthenticated() ) return;
 
         try {
             const views = await api.getUserViews();
             const items = views.Items || [];
 
-            const sidebarContent = this.el.querySelector('.sidebar-content');
-            if (!sidebarContent) return;
+            const sidebarContent = this.el.querySelector( '.sidebar-content' );
+            if ( !sidebarContent ) return;
 
             // Remove any previously rendered libraries and headers to allow clean reloading
-            sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach((el) => el.remove());
+            sidebarContent.querySelectorAll( '.library-item, .sidebar-section-header' ).forEach( ( el ) => el.remove() );
 
-            const hideHeader = storage.getItem('pref:hideSidebarLibraryHeader') === 'true';
-            if (items.length > 0 && !hideHeader) {
+            const hideHeader = storage.getItem( 'pref:hideSidebarLibraryHeader' ) === 'true';
+            if ( items.length > 0 && !hideHeader ) {
                 // Determine header label based on layout block ('My Media')
-                const header = document.createElement('div');
+                const header = document.createElement( 'div' );
                 header.className = 'sidebar-section-header';
                 header.id = 'section-header';
                 header.dataset.i18n = 'HeaderMyMedia';
-                header.textContent = i18n.t('HeaderMyMedia');
-                sidebarContent.appendChild(header);
+                header.textContent = i18n.t( 'HeaderMyMedia' );
+                sidebarContent.appendChild( header );
             }
 
-            items.forEach((lib) => {
-                const btn = document.createElement('button');
+            items.forEach( ( lib ) => {
+                const btn = document.createElement( 'button' );
                 btn.className = 'sidebar-item library-item';
                 btn.tabIndex = 0;
 
@@ -638,15 +697,15 @@ class Sidebar extends Component {
                 btn.dataset.layoutId = `lib-${lib.Id}`;
                 btn.innerHTML = `
                     <div class="item-icon">
-                        ${getLibraryIcon(lib.CollectionType)}
+                        ${getLibraryIcon( lib.CollectionType )}
                     </div>
                     <span class="item-text">${lib.Name}</span>
                 `;
 
-                this._bindItem(btn, () => router.navigate(buttonPath));
+                this._bindItem( btn, () => router.navigate( buttonPath ) );
 
-                sidebarContent.appendChild(btn);
-            });
+                sidebarContent.appendChild( btn );
+            } );
 
             /*
              * After building all library buttons, re-apply the sidebar layout so
@@ -655,17 +714,20 @@ class Sidebar extends Component {
              */
             this._applySidebarLayout();
 
+            // Re-evaluate alignment now that libraries are loaded and overflow metrics are active
+            setTimeout( () => this._updateSidebarItemsAlign(), 0 );
+
             // Invalidate focus manager cache to discover dynamically added libraries
             focusManager.resetDOMCache();
-        } catch (e) {
-            log.warn('Failed to load libraries', e);
+        } catch ( e ) {
+            log.warn( 'Failed to load libraries', e );
         }
     }
 
     _renderUserAvatar() {
         const user = auth.getCurrentUser();
-        if (user && user.PrimaryImageTag) {
-            const url = api.getUserImageUrl(user.Id, { maxWidth: 50 });
+        if ( user && user.PrimaryImageTag ) {
+            const url = api.getUserImageUrl( user.Id, { maxWidth: 50 } );
             return `<img src="${url}" class="sidebar-avatar" />`;
         }
         return sidebarIcons.userDefault;
@@ -673,7 +735,7 @@ class Sidebar extends Component {
 
     _getUserName() {
         const user = auth.getCurrentUser();
-        return user && user.Name ? user.Name : i18n.t('LabelUsername');
+        return user && user.Name ? user.Name : i18n.t( 'LabelUsername' );
     }
 
     /**
@@ -690,23 +752,23 @@ class Sidebar extends Component {
      * @param {boolean} active - Whether SyncPlay is currently enabled
      * @private
      */
-    _updateSyncPlayBtn(active) {
-        const btn = this.el.querySelector('#sidebar-syncplay');
-        const dot = this.el.querySelector('#sidebar-syncplay-dot');
-        const label = this.el.querySelector('#sidebar-syncplay-label');
-        if (!btn) return;
+    _updateSyncPlayBtn( active ) {
+        const btn = this.el.querySelector( '#sidebar-syncplay' );
+        const dot = this.el.querySelector( '#sidebar-syncplay-dot' );
+        const label = this.el.querySelector( '#sidebar-syncplay-label' );
+        if ( !btn ) return;
 
         // Hide completely if the plugin is disabled
-        btn.style.display = pluginManager.isEnabled('syncplay') ? '' : 'none';
+        btn.style.display = pluginManager.isEnabled( 'syncplay' ) ? '' : 'none';
 
-        btn.classList.toggle('syncplay-active', active);
+        btn.classList.toggle( 'syncplay-active', active );
 
-        if (dot) {
-            dot.classList.toggle('visible', active);
+        if ( dot ) {
+            dot.classList.toggle( 'visible', active );
         }
 
-        if (label) {
-            if (active) {
+        if ( label ) {
+            if ( active ) {
                 // Try to get the human-readable group name from SyncPlayManager
                 const manager = window.__syncPlayManager;
                 const groupName = manager?.groupName || 'In Group';
@@ -717,30 +779,66 @@ class Sidebar extends Component {
         }
     }
 
-    _onNavigate({ path }) {
+    _onNavigate( { path } ) {
         this.activePath = path;
         this._updateActiveState();
         this._updateTransparentCollapsed();
+        setTimeout( () => this._updateSidebarItemsAlign(), 0 );
     }
 
     _updateTransparentCollapsed() {
-        const transparentCollapsed = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
-        const isSettings = (this.activePath || '').startsWith('/settings');
-        this.el.classList.toggle('transparent-collapsed', transparentCollapsed && !isSettings);
+        const colorPref = storage.getItem( 'pref:collapsedSidebarColor' ) || 'theme';
+        const expandedColorPref = storage.getItem( 'pref:expandedSidebarColor' ) || 'theme';
+        this.el.classList.toggle( 'transparent-collapsed', colorPref === 'transparent' );
+        this.el.classList.toggle( 'semi-transparent-collapsed', colorPref === 'semi' );
+        this.el.classList.toggle( 'tinted-semi-collapsed', colorPref === 'tinted-semi' );
+        this.el.classList.toggle( 'black-collapsed', colorPref === 'black' );
+        this.el.classList.toggle( 'transparent-expanded', expandedColorPref === 'transparent' );
+        this.el.classList.toggle( 'semi-transparent-expanded', expandedColorPref === 'semi' );
+        this.el.classList.toggle( 'tinted-semi-expanded', expandedColorPref === 'tinted-semi' );
+        this.el.classList.toggle( 'black-expanded', expandedColorPref === 'black' );
+    }
+
+    _updateSidebarItemsAlign() {
+        const alignPref = storage.getItem( 'pref:sidebarItemsAlign' ) || 'top';
+        const scrollContainer = this.el.querySelector( '.sidebar-content' );
+
+        let shouldAlign = false;
+        if ( alignPref !== 'top' && scrollContainer ) {
+            // Check if all sidebar items fit inside the scrollable view without overflow
+            const hasOverflow = scrollContainer.scrollHeight > scrollContainer.clientHeight;
+            shouldAlign = !hasOverflow;
+        }
+
+        const prevCenter = this.el.classList.contains( 'align-center' );
+        const prevBottom = this.el.classList.contains( 'align-bottom' );
+
+        this.el.classList.toggle( 'align-center', alignPref === 'center' && shouldAlign );
+        this.el.classList.toggle( 'align-bottom', alignPref === 'bottom' && shouldAlign );
+
+        const focused = this.el.querySelector( '.sidebar-item.focused' );
+        if ( focused ) {
+            // Update immediately for engines that reflow synchronously
+            this._updateIndicator( focused, { instant: true } );
+            // And defer a 50ms update to ensure the TV rendering layout paint has fully settled
+            setTimeout( () => {
+                this._updateIndicator( focused, { instant: true } );
+            }, 50 );
+        }
     }
 
     _updateActiveState() {
-        const items = this.el.querySelectorAll('.sidebar-item');
-        items.forEach((item) => {
+        const items = this.el.querySelectorAll( '.sidebar-item' );
+        items.forEach( ( item ) => {
             const itemPath = item.dataset.path;
-            if (itemPath && this.activePath.startsWith(itemPath)) {
+            if ( itemPath && this.activePath.startsWith( itemPath ) ) {
                 // Approximate match (e.g. /home matches /home)
                 // Exception: /library/:id needs exact start logic
-                item.classList.add('active');
+                item.classList.add( 'active' );
             } else {
-                item.classList.remove('active');
+                item.classList.remove( 'active' );
             }
-        });
+        } );
     }
 
     /**
@@ -749,37 +847,37 @@ class Sidebar extends Component {
      * @param {Object} [options] - Update options
      * @param {boolean} [options.instant] - If true, disable transitions for this update
      */
-    _updateIndicator(focusedItem, options = {}) {
-        const indicator = this.el.querySelector('.sidebar-focus-indicator');
-        if (!indicator) return;
+    _updateIndicator( focusedItem, options = {} ) {
+        const indicator = this.el.querySelector( '.sidebar-focus-indicator' );
+        if ( !indicator ) return;
 
-        const target = focusedItem || this.el.querySelector('.sidebar-item.focused');
+        const target = focusedItem || this.el.querySelector( '.sidebar-item.focused' );
 
-        if (target) {
+        if ( target ) {
             // If we are currently NOT expanded, we want to snap instantly
-            const isExpanding = !this.el.classList.contains('expanded');
+            const isExpanding = !this.el.classList.contains( 'expanded' );
             const forceInstant = options.instant || isExpanding;
 
-            const contentContainer = this.el.querySelector('.sidebar-content');
+            const contentContainer = this.el.querySelector( '.sidebar-content' );
             const scrollTop = contentContainer ? contentContainer.scrollTop : 0;
 
             // Compute offsetTop cumulatively relative to the main sidebar nav container.
             // Bypasses getBoundingClientRect() which yields unstable values during active CSS transform animations.
             let y = 0;
             let current = target;
-            while (current && current !== this.el && current !== document.body) {
+            while ( current && current !== this.el && current !== document.body ) {
                 y += current.offsetTop || 0;
                 current = current.offsetParent;
             }
 
             // Compensate for the internal scroll position of the sidebar links list container
-            if (contentContainer && contentContainer.contains(target)) {
+            if ( contentContainer && contentContainer.contains( target ) ) {
                 y -= scrollTop;
             }
 
             const targetHeight = target.offsetHeight || 72;
 
-            if (forceInstant) {
+            if ( forceInstant ) {
                 // Force an instant snap
                 indicator.style.webkitTransition = 'none';
                 indicator.style.transition = 'none';
@@ -796,12 +894,12 @@ class Sidebar extends Component {
                 indicator.style.height = `${targetHeight}px`;
             }
 
-            if (!this.el.classList.contains('has-focus')) {
-                this.el.classList.add('has-focus');
+            if ( !this.el.classList.contains( 'has-focus' ) ) {
+                this.el.classList.add( 'has-focus' );
             }
         } else {
-            if (this.el.classList.contains('has-focus')) {
-                this.el.classList.remove('has-focus');
+            if ( this.el.classList.contains( 'has-focus' ) ) {
+                this.el.classList.remove( 'has-focus' );
             }
         }
     }
@@ -820,11 +918,11 @@ class Sidebar extends Component {
      * @private
      */
     _applySidebarLayout() {
-        const sidebarEl = this.el.id === 'main-sidebar' ? this.el : this.el.querySelector('#main-sidebar');
-        if (!sidebarEl) return;
+        const sidebarEl = this.el.id === 'main-sidebar' ? this.el : this.el.querySelector( '#main-sidebar' );
+        if ( !sidebarEl ) return;
 
-        const sidebarContent = sidebarEl.querySelector('.sidebar-content');
-        if (!sidebarContent) return;
+        const sidebarContent = sidebarEl.querySelector( '.sidebar-content' );
+        if ( !sidebarContent ) return;
 
         /* ── 1. Collect all sidebar items with their layout IDs ────────────── */
         /*
@@ -840,55 +938,55 @@ class Sidebar extends Component {
         const len = children.length;
 
         /* Iterate over children elements using a safe traditional loop */
-        for (let i = 0; i < len; i++) {
-            const el = children[i];
-            
+        for ( let i = 0; i < len; i++ ) {
+            const el = children[ i ];
+
             /* Verify if the element matches our target sidebar items */
-            const isSidebarItem = el.classList.contains('sidebar-item');
-            const isSectionHeader = el.classList.contains('sidebar-section-header');
-            
-            if (isSidebarItem || isSectionHeader) {
-                if (el.classList.contains('library-item')) {
+            const isSidebarItem = el.classList.contains( 'sidebar-item' );
+            const isSectionHeader = el.classList.contains( 'sidebar-section-header' );
+
+            if ( isSidebarItem || isSectionHeader ) {
+                if ( el.classList.contains( 'library-item' ) ) {
                     /* It's a dynamically injected library shortcut */
-                    allItems.push({ id: el.dataset.layoutId, el: el });
-                } else if (el.id === 'section-header') {
+                    allItems.push( { id: el.dataset.layoutId, el: el } );
+                } else if ( el.id === 'section-header' ) {
                     /* It's the library section header label */
-                    allItems.push({ id: 'section-header', el: el });
+                    allItems.push( { id: 'section-header', el: el } );
                 } else {
                     /* It's a static main navigation item (Home, Search, Settings, etc.) */
-                    const rawId = el.id ? el.id.replace('sidebar-', '') : null;
-                    if (rawId) {
-                        allItems.push({ id: rawId, el: el });
+                    const rawId = el.id ? el.id.replace( 'sidebar-', '' ) : null;
+                    if ( rawId ) {
+                        allItems.push( { id: rawId, el: el } );
                     }
                 }
             }
         }
 
         /* ── 2. Ask the manager to order and annotate items ────────────────── */
-        const ordered = sidebarLayoutManager.applyLayout(allItems);
+        const ordered = sidebarLayoutManager.applyLayout( allItems );
 
         /* ── 3. Re-insert items and apply visibility ───────────────────────── */
-        ordered.forEach(({ id, el, hidden }) => {
+        ordered.forEach( ( { id, el, hidden } ) => {
             const isSyncPlay = id === 'syncplay';
-            const pluginHidden = isSyncPlay && !pluginManager.isEnabled('syncplay');
+            const pluginHidden = isSyncPlay && !pluginManager.isEnabled( 'syncplay' );
             const shouldHide = hidden || pluginHidden;
 
             // Apply visibility
             el.style.display = shouldHide ? 'none' : '';
 
             // Sequentially append back into the shared container
-            sidebarContent.appendChild(el);
-        });
+            sidebarContent.appendChild( el );
+        } );
 
         /* ── 4. Update the FocusManager's defaultFocusSelector ─────────────── */
         const defaultFocusId = sidebarLayoutManager.getDefaultFocus();
-        const sectionConfig = focusManager.getSectionConfig('sidebar');
-        if (sectionConfig) {
+        const sectionConfig = focusManager.getSectionConfig( 'sidebar' );
+        if ( sectionConfig ) {
             sectionConfig.defaultFocusSelector = `#sidebar-${defaultFocusId}`;
         }
 
         // Invalidate the focus cache so the updated DOM structure is re-scanned
-        focusManager.invalidateCache('sidebar');
+        focusManager.invalidateCache( 'sidebar' );
     }
 
     /**
@@ -898,17 +996,17 @@ class Sidebar extends Component {
      */
     async _onRandomClick() {
         try {
-            log.info('Fetching random item...');
+            log.info( 'Fetching random item...' );
             const item = await api.getRandomItem();
-            if (item) {
-                log.info(`Random item found: ${item.Name} (${item.Id})`);
-                router.navigate(`/details/${item.Id}`);
+            if ( item ) {
+                log.info( `Random item found: ${item.Name} (${item.Id})` );
+                router.navigate( `/details/${item.Id}` );
             } else {
-                log.warn('No random item found.');
+                log.warn( 'No random item found.' );
                 // Optional: Show a toast/notification if no items are found
             }
-        } catch (e) {
-            log.error('Failed to fetch random item', e);
+        } catch ( e ) {
+            log.error( 'Failed to fetch random item', e );
         }
     }
 }

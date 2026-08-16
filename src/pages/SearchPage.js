@@ -310,9 +310,19 @@ class SearchPage extends Page {
                 { type: 'TvChannel' }
             ];
 
+            /*
+             * Determine whether to search using the dedicated /Search/Hints endpoint (default)
+             * or the general /Items endpoint (required by some custom server plugins).
+             */
+            const useItemsEndpoint = storage.getItem('pref:useItemsForSearch') === 'true';
+
             const limit = 12; // Fetch 12 so that with a grid limit of 11, the "See More" button appears
+            const searchFn = useItemsEndpoint
+                ? (type) => api.search(this._query, { IncludeItemTypes: type, Limit: limit })
+                : (type) => api.searchHints(this._query, { IncludeItemTypes: type, Limit: limit });
+
             const requests = [
-                ...searchTypes.map((t) => api.searchHints(this._query, { IncludeItemTypes: t.type, Limit: limit })),
+                ...searchTypes.map((t) => searchFn(t.type)),
                 api.searchPeople(this._query, { Limit: limit })
             ];
 
@@ -618,17 +628,25 @@ class SearchPage extends Page {
     _clearResults() {
         this.$('#search-results').innerHTML = '';
 
-        // Unregister grid sections to prevent memory leaks and focus confusion
-        if (this._grids) {
-            Object.values(this._grids).forEach((grid) => {
-                const baseId = grid.id;
-                focusManager.unregister(`${baseId}-items`);
-                focusManager.unregister(`${baseId}-btn-zone`);
-            });
-        }
+        this._destroyGrids();
 
         this._results = [];
         this._grids = {};
+    }
+
+    _destroyGrids() {
+        if (!this._grids) return;
+        Object.values(this._grids).forEach((grid) => {
+            const baseId = grid.id;
+            focusManager.unregister(`${baseId}-items`);
+            focusManager.unregister(`${baseId}-btn-zone`);
+            grid.destroy();
+        });
+    }
+
+    destroy() {
+        this._destroyGrids();
+        super.destroy();
     }
 
     _saveStateAndNavigate(sectionId, card) {

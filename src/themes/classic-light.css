@@ -14,7 +14,7 @@
 
     --jf-text-primary: #111111;
     --jf-text-secondary: #666666;
-    --jf-text-tertiary: #999999;
+    --jf-text-tertiary: rgba(255, 255, 255, 0.8);
     --jf-text-disabled: #cccccc;
 
     --jf-success: #2e7d32;
@@ -39,7 +39,7 @@
     --jf-shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
 
     --jf-scrollbar: #cccccc;
-    --jf-scrollbar-hover: #999999;
+    --jf-scrollbar-hover: rgba(255, 255, 255, 0.8);
 
     --jf-spacing-xs: 4px;
     --jf-spacing-sm: 8px;

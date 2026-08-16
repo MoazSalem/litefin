@@ -15,6 +15,7 @@
 import { SubtitleParser } from './SubtitleParser.js';
 import ASSRenderer from './ASSRenderer.js';
 import LibassWasmRenderer from './LibassWasmRenderer.js';
+import ASSJSRenderer from './ASSJSRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
@@ -442,6 +443,47 @@ export default class SubtitleManager {
     }
 
     /**
+     * Determines and returns the user-facing name of the currently active subtitle rendering engine.
+     * Evaluates backend type, delivery method, and player preferences to identify the active pipeline.
+     * 
+     * @returns {string} Human-readable renderer description.
+     */
+    getSubtitleRendererName() {
+        // Return 'None' if there's no active track loaded or if delivery is explicitly disabled.
+        if (!this._primaryTrack || this._primaryDelivery === DeliveryMethod.NONE) {
+            return i18n.t('None') || 'None';
+        }
+
+        // Map the internal delivery method constant to a descriptive name.
+        switch (this._primaryDelivery) {
+            case DeliveryMethod.EMBEDDED_NATIVE: {
+                // For native playback, distinguish based on the target OS environment.
+                if (this._backendType === 'webos') {
+                    return 'WebOS Native';
+                } else if (this._backendType === 'tizen') {
+                    return 'Tizen AVPlayer Native';
+                } else {
+                    return 'HTML5 Native';
+                }
+            }
+            case DeliveryMethod.EXTERNAL_TEXT:
+                // DOM rendering of parsed text-based formats (VTT, SRT, etc.).
+                return 'DOM / Text';
+            case DeliveryMethod.ASS_CANVAS: {
+                // ASS/SSA renderer engine: return 'libjass' or 'libass-wasm' directly.
+                const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+                return preferredEngine;
+            }
+            case DeliveryMethod.PGS_BITMAP:
+                // Graphics/bitmap subtitle rendering engine.
+                return 'PGSRenderer';
+            default:
+                // Fallback for unexpected delivery states.
+                return i18n.t('Unknown') || 'Unknown';
+        }
+    }
+
+    /**
      * Get the current primary subtitle track.
      * @returns {Object|null} The Jellyfin subtitle stream object
      */
@@ -461,19 +503,26 @@ export default class SubtitleManager {
         // SRT/VTT track is active, triggering an unwanted overlay.
         // =================================================================
         if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
+            // Sync the master style modifications toggle and preferred engine
+            const enableModifications = PlayerSettings.get('enableAssStyleModifications') === true;
+            const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+            this._assRenderer.setStyleConfig({ enableModifications, preferredEngine });
+
             const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
             let fontClass = null;
             let fontFamily = null;
 
-            if (this._hasContainerFonts && !overrideAssFonts) {
-                log.info('Using container fonts for ASS; font override toggle is OFF.');
-            } else {
+            if (overrideAssFonts) {
                 const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
                 if (fontId) {
                     await FontLoader.loadFont(fontId);
                 }
                 fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
                 fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+            } else if (this._hasContainerFonts) {
+                log.info('Using container fonts for ASS; font override toggle is OFF.');
+            } else {
+                log.info('Override OFF and no container fonts — restoring original ASS fonts.');
             }
 
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
@@ -559,6 +608,26 @@ export default class SubtitleManager {
         if (this._pgsRenderer && this._primaryDelivery === DeliveryMethod.PGS_BITMAP) {
             // Renders timestamp -1 to wipe the OffscreenCanvas clean
             this._pgsRenderer.clear();
+        }
+    }
+
+    // ========================================================================
+    // Playback State
+    // ========================================================================
+
+    /**
+     * Notify the ASS renderer that playback has resumed.
+     * Resumes CSS animations and the internal rAF loop.
+     */
+    play() {
+        if (this._assRenderer && typeof this._assRenderer.play === 'function') {
+            this._assRenderer.play();
+        }
+    }
+
+    pause() {
+        if (this._assRenderer && typeof this._assRenderer.pause === 'function') {
+            this._assRenderer.pause();
         }
     }
 
@@ -795,11 +864,22 @@ export default class SubtitleManager {
                 return;
             }
 
-            // Select and initialize ASS subtitle rendering backend
+            // Select and initialize ASS subtitle rendering backend with WASM feature gating
             const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
             let TargetRendererClass;
+            
+            // Check if the user selected libass-wasm as the preferred renderer
             if (preferredEngine === 'libass-wasm') {
-                TargetRendererClass = LibassWasmRenderer;
+                // Verify hardware/browser support for WebAssembly execution at runtime
+                if (LibassWasmRenderer.isSupported()) {
+                    TargetRendererClass = LibassWasmRenderer;
+                } else {
+                    // Fall back to libjass DOM rendering if the engine lacks WebAssembly capability
+                    log.warn('libass-wasm requested but WebAssembly is not supported on this platform; falling back to ASSRenderer (libjass)');
+                    TargetRendererClass = ASSRenderer;
+                }
+            } else if (preferredEngine === 'assjs') {
+                TargetRendererClass = ASSJSRenderer;
             } else {
                 TargetRendererClass = ASSRenderer;
             }
@@ -842,6 +922,10 @@ export default class SubtitleManager {
                     });
                 }
             }
+
+            // Sync master style modifications toggle and engine config
+            const enableAssMods = PlayerSettings.get('enableAssStyleModifications') === true;
+            this._assRenderer.setStyleConfig({ enableModifications: enableAssMods, preferredEngine });
 
             // Apply current subtitle font override
             let fontClass = null;
@@ -1324,7 +1408,20 @@ export default class SubtitleManager {
 
                 callback({
                     text: activeCue.text,
-                    duration: (activeCue.end - activeCue.start) * 1000
+                    duration: (activeCue.end - activeCue.start) * 1000,
+                    // ─────────────────────────────────────────────────────────
+                    // Absolute cue end position expressed in ticks (100ns units).
+                    // PlayerPage uses this to schedule subtitle clearing without
+                    // relying on video.currentTime, which may be stale right after
+                    // a seek on WebOS (hardware seek completes asynchronously).
+                    // 
+                    // We add the user's subtitle offset back in because the cue's
+                    // raw end time is in subtitle-space (adjusted), but PlayerPage
+                    // compares against the raw video position from getCurrentPositionTicks().
+                    // Failing to add the offset back would cause premature clearing
+                    // whenever the user has set a non-zero subtitle delay.
+                    // ─────────────────────────────────────────────────────────
+                    endTicks: Math.round((activeCue.end + offset) * 10000000)
                 });
             }
         } else {

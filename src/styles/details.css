@@ -58,8 +58,8 @@
     right: 0;
     bottom: 0;
     background: linear-gradient(to bottom,
-            rgba(16, 16, 16, 0.6) 0%,
-            var(--jf-background) 100%);
+            rgba(16, 16, 16, 0.45) 0%,
+            var(--jf-background) 125%);
     /* PERFORMANCE: Isolate gradient from main layout */
     transform: translateZ(0);
 }
@@ -113,6 +113,140 @@
 .details-page.layout-poster-right .hero-poster {
     margin-right: 0;
     margin-left: 40px;
+}
+
+/* Cinematic Backdrop Minimal Layout Mode */
+.details-page.layout-backdrop-minimal .hero-poster {
+    display: none !important;
+}
+
+.details-page.layout-backdrop-minimal .details-main-split {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 16vh;
+    margin-bottom: 20px;
+}
+
+.details-page.layout-backdrop-minimal .details-info-col {
+    width: 100%;
+    align-items: center;
+    padding-bottom: 0;
+}
+
+.details-page.layout-backdrop-minimal .hero-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-minimal .details-title-logo {
+    justify-content: center;
+    max-width: 600px;
+    height: 220px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-minimal .details-title {
+    text-align: center;
+    max-width: 90%;
+    font-size: 4rem;
+}
+
+.details-page.layout-backdrop-minimal .details-original-title {
+    text-align: center;
+}
+
+.details-page.layout-backdrop-minimal .details-meta-row {
+    justify-content: center;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-minimal .details-actions {
+    justify-content: center;
+    width: 100%;
+    margin-top: 12px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-minimal .details-overview {
+    width: 100%;
+    text-align: left;
+    margin-top: 24px;
+}
+
+.details-page.layout-backdrop-minimal .details-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+}
+
+/* Cinematic Backdrop Left Aligned Layout Mode */
+.details-page.layout-backdrop-left .hero-poster {
+    display: none !important;
+}
+
+.details-page.layout-backdrop-left .details-main-split {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding-top: 16vh;
+    margin-bottom: 20px;
+}
+
+.details-page.layout-backdrop-left .details-info-col {
+    width: 100%;
+    align-items: flex-start;
+    padding-bottom: 0;
+}
+
+.details-page.layout-backdrop-left .hero-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-left .details-title-logo {
+    justify-content: flex-start;
+    max-width: 600px;
+    height: 220px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-left .details-title {
+    text-align: left;
+    max-width: 90%;
+    font-size: 4rem;
+}
+
+.details-page.layout-backdrop-left .details-original-title {
+    text-align: left;
+}
+
+.details-page.layout-backdrop-left .details-meta-row {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.details-page.layout-backdrop-left .details-actions {
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: 12px;
+    margin-bottom: 24px;
+}
+
+.details-page.layout-backdrop-left .details-overview {
+    width: 100%;
+    text-align: left;
+    margin-top: 24px;
+}
+
+.details-page.layout-backdrop-left .details-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
 }
 
 .hero-poster {
@@ -215,7 +349,7 @@
 
 /* 
  * ============================================================================
- * Apple Human Interface Guidelines - Sleek Logo As Title Display
+ * Sleek Logo As Title Display
  * ============================================================================
  * When 'logo-only' title style is enabled, we completely bypass the standard 
  * absolute positioning on the top-right and instead pull the logo into the 
@@ -240,7 +374,7 @@
 }
 
 /* 
- * Premium Apple-Inspired Spring Dynamics
+ * Premium Spring Dynamics
  * Apply fluid spring mechanics to the logo entry by using high-tension 
  * cubic-bezier curves that scale and lift the image on successful load.
  */
@@ -378,7 +512,7 @@
 .meta-ends-at {
     color: var(--jf-text-secondary);
     /* Improved readability */
-    font-size: 1.3rem;
+    font-size: 1.4rem;
 }
 
 .details-actions {
@@ -420,8 +554,6 @@
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     border: 3px solid transparent;
     background-clip: padding-box;
-    /* Add bottom spacing to prevent overlapping when buttons wrap dynamically */
-    margin-bottom: 12px;
 }
 
 
@@ -672,6 +804,13 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     white-space: pre-line;
 }
 
+.overview-text a {
+    pointer-events: none;
+    cursor: default;
+    text-decoration: none;
+    color: inherit;
+}
+
 .line-clamp-6 {
     display: -webkit-box;
     -webkit-line-clamp: 6;
@@ -696,7 +835,7 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .details-rich-meta.focused {
     border-color: var(--jf-btn-primary-bg) !important;
     /* Focus highlight */
-    background-color: rgba(255, 255, 255, 0.02);
+    background-color: rgba(var(--jf-accent-dark-rgb,15,15,20),0.65);
     outline: none;
 }
 
@@ -717,7 +856,7 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     width: 120px;
     flex-shrink: 0;
     color: var(--jf-text-secondary);
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 500;
 }
 
@@ -1001,8 +1140,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 /*
  * ── FAVORITE BUTTON DYNAMIC ICON STATES ──────────────────────────────────────
  * Manages the transitions between outlined and filled states for the favorite
- * heart icon. To align with Apple HIG rules, unfocused non-favorites remain
- * outlined, while hover/focus/active states instantly swap to the premium filled
+ * heart icons, unfocused non-favorites remain outlined, 
+ * while hover/focus/active states instantly swap to the premium filled
  * SVG representation for clear interactive feedback.
  */
 

@@ -55,6 +55,48 @@
     box-shadow: none !important;
 }
 
+/* Semi-transparent collapsed sidebar with glassmorphic blur */
+.sidebar.semi-transparent-collapsed:not(.expanded):not(:hover) {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+/* Tinted semi-transparent collapsed sidebar */
+.sidebar.tinted-semi-collapsed:not(.expanded):not(:hover) {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+}
+
+/* Transparent expanded sidebar */
+.sidebar.transparent-expanded.expanded,
+.sidebar.transparent-expanded:hover {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+/* Semi-transparent expanded sidebar */
+.sidebar.semi-transparent-expanded.expanded,
+.sidebar.semi-transparent-expanded:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+/* Tinted semi-transparent expanded sidebar */
+.sidebar.tinted-semi-expanded.expanded,
+.sidebar.tinted-semi-expanded:hover {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.85) !important;
+}
+
+/* Black collapsed sidebar */
+.sidebar.black-collapsed:not(.expanded):not(:hover) {
+    background: #000000 !important;
+}
+
+/* Black expanded sidebar */
+.sidebar.black-expanded.expanded,
+.sidebar.black-expanded:hover {
+    background: #000000 !important;
+}
+
 /* Fully hidden state */
 .sidebar.hidden {
     -webkit-transform: translate3d(-100%, 0, 0);
@@ -66,6 +108,90 @@
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
     /* Shift to reveal full sidebar */
+}
+
+body.sidebar-mode-collapsed .sidebar.expanded,
+body.sidebar-mode-collapsed .sidebar:hover {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed:hover {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,
+body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
+    background: #000000 !important;
+}
+
+/* Ambient Theme Specific Overrides for Always Collapsed Mode */
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar:hover {
+    background: transparent !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
+    background: transparent !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.semi-transparent-collapsed:hover {
+    background: rgba(16, 16, 16, 0.4) !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.tinted-semi-collapsed:hover {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+}
+
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-collapsed.expanded,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
+    background: #000000 !important;
+}
+
+body.sidebar-mode-collapsed .sidebar.expanded .logo-text,
+body.sidebar-mode-collapsed .sidebar:hover .logo-text,
+body.sidebar-mode-collapsed .sidebar.expanded .item-text,
+body.sidebar-mode-collapsed .sidebar:hover .item-text {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Ensure focused item text/icon uses high-contrast text color when focused in collapsed state */
+body.sidebar-mode-collapsed .sidebar-item.focused,
+body.sidebar-mode-collapsed .sidebar-item:focus {
+    color: var(--jf-primary-btn-color) !important;
+}
+
+body.sidebar-mode-collapsed .sidebar .logo-icon,
+body.sidebar-mode-collapsed .sidebar .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+/* Rounded square focus indicator overrides for Always Collapsed mode */
+body.sidebar-mode-collapsed .sidebar-focus-indicator {
+    width: 56px !important;
+    height: 56px !important;
+    left: 272px !important;
+    margin-top: 8px !important;
+    border-radius: 14px !important;
 }
 
 /* Instant Mode: Remove all transitions when disabled in settings */
@@ -142,7 +268,8 @@ body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
     transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
 }
 
-.sidebar.has-focus .sidebar-focus-indicator {
+.sidebar.expanded.has-focus .sidebar-focus-indicator,
+.sidebar:hover.has-focus .sidebar-focus-indicator {
     opacity: 1;
 }
 
@@ -503,6 +630,14 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     overflow-x: hidden;
 }
 
+.sidebar.align-center .sidebar-content {
+    justify-content: center !important;
+}
+
+.sidebar.align-bottom .sidebar-content {
+    justify-content: flex-end !important;
+}
+
 .sidebar-libraries {
     display: flex;
     flex-direction: column;
@@ -570,7 +705,7 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 }
 
 .library-item .item-text {
-    font-size: 1.2rem;
+    font-size: 1.4rem;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;

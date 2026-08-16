@@ -75,6 +75,9 @@ export default class SubtitleQuickSettings extends BaseMenu {
         // Check if we are currently rendering ASS subtitles
         const isASS = this.osd && this.osd.player && this.osd.player._subtitleManager && this.osd.player._subtitleManager.isASSActive();
 
+        // Master toggle for ASS style modifications (default: false)
+        const enableAssMods = PlayerSettings.get('enableAssStyleModifications') === true;
+
         // Whether the outline/shadow user overrides are enabled (default: true)
         const overrideOutlineShadow = PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false;
 
@@ -302,10 +305,11 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 options: [
                     { value: 'none', label: i18n.t('None') },
                     { value: 'uniform', label: i18n.t('Uniform') },
+                    { value: 'border', label: i18n.t('Border') },
+                    { value: 'uniform_border', label: i18n.t('UniformBorders') || 'Uniform + borders' },
                     { value: 'dropshadow', label: i18n.t('DropShadow') },
                     { value: 'raised', label: i18n.t('Raised') },
-                    { value: 'depressed', label: i18n.t('Depressed') },
-                    { value: 'border', label: i18n.t('Border') }
+                    { value: 'depressed', label: i18n.t('Depressed') }
                 ]
             },
             {
@@ -315,7 +319,16 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'BorderWidth',
                 key: 'subtitleBorderWidth',
                 min: 1, max: 20, step: 1, unit: 'px',
-                visible: !isASS && shadowType === 'border'
+                visible: !isASS && (shadowType === 'border' || shadowType === 'uniform_border')
+            },
+            {
+                id: 'borderOpacity',
+                type: 'slider',
+                label: i18n.t('BorderOpacity'),
+                labelKey: 'BorderOpacity',
+                key: 'subtitleBorderOpacity',
+                min: 0, max: 100, step: 5, unit: '%',
+                visible: !isASS && (shadowType === 'border' || shadowType === 'uniform_border')
             },
             {
                 id: 'shadowColor',
@@ -343,7 +356,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'ShadowOpacity',
                 key: 'subtitleDropShadowOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
-                visible: !isASS && shadowType !== 'none'
+                visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
             },
             {
                 id: 'shadowBlur',
@@ -354,13 +367,27 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 min: 0, max: 20, step: 1, unit: 'px',
                 visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
             },
+            // Master toggle: when OFF, all ASS style modifications are disabled
+            // and the subtitle renders with its original embedded styling.
+            {
+                id: 'enableAssStyleModifications',
+                type: 'select',
+                label: i18n.t('EnableAssStyleModifications') || 'Enable ASS Style Overrides',
+                labelKey: 'EnableAssStyleModifications',
+                key: 'enableAssStyleModifications',
+                visible: isASS,
+                options: [
+                    { value: true, label: i18n.t('On') },
+                    { value: false, label: i18n.t('Off') }
+                ]
+            },
             {
                 id: 'overrideAssFonts',
                 type: 'select',
                 label: i18n.t('OverrideAssFonts'),
                 labelKey: 'OverrideAssFonts',
                 key: 'subtitleOverrideAssFonts',
-                visible: isASS,
+                visible: isASS && enableAssMods,
                 options: [
                     { value: true, label: i18n.t('On') },
                     { value: false, label: i18n.t('Off') }
@@ -377,9 +404,9 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 // Update the key used for localization lookup
                 labelKey: overrideAssFonts ? 'AssFontFamily' : 'FallbackFontForAssFormat',
                 key: 'subtitleFontAss',
-                // Keep the font configuration selector visible whenever ASS rendering is active,
+                // Keep the font configuration selector visible whenever ASS styling is active,
                 // regardless of whether overrideAssFonts is turned on or off.
-                visible: isASS,
+                visible: isASS && enableAssMods,
                 options: [
                     { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
@@ -409,7 +436,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'FontScaleAss',
                 key: 'subtitleFontScale',
                 min: 0.5, max: 3.0, step: 0.1, unit: 'x',
-                visible: isASS
+                visible: isASS && enableAssMods
             },
             {
                 id: 'bottomOffsetAss',
@@ -418,7 +445,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'VerticalPositionAss',
                 key: 'subtitleBottomOffset',
                 min: -100, max: 750, step: 5, unit: 'px',
-                visible: isASS
+                visible: isASS && enableAssMods
             },
             {
                 id: 'overrideOutlineShadow',
@@ -426,7 +453,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('OverrideOutlineShadow'),
                 labelKey: 'OverrideOutlineShadow',
                 key: 'subtitleOverrideAssOutlineShadow',
-                visible: isASS,
+                visible: isASS && enableAssMods,
                 options: [
                     { value: true, label: i18n.t('On') },
                     { value: false, label: i18n.t('Off') }
@@ -439,7 +466,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'OutlineThicknessAss',
                 key: 'subtitleOutlineThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
-                visible: isASS && overrideOutlineShadow
+                visible: isASS && enableAssMods && overrideOutlineShadow
             },
             {
                 id: 'shadowThicknessAss',
@@ -448,7 +475,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'ShadowThicknessAss',
                 key: 'subtitleShadowThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
-                visible: isASS && overrideOutlineShadow
+                visible: isASS && enableAssMods && overrideOutlineShadow
             },
             {
                 id: 'lineHeightAss',
@@ -457,7 +484,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'VerticalSpacingAss',
                 key: 'subtitleLineHeight',
                 min: -50, max: 50, step: 1, unit: 'px',
-                visible: isASS
+                visible: isASS && enableAssMods
             },
             {
                 id: 'letterSpacingAss',
@@ -466,7 +493,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'HorizontalSpacingAss',
                 key: 'subtitleLetterSpacing',
                 min: -20, max: 40, step: 0.5, unit: 'px',
-                visible: isASS
+                visible: isASS && enableAssMods
             },
 
             // ================================================================

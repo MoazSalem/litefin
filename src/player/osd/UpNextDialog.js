@@ -72,6 +72,14 @@ export default class UpNextDialog extends BaseMenu {
          * @type {number}
          */
         this._initialSecondsRemaining = 0;
+
+        /**
+         * Timer reference for the 5-second OSD sync window.
+         * After floating independently for 5 seconds, the dialog syncs its
+         * visibility with the OSD controls.
+         * @type {number|null}
+         */
+        this._syncTimer = null;
     }
 
     // =========================================================================
@@ -324,6 +332,13 @@ export default class UpNextDialog extends BaseMenu {
 
         if (!this.$el) return; // Bail if render failed (no overlay container yet)
 
+        // Clear any existing sync timer and strip sync-osd class so it shows independently at first
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+            this._syncTimer = null;
+        }
+        this.$el.classList.remove('sync-osd');
+
         // Call BaseMenu.show() to add .visible class
         super.show();
 
@@ -333,12 +348,36 @@ export default class UpNextDialog extends BaseMenu {
 
         // Rebuild overlay focus cache so D-pad navigation sees these buttons
         this.osd._cacheFocusableElements();
+
+        /*
+         * =====================================================================
+         * VISIBILITY SYNC WITH OSD:
+         * Float independently for 5 seconds upon first appearing. After 5 seconds,
+         * attach the .sync-osd class so the dialog hides and shows together
+         * with the main OSD control interface.
+         * =====================================================================
+         */
+        this._syncTimer = setTimeout(() => {
+            this._syncTimer = null;
+            if (this.isVisible && this.$el) {
+                this.$el.classList.add('sync-osd');
+            }
+        }, 5000);
     }
 
     /**
-     * Hide the dialog and clean up the countdown timer.
+     * Hide the dialog and clean up the countdown timer and sync state.
      */
     hide() {
+        // Clear sync timer and remove sync class on hide
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+            this._syncTimer = null;
+        }
+        if (this.$el) {
+            this.$el.classList.remove('sync-osd');
+        }
+
         // Call BaseMenu.hide() to remove .visible class
         super.hide();
 
@@ -423,6 +462,10 @@ export default class UpNextDialog extends BaseMenu {
      * Clean up when the OSD is destroyed.
      */
     destroy() {
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+            this._syncTimer = null;
+        }
         this._stopCountdown();
         super.destroy();
     }

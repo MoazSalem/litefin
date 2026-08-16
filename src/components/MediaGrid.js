@@ -75,14 +75,12 @@ class MediaGrid extends Component {
      */
     onMounted() {
         log.debug(`Mounted with ${this.items.length} items.`);
-        const btn = document.getElementById(`${this.id}-btn`);
-        if (btn) {
-            btn.onclick = () => this.handleSeeMore();
-            // CRITICAL: Add keyboard handler for "Enter" key (TV Remote/Keyboard)
-            btn.onkeydown = (e) => {
-                if (e.key === 'Enter') {
-                    // Don't prevent default yet, we want to allow the click handler to fire
-                    // but we ensure it's captured here too.
+
+        this._btn = document.getElementById(`${this.id}-btn`);
+        if (this._btn) {
+            this._btn.onclick = () => this.handleSeeMore();
+            this._btn.onkeydown = (e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Space') {
                     this.handleSeeMore();
                 }
             };
@@ -90,13 +88,10 @@ class MediaGrid extends Component {
 
         this._updateButtonVisibility();
 
-        // Delegated click/mousedown handler on grid container — survives innerHTML rebuilds
-        // in toggleExpand() without needing per-card re-binding.
-        // We use both mousedown and click for snappy "instant-response" feel on Magic Remote.
-        const grid = document.getElementById(`${this.id}-items`);
-        if (grid) {
+        this._gridEl = document.getElementById(`${this.id}-items`);
+        if (this._gridEl) {
             let lastActivateTime = 0;
-            const handleActivate = (e) => {
+            this._handleActivate = (e) => {
                 const card = e.target.closest('.media-card');
                 if (card) {
                     const now = Date.now();
@@ -125,24 +120,39 @@ class MediaGrid extends Component {
                 }
             };
 
-            grid.addEventListener('mousedown', handleActivate);
-            grid.addEventListener('click', handleActivate);
+            this._gridEl.addEventListener('mousedown', this._handleActivate);
+            this._gridEl.addEventListener('click', this._handleActivate);
 
-            // Lazy Load Images
-            lazyLoader.observe(grid);
+            lazyLoader.observe(this._gridEl);
         }
+    }
+
+    destroy() {
+        if (this._btn) {
+            this._btn.onclick = null;
+            this._btn.onkeydown = null;
+            this._btn = null;
+        }
+        if (this._gridEl) {
+            lazyLoader.clearContainer(this._gridEl);
+            this._gridEl.removeEventListener('mousedown', this._handleActivate);
+            this._gridEl.removeEventListener('click', this._handleActivate);
+            this._gridEl = null;
+        }
+        this._handleActivate = null;
+        this.items = null;
+        super.destroy();
     }
 
     /**
      * Render the grid items strings
      */
     _renderItems() {
-        // Only slice if we are using in-place expansion (deprecated) or if we haven't navigated yet
-        const displayItems = this._shouldShowButton() ? this.items.slice(0, this.limit) : this.items;
+        const items = this._shouldShowButton() ? this.items.slice(0, this.limit) : this.items;
 
         const html = [];
-        for (let i = 0; i < displayItems.length; i++) {
-            html.push(this._createCardHtml(displayItems[i]));
+        for (let i = 0; i < items.length; i++) {
+            html.push(this._createCardHtml(items[i]));
         }
         return html.join('');
     }
@@ -199,11 +209,10 @@ class MediaGrid extends Component {
         const btnContainer = document.getElementById(`${this.id}-btn-zone`);
         if (btnContainer) {
             if (this._shouldShowButton()) {
-                btnContainer.style.setProperty('display', 'flex', 'important');
+                btnContainer.style.display = 'flex';
                 btnContainer.style.justifyContent = 'center';
-                // Also ensure inner button is visible
                 const btn = btnContainer.querySelector('.see-more-btn');
-                if (btn) btn.style.setProperty('display', 'inline-block', 'important');
+                if (btn) btn.style.display = '';
             } else {
                 btnContainer.style.display = 'none';
             }

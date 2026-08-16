@@ -34,7 +34,13 @@ npm run format:check   # Prettier check only
 ### Package
 
 ```bash
-npm run package                    # All 8 variants (WGT + IPK)
+npm run package                    # All variants (WGT + IPK)
+npm run package:tizen              # All Tizen variants (WGT)
+npm run package:webos              # All webOS variants (IPK)
+npm run package:modern             # Modern - Tizen WGT + webOS IPK
+npm run package:normal             # Normal - Tizen WGT + webOS IPK
+npm run package:legacy             # Legacy - Tizen WGT + webOS IPK
+npm run package:ultra-legacy       # Ultra-Legacy - Tizen WGT + webOS IPK
 npm run package:tizen-modern       # Tizen WGT (Modern)
 npm run package:webos-normal       # webOS IPK (Normal)
 npm run package:webos-modern       # webOS IPK (Modern)
@@ -163,25 +169,73 @@ log.verbose('message'); // Level 4 — verbose trace
 
 - All UI components extend `Component` from `src/core/Component.js`.
 - Lifecycle: `constructor()` → `render()` (returns HTML string) → `mount()` (DOM attach) → `onMounted()` (post-attach init) → `update()` (re-render) → `destroy()` (cleanup).
-- Pages extend `Page` (which extends `Component`) from `src/pages/Page.js` — adds `onInit()`, focus section registration, navigation state save/restore, `markReady()`.
+- Pages extend `Page` (which extends `Component`) from `src/pages/Page.js` — adds `onInit(params)`, focus section registration, navigation state save/restore, `markReady()`.
 - Cleanup: always unsubscribe from EventBus and destroy children in `destroy()`.
 - DOM references go through `this.el` (the component's root element, set during mount).
 - Props are passed via `this.props`, internal state via `this._state`.
 - Child components tracked in `this._children` for bulk destroy.
 - Event subscriptions stored in `this._subscriptions` (return value of `eventBus.on()`) for auto-cleanup in `destroy()`.
 
+### Player & OSD System
+
+- **Player implementations** in `src/player/core/`:
+  - `JellyfinPlayer` — Main orchestrator for playback (handles all platforms via adapters).
+  - `TizenAVPlayer` — Native Tizen AVPlayer binding (high performance).
+  - `WebOSPlayer` — Native webOS Player binding.
+  - `HtmlVideoPlayer` — Fallback HTML5 `<video>` player (desktop testing).
+  - Subtitle renderers: `ASSJSRenderer` (ASS/SSA with assjs lib), `LibassWasmRenderer` (WebAssembly libass), `PGSRenderer` (bitmap subtitles).
+- **OSD (On-Screen Display)** in `src/player/osd/`:
+  - `OSDController` — Manages playback controls, menus, overlays.
+  - Menu classes: `PlaybackModeMenu`, `PlaybackSpeedMenu`, `QualityMenu`, `SubtitleQuickSettings`, `TrackMenu`, etc.
+  - `TrickplayManager` — Rewind/fast-forward with frame scrubbing.
+  - `UpNextDialog` — "Next episode" preview.
+  - `ChaptersModal`, `QueueModal`, `LyricsModal` — Content-specific dialogs.
+  - Subscribe to player events via `eventBus`: `'player:play'`, `'player:pause'`, `'player:timeupdate'`, `'player:seek'`, `'player:stop'`.
+
+### Plugin System
+
+- **Plugin architecture** in `src/plugins/`:
+  - `PluginManager` — Loads bundled plugins (`src/plugins/installed/`), initializes them with `PluginAPI`, broadcasts player/page events.
+  - `PluginAPI` — Sandboxed API surface for plugins (events, storage, UI injection, player info).
+  - `PluginWidgetHost` — Injects plugin OSD widgets into the player.
+  - `ServerPluginClient` — Communication with Jellyfin server plugins (manifest negotiation, remote calls).
+- **Plugin structure**: Each plugin is a JS module exporting a default object with `id`, `version`, `name`, `init(api)`, `destroy()`.
+- **Bundled plugins** include: `skip-intro`, `syncplay`, `local-intros`, `mdblist-ratings`.
+- **Plugin events**: Access via `api.on(event, callback)` — player events (`'player:play'`, `'player:timeupdate'`, `'player:stop'`) and page events (`'page:load'`, `'page:unload'`).
+- **Plugin storage**: Use `api.storage(namespace)` for isolated persistent storage per plugin.
+- **Plugin UI**: Use `api.showToast()`, `api.addOSDWidget()`, `api.registerFocusSection()` for UI integration.
+
+### Platform Adapters
+
+- **Tizen adapter** (`src/tizen/TizenAdapter.js`) — Handles Tizen-specific:
+  - Remote key registration (Up/Down/Left/Right/Enter/Back/Colored buttons).
+  - App lifecycle (suspend, resume, exit).
+  - Device capabilities and TV control.
+  - Emits platform events via `eventBus` (`'device:suspend'`, `'device:resume'`, etc.).
+- **webOS adapter** (`src/webos/WebOSAdapter.js`) — Similar to Tizen but uses webOS TV API.
+- **SmartHub manager** (`src/tizen/SmartHubManager.js`) — Tizen SmartHub integration (app launch, navigation).
+- Both adapters are initialized in `App.js` — use `tizenAdapter` / `webosAdapter` singletons for platform-specific calls.
+
 ### Patterns & Best Practices
 
 - **State management**: Use `state.set(key, value)` / `state.get(key)` / `state.subscribe(key, fn)` from `src/core/StateManager.js`. State changes emit `'state:change'` events.
 - **Event communication**: Use `eventBus.emit(event, ...args)` / `eventBus.on(event, callback)` for decoupled communication. `on()` returns an unsubscribe function. Also supports `once()` and `off()`.
 - **Navigation**: Use `router.navigate(path)` and register routes with `router.register(pattern, PageClass)`. Hash-based SPA with param matching and history restoration.
-- **Focus management**: Use `focusManager` for TV D-Pad navigation — every interactive element needs `tabindex="0"`.
+- **Navigation state**: Before navigating, `navigationState.captureState(currentPage)` saves focus, scroll position, and page-specific filters. Router calls this automatically. Use `navigationState.restoreState(newPage)` after mount to restore.
+- **Focus management**: Use `focusManager` for TV D-Pad navigation — every interactive element needs `tabindex="0"`. Register focus sections with `focusManager.registerSection(name, config)` for multi-section pages.
+- **Spatial navigation**: Use `spatialNavigator` for grid-based content (media cards, etc.). It calculates D-pad targets based on element geometry.
+- **Scroll handling**: Use `scrollController` for native scrolling, GPU-accelerated on Tizen 6+, polyfilled on older versions.
+- **Play queue**: Use `playQueue.queue(item, options)` to add items for sequential playback; handles cross-season episodes and boxsets automatically.
+- **Remote button mapping**: Use `remoteButtonManager` for colored button actions (Red/Green/Yellow/Blue). Custom actions persist via storage.
 - **Localization**: Use `i18n.t('key')` for all user-facing strings. Locale files in `src/locales/`.
 - **Storage**: Use `storage.getItem/setItem/removeItem` (in-memory cache over localStorage, debounced flush).
+- **Image caching**: Use `imageCache.get(url, options)` for cached backdrops/thumbnails; handles blur-hash decoding and cache eviction.
+- **Lazy loading**: Use `lazyLoader.observe(element, callback)` for viewport-based media loading.
 - **Player detection**: Branch on `platformInfo.isWebOS` / `platformInfo.isTizen` / `platformInfo.isTv` for platform-specific code.
 - **CSS theming**: Use CSS variables (defined in `src/themes/`) — never hardcode colors.
 - **Async patterns**: Use `async/await` for all async operations. Prefer `try/catch` over `.catch()`.
 - **Singleton accessors**: Always use getters (`get serverUrl()`) for private field access.
+- **Toast notifications**: Use `toast.show(message, duration, options)` for transient UI feedback.
 
 ### Tizen/webOS Compatibility Notes
 
@@ -203,10 +257,35 @@ log.verbose('message'); // Level 4 — verbose trace
 - `src/core/EventBus.js` — Pub/sub event system
 - `src/core/Router.js` — Hash-based SPA router
 - `src/core/StateManager.js` — Observable state container
+- `src/core/NavigationState.js` — Focus/scroll state capture and restoration
+- `src/core/PlayQueue.js` — Sequential playback queue with cross-season episode handling
+- `src/core/RemoteButtonManager.js` — Colored button (Red/Green/Yellow/Blue) action mapping
+- `src/core/ScreensaverManager.js` — Idle detection and screensaver plugin management
 - `src/api/ApiClient.js` — Jellyfin HTTP API client (server discovery, auth, WebSocket)
+- `src/api/AuthManager.js` — Authentication and session management
+- `src/api/DeviceProfile.js` — Device capability detection and Jellyfin device profile building
+- `src/player/core/JellyfinPlayer.js` — Main player orchestrator (playback lifecycle, quality switching)
+- `src/player/osd/OSDController.js` — Playback overlay controls, menus, and dialogs
+- `src/pages/Page.js` — Base page class with route params, focus sections, ready state
+- `src/plugins/PluginManager.js` — Plugin lifecycle, event broadcasting, widget hosting
+- `src/plugins/PluginAPI.js` — Sandboxed API for plugins
+- `src/plugins/ServerPluginClient.js` — Jellyfin server plugin communication
+- `src/tizen/TizenAdapter.js` — Tizen platform integration (keys, lifecycle, device info)
+- `src/webos/WebOSAdapter.js` — webOS platform integration
 - `src/utils/Logger.js` — Centralized logging (console interception, log levels)
 - `src/utils/StorageService.js` — localStorage cache layer with in-memory buffer
 - `src/utils/PlatformInfo.js` — Tizen/webOS/device detection
+- `src/utils/i18n.js` — Localization manager
+- `src/ui/FocusManager.js` — D-Pad focus navigation and management
+- `src/ui/SpatialNavigator.js` — Geometric spatial navigation for grids
+- `src/ui/ScrollController.js` — Native vs GPU-accelerated scroll abstraction
+- `src/ui/LayoutManager.js` — Responsive layout (sidebar, themes, media queries)
+- `src/ui/DebugOverlay.js` — Runtime debug info and log filtering UI
+- `src/ui/Toast.js` — Transient notification system
+- `src/ui/GlobalClock.js` — Time display on UI
+- `src/utils/ImageCache.js` — Cached image loading with blur-hash decoding
+- `src/utils/LazyLoader.js` — Viewport-based lazy loading
+- `src/utils/CardRenderer.js` — Media card HTML template generation
 - `webpack.config.cjs` — Multi-target build config (6 variants)
 - `gulpfile.mjs` — Build orchestration + packaging (8 package variants)
 - `config.xml` / `appinfo.json` — Tizen / webOS platform manifests

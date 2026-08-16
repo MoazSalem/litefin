@@ -49,6 +49,13 @@ export class ApiClient {
 
         // Track retries to prevent infinite loops on 401
         this._retryingRequests = new Set();
+
+        // ── ETag Response Cache ───────────────────────────────────────────
+        // In-memory cache of { etag, body } keyed by full request URL.
+        // Used to send If-None-Match on GET requests and short-circuit to 304
+        // cached data when the server reports no change.
+        this._etagCache = new Map();
+        this._etagCacheMaxSize = 20;
     }
 
     // ========================================================================
@@ -144,7 +151,24 @@ export class ApiClient {
         this._userId = null;
         state.set('user:authenticated', false);
         state.set('user:data', null);
+
+        // Wipe ETag cache — cached responses are bound to the previous auth session
+        this._etagCache.clear();
+
+        // Wipe page caches — stale data bound to the previous auth session
+        state.clearByPrefix('details:');
+        state.clearByPrefix('home:');
+
         log.info('Authentication cleared');
+    }
+
+    /**
+     * Clear the ETag response cache. Call after playback or server data mutations
+     * to ensure the next request fetches fresh data instead of a 304-stale body.
+     */
+    clearEtagCache() {
+        this._etagCache.clear();
+        log.debug('ETag cache cleared');
     }
 
     // ========================================================================
@@ -234,26 +258,38 @@ export class ApiClient {
         }
 
         // Conditionally request quality/resolution metadata if enabled
-        if (storage.getItem('pref:showQualityBadges') === 'true' && options.params) {
+        if (options.params) {
             const fieldsKey = Object.keys(options.params).find((k) => k.toLowerCase() === 'fields');
             const isItemsEndpoint =
-                endpoint.includes('/Items') ||
+                (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
                 endpoint.includes('/Latest') ||
                 endpoint.includes('/Resume') ||
                 endpoint.includes('/NextUp') ||
                 endpoint.includes('/Upcoming') ||
                 endpoint.includes('/Similar') ||
                 endpoint.includes('/Episodes') ||
-                endpoint.includes('/Search/Hints');
+                endpoint.includes('/Search/Hints') ||
+                endpoint.includes('/Persons') ||
+                endpoint.includes('/MergedRows');
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
                 const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
-                ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
-                    if (!fieldsList.includes(f)) {
-                        fieldsList.push(f);
+                
+                if (storage.getItem('pref:showQualityBadges') === 'true') {
+                    ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
+                        if (!fieldsList.includes(f)) {
+                            fieldsList.push(f);
+                        }
+                    });
+                }
+
+                if (storage.getItem('pref:showMediaSourceCounts') !== 'false') {
+                    if (!fieldsList.includes('MediaSourceCount')) {
+                        fieldsList.push('MediaSourceCount');
                     }
-                });
+                }
+
                 options.params[targetKey] = fieldsList.join(',');
             }
         }
@@ -279,11 +315,24 @@ export class ApiClient {
         // DEBUG: Store last requested URL
         this.lastUrl = url;
 
+        // ── ETag cache lookup ──────────────────────────────────────────────
+        // For GET requests, check if we have a cached ETag and send
+        // If-None-Match so the server can respond with 304 if unchanged.
+        let etagEntry = null;
+        if (method === 'GET') {
+            etagEntry = this._etagCache.get(url) || null;
+        }
+
         // Build headers
         const headers = {
             Accept: 'application/json', // Explicitly request JSON response
             ...options.headers
         };
+
+        // Add If-None-Match header if we have a cached ETag for this URL
+        if (etagEntry && etagEntry.etag) {
+            headers['If-None-Match'] = etagEntry.etag;
+        }
 
         if (!options.skipAuth) {
             /*
@@ -347,6 +396,12 @@ export class ApiClient {
             const response = await fetch(url, fetchOptions);
             if (timeoutId) clearTimeout(timeoutId);
 
+            // Handle 304 Not Modified — return cached response body
+            if (response.status === 304 && etagEntry) {
+                log.debug(`304 ${endpoint} — returning cached response`);
+                return etagEntry.body;
+            }
+
             // Handle error responses
             if (!response.ok) {
                 // If 401 Unauthorized and not already a retry, try one more time
@@ -356,6 +411,9 @@ export class ApiClient {
                     return this.request(endpoint, options, true);
                 }
 
+                if (options.warnOnError && response) {
+                    response._suppressErrorLog = true;
+                }
                 const error = await this._handleError(response);
                 throw error;
             }
@@ -367,11 +425,27 @@ export class ApiClient {
 
             // Parse response based on content type
             const contentType = response.headers.get('content-type');
+            let body;
             if (contentType && contentType.includes('application/json')) {
-                return await response.json();
+                body = await response.json();
+            } else {
+                body = await response.text();
             }
 
-            return await response.text();
+            // Cache ETag for GET requests so subsequent calls can use
+            // If-None-Match / 304 short-circuit when data hasn't changed.
+            if (method === 'GET') {
+                const etag = response.headers.get('ETag');
+                if (etag && body !== undefined && body !== null) {
+                    if (this._etagCache.size >= this._etagCacheMaxSize) {
+                        const firstKey = this._etagCache.keys().next().value;
+                        this._etagCache.delete(firstKey);
+                    }
+                    this._etagCache.set(url, { etag, body });
+                }
+            }
+
+            return body;
         } catch (error) {
             // Handle Network Errors (DNS, Connection Refused, Offline) or Timeout
             const isTimeout = error.name === 'AbortError';
@@ -385,13 +459,62 @@ export class ApiClient {
 
                 log.error(`${msg}:`, error.message);
 
+                // =============================================================
+                // WAKE-ON-LAN ON REQUEST TIMEOUT / UNREACHABLE RETRY
+                // =============================================================
+                // If the user has enabled Wake-on-LAN on timeout and provided
+                // a valid MAC address, send a magic packet and retry the probe.
+                // =============================================================
+                const wolTimeoutEnabled = storage.getItem('pref:enableWolOnTimeout') === 'true';
+                const wolMac = storage.getItem('pref:wolMacAddress');
+
+                if (wolTimeoutEnabled && wolMac && !options._isWolTimeoutRetry) {
+                    log.info(`Request failed/timed out. Wake-on-LAN on timeout active. Broadcasting packet to ${wolMac}...`);
+
+                    try {
+                        // Send Wake-on-LAN Magic Packet
+                        sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
+
+                        // Retry loop: probe server status every 3s for up to 5 attempts (~15 seconds)
+                        const maxAttempts = 5;
+                        const retryDelayMs = 3000;
+
+                        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                            log.info(`Probing server status post-WOL (attempt ${attempt}/${maxAttempts})...`);
+                            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+
+                            try {
+                                const testUrl = `${this._serverUrl}/System/Info/Public`;
+                                const testRes = await fetch(testUrl, {
+                                    method: 'GET',
+                                    headers: { Accept: 'application/json' }
+                                });
+
+                                if (testRes.ok) {
+                                    log.info('Server responded to status probe! Re-executing failed API request...');
+                                    // Re-run original request with _isWolTimeoutRetry flag set to prevent recursion loops
+                                    return await this.request(endpoint, { ...options, _isWolTimeoutRetry: true }, isRetry);
+                                }
+                            } catch (probeErr) {
+                                log.debug(`Server status probe ${attempt}/${maxAttempts} failed — server still booting...`);
+                            }
+                        }
+                    } catch (wolCycleErr) {
+                        log.warn('Error during WOL timeout recovery cycle:', wolCycleErr);
+                    }
+                }
+
                 const networkError = new ServerUnreachableError(`${msg}. Please check your network and server status.`);
                 eventBus.emit('api:offline', { url: this._serverUrl, isTimeout });
                 throw networkError;
             }
 
-            log.error(`Request to ${endpoint} failed:`, error.message || error);
-            eventBus.emit('api:error', { endpoint, error });
+            if (options.warnOnError) {
+                log.warn(`Request to ${endpoint} failed (suppressed):`, error.message || error);
+            } else {
+                log.error(`Request to ${endpoint} failed:`, error.message || error);
+                eventBus.emit('api:error', { endpoint, error });
+            }
             throw error;
         }
     }
@@ -416,7 +539,7 @@ export class ApiClient {
                     message = data.message || data.Message || message;
                 } catch {
                     // Not JSON — use raw text as the error message (trim to 200 chars max)
-                    const trimmed = bodyText.trim();
+                    const trimmed = (bodyText || '').trim();
                     if (trimmed) {
                         message = trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed;
                     }
@@ -426,10 +549,8 @@ export class ApiClient {
             // Could not read body at all — keep the "HTTP N" default
         }
 
-        // Log 400s at error level so they are always visible in the debug overlay
-        // even when general logging is disabled. The server reason is included so
-        // the developer can diagnose schema issues without needing DevTools.
-        if (response.status === 400) {
+        // Log 400s at error level only if not suppressed via warnOnError
+        if (response.status === 400 && !response._suppressErrorLog) {
             log.error(`Server rejected request (400 Bad Request): ${message}`);
         }
 
@@ -606,7 +727,7 @@ export class ApiClient {
             SortOrder: 'Ascending',
             IncludeItemTypes: '',
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'BackdropImageTags,ParentBackdropImageTags,MediaSourceCount',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             Limit: 100
@@ -631,12 +752,16 @@ export class ApiClient {
 
     /**
      * Get latest items in a library
+     * Uses configurable user limit preference (defaults to 12 items)
      */
     async getLatestItems(parentId, params = {}) {
+        // Read user's custom homepage row limit from storage, defaulting to 12 items
+        const defaultLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+
         const defaults = {
-            // 20 items gives a comfortable scrollable collection per library row
-            Limit: 20,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,BackdropImageTags,ParentBackdropImageTags',
+            // Default item count per library row configured via user settings
+            Limit: defaultLimit,
+            Fields: 'BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ParentId: parentId
@@ -647,14 +772,17 @@ export class ApiClient {
 
     /**
      * Get resume items (continue watching)
+     * Uses configurable user limit preference (defaults to 12 items)
      */
     async getResumeItems(params = {}) {
+        // Read user's custom homepage row limit from storage, defaulting to 12 items
+        const defaultLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+
         const defaults = {
-            // Fetch enough items to fill the horizontal row generously —
-            // users can scroll through up to 20 continue-watching entries
-            Limit: 20,
+            // Fetch items up to the user-selected row item limit
+            Limit: defaultLimit,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -675,8 +803,7 @@ export class ApiClient {
             Filters: 'IsPlayed',
             SortBy: 'DatePlayed',
             SortOrder: 'Descending',
-            Limit: limit,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+            Limit: limit
         });
     }
 
@@ -691,9 +818,55 @@ export class ApiClient {
             Filters: 'IsPlayed',
             SortBy: 'PlayCount',
             SortOrder: 'Descending',
-            Limit: limit,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+            Limit: limit
         });
+    }
+
+    /**
+     * Batch fetch latest items for multiple parent library IDs in a single request.
+     * @param {string[]} parentIds - Array of library parent GUIDs
+     * @param {Object} [params] - Optional parameters (Limit, isPlayed, fields)
+     * @returns {Promise<Object>} Object mapping parentId -> BaseItemDto[]
+     */
+    async getBatchLatest(parentIds = [], params = {}) {
+        if (!parentIds || parentIds.length === 0) return {};
+        try {
+            return await this.get('/Litefin/Items/Latest', {
+                parentIds: parentIds.join(','),
+                ...params
+            }, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Batch fetch candidate thumbnail items for multiple parent library IDs in 1 request.
+     * @param {string[]} parentIds - Array of library parent GUIDs
+     * @returns {Promise<Object|null>} Object mapping parentId -> BaseItemDto[]
+     */
+    async getLibraryThumbnails(parentIds = []) {
+        if (!parentIds || parentIds.length === 0) return {};
+        try {
+            return await this.get('/Litefin/Items/Thumbnails', {
+                parentIds: parentIds.join(',')
+            }, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Fetch curated Hero Carousel items (Movies & Series with backdrops) in a single optimized request.
+     * @param {Object} [params] - Optional query parameters (limit, ignoreWatched)
+     * @returns {Promise<Object|null>} QueryResult object with Items array or null on fallback
+     */
+    async getHomeHero(params = {}) {
+        try {
+            return await this.get('/Litefin/Hero', params, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
@@ -703,12 +876,24 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
 
         return this.get('/Shows/NextUp', { ...defaults, ...params });
+    }
+
+    /**
+     * Get merged continue watching and next up items from the Litefin plugin on the server.
+     * This calls the custom Litefin plugin controller to return a pre-merged deduplicated list.
+     *
+     * @param {Object} [params] - Query parameters such as limit
+     * @returns {Promise<Object>} Object containing the merged items list
+     */
+    async getMergedRows(params = {}) {
+        // Query the custom plugin controller route directly on the server
+        return this.get('/Litefin/MergedRows/ContinueAndNextUp', params);
     }
 
     /**
@@ -718,7 +903,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 48,
-            Fields: 'AirTime,PrimaryImageAspectRatio',
+            Fields: 'AirTime',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
             EnableTotalRecordCount: false
@@ -735,7 +920,7 @@ export class ApiClient {
             UserId: this._userId,
             IncludeItemTypes: 'Series',
             Recursive: true,
-            Fields: 'DateCreated,PrimaryImageAspectRatio'
+            Fields: 'DateCreated'
         };
 
         return this.get(`/Studios`, { ...defaults, ...params });
@@ -794,6 +979,23 @@ export class ApiClient {
     }
 
     /**
+     * Fetch additional video parts for multi-part video items (e.g. Part 2, Part 3 of a multi-disc movie).
+     * Jellyfin server endpoint: GET /Videos/{itemId}/AdditionalParts
+     *
+     * @param {string} itemId - The primary video item ID
+     * @returns {Promise<Object>} Paginated query result containing additional part items
+     */
+    async getAdditionalParts(itemId) {
+        /*
+         * Multi-part items in Jellyfin allow split video files (e.g., Lord of the Rings Disc 1 & Disc 2)
+         * to be grouped under a single library entry while preserving individual stream files.
+         */
+        return this.get(`/Videos/${itemId}/AdditionalParts`, {
+            UserId: this._userId
+        });
+    }
+
+    /**
      * Get items inside a server-managed Playlist.
      *
      * We use the dedicated /Playlists/{id}/Items endpoint rather than the
@@ -809,7 +1011,7 @@ export class ApiClient {
     async getPlaylistItems(playlistId, params = {}) {
         return this.get(`/Playlists/${playlistId}/Items`, {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,UserData,RunTimeTicks,BasicSyncInfo',
+            Fields: 'UserData,RunTimeTicks',
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ...params
         });
@@ -870,11 +1072,47 @@ export class ApiClient {
         return this.post(`/Collections/${collectionId}/Items?${qs}&UserId=${encodeURIComponent(this._userId)}`);
     }
 
+    /**
+     * Gets the collections that include the specified item.
+     * Tries the native Jellyfin endpoint (/Items/{itemId}/Collections) first.
+     * If the server returns a 404 (meaning it's an older server like 10.11),
+     * it falls back to the custom Litefin plugin endpoint (/Litefin/Items/{itemId}/Collections).
+     *
+     * @param {string} itemId - The target item ID
+     * @param {Object} [params] - Query parameters such as Fields, StartIndex, Limit
+     * @returns {Promise<Object>} collections query result
+     */
+    async getItemCollections(itemId, params = {}) {
+        const defaults = {
+            userId: this._userId
+        };
+
+        try {
+            // Attempt to fetch from native Jellyfin endpoint (available in newer servers)
+            return await this.get(`/Items/${itemId}/Collections`, { ...defaults, ...params }, { warnOnError: true });
+        } catch (err) {
+            // Fall back to the Litefin plugin endpoint if the native route is not found
+            if (err.status === 404 || err.message?.includes('Not found')) {
+                log.debug(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
+                try {
+                    return await this.get(
+                        `/Litefin/Items/${itemId}/Collections`,
+                        { ...defaults, ...params },
+                        { warnOnError: true }
+                    );
+                } catch (fallbackErr) {
+                    return { Items: [] };
+                }
+            }
+            // A 400 Bad Request simply means the item is not part of any collection on this server version
+            return { Items: [] };
+        }
+    }
+
     async getSimilar(itemId, params = {}) {
         const defaults = {
             UserId: this._userId,
-            Limit: 12,
-            Fields: 'PrimaryImageAspectRatio'
+            Limit: 12
         };
 
         return this.get(`/Items/${itemId}/Similar`, { ...defaults, ...params });
@@ -882,8 +1120,7 @@ export class ApiClient {
 
     async getSeasons(seriesId) {
         return this.get(`/Shows/${seriesId}/Seasons`, {
-            UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+            UserId: this._userId
         });
     }
 
@@ -892,7 +1129,7 @@ export class ApiClient {
         // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters',
+            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,MediaStreams,Width,Height,UserData',
             IsVirtualUnaired: false,
             IsMissing: false,
             ...params
@@ -911,18 +1148,21 @@ export class ApiClient {
     }
 
     async getPersonItems(personId) {
-        // Fetch items for this person - Movies, Series, Episodes only
-        // High limit to capture full filmography (some people have many appearances)
-        // Note: People field loaded separately via getPersonItemsWithRoles for performance
-        return this.get(`/Users/${this._userId}/Items`, {
-            PersonIds: personId,
-            IncludeItemTypes: 'Movie,Series,Episode',
-            Recursive: true,
-            Limit: 500,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
-            SortBy: 'PremiereDate',
-            SortOrder: 'Descending'
-        });
+        // Try custom Litefin plugin endpoint first (single request with roles pre-populated)
+        try {
+            return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 50 }, { warnOnError: true });
+        } catch (err) {
+            // Fallback to standard Jellyfin endpoint if plugin is not installed
+            return this.get(`/Users/${this._userId}/Items`, {
+                PersonIds: personId,
+                IncludeItemTypes: 'Movie,Series,Episode',
+                Recursive: true,
+                Limit: 500,
+                Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
+                SortBy: 'PremiereDate',
+                SortOrder: 'Descending'
+            });
+        }
     }
 
     // Separate call to get items with People field (for character roles)
@@ -953,7 +1193,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
@@ -966,7 +1206,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
@@ -979,7 +1219,7 @@ export class ApiClient {
         const defaults = {
             Limit: 20,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ParentThumbImageTag',
+            Fields: 'ParentThumbImageTag',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -997,7 +1237,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: false
@@ -1010,7 +1250,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            Fields: 'ItemCounts',
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             EnableTotalRecordCount: false
@@ -1037,7 +1277,6 @@ export class ApiClient {
             SearchTerm: query,
             IncludeItemTypes: 'Movie,Series,Episode,BoxSet',
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
             EnableTotalRecordCount: false,
             MediaTypes: null
@@ -1059,8 +1298,7 @@ export class ApiClient {
             searchTerm: query,
             IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,Artist,MusicAlbum,Audio',
             Limit: 50,
-            Recursive: true,
-            Fields: 'PrimaryImageAspectRatio'
+            Recursive: true
         };
 
         return this.get('/Search/Hints', { ...defaults, ...params });
@@ -1080,7 +1318,7 @@ export class ApiClient {
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             Limit: 50,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear'
+            Fields: 'ProductionYear'
         };
 
         return this.get('/Artists', { ...defaults, ...params });
@@ -1100,8 +1338,8 @@ export class ApiClient {
             SortBy: 'ProductionYear,SortName',
             SortOrder: 'Descending',
             Recursive: true,
-            Limit: 100,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists'
+            Limit: 12,
+            Fields: 'ProductionYear,AlbumArtist,Artists'
         };
 
         return this.get('/Items', { ...defaults, ...params });
@@ -1121,8 +1359,8 @@ export class ApiClient {
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             Recursive: true,
-            Limit: 200,
-            Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
+            Limit: 12,
+            Fields: 'ProductionYear,AlbumArtist,Artists,RunTimeTicks'
         };
 
         return this.get('/Items', { ...defaults, ...params });
@@ -1131,9 +1369,8 @@ export class ApiClient {
     async searchPeople(query, params = {}) {
         const defaults = {
             UserId: this._userId,
-            searchTerm: query,
+            SearchTerm: query,
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
             EnableTotalRecordCount: false
         };
@@ -1333,7 +1570,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             EnableUserData: true,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            Fields: 'CanSelfRecord',
             EnableTotalRecordCount: false
         };
         return this.get('/LiveTv/Channels', { ...defaults, ...params });
@@ -1343,7 +1580,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             EnableUserData: true,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            Fields: 'CanSelfRecord',
             EnableTotalRecordCount: false
         };
         return this.get('/LiveTv/Programs', { ...defaults, ...params });
@@ -1354,7 +1591,7 @@ export class ApiClient {
             UserId: this._userId,
             IsAiring: true,
             EnableUserData: true,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            Fields: 'CanSelfRecord',
             EnableTotalRecordCount: false,
             Limit: 24
         };
@@ -1364,7 +1601,7 @@ export class ApiClient {
     async getLiveTvRecordings(params = {}) {
         const defaults = {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,CanSelfRecord,Status',
+            Fields: 'CanSelfRecord,Status',
             EnableTotalRecordCount: false
         };
         return this.get('/LiveTv/Recordings', { ...defaults, ...params });
@@ -1882,7 +2119,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
                 const info = JSON.parse(xhr.responseText);
 
                 let serverName = info.ServerName;
-                if (!serverName || serverName.trim() === '') {
+                if (!serverName || typeof serverName !== 'string' || serverName.trim() === '') {
                     // Fall back to hostname extracted from the address URL
                     try {
                         serverName = new URL(address).hostname;
@@ -2106,13 +2343,172 @@ async function _discoverViaLunaService(onServerFound) {
 }
 
 /**
- * Discover Jellyfin servers on local network
+ * Send Wake-on-LAN Magic Packet via background service
+ * ============================================================================
+ * Initiates a request to the local Node.js companion service to broadcast
+ * a Wake-on-LAN magic packet targeting the specified server MAC address.
+ * Pre-launches the Tizen background service if required to ensure the HTTP
+ * proxy is active.
+ * ============================================================================
+ * @param {string} macAddress - Target server MAC address (e.g., '00:11:22:33:44:55')
+ * @returns {Promise<boolean>} True if the magic packet was successfully dispatched
  */
-export async function discoverServers(onProgress = null, onServerFound = null) {
+export async function sendWakeOnLan(macAddress) {
+    if (!macAddress) {
+        log.warn('Wake-on-LAN requested, but no MAC address was provided');
+        return false;
+    }
+
+    log.info(`Initiating Wake-on-LAN command for MAC: ${macAddress}`);
+
+    // 1. WebOS implementation: dispatch Luna request to the background service
+    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+        log.info('Platform WebOS: Dispatching WOL request to Luna service org.litefin.app.service');
+
+        const sendLunaRequest = () =>
+            new Promise((resolve) => {
+                try {
+                    window.webOS.service.request('luna://org.litefin.app.service', {
+                        method: 'wol',
+                        parameters: { mac: macAddress },
+                        onSuccess(response) {
+                            log.info('Luna WOL request succeeded:', response);
+                            resolve({ success: true, response });
+                        },
+                        onFailure(err) {
+                            log.warn('Luna WOL request failed:', err);
+                            resolve({ success: false, err });
+                        }
+                    });
+                } catch (e) {
+                    log.error('Exception during Luna WOL request dispatch:', e);
+                    resolve({ success: false, err: e });
+                }
+            });
+
+        // First attempt to invoke Luna method
+        let res = await sendLunaRequest();
+
+        // If service is cold-booting, WebOS returns "org.litefin.app.service is not running" while starting it.
+        // Wait 600ms for the OS to initialize the Node.js background process and retry.
+        if (!res.success && res.err) {
+            const errStr = typeof res.err === 'string' ? res.err : res.err.errorText || JSON.stringify(res.err);
+            if (errStr.includes('not running')) {
+                log.info('Luna service process is cold-booting — waiting 600ms for startup retry...');
+                await new Promise((resolve) => setTimeout(resolve, 600));
+                res = await sendLunaRequest();
+            }
+        }
+
+        if (res.success) {
+            return true;
+        }
+    }
+
+    // 2. Tizen/HTTP Proxy implementation: fetch localhost:8123/wol
+    // We dynamically import PlayerSettings to prevent circular dependency cycles.
+    const { PlayerSettings } = await import('../utils/PlayerSettings.js');
+    const bgEnabled = PlayerSettings.get('enableBackgroundService') !== false;
+
+    if (bgEnabled) {
+        // Pre-launch ytresolver background service on Tizen if needed
+        if (typeof tizen !== 'undefined') {
+            try {
+                const appId = tizen.application.getCurrentApplication().appInfo.id;
+                const pkgId = appId.split('.')[0];
+                log.info(`Platform Tizen: Pre-launching ytresolver background service: ${pkgId}.ytresolver`);
+                tizen.application.launch(pkgId + '.ytresolver');
+                
+                // Allow a brief 500ms delay for the service to bind port and start listening
+                await new Promise((resolve) => setTimeout(resolve, 500));
+            } catch (preLaunchErr) {
+                log.warn('Failed to pre-launch Tizen background service for WOL:', preLaunchErr);
+            }
+        }
+
+        log.info('Dispatching WOL request to local HTTP proxy on port 8123');
+        try {
+            const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                // Keep-alive or short timeout since it is local loopback
+                timeout: 3000
+            });
+            const data = await res.json();
+            log.info('Local HTTP WOL response received:', data);
+            return !!(data && data.success);
+        } catch (fetchErr) {
+            log.warn('Failed to dispatch WOL request to local HTTP proxy:', fetchErr);
+            return false;
+        }
+    }
+
+    log.warn('WOL command skipped: background service is disabled or platform is unsupported');
+    return false;
+}
+
+/**
+ * Check if the current device/platform has a background UDP discovery service.
+ * - WebOS: true if Luna service is available (window.webOS.service)
+ * - Tizen: true if running on Tizen and background service is enabled
+ * - Others: false
+ *
+ * @returns {boolean} True if background UDP discovery service is present
+ */
+export function hasBackgroundDiscoveryService() {
+    // 1. WebOS Luna Service check
+    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+        return true;
+    }
+
+    // 2. Tizen HTTP Proxy / Discovery Service check
+    if (typeof tizen !== 'undefined') {
+        try {
+            const bgEnabled = storage.getItem('player:enableBackgroundService') !== 'false';
+            return bgEnabled;
+        } catch (_) {
+            return true;
+        }
+    }
+
+    // 3. Platforms without background UDP discovery service
+    return false;
+}
+
+/**
+ * Discover Jellyfin servers on local network
+ *
+ * @param {Function|null} onProgress - Optional callback receiving (checked, total)
+ * @param {Function|null} onServerFound - Optional callback receiving server info object
+ * @param {Object|boolean} [options={}] - Discovery options or allowHttpFallback flag
+ * @param {boolean} [options.isManual=false] - True if user manually triggered search via button
+ * @param {boolean} [options.allowHttpFallback] - Allow falling back to subnet HTTP scan
+ */
+export async function discoverServers(onProgress = null, onServerFound = null, options = {}) {
+    // Parse options object or boolean flag for backwards compatibility
+    const isManual = typeof options === 'object' && options !== null ? !!options.isManual : false;
+    const allowHttpFallback = typeof options === 'object' && options !== null && 'allowHttpFallback' in options
+        ? !!options.allowHttpFallback
+        : isManual;
+
     // Cancel any existing scan first
     cancelDiscovery();
 
-    log.info('Starting server discovery...');
+    log.info(`Starting server discovery (isManual=${isManual}, allowHttpFallback=${allowHttpFallback})...`);
+
+    // =========================================================================
+    // WAKE-ON-LAN ON SERVER SCAN
+    // =========================================================================
+    // If enabled in settings, broadcast a Wake-on-LAN magic packet to wake
+    // sleeping servers on the local subnet while performing discovery.
+    // =========================================================================
+    const wolOnScanEnabled = storage.getItem('pref:enableWolOnServerScan') === 'true';
+    const wolMac = storage.getItem('pref:wolMacAddress');
+
+    if (wolOnScanEnabled && wolMac) {
+        log.info(`Server discovery initiated. Sending Wake-on-LAN packet to ${wolMac}...`);
+        sendWakeOnLan(wolMac).catch((e) => log.warn('Failed to send WOL on server discovery scan:', e));
+    }
 
     /*
      * =========================================================================
@@ -2139,7 +2535,11 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
             return lunaServers;
         }
 
-        log.warn('Luna service unavailable — falling back to HTTP scan');
+        log.warn('Luna service unavailable');
+        if (!allowHttpFallback) {
+            log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+            return [];
+        }
     }
 
     /*
@@ -2176,10 +2576,24 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
                 return tizenServers;
             }
 
-            log.warn('Tizen /discover unavailable — falling back to HTTP scan');
+            log.warn('Tizen /discover unavailable');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         } else {
-            log.info('Background service disabled — skipping Tizen /discover, using HTTP scan');
+            log.info('Background service disabled — skipping Tizen /discover');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         }
+    }
+
+    // Check if HTTP fallback scan is permitted
+    if (!allowHttpFallback) {
+        log.info('No background discovery service available and HTTP fallback disabled — skipping HTTP subnet scan');
+        return [];
     }
 
     // =========================================================================

@@ -100,7 +100,6 @@
     background-color: rgba(255, 255, 255, 0.15);
     color: #fff;
     transform: scale(1.08);
-    /* Apple-style pop */
     border-color: var(--jf-focus-border-color);
     overflow: hidden !important;
     /* Force Tizen 4 layer repaint to respect radius */

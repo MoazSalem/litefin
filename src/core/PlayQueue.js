@@ -192,10 +192,8 @@ class PlayQueue {
                 // Auto-init album queue for songs played standalone
                 await this._initBoxSetQueue(item, item.AlbumId);
             } else {
-                // Standalone item (Movie, etc.) — stamp and queue
-                _stampPlaylistItemId(item);
-                this._queue = [item];
-                this._currentIndex = 0;
+                // Standalone item (Movie, Video, etc.) — check for additional parts and queue
+                await this._initMultiPartOrStandaloneQueue(item);
             }
 
             // If shuffle mode was flipped on BEFORE the queue was initialized
@@ -210,6 +208,54 @@ class PlayQueue {
             // Fallback to single item
             this._queue = [item];
             this._currentIndex = 0;
+        }
+    }
+
+    /**
+     * Build play queue for standalone items (Movies, Videos) with support for multi-part items.
+     * Checks if the item has additional video parts (Part 2, Part 3, etc.) and appends them
+     * to ensure seamless continuous playback across split files.
+     *
+     * @param {Object} item - The starting media item
+     * @private
+     */
+    async _initMultiPartOrStandaloneQueue(item) {
+        log.debug('Initializing standalone or multi-part queue for item:', item.Id);
+
+        // Always stamp the primary item with a session-unique PlaylistItemId
+        _stampPlaylistItemId(item);
+
+        // Default queue contains single item
+        this._queue = [item];
+        this._currentIndex = 0;
+
+        // Query Jellyfin server for additional video parts if item indicates PartCount > 1
+        // or for Movie/Video types which might contain split files
+        if (item.PartCount > 1 || item.Type === 'Movie' || item.Type === 'Video') {
+            try {
+                // Primary item ID to query additional parts for
+                const targetId = item.PrimaryItemId || item.Id;
+
+                // Request additional parts from Jellyfin server API
+                const response = await api.getAdditionalParts(targetId);
+                const parts = response?.Items || [];
+
+                if (parts.length > 0) {
+                    log.info(`Found ${parts.length} additional part(s) for item ${targetId}`);
+
+                    // Fetch details or stamp each part with a session-unique PlaylistItemId
+                    parts.forEach(_stampPlaylistItemId);
+
+                    // Combine primary item with additional parts in natural sequence
+                    this._queue = [item, ...parts];
+
+                    // Locate index of currently selected item within the combined queue
+                    const activeIndex = this._queue.findIndex((p) => p.Id === item.Id);
+                    this._currentIndex = activeIndex !== -1 ? activeIndex : 0;
+                }
+            } catch (err) {
+                log.warn('Failed to fetch additional parts for item in PlayQueue:', err);
+            }
         }
     }
 
@@ -499,7 +545,7 @@ class PlayQueue {
         // correctly across season boundaries.
         const response = await api.getEpisodes(currentItem.SeriesId, {
             Limit: 500, // large enough for any series
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources,Trickplay'
+            Fields: 'Overview,Chapters,MediaSources,Trickplay'
         });
 
         log.info(
@@ -593,7 +639,7 @@ class PlayQueue {
         // Fetch only episodes for this specific season
         const response = await api.getEpisodes(currentItem.SeriesId, {
             SeasonId: seasonId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources,Trickplay'
+            Fields: 'Overview,Chapters,MediaSources,Trickplay'
         });
 
         const episodes = response.Items || [];
@@ -631,7 +677,7 @@ class PlayQueue {
         // We also request Trickplay and MediaSources for a richer player
         // experience (chapter thumbnails, stream selection) without a second fetch.
         const response = await api.getPlaylistItems(playlistId, {
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters,MediaSources,Trickplay'
+            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,Trickplay'
         });
 
         const items = response?.Items || [];

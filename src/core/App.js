@@ -121,6 +121,13 @@ class App {
             (trackMenuBgOpacity / 100).toFixed(2)
         );
 
+        // Initialize OSD background gradient opacity CSS variable
+        const osdGradientOpacity = PlayerSettings.get('osdGradientOpacity');
+        document.documentElement.style.setProperty(
+            '--osd-gradient-opacity',
+            (osdGradientOpacity / 100).toFixed(2)
+        );
+
         // 3.1. Initialize CSS vars polyfill (no-op on Chrome 49+, active on Tizen 3.0 / Chrome 47).
         //      Must run AFTER layoutManager.init() so the data-theme attribute and theme
         //      CSS variables are already present on <html> when the polyfill scans the DOM.
@@ -348,6 +355,12 @@ class App {
                 document.body.classList.remove('sidebar-mode-hidden');
             }
 
+            if (sidebarMode === 'collapsed') {
+                document.body.classList.add('sidebar-mode-collapsed');
+            } else {
+                document.body.classList.remove('sidebar-mode-collapsed');
+            }
+
             this.sidebar.setMode('visible');
         }
     }
@@ -395,6 +408,12 @@ class App {
         // Listen for OSD track menu bg opacity changes
         eventBus.on('pref:osdTrackMenuBgOpacity', (value) => {
             document.documentElement.style.setProperty('--osd-track-menu-bg-opacity', (value / 100).toFixed(2));
+            cssVarsPolyfill.update();
+        });
+
+        // Listen for OSD background gradient opacity changes
+        eventBus.on('pref:osdGradientOpacity', (value) => {
+            document.documentElement.style.setProperty('--osd-gradient-opacity', (value / 100).toFixed(2));
             cssVarsPolyfill.update();
         });
 
@@ -872,20 +891,35 @@ class App {
                 const activeUserId = auth.getCurrentUser()?.Id;
                 const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
+                const skipProfilesOnce = storage.getItem('litefin:skip_profiles_once') === 'true';
+                if (skipProfilesOnce) {
+                    storage.removeItem('litefin:skip_profiles_once');
+                    storage.flush();
+                }
+
+                /*
+                 * Check user preference: "Remember Last Active User".
+                 * When enabled, the app skips the profile picker on launch and boots directly
+                 * into the last active session (unless protected by a local PIN).
+                 * Default: disabled (false). Adheres to Apple Human Interface Guidelines
+                 * for frictionless user experience and user control.
+                 */
+                const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
-                } else if (isAuthenticated && (sessionCount > 1 || activeHasPin)) {
-                    // Multiple users stored, or the restored profile is PIN-locked —
+                } else if (isAuthenticated && ((sessionCount > 1 && !rememberLastUser) || activeHasPin) && !skipProfilesOnce) {
+                    // Multiple users stored (and remember last user is disabled), or the restored profile is PIN-locked —
                     // make them pick a profile (which enforces any PIN).
                     log.info(
-                        `Initial route: navigating to ProfilesPage (sessions=${sessionCount}, pinLocked=${activeHasPin})`
+                        `Initial route: navigating to ProfilesPage (sessions=${sessionCount}, pinLocked=${activeHasPin}, rememberLastUser=${rememberLastUser})`
                     );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Single user, no PIN — skip the profiles screen and go straight home
-                    log.info('Initial route: Authenticated (single user), navigating to HomePage');
+                    // Single user, no PIN, rememberLastUser active, or skipped once — skip the profiles screen and go straight home
+                    log.info('Initial route: Authenticated, navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {
                     log.info('Initial route: No session, navigating to LoginPage');

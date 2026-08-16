@@ -18,10 +18,24 @@ export default class PlaybackModeMenu extends BaseMenu {
         this.isModal = true;
         this.title = i18n.t('PlaybackMode');
         this.options = [
+            // Auto lets the server decide the best delivery method.
             { id: 'auto', label: i18n.t('Auto') },
+
+            // Forces the raw file to be sent as-is without any server processing.
             { id: 'directPlay', label: i18n.t('ForceDirectPlay') },
-            { id: 'transcode', label: i18n.t('ForceTranscode') },
-            { id: 'remux', label: i18n.t('ForceRemux') }
+
+            // Rewraps the video into a new container without re-encoding any streams.
+            // Previously labelled "Force Remux".
+            { id: 'remux', label: i18n.t('ChangeContainer') },
+
+            // Full re-encode of video stream; audio is copied through untouched.
+            { id: 'transcodeVideo', label: i18n.t('TranscodeVideoOnly') },
+
+            // Full re-encode of audio stream; video is copied through untouched.
+            { id: 'transcodeAudio', label: i18n.t('TranscodeAudioOnly') },
+
+            // Forces both video and audio to be fully re-encoded on the server.
+            { id: 'transcode', label: i18n.t('ForceTranscode') }
         ];
     }
 
@@ -58,6 +72,19 @@ export default class PlaybackModeMenu extends BaseMenu {
             this.osd._currentFocusRow = this._prevRow;
             this.osd._currentFocusIndex = this._prevIndex;
             this.osd._updateFocus();
+
+            /*
+             * Lock out enter/click inputs for 350ms to absorb any ghost key presses
+             * or trailing clicks on the newly focused parent button on the OSD.
+             */
+            this.osd._focusRestoreLockout = true;
+            if ( this.osd._focusRestoreLockoutTimer ) {
+                clearTimeout( this.osd._focusRestoreLockoutTimer );
+            }
+            this.osd._focusRestoreLockoutTimer = setTimeout( () => {
+                this.osd._focusRestoreLockout = false;
+                this.osd._focusRestoreLockoutTimer = null;
+            }, 350 );
         }
     }
 
@@ -110,6 +137,19 @@ export default class PlaybackModeMenu extends BaseMenu {
         this.$el.querySelectorAll( '.track-item' ).forEach( btn => {
             btn.addEventListener( 'click', ( e ) => {
                 e.stopPropagation();
+                /*
+                 * ================================================================
+                 * TIZEN TV CLICK ORIGIN GUARD
+                 * ================================================================
+                 * Discard synthetic focus-clicks and Enter-synthesized clicks (detail === 0
+                 * or clientX === 0 && clientY === 0). D-pad Enter is handled exclusively
+                 * via handleKey() -> handleEnter().
+                 * ================================================================
+                 */
+                if ( btn._programmaticFocus ) return;
+                if ( e.detail === 0 ) return;
+                if ( e.clientX === 0 && e.clientY === 0 ) return;
+
                 this.focusIndex = parseInt( btn.dataset.menuIndex );
                 this.handleEnter();
             } );
@@ -137,12 +177,12 @@ export default class PlaybackModeMenu extends BaseMenu {
                 this.updateFocus();
                 return true;
             case 'enter':
+                this.handleEnter();
                 return true;
             case 'back':
             case 'left':
             case 'right':
-                this.hide();
-                this.osd.toggleSettings( true );
+                this.osd.closeMenu();
                 return true;
         }
         return false;
@@ -164,7 +204,9 @@ export default class PlaybackModeMenu extends BaseMenu {
             const isFocused = i === this.focusIndex;
             opt.classList.toggle( 'focused', isFocused );
             if ( isFocused ) {
-                opt.focus();
+                opt._programmaticFocus = true;
+                opt.focus( { preventScroll: true } );
+                setTimeout( () => { opt._programmaticFocus = false; }, 0 );
                 opt.scrollIntoView( { block: 'nearest', behavior: 'smooth' } );
             }
         } );

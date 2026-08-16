@@ -160,6 +160,22 @@ class StateManager {
         this._state.clear();
         this._subscribers.clear();
     }
+
+    /**
+     * Delete all state keys matching a prefix
+     * @param {string} prefix - Key prefix to match (e.g. 'details:')
+     */
+    clearByPrefix(prefix) {
+        const keysToDelete = [];
+        for (const key of this._state.keys()) {
+            if (key.startsWith(prefix)) {
+                keysToDelete.push(key);
+            }
+        }
+        for (const key of keysToDelete) {
+            this.delete(key);
+        }
+    }
 }
 
 // Export singleton instance for global use

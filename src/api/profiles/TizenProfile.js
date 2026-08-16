@@ -225,6 +225,13 @@ export function buildJellyfinProfile(options = {}) {
         return _buildMinimalProfile(caps);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Bitrate cap: only apply the manual setting when the server is actually
+    // in a position to respect it (i.e. not in a forced DirectPlay/remux session
+    // where the bitrate is dictated by the source file, not our preference).
+    // Also include the two partial-transcode modes here since they still route
+    // through the regular HLS/transcode pipeline where bitrate limits apply.
+    // ──────────────────────────────────────────────────────────────────────────
     let maxBitrate = 120000000;
     if (playbackMode !== 'directPlay' && playbackMode !== 'transcode' && playbackMode !== 'remux') {
         maxBitrate =
@@ -233,15 +240,13 @@ export function buildJellyfinProfile(options = {}) {
             (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
     }
 
-    // Keep as integer — the Jellyfin server TranscodingProfileDto schema expects
-    // MaxAudioChannels, MinSegments and SegmentLength to be integers, not strings.
-    // Sending a string (e.g. "6") causes a JSON-schema validation 400 Bad Request
-    // on strict server versions.
-    const maxAudioChannels = caps.maxAudioChannels;
+    // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
+    const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
+    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
-    const maxAudioChannelsStr = String(caps.maxAudioChannels);
+    const maxAudioChannelsStr = String(maxAudioChannels);
 
     // enableFlacInVideo: when false (default), FLAC is NOT included in the video
     // DirectPlay audio codec list. This forces Jellyfin to transcode FLAC tracks
@@ -320,7 +325,11 @@ export function buildJellyfinProfile(options = {}) {
 
     const directPlayProfiles = [];
 
-    if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
+    // Exclude DirectPlay profiles for any mode that forces server-side processing.
+    // transcodeVideo / transcodeAudio both need a remux or transcode path from
+    // the server, so they must not advertise DirectPlay capability either.
+    if (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') {
         // Standard Web formats (MP4, MKV, WebM)
         // Video DirectPlay: audioCodec string excludes FLAC by default (see enableFlacInVideo)
         directPlayProfiles.push({
@@ -561,11 +570,45 @@ export function buildJellyfinProfile(options = {}) {
     let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
+        // ──────────────────────────────────────────────────────────────────────
+        // Change Container / Remux:
+        //   Video → copy verbatim (all supported codecs are allowed through)
+        //   Audio → copy if supported, transcode to preferred target if not
+        // ──────────────────────────────────────────────────────────────────────
         directAudioCodecs = videoAudioCodecString;
 
         const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
         transVideoCodecs = Array.from(allVideo).join(',');
         directVideoCodecs = transVideoCodecs;
+    } else if (playbackMode === 'transcodeAudio') {
+        // ──────────────────────────────────────────────────────────────────────
+        // Transcode Audio Only:
+        //   Video → copy verbatim (same as remux — all codecs allowed through)
+        //   Audio → always re-encoded to the preferred transcode target codec
+        //
+        // This is identical to remux for the profile side; the server will copy
+        // video and transcode only the audio stream when needed.
+        // ──────────────────────────────────────────────────────────────────────
+        directAudioCodecs = videoAudioCodecString;
+
+        const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
+        transVideoCodecs = Array.from(allVideo).join(',');
+        directVideoCodecs = transVideoCodecs;
+    } else if (playbackMode === 'transcodeVideo') {
+        // ──────────────────────────────────────────────────────────────────────
+        // Transcode Video Only:
+        //   Video → always re-encoded to H264 (safe universal codec)
+        //   Audio → copy verbatim (all supported audio codecs are declared so
+        //           the server can pass the original audio through untouched)
+        //
+        // We achieve this by placing all audio codecs in directAudioCodecs
+        // (so the server considers audio as "compatible" and copies it)
+        // while restricting transVideoCodecs to only 'h264' (forcing video
+        // to always be re-encoded, never just copied).
+        // ──────────────────────────────────────────────────────────────────────
+        directAudioCodecs = videoAudioCodecString;
+        transVideoCodecs  = 'h264'; // Only h264 target — server must re-encode video
+        directVideoCodecs = 'h264';
     }
 
     const transcodingProfiles = [];
