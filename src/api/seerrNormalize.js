@@ -79,13 +79,17 @@ function extractYear(dateStr) {
 /**
  * Converts a Jellyseerr result into a Jellyfin-shaped item.
  * @param {Object} result - Raw result from /discover, /search, /movie or /tv
+ * @param {string} [fallbackMediaType] - Explicit fallback ('tv' or 'movie') when result.mediaType is missing
  * @returns {Object|null} Normalized item, or null when the result is unusable
  */
-export function normalizeSeerrItem(result) {
+export function normalizeSeerrItem(result, fallbackMediaType = null) {
     if (!result || !result.id) return null;
 
-    const mediaType = result.mediaType === 'tv' ? 'tv' : 'movie';
-    const isTv = mediaType === 'tv';
+    const isTv =
+        result.mediaType === 'tv' ||
+        (fallbackMediaType && fallbackMediaType === 'tv') ||
+        (!result.mediaType && (!!result.firstAirDate || !!result.seasons || !!result.numberOfSeasons));
+    const mediaType = isTv ? 'tv' : 'movie';
 
     return {
         // Cannot collide with a Jellyfin GUID, and doubles as the CardRenderer

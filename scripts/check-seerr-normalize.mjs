@@ -94,10 +94,18 @@ assert.equal(malformedDate.ProductionYear, undefined);
 assert.equal(normalizeSeerrItem(null), null);
 assert.equal(normalizeSeerrItem({ mediaType: 'movie', title: 'No id' }), null);
 
-// Missing mediaType falls back to movie
+// Missing mediaType falls back to movie unless tv indicators or fallback are present
 const noType = normalizeSeerrItem({ id: 10, title: 'W' });
 assert.equal(noType.Type, 'Movie');
 assert.equal(noType.Id, 'tmdb-movie-10');
+
+const tvWithoutMediaType = normalizeSeerrItem({ id: 125988, name: 'Silo', firstAirDate: '2023-05-04' });
+assert.equal(tvWithoutMediaType._mediaType, 'tv');
+assert.equal(tvWithoutMediaType.Type, 'Series');
+
+const tvWithFallback = normalizeSeerrItem({ id: 125988, name: 'Silo' }, 'tv');
+assert.equal(tvWithFallback._mediaType, 'tv');
+assert.equal(tvWithFallback.Type, 'Series');
 
 // Status table
 assert.equal(seerrStatusKey(SEERR_STATUS.PENDING), 'SeerrStatusPending');

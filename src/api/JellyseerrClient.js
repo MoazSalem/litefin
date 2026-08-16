@@ -138,7 +138,7 @@ export class JellyseerrClient {
     async details(mediaType, tmdbId) {
         const type = mediaType === 'tv' ? 'Tv' : 'Movie';
         const result = await this._request(`/${type}/${tmdbId}`);
-        const item = normalizeSeerrItem(result);
+        const item = normalizeSeerrItem(result, mediaType);
         if (!item) throw new Error('SeerrInvalidResponse');
         return decorateStatusBadge(item);
     }
@@ -200,14 +200,14 @@ export class JellyseerrClient {
     async isWatchlisted(mediaType, tmdbId) {
         const payload = await this._request('/Watchlist');
         return this._resultsOf(payload).some(
-            (entry) => Number(entry.tmdbId) === Number(tmdbId) && entry.mediaType === mediaType
+            (entry) => Number(entry.mediaId || entry.tmdbId) === Number(tmdbId) && entry.mediaType === mediaType
         );
     }
 
     async addToWatchlist(item) {
         return this._request('/Watchlist', {
             method: 'POST',
-            body: { tmdbId: item._tmdbId, mediaType: item._mediaType, title: item.Name }
+            body: { mediaId: item._tmdbId, tmdbId: item._tmdbId, mediaType: item._mediaType, title: item.Name }
         });
     }
 
