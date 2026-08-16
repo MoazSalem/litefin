@@ -209,6 +209,10 @@ export class JellyseerrClient {
         return this._request('/Requests', { method: 'POST', body });
     }
 
+    async cancelRequest(requestId) {
+        return this._request(`/Requests/${requestId}`, { method: 'DELETE' });
+    }
+
     async requestOptions(mediaType) {
         const user = await this._request('/User');
         if (!((user.permissions || 0) & (2 | 8192))) return null;

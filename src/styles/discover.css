@@ -71,6 +71,27 @@
 }
 
 /* ========================================================================
+   Seerr details page action buttons (Apple HIG transparent unfocused, colored focused)
+   ======================================================================== */
+
+.seerr-details-page .details-actions .btn {
+    background: transparent !important;
+    border: 2px solid rgba(255, 255, 255, 0.25) !important;
+    color: var(--jf-text-primary, #ffffff) !important;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.seerr-details-page .details-actions .btn:hover,
+.seerr-details-page .details-actions .btn:focus,
+.seerr-details-page .details-actions .btn.focused {
+    background: var(--jf-btn-primary-bg, var(--jf-accent, #00a4dc)) !important;
+    border-color: var(--jf-btn-primary-border, var(--jf-accent, #00a4dc)) !important;
+    color: var(--jf-btn-primary-color, #ffffff) !important;
+    transform: scale(1.05);
+    outline: none !important;
+}
+
+/* ========================================================================
    Request modal
    ======================================================================== */
 

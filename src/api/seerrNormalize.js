@@ -124,6 +124,11 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         _detailImageUrl: result.posterPath ? `${TMDB_POSTER_DETAIL_BASE}${result.posterPath}` : '',
         _backdropUrl: result.backdropPath ? `${TMDB_BACKDROP_BASE}${result.backdropPath}` : '',
         _seerrStatus: (result.mediaInfo && result.mediaInfo.status) || SEERR_STATUS.NOT_REQUESTED,
+        _requestId: (() => {
+            const requests = (result.mediaInfo && result.mediaInfo.requests) || result.requests || [];
+            const firstReq = Array.isArray(requests) ? requests[0] : null;
+            return firstReq ? (firstReq.id || firstReq.requestId) : null;
+        })(),
         _tmdbId: result.id,
         _mediaType: mediaType,
         RunTimeTicks: (result.runtime || result.episodeRunTime?.[0] || 0) * 600000000,

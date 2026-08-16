@@ -58,10 +58,13 @@ class SeerrDetailsPage extends Page {
                         <div class="details-info-col" id="details-info-col">
                             <div class="hero-info" id="hero-info"></div>
                             <section class="details-actions" id="actions">
-                                <button class="btn btn-primary seerr-request-btn" tabindex="0">
+                                <button class="btn btn-action seerr-request-btn" tabindex="0">
                                     <span>${i18n.t('SeerrRequest')}</span>
                                 </button>
-                                <button class="btn seerr-watchlist-btn" tabindex="0">
+                                <button class="btn btn-action seerr-cancel-request-btn hidden" tabindex="0">
+                                    <span>${i18n.t('SeerrCancelRequest')}</span>
+                                </button>
+                                <button class="btn btn-action seerr-watchlist-btn" tabindex="0">
                                     <span>${i18n.t('SeerrAddToWatchlist')}</span>
                                 </button>
                             </section>
@@ -173,16 +176,42 @@ class SeerrDetailsPage extends Page {
 
     _bindActions() {
         this.$('.seerr-request-btn')?.addEventListener('click', () => {
-            SeerrRequestModal.show(this._item, (newStatus) => {
+            SeerrRequestModal.show(this._item, (newStatus, requestId) => {
                 this._item._seerrStatus = newStatus;
+                if (requestId) this._item._requestId = requestId;
                 this._updateRequestButton();
                 this._renderStatus();
+                this._registerFocus();
+                focusManager.invalidateCache('seerr-details-actions');
                 const overviewButton = this.$('.see-more-btn:not(.hidden)');
                 if (overviewButton) {
                     this.setActiveSection('seerr-details-overview');
                     focusManager.focusElement(overviewButton);
                 }
             });
+        });
+
+        this.$('.seerr-cancel-request-btn')?.addEventListener('click', async () => {
+            const button = this.$('.seerr-cancel-request-btn');
+            if (!this._item._requestId) return;
+            button.disabled = true;
+            try {
+                await seerr.cancelRequest(this._item._requestId);
+                this._item._seerrStatus = SEERR_STATUS.NOT_REQUESTED;
+                this._item._requestId = null;
+                this._hasUnrequestedSeasons = true;
+                this._updateRequestButton();
+                this._renderStatus();
+                this._registerFocus();
+                const reqBtn = this.$('.seerr-request-btn:not(.hidden)');
+                if (reqBtn) focusManager.focusElement(reqBtn);
+                toast.show(i18n.t('SeerrRequestCancelled'));
+            } catch (err) {
+                log.warn('Unable to cancel Seerr request', err);
+                toast.show(i18n.t('SeerrCancelRequestFailed'));
+            } finally {
+                button.disabled = false;
+            }
         });
 
         this.$('.seerr-watchlist-btn')?.addEventListener('click', async () => {
@@ -213,7 +242,9 @@ class SeerrDetailsPage extends Page {
     _registerFocus() {
         const requestButton = this.$('.seerr-request-btn');
         const hasRequestAction = requestButton && !requestButton.classList.contains('hidden');
-        const hasAction = hasRequestAction || !!this.$('.seerr-watchlist-btn');
+        const cancelBtn = this.$('.seerr-cancel-request-btn');
+        const hasCancelAction = cancelBtn && !cancelBtn.classList.contains('hidden');
+        const hasAction = hasRequestAction || hasCancelAction || !!this.$('.seerr-watchlist-btn');
         const hasOverviewAction = !this.$('.see-more-btn')?.classList.contains('hidden');
 
         if (hasAction) {
@@ -237,6 +268,7 @@ class SeerrDetailsPage extends Page {
 
     _updateRequestButton() {
         const button = this.$('.seerr-request-btn');
+        const cancelBtn = this.$('.seerr-cancel-request-btn');
         if (!button) return;
         const isTv = this._item._mediaType === 'tv';
         let requestable;
@@ -251,6 +283,12 @@ class SeerrDetailsPage extends Page {
         button.classList.toggle('hidden', !requestable);
         button.tabIndex = requestable ? 0 : -1;
 
+        const canCancel = !!(this._item._requestId && this._item._seerrStatus !== SEERR_STATUS.AVAILABLE);
+        if (cancelBtn) {
+            cancelBtn.classList.toggle('hidden', !canCancel);
+            cancelBtn.tabIndex = canCancel ? 0 : -1;
+        }
+
         const isPartialOrPending =
             isTv &&
             (this._item._seerrStatus === SEERR_STATUS.PENDING ||
@@ -260,6 +298,7 @@ class SeerrDetailsPage extends Page {
         if (span) {
             span.textContent = i18n.t(isPartialOrPending ? 'SeerrRequestMore' : 'SeerrRequest');
         }
+        focusManager.invalidateCache('seerr-details-actions');
     }
 
     _updateWatchlistButton() {

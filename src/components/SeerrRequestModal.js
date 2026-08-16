@@ -117,14 +117,14 @@ class SeerrRequestModal {
                 }
                 requestBtn.disabled = true;
                 try {
-                    await seerr.createRequest({
+                    const res = await seerr.createRequest({
                         mediaType: item._mediaType,
                         tmdbId: item._tmdbId,
                         seasons: isTv ? selectedSeasons.slice() : undefined,
                         ...requestOptions()
                     });
                     toast.show(i18n.t('SeerrRequestSent'));
-                    if (onRequested) onRequested(SEERR_STATUS.PENDING);
+                    if (onRequested) onRequested(SEERR_STATUS.PENDING, res?.id);
                     close();
                 } catch (err) {
                     requestBtn.disabled = false;
