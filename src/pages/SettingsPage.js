@@ -2911,8 +2911,6 @@ class SettingsPage extends Page {
         const audioSettingsHtml =
             currentBackend !== 'tizen'
                 ? `
-                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDisableVbrAudioEncoding">${i18n.t('LabelDisableVbrAudioEncoding') || 'Disable VBR audio encoding'}</span>
@@ -2994,6 +2992,28 @@ class SettingsPage extends Page {
                 { value: 500000, label: i18n.t('BitrateKbps', ['500']) }
             ],
             currentBitrate
+        )}
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AllowedAudioChannels">${i18n.t('AllowedAudioChannels') || 'Maximum Audio Channels'}</span>
+                        <span class="setting-description" data-i18n="AllowedAudioChannelsDescription">${i18n.t('AllowedAudioChannelsDescription') || 'Configure maximum audio channels for video playback. Defaults to 5.1 (6 channels).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'allowed-audio-channels-select',
+            [
+                { value: -1, label: i18n.t('AudioChannelsAuto') || 'Auto (No Limit)' },
+                { value: 8, label: i18n.t('AudioChannels71') || '7.1 Channels' },
+                { value: 6, label: i18n.t('AudioChannels51') || '5.1 Channels (Default)' },
+                { value: 2, label: i18n.t('AudioChannels20') || 'Stereo 2.0' },
+                { value: 1, label: i18n.t('AudioChannels10') || 'Mono 1.0' }
+            ],
+            PlayerSettings.get('allowedAudioChannels') ?? 6
         )}
                     </div>
                 </div>
@@ -3500,9 +3520,8 @@ class SettingsPage extends Page {
                 ],
                 PlayerSettings.get('transcodeAudioCodec') || 'auto'
             )}
-                    </div>
-                </div>
-
+            </div>
+        </div>
                 <!-- ============================================================
                      EAC3 FORCE STATE
                      canPlayType returns '' for EAC3 on many WebOS/browser builds
@@ -7740,6 +7759,8 @@ class SettingsPage extends Page {
             'truehd-force-select': { type: 'player', key: 'enableTrueHd' },
             /* Transcode target codec — used by all three device profiles (Tizen, WebOS, Web) */
             'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
+            /* Maximum audio channels — used by all three device profiles (Tizen, WebOS, Web) */
+            'allowed-audio-channels-select': { type: 'player', key: 'allowedAudioChannels' },
             /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
             'eac3-force-select': { type: 'player', key: 'enableEac3' },
             /* MP2 force-state override — corrects false positives or forces transcoding to avoid stalls */

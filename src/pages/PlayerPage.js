@@ -1430,7 +1430,10 @@ class PlayerPage extends Page {
             VideoCodec: 'h264',
             AudioCodec: 'aac',
             MaxStreamingBitrate: 120000000,
-            TranscodingMaxAudioChannels: 2,
+            TranscodingMaxAudioChannels: (() => {
+                const userChannels = PlayerSettings.get('allowedAudioChannels');
+                return (userChannels && userChannels > 0) ? userChannels : 6;
+            })(),
             SegmentContainer: 'ts',
             MinSegments: 1,
             BreakOnNonKeyFrames: true
