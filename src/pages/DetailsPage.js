@@ -24,6 +24,7 @@ import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
 import AddToTargetModal from '../components/AddToTargetModal.js';
 import DescriptionModal from '../components/DescriptionModal.js';
+import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -1552,14 +1553,14 @@ class DetailsPage extends Page {
         }
 
         if (genres && genres.length > 0) {
-            htmlParts.push(createRow('Genres', genres));
+            htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
         // Directors (only shown in 'all')
         if (richMetadataStyle === 'all') {
             const directors = (item.People || []).filter((p) => p.Type === 'Director');
             if (directors.length > 0) {
-                htmlParts.push(createRow('Directors', directors));
+                htmlParts.push(RichMetadataTable.createChipRow('Directors', directors));
             }
         }
 
@@ -1571,36 +1572,26 @@ class DetailsPage extends Page {
         ) {
             const writers = (item.People || []).filter((p) => p.Type === 'Writer');
             if (writers.length > 0) {
-                htmlParts.push(createRow('Writers', writers));
+                htmlParts.push(RichMetadataTable.createChipRow('Writers', writers));
             }
         }
 
         // Studios (shown in 'all' or 'genres-studios-writers')
         if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
             if (item.Studios && item.Studios.length > 0) {
-                htmlParts.push(createRow('Studios', item.Studios));
+                htmlParts.push(RichMetadataTable.createChipRow('Studios', item.Studios));
             }
         }
 
         // Tags (only shown in 'all')
         if (richMetadataStyle === 'all') {
             if (item.Tags && item.Tags.length > 0) {
-                htmlParts.push(createRow('Tags', item.Tags));
+                htmlParts.push(RichMetadataTable.createChipRow('Tags', item.Tags));
             }
         }
 
         // Photo EXIF Data (only shown in 'all')
         if (item.Type === 'Photo' && richMetadataStyle === 'all') {
-            const createTextRow = (label, value) => {
-                if (!value) return '';
-                return `
-                    <div class="rich-meta-row">
-                        <div class="meta-label">${label}</div>
-                        <div class="meta-value-text">${value}</div>
-                    </div>
-                `;
-            };
-
             const esc = (str) =>
                 String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -1625,12 +1616,12 @@ class DetailsPage extends Page {
             const focal = item.FocalLength ? `${item.FocalLength} mm` : null;
             const altitude = item.Altitude != null ? `${Math.round(item.Altitude)} m` : null;
 
-            htmlParts.push(createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
-            htmlParts.push(createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
-            htmlParts.push(createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
-            htmlParts.push(createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
-            htmlParts.push(createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
-            htmlParts.push(createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
         }
 
         container = this.$('#rich-meta');

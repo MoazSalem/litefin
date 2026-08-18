@@ -10,6 +10,7 @@
 import Page from './Page.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import SeerrRequestModal from '../components/SeerrRequestModal.js';
+import { RichMetadataTable } from '../components/RichMetadataTable.js';
 import { seerr } from '../api/JellyseerrClient.js';
 import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
 import BackdropManager from '../utils/BackdropManager.js';
@@ -163,11 +164,26 @@ class SeerrDetailsPage extends Page {
 
         if (item._backdropUrl) BackdropManager.applyBackdrop(this.$('#backdrop'), item._backdropUrl);
 
-        if (item.Genres.length > 0) {
-            this.$('#rich-meta').innerHTML =
-                `<strong>${i18n.t('Genres')}:</strong> ${escapeHtml(item.Genres.join(', '))}`;
-            this.$('#rich-meta-container').classList.remove('hidden');
+        this._richMetaTable = new RichMetadataTable({
+            container: this.$('#rich-meta'),
+            containerWrapper: this.$('#rich-meta-container'),
+            onChipClick: (chip) => {
+                const name = chip.dataset.name;
+                log.info(`Selected genre chip: ${name}`);
+            }
+        });
+
+        const htmlParts = [];
+        if (item.Genres && item.Genres.length > 0) {
+            htmlParts.push(RichMetadataTable.createChipRow('Genres', item.Genres));
         }
+        if (item.Studios && item.Studios.length > 0) {
+            htmlParts.push(RichMetadataTable.createChipRow('Studios', item.Studios));
+        }
+        if (item.Tags && item.Tags.length > 0) {
+            htmlParts.push(RichMetadataTable.createChipRow('Tags', item.Tags));
+        }
+        this._richMetaTable.render(htmlParts.join(''));
 
         this.$('#details-info-col').classList.add('visible');
         this._updateRequestButton();
@@ -239,6 +255,14 @@ class SeerrDetailsPage extends Page {
         });
     }
 
+    onBackKey() {
+        if (this._richMetaTable && this._richMetaTable.isActive()) {
+            this._richMetaTable.deactivate();
+            return true;
+        }
+        return super.onBackKey();
+    }
+
     _registerFocus() {
         const requestButton = this.$('.seerr-request-btn');
         const hasRequestAction = requestButton && !requestButton.classList.contains('hidden');
@@ -246,24 +270,35 @@ class SeerrDetailsPage extends Page {
         const hasCancelAction = cancelBtn && !cancelBtn.classList.contains('hidden');
         const hasAction = hasRequestAction || hasCancelAction || !!this.$('.seerr-watchlist-btn');
         const hasOverviewAction = !this.$('.see-more-btn')?.classList.contains('hidden');
+        const hasRichMeta = !this.$('#rich-meta-container')?.classList.contains('hidden');
 
         if (hasAction) {
             this.registerFocusSection('seerr-details-actions', this.$('#actions'), {
                 orientation: 'horizontal',
                 leaveLeft: 'sidebar',
-                leaveDown: hasOverviewAction ? 'seerr-details-overview' : null
+                leaveDown: hasOverviewAction ? 'seerr-details-overview' : (hasRichMeta ? 'details-rich-meta' : null)
             });
         }
         if (hasOverviewAction) {
             this.registerFocusSection('seerr-details-overview', this.$('.details-overview'), {
                 orientation: 'vertical',
                 leaveUp: hasAction ? 'seerr-details-actions' : null,
+                leaveDown: hasRichMeta ? 'details-rich-meta' : null,
                 leaveLeft: 'sidebar'
+            });
+        }
+        if (hasRichMeta) {
+            this.registerFocusSection('details-rich-meta', this.$('#rich-meta-container'), {
+                orientation: 'vertical',
+                leaveUp: hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null),
+                leaveLeft: 'sidebar',
+                enterTo: 'first'
             });
         }
 
         if (hasAction) this.setActiveSection('seerr-details-actions');
         else if (hasOverviewAction) this.setActiveSection('seerr-details-overview');
+        else if (hasRichMeta) this.setActiveSection('details-rich-meta');
     }
 
     _updateRequestButton() {

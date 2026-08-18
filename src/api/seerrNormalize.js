@@ -134,6 +134,14 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         RunTimeTicks: (result.runtime || result.episodeRunTime?.[0] || 0) * 600000000,
         CommunityRating: typeof result.voteAverage === 'number' ? result.voteAverage : 0,
         Genres: Array.isArray(result.genres) ? result.genres.map((genre) => genre.name).filter(Boolean) : [],
+        Studios: Array.isArray(result.productionCompanies)
+            ? result.productionCompanies.map((c) => (typeof c === 'string' ? c : (c && c.name))).filter(Boolean)
+            : [],
+        Tags: (() => {
+            const rawKw = result.keywords;
+            const kwList = Array.isArray(rawKw) ? rawKw : (rawKw && Array.isArray(rawKw.results) ? rawKw.results : []);
+            return kwList.map((k) => (typeof k === 'string' ? k : (k && k.name))).filter(Boolean);
+        })(),
         Tagline: result.tagline || ''
     };
 }
