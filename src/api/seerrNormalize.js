@@ -150,6 +150,10 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         _detailImageUrl: result.posterPath ? `${TMDB_POSTER_DETAIL_BASE}${result.posterPath}` : '',
         _backdropUrl: result.backdropPath ? `${TMDB_BACKDROP_BASE}${result.backdropPath}` : '',
         _seerrStatus: (result.mediaInfo && result.mediaInfo.status) || SEERR_STATUS.NOT_REQUESTED,
+        _jellyfinMediaId: (() => {
+            const info = result.mediaInfo || {};
+            return info.jellyfinMediaId || info.jellyfinMediaId4k || info.serviceId || info.externalServiceId || null;
+        })(),
         _requestId: (() => {
             const requests = (result.mediaInfo && result.mediaInfo.requests) || result.requests || [];
             const firstReq = Array.isArray(requests) ? requests[0] : null;

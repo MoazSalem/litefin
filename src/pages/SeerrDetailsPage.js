@@ -11,6 +11,7 @@ import Page from './Page.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import SeerrRequestModal from '../components/SeerrRequestModal.js';
 import { RichMetadataTable } from '../components/RichMetadataTable.js';
+import { api } from '../api/ApiClient.js';
 import { seerr } from '../api/JellyseerrClient.js';
 import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
 import BackdropManager from '../utils/BackdropManager.js';
@@ -67,6 +68,10 @@ class SeerrDetailsPage extends Page {
                         <div class="details-info-col" id="details-info-col">
                             <div class="hero-info" id="hero-info"></div>
                             <section class="details-actions" id="actions">
+                                <button class="btn btn-action btn-primary seerr-play-btn hidden" tabindex="0">
+                                    ${detailsIcons.play}
+                                    <span>${i18n.t('Play')}</span>
+                                </button>
                                 <button class="btn btn-action seerr-request-btn" tabindex="0">
                                     ${detailsIcons.add}
                                     <span>${i18n.t('SeerrRequest')}</span>
@@ -146,10 +151,12 @@ class SeerrDetailsPage extends Page {
             } catch (err) {
                 log.warn('Unable to load Seerr watchlist state', err);
             }
-            this.title = this._item.Name;
             this._renderDetails();
             this._bindActions();
             this._registerFocus();
+            if (this._item._seerrStatus === SEERR_STATUS.AVAILABLE || this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE) {
+                void this._checkJellyfinMediaAvailability(mediaType, tmdbId);
+            }
             seerr.getRatingsCombined(mediaType, tmdbId)
                 .then((ratings) => this._renderRatings(ratings))
                 .catch((err) => log.warn('Ratings fetch failed', err));
@@ -302,11 +309,68 @@ class SeerrDetailsPage extends Page {
         this._updateRequestButton();
         this._updateWatchlistButton();
         this._updateTrailerButton();
+        this._updatePlayButton();
 
         requestAnimationFrame(() => {
             this.$('#details-info-col').classList.add('visible');
             this._checkOverviewTruncation();
         });
+    }
+
+    async _checkJellyfinMediaAvailability(mediaType, tmdbId) {
+        let jfId = this._item ? this._item._jellyfinMediaId : null;
+        if (!jfId) {
+            try {
+                const jfItems = await api.getItems({
+                    Recursive: true,
+                    IncludeItemTypes: mediaType === 'tv' ? 'Series' : 'Movie',
+                    AnyProviderIdEquals: `tmdb.${tmdbId}`
+                });
+                if (jfItems && jfItems.length > 0) {
+                    jfId = jfItems[0].Id;
+                }
+            } catch (e) {
+                log.debug('Jellyfin media lookup failed for tmdb ID', tmdbId, e);
+            }
+        }
+
+        if (!jfId && this._item && this._item.Name) {
+            try {
+                const searchRes = await api.getItems({
+                    Recursive: true,
+                    IncludeItemTypes: mediaType === 'tv' ? 'Series' : 'Movie',
+                    SearchTerm: this._item.Name,
+                    Fields: 'ProviderIds,ProductionYear',
+                    Limit: 10
+                });
+                if (searchRes && searchRes.length > 0) {
+                    const match = searchRes.find((item) => {
+                        const tmdbVal = item.ProviderIds?.Tmdb || item.ProviderIds?.tmdb;
+                        const tmdbMatch = tmdbVal && String(tmdbVal) === String(tmdbId);
+                        const yearMatch = !this._item.ProductionYear || item.ProductionYear === this._item.ProductionYear;
+                        return tmdbMatch || yearMatch;
+                    });
+                    if (match) jfId = match.Id;
+                }
+            } catch (e) {
+                log.debug('Jellyfin fallback title search failed', e);
+            }
+        }
+
+        if (jfId) {
+            this._jellyfinMediaId = jfId;
+            this._updatePlayButton();
+            this._registerFocus();
+        }
+    }
+
+    _updatePlayButton() {
+        const playBtn = this.$('.seerr-play-btn');
+        if (!playBtn) return;
+        const isAvailable = !!this._jellyfinMediaId;
+        playBtn.classList.toggle('hidden', !isAvailable);
+        playBtn.tabIndex = isAvailable ? 0 : -1;
+        focusManager.invalidateCache('seerr-details-actions');
     }
 
     _updateTrailerButton() {
@@ -418,6 +482,16 @@ class SeerrDetailsPage extends Page {
                 toast.show(i18n.t('SeerrWatchlistFailed'));
             } finally {
                 button.disabled = false;
+            }
+        });
+
+        this.$('.seerr-play-btn')?.addEventListener('click', () => {
+            if (!this._jellyfinMediaId) return;
+            const isTv = this.params.mediaType === 'tv' || this._item?._mediaType === 'tv';
+            if (isTv) {
+                router.navigate(`/details/${this._jellyfinMediaId}`);
+            } else {
+                router.navigate(`/player/${this._jellyfinMediaId}/false`);
             }
         });
 
@@ -636,13 +710,15 @@ class SeerrDetailsPage extends Page {
     }
 
     _registerFocus() {
+        const playBtn = this.$('.seerr-play-btn');
+        const hasPlayAction = playBtn && !playBtn.classList.contains('hidden');
         const requestButton = this.$('.seerr-request-btn');
         const hasRequestAction = requestButton && !requestButton.classList.contains('hidden');
         const cancelBtn = this.$('.seerr-cancel-request-btn');
         const hasCancelAction = cancelBtn && !cancelBtn.classList.contains('hidden');
         const trailerBtn = this.$('.seerr-trailer-btn');
         const hasTrailerAction = trailerBtn && !trailerBtn.classList.contains('hidden');
-        const hasAction = hasRequestAction || hasCancelAction || !!this.$('.seerr-watchlist-btn') || hasTrailerAction;
+        const hasAction = hasPlayAction || hasRequestAction || hasCancelAction || !!this.$('.seerr-watchlist-btn') || hasTrailerAction;
 
         const hasOverviewAction = !this.$('.see-more-btn')?.classList.contains('hidden');
         const hasRichMeta = !this.$('#rich-meta-container')?.classList.contains('hidden');
