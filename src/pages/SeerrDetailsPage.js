@@ -19,6 +19,9 @@ import { toast } from '../ui/Toast.js';
 import { storage } from '../utils/StorageService.js';
 import { detailsIcons } from '../utils/Icons.js';
 import { i18n } from '../utils/i18n.js';
+import { TrailerPlayer } from '../components/TrailerPlayer.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrDetailsPage');
@@ -66,6 +69,10 @@ class SeerrDetailsPage extends Page {
                                 <button class="btn btn-action seerr-cancel-request-btn hidden" tabindex="0">
                                     ${detailsIcons.cancel}
                                     <span>${i18n.t('SeerrCancelRequest')}</span>
+                                </button>
+                                <button class="btn btn-action seerr-trailer-btn hidden" tabindex="0">
+                                    ${detailsIcons.trailer}
+                                    <span>${i18n.t('WatchTrailer')}</span>
                                 </button>
                                 <button class="btn btn-action seerr-watchlist-btn" tabindex="0">
                                     ${detailsIcons.watchlist}
@@ -252,11 +259,35 @@ class SeerrDetailsPage extends Page {
 
         this._updateRequestButton();
         this._updateWatchlistButton();
+        this._updateTrailerButton();
 
         requestAnimationFrame(() => {
             this.$('#details-info-col').classList.add('visible');
             this._checkOverviewTruncation();
         });
+    }
+
+    _updateTrailerButton() {
+        const trailerBtn = this.$('.seerr-trailer-btn');
+        if (!trailerBtn) return;
+        const hasTrailers = this._item && Array.isArray(this._item.RemoteTrailers) && this._item.RemoteTrailers.length > 0;
+        trailerBtn.classList.toggle('hidden', !hasTrailers);
+        trailerBtn.tabIndex = hasTrailers ? 0 : -1;
+    }
+
+    _showRemoteTrailerPlayer() {
+        themeSongPlayer.stopInstant();
+        const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+        const trailers = (this._item && this._item.RemoteTrailers) || [];
+        if (!trailers.length) return;
+
+        if (mode === 'external') {
+            TrailerPlayer.launchExternal(trailers, this);
+        } else if (mode === 'internal_iframe') {
+            TrailerPlayer.showLegacy(trailers, this);
+        } else {
+            TrailerPlayer.show(trailers, this);
+        }
     }
 
     _checkOverviewTruncation() {
@@ -348,6 +379,10 @@ class SeerrDetailsPage extends Page {
             }
         });
 
+        this.$('.seerr-trailer-btn')?.addEventListener('click', () => {
+            this._showRemoteTrailerPlayer();
+        });
+
         this.$('.see-more-btn')?.addEventListener('click', () => {
             DescriptionModal.show(
                 { title: escapeHtml(this._item.Name), overview: escapeHtml(this._item.Overview) },
@@ -369,7 +404,9 @@ class SeerrDetailsPage extends Page {
         const hasRequestAction = requestButton && !requestButton.classList.contains('hidden');
         const cancelBtn = this.$('.seerr-cancel-request-btn');
         const hasCancelAction = cancelBtn && !cancelBtn.classList.contains('hidden');
-        const hasAction = hasRequestAction || hasCancelAction || !!this.$('.seerr-watchlist-btn');
+        const trailerBtn = this.$('.seerr-trailer-btn');
+        const hasTrailerAction = trailerBtn && !trailerBtn.classList.contains('hidden');
+        const hasAction = hasRequestAction || hasCancelAction || !!this.$('.seerr-watchlist-btn') || hasTrailerAction;
         const hasOverviewAction = !this.$('.see-more-btn')?.classList.contains('hidden');
         const hasRichMeta = !this.$('#rich-meta-container')?.classList.contains('hidden');
 

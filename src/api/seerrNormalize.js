@@ -208,6 +208,25 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             const kwList = Array.isArray(rawKw) ? rawKw : (rawKw && Array.isArray(rawKw.results) ? rawKw.results : []);
             return kwList.map((k) => (typeof k === 'string' ? k : (k && k.name))).filter(Boolean);
         })(),
+        RemoteTrailers: (() => {
+            const raw = result.relatedVideos || result.videos || [];
+            const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.results) ? raw.results : []);
+            return list
+                .filter((v) => {
+                    const site = (v && v.site ? String(v.site) : '').toLowerCase();
+                    const type = (v && v.type ? String(v.type) : '').toLowerCase();
+                    return site === 'youtube' && type === 'trailer';
+                })
+                .map((v) => {
+                    const key = v.key || v.url || '';
+                    const url = key.startsWith('http') ? key : (key ? `https://www.youtube.com/watch?v=${key}` : '');
+                    return {
+                        Name: v.name || `${result.title || result.name || 'Media'} Trailer`,
+                        Url: url
+                    };
+                })
+                .filter((v) => Boolean(v.Url));
+        })(),
         Tagline: result.tagline || ''
     };
 }
