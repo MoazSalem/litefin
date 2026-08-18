@@ -88,22 +88,30 @@ class CardRenderer {
                 if (videoStream) {
                     if (videoStream.Width) width = videoStream.Width;
                     if (videoStream.Height) height = videoStream.Height;
-                    const videoRange = videoStream.VideoRange || videoStream.VideoRangeType || '';
+
+                    // Capture top-level item range attributes
+                    const itemRange = `${item.VideoRange || ''} ${item.VideoRangeType || ''}`;
+
+                    // Capture detailed video stream range and codec attributes
+                    const videoRange = videoStream.VideoRange || '';
+                    const videoRangeType = videoStream.VideoRangeType || '';
                     const profile = videoStream.Profile || '';
                     const title = videoStream.Title || videoStream.DisplayTitle || '';
                     const codec = videoStream.Codec || '';
 
-                    // Build a unified inspection string across stream metadata
-                    const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
+                    // Build a unified inspection string across all item and stream metadata fields
+                    const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${title} ${codec}`.toLowerCase();
 
                     /*
                      * 1. Detect HDR10+ specific signaling
+                     * Checks for 'hdr10plus', 'hdr10+', 'hdr10p', or Dolby Vision hybrid 'doviwithhdr10plus'
                      */
                     if (
                         checkString.includes('hdr10plus') ||
                         checkString.includes('hdr10+') ||
                         checkString.includes('hdr10p') ||
-                        checkString.includes('doviwithhdr10plus')
+                        checkString.includes('doviwithhdr10plus') ||
+                        checkString.includes('doviwithelhdr10plus')
                     ) {
                         isHdr10Plus = true;
                     }
@@ -968,47 +976,43 @@ class CardRenderer {
                     ${progressHtml}
                     ${videoBadgeHtml}
                     ${!options.showMeta ? badgeContainer : ''}
-                    ${
-                        showInside
-                            ? `
+                    ${showInside
+                ? `
                     <div class="card-info inside">
-                        ${
-                            options.showMeta
-                                ? `
+                        ${options.showMeta
+                    ? `
                         <div class="card-title-row">
                             <div class="card-title"><span>${titleText}</span></div>
                             ${badgeContainer}
                         </div>
                         `
-                                : `<div class="card-title"><span>${titleText}</span></div>`
-                        }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                         ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                         ${metaHtml}
                     </div>
                     `
-                            : ''
-                    }
+                : ''
+            }
                 </div>
-                ${
-                    showOutside
-                        ? `
+                ${showOutside
+                ? `
                 <div class="card-info">
-                    ${
-                        options.showMeta
-                            ? `
+                    ${options.showMeta
+                    ? `
                     <div class="card-title-row">
                         <div class="card-title"><span>${titleText}</span></div>
                         ${badgeContainer}
                     </div>
                     `
-                            : `<div class="card-title"><span>${titleText}</span></div>`
-                    }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                     ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                     ${metaHtml}
                 </div>
                 `
-                        : ''
-                }
+                : ''
+            }
             </button>
         `;
 
@@ -1104,15 +1108,14 @@ class CardRenderer {
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
-                    ${
-                        !skeletonHideLabels
-                            ? `
+                    ${!skeletonHideLabels
+                        ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
                         ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>` : ''}
                     </div>
                     `
-                            : ''
+                        : ''
                     }
                 </div>
             `;
