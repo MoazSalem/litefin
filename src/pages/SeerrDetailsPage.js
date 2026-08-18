@@ -60,12 +60,15 @@ class SeerrDetailsPage extends Page {
                             <div class="hero-info" id="hero-info"></div>
                             <section class="details-actions" id="actions">
                                 <button class="btn btn-action seerr-request-btn" tabindex="0">
+                                    ${detailsIcons.add}
                                     <span>${i18n.t('SeerrRequest')}</span>
                                 </button>
                                 <button class="btn btn-action seerr-cancel-request-btn hidden" tabindex="0">
+                                    ${detailsIcons.cancel}
                                     <span>${i18n.t('SeerrCancelRequest')}</span>
                                 </button>
                                 <button class="btn btn-action seerr-watchlist-btn" tabindex="0">
+                                    ${detailsIcons.watchlist}
                                     <span>${i18n.t('SeerrAddToWatchlist')}</span>
                                 </button>
                             </section>
@@ -116,6 +119,9 @@ class SeerrDetailsPage extends Page {
             this._renderDetails();
             this._bindActions();
             this._registerFocus();
+            seerr.getRatingsCombined(mediaType, tmdbId)
+                .then((ratings) => this._renderRatings(ratings))
+                .catch((err) => log.warn('Ratings fetch failed', err));
         } catch (err) {
             log.warn('Unable to load Seerr details', err);
             this._showError();
@@ -133,26 +139,61 @@ class SeerrDetailsPage extends Page {
             ? `${Math.floor(runtimeMinutes / 60) ? `${Math.floor(runtimeMinutes / 60)}h ` : ''}${runtimeMinutes % 60}m`
             : '';
         const statusKey = seerrStatusKey(item._seerrStatus);
-        const meta = [
+        const formatCompactCurrency = (val) => {
+            if (typeof val !== 'number' || val <= 0) return '';
+            if (val >= 1e9) return `$${(val / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
+            if (val >= 1e6) return `$${(val / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+            if (val >= 1e3) return `$${(val / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+            return `$${val}`;
+        };
+
+        const primaryMeta = [
             item.ProductionYear ? `<span class="meta-item">${item.ProductionYear}</span>` : '',
             runtime ? `<span class="meta-item">${runtime}</span>` : '',
             item.CommunityRating
-                ? `<span class="meta-item meta-star">${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}</span>`
-                : '',
+                ? `<span class="meta-item seerr-rating-item seerr-tmdb-rating">${detailsIcons.tmdbRating} ${item.CommunityRating.toFixed(1)}</span>`
+                : ''
+        ].filter(Boolean).join('');
+
+        const secondaryMeta = [
             statusKey
                 ? `<span class="meta-item meta-badge seerr-details-status">${escapeHtml(i18n.t(statusKey))}</span>`
+                : '',
+            item.MediaStatus
+                ? `<span class="meta-item seerr-meta-card">${escapeHtml(item.MediaStatus)}</span>`
+                : '',
+            item.ReleaseDate
+                ? `<span class="meta-item seerr-meta-card">${escapeHtml(item.ReleaseDate)}</span>`
+                : '',
+            item.Budget
+                ? `<span class="meta-item seerr-meta-card">Budget: ${formatCompactCurrency(item.Budget)}</span>`
+                : '',
+            item.Revenue
+                ? `<span class="meta-item seerr-meta-card">Revenue: ${formatCompactCurrency(item.Revenue)}</span>`
                 : ''
-        ].join('');
+        ].filter(Boolean).join('');
 
         this.$('#hero-info').innerHTML = `
             <h1 class="details-title" style="max-width: 100%;">${escapeHtml(i18n.ensureBiDi(item.Name))}</h1>
-            ${item.Tagline ? `<p class="details-tagline">${escapeHtml(item.Tagline)}</p>` : ''}
-            <div class="details-meta-row">${meta}</div>
+            ${item.OriginalTitle ? `<h2 class="details-original-title">${escapeHtml(i18n.ensureBiDi(item.OriginalTitle))}</h2>` : ''}
+            <div class="details-meta-row">${primaryMeta}</div>
+            ${secondaryMeta ? `<div class="details-meta-row secondary-meta-row" style="margin-top: 6px;">${secondaryMeta}</div>` : ''}
         `;
 
-        this.$('#overview-text').textContent = item.Overview || '';
-        this.$('.see-more-btn').classList.toggle('hidden', !item.Overview);
-        this.$('.see-more-btn').tabIndex = item.Overview ? 0 : -1;
+        const overviewContainer = this.$('.details-overview');
+        const overviewEl = this.$('#overview-text');
+        let taglineEl = overviewContainer.querySelector('.details-tagline');
+        if (!taglineEl && item.Tagline) {
+            taglineEl = document.createElement('p');
+            taglineEl.className = 'details-tagline';
+            overviewContainer.insertBefore(taglineEl, overviewEl);
+        }
+        if (taglineEl) {
+            taglineEl.textContent = item.Tagline || '';
+            taglineEl.style.display = item.Tagline ? 'block' : 'none';
+        }
+
+        overviewEl.textContent = item.Overview || '';
 
         if (item._detailImageUrl) {
             const poster = document.createElement('img');
@@ -164,45 +205,108 @@ class SeerrDetailsPage extends Page {
 
         if (item._backdropUrl) BackdropManager.applyBackdrop(this.$('#backdrop'), item._backdropUrl);
 
+        const richMetadataStyle =
+            storage.getItem('pref:richMetadataStyle') ||
+            (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+        const isHidden = richMetadataStyle === 'none';
+
         this._richMetaTable = new RichMetadataTable({
             container: this.$('#rich-meta'),
             containerWrapper: this.$('#rich-meta-container'),
             onChipClick: (chip) => {
                 const name = chip.dataset.name;
-                log.info(`Selected genre chip: ${name}`);
+                log.info(`Selected metadata chip: ${name}`);
             }
         });
 
-        const htmlParts = [];
-        if (item.Genres && item.Genres.length > 0) {
-            htmlParts.push(RichMetadataTable.createChipRow('Genres', item.Genres));
+        if (isHidden) {
+            this._richMetaTable.render('');
+        } else {
+            const htmlParts = [];
+            if (item.Genres && item.Genres.length > 0) {
+                htmlParts.push(RichMetadataTable.createChipRow('Genres', item.Genres));
+            }
+            if (
+                (richMetadataStyle === 'all' ||
+                    richMetadataStyle === 'genres-studios' ||
+                    richMetadataStyle === 'genres-studios-writers') &&
+                item.Studios &&
+                item.Studios.length > 0
+            ) {
+                htmlParts.push(RichMetadataTable.createChipRow('Studios', item.Studios));
+            }
+            if (
+                (richMetadataStyle === 'all' ||
+                    richMetadataStyle === 'genres-studios-writers' ||
+                    richMetadataStyle === 'genres-writers') &&
+                item.ProductionTeam &&
+                item.ProductionTeam.length > 0
+            ) {
+                htmlParts.push(RichMetadataTable.createChipRow('ProductionTeam', item.ProductionTeam));
+            }
+            if (richMetadataStyle === 'all' && item.Tags && item.Tags.length > 0) {
+                htmlParts.push(RichMetadataTable.createChipRow('Tags', item.Tags));
+            }
+            this._richMetaTable.render(htmlParts.join(''));
         }
-        if (item.Studios && item.Studios.length > 0) {
-            htmlParts.push(RichMetadataTable.createChipRow('Studios', item.Studios));
-        }
-        if (item.Tags && item.Tags.length > 0) {
-            htmlParts.push(RichMetadataTable.createChipRow('Tags', item.Tags));
-        }
-        this._richMetaTable.render(htmlParts.join(''));
 
-        this.$('#details-info-col').classList.add('visible');
         this._updateRequestButton();
         this._updateWatchlistButton();
+
+        requestAnimationFrame(() => {
+            this.$('#details-info-col').classList.add('visible');
+            this._checkOverviewTruncation();
+        });
+    }
+
+    _checkOverviewTruncation() {
+        const overviewEl = this.$('#overview-text');
+        const seeMoreBtn = this.$('.see-more-btn');
+        if (!overviewEl || !seeMoreBtn) return;
+
+        const isTruncated = overviewEl.scrollHeight > overviewEl.clientHeight + 2;
+        seeMoreBtn.classList.toggle('hidden', !isTruncated);
+        seeMoreBtn.tabIndex = isTruncated ? 0 : -1;
+        this._registerFocus();
+    }
+
+    async _refreshTvSeasonState() {
+        if (this._item._mediaType === 'tv') {
+            try {
+                const seasons = await seerr.tvSeasons(this._item._tmdbId);
+                this._hasUnrequestedSeasons = seasons.some(
+                    (s) => s.status === SEERR_STATUS.NOT_REQUESTED || s.status === SEERR_STATUS.DELETED
+                );
+            } catch (e) {
+                log.warn('Failed to refresh TV seasons status', e);
+            }
+        }
+        this._updateRequestButton();
+        this._renderStatus();
+        this._registerFocus();
+        focusManager.invalidateCache('seerr-details-actions');
     }
 
     _bindActions() {
         this.$('.seerr-request-btn')?.addEventListener('click', () => {
-            SeerrRequestModal.show(this._item, (newStatus, requestId) => {
+            SeerrRequestModal.show(this._item, async (newStatus, requestId) => {
                 this._item._seerrStatus = newStatus;
                 if (requestId) this._item._requestId = requestId;
-                this._updateRequestButton();
-                this._renderStatus();
-                this._registerFocus();
-                focusManager.invalidateCache('seerr-details-actions');
-                const overviewButton = this.$('.see-more-btn:not(.hidden)');
-                if (overviewButton) {
-                    this.setActiveSection('seerr-details-overview');
-                    focusManager.focusElement(overviewButton);
+                await this._refreshTvSeasonState();
+
+                const reqBtn = this.$('.seerr-request-btn:not(.hidden)');
+                const cancelBtn = this.$('.seerr-cancel-request-btn:not(.hidden)');
+                const watchlistBtn = this.$('.seerr-watchlist-btn:not(.hidden)');
+                const targetBtn = reqBtn || cancelBtn || watchlistBtn;
+                if (targetBtn) {
+                    this.setActiveSection('seerr-details-actions');
+                    focusManager.focusElement(targetBtn);
+                } else {
+                    const overviewButton = this.$('.see-more-btn:not(.hidden)');
+                    if (overviewButton) {
+                        this.setActiveSection('seerr-details-overview');
+                        focusManager.focusElement(overviewButton);
+                    }
                 }
             });
         });
@@ -215,10 +319,7 @@ class SeerrDetailsPage extends Page {
                 await seerr.cancelRequest(this._item._requestId);
                 this._item._seerrStatus = SEERR_STATUS.NOT_REQUESTED;
                 this._item._requestId = null;
-                this._hasUnrequestedSeasons = true;
-                this._updateRequestButton();
-                this._renderStatus();
-                this._registerFocus();
+                await this._refreshTvSeasonState();
                 const reqBtn = this.$('.seerr-request-btn:not(.hidden)');
                 if (reqBtn) focusManager.focusElement(reqBtn);
                 toast.show(i18n.t('SeerrRequestCancelled'));
@@ -343,15 +444,64 @@ class SeerrDetailsPage extends Page {
 
     _renderStatus() {
         const statusKey = seerrStatusKey(this._item._seerrStatus);
-        const row = this.$('.details-meta-row');
-        const oldStatus = row?.querySelector('.seerr-details-status');
+        const row = this.$('.secondary-meta-row') || this.$('.details-meta-row');
+        const oldStatus = this.$('.seerr-details-status');
         if (oldStatus) oldStatus.remove();
         if (!row || !statusKey) return;
 
         const status = document.createElement('span');
         status.className = 'meta-item meta-badge seerr-details-status';
         status.textContent = i18n.t(statusKey);
-        row.appendChild(status);
+        row.insertBefore(status, row.firstChild);
+    }
+
+    _renderRatings(ratings) {
+        if (!ratings) return;
+        const row = this.$('.details-meta-row');
+        if (!row) return;
+
+        const oldContainer = row.querySelector('.seerr-ratings-container');
+        if (oldContainer) oldContainer.remove();
+
+        const ratingItems = [];
+
+        // 2. IMDb
+        if (ratings.imdb && typeof ratings.imdb.criticsScore === 'number' && ratings.imdb.criticsScore > 0) {
+            ratingItems.push(
+                `<span class="meta-item seerr-rating-item" title="IMDb">${detailsIcons.imdbRating} ${ratings.imdb.criticsScore.toFixed(1)}</span>`
+            );
+        }
+
+        // 3. Rotten Tomatoes Critics
+        if (ratings.rt && typeof ratings.rt.criticsScore === 'number' && ratings.rt.criticsScore > 0) {
+            ratingItems.push(
+                `<span class="meta-item seerr-rating-item" title="Rotten Tomatoes Critics">${detailsIcons.rottenTomatoesFresh} ${ratings.rt.criticsScore}%</span>`
+            );
+        }
+
+        // 4. Rotten Tomatoes Audience
+        if (ratings.rt && typeof ratings.rt.audienceScore === 'number' && ratings.rt.audienceScore > 0) {
+            ratingItems.push(
+                `<span class="meta-item seerr-rating-item" title="Rotten Tomatoes Audience">${detailsIcons.rottenTomatoesAudience} ${ratings.rt.audienceScore}%</span>`
+            );
+        }
+
+        if (ratingItems.length > 0) {
+            const container = document.createElement('div');
+            container.className = 'seerr-ratings-container';
+            container.style.display = 'inline-flex';
+            container.style.gap = '20px';
+            container.style.alignItems = 'center';
+            container.style.marginLeft = '20px';
+            container.innerHTML = ratingItems.join('');
+
+            const tmdbItem = row.querySelector('.seerr-tmdb-rating');
+            if (tmdbItem && tmdbItem.nextSibling) {
+                row.insertBefore(container, tmdbItem.nextSibling);
+            } else {
+                row.appendChild(container);
+            }
+        }
     }
 
     _showError() {

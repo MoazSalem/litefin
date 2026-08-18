@@ -109,13 +109,12 @@ assert.equal(tvWithFallback.Type, 'Series');
 
 // Status table
 assert.equal(seerrStatusKey(SEERR_STATUS.PENDING), 'SeerrStatusPending');
-assert.equal(seerrStatusKey(SEERR_STATUS.PROCESSING), 'SeerrStatusProcessing');
+assert.equal(seerrStatusKey(SEERR_STATUS.PROCESSING), 'SeerrStatusPending');
 assert.equal(seerrStatusKey(SEERR_STATUS.PARTIALLY_AVAILABLE), 'SeerrStatusPartial');
 assert.equal(seerrStatusKey(SEERR_STATUS.AVAILABLE), 'SeerrStatusAvailable');
-// 0 (never requested), 1 (unknown) and 6 (deleted) show no badge
-assert.equal(seerrStatusKey(0), '');
-assert.equal(seerrStatusKey(1), '');
-assert.equal(seerrStatusKey(6), '');
-assert.equal(seerrStatusKey(undefined), '');
+assert.equal(seerrStatusKey(0), 'SeerrStatusNotRequested');
+assert.equal(seerrStatusKey(1), 'SeerrStatusNotRequested');
+assert.equal(seerrStatusKey(6), 'SeerrStatusNotRequested');
+assert.equal(seerrStatusKey(undefined), 'SeerrStatusNotRequested');
 
 console.log('seerrNormalize: OK');

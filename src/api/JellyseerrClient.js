@@ -213,6 +213,15 @@ export class JellyseerrClient {
         return this._request(`/Requests/${requestId}`, { method: 'DELETE' });
     }
 
+    async getRatingsCombined(mediaType, tmdbId) {
+        try {
+            return await this._request(`/Ratings/${mediaType}/${tmdbId}`);
+        } catch (err) {
+            log.warn(`Failed to fetch ratings for ${mediaType} ${tmdbId}`, err);
+            return null;
+        }
+    }
+
     async requestOptions(mediaType) {
         const user = await this._request('/User');
         if (!((user.permissions || 0) & (2 | 8192))) return null;

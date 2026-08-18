@@ -91,6 +91,43 @@
     outline: none !important;
 }
 
+.seerr-details-page .details-actions .btn svg {
+    margin-right: 10px;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.seerr-rating-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 1.3rem;
+    color: var(--jf-text-primary, #ffffff);
+}
+
+.seerr-rating-icon {
+    height: 28px;
+    width: auto;
+    max-width: 44px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.seerr-meta-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 4px 10px;
+    border-radius: var(--jf-border-radius, 8px);
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+}
+
 /* ========================================================================
    Request modal
    ======================================================================== */

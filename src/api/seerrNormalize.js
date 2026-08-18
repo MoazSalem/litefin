@@ -12,6 +12,25 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w300';
 const TMDB_POSTER_DETAIL_BASE = 'https://image.tmdb.org/t/p/w500';
 const TMDB_BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280';
 
+function extractCrewByJob(rawCrew, jobMatches) {
+    if (!Array.isArray(rawCrew)) return [];
+    const names = [];
+    const seen = new Set();
+    for (const member of rawCrew) {
+        const job = (member.job || member.known_for_department || '').toLowerCase();
+        const name = typeof member === 'string' ? member : (member && member.name);
+        if (!name) continue;
+        if (jobMatches.some((match) => job.includes(match))) {
+            const key = name.trim().toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                names.push(name.trim());
+            }
+        }
+    }
+    return names;
+}
+
 /**
  * Jellyseerr MediaStatus values. 0 does not exist server-side — it is our
  * value for "never requested", when the result carries no mediaInfo.
@@ -52,15 +71,17 @@ export function normalizeSeerrBaseUrl(url) {
 export function seerrStatusKey(status) {
     switch (status) {
         case SEERR_STATUS.PENDING:
-            return 'SeerrStatusPending';
         case SEERR_STATUS.PROCESSING:
-            return 'SeerrStatusProcessing';
+            return 'SeerrStatusPending';
         case SEERR_STATUS.PARTIALLY_AVAILABLE:
             return 'SeerrStatusPartial';
         case SEERR_STATUS.AVAILABLE:
             return 'SeerrStatusAvailable';
+        case SEERR_STATUS.NOT_REQUESTED:
+        case SEERR_STATUS.UNKNOWN:
+        case SEERR_STATUS.DELETED:
         default:
-            return '';
+            return 'SeerrStatusNotRequested';
     }
 }
 
@@ -116,6 +137,11 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         // HTML cache key.
         Id: `tmdb-${mediaType}-${result.id}`,
         Name: result.title || result.name || '',
+        OriginalTitle: (() => {
+            const orig = result.originalTitle || result.originalName || '';
+            const main = result.title || result.name || '';
+            return orig !== main ? orig : '';
+        })(),
         Type: isTv ? 'Series' : 'Movie',
         ProductionYear: extractYear(isTv ? result.firstAirDate : result.releaseDate),
         Overview: result.overview || '',
@@ -132,11 +158,51 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         _tmdbId: result.id,
         _mediaType: mediaType,
         RunTimeTicks: (result.runtime || result.episodeRunTime?.[0] || 0) * 600000000,
+        ReleaseDate: result.releaseDate || result.firstAirDate || '',
+        Budget: typeof result.budget === 'number' && result.budget > 0 ? result.budget : null,
+        Revenue: typeof result.revenue === 'number' && result.revenue > 0 ? result.revenue : null,
+        MediaStatus: result.status || result.mediaStatus || '',
         CommunityRating: typeof result.voteAverage === 'number' ? result.voteAverage : 0,
         Genres: Array.isArray(result.genres) ? result.genres.map((genre) => genre.name).filter(Boolean) : [],
         Studios: Array.isArray(result.productionCompanies)
             ? result.productionCompanies.map((c) => (typeof c === 'string' ? c : (c && c.name))).filter(Boolean)
             : [],
+        ProductionTeam: (() => {
+            const rawCrew = (result.credits && result.credits.crew) || result.crew || [];
+            if (!Array.isArray(rawCrew)) return [];
+            
+            const jobLimits = {
+                'director': 2,
+                'writer': 2,
+                'screenplay': 2,
+                'editor': 1,
+                'producer': 2,
+                'co-producer': 1
+            };
+            const counts = {};
+            const names = [];
+            const seen = new Set();
+
+            for (const member of rawCrew) {
+                const job = (member.job || '').trim().toLowerCase();
+                const name = typeof member === 'string' ? member : (member && member.name);
+                if (!name) continue;
+                
+                const limit = jobLimits[job];
+                if (limit) {
+                    counts[job] = counts[job] || 0;
+                    if (counts[job] < limit) {
+                        const key = name.trim().toLowerCase();
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            names.push(name.trim());
+                        }
+                        counts[job]++;
+                    }
+                }
+            }
+            return names;
+        })(),
         Tags: (() => {
             const rawKw = result.keywords;
             const kwList = Array.isArray(rawKw) ? rawKw : (rawKw && Array.isArray(rawKw.results) ? rawKw.results : []);
