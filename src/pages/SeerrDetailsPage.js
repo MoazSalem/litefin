@@ -22,6 +22,10 @@ import { i18n } from '../utils/i18n.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
+import { VirtualCardRow } from '../components/VirtualCardRow.js';
+import CardRenderer from '../utils/CardRenderer.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
+import { router } from '../core/Router.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrDetailsPage');
@@ -88,6 +92,25 @@ class SeerrDetailsPage extends Page {
                     <div id="rich-meta-container" class="media-row hidden">
                         <div class="details-rich-meta" id="rich-meta"></div>
                     </div>
+
+                    <!-- Cast & Crew -->
+                    <section class="details-people media-row hidden" id="seerr-people-section">
+                        <h2 class="row-title" data-i18n="HeaderCastAndCrew">${i18n.t('HeaderCastAndCrew')}</h2>
+                        <div class="people-row" id="seerr-people-row"></div>
+                    </section>
+
+                    <!-- Recommendations -->
+                    <section class="details-recommendations media-row hidden" id="seerr-recommendations-section">
+                        <h2 class="row-title" data-i18n="HeaderRecommendations">${i18n.t('HeaderRecommendations')}</h2>
+                        <div class="recommendations-row" id="seerr-recommendations-row"></div>
+                    </section>
+
+                    <!-- Similar items -->
+                    <section class="details-similar media-row hidden" id="seerr-similar-section">
+                        <h2 class="row-title" data-i18n="HeaderMoreLikeThis">${i18n.t('HeaderMoreLikeThis')}</h2>
+                        <div class="similar-row" id="seerr-similar-row"></div>
+                    </section>
+
                     <div class="discover-message hidden" id="seerr-details-message"></div>
                     <div class="page-loading hidden"><div class="loading-spinner"></div></div>
                 </div>
@@ -129,6 +152,7 @@ class SeerrDetailsPage extends Page {
             seerr.getRatingsCombined(mediaType, tmdbId)
                 .then((ratings) => this._renderRatings(ratings))
                 .catch((err) => log.warn('Ratings fetch failed', err));
+            setTimeout(() => this._loadSecondaryContent(mediaType, tmdbId), 150);
         } catch (err) {
             log.warn('Unable to load Seerr details', err);
             this._showError();
@@ -399,6 +423,153 @@ class SeerrDetailsPage extends Page {
         return super.onBackKey();
     }
 
+    _renderVirtualRow(options) {
+        const {
+            sectionId,
+            listId,
+            items,
+            isLandscape = false,
+            renderCard,
+            focusSectionName,
+            onClick
+        } = options;
+
+        const section = this.$(`#${sectionId}`);
+        const list = this.$(`#${listId}`);
+        if (!section || !list || !items || items.length === 0) return;
+
+        section.classList.remove('hidden');
+        list.classList.add('row-items');
+        list.innerHTML = `<div class="row-items-track"></div>`;
+        const trackContainer = list.querySelector('.row-items-track');
+
+        const virtualRow = new VirtualCardRow(trackContainer, items, {
+            isLandscape: isLandscape,
+            visibleCount: 10,
+            initialWindow: Math.min(20, items.length),
+            focusSectionId: focusSectionName,
+            renderCard: renderCard
+        });
+
+        if (!this._virtualRows) this._virtualRows = {};
+        this._virtualRows[focusSectionName] = virtualRow;
+
+        const handleCardClick = (e) => {
+            const card = e.target.closest('.media-card');
+            if (!card) return;
+            const virtualIndex = parseInt(card.getAttribute('data-virtual-index') || card.dataset.virtualIndex, 10);
+            let item = !isNaN(virtualIndex) ? virtualRow.items[virtualIndex] : null;
+            if (!item) {
+                const cardId = card.getAttribute('data-id') || card.dataset.id;
+                item = virtualRow.items.find((i) => String(i.Id) === String(cardId) || String(i._tmdbId) === String(cardId));
+            }
+            if (onClick) {
+                onClick(card, item);
+            } else if (item && item._tmdbId) {
+                router.navigate(`/seerr/${item._mediaType || 'movie'}/${item._tmdbId}`);
+            }
+        };
+
+        list.onclick = handleCardClick;
+        trackContainer.onclick = handleCardClick;
+
+        lazyLoader.observe(list);
+
+        this.registerFocusSection(focusSectionName, list, {
+            orientation: 'horizontal',
+            leaveLeft: 'sidebar',
+            onMove: (direction, currentElement) => {
+                if (!currentElement || currentElement.dataset.virtualIndex === undefined) return false;
+                const currentIndex = parseInt(currentElement.dataset.virtualIndex, 10);
+                const nextNode = virtualRow.handleMove(direction, currentIndex);
+                if (nextNode) {
+                    virtualRow.syncIndexFromNode(nextNode);
+                    focusManager.focusElement(nextNode);
+                    return true;
+                }
+                return false;
+            },
+            onEnter: (fromElement, options) => {
+                if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
+                    virtualRow._updateWindow(virtualRow.currentIndex);
+                    return virtualRow.domNodes.get(virtualRow.currentIndex);
+                }
+                return null;
+            }
+        });
+
+        this._registerFocus();
+    }
+
+    async _loadSecondaryContent(mediaType, tmdbId) {
+        if (!this._item) return;
+
+        // 1. Cast & Crew (check setting pref:hideCastSection)
+        const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+        if (!hideCast && Array.isArray(this._item.Cast) && this._item.Cast.length > 0) {
+            this._renderVirtualRow({
+                sectionId: 'seerr-people-section',
+                listId: 'seerr-people-row',
+                items: this._item.Cast,
+                isLandscape: false,
+                renderCard: (person) => CardRenderer.createCardHtml(person, { type: 'person' }),
+                focusSectionName: 'seerr-details-people'
+            });
+        }
+
+        // 2. Recommendations
+        let recommendedItems = (this._item && Array.isArray(this._item.Recommendations)) ? this._item.Recommendations : [];
+        if (!recommendedItems.length) {
+            try {
+                recommendedItems = await seerr.recommendations(mediaType, tmdbId);
+            } catch (e) {
+                log.warn('Failed to load Seerr recommendations', e);
+            }
+        }
+        if (recommendedItems && recommendedItems.length > 0) {
+            this._renderVirtualRow({
+                sectionId: 'seerr-recommendations-section',
+                listId: 'seerr-recommendations-row',
+                items: recommendedItems,
+                isLandscape: false,
+                renderCard: (item) => CardRenderer.createCardHtml(item, { type: 'poster' }),
+                focusSectionName: 'seerr-details-recommendations',
+                onClick: (card, item) => {
+                    const target = item || recommendedItems.find((i) => String(i.Id) === String(card.getAttribute('data-id') || card.dataset.id));
+                    if (target && target._tmdbId) {
+                        router.navigate(`/seerr/${target._mediaType || mediaType}/${target._tmdbId}`);
+                    }
+                }
+            });
+        }
+
+        // 3. Similar items
+        let similarItems = (this._item && Array.isArray(this._item.Similar)) ? this._item.Similar : [];
+        if (!similarItems.length) {
+            try {
+                similarItems = await seerr.similar(mediaType, tmdbId);
+            } catch (e) {
+                log.warn('Failed to load Seerr similar items', e);
+            }
+        }
+        if (similarItems && similarItems.length > 0) {
+            this._renderVirtualRow({
+                sectionId: 'seerr-similar-section',
+                listId: 'seerr-similar-row',
+                items: similarItems,
+                isLandscape: false,
+                renderCard: (item) => CardRenderer.createCardHtml(item, { type: 'poster' }),
+                focusSectionName: 'seerr-details-similar',
+                onClick: (card, item) => {
+                    const target = item || similarItems.find((i) => String(i.Id) === String(card.getAttribute('data-id') || card.dataset.id));
+                    if (target && target._tmdbId) {
+                        router.navigate(`/seerr/${target._mediaType || mediaType}/${target._tmdbId}`);
+                    }
+                }
+            });
+        }
+    }
+
     _registerFocus() {
         const requestButton = this.$('.seerr-request-btn');
         const hasRequestAction = requestButton && !requestButton.classList.contains('hidden');
@@ -407,30 +578,87 @@ class SeerrDetailsPage extends Page {
         const trailerBtn = this.$('.seerr-trailer-btn');
         const hasTrailerAction = trailerBtn && !trailerBtn.classList.contains('hidden');
         const hasAction = hasRequestAction || hasCancelAction || !!this.$('.seerr-watchlist-btn') || hasTrailerAction;
+
         const hasOverviewAction = !this.$('.see-more-btn')?.classList.contains('hidden');
         const hasRichMeta = !this.$('#rich-meta-container')?.classList.contains('hidden');
+        const hasPeople = !this.$('#seerr-people-section')?.classList.contains('hidden');
+        const hasRecs = !this.$('#seerr-recommendations-section')?.classList.contains('hidden');
+        const hasSimilar = !this.$('#seerr-similar-section')?.classList.contains('hidden');
+
+        const getDownFromActions = () => {
+            if (hasOverviewAction) return 'seerr-details-overview';
+            if (hasRichMeta) return 'details-rich-meta';
+            if (hasPeople) return 'seerr-details-people';
+            if (hasRecs) return 'seerr-details-recommendations';
+            if (hasSimilar) return 'seerr-details-similar';
+            return null;
+        };
+
+        const getDownFromOverview = () => {
+            if (hasRichMeta) return 'details-rich-meta';
+            if (hasPeople) return 'seerr-details-people';
+            if (hasRecs) return 'seerr-details-recommendations';
+            if (hasSimilar) return 'seerr-details-similar';
+            return null;
+        };
+
+        const getDownFromRichMeta = () => {
+            if (hasPeople) return 'seerr-details-people';
+            if (hasRecs) return 'seerr-details-recommendations';
+            if (hasSimilar) return 'seerr-details-similar';
+            return null;
+        };
 
         if (hasAction) {
             this.registerFocusSection('seerr-details-actions', this.$('#actions'), {
                 orientation: 'horizontal',
                 leaveLeft: 'sidebar',
-                leaveDown: hasOverviewAction ? 'seerr-details-overview' : (hasRichMeta ? 'details-rich-meta' : null)
+                leaveDown: getDownFromActions()
             });
         }
+
         if (hasOverviewAction) {
             this.registerFocusSection('seerr-details-overview', this.$('.details-overview'), {
                 orientation: 'vertical',
                 leaveUp: hasAction ? 'seerr-details-actions' : null,
-                leaveDown: hasRichMeta ? 'details-rich-meta' : null,
+                leaveDown: getDownFromOverview(),
                 leaveLeft: 'sidebar'
             });
         }
+
         if (hasRichMeta) {
             this.registerFocusSection('details-rich-meta', this.$('#rich-meta-container'), {
                 orientation: 'vertical',
                 leaveUp: hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null),
+                leaveDown: getDownFromRichMeta(),
                 leaveLeft: 'sidebar',
                 enterTo: 'first'
+            });
+        }
+
+        if (hasPeople) {
+            this.registerFocusSection('seerr-details-people', this.$('#seerr-people-section'), {
+                orientation: 'horizontal',
+                leaveUp: hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null)),
+                leaveDown: hasRecs ? 'seerr-details-recommendations' : (hasSimilar ? 'seerr-details-similar' : null),
+                leaveLeft: 'sidebar'
+            });
+        }
+
+        if (hasRecs) {
+            this.registerFocusSection('seerr-details-recommendations', this.$('#seerr-recommendations-section'), {
+                orientation: 'horizontal',
+                leaveUp: hasPeople ? 'seerr-details-people' : (hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null))),
+                leaveDown: hasSimilar ? 'seerr-details-similar' : null,
+                leaveLeft: 'sidebar'
+            });
+        }
+
+        if (hasSimilar) {
+            this.registerFocusSection('seerr-details-similar', this.$('#seerr-similar-section'), {
+                orientation: 'horizontal',
+                leaveUp: hasRecs ? 'seerr-details-recommendations' : (hasPeople ? 'seerr-details-people' : (hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null)))),
+                leaveLeft: 'sidebar'
             });
         }
 

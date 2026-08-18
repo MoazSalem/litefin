@@ -143,6 +143,38 @@ export class JellyseerrClient {
         return decorateStatusBadge(item);
     }
 
+    async similar(mediaType, tmdbId, page = 1) {
+        const type = mediaType === 'tv' ? 'Tv' : 'Movie';
+        try {
+            const raw = await this._request(`/${type}/${tmdbId}/similar?page=${page}`);
+            const list = this._resultsOf(raw);
+            return list
+                .filter((r) => r && r.mediaType !== 'person')
+                .map((r) => normalizeSeerrItem(r, mediaType))
+                .filter(Boolean)
+                .map(decorateStatusBadge);
+        } catch (e) {
+            log.warn(`Failed to fetch similar for ${mediaType} ${tmdbId}`, e);
+            return [];
+        }
+    }
+
+    async recommendations(mediaType, tmdbId, page = 1) {
+        const type = mediaType === 'tv' ? 'Tv' : 'Movie';
+        try {
+            const raw = await this._request(`/${type}/${tmdbId}/recommendations?page=${page}`);
+            const list = this._resultsOf(raw);
+            return list
+                .filter((r) => r && r.mediaType !== 'person')
+                .map((r) => normalizeSeerrItem(r, mediaType))
+                .filter(Boolean)
+                .map(decorateStatusBadge);
+        } catch (e) {
+            log.warn(`Failed to fetch recommendations for ${mediaType} ${tmdbId}`, e);
+            return [];
+        }
+    }
+
     /**
      * Gets requestable seasons of a series.
      * @param {number} tmdbId

@@ -203,6 +203,17 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             }
             return names;
         })(),
+        Cast: (() => {
+            const rawCast = (result.credits && result.credits.cast) || result.cast || [];
+            if (!Array.isArray(rawCast)) return [];
+            return rawCast.map((c) => ({
+                Id: c.id,
+                Name: c.name,
+                Role: c.character || '',
+                Type: 'Person',
+                _imageUrl: c.profilePath ? `${TMDB_POSTER_BASE}${c.profilePath}` : ''
+            }));
+        })(),
         Tags: (() => {
             const rawKw = result.keywords;
             const kwList = Array.isArray(rawKw) ? rawKw : (rawKw && Array.isArray(rawKw.results) ? rawKw.results : []);
@@ -227,6 +238,16 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
                 })
                 .filter((v) => Boolean(v.Url));
         })(),
-        Tagline: result.tagline || ''
+        Tagline: result.tagline || '',
+        Similar: (() => {
+            const raw = result.similar;
+            const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.results) ? raw.results : []);
+            return list.map((item) => normalizeSeerrItem(item, mediaType)).filter(Boolean);
+        })(),
+        Recommendations: (() => {
+            const raw = result.recommendations;
+            const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.results) ? raw.results : []);
+            return list.map((item) => normalizeSeerrItem(item, mediaType)).filter(Boolean);
+        })()
     };
 }
