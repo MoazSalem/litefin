@@ -617,11 +617,34 @@ class CardRenderer {
         // Quality Badge (Resolution/HDR)
         let qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
 
-        // Caller-supplied, already translated. Generic on purpose: the renderer
-        // has no business knowing where the status came from.
-        let statusBadgeHtml = '';
-        if (item._statusBadge && item._statusBadge.label) {
-            statusBadgeHtml = `<div class="card-status-badge card-status-badge--${item._statusBadge.variant}">${item._statusBadge.label}</div>`;
+        let seerrTypeBadgeHtml = '';
+        let seerrBadgeHtml = '';
+
+        const isSeerrItem = item._seerrStatus !== undefined || item._mediaType !== undefined || (item.Id && String(item.Id).startsWith('tmdb-'));
+        if (isSeerrItem) {
+            const mediaType = item._mediaType || (item.Type === 'Series' ? 'tv' : 'movie');
+            if (mediaType === 'tv' || item.Type === 'Series') {
+                seerrTypeBadgeHtml = `<div class="seerr-type-badge seerr-type-badge--series">SERIES</div>`;
+            } else {
+                seerrTypeBadgeHtml = `<div class="seerr-type-badge seerr-type-badge--movie">MOVIE</div>`;
+            }
+        }
+
+        if (item._seerrStatus !== undefined && item._seerrStatus !== null) {
+            const isRequested =
+                item._seerrStatus === 2 ||
+                item._seerrStatus === 3 ||
+                (item._requestId && item._seerrStatus !== 5 && item._seerrStatus !== 4);
+            const isPartial = item._seerrStatus === 4;
+            const isAvailable = item._seerrStatus === 5;
+
+            if (isRequested) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested" title="Requested"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"></path></svg></div>`;
+            } else if (isPartial) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--partial" title="Partially Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"></path></svg></div>`;
+            } else if (isAvailable) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--available" title="Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"></path></svg></div>`;
+            }
         }
 
         // --- 3. Text Generation ---
@@ -915,7 +938,8 @@ class CardRenderer {
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
             ${qualityBadgeHtml}
-            ${statusBadgeHtml}
+            ${seerrTypeBadgeHtml}
+            ${seerrBadgeHtml}
         `;
 
         const html = `
@@ -924,7 +948,7 @@ class CardRenderer {
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
-                    ${!options.showMeta ? badgeContainer : ''}
+                    ${badgeContainer}
                     ${
                         showInside
                             ? `
