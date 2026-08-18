@@ -26,6 +26,7 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { router } from '../core/Router.js';
+import { state } from '../core/StateManager.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrDetailsPage');
@@ -152,14 +153,31 @@ class SeerrDetailsPage extends Page {
             seerr.getRatingsCombined(mediaType, tmdbId)
                 .then((ratings) => this._renderRatings(ratings))
                 .catch((err) => log.warn('Ratings fetch failed', err));
-            setTimeout(() => this._loadSecondaryContent(mediaType, tmdbId), 150);
+
+            const focusStateKey = `seerr:lastFocusedItem:${tmdbId}`;
+            const hasFocusTarget = this._pendingNavState || state.get(focusStateKey);
+            if (hasFocusTarget) {
+                this._deferredLoading = true;
+            } else {
+                this.setLoading(false);
+                this.markReady();
+                this.restoreScrollFocusWhenReady();
+            }
+
+            if (this._deferredLoading) {
+                await this._loadSecondaryContent(mediaType, tmdbId);
+                this.setLoading(false);
+                this._deferredLoading = false;
+                this.markReady();
+                this.restoreScrollFocusWhenReady();
+            } else {
+                setTimeout(() => this._loadSecondaryContent(mediaType, tmdbId), 50);
+            }
         } catch (err) {
             log.warn('Unable to load Seerr details', err);
             this._showError();
-        } finally {
             this.setLoading(false);
             this.markReady();
-            this.restoreScrollFocusWhenReady();
         }
     }
 
@@ -537,6 +555,13 @@ class SeerrDetailsPage extends Page {
                 onClick: (card, item) => {
                     const target = item || recommendedItems.find((i) => String(i.Id) === String(card.getAttribute('data-id') || card.dataset.id));
                     if (target && target._tmdbId) {
+                        const stateKey = `seerr:lastFocusedItem:${this._item._tmdbId}`;
+                        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                            state.set(stateKey, {
+                                itemId: target.Id || target._tmdbId,
+                                sectionId: 'seerr-details-recommendations'
+                            });
+                        }
                         router.navigate(`/seerr/${target._mediaType || mediaType}/${target._tmdbId}`);
                     }
                 }
@@ -563,11 +588,51 @@ class SeerrDetailsPage extends Page {
                 onClick: (card, item) => {
                     const target = item || similarItems.find((i) => String(i.Id) === String(card.getAttribute('data-id') || card.dataset.id));
                     if (target && target._tmdbId) {
+                        const stateKey = `seerr:lastFocusedItem:${this._item._tmdbId}`;
+                        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                            state.set(stateKey, {
+                                itemId: target.Id || target._tmdbId,
+                                sectionId: 'seerr-details-similar'
+                            });
+                        }
                         router.navigate(`/seerr/${target._mediaType || mediaType}/${target._tmdbId}`);
                     }
                 }
             });
         }
+
+        this._restoreLastFocusedItem();
+    }
+
+    _restoreLastFocusedItem() {
+        if (!this._item) return;
+
+        const stateKey = `seerr:lastFocusedItem:${this._item._tmdbId}`;
+        if (storage.getItem('pref:disableFocusRestore') === 'true') {
+            state.delete(stateKey);
+            return;
+        }
+
+        const lastFocusedObj = state.get(stateKey);
+        if (!lastFocusedObj) return;
+
+        const targetId = lastFocusedObj.itemId;
+        const sectionId = lastFocusedObj.sectionId;
+        const virtualRow = this._virtualRows ? this._virtualRows[sectionId] : null;
+
+        if (virtualRow) {
+            const index = virtualRow.items.findIndex(
+                (i) => String(i.Id) === String(targetId) || String(i._tmdbId) === String(targetId)
+            );
+            if (index !== -1) {
+                this.setActiveSection(sectionId, false);
+                const node = virtualRow.focusByIndex(index);
+                if (node) {
+                    focusManager.focusElement(node, { instantScroll: true });
+                }
+            }
+        }
+        state.delete(stateKey);
     }
 
     _registerFocus() {
@@ -705,6 +770,7 @@ class SeerrDetailsPage extends Page {
     _updateWatchlistButton() {
         const label = this.$('.seerr-watchlist-btn span');
         if (label) label.textContent = i18n.t(this._isWatchlisted ? 'SeerrRemoveFromWatchlist' : 'SeerrAddToWatchlist');
+        focusManager.invalidateCache('seerr-details-actions');
     }
 
     _renderStatus() {

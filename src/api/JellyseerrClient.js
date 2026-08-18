@@ -32,6 +32,15 @@ export class JellyseerrClient {
     constructor() {
         this._status = null;
         this._clearedLegacyCredentials = false;
+        this._cache = new Map();
+        this._cacheTtlMs = 5 * 60 * 1000;
+    }
+
+    /**
+     * Clears all cached network responses.
+     */
+    clearCache() {
+        this._cache.clear();
     }
 
     /** Last known server-side configuration state. */
@@ -79,12 +88,23 @@ export class JellyseerrClient {
 
         try {
             if (method === 'POST') {
+                this.clearCache();
                 return await api.post(`${API_ROOT}${path}`, options.body);
             }
             if (method === 'DELETE') {
+                this.clearCache();
                 return await api.delete(`${API_ROOT}${path}`);
             }
-            return await api.get(`${API_ROOT}${path}`);
+
+            const now = Date.now();
+            const cached = this._cache.get(path);
+            if (cached && now - cached.timestamp < this._cacheTtlMs) {
+                return cached.data;
+            }
+
+            const data = await api.get(`${API_ROOT}${path}`);
+            this._cache.set(path, { data, timestamp: now });
+            return data;
         } catch (err) {
             log.warn(`Request failed: ${method} ${path}`, err);
             throw err;
