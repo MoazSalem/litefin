@@ -1848,12 +1848,14 @@ class LibraryPage extends Page {
 
         // Custom layout requests from deep links (Music, TV Channels, Artists, People)
         const squareTypes = ['TvChannel', 'MusicAlbum', 'MusicArtist,Artist', 'MusicArtist', 'Audio'];
-        if (this.state.libraryInfo?.CollectionType === 'musicvideos') {
+        if (
+            this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos'
+        ) {
             return 'backdrop';
         }
         if (
             this.state.libraryInfo?.CollectionType === 'music' ||
-            this.state.libraryInfo?.CollectionType === 'homevideos' ||
             (this.params.includeItemTypes && squareTypes.includes(this.params.includeItemTypes))
         ) {
             // For thumb/banner, use backdrop if available; fall back gracefully
@@ -2099,13 +2101,14 @@ class LibraryPage extends Page {
         const pagination = this.$('#library-pagination');
         if (pagination) pagination.style.display = ''; // Restore pagination
 
-        // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks, or Music Videos)
+        // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks, Music Videos, or Home Videos)
         // These viewTypes/collections always force landscape regardless of user view mode preference.
         const isLandscape =
             this.state.viewType === 'Episodes' ||
             this.state.viewType === 'Upcoming' ||
             this.state.viewType === 'Networks' ||
-            this.state.libraryInfo?.CollectionType === 'musicvideos';
+            this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos';
 
         // --------------------------------------------------------------------
         // Apply the view mode CSS modifier class to the grid container.
