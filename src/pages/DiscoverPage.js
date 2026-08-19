@@ -2,34 +2,30 @@
  * ============================================================================
  * Litefin Tizen - Discover Page (Jellyseerr)
  * ============================================================================
- * Discovery rows and search against a Jellyseerr instance. Items are normalized
- * to the Jellyfin shape upstream (seerrNormalize), so MediaGrid and CardRenderer
- * are reused as-is.
+ * Discovery rows (My Requests, Watchlist, Trending, Popular Movies/Series) against
+ * a Jellyseerr instance. Rendered as high-performance horizontal rows using
+ * VirtualCardRow (matching HomePage layout).
  * ============================================================================
  */
 
 import Page from './Page.js';
-import MediaGrid from '../components/MediaGrid.js';
+import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { seerr } from '../api/JellyseerrClient.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('DiscoverPage');
 
-/** Matches SearchPage. */
-const SEARCH_DEBOUNCE = 500;
-
 class DiscoverPage extends Page {
     constructor() {
         super();
         this._isAsyncPage = true;
-        this._query = '';
-        this._lastSearchedQuery = '';
-        this._debounceTimer = null;
-        this._grids = {};
+        this._virtualRows = [];
+        this._rowRegistry = new Map();
     }
 
     render() {
@@ -61,13 +57,14 @@ class DiscoverPage extends Page {
             return;
         }
 
+        this._attachDelegatedListeners();
         await this._loadRows();
         this.markReady();
         this.restoreScrollFocusWhenReady();
     }
 
     // ========================================================================
-    // Loading
+    // Loading & Data Fetching
     // ========================================================================
 
     async _loadRows() {
@@ -77,11 +74,15 @@ class DiscoverPage extends Page {
         // A failing row must not blank the page, so each promise is isolated
         const settle = (promise) =>
             promise.catch((err) => {
-                log.warn('Discover row failed', err);
+                log.warn('Discover row fetch failed', err);
                 return null;
             });
 
-        const [trending, movies, series] = await Promise.all([
+        // Load discovery rows: Recently Added (Row 1), My Requests, Watchlist, Trending, Movies, Series
+        const [recentlyAdded, requests, watchlist, trending, movies, series] = await Promise.all([
+            settle(seerr.recentlyAdded()),
+            settle(seerr.requests()),
+            settle(seerr.watchlist()),
             settle(seerr.discoverTrending()),
             settle(seerr.discoverMovies()),
             settle(seerr.discoverTv())
@@ -89,129 +90,185 @@ class DiscoverPage extends Page {
 
         this.setLoading(false);
 
-        // Covers both all-rejected (null) rows and all-succeeded-but-empty rows —
-        // an empty array is truthy, so null-checks alone miss the latter.
-        const totalItems = (trending?.length || 0) + (movies?.length || 0) + (series?.length || 0);
+        const totalItems =
+            (recentlyAdded?.length || 0) +
+            (requests?.length || 0) +
+            (watchlist?.length || 0) +
+            (trending?.length || 0) +
+            (movies?.length || 0) +
+            (series?.length || 0);
+
         if (totalItems === 0) {
             this._showMessage(i18n.t('SeerrLoadFailed'), false);
             return;
         }
 
-        this._renderRows([
-            { key: 'trending', title: i18n.t('SeerrTrending'), items: trending },
-            { key: 'movies', title: i18n.t('SeerrPopularMovies'), items: movies },
-            { key: 'series', title: i18n.t('SeerrPopularSeries'), items: series }
-        ]);
-    }
-
-    async _search() {
-        if (!this._query) return;
-        if (this._query === this._lastSearchedQuery) return;
-        this._lastSearchedQuery = this._query;
-
-        this.setLoading(true);
-        this._hideMessage();
-
-        try {
-            const results = await seerr.search(this._query);
-            this.setLoading(false);
-            if (results.length === 0) {
-                this._destroyGrids();
-                this.$('#discover-rows').innerHTML = '';
-                this._showMessage(i18n.t('SearchResultsEmpty', [this._query]), false);
-                return;
-            }
-            this._renderRows([{ key: 'results', title: i18n.t('SearchResults'), items: results }]);
-        } catch (err) {
-            this.setLoading(false);
-            log.warn('Discover search failed', err);
-            this._showMessage(
-                err.message === 'SeerrUnauthorized' ? i18n.t('SeerrSessionExpired') : i18n.t('SeerrLoadFailed'),
-                false
-            );
+        const rows = [];
+        if (recentlyAdded && recentlyAdded.length > 0) {
+            rows.push({ key: 'recentlyAdded', title: i18n.t('SeerrRecentlyAdded', ['Recently Added']), items: recentlyAdded });
         }
+        if (requests && requests.length > 0) {
+            rows.push({ key: 'requests', title: i18n.t('SeerrMyRequests', ['My Requests']), items: requests });
+        }
+        if (watchlist && watchlist.length > 0) {
+            rows.push({ key: 'watchlist', title: i18n.t('SeerrWatchlist', ['Watchlist']), items: watchlist });
+        }
+        if (trending && trending.length > 0) {
+            rows.push({ key: 'trending', title: i18n.t('SeerrTrending', ['Trending']), items: trending });
+        }
+        if (movies && movies.length > 0) {
+            rows.push({ key: 'movies', title: i18n.t('SeerrPopularMovies', ['Popular Movies']), items: movies });
+        }
+        if (series && series.length > 0) {
+            rows.push({ key: 'series', title: i18n.t('SeerrPopularSeries', ['Popular Series']), items: series });
+        }
+
+        this._renderRows(rows);
     }
 
     // ========================================================================
-    // Rendering
+    // Rendering Horizontal Card Rows (VirtualCardRow)
     // ========================================================================
 
     /**
-     * @param {Array<{key: string, title: string, items: Array|null}>} rows
+     * Renders rows as horizontal VirtualCardRow sections matching the homepage layout.
+     * @param {Array<{key: string, title: string, items: Array}>} rows
      * @private
      */
     _renderRows(rows) {
         const container = this.$('#discover-rows');
-        this._destroyGrids();
-        container.innerHTML = '';
-        this._grids = {};
+        if (!container) return;
 
-        // CardRenderer keeps a static HTML cache keyed by item.Id, cleared only
-        // when render options change. Ours do not change between discovery rows
-        // and search results, so without this a card whose status just changed
-        // would re-render with its stale badge. Same precaution as LibraryPage.
+        this._destroyVirtualRows();
+        container.innerHTML = '';
+        this._rowRegistry.clear();
+
         CardRenderer.clearCache();
 
-        rows.forEach((row) => {
+        rows.forEach((row, index) => {
             if (!row.items || row.items.length === 0) return;
-            const grid = new MediaGrid({
-                id: `discover-${row.key}`,
-                title: row.title,
-                items: row.items,
-                type: 'poster',
-                contextType: 'discover',
-                limit: 20,
-                allowSeeMore: false,
-                onClick: (card) => this._onCardActivated(card)
+
+            const sectionEl = document.createElement('section');
+            sectionEl.className = 'media-row';
+            sectionEl.setAttribute('data-row-id', row.key);
+            sectionEl.setAttribute('data-row-index', index);
+
+            sectionEl.innerHTML = `
+                <h2 class="row-title">${row.title}</h2>
+                <div class="row-items" id="row-items-${row.key}">
+                    <div class="row-items-track"></div>
+                </div>
+            `;
+            container.appendChild(sectionEl);
+
+            const trackEl = sectionEl.querySelector('.row-items-track');
+            const virtualRow = new VirtualCardRow(trackEl, row.items, {
+                isLandscape: false,
+                cardType: 'poster',
+                visibleCount: 10,
+                initialWindow: Math.min(row.items.length, 12),
+                focusSectionId: `discover-row-${row.key}`,
+                renderCard: (item) =>
+                    this._renderMediaCard(item, false, 'poster', 'discover')
             });
-            grid.mount(container);
-            this._grids[row.key] = { grid, items: row.items };
+
+            const itemsContainer = sectionEl.querySelector('.row-items');
+            const prevKey = index > 0 ? rows[index - 1].key : null;
+            const nextKey = index < rows.length - 1 ? rows[index + 1].key : null;
+
+            this.registerFocusSection(`discover-row-${row.key}`, itemsContainer, {
+                orientation: 'horizontal',
+                leaveUp: prevKey ? `discover-row-${prevKey}` : null,
+                leaveDown: nextKey ? `discover-row-${nextKey}` : null,
+                leaveLeft: 'sidebar',
+
+                onMove: (direction, currentElement) => {
+                    if (!currentElement || currentElement.dataset.virtualIndex === undefined) {
+                        return false;
+                    }
+                    const idx = parseInt(currentElement.dataset.virtualIndex, 10);
+                    const nextNode = virtualRow.handleMove(direction, idx);
+                    if (nextNode) {
+                        focusManager.focusElement(nextNode);
+                        return true;
+                    }
+                    return false;
+                },
+
+                onEnter: (fromElement, options) => {
+                    if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
+                        const existingNode = virtualRow.domNodes.get(virtualRow.currentIndex);
+                        if (existingNode && existingNode.isConnected) {
+                            return existingNode;
+                        }
+                        virtualRow._updateWindow(virtualRow.currentIndex);
+                        return virtualRow.domNodes.get(virtualRow.currentIndex);
+                    }
+                    return null;
+                }
+            });
+
+            this._rowRegistry.set(row.key, { row, sectionEl, virtualRow });
+            this._virtualRows.push(virtualRow);
+            lazyLoader.observe(sectionEl);
         });
 
-        this._registerRowFocus();
-    }
-
-    _registerRowFocus() {
-        const keys = Object.keys(this._grids);
-        if (keys.length === 0) return;
-
-        keys.forEach((key, index) => {
-            const sectionId = `discover-${key}-items`;
-            const prev = index > 0 ? `discover-${keys[index - 1]}-items` : null;
-            const next = index < keys.length - 1 ? `discover-${keys[index + 1]}-items` : null;
-
-            this.registerFocusSection(sectionId, this.$(`#${sectionId}`), {
-                orientation: 'grid',
-                leaveUp: prev,
-                leaveDown: next,
-                leaveLeft: 'sidebar'
-            });
-        });
-
-        this.setActiveSection(`discover-${keys[0]}-items`);
+        if (rows.length > 0) {
+            this.setActiveSection(`discover-row-${rows[0].key}`);
+        }
     }
 
     /**
-     * Resolves the normalized item behind a card and opens its details page.
-     * @param {HTMLElement} card
+     * Attaches event delegation on #discover-rows for fast card activation and index syncing.
      * @private
      */
-    _onCardActivated(card) {
-        const itemId = card.dataset.itemId;
-        if (!itemId) return;
+    _attachDelegatedListeners() {
+        const container = this.$('#discover-rows');
+        if (!container) return;
 
-        let found = null;
-        Object.keys(this._grids).forEach((key) => {
-            if (found) return;
-            found = this._grids[key].items.find((i) => i.Id === itemId) || null;
+        let lastActivateTime = 0;
+        const handleActivate = (e) => {
+            const card = e.target.closest('.media-card');
+            if (!card) return;
+
+            const now = Date.now();
+            if (now - lastActivateTime < 400) return;
+            lastActivateTime = now;
+
+            e.stopPropagation();
+
+            const itemId = card.dataset.itemId;
+            if (!itemId) return;
+
+            // Find item in registry
+            let found = null;
+            for (const [, entry] of this._rowRegistry) {
+                found = entry.virtualRow.items.find((i) => i.Id === itemId);
+                if (found) break;
+            }
+
+            if (found) {
+                router.navigate(`/seerr/${found._mediaType}/${found._tmdbId}`);
+            }
+        };
+
+        container.addEventListener('click', handleActivate);
+        container.addEventListener('mousedown', handleActivate);
+
+        container.addEventListener('focusin', (e) => {
+            if (!e.target.classList.contains('media-card')) return;
+            const sectionEl = e.target.closest('section[data-row-id]');
+            if (!sectionEl) return;
+            const rowId = sectionEl.getAttribute('data-row-id');
+            const rowEntry = this._rowRegistry.get(rowId);
+            if (rowEntry) {
+                rowEntry.virtualRow.syncIndexFromNode(e.target);
+            }
         });
-        if (!found) return;
-
-        router.navigate(`/seerr/${found._mediaType}/${found._tmdbId}`);
     }
 
     // ========================================================================
-    // States and input
+    // UI Helpers & Messaging
     // ========================================================================
 
     _showMessage(text, withSettingsButton) {
@@ -236,17 +293,9 @@ class DiscoverPage extends Page {
             btn.addEventListener('click', () => router.navigate('/settings'));
             this.registerFocusSection('discover-message', el, {
                 orientation: 'horizontal',
-                leaveUp: 'discover-header',
                 leaveLeft: 'sidebar'
             });
-
-            // Reciprocal link so Down from the search input reaches the button —
-            // mirrors what _registerRowFocus() does for the row sections.
-            this.registerFocusSection('discover-header', this.$('#discover-header'), {
-                orientation: 'horizontal',
-                leaveDown: 'discover-message',
-                leaveLeft: 'sidebar'
-            });
+            this.setActiveSection('discover-message');
         }
     }
 
@@ -254,92 +303,26 @@ class DiscoverPage extends Page {
         this.$('#discover-message')?.classList.add('hidden');
     }
 
-    /**
-     * Like SearchPage: never hide the whole page while loading, or the input
-     * field vanishes on every keystroke.
-     */
     setLoading(show) {
         const spinner = this.$('.page-loading');
         if (!spinner) return;
         spinner.classList.toggle('hidden', !show);
     }
 
-    _bindEvents() {
-        if (!this._input) return;
-
-        this._input.addEventListener('input', (e) => {
-            this._query = e.target.value.trim();
-            if (this._debounceTimer) clearTimeout(this._debounceTimer);
-
-            if (!this._query) {
-                // Cleared field returns to the discovery rows
-                this._lastSearchedQuery = '';
-                this._hideMessage();
-                if (seerr.isConfigured) this._loadRows();
-                return;
-            }
-
-            this._debounceTimer = setTimeout(() => this._search(), SEARCH_DEBOUNCE);
-        });
-
-        // Same workaround as SearchPage: readonly on blur stops the Tizen
-        // virtual keyboard from reopening as soon as focus returns.
-        this._input.addEventListener('blur', () => {
-            this._input.setAttribute('readonly', 'true');
-        });
-
-        this._input.addEventListener('click', () => {
-            this._input.removeAttribute('readonly');
-            this._input.focus();
-        });
-
-        this._input.addEventListener('keydown', (e) => {
-            if (e.keyCode === 13) {
-                this._input.removeAttribute('readonly');
-                this._input.focus();
-            }
-            if (e.keyCode === 40) {
-                const keys = Object.keys(this._grids);
-                // No rows yet (e.g. not configured): fall back to the message's
-                // settings button, if one is showing, so Down isn't a dead end.
-                const settingsBtn = keys.length === 0 ? this.$('#btn-discover-settings') : null;
-                if (keys.length === 0 && !settingsBtn) return;
-                e.preventDefault();
-                requestAnimationFrame(() => {
-                    if (keys.length > 0) {
-                        const sectionId = `discover-${keys[0]}-items`;
-                        const container = this.$(`#${sectionId}`);
-                        const firstCard = container?.querySelector('button, [tabindex="0"]');
-                        if (firstCard) {
-                            this.setActiveSection(sectionId);
-                            focusManager.focusElement(firstCard);
-                        }
-                    } else if (settingsBtn) {
-                        this.setActiveSection('discover-message');
-                        focusManager.focusElement(settingsBtn);
-                    }
-                });
-            }
-        });
-    }
-
     // ========================================================================
-    // Lifecycle
+    // Lifecycle & Cleanup
     // ========================================================================
 
-    _destroyGrids() {
-        Object.keys(this._grids).forEach((key) => {
-            const entry = this._grids[key];
-            focusManager.unregister(`${entry.grid.id}-items`);
-            focusManager.unregister(`${entry.grid.id}-btn-zone`);
-            entry.grid.destroy();
-        });
-        this._grids = {};
+    _destroyVirtualRows() {
+        for (const [key] of this._rowRegistry) {
+            focusManager.unregister(`discover-row-${key}`);
+        }
+        this._virtualRows = [];
+        this._rowRegistry.clear();
     }
 
     destroy() {
-        if (this._debounceTimer) clearTimeout(this._debounceTimer);
-        this._destroyGrids();
+        this._destroyVirtualRows();
         super.destroy();
     }
 }

@@ -284,6 +284,167 @@ export class JellyseerrClient {
         return { servers, details };
     }
 
+    /**
+     * Enriches a list of normalized Seerr items with full TMDB details (poster image, overview, title)
+     * if any item is missing its poster image URL.
+     * @param {Array<Object>} items
+     * @returns {Promise<Array<Object>>}
+     * @private
+     */
+    async _enrichSeerrItems(items) {
+        if (!Array.isArray(items) || items.length === 0) return [];
+
+        const enriched = await Promise.all(
+            items.map(async (item) => {
+                if (!item) return null;
+                // If item already has poster image URL and title, return as-is
+                if (item._imageUrl && item.Name) return item;
+
+                try {
+                    // Fetch full details which populates _imageUrl, _backdropUrl, Name, Overview, etc.
+                    const detail = await this.details(item._mediaType, item._tmdbId);
+                    if (detail) {
+                        return {
+                            ...detail,
+                            _seerrStatus: item._seerrStatus !== 0 ? item._seerrStatus : detail._seerrStatus,
+                            _requestId: item._requestId || detail._requestId
+                        };
+                    }
+                } catch (err) {
+                    log.warn(`Failed to enrich Seerr item details for ${item._mediaType} ${item._tmdbId}`, err);
+                }
+                return item;
+            })
+        );
+        return enriched.filter(Boolean);
+    }
+
+    /**
+     * Gets user requests from Seerr with automatic route fallback.
+     * @param {number} [take=20]
+     * @param {number} [skip=0]
+     * @param {string} [filter='all']
+     * @returns {Promise<Array<Object>>}
+     */
+    async requests(take = 20, skip = 0, filter = 'all') {
+        let payload = null;
+        // Fallback route chain: /request -> /Request -> /Requests
+        try {
+            payload = await this._request(`/request?take=${take}&skip=${skip}&filter=${filter}`);
+        } catch (err1) {
+            if (err1.status === 404) {
+                try {
+                    payload = await this._request(`/Request?take=${take}&skip=${skip}&filter=${filter}`);
+                } catch (err2) {
+                    if (err2.status === 404) {
+                        payload = await this._request(`/Requests?take=${take}&skip=${skip}&filter=${filter}`);
+                    } else {
+                        throw err2;
+                    }
+                }
+            } else {
+                throw err1;
+            }
+        }
+
+        const rawList = this._resultsOf(payload);
+        const items = rawList
+            .map((req) => {
+                if (!req) return null;
+                const media = req.media || req;
+                const tmdbId = media.tmdbId || media.id || req.tmdbId || req.id;
+                if (!tmdbId) return null;
+
+                const item = normalizeSeerrItem({
+                    ...media,
+                    id: tmdbId,
+                    mediaType: media.mediaType || req.type || (req.type === 1 ? 'movie' : req.type === 2 ? 'tv' : 'movie'),
+                    mediaInfo: media.mediaInfo || media,
+                    requests: media.requests || [req]
+                });
+                return item;
+            })
+            .filter(Boolean)
+            .map((item) => decorateStatusBadge(item));
+
+        return this._enrichSeerrItems(items);
+    }
+
+    /**
+     * Gets user watchlist from Seerr with detail enrichment for poster images.
+     * @param {number} [page=1]
+     * @returns {Promise<Array<Object>>}
+     */
+    async watchlist(page = 1) {
+        let payload = null;
+        // Fallback route chain: /Watchlist -> /watchlist
+        try {
+            payload = await this._request(`/Watchlist?page=${page}`);
+        } catch (err1) {
+            if (err1.status === 404) {
+                payload = await this._request(`/watchlist?page=${page}`);
+            } else {
+                throw err1;
+            }
+        }
+
+        const rawList = this._resultsOf(payload);
+        const items = rawList
+            .map((entry) => {
+                if (!entry) return null;
+                const tmdbId = entry.tmdbId || entry.mediaId || entry.id;
+                if (!tmdbId) return null;
+
+                const item = normalizeSeerrItem({
+                    ...entry,
+                    id: tmdbId,
+                    mediaType: entry.mediaType
+                });
+                return item;
+            })
+            .filter(Boolean)
+            .map((item) => decorateStatusBadge(item));
+
+        return this._enrichSeerrItems(items);
+    }
+
+    /**
+     * Gets recently added media items from Seerr.
+     * @param {number} [take=20]
+     * @returns {Promise<Array<Object>>}
+     */
+    async recentlyAdded(take = 20) {
+        let payload = null;
+        try {
+            payload = await this._request(`/RecentlyAdded?take=${take}`);
+        } catch (err1) {
+            if (err1.status === 404) {
+                payload = await this._request(`/Media?take=${take}`);
+            } else {
+                throw err1;
+            }
+        }
+
+        const rawList = this._resultsOf(payload);
+        const items = rawList
+            .map((entry) => {
+                if (!entry) return null;
+                const tmdbId = entry.tmdbId || entry.mediaId || entry.id;
+                if (!tmdbId) return null;
+
+                const item = normalizeSeerrItem({
+                    ...entry,
+                    id: tmdbId,
+                    mediaType: entry.mediaType
+                });
+                return item;
+            })
+            .filter(Boolean)
+            .map((item) => decorateStatusBadge(item));
+
+        return this._enrichSeerrItems(items);
+    }
+
     async isWatchlisted(mediaType, tmdbId) {
         const payload = await this._request('/Watchlist');
         return this._resultsOf(payload).some(

@@ -57,7 +57,6 @@
     background: var(--jf-accent, #00a4dc);
     color: var(--jf-accent-content-color, #ffffff);
     font-weight: 700;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .provider-btn:focus,
