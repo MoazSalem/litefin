@@ -8,8 +8,10 @@
 
 import Page from './Page.js';
 import { api } from '../api/index.js';
+import { seerr } from '../api/JellyseerrClient.js';
 import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
+import CardRenderer from '../utils/CardRenderer.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { storage } from '../utils/StorageService.js';
@@ -21,12 +23,17 @@ const log = logger.create('SearchPage');
 class SearchPage extends Page {
     constructor() {
         super();
-        // Title translated in onInit
+        // Flag page as async because onInit performs asynchronous status checks
+        this._isAsyncPage = true;
 
+        // Search query strings and results state
         this._query = '';
         this._lastSearchedQuery = ''; // Track to prevent redundant searches
         this._results = [];
         this._debounceTimer = null;
+        // Provider state: 'jellyfin' (default) or 'seerr'
+        this._provider = storage.getItem('search:provider') || 'jellyfin';
+        this._seerrAvailable = false;
     }
 
     render() {
@@ -34,7 +41,7 @@ class SearchPage extends Page {
             <div class="page search-page">
                 <!-- Results -->
                 <main class="page-content search-content">
-                    <!-- Header with search input (Scrollable) -->
+                    <!-- Header with search input & provider toggle -->
                     <div class="search-controls" id="search-header">
                         <div class="search-input-wrapper">
                             <input 
@@ -46,6 +53,20 @@ class SearchPage extends Page {
                                 autocomplete="off"
                                 tabindex="0"
                             >
+                        </div>
+                        <div class="search-provider-toggle hidden" id="search-provider-toggle">
+                            <button 
+                                class="provider-btn focusable" 
+                                id="provider-jellyfin" 
+                                data-provider="jellyfin"
+                                tabindex="0"
+                            >Jellyfin</button>
+                            <button 
+                                class="provider-btn focusable" 
+                                id="provider-seerr" 
+                                data-provider="seerr"
+                                tabindex="0"
+                            >Seerr</button>
                         </div>
                     </div>
                     
@@ -79,9 +100,36 @@ class SearchPage extends Page {
         `;
     }
 
-    onInit() {
+    async onInit() {
         this.title = i18n.t('Search');
         this._searchInput = this.$('#search-input');
+        this._providerToggle = this.$('#search-provider-toggle');
+        this._btnJellyfin = this.$('#provider-jellyfin');
+        this._btnSeerr = this.$('#provider-seerr');
+
+        // Check if Seerr plugin is configured and available
+        try {
+            const status = await seerr.status();
+            if (status && status.available) {
+                this._seerrAvailable = true;
+                if (this._providerToggle) {
+                    this._providerToggle.classList.remove('hidden');
+                }
+            } else {
+                this._seerrAvailable = false;
+                this._provider = 'jellyfin';
+                if (this._providerToggle) {
+                    this._providerToggle.classList.add('hidden');
+                }
+            }
+        } catch (e) {
+            log.debug('Seerr status check failed on search page', e);
+            this._seerrAvailable = false;
+            this._provider = 'jellyfin';
+        }
+
+        // Apply active class styling to provider buttons
+        this._updateProviderUI();
 
         // Bind events
         this._bindEvents();
@@ -103,22 +151,23 @@ class SearchPage extends Page {
 
         if (!searchState) {
             // Initial Focus Sequence (Only if NOT restoring state)
-            // 1. Remove readonly to allow KB to open initially
             this._searchInput.removeAttribute('readonly');
 
             setTimeout(() => {
                 this._searchInput.focus();
-                // Note: We leave it editable so usage works immediately.
-                // It will become readonly only when user navigates AWAY (blur).
             }, 100);
 
             // Show empty state
             this.$('#search-empty')?.classList.remove('hidden');
         } else {
             // Rehydrate state
-            this._query = searchState.query;
-            this._results = searchState.results;
-            this._lastSearchedQuery = searchState.query;
+            this._query = searchState.query || '';
+            this._results = searchState.results || [];
+            this._lastSearchedQuery = searchState.query || '';
+            if (searchState.provider && this._seerrAvailable) {
+                this._provider = searchState.provider;
+                this._updateProviderUI();
+            }
 
             if (this._searchInput) {
                 this._searchInput.value = this._query;
@@ -128,7 +177,11 @@ class SearchPage extends Page {
             this.$('#search-empty')?.classList.add('hidden');
 
             if (this._results && this._results.length > 0) {
-                this._renderResults();
+                if (this._provider === 'seerr') {
+                    this._renderSeerrResults();
+                } else {
+                    this._renderResults();
+                }
 
                 // Restore Focus
                 requestAnimationFrame(() => {
@@ -161,9 +214,53 @@ class SearchPage extends Page {
                 state.delete('search:state');
             }
         }
+
+        // Mark page ready to dismiss app splash / loading screen on page refresh
+        this.markReady();
+        this.restoreScrollFocusWhenReady();
+    }
+
+    _updateProviderUI() {
+        if (this._btnJellyfin) {
+            this._btnJellyfin.classList.toggle('active', this._provider === 'jellyfin');
+        }
+        if (this._btnSeerr) {
+            this._btnSeerr.classList.toggle('active', this._provider === 'seerr');
+        }
+    }
+
+    _setProvider(provider) {
+        if (this._provider === provider) return;
+        this._provider = provider;
+        storage.setItem('search:provider', provider);
+        this._updateProviderUI();
+
+        // Reset last query to force a fresh search with new provider
+        this._lastSearchedQuery = '';
+
+        if (this._query) {
+            this._search();
+        } else {
+            this._clearResults();
+            this.$('#search-empty')?.classList.remove('hidden');
+        }
     }
 
     _bindEvents() {
+        // Provider toggle button click/enter handlers
+        if (this._btnJellyfin) {
+            this._btnJellyfin.addEventListener('click', () => this._setProvider('jellyfin'));
+            this._btnJellyfin.addEventListener('keydown', (e) => {
+                if (e.keyCode === 13) this._setProvider('jellyfin');
+            });
+        }
+        if (this._btnSeerr) {
+            this._btnSeerr.addEventListener('click', () => this._setProvider('seerr'));
+            this._btnSeerr.addEventListener('keydown', (e) => {
+                if (e.keyCode === 13) this._setProvider('seerr');
+            });
+        }
+
         // Search input logic for specific Keyboard behavior
         if (this._searchInput) {
             // 1. On Input: Handle text changes
@@ -194,17 +291,19 @@ class SearchPage extends Page {
                     e.preventDefault();
                     // Move focus to first row's items - use RAF to ensure DOM is ready
                     requestAnimationFrame(() => {
-                        const sectionOrder = [
-                            'movies',
-                            'series',
-                            'episodes',
-                            'people',
-                            'artists',
-                            'albums',
-                            'songs',
-                            'collections',
-                            'channels'
-                        ];
+                        const sectionOrder = this._provider === 'seerr'
+                            ? ['seerr']
+                            : [
+                                'movies',
+                                'series',
+                                'episodes',
+                                'people',
+                                'artists',
+                                'albums',
+                                'songs',
+                                'collections',
+                                'channels'
+                            ];
                         const firstType = sectionOrder.find((type) => this._grids[type]);
                         if (firstType) {
                             const sectionId = `${this._grids[firstType].id}-items`;
@@ -226,26 +325,13 @@ class SearchPage extends Page {
     _setupFocus() {
         this.registerFocusSection('search-header', this.$('#search-header'), {
             orientation: 'horizontal',
-            leaveDown: null, // Dynamically updated by _registerSearchFocus
+            leaveDown: null,
             leaveLeft: 'sidebar'
         });
 
         this.setActiveSection('search-header');
     }
 
-    /**
-     * Overrides the default page-level loading state mechanism.
-     *
-     * By default, Page.js adds a 'loading' class to the page container, which
-     * hides all other child elements (via opacity: 0) to prevent interaction.
-     * For live search, this causes a jarring UI flash/pulse on every keystroke
-     * because the input box itself disappears.
-     *
-     * Instead, we manually toggle the visibility of the search spinner element,
-     * keeping the search input field and any existing results fully visible.
-     *
-     * @param {boolean} show - True to display the spinner, false to hide it.
-     */
     setLoading(show) {
         const spinner = this.$('.page-loading');
         if (spinner) {
@@ -276,7 +362,6 @@ class SearchPage extends Page {
         }
 
         // Debounce search - set to 500ms to ensure snappier updates as the user types
-        // while still grouping fast keystrokes to limit redundant API requests.
         this._debounceTimer = setTimeout(() => {
             this._search();
         }, 500);
@@ -285,83 +370,33 @@ class SearchPage extends Page {
     async _search() {
         if (!this._query) return;
 
-        // Skip if already searched for this exact query (prevents flicker on keyboard dismiss)
+        // Skip if already searched for this exact query
         if (this._query === this._lastSearchedQuery) return;
         this._lastSearchedQuery = this._query;
 
         this.setLoading(true);
 
         try {
-            log.info(`Searching for "${this._query}"`);
+            if (this._provider === 'seerr') {
+                await this._searchSeerr();
+            } else {
+                await this._searchJellyfin();
+            }
+        } catch (error) {
+            log.error('Search failed', error);
+        }
 
-            /*
-             * To ensure perfect diversity and category parity, we perform individual
-             * parallel requests for every media type, each limited to 11 items.
-             * This matches the user's requested "get them all and limit each to 11" logic.
-             */
-            const searchTypes = [
-                { type: 'Movie' },
-                { type: 'Series' },
-                { type: 'Episode' },
-                { type: 'MusicArtist,Artist' },
-                { type: 'MusicAlbum' },
-                { type: 'Audio' },
-                { type: 'BoxSet' },
-                { type: 'TvChannel' }
-            ];
+        this.setLoading(false);
+    }
 
-            const limit = 12; // Fetch 12 so that with a grid limit of 11, the "See More" button appears
-            const requests = [
-                ...searchTypes.map((t) => api.searchHints(this._query, { IncludeItemTypes: t.type, Limit: limit })),
-                api.searchPeople(this._query, { Limit: limit })
-            ];
-
-            const responses = await Promise.all(requests);
-
-            // Helper to normalize various SearchHint response formats (Array vs Object)
-            const normalize = (res, forcedType = null) => {
-                // Jellyfin /Search/Hints can return a raw Array or an object with SearchHints/Items
-                const rawItems = Array.isArray(res) ? res : res?.SearchHints || res?.Items || [];
-                return rawItems.map((item) => ({
-                    ...item,
-                    Id: item.ItemId || item.Id, // Normalize search hint IDs
-                    ImageTags: item.ImageTags || {
-                        Primary: item.PrimaryImageTag
-                    },
-                    // Ensure Type is correctly set (SearchHints have Type property)
-                    Type: forcedType || item.Type
-                }));
-            };
-
-            const movies = normalize(responses[0]);
-            const series = normalize(responses[1]);
-            const episodes = normalize(responses[2]);
-            const artists = normalize(responses[3]);
-            const albums = normalize(responses[4]);
-            const songs = normalize(responses[5]);
-            const collections = normalize(responses[6]);
-            const channels = normalize(responses[7]);
-            const people = normalize(responses[8], 'Person');
-
-            // Combine results into a single list for the grouping renderer
-            this._results = [
-                ...movies,
-                ...series,
-                ...episodes,
-                ...people,
-                ...artists,
-                ...albums,
-                ...songs,
-                ...collections,
-                ...channels
-            ];
-
-            log.debug(
-                `Search returned: ${movies.length} movies, ${series.length} series, ${episodes.length} episodes, ${people.length} people`
-            );
+    async _searchSeerr() {
+        log.info(`Searching Seerr for "${this._query}"`);
+        try {
+            const results = await seerr.search(this._query);
+            this._results = results || [];
 
             if (this._results.length > 0) {
-                this._renderResults();
+                this._renderSeerrResults();
             } else {
                 this._clearResults();
                 const noResultsEl = this.$('#no-results');
@@ -371,11 +406,109 @@ class SearchPage extends Page {
                     noResultsEl.classList.remove('hidden');
                 }
             }
-        } catch (error) {
-            log.error('Search failed', error);
+        } catch (err) {
+            log.warn('Seerr search failed', err);
+            this._clearResults();
+            const noResultsEl = this.$('#no-results');
+            const noResultsText = this.$('#no-results-text');
+            if (noResultsEl && noResultsText) {
+                noResultsText.innerHTML = err.message === 'SeerrUnauthorized'
+                    ? i18n.t('SeerrSessionExpired')
+                    : i18n.t('SeerrLoadFailed');
+                noResultsEl.classList.remove('hidden');
+            }
         }
+    }
 
-        this.setLoading(false);
+    _renderSeerrResults() {
+        const container = this.$('#search-results');
+        container.innerHTML = '';
+        this._grids = {};
+
+        CardRenderer.clearCache();
+
+        this._grids.seerr = new MediaGrid({
+            id: 'search-seerr',
+            title: i18n.t('SearchResults'),
+            items: this._results,
+            type: 'poster',
+            contextType: 'discover',
+            limit: 30,
+            allowSeeMore: false,
+            onClick: (card) => this._saveStateAndNavigate('search-seerr-items', card)
+        });
+        this._grids.seerr.mount(container);
+
+        this._registerSearchFocus();
+    }
+
+    async _searchJellyfin() {
+        log.info(`Searching Jellyfin for "${this._query}"`);
+
+        const searchTypes = [
+            { type: 'Movie' },
+            { type: 'Series' },
+            { type: 'Episode' },
+            { type: 'MusicArtist,Artist' },
+            { type: 'MusicAlbum' },
+            { type: 'Audio' },
+            { type: 'BoxSet' },
+            { type: 'TvChannel' }
+        ];
+
+        const limit = 12;
+        const requests = [
+            ...searchTypes.map((t) => api.searchHints(this._query, { IncludeItemTypes: t.type, Limit: limit })),
+            api.searchPeople(this._query, { Limit: limit })
+        ];
+
+        const responses = await Promise.all(requests);
+
+        const normalize = (res, forcedType = null) => {
+            const rawItems = Array.isArray(res) ? res : res?.SearchHints || res?.Items || [];
+            return rawItems.map((item) => ({
+                ...item,
+                Id: item.ItemId || item.Id,
+                ImageTags: item.ImageTags || {
+                    Primary: item.PrimaryImageTag
+                },
+                Type: forcedType || item.Type
+            }));
+        };
+
+        const movies = normalize(responses[0]);
+        const series = normalize(responses[1]);
+        const episodes = normalize(responses[2]);
+        const artists = normalize(responses[3]);
+        const albums = normalize(responses[4]);
+        const songs = normalize(responses[5]);
+        const collections = normalize(responses[6]);
+        const channels = normalize(responses[7]);
+        const people = normalize(responses[8], 'Person');
+
+        this._results = [
+            ...movies,
+            ...series,
+            ...episodes,
+            ...people,
+            ...artists,
+            ...albums,
+            ...songs,
+            ...collections,
+            ...channels
+        ];
+
+        if (this._results.length > 0) {
+            this._renderResults();
+        } else {
+            this._clearResults();
+            const noResultsEl = this.$('#no-results');
+            const noResultsText = this.$('#no-results-text');
+            if (noResultsEl && noResultsText) {
+                noResultsText.innerHTML = i18n.t('SearchResultsEmpty', [this._query]);
+                noResultsEl.classList.remove('hidden');
+            }
+        }
     }
 
     _renderResults() {
@@ -388,7 +521,6 @@ class SearchPage extends Page {
         const series = this._results.filter((i) => i.Type === 'Series');
         const episodes = this._results.filter((i) => i.Type === 'Episode');
         const channels = this._results.filter((i) => i.Type === 'TvChannel');
-        // Music types - merge MusicArtist and Artist for better coverage
         const artists = this._results.filter((i) => i.Type === 'MusicArtist' || i.Type === 'Artist');
         const albums = this._results.filter((i) => i.Type === 'MusicAlbum');
         const songs = this._results.filter((i) => i.Type === 'Audio');
@@ -538,30 +670,30 @@ class SearchPage extends Page {
     }
 
     _registerSearchFocus() {
-        // Must match all rendered grid keys so the focus chain is complete
-        const sectionOrder = [
-            'movies',
-            'series',
-            'episodes',
-            'people',
-            'artists',
-            'albums',
-            'songs',
-            'collections',
-            'channels'
-        ];
+        const sectionOrder = this._provider === 'seerr'
+            ? ['seerr']
+            : [
+                'movies',
+                'series',
+                'episodes',
+                'people',
+                'artists',
+                'albums',
+                'songs',
+                'collections',
+                'channels'
+            ];
         const activeTypes = sectionOrder.filter((type) => this._grids[type]);
 
-        if (activeTypes.length === 0) return;
-
-        // Register Header Focus Hook
+        // Register Header Focus Section (includes input and provider toggle buttons)
         this.registerFocusSection('search-header', this.$('#search-header'), {
             orientation: 'horizontal',
-            leaveDown: `${this._grids[activeTypes[0]].id}-items`,
+            leaveDown: activeTypes.length > 0 ? `${this._grids[activeTypes[0]].id}-items` : null,
             leaveLeft: 'sidebar'
         });
 
-        // Loop through grids to chain them
+        if (activeTypes.length === 0) return;
+
         activeTypes.forEach((type, index) => {
             const gridComp = this._grids[type];
             const baseId = gridComp.id;
@@ -570,14 +702,12 @@ class SearchPage extends Page {
             const btnId = `${baseId}-btn`;
 
             const btn = this.$(`#${btnId}`);
-            // Check visibility via offsetParent to avoid focus traps
             const isButtonVisible = btn && btn.offsetParent !== null;
             const btnContainer = this.$(`#${btnZone}`);
 
             const prevType = index > 0 ? activeTypes[index - 1] : null;
             const nextType = index < activeTypes.length - 1 ? activeTypes[index + 1] : null;
 
-            // --- Grid Zone ---
             // UP
             let gridLeaveUp;
             if (prevType) {
@@ -604,7 +734,7 @@ class SearchPage extends Page {
                 leaveLeft: 'sidebar'
             });
 
-            // --- Button Zone ---
+            // Button Zone
             if (isButtonVisible && btnContainer) {
                 this.registerFocusSection(btnZone, btnContainer, {
                     orientation: 'horizontal',
@@ -617,9 +747,7 @@ class SearchPage extends Page {
 
     _clearResults() {
         this.$('#search-results').innerHTML = '';
-
         this._destroyGrids();
-
         this._results = [];
         this._grids = {};
     }
@@ -646,16 +774,27 @@ class SearchPage extends Page {
             state.set('search:state', {
                 query: this._query,
                 results: this._results,
+                provider: this._provider,
                 focusItemId: card.dataset.itemId,
                 focusSectionId: sectionId
             });
         }
 
+        // Seerr navigation logic
+        if (this._provider === 'seerr' || card.dataset.contextType === 'discover') {
+            const found = this._results.find((i) => i.Id === card.dataset.itemId);
+            if (found) {
+                const mediaType = found._mediaType || (found.Type === 'Series' ? 'tv' : 'movie');
+                const tmdbId = found._tmdbId || found.id || card.dataset.itemId;
+                router.navigate(`/seerr/${mediaType}/${tmdbId}`);
+                return;
+            }
+        }
+
+        // Jellyfin navigation logic
         const itemType = card.dataset.contextType || card.dataset.type || 'Movie';
         let route = `/details/${card.dataset.itemId}`;
 
-        // Persons AND music artists both open the PersonPage
-        // (PersonPage detects artist type and shows albums/songs instead)
         if (
             itemType === 'Person' ||
             itemType === 'MusicArtist' ||

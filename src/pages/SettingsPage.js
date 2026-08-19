@@ -4679,8 +4679,7 @@ class SettingsPage extends Page {
 
         /*
          * Check whether auto-login for the last active user is enabled.
-         * Default: disabled (false). Adheres to Apple Human Interface Guidelines
-         * for explicit user consent and minimal friction control elements.
+         * Default: disabled (false).
          */
         const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
 
@@ -5964,7 +5963,6 @@ class SettingsPage extends Page {
         // ==========================================
         // Controls whether the application automatically boots into the last active
         // user profile, skipping the "Who's Watching" selection screen on app launch.
-        // Follows Apple Human Interface Guidelines for intuitive binary toggle controls.
         const rememberLastUserToggle = this.$('#toggle-remember-last-user');
         if (rememberLastUserToggle) {
             rememberLastUserToggle.addEventListener('click', () => {

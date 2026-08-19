@@ -3,8 +3,8 @@
  * Litefin Tizen - Description Modal Component
  * ============================================================================
  * Displays full item overview description in a wide, scrollable dialog.
- * Designed following Apple Human Interface Guidelines for TV/desktop:
- * sleek, modern, minimal aesthetic with springy focus feel, dark frosted UI,
+ * Designed following TV/desktop UI best practices:
+ * sleek, modern, minimal aesthetic with responsive focus feel, dark frosted UI,
  * clear typography, and full D-pad/keyboard/mouse support.
  *
  * Direct Remote Controls:

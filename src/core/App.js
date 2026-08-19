@@ -905,8 +905,7 @@ class App {
                  * Check user preference: "Remember Last Active User".
                  * When enabled, the app skips the profile picker on launch and boots directly
                  * into the last active session (unless protected by a local PIN).
-                 * Default: disabled (false). Adheres to Apple Human Interface Guidelines
-                 * for frictionless user experience and user control.
+                 * Default: disabled (false).
                  */
                 const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
 

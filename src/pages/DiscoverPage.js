@@ -36,20 +36,6 @@ class DiscoverPage extends Page {
         return `
             <div class="page discover-page">
                 <main class="page-content discover-content">
-                    <div class="discover-controls" id="discover-header">
-                        <div class="search-input-wrapper">
-                            <input
-                                type="text"
-                                id="discover-input"
-                                class="search-input text-input tv-input"
-                                data-i18n="SearchPlaceholder"
-                                placeholder="Search..."
-                                autocomplete="off"
-                                tabindex="0"
-                            >
-                        </div>
-                    </div>
-
                     <div class="discover-rows" id="discover-rows"></div>
 
                     <div class="discover-message hidden" id="discover-message"></div>
@@ -64,16 +50,8 @@ class DiscoverPage extends Page {
 
     async onInit() {
         this.title = i18n.t('SeerrDiscover');
-        this._input = this.$('#discover-input');
 
         i18n.translateDOM(this.el);
-        this._bindEvents();
-
-        this.registerFocusSection('discover-header', this.$('#discover-header'), {
-            orientation: 'horizontal',
-            leaveLeft: 'sidebar'
-        });
-        this.setActiveSection('discover-header');
 
         const status = await seerr.status(true);
         if (!status.available) {
@@ -197,15 +175,9 @@ class DiscoverPage extends Page {
         const keys = Object.keys(this._grids);
         if (keys.length === 0) return;
 
-        this.registerFocusSection('discover-header', this.$('#discover-header'), {
-            orientation: 'horizontal',
-            leaveDown: `discover-${keys[0]}-items`,
-            leaveLeft: 'sidebar'
-        });
-
         keys.forEach((key, index) => {
             const sectionId = `discover-${key}-items`;
-            const prev = index > 0 ? `discover-${keys[index - 1]}-items` : 'discover-header';
+            const prev = index > 0 ? `discover-${keys[index - 1]}-items` : null;
             const next = index < keys.length - 1 ? `discover-${keys[index + 1]}-items` : null;
 
             this.registerFocusSection(sectionId, this.$(`#${sectionId}`), {
@@ -215,6 +187,8 @@ class DiscoverPage extends Page {
                 leaveLeft: 'sidebar'
             });
         });
+
+        this.setActiveSection(`discover-${keys[0]}-items`);
     }
 
     /**
