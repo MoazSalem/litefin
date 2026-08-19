@@ -69,6 +69,93 @@
 }
 
 /* ========================================================================
+   Seerr Network & Studio Logo Cards (Dark Slate Pill Container with Logo)
+   ======================================================================== */
+
+.media-card.seerr-logo-card .card-image,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image {
+    background: #181d28 !important;
+    background-color: #181d28 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, border-color 0.2s ease !important;
+}
+
+.media-card.seerr-logo-card .card-image img,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card .card-image img,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image img {
+    object-fit: contain !important;
+    padding: 40px 80px !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+}
+
+/* Hide type badges & overlays on network/studio logo cards and genre cards */
+.media-card.seerr-logo-card .seerr-type-badge,
+.media-card.seerr-genre-card .seerr-type-badge,
+.media-card.seerr-logo-card .card-image-tint,
+.media-card.seerr-logo-card .card-overlay-tint {
+    display: none !important;
+}
+
+/* Hide title and subtitle labels under network, studio, and genre cards */
+.media-card.seerr-logo-card .card-info,
+.media-card.seerr-genre-card .card-info {
+    display: none !important;
+}
+
+/* Focus and Hover state for Logo Cards */
+.media-card.seerr-logo-card:focus .card-image,
+.media-card.seerr-logo-card.focused .card-image,
+.media-card.seerr-logo-card:hover .card-image,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:focus .card-image,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-image {
+    background: #232a3b !important;
+    background-color: #232a3b !important;
+    border-color: rgba(255, 255, 255, 0.9) !important;
+    transform: scale(1.04) !important;
+}
+
+/* ========================================================================
+   Seerr Genre Cards (Landscape with Backdrop Image & Centered Overlay Title)
+   ======================================================================== */
+
+.media-card.seerr-genre-card .card-image {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+.media-card.seerr-genre-card .card-image img {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.media-card.seerr-genre-card:focus .card-image img,
+.media-card.seerr-genre-card.focused .card-image img,
+.media-card.seerr-genre-card:hover .card-image img {
+    transform: scale(1.05) !important;
+}
+
+/* ========================================================================
+   Reduced spacing for rows without card titles below cards (Genres, Studios, Networks)
+   ======================================================================== */
+
+.media-row.media-row--no-card-labels,
+.media-row[data-row-id="genreMovies"],
+.media-row[data-row-id="studios"],
+.media-row[data-row-id="genreSeries"],
+.media-row[data-row-id="networks"] {
+    margin-bottom: 0px !important;
+}
+
+/* ========================================================================
    Discover page
    ======================================================================== */
 

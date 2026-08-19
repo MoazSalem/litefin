@@ -2,9 +2,21 @@
  * ============================================================================
  * Litefin Tizen - Discover Page (Jellyseerr)
  * ============================================================================
- * Discovery rows (My Requests, Watchlist, Trending, Popular Movies/Series) against
- * a Jellyseerr instance. Rendered as high-performance horizontal rows using
- * VirtualCardRow (matching HomePage layout).
+ * Discovery rows against a Jellyseerr instance:
+ * 1. Recently Added (Poster)
+ * 2. My Requests (Poster)
+ * 3. Watchlist (Poster)
+ * 4. Trending (Poster)
+ * 5. Popular Movies (Poster)
+ * 6. Movie Genres (Landscape)
+ * 7. Upcoming Movies (Poster)
+ * 8. Studios (Landscape)
+ * 9. Popular Series (Poster)
+ * 10. Series Genres (Landscape)
+ * 11. Upcoming Series (Poster)
+ * 12. Networks (Landscape)
+ *
+ * Rendered as high-performance horizontal rows using VirtualCardRow.
  * ============================================================================
  */
 
@@ -78,14 +90,33 @@ class DiscoverPage extends Page {
                 return null;
             });
 
-        // Load discovery rows: Recently Added (Row 1), My Requests, Watchlist, Trending, Movies, Series
-        const [recentlyAdded, requests, watchlist, trending, movies, series] = await Promise.all([
+        // Fetch all 12 discovery rows in parallel
+        const [
+            recentlyAdded,
+            requests,
+            watchlist,
+            trending,
+            movies,
+            genreMovies,
+            upcomingMovies,
+            studios,
+            series,
+            genreSeries,
+            upcomingSeries,
+            networks
+        ] = await Promise.all([
             settle(seerr.recentlyAdded()),
             settle(seerr.requests()),
             settle(seerr.watchlist()),
             settle(seerr.discoverTrending()),
             settle(seerr.discoverMovies()),
-            settle(seerr.discoverTv())
+            settle(seerr.genreSliderMovies()),
+            settle(seerr.upcomingMovies()),
+            settle(seerr.studios()),
+            settle(seerr.discoverTv()),
+            settle(seerr.genreSliderTv()),
+            settle(seerr.upcomingTv()),
+            settle(seerr.networks())
         ]);
 
         this.setLoading(false);
@@ -96,31 +127,69 @@ class DiscoverPage extends Page {
             (watchlist?.length || 0) +
             (trending?.length || 0) +
             (movies?.length || 0) +
-            (series?.length || 0);
+            (genreMovies?.length || 0) +
+            (upcomingMovies?.length || 0) +
+            (studios?.length || 0) +
+            (series?.length || 0) +
+            (genreSeries?.length || 0) +
+            (upcomingSeries?.length || 0) +
+            (networks?.length || 0);
 
         if (totalItems === 0) {
             this._showMessage(i18n.t('SeerrLoadFailed'), false);
             return;
         }
 
+        // Ordered row list strictly following user sequence:
+        // 1. Recently Added (Poster)
+        // 2. My Requests (Poster)
+        // 3. Watchlist (Poster)
+        // 4. Trending (Poster)
+        // 5. Popular Movies (Poster)
+        // 6. Movie Genres (Landscape)
+        // 7. Upcoming Movies (Landscape)
+        // 8. Studios (Landscape)
+        // 9. Popular Series (Poster)
+        // 10. Series Genres (Landscape)
+        // 11. Upcoming Series (Landscape)
+        // 12. Networks (Landscape)
         const rows = [];
+
         if (recentlyAdded && recentlyAdded.length > 0) {
-            rows.push({ key: 'recentlyAdded', title: i18n.t('SeerrRecentlyAdded', ['Recently Added']), items: recentlyAdded });
+            rows.push({ key: 'recentlyAdded', title: i18n.t('SeerrRecentlyAdded', ['Recently Added']), items: recentlyAdded, cardType: 'poster' });
         }
         if (requests && requests.length > 0) {
-            rows.push({ key: 'requests', title: i18n.t('SeerrMyRequests', ['My Requests']), items: requests });
+            rows.push({ key: 'requests', title: i18n.t('SeerrMyRequests', ['My Requests']), items: requests, cardType: 'poster' });
         }
         if (watchlist && watchlist.length > 0) {
-            rows.push({ key: 'watchlist', title: i18n.t('SeerrWatchlist', ['Watchlist']), items: watchlist });
+            rows.push({ key: 'watchlist', title: i18n.t('SeerrWatchlist', ['Watchlist']), items: watchlist, cardType: 'poster' });
         }
         if (trending && trending.length > 0) {
-            rows.push({ key: 'trending', title: i18n.t('SeerrTrending', ['Trending']), items: trending });
+            rows.push({ key: 'trending', title: i18n.t('SeerrTrending', ['Trending']), items: trending, cardType: 'poster' });
         }
         if (movies && movies.length > 0) {
-            rows.push({ key: 'movies', title: i18n.t('SeerrPopularMovies', ['Popular Movies']), items: movies });
+            rows.push({ key: 'movies', title: i18n.t('SeerrPopularMovies', ['Popular Movies']), items: movies, cardType: 'poster' });
+        }
+        if (genreMovies && genreMovies.length > 0) {
+            rows.push({ key: 'genreMovies', title: i18n.t('SeerrMovieGenres', ['Movie Genres']), items: genreMovies, cardType: 'landscape' });
+        }
+        if (upcomingMovies && upcomingMovies.length > 0) {
+            rows.push({ key: 'upcomingMovies', title: i18n.t('SeerrUpcomingMovies', ['Upcoming Movies']), items: upcomingMovies, cardType: 'poster' });
+        }
+        if (studios && studios.length > 0) {
+            rows.push({ key: 'studios', title: i18n.t('SeerrStudios', ['Studios']), items: studios, cardType: 'landscape' });
         }
         if (series && series.length > 0) {
-            rows.push({ key: 'series', title: i18n.t('SeerrPopularSeries', ['Popular Series']), items: series });
+            rows.push({ key: 'series', title: i18n.t('SeerrPopularSeries', ['Popular Series']), items: series, cardType: 'poster' });
+        }
+        if (genreSeries && genreSeries.length > 0) {
+            rows.push({ key: 'genreSeries', title: i18n.t('SeerrSeriesGenres', ['Series Genres']), items: genreSeries, cardType: 'landscape' });
+        }
+        if (upcomingSeries && upcomingSeries.length > 0) {
+            rows.push({ key: 'upcomingSeries', title: i18n.t('SeerrUpcomingSeries', ['Upcoming Series']), items: upcomingSeries, cardType: 'poster' });
+        }
+        if (networks && networks.length > 0) {
+            rows.push({ key: 'networks', title: i18n.t('SeerrNetworks', ['Networks']), items: networks, cardType: 'landscape' });
         }
 
         this._renderRows(rows);
@@ -132,7 +201,7 @@ class DiscoverPage extends Page {
 
     /**
      * Renders rows as horizontal VirtualCardRow sections matching the homepage layout.
-     * @param {Array<{key: string, title: string, items: Array}>} rows
+     * @param {Array<{key: string, title: string, items: Array, cardType?: string}>} rows
      * @private
      */
     _renderRows(rows) {
@@ -148,8 +217,11 @@ class DiscoverPage extends Page {
         rows.forEach((row, index) => {
             if (!row.items || row.items.length === 0) return;
 
+            const isLandscape = row.cardType === 'landscape';
+            const hasNoCardLabels = row.key === 'genreMovies' || row.key === 'studios' || row.key === 'genreSeries' || row.key === 'networks';
+
             const sectionEl = document.createElement('section');
-            sectionEl.className = 'media-row';
+            sectionEl.className = hasNoCardLabels ? 'media-row media-row--no-card-labels' : 'media-row';
             sectionEl.setAttribute('data-row-id', row.key);
             sectionEl.setAttribute('data-row-index', index);
 
@@ -163,13 +235,13 @@ class DiscoverPage extends Page {
 
             const trackEl = sectionEl.querySelector('.row-items-track');
             const virtualRow = new VirtualCardRow(trackEl, row.items, {
-                isLandscape: false,
-                cardType: 'poster',
+                isLandscape,
+                cardType: row.cardType || 'poster',
                 visibleCount: 10,
                 initialWindow: Math.min(row.items.length, 12),
                 focusSectionId: `discover-row-${row.key}`,
                 renderCard: (item) =>
-                    this._renderMediaCard(item, false, 'poster', 'discover')
+                    this._renderMediaCard(item, isLandscape, row.cardType || 'poster', 'discover')
             });
 
             const itemsContainer = sectionEl.querySelector('.row-items');
@@ -247,7 +319,11 @@ class DiscoverPage extends Page {
                 if (found) break;
             }
 
-            if (found) {
+            if (!found) return;
+
+            if (found._isGenreCard || found._isStudioCard || found._isNetworkCard) {
+                router.navigate(`/search?query=${encodeURIComponent(found.Name)}`);
+            } else if (found._mediaType && found._tmdbId) {
                 router.navigate(`/seerr/${found._mediaType}/${found._tmdbId}`);
             }
         };
@@ -276,14 +352,13 @@ class DiscoverPage extends Page {
         if (!el) return;
         el.innerHTML = `
             <p>${text}</p>
-            ${
-                withSettingsButton
-                    ? `<div class="discover-message-actions">
+            ${withSettingsButton
+                ? `<div class="discover-message-actions">
                            <button class="btn btn-secondary focusable" id="btn-discover-settings" tabindex="0">
                                ${i18n.t('SeerrOpenSettings')}
                            </button>
                        </div>`
-                    : ''
+                : ''
             }
         `;
         el.classList.remove('hidden');

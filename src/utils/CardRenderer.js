@@ -540,6 +540,11 @@ class CardRenderer {
         // --- 1.5 Premium Fallbacks & Modern Shadow ---
         if (!imageUrl) {
             imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
+        } else if (item._isGenreCard) {
+            imageInnerHtml = `
+                <div class="card-overlay-tint"></div>
+                <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
+            `;
         } else if (isModern && !isGrid) {
             // Modern horizontal cards get a shadow tint to ensure inside title readability.
             // We bypass this for grid-based cards to keep their artwork fully bright and clear.
@@ -620,7 +625,11 @@ class CardRenderer {
         let seerrTypeBadgeHtml = '';
         let seerrBadgeHtml = '';
 
-        const isSeerrItem = item._seerrStatus !== undefined || item._mediaType !== undefined || (item.Id && String(item.Id).startsWith('tmdb-'));
+        const isSeerrItem =
+            !item._isGenreCard &&
+            !item._isStudioCard &&
+            !item._isNetworkCard &&
+            (item._seerrStatus !== undefined || item._mediaType !== undefined || (item.Id && String(item.Id).startsWith('tmdb-')));
         if (isSeerrItem) {
             const mediaType = item._mediaType || (item.Type === 'Series' ? 'tv' : 'movie');
             if (mediaType === 'tv' || item.Type === 'Series') {
@@ -732,9 +741,12 @@ class CardRenderer {
             subtitleText = parts.join(' · ');
         }
 
-        // --- 3.4. Label Visibility Styles ---
+        // --- 3.4. Label Visibility Styles & Special Card Overrides ---
         const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
-        if (!options.showMeta) {
+        if (item._isStudioCard || item._isNetworkCard || item._isGenreCard) {
+            titleText = '';
+            subtitleText = '';
+        } else if (!options.showMeta) {
             if (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'titleOnly2Lines') {
                 subtitleText = '';
             } else if (cardLabelStyle === 'hidden') {
@@ -757,6 +769,13 @@ class CardRenderer {
         let cssClass = isLandscape ? 'media-card landscape' : 'media-card';
         // 'artist' is an alias for the square type — same 1:1 aspect ratio card
         if (type === 'square' || type === 'artist') cssClass = 'media-card square';
+
+        if (item._isStudioCard || item._isNetworkCard || type === 'logo') {
+            cssClass += ' seerr-logo-card';
+        }
+        if (item._isGenreCard) {
+            cssClass += ' seerr-genre-card';
+        }
 
         // -------------------------------------------------------------
         // GRID CARD MARKER

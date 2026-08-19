@@ -13,6 +13,7 @@ import { i18n } from '../utils/i18n.js';
 import { storage } from '../utils/StorageService.js';
 import { api } from './ApiClient.js';
 import { normalizeSeerrItem, seerrStatusKey } from './seerrNormalize.js';
+import { buildGenreSliderItems, buildStudioItems, buildNetworkItems } from '../utils/seerrGenres.js';
 
 const log = logger.create('JellyseerrClient');
 const API_ROOT = '/Litefin/Seerr';
@@ -443,6 +444,90 @@ export class JellyseerrClient {
             .map((item) => decorateStatusBadge(item));
 
         return this._enrichSeerrItems(items);
+    }
+
+    /**
+     * Gets upcoming movies from Seerr.
+     * @param {number} [page=1]
+     * @returns {Promise<Array<Object>>}
+     */
+    async upcomingMovies(page = 1) {
+        let payload = null;
+        try {
+            payload = await this._request(`/Discover/Movies/Upcoming?page=${page}`);
+        } catch (err) {
+            payload = await this._request(`/discover/movies/upcoming?page=${page}`);
+        }
+        return this._normalizeList(payload);
+    }
+
+    /**
+     * Gets upcoming TV series from Seerr.
+     * @param {number} [page=1]
+     * @returns {Promise<Array<Object>>}
+     */
+    async upcomingTv(page = 1) {
+        let payload = null;
+        try {
+            payload = await this._request(`/Discover/Tv/Upcoming?page=${page}`);
+        } catch (err) {
+            payload = await this._request(`/discover/tv/upcoming?page=${page}`);
+        }
+        return this._normalizeList(payload);
+    }
+
+    /**
+     * Gets movie genre slider items from Seerr.
+     * @returns {Promise<Array<Object>>}
+     */
+    async genreSliderMovies() {
+        let payload = null;
+        try {
+            payload = await this._request('/Discover/GenreSlider/Movie');
+        } catch (err) {
+            try {
+                payload = await this._request('/discover/genreslider/movie');
+            } catch (err2) {
+                payload = null;
+            }
+        }
+        const rawList = this._resultsOf(payload);
+        return buildGenreSliderItems(rawList, 'movie');
+    }
+
+    /**
+     * Gets TV genre slider items from Seerr.
+     * @returns {Promise<Array<Object>>}
+     */
+    async genreSliderTv() {
+        let payload = null;
+        try {
+            payload = await this._request('/Discover/GenreSlider/Tv');
+        } catch (err) {
+            try {
+                payload = await this._request('/discover/genreslider/tv');
+            } catch (err2) {
+                payload = null;
+            }
+        }
+        const rawList = this._resultsOf(payload);
+        return buildGenreSliderItems(rawList, 'tv');
+    }
+
+    /**
+     * Gets movie studios list with logos.
+     * @returns {Promise<Array<Object>>}
+     */
+    async studios() {
+        return buildStudioItems();
+    }
+
+    /**
+     * Gets streaming networks list with logos.
+     * @returns {Promise<Array<Object>>}
+     */
+    async networks() {
+        return buildNetworkItems();
     }
 
     async isWatchlisted(mediaType, tmdbId) {
