@@ -243,6 +243,7 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
                 .filter((v) => Boolean(v.Url));
         })(),
         Tagline: result.tagline || '',
+        collection: result.collection || (result.belongsToCollection ? { id: result.belongsToCollection.id, name: result.belongsToCollection.name } : null),
         Similar: (() => {
             const raw = result.similar;
             const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.results) ? raw.results : []);

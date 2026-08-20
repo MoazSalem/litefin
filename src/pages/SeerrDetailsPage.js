@@ -105,6 +105,12 @@ class SeerrDetailsPage extends Page {
                         <div class="people-row" id="seerr-people-row"></div>
                     </section>
 
+                    <!-- Collection -->
+                    <section class="details-collection media-row hidden" id="seerr-collection-section">
+                        <h2 class="row-title" id="seerr-collection-title"></h2>
+                        <div class="collection-row" id="seerr-collection-row"></div>
+                    </section>
+
                     <!-- Recommendations -->
                     <section class="details-recommendations media-row hidden" id="seerr-recommendations-section">
                         <h2 class="row-title" data-i18n="HeaderRecommendations">${i18n.t('HeaderRecommendations')}</h2>
@@ -570,11 +576,13 @@ class SeerrDetailsPage extends Page {
         this.registerFocusSection(focusSectionName, list, {
             orientation: 'horizontal',
             leaveLeft: 'sidebar',
+            enterTo: 'first',
             onMove: (direction, currentElement) => {
                 if (!currentElement || currentElement.dataset.virtualIndex === undefined) return false;
                 const currentIndex = parseInt(currentElement.dataset.virtualIndex, 10);
                 const nextNode = virtualRow.handleMove(direction, currentIndex);
                 if (nextNode) {
+                    virtualRow._hasBeenFocused = true;
                     virtualRow.syncIndexFromNode(nextNode);
                     focusManager.focusElement(nextNode);
                     return true;
@@ -583,10 +591,18 @@ class SeerrDetailsPage extends Page {
             },
             onEnter: (fromElement, options) => {
                 if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
-                    virtualRow._updateWindow(virtualRow.currentIndex);
-                    return virtualRow.domNodes.get(virtualRow.currentIndex);
+                    const targetIndex = virtualRow._hasBeenFocused ? virtualRow.currentIndex : 0;
+                    virtualRow._updateWindow(targetIndex);
+                    return virtualRow.domNodes.get(targetIndex);
                 }
                 return null;
+            }
+        });
+
+        list.addEventListener('focusin', (e) => {
+            if (e.target.classList.contains('media-card')) {
+                virtualRow._hasBeenFocused = true;
+                virtualRow.syncIndexFromNode(e.target);
             }
         });
 
@@ -607,6 +623,44 @@ class SeerrDetailsPage extends Page {
                 renderCard: (person) => CardRenderer.createCardHtml(person, { type: 'person' }),
                 focusSectionName: 'seerr-details-people'
             });
+        }
+
+        // 1.5. Collection items (after cast row)
+        const collectionObj = this._item?.collection || (this._item?.belongsToCollection ? { id: this._item.belongsToCollection.id, name: this._item.belongsToCollection.name } : null);
+        const collectionId = collectionObj?.id || (typeof collectionObj === 'number' ? collectionObj : null);
+        if (collectionId) {
+            try {
+                const colData = await seerr.collection(collectionId);
+                if (colData && Array.isArray(colData.items) && colData.items.length > 0) {
+                    const colTitle = colData.name || i18n.t('HeaderCollection') || 'Collection';
+                    const titleEl = this.$('#seerr-collection-title');
+                    if (titleEl) titleEl.textContent = colTitle;
+
+                    this._renderVirtualRow({
+                        sectionId: 'seerr-collection-section',
+                        listId: 'seerr-collection-row',
+                        items: colData.items,
+                        isLandscape: false,
+                        renderCard: (item) => CardRenderer.createCardHtml(item, { type: 'poster' }),
+                        focusSectionName: 'seerr-details-collection',
+                        onClick: (card, item) => {
+                            const target = item || colData.items.find((i) => String(i.Id) === String(card.getAttribute('data-id') || card.dataset.id));
+                            if (target && target._tmdbId) {
+                                const stateKey = `seerr:lastFocusedItem:${this._item._tmdbId}`;
+                                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                                    state.set(stateKey, {
+                                        itemId: target.Id || target._tmdbId,
+                                        sectionId: 'seerr-details-collection'
+                                    });
+                                }
+                                router.navigate(`/seerr/${target._mediaType || mediaType}/${target._tmdbId}`);
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                log.warn('Failed to load Seerr collection items', e);
+            }
         }
 
         // 2. Recommendations
@@ -723,6 +777,7 @@ class SeerrDetailsPage extends Page {
         const hasOverviewAction = !this.$('.see-more-btn')?.classList.contains('hidden');
         const hasRichMeta = !this.$('#rich-meta-container')?.classList.contains('hidden');
         const hasPeople = !this.$('#seerr-people-section')?.classList.contains('hidden');
+        const hasCollection = !this.$('#seerr-collection-section')?.classList.contains('hidden');
         const hasRecs = !this.$('#seerr-recommendations-section')?.classList.contains('hidden');
         const hasSimilar = !this.$('#seerr-similar-section')?.classList.contains('hidden');
 
@@ -730,6 +785,7 @@ class SeerrDetailsPage extends Page {
             if (hasOverviewAction) return 'seerr-details-overview';
             if (hasRichMeta) return 'details-rich-meta';
             if (hasPeople) return 'seerr-details-people';
+            if (hasCollection) return 'seerr-details-collection';
             if (hasRecs) return 'seerr-details-recommendations';
             if (hasSimilar) return 'seerr-details-similar';
             return null;
@@ -738,6 +794,7 @@ class SeerrDetailsPage extends Page {
         const getDownFromOverview = () => {
             if (hasRichMeta) return 'details-rich-meta';
             if (hasPeople) return 'seerr-details-people';
+            if (hasCollection) return 'seerr-details-collection';
             if (hasRecs) return 'seerr-details-recommendations';
             if (hasSimilar) return 'seerr-details-similar';
             return null;
@@ -745,13 +802,34 @@ class SeerrDetailsPage extends Page {
 
         const getDownFromRichMeta = () => {
             if (hasPeople) return 'seerr-details-people';
+            if (hasCollection) return 'seerr-details-collection';
             if (hasRecs) return 'seerr-details-recommendations';
             if (hasSimilar) return 'seerr-details-similar';
             return null;
         };
 
+        const getDownFromPeople = () => {
+            if (hasCollection) return 'seerr-details-collection';
+            if (hasRecs) return 'seerr-details-recommendations';
+            if (hasSimilar) return 'seerr-details-similar';
+            return null;
+        };
+
+        const updateSection = (name, container, opts) => {
+            const existing = focusManager.getSectionConfig(name);
+            if (existing) {
+                if (opts.leaveUp !== undefined) existing.leaveUp = opts.leaveUp;
+                if (opts.leaveDown !== undefined) existing.leaveDown = opts.leaveDown;
+                if (opts.leaveLeft !== undefined) existing.leaveLeft = opts.leaveLeft;
+                if (opts.orientation !== undefined) existing.orientation = opts.orientation;
+                if (opts.enterTo !== undefined) existing.enterTo = opts.enterTo;
+            } else if (container) {
+                this.registerFocusSection(name, container, opts);
+            }
+        };
+
         if (hasAction) {
-            this.registerFocusSection('seerr-details-actions', this.$('#actions'), {
+            updateSection('seerr-details-actions', this.$('#actions'), {
                 orientation: 'horizontal',
                 leaveLeft: 'sidebar',
                 leaveDown: getDownFromActions()
@@ -759,7 +837,7 @@ class SeerrDetailsPage extends Page {
         }
 
         if (hasOverviewAction) {
-            this.registerFocusSection('seerr-details-overview', this.$('.details-overview'), {
+            updateSection('seerr-details-overview', this.$('.details-overview'), {
                 orientation: 'vertical',
                 leaveUp: hasAction ? 'seerr-details-actions' : null,
                 leaveDown: getDownFromOverview(),
@@ -768,7 +846,7 @@ class SeerrDetailsPage extends Page {
         }
 
         if (hasRichMeta) {
-            this.registerFocusSection('details-rich-meta', this.$('#rich-meta-container'), {
+            updateSection('details-rich-meta', this.$('#rich-meta-container'), {
                 orientation: 'vertical',
                 leaveUp: hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null),
                 leaveDown: getDownFromRichMeta(),
@@ -778,27 +856,36 @@ class SeerrDetailsPage extends Page {
         }
 
         if (hasPeople) {
-            this.registerFocusSection('seerr-details-people', this.$('#seerr-people-section'), {
+            updateSection('seerr-details-people', this.$('#seerr-people-section'), {
                 orientation: 'horizontal',
                 leaveUp: hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null)),
+                leaveDown: getDownFromPeople(),
+                leaveLeft: 'sidebar'
+            });
+        }
+
+        if (hasCollection) {
+            updateSection('seerr-details-collection', this.$('#seerr-collection-section'), {
+                orientation: 'horizontal',
+                leaveUp: hasPeople ? 'seerr-details-people' : (hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null))),
                 leaveDown: hasRecs ? 'seerr-details-recommendations' : (hasSimilar ? 'seerr-details-similar' : null),
                 leaveLeft: 'sidebar'
             });
         }
 
         if (hasRecs) {
-            this.registerFocusSection('seerr-details-recommendations', this.$('#seerr-recommendations-section'), {
+            updateSection('seerr-details-recommendations', this.$('#seerr-recommendations-section'), {
                 orientation: 'horizontal',
-                leaveUp: hasPeople ? 'seerr-details-people' : (hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null))),
+                leaveUp: hasCollection ? 'seerr-details-collection' : (hasPeople ? 'seerr-details-people' : (hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null)))),
                 leaveDown: hasSimilar ? 'seerr-details-similar' : null,
                 leaveLeft: 'sidebar'
             });
         }
 
         if (hasSimilar) {
-            this.registerFocusSection('seerr-details-similar', this.$('#seerr-similar-section'), {
+            updateSection('seerr-details-similar', this.$('#seerr-similar-section'), {
                 orientation: 'horizontal',
-                leaveUp: hasRecs ? 'seerr-details-recommendations' : (hasPeople ? 'seerr-details-people' : (hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null)))),
+                leaveUp: hasRecs ? 'seerr-details-recommendations' : (hasCollection ? 'seerr-details-collection' : (hasPeople ? 'seerr-details-people' : (hasRichMeta ? 'details-rich-meta' : (hasOverviewAction ? 'seerr-details-overview' : (hasAction ? 'seerr-details-actions' : null))))),
                 leaveLeft: 'sidebar'
             });
         }

@@ -222,6 +222,27 @@ export class JellyseerrClient {
         }
     }
 
+    async collection(collectionId) {
+        try {
+            const raw = await this._request(`/Collection/${collectionId}`);
+            const list = this._resultsOf(raw?.parts || raw?.results || raw);
+            const title = raw?.name || raw?.title || '';
+            const items = list
+                .filter((r) => r && r.mediaType !== 'person')
+                .map((r) => normalizeSeerrItem(r, r.mediaType || 'movie'))
+                .filter(Boolean)
+                .map(decorateStatusBadge);
+            return {
+                id: collectionId,
+                name: title,
+                items: items
+            };
+        } catch (e) {
+            log.warn(`Failed to fetch collection ${collectionId}`, e);
+            return { id: collectionId, name: '', items: [] };
+        }
+    }
+
     /**
      * Gets requestable seasons of a series.
      * @param {number} tmdbId
