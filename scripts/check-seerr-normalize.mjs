@@ -53,7 +53,7 @@ assert.equal(movie._mediaType, 'movie');
 assert.equal(movie.Overview, 'A computer hacker learns...');
 assert.equal(movie.RunTimeTicks, 136 * 600000000);
 assert.equal(movie.CommunityRating, 8.2);
-assert.deepEqual(movie.Genres, ['Action']);
+assert.deepEqual(movie.Genres, [{ Id: 28, Name: 'Action' }]);
 assert.equal(movie.Tagline, 'Welcome to the Real World.');
 
 // Series: title comes from `name`, year from `firstAirDate`

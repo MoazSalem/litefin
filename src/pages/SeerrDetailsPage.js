@@ -277,7 +277,29 @@ class SeerrDetailsPage extends Page {
             containerWrapper: this.$('#rich-meta-container'),
             onChipClick: (chip) => {
                 const name = chip.dataset.name;
-                log.info(`Selected metadata chip: ${name}`);
+                const id = chip.dataset.id;
+                const type = chip.dataset.type;
+                const mediaType = this._mediaType || 'movie';
+
+                log.info(`Selected Seerr metadata chip: type=${type}, name=${name}, id=${id}`);
+
+                if (type === 'tags' || type === 'tag' || type === 'keywords') {
+                    if (id) {
+                        router.navigate(`/library/seerr?seerrType=keyword&mediaType=${mediaType}&keywordId=${id}&name=${encodeURIComponent(name)}`);
+                    }
+                } else if (type === 'genres' || type === 'genre') {
+                    if (id) {
+                        router.navigate(`/library/seerr?seerrType=genre&mediaType=${mediaType}&genreId=${id}&name=${encodeURIComponent(name)}`);
+                    }
+                } else if (type === 'studios' || type === 'studio') {
+                    if (id) {
+                        router.navigate(`/library/seerr?seerrType=studio&studioId=${id}&name=${encodeURIComponent(name)}`);
+                    }
+                } else if (type === 'networks' || type === 'network') {
+                    if (id) {
+                        router.navigate(`/library/seerr?seerrType=network&networkId=${id}&name=${encodeURIComponent(name)}`);
+                    }
+                }
             }
         });
 

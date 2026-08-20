@@ -179,3 +179,24 @@ export function buildNetworkItems() {
         _isNetworkCard: true
     }));
 }
+
+export function getGenreNameById(id) {
+    const numericId = parseInt(id, 10);
+    const movieMatch = MOVIE_GENRES_FALLBACK.find((g) => g.id === numericId);
+    if (movieMatch) return movieMatch.name;
+    const tvMatch = TV_GENRES_FALLBACK.find((g) => g.id === numericId);
+    if (tvMatch) return tvMatch.name;
+    return '';
+}
+
+export function getStudioNameById(id) {
+    const numericId = parseInt(id, 10);
+    const match = MOVIE_STUDIOS.find((s) => s.id === numericId);
+    return match ? match.name : '';
+}
+
+export function getNetworkNameById(id) {
+    const numericId = parseInt(id, 10);
+    const match = STREAMING_NETWORKS.find((n) => n.id === numericId);
+    return match ? match.name : '';
+}

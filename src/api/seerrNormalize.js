@@ -167,9 +167,11 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         Revenue: typeof result.revenue === 'number' && result.revenue > 0 ? result.revenue : null,
         MediaStatus: result.status || result.mediaStatus || '',
         CommunityRating: typeof result.voteAverage === 'number' ? result.voteAverage : 0,
-        Genres: Array.isArray(result.genres) ? result.genres.map((genre) => genre.name).filter(Boolean) : [],
+        Genres: Array.isArray(result.genres)
+            ? result.genres.map((g) => (typeof g === 'object' && g ? { Id: g.id || g.Id || '', Name: g.name || g.Name || '' } : { Id: '', Name: String(g) })).filter((g) => g && Boolean(g.Name))
+            : [],
         Studios: Array.isArray(result.productionCompanies)
-            ? result.productionCompanies.map((c) => (typeof c === 'string' ? c : (c && c.name))).filter(Boolean)
+            ? result.productionCompanies.map((c) => (typeof c === 'object' && c ? { Id: c.id || c.Id || '', Name: c.name || c.Name || '' } : { Id: '', Name: String(c) })).filter((c) => c && Boolean(c.Name))
             : [],
         ProductionTeam: (() => {
             const rawCrew = (result.credits && result.credits.crew) || result.crew || [];
@@ -220,8 +222,14 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         })(),
         Tags: (() => {
             const rawKw = result.keywords;
-            const kwList = Array.isArray(rawKw) ? rawKw : (rawKw && Array.isArray(rawKw.results) ? rawKw.results : []);
-            return kwList.map((k) => (typeof k === 'string' ? k : (k && k.name))).filter(Boolean);
+            const kwList = Array.isArray(rawKw) ? rawKw : (rawKw && Array.isArray(rawKw.results) ? rawKw.results : (rawKw && Array.isArray(rawKw.keywords) ? rawKw.keywords : []));
+            return kwList.map((k) => {
+                if (!k) return null;
+                if (typeof k === 'object') {
+                    return { Id: k.id || k.Id || '', Name: k.name || k.Name || '' };
+                }
+                return { Id: '', Name: String(k) };
+            }).filter((k) => k && Boolean(k.Name));
         })(),
         RemoteTrailers: (() => {
             const raw = result.relatedVideos || result.videos || [];

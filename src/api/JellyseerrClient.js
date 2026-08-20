@@ -140,22 +140,44 @@ export class JellyseerrClient {
         return this._normalizeList(await this._request('/Discover/Trending'));
     }
 
-    async discoverMovies(page = 1, genre = null) {
-        const genreParam = genre ? `&genre=${genre}` : '';
-        return this._normalizeList(await this._request(`/Discover/Movies?page=${page}${genreParam}`));
+    async discoverMovies(page = 1, options = {}) {
+        let queryParams = `page=${page}`;
+        if (typeof options === 'number' || typeof options === 'string') {
+            queryParams += `&genre=${options}`;
+        } else if (options && typeof options === 'object') {
+            if (options.genre) queryParams += `&genre=${options.genre}`;
+            if (options.keywords) queryParams += `&keywords=${options.keywords}`;
+            if (options.studio) queryParams += `&studio=${options.studio}`;
+        }
+        return this._normalizeList(await this._request(`/Discover/Movies?${queryParams}`));
     }
 
-    async discoverTv(page = 1, genre = null) {
-        const genreParam = genre ? `&genre=${genre}` : '';
-        return this._normalizeList(await this._request(`/Discover/Tv?page=${page}${genreParam}`));
+    async discoverTv(page = 1, options = {}) {
+        let queryParams = `page=${page}`;
+        if (typeof options === 'number' || typeof options === 'string') {
+            queryParams += `&genre=${options}`;
+        } else if (options && typeof options === 'object') {
+            if (options.genre) queryParams += `&genre=${options.genre}`;
+            if (options.keywords) queryParams += `&keywords=${options.keywords}`;
+            if (options.network) queryParams += `&network=${options.network}`;
+        }
+        return this._normalizeList(await this._request(`/Discover/Tv?${queryParams}`));
     }
 
     async moviesByGenre(genreId, page = 1) {
-        return this.discoverMovies(page, genreId);
+        return this.discoverMovies(page, { genre: genreId });
     }
 
     async tvByGenre(genreId, page = 1) {
-        return this.discoverTv(page, genreId);
+        return this.discoverTv(page, { genre: genreId });
+    }
+
+    async moviesByKeyword(keywordId, page = 1) {
+        return this.discoverMovies(page, { keywords: keywordId });
+    }
+
+    async tvByKeyword(keywordId, page = 1) {
+        return this.discoverTv(page, { keywords: keywordId });
     }
 
     async moviesByStudio(studioId, page = 1) {

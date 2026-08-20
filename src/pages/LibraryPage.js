@@ -21,6 +21,7 @@ import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
 import { seerr } from '../api/JellyseerrClient.js';
+import { getGenreNameById, getStudioNameById, getNetworkNameById } from '../utils/seerrGenres.js';
 
 const log = logger.create('Library');
 
@@ -294,7 +295,16 @@ class LibraryPage extends Page {
         }
 
         if (isSeerrLibrary) {
-            const seerrTitle = this.params.name ? decodeURIComponent(this.params.name) : i18n.t('Discover');
+            let seerrTitle = this.params.name ? decodeURIComponent(this.params.name) : '';
+            if (!seerrTitle) {
+                const gId = this.params.genreId || this.params.genre;
+                const sId = this.params.studioId || this.params.studio;
+                const nId = this.params.networkId || this.params.network;
+                if (gId) seerrTitle = getGenreNameById(gId) || i18n.t('HeaderGenre') || 'Genre';
+                else if (sId) seerrTitle = getStudioNameById(sId) || i18n.t('HeaderStudio') || 'Studio';
+                else if (nId) seerrTitle = getNetworkNameById(nId) || i18n.t('Network') || 'Network';
+                else seerrTitle = i18n.t('Discover') || 'Discover';
+            }
             this.state.libraryInfo = {
                 Name: seerrTitle,
                 CollectionType: 'seerr'
@@ -905,16 +915,23 @@ class LibraryPage extends Page {
         if (this.state.libraryId === 'seerr') {
             const seerrType = this.params.seerrType;
             const mediaType = this.params.mediaType || 'movie';
-            const genreId = this.params.genreId;
-            const studioId = this.params.studioId;
-            const networkId = this.params.networkId;
+            const genreId = this.params.genreId || this.params.genre;
+            const studioId = this.params.studioId || this.params.studio;
+            const networkId = this.params.networkId || this.params.network;
+            const keywordId = this.params.keywordId || this.params.keywords || this.params.keyword;
 
             // Calculate active page for Seerr request (each page contains 100 items merged from 5 upstream pages)
             const seerrPage = Math.floor(this.state.startIndex / 100) + 1;
 
             let items = [];
             try {
-                if (seerrType === 'genre' || genreId) {
+                if (seerrType === 'keyword' || seerrType === 'tag' || keywordId) {
+                    if (mediaType === 'tv') {
+                        items = await seerr.tvByKeyword(keywordId, seerrPage);
+                    } else {
+                        items = await seerr.moviesByKeyword(keywordId, seerrPage);
+                    }
+                } else if (seerrType === 'genre' || genreId) {
                     if (mediaType === 'tv') {
                         items = await seerr.tvByGenre(genreId, seerrPage);
                     } else {
@@ -3591,9 +3608,10 @@ class LibraryPage extends Page {
             const currentParams = new URLSearchParams();
             if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
             if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
-            if (this.params.genreId) currentParams.set('genreId', this.params.genreId);
-            if (this.params.studioId) currentParams.set('studioId', this.params.studioId);
-            if (this.params.networkId) currentParams.set('networkId', this.params.networkId);
+            if (this.params.genreId || this.params.genre) currentParams.set('genreId', this.params.genreId || this.params.genre);
+            if (this.params.studioId || this.params.studio) currentParams.set('studioId', this.params.studioId || this.params.studio);
+            if (this.params.networkId || this.params.network) currentParams.set('networkId', this.params.networkId || this.params.network);
+            if (this.params.keywordId || this.params.keywords || this.params.keyword) currentParams.set('keywordId', this.params.keywordId || this.params.keywords || this.params.keyword);
             if (this.params.name) currentParams.set('name', this.params.name);
             currentParams.set('page', targetPage);
 

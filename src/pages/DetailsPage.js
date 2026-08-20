@@ -1704,6 +1704,7 @@ class DetailsPage extends Page {
                 chip.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    this._deactivateRichMeta();
                     this._handleMetaClick(chip);
                 };
 
@@ -1713,6 +1714,7 @@ class DetailsPage extends Page {
                         // Enter
                         e.preventDefault();
                         e.stopPropagation();
+                        this._deactivateRichMeta();
                         this._handleMetaClick(chip);
                     }
                 };

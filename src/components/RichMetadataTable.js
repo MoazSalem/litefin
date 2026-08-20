@@ -123,6 +123,7 @@ export class RichMetadataTable {
                 chip.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    this.deactivate();
                     if (this._onChipClick) this._onChipClick(chip);
                 };
 
@@ -130,6 +131,7 @@ export class RichMetadataTable {
                     if (e.keyCode === 13) {
                         e.preventDefault();
                         e.stopPropagation();
+                        this.deactivate();
                         if (this._onChipClick) this._onChipClick(chip);
                     }
                 };
