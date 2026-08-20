@@ -332,11 +332,21 @@ export class HtmlVideoPlayer {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('HLS manifest parsed');
 
+                // =========================================================================
+                // Initial HLS Audio Track Selection Fix
+                // =========================================================================
+                // hls.audioTrack expects a 0-based list index into hls.audioTracks,
+                // NOT the raw Jellyfin StreamID (options.audioStreamIndex).
+                // Use options.audioTrackListIndex pre-computed by JellyfinPlayer.
+                // =========================================================================
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex >= 0) {
-                    const outputIndex = hls.audioTracks.length <= 1 ? 0 : options.audioStreamIndex;
+                    const listIndex = (options.audioTrackListIndex !== undefined && options.audioTrackListIndex !== null && options.audioTrackListIndex >= 0)
+                        ? options.audioTrackListIndex
+                        : 0;
+                    const outputIndex = hls.audioTracks.length <= 1 ? 0 : listIndex;
                     if (outputIndex < hls.audioTracks.length) {
                         hls.audioTrack = outputIndex;
-                        log.debug('Set HLS audio track:', options.audioStreamIndex, 'mapped to', outputIndex);
+                        log.debug(`Set HLS audio track listIndex ${listIndex} mapped to outputIndex ${outputIndex}`);
                     }
                 }
 
@@ -586,9 +596,21 @@ export class HtmlVideoPlayer {
                     seekCompleted = true;
                 }
 
-                // Apply initially requested tracks once native tracks are populated
+                // =========================================================================
+                // Initial Audio Track Selection Fix
+                // =========================================================================
+                // setAudioStreamIndex expects a 0-based listIndex into native video.audioTracks
+                // (or HLS tracks), NOT the raw Jellyfin audioStreamIndex StreamID.
+                // JellyfinPlayer pre-computes audioTrackListIndex on options for this purpose.
+                // Using raw StreamID (e.g. 4) caused an out-of-bounds index lookup on
+                // video.audioTracks, disabling all tracks and falling back to track 0.
+                // =========================================================================
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
-                    this.setAudioStreamIndex(options.audioStreamIndex);
+                    const listIndex = (options.audioTrackListIndex !== undefined && options.audioTrackListIndex !== null && options.audioTrackListIndex >= 0)
+                        ? options.audioTrackListIndex
+                        : 0;
+                    log.info(`[HtmlVideoPlayer] Applying initial audio track: StreamID ${options.audioStreamIndex} → listIndex ${listIndex}`);
+                    this.setAudioStreamIndex(listIndex);
                 }
                 if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
                     this.setSubtitleStreamIndex(options.subtitleStreamIndex);

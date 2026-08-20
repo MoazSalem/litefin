@@ -1116,9 +1116,36 @@ class PlayerPage extends Page {
             }
         }
 
-        // 3. Fallback to default from MediaSource for Audio if still undefined
-        if (savedAudioIndex === undefined) {
-            savedAudioIndex = mediaSource?.DefaultAudioStreamIndex;
+        // 3. Fallback to default from MediaSource for Audio if still undefined or null
+        // =========================================================================
+        // DEFAULT AUDIO STREAM RESOLUTION (Disposition "default")
+        // =========================================================================
+        // When preSelectedAudio is null or undefined (and session track memory
+        // yielded no match), we resolve the default audio track.
+        // Priority order:
+        //   1. Audio stream with disposition "default" (s.Type === 'Audio' && s.IsDefault)
+        //   2. MediaSource DefaultAudioStreamIndex property
+        //   3. First available audio stream in container (audioStreams[0])
+        // =========================================================================
+        if (savedAudioIndex === undefined || savedAudioIndex === null) {
+            // Filter candidate streams to Audio type
+            const audioStreams = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+
+            // Attempt match by disposition default (IsDefault), then DefaultAudioStreamIndex, then first track
+            const defaultAudioStream =
+                audioStreams.find((s) => s.IsDefault) ||
+                (mediaSource?.DefaultAudioStreamIndex !== undefined && mediaSource?.DefaultAudioStreamIndex !== null
+                    ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
+                    : null) ||
+                audioStreams[0];
+
+            // Assign resolved index
+            if (defaultAudioStream) {
+                savedAudioIndex = defaultAudioStream.Index;
+                log.info(
+                    `[Track Resolution] Resolved default audio track (disposition default): Index ${savedAudioIndex} (${defaultAudioStream.Language || 'und'})`
+                );
+            }
         }
 
         // Note: We leave savedSubtitleIndex as undefined if unresolved, so JellyfinPlayer's SubtitleMode logic handles it.

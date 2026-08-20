@@ -704,8 +704,11 @@ export class JellyfinPlayer extends EventEmitter {
                     const fallbackSource = options.item.MediaSources[0];
                     const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                     if (ms) {
-                        defaultIndex = ms.DefaultAudioStreamIndex;
                         const audioStreams = (ms.MediaStreams || []).filter(s => s.Type === 'Audio');
+                        const defaultAudioStream = audioStreams.find(s => s.IsDefault) ||
+                            (ms.DefaultAudioStreamIndex !== undefined && ms.DefaultAudioStreamIndex !== null ? audioStreams.find(s => s.Index === ms.DefaultAudioStreamIndex) : null) ||
+                            audioStreams[0];
+                        defaultIndex = defaultAudioStream ? defaultAudioStream.Index : ms.DefaultAudioStreamIndex;
                         if (audioStreams.length > 0) {
                             firstAudioIndex = audioStreams[0].Index;
                         }
@@ -864,7 +867,10 @@ export class JellyfinPlayer extends EventEmitter {
                         }
                     } else {
                         const prefLang = storage.getItem('pref:subtitleLang') || 'none';
-                        const audioStreamIndex = options.audioStreamIndex !== undefined ? options.audioStreamIndex : ms.DefaultAudioStreamIndex;
+                        const defaultAudioStream = (ms.MediaStreams || []).find(s => s.Type === 'Audio' && s.IsDefault) ||
+                            (ms.MediaStreams || []).find(s => s.Type === 'Audio' && s.Index === ms.DefaultAudioStreamIndex) ||
+                            (ms.MediaStreams || []).find(s => s.Type === 'Audio');
+                        const audioStreamIndex = options.audioStreamIndex !== undefined && options.audioStreamIndex !== null ? options.audioStreamIndex : defaultAudioStream?.Index;
                         const audioStream = ms.MediaStreams.find(s => s.Type === 'Audio' && s.Index === audioStreamIndex);
                         const audioLang = audioStream ? (audioStream.Language || 'und') : 'und';
                         
