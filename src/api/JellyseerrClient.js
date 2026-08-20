@@ -121,23 +121,49 @@ export class JellyseerrClient {
 
     /** @private */
     _normalizeList(payload) {
-        return this._resultsOf(payload)
+        const results = this._resultsOf(payload)
             .filter((result) => result && result.mediaType !== 'person')
             .map(normalizeSeerrItem)
             .filter((item) => item !== null)
             .map((item) => decorateStatusBadge(item));
+
+        if (payload && typeof payload === 'object') {
+            results.page = payload.page || 1;
+            results.totalPages = payload.totalPages || 1;
+            results.totalResults = payload.totalResults || results.length;
+        }
+
+        return results;
     }
 
     async discoverTrending() {
         return this._normalizeList(await this._request('/Discover/Trending'));
     }
 
-    async discoverMovies(page = 1) {
-        return this._normalizeList(await this._request(`/Discover/Movies?page=${page}`));
+    async discoverMovies(page = 1, genre = null) {
+        const genreParam = genre ? `&genre=${genre}` : '';
+        return this._normalizeList(await this._request(`/Discover/Movies?page=${page}${genreParam}`));
     }
 
-    async discoverTv(page = 1) {
-        return this._normalizeList(await this._request(`/Discover/Tv?page=${page}`));
+    async discoverTv(page = 1, genre = null) {
+        const genreParam = genre ? `&genre=${genre}` : '';
+        return this._normalizeList(await this._request(`/Discover/Tv?page=${page}${genreParam}`));
+    }
+
+    async moviesByGenre(genreId, page = 1) {
+        return this.discoverMovies(page, genreId);
+    }
+
+    async tvByGenre(genreId, page = 1) {
+        return this.discoverTv(page, genreId);
+    }
+
+    async moviesByStudio(studioId, page = 1) {
+        return this._normalizeList(await this._request(`/Discover/Movies/Studio/${studioId}?page=${page}`));
+    }
+
+    async tvByNetwork(networkId, page = 1) {
+        return this._normalizeList(await this._request(`/Discover/Tv/Network/${networkId}?page=${page}`));
     }
 
     /**

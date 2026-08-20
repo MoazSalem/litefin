@@ -20,6 +20,7 @@ import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
+import { seerr } from '../api/JellyseerrClient.js';
 
 const log = logger.create('Library');
 
@@ -280,10 +281,28 @@ class LibraryPage extends Page {
         this.setLoading(true);
         this.state.libraryId = this.params.id;
 
-        // Special handling for 'virtual' library IDs (e.g. 'all' for search expansion)
+        // Special handling for 'virtual' library IDs (e.g. 'all' for search expansion, 'seerr' for Seerr discovery)
         const isVirtualLibrary = this.state.libraryId === 'all';
+        const isSeerrLibrary = this.state.libraryId === 'seerr';
 
-        if (!isVirtualLibrary) {
+        if (this.params.page) {
+            const pageNum = parseInt(this.params.page, 10);
+            if (!isNaN(pageNum) && pageNum > 0) {
+                const pageLimit = isSeerrLibrary ? 100 : this.state.limit;
+                this.state.startIndex = (pageNum - 1) * pageLimit;
+            }
+        }
+
+        if (isSeerrLibrary) {
+            const seerrTitle = this.params.name ? decodeURIComponent(this.params.name) : i18n.t('Discover');
+            this.state.libraryInfo = {
+                Name: seerrTitle,
+                CollectionType: 'seerr'
+            };
+            this.state.viewMode = 'poster';
+            this.$('#library-title').textContent = seerrTitle;
+            this.title = seerrTitle;
+        } else if (!isVirtualLibrary) {
             await this._fetchLibraryInfo();
         } else {
             // Setup default state for virtual library
@@ -735,9 +754,11 @@ class LibraryPage extends Page {
         const parts = [`library:state:${this.params.id}`];
         if (this.params.genreId) parts.push(`genre:${this.params.genreId}`);
         if (this.params.studioId) parts.push(`studio:${this.params.studioId}`);
+        if (this.params.networkId) parts.push(`network:${this.params.networkId}`);
         if (this.params.year) parts.push(`year:${this.params.year}`);
         if (this.params.personId) parts.push(`person:${this.params.personId}`);
         if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
+        if (this.params.page) parts.push(`page:${this.params.page}`);
         return parts.join(':');
     }
 
@@ -879,6 +900,50 @@ class LibraryPage extends Page {
 
     async _loadItems() {
         this.setLoading(true);
+
+        // Special handling for Seerr discovery library
+        if (this.state.libraryId === 'seerr') {
+            const seerrType = this.params.seerrType;
+            const mediaType = this.params.mediaType || 'movie';
+            const genreId = this.params.genreId;
+            const studioId = this.params.studioId;
+            const networkId = this.params.networkId;
+
+            // Calculate active page for Seerr request (each page contains 100 items merged from 5 upstream pages)
+            const seerrPage = Math.floor(this.state.startIndex / 100) + 1;
+
+            let items = [];
+            try {
+                if (seerrType === 'genre' || genreId) {
+                    if (mediaType === 'tv') {
+                        items = await seerr.tvByGenre(genreId, seerrPage);
+                    } else {
+                        items = await seerr.moviesByGenre(genreId, seerrPage);
+                    }
+                } else if (seerrType === 'studio' || studioId) {
+                    items = await seerr.moviesByStudio(studioId, seerrPage);
+                } else if (seerrType === 'network' || networkId) {
+                    items = await seerr.tvByNetwork(networkId, seerrPage);
+                }
+            } catch (err) {
+                log.error('Failed to load Seerr category items', err);
+                items = [];
+            }
+
+            this.state.items = items || [];
+            this.state.limit = 100;
+            this.state.totalRecordCount = items.totalResults || (items.totalPages ? items.totalPages * 100 : (items.length ? (seerrPage + 1) * 100 : 0));
+            this.state.viewMode = 'poster';
+
+            const grid = this.$('#library-grid');
+            if (grid) {
+                grid.style.display = '';
+                this._renderGrid(this.state.items);
+            }
+            this._updatePaginationUI();
+            this.setLoading(false);
+            return;
+        }
 
         // Capture starting viewType to prevent race conditions
         const capturedViewType = this.state.viewType;
@@ -3459,6 +3524,13 @@ class LibraryPage extends Page {
         const itemId = card.dataset.itemId;
         if (!itemId) return;
 
+        // Special handling for Seerr items: navigate to SeerrDetailsPage
+        if (card.dataset.mediaType && card.dataset.tmdbId) {
+            log.info('Navigating to Seerr details:', card.dataset.mediaType, card.dataset.tmdbId);
+            router.navigate(`/seerr/${card.dataset.mediaType}/${card.dataset.tmdbId}`);
+            return;
+        }
+
         // Special handling for Networks view: navigate to studio-filtered library
         if (this.state.viewType === 'Networks') {
             log.debug('Navigating to Studio:', itemId);
@@ -3514,27 +3586,33 @@ class LibraryPage extends Page {
         // Bounds check
         if (newIndex < 0 || newIndex >= this.state.totalRecordCount) return;
 
-        this.state.startIndex = newIndex;
+        if (this.state.libraryId === 'seerr') {
+            const targetPage = Math.floor(newIndex / 100) + 1;
+            const currentParams = new URLSearchParams();
+            if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
+            if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
+            if (this.params.genreId) currentParams.set('genreId', this.params.genreId);
+            if (this.params.studioId) currentParams.set('studioId', this.params.studioId);
+            if (this.params.networkId) currentParams.set('networkId', this.params.networkId);
+            if (this.params.name) currentParams.set('name', this.params.name);
+            currentParams.set('page', targetPage);
 
-        await this._loadItems();
-
-        // Scroll to top of grid
-        const scrollContainer = this.$('#library-scroll-container');
-        if (scrollContainer) scrollContainer.scrollTop = 0;
-
-        // Force focus to first item in grid
-        const grid = this.$('#library-grid');
-        const firstItem = grid ? grid.querySelector('.media-card') : null;
-        if (firstItem) {
-            focusManager.focusElement(firstItem);
-        } else {
-            // Fallback if empty, check if controls are visible
-            if (this.$('#library-controls')?.style.display !== 'none') {
-                this.setActiveSection('library-controls');
-            } else {
-                this.setActiveSection('library-grid');
-            }
+            router.navigate(`/library/seerr?${currentParams.toString()}`);
+            return;
         }
+
+        const targetPage = Math.floor(newIndex / this.state.limit) + 1;
+        const currentParams = new URLSearchParams();
+        if (this.params.genreId) currentParams.set('genreId', this.params.genreId);
+        if (this.params.studioId) currentParams.set('studioId', this.params.studioId);
+        if (this.params.networkId) currentParams.set('networkId', this.params.networkId);
+        if (this.params.year) currentParams.set('year', this.params.year);
+        if (this.params.personId) currentParams.set('personId', this.params.personId);
+        if (this.params.tagName) currentParams.set('tagName', this.params.tagName);
+        if (this.params.name) currentParams.set('name', this.params.name);
+        currentParams.set('page', targetPage);
+
+        router.navigate(`/library/${this.state.libraryId}?${currentParams.toString()}`);
     }
 
     // ========================================================================
@@ -4744,6 +4822,20 @@ class LibraryPage extends Page {
     _updateHeaderVisibility() {
         const collectionType = this.state.libraryInfo?.CollectionType;
         const viewType = this.state.viewType;
+
+        // Hide controls, tabs, and alpha picker for Seerr category library views
+        if (collectionType === 'seerr' || this.state.libraryId === 'seerr') {
+            const controls = this.$('#library-controls');
+            const controlsRow = this.$('.library-controls-row');
+            const alphaPicker = this.$('#alpha-picker-container');
+            const tabsContainer = this.$('#library-tabs');
+
+            if (controlsRow) controlsRow.style.display = 'none';
+            if (controls) controls.style.display = 'none';
+            if (alphaPicker) alphaPicker.style.display = 'none';
+            if (tabsContainer) tabsContainer.style.display = 'none';
+            return;
+        }
 
         // Condition: only show for Movies (Items), TV Shows (Items), Episodes, and music grid views
         const isMovieMain = collectionType === 'movies' && viewType === 'Items';

@@ -321,8 +321,12 @@ class DiscoverPage extends Page {
 
             if (!found) return;
 
-            if (found._isGenreCard || found._isStudioCard || found._isNetworkCard) {
-                router.navigate(`/search?query=${encodeURIComponent(found.Name)}`);
+            if (found._isGenreCard) {
+                router.navigate(`/library/seerr?seerrType=genre&mediaType=${found._mediaType}&genreId=${found._genreId}&name=${encodeURIComponent(found.Name)}`);
+            } else if (found._isStudioCard) {
+                router.navigate(`/library/seerr?seerrType=studio&studioId=${found._studioId}&name=${encodeURIComponent(found.Name)}`);
+            } else if (found._isNetworkCard) {
+                router.navigate(`/library/seerr?seerrType=network&networkId=${found._networkId}&name=${encodeURIComponent(found.Name)}`);
             } else if (found._mediaType && found._tmdbId) {
                 router.navigate(`/seerr/${found._mediaType}/${found._tmdbId}`);
             }
