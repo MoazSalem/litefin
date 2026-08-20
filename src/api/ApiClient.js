@@ -475,8 +475,9 @@ export class ApiClient {
                         // Send Wake-on-LAN Magic Packet
                         sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
 
-                        // Retry loop: probe server status every 3s for up to 5 attempts (~15 seconds)
-                        const maxAttempts = 5;
+                        // Retry loop: probe server status every 3s (up to 25 attempts / ~90s if Extended Wait is active)
+                        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+                        const maxAttempts = extendedWait ? 25 : 5;
                         const retryDelayMs = 3000;
 
                         for (let attempt = 1; attempt <= maxAttempts; attempt++) {

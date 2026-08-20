@@ -1321,6 +1321,8 @@
     "ViewPhoto": "View Photo",
     "VP9Description": "Direct play VP9 content (WebM, YouTube-style files)",
     "WaitingForAuthorization": "Waiting for authorization...",
+    "WakeOnLanExtendedWait": "Extended Wake-on-LAN Wait Time",
+    "WakeOnLanExtendedWaitDescription": "Increases server boot await timer from ~18s to ~90s (25 retry attempts) when starting up or connecting. Essential for PCs powering on from a cold shutdown state.",
     "WakeOnLanServerScan": "Wake-on-LAN on Server Discovery",
     "WakeOnLanServerScanDescription": "Automatically send a Wake-on-LAN magic packet to your saved server MAC address when scanning for local servers.",
     "WakeOnLanStartup": "Wake-on-LAN on Startup",

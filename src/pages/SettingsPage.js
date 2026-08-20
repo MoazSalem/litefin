@@ -1375,8 +1375,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanExtendedWait">${i18n.t('WakeOnLanExtendedWait')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanExtendedWaitDescription">${i18n.t('WakeOnLanExtendedWaitDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolExtendedWait') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-extended-wait" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Conditional container for MAC Address entry -->
-                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true') ? '' : 'none'}">
+                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true' || storage.getItem('pref:enableWolExtendedWait') === 'true') ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="WolMacAddress">${i18n.t('WolMacAddress')}</span>
                         <span class="setting-description" data-i18n="WolMacAddressDescription">${i18n.t('WolMacAddressDescription')}</span>
@@ -6701,9 +6714,10 @@ class SettingsPage extends Page {
             const wolStartup = storage.getItem('pref:enableWolOnStartup') === 'true';
             const wolTimeout = storage.getItem('pref:enableWolOnTimeout') === 'true';
             const wolScan = storage.getItem('pref:enableWolOnServerScan') === 'true';
+            const wolExtended = storage.getItem('pref:enableWolExtendedWait') === 'true';
             const macContainer = this.$('#wol-mac-container');
             if (macContainer) {
-                macContainer.style.display = (wolStartup || wolTimeout || wolScan) ? '' : 'none';
+                macContainer.style.display = (wolStartup || wolTimeout || wolScan || wolExtended) ? '' : 'none';
             }
             focusManager.invalidateCache('settings-content');
         };
@@ -6750,6 +6764,22 @@ class SettingsPage extends Page {
                 storage.setItem('pref:enableWolOnServerScan', newValue ? 'true' : 'false');
                 storage.flush();
                 wolScanToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        const wolExtendedToggleBtn = this.$('#toggle-wol-extended-wait');
+        if (wolExtendedToggleBtn) {
+            wolExtendedToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolExtendedWait') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolExtendedWait', newValue ? 'true' : 'false');
+                storage.flush();
+                wolExtendedToggleBtn.classList.toggle('active', newValue);
 
                 // Synchronize visibility of the MAC address input field row
                 updateWolMacVisibility();
