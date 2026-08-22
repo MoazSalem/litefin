@@ -8,6 +8,7 @@
  */
 
 import { api } from '../api/index.js';
+import { escapeHtml } from './Utils.js';
 import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
@@ -772,6 +773,12 @@ class CardRenderer {
             }
         }
 
+        // Title/subtitle derive from server-supplied fields (Name, SeriesName,
+        // ChannelName, CurrentProgram.Name, Role...) and land in innerHTML —
+        // escape once here, after all composition is done.
+        titleText = escapeHtml(titleText);
+        subtitleText = escapeHtml(subtitleText);
+
         // --- 3.5. List View Override ---
         // In list-view, we want the Title on the left and EVERY other piece of info
         // (Year, Role, Rating, Score) on the right. We move subtitle parts to metaHtml.
@@ -803,7 +810,7 @@ class CardRenderer {
         // Attach fallback data for LazyLoader to use on error
         const fbData = CardRenderer.getFallbackData(item.Name);
         const hideInitials = type === 'library';
-        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
+        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${escapeHtml(fbData.name)}" data-fb-init="${escapeHtml(fbData.initials)}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
         // ====================================================================
         // Expansion Eligibility Strategy
@@ -901,8 +908,8 @@ class CardRenderer {
                 ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>`
                 : '';
         const imagePart = imageUrl
-            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
-            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>` : ''}`;
+            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
+            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${escapeHtml(i18n.ensureBiDi(item.Name))}</div>` : ''}`;
         const finalContextType = contextType || item.Type;
 
         const isHiddenLibraryLabel =
@@ -1057,8 +1064,8 @@ class CardRenderer {
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
-                ${!hideInitials ? `<div class="media-fallback-initials">${data.initials}</div>` : ''}
-                ${!isModern ? `<div class="media-fallback-name">${data.name}</div>` : ''}
+                ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(data.initials)}</div>` : ''}
+                ${!isModern ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
             </div>
         `;
     }

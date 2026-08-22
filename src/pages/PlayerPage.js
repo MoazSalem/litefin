@@ -33,6 +33,7 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('Player');
 
@@ -2286,7 +2287,10 @@ class PlayerPage extends Page {
 
         if (data && data.text && data.text.trim().length > 0) {
             // Render subtitle
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Cue text is external content (SRT/VTT/ASS from the server or a
+            // sidecar file); SubtitleParser only strips ASS {...} tags, so
+            // HTML in cue text must be escaped before innerHTML.
+            overlay.innerHTML = `<span class="subtitle-line">${escapeHtml(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -2366,8 +2370,8 @@ class PlayerPage extends Page {
         if (!overlay) return;
 
         if (data && data.text && data.text.trim().length > 0) {
-            // Render the secondary subtitle text
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Render the secondary subtitle text (escaped: external cue content)
+            overlay.innerHTML = `<span class="subtitle-line">${escapeHtml(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------

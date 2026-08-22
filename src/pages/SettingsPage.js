@@ -32,6 +32,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('SettingsPage');
 
@@ -7419,7 +7420,7 @@ class SettingsPage extends Page {
     _renderDropdown(id, options, currentValue, disabled = false) {
         // Find current label (using String conversion to match storage strings with number options)
         const currentOption = options.find((o) => String(o.value) === String(currentValue)) || options[0];
-        const currentLabel = currentOption ? i18n.ensureBiDi(currentOption.label) : i18n.t('Select');
+        const currentLabel = currentOption ? escapeHtml(i18n.ensureBiDi(currentOption.label)) : i18n.t('Select');
 
         // Render as a button that triggers the modal
         return `
@@ -7474,7 +7475,7 @@ class SettingsPage extends Page {
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                             <span style="margin-right: 12px;">${i18n.ensureBiDi(opt.label)}</span>
+                             <span style="margin-right: 12px;">${escapeHtml(i18n.ensureBiDi(opt.label))}</span>
                              ${badge}
                         </button>
                     `;
@@ -9519,8 +9520,8 @@ class SettingsPage extends Page {
                 quality: 90,
                 maxWidth: 300
             });
-            return `<img src="${imageUrl}" class="user-avatar" alt="${user.Name}" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
-                    <div class="user-avatar-placeholder hidden">${user.Name[0].toUpperCase()}</div>`;
+            return `<img src="${imageUrl}" class="user-avatar" alt="${escapeHtml(user.Name)}" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
+                    <div class="user-avatar-placeholder hidden">${escapeHtml(user.Name ? user.Name[0].toUpperCase() : '?')}</div>`;
         }
         return `<div class="user-avatar-placeholder">${user?.Name ? user.Name[0].toUpperCase() : '?'}</div>`;
     }
