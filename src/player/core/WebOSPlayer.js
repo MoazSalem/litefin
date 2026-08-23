@@ -1314,6 +1314,13 @@ export class WebOSPlayer {
         // ─────────────────────────────────────────────────────────────────────
         const nativeIndex = this._resolveNativeAudioIndex(listIndex, audioTracks);
 
+        // Guard against out-of-bounds index resolution
+        if (nativeIndex < 0 || nativeIndex >= audioTracks.length) {
+            log.warn('WebOSPlayer: _resolveNativeAudioIndex returned out-of-range index', nativeIndex, 'for listIndex', listIndex, '— firing audiotrackswitchfailed');
+            this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
+            return;
+        }
+
         for (let i = 0; i < audioTracks.length; i++) {
             audioTracks[i].enabled = (i === nativeIndex);
         }
@@ -1374,6 +1381,9 @@ export class WebOSPlayer {
             // Exclude DTS / DCA audio formats if disabled in settings
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
 
+            // Exclude FLAC / ALAC audio formats if disabled in settings
+            if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) return false;
+
             return true;
         });
 
@@ -1415,33 +1425,34 @@ export class WebOSPlayer {
      * @private
      */
     _resolveNativeAudioIndex(listIndex, nativeTracks) {
-        // ====================================================================
-        // Fast-path: Skip resolution if native track list is empty or single
-        // track where selection ambiguity is impossible.
-        // ====================================================================
-        if (!nativeTracks || nativeTracks.length <= 1) {
-            log.info('[AudioDebug] _resolveNativeAudioIndex fast-path return:', listIndex);
-            return listIndex;
+        // Guard: empty native track collection exposed by WebOS Chromium
+        if (!nativeTracks || nativeTracks.length === 0) {
+            log.warn('[AudioDebug] WebOSPlayer._resolveNativeAudioIndex: nativeTracks is empty');
+            return -1;
+        }
+
+        // Fast-path: single native track — no ambiguity possible
+        if (nativeTracks.length === 1) {
+            log.info('[AudioDebug] WebOSPlayer._resolveNativeAudioIndex: single native track fast-path → 0');
+            return 0;
         }
 
         // ====================================================================
-        // Rebuild the Jellyfin-visible audio stream list
-        // Apply the same codec filters used by JellyfinPlayer._getBackendAudioTracks
-        // to align the index mapping precisely with the client UI presentation.
+        // Gather Jellyfin-visible audio streams from current media source
+        // Uses the same codec filters as JellyfinPlayer._getBackendAudioTracks
         // ====================================================================
         const mediaStreams = this._currentPlayOptions?.mediaSource?.MediaStreams || [];
         const jellyfinAudioStreams = mediaStreams.filter(s => {
             if (s.Type !== 'Audio') return false;
             const codec = (s.Codec || '').toLowerCase();
-
-            // Exclude passthrough formats that the WebOS system cannot decode natively
             if (codec === 'truehd' && !isTrueHdSupported()) return false;
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
+            if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) return false;
             return true;
         });
 
         // ====================================================================
-        // Temporary OSD and Playback Audio Debugging Logs
+        // Diagnostic logging
         // ====================================================================
         log.info('[AudioDebug] WebOSPlayer._resolveNativeAudioIndex:');
         log.info('  - listIndex:', listIndex);
@@ -1456,28 +1467,58 @@ export class WebOSPlayer {
             log.info(`    * [${i}] id: ${t.id}, language: ${t.language}, label: ${t.label}, enabled: ${t.enabled}`);
         }
 
-        // ====================================================================
-        // Guard check: Ensure target listIndex falls within active streams range.
-        // If not, return the requested index unchanged.
-        // ====================================================================
+        // Guard: ensure listIndex points to a valid Jellyfin audio stream
         const targetStream = jellyfinAudioStreams[listIndex];
         if (!targetStream) {
-            log.warn('[AudioDebug] WebOSPlayer: _resolveNativeAudioIndex — listIndex out of range, returning as-is');
-            return listIndex;
+            log.warn('[AudioDebug] WebOSPlayer: listIndex out of range, returning clamped fallback');
+            return Math.min(Math.max(0, listIndex), nativeTracks.length - 1);
         }
 
-        log.info('  - targetStream Index:', targetStream.Index, 'Language:', targetStream.Language);
+        log.info('  - targetStream Index:', targetStream.Index, 'Language:', targetStream.Language, 'Codec:', targetStream.Codec);
 
         // ====================================================================
-        // Primary: ISO 639-2/T/B to BCP-47 / ISO 639-1 Language Tag Matching
-        // WebOS natively exposes 2-letter codes (e.g. "ja", "en", "de") while
-        // Jellyfin feeds 3-letter ISO codes (e.g. "jpn", "eng", "ger").
-        // This translator maps 3-letter codes to their 2-letter equivalents.
+        // Strategy 1: Codec-Aware Playable Stream Mapping (PRIMARY)
+        //
+        // When the native player exposes fewer tracks than the Jellyfin-filtered
+        // list, additional codecs were silently dropped by the browser demuxer.
+        // Build a "playable" subset by filtering out suspect codecs, verify the
+        // count matches native tracks, then use the filtered list for mapping.
+        //
+        // This MUST run before language matching because language matching alone
+        // cannot disambiguate when all tracks share the same language but some
+        // codecs were dropped (e.g. 4 English tracks → 3 native tracks).
+        // ====================================================================
+        if (nativeTracks.length !== jellyfinAudioStreams.length) {
+            const SUSPECT_CODECS = ['flac', 'alac', 'truehd', 'dts', 'dca'];
+            const isUnsupportedCodec = (codec) => {
+                const c = (codec || '').toLowerCase();
+                return SUSPECT_CODECS.some(sc => c === sc || c.includes(sc));
+            };
+
+            const playableStreams = jellyfinAudioStreams.filter(s => !isUnsupportedCodec(s.Codec));
+            log.info(`  - Codec-aware mapping: ${jellyfinAudioStreams.length} jellyfin → ${playableStreams.length} playable (native: ${nativeTracks.length})`);
+
+            if (playableStreams.length === nativeTracks.length) {
+                const targetCodec = (targetStream.Codec || '').toLowerCase();
+
+                if (isUnsupportedCodec(targetCodec)) {
+                    log.info(`[AudioDebug] WebOSPlayer: Target codec "${targetCodec}" is unsupported by native player → returning -1`);
+                    return -1;
+                }
+
+                const nativeIdx = playableStreams.findIndex(s => s.Index === targetStream.Index);
+                if (nativeIdx >= 0) {
+                    log.info(`[AudioDebug] WebOSPlayer: Codec-aware mapping resolved listIndex ${listIndex} → native index ${nativeIdx}`);
+                    return nativeIdx;
+                }
+            }
+        }
+
+        // ====================================================================
+        // Strategy 2: Language-Tag Matching (ISO 639-2 ↔ BCP-47 / ISO 639-1)
         // ====================================================================
         const targetLang = (targetStream.Language || '').toLowerCase().trim();
         if (targetLang && targetLang !== 'und' && targetLang !== 'unknown') {
-
-            // ISO 639-2 (3-letter) -> ISO 639-1 (2-letter) Mapping Dictionary
             const ISO_MAP = {
                 'eng': 'en', 'zho': 'zh', 'chi': 'zh', 'spa': 'es', 'fre': 'fr', 'fra': 'fr',
                 'ger': 'de', 'deu': 'de', 'jpn': 'ja', 'kor': 'ko', 'rus': 'ru', 'ita': 'it',
@@ -1488,9 +1529,8 @@ export class WebOSPlayer {
                 'hrv': 'hr', 'srp': 'sr', 'slv': 'sl', 'est': 'et', 'lav': 'lv', 'lit': 'lt'
             };
 
-            // Normalize helper to clean and map inputs
             const normalize = (l) => {
-                const clean = l.toLowerCase().trim();
+                const clean = (l || '').toLowerCase().trim();
                 return ISO_MAP[clean] || clean;
             };
 
@@ -1498,40 +1538,25 @@ export class WebOSPlayer {
             const nativeMatches = [];
             log.info(`  - Lang match attempt: targetLang = ${targetLang}, normalized = ${normTarget}`);
 
-            // Scan native tracks and accumulate matches
             for (let i = 0; i < nativeTracks.length; i++) {
                 const nativeLang = (nativeTracks[i].language || '').toLowerCase().trim();
-                if (!nativeLang) {
-                    log.info(`    * Native track [${i}] language is empty, skipping`);
-                    continue;
-                }
-
+                if (!nativeLang) continue;
                 const normNative = normalize(nativeLang);
-                log.info(`    * Native track [${i}] language = ${nativeLang}, normalized = ${normNative}`);
-
-                // Compare values using strict equality and substring matching
                 if (normNative === normTarget || normNative.startsWith(normTarget) || normTarget.startsWith(normNative)) {
-                    log.info(`      -> Match found at index ${i}`);
                     nativeMatches.push(i);
                 }
             }
 
-            // Single unique match found - return immediately
             if (nativeMatches.length === 1) {
-                log.info('[AudioDebug] WebOSPlayer: Resolved native audio index by language match', listIndex, '→', nativeMatches[0]);
+                log.info('[AudioDebug] WebOSPlayer: Resolved native audio index by unique language match', listIndex, '→', nativeMatches[0]);
                 return nativeMatches[0];
             }
 
-            // Multiple matches for the same language - resolve by stream index order
             if (nativeMatches.length > 1) {
-                log.info('  - Multiple matches found, disambiguating...');
-                const sameLanguageStreams = jellyfinAudioStreams.filter(
-                    s => normalize(s.Language || '') === normTarget
-                );
+                const sameLanguageStreams = jellyfinAudioStreams.filter(s => normalize(s.Language || '') === normTarget);
                 const posWithinLang = sameLanguageStreams.findIndex(s => s.Index === targetStream.Index);
-                log.info('    * sameLanguageStreams count:', sameLanguageStreams.length, 'posWithinLang:', posWithinLang);
                 if (posWithinLang >= 0 && posWithinLang < nativeMatches.length) {
-                    log.info('[AudioDebug] WebOSPlayer: Disambiguated multi-track same language match', listIndex, '→', nativeMatches[posWithinLang]);
+                    log.info('[AudioDebug] WebOSPlayer: Disambiguated same language match', listIndex, '→', nativeMatches[posWithinLang]);
                     return nativeMatches[posWithinLang];
                 }
             }
@@ -1540,43 +1565,35 @@ export class WebOSPlayer {
         }
 
         // ====================================================================
-        // Secondary: Deterministic Default-Reordering Fallback Mapping
-        // Runs when language headers are missing/und, or when matching failed.
+        // Strategy 3: Deterministic Default-Reordering Fallback
         // WebOS moves the container's default audio track to native index 0.
-        // The remaining non-default tracks shift down in relative container order.
         // ====================================================================
-        // Fetch the container's actual default audio stream index instead of
-        // the server-preferred DefaultAudioStreamIndex. WebOS's native player
-        // shifts the file's container-defined default track to index 0.
         const defaultStreamIndex = this._getContainerDefaultAudioIndex(this._currentPlayOptions?.mediaSource);
         log.info('  - Default reordering attempt: defaultStreamIndex =', defaultStreamIndex);
         if (defaultStreamIndex !== undefined && defaultStreamIndex !== null) {
-            // Find default track list position in Jellyfin list
             const defaultListIndex = jellyfinAudioStreams.findIndex(s => s.Index === defaultStreamIndex);
             log.info('    * defaultListIndex in jellyfin streams =', defaultListIndex);
 
             if (defaultListIndex !== -1) {
-                // If requested track is the default one, map directly to native index 0
                 if (listIndex === defaultListIndex) {
-                    log.info('[AudioDebug] WebOSPlayer: Resolved native index via default stream reordering (target is default) → 0');
+                    log.info('[AudioDebug] WebOSPlayer: Resolved via default reordering (target is default) → 0');
                     return 0;
                 }
 
-                // If target is non-default, shift it down to skip the default slot.
-                // Tracks before default list position remain listIndex + 1.
-                // Tracks after default list position map to listIndex.
                 const resolvedIndex = listIndex < defaultListIndex ? listIndex + 1 : listIndex;
-                log.info('[AudioDebug] WebOSPlayer: Resolved native index via default stream reordering (target is non-default)', listIndex, '→', resolvedIndex);
-                return resolvedIndex;
+                if (resolvedIndex >= 0 && resolvedIndex < nativeTracks.length) {
+                    log.info('[AudioDebug] WebOSPlayer: Resolved via default reordering (non-default)', listIndex, '→', resolvedIndex);
+                    return resolvedIndex;
+                }
             }
         }
 
         // ====================================================================
-        // Ultimate Fallback: Direct positional indexing
-        // Only hit if all other resolution strategies fail.
+        // Strategy 4: Positional Fallback — clamped to native track bounds
         // ====================================================================
-        log.warn('[AudioDebug] WebOSPlayer: Ultimate fallback used for audio index resolution', listIndex);
-        return listIndex;
+        const fallbackIndex = Math.min(Math.max(0, listIndex), nativeTracks.length - 1);
+        log.info('[AudioDebug] WebOSPlayer: Clamped positional fallback used', listIndex, '→', fallbackIndex);
+        return fallbackIndex;
     }
 
     /**
