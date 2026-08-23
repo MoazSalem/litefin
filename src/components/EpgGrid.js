@@ -14,6 +14,7 @@ import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
 import { imageService } from '../utils/ImageService.js';
+import { escapeHtml } from '../utils/Utils.js';
 import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('EpgGrid');
@@ -296,11 +297,11 @@ class EpgGrid {
             }
             <div class="epg-channel-logo-fallback grad-${fallbackData.gradNum}" 
                  style="${logoUrl ? 'display: none;' : 'display: flex;'}">
-                ${fallbackData.initials}
+                ${escapeHtml(fallbackData.initials)}
             </div>
             <div class="epg-channel-info">
-                <div class="epg-channel-name">${channel.Name}</div>
-                <div class="epg-channel-number">${channel.Number || ''}</div>
+                <div class="epg-channel-name">${escapeHtml(channel.Name)}</div>
+                <div class="epg-channel-number">${escapeHtml(channel.Number || '')}</div>
             </div>
         `;
         this.channelsTrack.appendChild(channelEl);
@@ -346,7 +347,7 @@ class EpgGrid {
                 <div class="epg-program-content">
                     <div class="epg-program-title">
                         <span class="epg-program-prefix hidden">‹</span>
-                        <span class="title-text">${program.Name}</span>
+                        <span class="title-text">${escapeHtml(program.Name)}</span>
                     </div>
                     <div class="epg-program-time">${this._formatProgramTime(program)}</div>
                 </div>
