@@ -129,6 +129,13 @@ export class TizenAVPlayer {
         // Initial buffer gate timeout ID (3s safety fallback)
         this._initialBufferTimeoutId = null;
 
+        // Post-seek buffer fallback timeout ID. If onbufferingstart fires during
+        // a seek but onbufferingcomplete never arrives (common when the seek was
+        // performed while paused), _bufferingComplete stays false and playback
+        // resume is permanently blocked. This timer mirrors the initial-buffer
+        // fallback and forces the gate open after a short window.
+        this._seekBufferTimeoutId = null;
+
         // Check Tizen availability: prioritize webapis (Samsung Hardware API) over tizen (Universal API)
         // On most Samsung TVs, webapis.avplay is the direct hardware interface.
         const avplay = window.webapis?.avplay || window.tizen?.avplay || null;
@@ -638,6 +645,10 @@ export class TizenAVPlayer {
                 if (this._initialBufferTimeoutId) {
                     clearTimeout(this._initialBufferTimeoutId);
                     this._initialBufferTimeoutId = null;
+                }
+                if (this._seekBufferTimeoutId !== null) {
+                    clearTimeout(this._seekBufferTimeoutId);
+                    this._seekBufferTimeoutId = null;
                 }
                 log.info('Buffering complete (network threshold reached)');
                 this._bufferingComplete = true;
@@ -1156,6 +1167,12 @@ export class TizenAVPlayer {
                     this._avplay.pause();
                     this._pendingPause = false;
                     log.info('_checkNativePlay(): applied deferred pause (post-seek/buffer)');
+                } else if (state === 'PAUSED') {
+                    // Already paused natively — the deferred pause is satisfied.
+                    // Clear the flag so it doesn't linger and block future play()
+                    // attempts once the user decides to resume.
+                    this._pendingPause = false;
+                    log.debug('_checkNativePlay(): deferred pause already satisfied (state=PAUSED)');
                 }
             } catch (e) {
                 log.warn('Deferred pause failed (will retry):', e.message || e);
@@ -1271,6 +1288,25 @@ export class TizenAVPlayer {
                 log.error('Double-Gate play() failed:', e.message || e);
             }
         } else if (!this._isTizenPlaying) {
+            // ── Stale-Buffer Recovery ──────────────────────────────────────────
+            // _bufferingComplete can be left false by a seek performed while the
+            // pipeline was paused: onbufferingstart fires but onbufferingcomplete
+            // may never arrive in a paused decoder, so the gate stays shut and
+            // resume is blocked. If the user intends to play and the native layer
+            // reports a stable PLAYING/PAUSED state, trust AVPlay over the heuristic:
+            // a stable state means the decoder demonstrably has data ready to render,
+            // so force the gate open and re-run the play attempt.
+            if (this._isPlaying && this._isPrepared && !this._bufferingComplete && this._avplay) {
+                let avplayState = 'UNKNOWN';
+                try { avplayState = this._avplay.getState(); } catch (_) {}
+                if (avplayState === 'PLAYING' || avplayState === 'PAUSED') {
+                    log.warn(`_checkNativePlay(): buffer gate stale (state='${avplayState}') — forcing buffering complete`);
+                    this._bufferingComplete = true;
+                    this._isNativeBuffering = false;
+                    this._checkNativePlay();
+                    return;
+                }
+            }
             log.debug(`Double-Gate pending: Playing=${this._isPlaying}, Prep=${this._isPrepared}, Buff=${this._bufferingComplete}`);
         }
     }
@@ -1621,6 +1657,10 @@ export class TizenAVPlayer {
             clearTimeout(this._initialBufferTimeoutId);
             this._initialBufferTimeoutId = null;
         }
+        if (this._seekBufferTimeoutId !== null) {
+            clearTimeout(this._seekBufferTimeoutId);
+            this._seekBufferTimeoutId = null;
+        }
 
         // Unconditionally cancel the seek safety timer on stop to avoid fires
         // referencing a dead, stopped, or closed player instance
@@ -1876,6 +1916,29 @@ export class TizenAVPlayer {
                         this._bufferingCompleteDuringSeek = false;
                     }
 
+                    // ── Post-Seek Buffer Fallback ─────────────────────────────────
+                    // If onbufferingstart fired during the seek but onbufferingcomplete
+                    // never arrived, _bufferingComplete stays false forever and resume
+                    // is permanently blocked. This commonly happens when the seek was
+                    // performed while paused — a paused decoder may never reach the
+                    // network buffer-full threshold that triggers onbufferingcomplete.
+                    // Mirror the initial-buffer fallback: force the gate open after a
+                    // short window so playback can resume.
+                    if (this._isNativeBuffering) {
+                        if (this._seekBufferTimeoutId !== null) {
+                            clearTimeout(this._seekBufferTimeoutId);
+                        }
+                        this._seekBufferTimeoutId = setTimeout(() => {
+                            this._seekBufferTimeoutId = null;
+                            if (this._avplay && this._isPrepared && !this._bufferingComplete) {
+                                log.warn('seek(): buffering never completed after seek — forcing buffering complete');
+                                this._bufferingComplete = true;
+                                this._isNativeBuffering = false;
+                                this._checkNativePlay();
+                            }
+                        }, 2500);
+                    }
+
                     // ── Unmute native subtitles post-seek ─────────────────────────
                     if (hasActiveNativeSubtitle && this._avplay) {
                         try {
@@ -1900,7 +1963,10 @@ export class TizenAVPlayer {
                     } else if (pendingOp === 'play') {
                         this._isPlaying = true;
                         this._isTizenPlaying = false;
-                        if (this._isPrepared && this._bufferingComplete) {
+                        // _checkNativePlay() self-heals a stale _bufferingComplete
+                        // when AVPlay reports a stable state, so no need to gate
+                        // on the flag here — the fallback timer covers the READY case.
+                        if (this._isPrepared) {
                             this._checkNativePlay();
                         }
                         log.debug('seek(): applied queued play after seek');
@@ -1962,7 +2028,10 @@ export class TizenAVPlayer {
                     } else if (pendingOp === 'play') {
                         this._isPlaying = true;
                         this._isTizenPlaying = false;
-                        if (this._isPrepared && this._bufferingComplete) {
+                        // _checkNativePlay() self-heals a stale _bufferingComplete
+                        // when AVPlay reports a stable state, so no need to gate
+                        // on the flag here — the fallback timer covers the READY case.
+                        if (this._isPrepared) {
                             this._checkNativePlay();
                         }
                     }
