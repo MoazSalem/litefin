@@ -10,6 +10,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { imageService } from '../utils/ImageService.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -423,6 +424,27 @@ class LibraryPage extends Page {
                     const sectionConfig = focusManager.getSectionConfig(sectionId);
                     const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
 
+                    // If the saved focus item is beyond the first rendered chunk,
+                    // expand the rendered window so the card element exists in the
+                    // DOM and can be found by querySelector. Without this, focus
+                    // restoration silently fails for items past the initial chunk.
+                    const grid = this.$('#library-grid');
+                    if (grid && this.state.items && this.state._gridColumns) {
+                        const itemIndex = this.state.items.findIndex((item) => item.Id === targetId);
+                        if (itemIndex >= 0) {
+                            const columns = this.state._gridColumns;
+                            while (
+                                itemIndex >= this.state.gridWindowEnd &&
+                                this.state.gridWindowEnd < this.state.items.length
+                            ) {
+                                this._appendGridChunk(grid, this.state.items, columns);
+                            }
+                            while (itemIndex < this.state.gridWindowStart && this.state.gridWindowStart > 0) {
+                                this._prependGridChunk(grid, this.state.items, columns);
+                            }
+                        }
+                    }
+
                     const savedElement = sectionContainer.querySelector(
                         `[data-item-id="${targetId}"], [data-id="${targetId}"], [id="${targetId}"]`
                     );
@@ -778,15 +800,23 @@ class LibraryPage extends Page {
         this.$('#library-tabs')?.removeEventListener('click', this._onTabClick);
         this.$('#alpha-picker')?.removeEventListener('click', this._onAlphaClick);
 
-        // Clean up the progressive grid DOM trigger listener to prevent leaks
+        // Clean up the merged grid evaluation listeners
         if (this._onGridFocusChanged) {
             eventBus.off('focus:changed', this._onGridFocusChanged);
             this._onGridFocusChanged = null;
         }
-        if (this._gridFocusFrameId) {
-            cancelAnimationFrame(this._gridFocusFrameId);
-            this._gridFocusFrameId = null;
+        if (this._onGridScroll) {
+            const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
+            scrollContainer?.removeEventListener('scroll', this._onGridScroll);
+            this._onGridScroll = null;
         }
+        if (this._gridEvalFrameId) {
+            cancelAnimationFrame(this._gridEvalFrameId);
+            this._gridEvalFrameId = null;
+        }
+        this._gridEvalPending = false;
+        this._gridFocusElement = null;
+        this._gridScrollTop = null;
     }
 
     // ========================================================================
@@ -912,6 +942,13 @@ class LibraryPage extends Page {
             grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode, shouldHideLabels);
         }
 
+        // Align limit to grid columns so the last rendered row is always full.
+        // Avoids visual partial-row gaps when navigating the grid via D-pad.
+        const alignCols = this.state.gridMode === 'dynamic' ? this.state.gridColumns : 0;
+        if (alignCols > 0) {
+            this.state.limit = Math.ceil(this.state.limit / alignCols) * alignCols;
+        }
+
         try {
             const params = {
                 SortBy: this.state.sortBy,
@@ -919,7 +956,7 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating',
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
             };
@@ -1812,9 +1849,13 @@ class LibraryPage extends Page {
         // Custom layout requests from deep links (Music, TV Channels, Artists, People)
         const squareTypes = ['TvChannel', 'MusicAlbum', 'MusicArtist,Artist', 'MusicArtist', 'Audio'];
         if (
-            this.state.libraryInfo?.CollectionType === 'music' ||
-            this.state.libraryInfo?.CollectionType === 'homevideos' ||
             this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos'
+        ) {
+            return 'backdrop';
+        }
+        if (
+            this.state.libraryInfo?.CollectionType === 'music' ||
             (this.params.includeItemTypes && squareTypes.includes(this.params.includeItemTypes))
         ) {
             // For thumb/banner, use backdrop if available; fall back gracefully
@@ -2046,6 +2087,10 @@ class LibraryPage extends Page {
         const grid = this.$('#library-grid');
         if (!grid) return;
 
+        // Invalidate the CardRenderer HTML cache — items or view options may
+        // have changed since the last render (new data, view mode switch, etc.)
+        CardRenderer.clearCache();
+
         // Cleanup: Hide horizontal rows if they exist and restore grid
         const rowsContainer = this.$('#library-rows');
         if (rowsContainer) {
@@ -2056,12 +2101,14 @@ class LibraryPage extends Page {
         const pagination = this.$('#library-pagination');
         if (pagination) pagination.style.display = ''; // Restore pagination
 
-        // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks)
-        // These viewTypes always force landscape regardless of user view mode preference.
+        // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks, Music Videos, or Home Videos)
+        // These viewTypes/collections always force landscape regardless of user view mode preference.
         const isLandscape =
             this.state.viewType === 'Episodes' ||
             this.state.viewType === 'Upcoming' ||
-            this.state.viewType === 'Networks';
+            this.state.viewType === 'Networks' ||
+            this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos';
 
         // --------------------------------------------------------------------
         // Apply the view mode CSS modifier class to the grid container.
@@ -2256,9 +2303,8 @@ class LibraryPage extends Page {
         //
         // Chunk sizing: (columns × 5 rows) gives ~2 visible screens worth of content.
         // ====================================================================
-        const columns = this.state.gridColumns || this._getDefaultColumnsForMode(
-            isLandscape ? 'thumb' : this.state.viewMode
-        );
+        const columns =
+            this.state.gridColumns || this._getDefaultColumnsForMode(isLandscape ? 'thumb' : this.state.viewMode);
 
         // Store rendering context + column count on state so _appendGridChunk
         // and _prependGridChunk can access them without re-deriving
@@ -2268,11 +2314,17 @@ class LibraryPage extends Page {
             cardWidth
         };
         this.state._gridColumns = columns;
+        grid.dataset.gridColumns = columns;
 
         // Reset the sliding window — a fresh _renderGrid always starts from zero
         this.state.gridWindowStart = 0;
         this.state.gridWindowEnd = 0;
         this.state.gridCardRowHeight = null; // Force re-measure on next append
+
+        // Reset direction cursors so stale positions from a previous page render
+        // don't immediately fire spurious append/prepend on the fresh grid
+        this._lastFocusItemIndex = 0;
+        this._lastGridScrollTop = 0;
 
         // Clear the grid and inject the spacer that maintains scroll position
         // when top rows are evicted from the DOM. Height starts at 0px.
@@ -2280,6 +2332,13 @@ class LibraryPage extends Page {
 
         // Render the first chunk immediately — this is what the user sees on load
         this._appendGridChunk(grid, items, columns);
+
+        // Eagerly measure row height while layout is already being computed
+        // from the initial render. This caches gridCardRowHeight before any
+        // user interaction, so _syncGridWindow and _prependGridChunk never
+        // need to force a synchronous layout reflow by reading offsetTop
+        // during a focus change or scroll event on the hot path.
+        this._measureGridRowHeight(grid, columns);
 
         // Lazy Load Images (observe the initial chunk)
         lazyLoader.observe(grid);
@@ -2322,79 +2381,95 @@ class LibraryPage extends Page {
             leaveDown: 'library-pagination',
             leaveLeft: 'sidebar',
             selector: '.media-card',
-            scrollOffsetTop: 100
-        });
+            scrollOffsetTop: 100,
 
-        // ====================================================================
-        // PROGRESSIVE DOM TRIGGER — focus:changed listener (Deferred)
-        // ====================================================================
-        // Fires after every focus change anywhere in the page. We filter to
-        // cards inside the library-grid and check if we are close enough to
-        // the bottom of the rendered DOM to warrant adding the next chunk.
-        //
-        // PERFORMANCE: Evaluation and DOM chunk appends/prepends are deferred
-        // to requestAnimationFrame so that DOM layout reads (_measureGridRowHeight)
-        // and chunk insertions do not execute synchronously inside the keydown/
-        // focus transition stack, allowing the scroll animation to launch smoothly.
-        // ====================================================================
-        if (this._onGridFocusChanged) {
-            eventBus.off('focus:changed', this._onGridFocusChanged);
-            if (this._gridFocusFrameId) {
-                cancelAnimationFrame(this._gridFocusFrameId);
-                this._gridFocusFrameId = null;
-            }
-        }
-        this._onGridFocusChanged = (element) => {
-            // Only act on media-cards inside this grid
-            if (!element || !grid.contains(element)) return;
-            if (!element.classList.contains('media-card')) return;
+            // =================================================================
+            // VIRTUAL GRID EDGE GUARD
+            // =================================================================
+            // When the user presses UP on the first rendered DOM row, FocusManager
+            // would normally fire leaveUp because no card exists above in the DOM.
+            // But if gridWindowStart > 0 there ARE real items above — they were
+            // just evicted from the DOM to keep the node count small.
+            //
+            // We intercept the UP move here (before FocusManager acts on it),
+            // prepend the missing rows back into the DOM, and return false.
+            // FocusManager then re-queries the grid (cache was invalidated by
+            // _hookGridCards) and finds the card directly above — allowing it
+            // to move focus there naturally, just as if the rows had always been
+            // in the DOM. The result: no accidental focus jumps to tabs/controls
+            // while holding UP through a windowed grid.
+            // =================================================================
+            onMove: (direction, focusedElement) => {
+                if (direction !== 'up') return false;
+                if (this.state.gridWindowStart <= 0) return false;
+                if (!focusedElement) return false;
 
-            // ================================================================
-            // DEFERRED GRID CHUNK EVALUATION
-            // ================================================================
-            // Cancel any pending frame request from rapid D-pad key holding.
-            // Defer chunk boundary checking and DOM chunking (_appendGridChunk /
-            // _prependGridChunk) to requestAnimationFrame so layout measurements
-            // and DOM mutations do not interrupt the focus transition paint or
-            // scroll animation setup on the main thread.
-            // ================================================================
-            if (this._gridFocusFrameId) {
-                cancelAnimationFrame(this._gridFocusFrameId);
-            }
-
-            this._gridFocusFrameId = requestAnimationFrame(() => {
-                this._gridFocusFrameId = null;
-                if (!grid || !document.contains(grid)) return;
-
-                // Find DOM index of the focused card (fast linear scan — window is small)
+                // Are we on the FIRST rendered row?
                 const allCards = grid.querySelectorAll('.media-card');
                 let domIndex = -1;
                 for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === element) { domIndex = i; break; }
+                    if (allCards[i] === focusedElement) {
+                        domIndex = i;
+                        break;
+                    }
                 }
-                if (domIndex === -1) return;
+                // domIndex < currentColumns means the card is in the first row
+                if (domIndex < 0 || domIndex >= currentColumns) return false;
 
-                // The card's index in the full items array
-                const itemIndex = this.state.gridWindowStart + domIndex;
+                // Prepend the evicted rows synchronously. _hookGridCards inside
+                // _prependGridChunk calls focusManager.invalidateCache() so
+                // FocusManager will re-query after we return false.
+                this._prependGridChunk(grid, this.state.items, currentColumns);
 
-                // -----------------------------------------------------------------------
-                // DOWNWARD TRIGGER: within 2 rows of the bottom rendered boundary
-                // -----------------------------------------------------------------------
-                const appendThreshold = this.state.gridWindowEnd - (currentColumns * 2);
-                if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
-                    this._appendGridChunk(grid, this.state.items, currentColumns);
-                }
+                // Return false — FocusManager proceeds with its UP move,
+                // re-queries the grid, and lands on the card above correctly.
+                return false;
+            }
+        });
 
-                // -----------------------------------------------------------------------
-                // UPWARD TRIGGER: within 2 rows of the top rendered boundary
-                // -----------------------------------------------------------------------
-                const prependThreshold = this.state.gridWindowStart + (currentColumns * 2);
-                if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
-                    this._prependGridChunk(grid, this.state.items, currentColumns);
-                }
-            });
+        // ====================================================================
+        // MERGED PROGRESSIVE DOM TRIGGER — shared evaluation engine
+        // ====================================================================
+        // Combines the two former evaluation paths (focus:changed for D-pad,
+        // native scroll for mouse/magic remote) into a SINGLE rAF-backed
+        // evaluation point. Both paths write their latest input to shared
+        // state and call _scheduleGridEval(), which guarantees at most one
+        // evaluation per frame regardless of how many input events fire.
+        //
+        // This eliminates:
+        //   1. Double append/prepend when both scroll and focus fire in
+        //      the same frame (e.g. scroll ends → focus settles on a card)
+        //   2. Duplicate _syncGridWindow calls operating on stale DOM
+        //   3. Separate rAF IDs competing for the same work
+        // ====================================================================
+        this._gridEvalPending = false;
+        this._gridEvalFrameId = null;
+        this._gridFocusElement = null;
+        this._gridScrollTop = null;
+
+        if (this._onGridFocusChanged) {
+            eventBus.off('focus:changed', this._onGridFocusChanged);
+        }
+        this._onGridFocusChanged = (element) => {
+            if (!element || !grid.contains(element)) return;
+            if (!element.classList.contains('media-card')) return;
+            this._gridFocusElement = element;
+            this._scheduleGridEval();
         };
         eventBus.on('focus:changed', this._onGridFocusChanged);
+
+        const scrollContainer = this.$('#library-scroll-container') || this.el.querySelector('.page-content');
+        if (scrollContainer) {
+            if (this._onGridScroll) {
+                scrollContainer.removeEventListener('scroll', this._onGridScroll);
+            }
+            this._lastGridScrollTop = 0;
+            this._onGridScroll = () => {
+                this._gridScrollTop = scrollContainer.scrollTop;
+                this._scheduleGridEval();
+            };
+            scrollContainer.addEventListener('scroll', this._onGridScroll, { passive: true });
+        }
 
         // Register pagination footer — the grid's leaveDown points here.
         // Without this registration the section is a ghost and focus is silently
@@ -2586,36 +2661,8 @@ class LibraryPage extends Page {
             this._hookGridCards(newCards);
         }
 
-        // -----------------------------------------------------------------------
-        // WINDOW EVICTION — remove rows from the top once we exceed the cap
-        // -----------------------------------------------------------------------
-        const windowRows = Math.ceil((this.state.gridWindowEnd - this.state.gridWindowStart) / columns);
-
-        if (windowRows > MAX_WINDOW_ROWS) {
-            // Measure row height before evicting (cached after first call)
-            const rowHeight = this._measureGridRowHeight(grid, columns);
-            if (rowHeight) {
-                // How many rows we are over the cap
-                const rowsToEvict = windowRows - MAX_WINDOW_ROWS;
-                const cardsToEvict = rowsToEvict * columns;
-
-                // Remove the top N cards (they are directly after the spacer)
-                const allCards = grid.querySelectorAll('.media-card');
-                for (let i = 0; i < Math.min(cardsToEvict, allCards.length); i++) {
-                    allCards[i].remove();
-                }
-
-                // Grow the spacer by exactly the height of the evicted rows.
-                // This keeps the total scroll height and viewport position stable.
-                this.state.gridWindowStart += cardsToEvict;
-                const spacer = grid.querySelector('#grid-top-spacer');
-                if (spacer) {
-                    const newSpacerHeight = Math.floor(this.state.gridWindowStart / columns) * rowHeight;
-                    spacer.style.height = `${newSpacerHeight}px`;
-                }
-            }
-        }
-
+        // Eviction is handled by _syncGridWindow (position-based, one row at a
+        // time, always off-screen) rather than here inside the append operation.
         return this.state.gridWindowEnd < items.length;
     }
 
@@ -2681,24 +2728,272 @@ class LibraryPage extends Page {
         const newCards = Array.from(allCards).slice(0, chunkSize);
         this._hookGridCards(newCards);
 
-        // -----------------------------------------------------------------------
-        // WINDOW EVICTION from the bottom to maintain the cap
-        // -----------------------------------------------------------------------
-        const windowRows = Math.ceil((this.state.gridWindowEnd - this.state.gridWindowStart) / columns);
-        if (windowRows > MAX_WINDOW_ROWS) {
-            const rowsToEvict = windowRows - MAX_WINDOW_ROWS;
-            const cardsToEvict = rowsToEvict * columns;
+        // Eviction from the bottom is handled by _syncGridWindow — same
+        // position-based approach, symmetric to the top eviction.
+        return this.state.gridWindowStart > 0;
+    }
 
-            // Remove the last N cards in the grid
-            const updatedCards = grid.querySelectorAll('.media-card');
-            const totalCards = updatedCards.length;
-            for (let i = totalCards - 1; i >= totalCards - cardsToEvict && i >= 0; i--) {
-                updatedCards[i].remove();
+    /**
+     * =========================================================================
+     * SCHEDULE GRID EVALUATION (shared by focus:changed + scroll)
+     * =========================================================================
+     * Single rAF-backed evaluation point that handles both D-pad navigation
+     * (via _gridFocusElement) and mouse/magic remote scrolling (via
+     * _gridScrollTop). Uses one pending flag + one rAF ID so at most one
+     * evaluation executes per frame, regardless of how many input events fire.
+     *
+     * Both focus:changed and scroll handlers delegate to this method, storing
+     * their latest input on shared state before scheduling. The downstream
+     * _evaluateGrid() reads the most current values from both sources.
+     * =========================================================================
+     */
+    _scheduleGridEval() {
+        if (this._gridEvalPending) return;
+        this._gridEvalPending = true;
+        this._gridEvalFrameId = requestAnimationFrame(() => {
+            this._gridEvalFrameId = null;
+            this._gridEvalPending = false;
+            this._evaluateGrid();
+        });
+    }
+
+    /**
+     * =========================================================================
+     * EVALUATE GRID BOUNDARIES (merged focus + scroll evaluation)
+     * =========================================================================
+     * Runs at most once per frame via _scheduleGridEval(). Evaluates grid
+     * append/prepend boundaries based on the user's current position.
+     *
+     * CRITICAL PRIORITY: If a scroll event is pending (_gridScrollTop is not
+     * null), the SCROLL-based evaluation runs. This is the correct priority
+     * for webOS magic-remote / mouse-wheel users who scroll WITHOUT changing
+     * focus: focus:changed never fires during their scrolling, so focus-based
+     * evaluation alone would never append rows and the grid would appear
+     * stuck at its initial chunk (the reported "only 5 rows" bug).
+     *
+     * When no scroll input is pending, focus-based evaluation (D-pad)
+     * determines the position instead.
+     * =========================================================================
+     */
+    _evaluateGrid() {
+        const grid = this.$('#library-grid');
+        if (!grid || !document.contains(grid)) return;
+
+        const currentColumns = this.state._gridColumns;
+        if (!currentColumns) return;
+
+        const scrollContainer = this.$('#library-scroll-container') || this.el?.querySelector('.page-content');
+        const focusedElement = this._gridFocusElement;
+
+        // ------------------------------------------------------------------
+        // PRIORITY 1: Scroll-based evaluation (pending scroll event)
+        // ------------------------------------------------------------------
+        // Runs whenever a scroll event is pending, regardless of focus state.
+        // This is essential for mouse-wheel / magic-remote scrolling where
+        // focus does not move and focus:changed never fires.
+        if (scrollContainer && this._gridScrollTop !== null) {
+            const scrollTop = this._gridScrollTop;
+            this._gridScrollTop = null; // Consume the scroll input
+
+            const containerHeight = scrollContainer.clientHeight;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const rowHeight = this.state.gridCardRowHeight;
+
+            const scrollingDown = scrollTop > (this._lastGridScrollTop || 0);
+            this._lastGridScrollTop = scrollTop;
+
+            if (scrollingDown) {
+                const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
+                if (distanceFromBottom <= containerHeight * 1.5) {
+                    if (this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                }
+            } else {
+                const spacer = grid.querySelector('#grid-top-spacer');
+                const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+                const distanceFromRenderedTop = scrollTop - spacerHeight;
+                if (this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
+                    this._prependGridChunk(grid, this.state.items, currentColumns);
+                }
             }
-            this.state.gridWindowEnd -= cardsToEvict;
+
+            if (rowHeight) {
+                const spacer = grid.querySelector('#grid-top-spacer');
+                const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+                const scrolledPastRenderedTop = Math.max(0, scrollTop - spacerHeight);
+
+                // ----------------------------------------------------------------
+                // OVERSHOOT GUARD — skip eviction when scrolled past the grid
+                // ----------------------------------------------------------------
+                // When the user presses DOWN from the last grid row, the page
+                // scrolls to reveal the pagination section below the grid.
+                // scrollTop now includes the pagination section's height, pushing
+                // the computed currentRow ABOVE the last real row. _syncGridWindow
+                // would then evict most of the visible grid to match a phantom row
+                // that doesn't exist, causing all UI elements to "disappear".
+                //
+                // We detect this by checking whether the visible grid content (from
+                // the rendered top + scroll offset within it) would exceed the last
+                // item in the array. If the derived row is higher than the last real
+                // row, we know scrollTop has strayed into the pagination/padding zone
+                // and skip _syncGridWindow entirely for this scroll event.
+                // ----------------------------------------------------------------
+                const maxRow = Math.max(0, Math.ceil(this.state.items.length / currentColumns) - 1);
+                const derivedRow =
+                    Math.floor(scrolledPastRenderedTop / rowHeight) +
+                    Math.floor(this.state.gridWindowStart / currentColumns);
+
+                // Only sync window if the derived row is within actual content bounds
+                if (derivedRow <= maxRow) {
+                    this._syncGridWindow(grid, this.state.items, currentColumns, derivedRow);
+                }
+            }
+
+            // Keep the focus-based direction cursor in sync so the next
+            // D-pad move compares against the current position rather than
+            // a stale value from before the scroll.
+            if (focusedElement && grid.contains(focusedElement)) {
+                const allCards = grid.querySelectorAll('.media-card');
+                for (let i = 0; i < allCards.length; i++) {
+                    if (allCards[i] === focusedElement) {
+                        this._lastFocusItemIndex = this.state.gridWindowStart + i;
+                        break;
+                    }
+                }
+            }
+            return;
         }
 
-        return this.state.gridWindowStart > 0;
+        // ------------------------------------------------------------------
+        // PRIORITY 2: Focus-based evaluation (D-pad navigation)
+        // ------------------------------------------------------------------
+        if (focusedElement && grid.contains(focusedElement)) {
+            const allCards = grid.querySelectorAll('.media-card');
+            let domIndex = -1;
+            for (let i = 0; i < allCards.length; i++) {
+                if (allCards[i] === focusedElement) {
+                    domIndex = i;
+                    break;
+                }
+            }
+            if (domIndex >= 0) {
+                const itemIndex = this.state.gridWindowStart + domIndex;
+
+                // Direction isolation: only append when moving down,
+                // only prepend when moving up (prevents oscillation)
+                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
+                this._lastFocusItemIndex = itemIndex;
+
+                if (movingDown) {
+                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
+                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                } else {
+                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
+                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    }
+                }
+
+                const currentRow = Math.floor(itemIndex / currentColumns);
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+            }
+        }
+    }
+
+    /**
+     * =========================================================================
+     * POSITION-BASED GRID WINDOW SYNC
+     * =========================================================================
+     * Called after every D-pad move or scroll event with the current "row" the
+     * user is on (0-indexed from the start of the full items array).
+     *
+     * Computes the ideal window based on fixed lookahead/lookbehind constants:
+     *   ROWS_ABOVE  — rows to keep rendered above the current view
+     *   ROWS_BELOW  — rows to keep rendered below the current view
+     *
+     * By tying eviction to the current position rather than to append/prepend
+     * operations, we get:
+     *   • Top eviction always happens exactly 1 row above the off-screen area
+     *     → completely invisible to the user (it's already scrolled past)
+     *   • No batch eviction of 3 rows at once — always exactly 1 row removed
+     *     per row the user advances
+     *   • Bottom eviction mirrors the same behaviour when scrolling up
+     *
+     * @param {HTMLElement} grid         - The #library-grid container element
+     * @param {Array}       items        - Full items array
+     * @param {number}      columns      - Grid column count
+     * @param {number}      currentRow   - Current row index (0-based) in items[]
+     * =========================================================================
+     */
+    _syncGridWindow(grid, items, columns, currentRow) {
+        if (!grid || !items || !columns) return;
+
+        // -----------------------------------------------------------------------
+        // WINDOW CONSTANTS
+        // -----------------------------------------------------------------------
+        // ROWS_ABOVE: rows to keep rendered above the current row.
+        //   2 rows = ~2 screen-heights of backward buffer. When the user is on
+        //   row N, rows 0..(N-3) are off-screen and safe to evict.
+        //
+        // ROWS_BELOW: rows to keep rendered below the current row.
+        //   5 rows = ~1.5 screen-heights of forward buffer before the next
+        //   _appendGridChunk fires.
+        // -----------------------------------------------------------------------
+        const ROWS_ABOVE = 2;
+        const ROWS_BELOW = 5;
+
+        // Ideal first/last item index in the window
+        const idealStart = Math.max(0, (currentRow - ROWS_ABOVE) * columns);
+        const idealEnd = Math.min(items.length, (currentRow + ROWS_BELOW + 1) * columns);
+
+        // -----------------------------------------------------------------------
+        // TOP EVICTION
+        // -----------------------------------------------------------------------
+        // If the window starts too early (rows are now behind the ROWS_ABOVE
+        // buffer), remove exactly one row at a time so each eviction corresponds
+        // to exactly one row of advancement — invisible because that row is
+        // already above the viewport.
+        // -----------------------------------------------------------------------
+        if (this.state.gridWindowStart < idealStart) {
+            const rowHeight = this._measureGridRowHeight(grid, columns);
+            if (rowHeight) {
+                const cardsToEvict = idealStart - this.state.gridWindowStart;
+                const allCards = grid.querySelectorAll('.media-card');
+                const count = Math.min(cardsToEvict, allCards.length);
+                for (let i = 0; i < count; i++) {
+                    allCards[i].remove();
+                }
+                this.state.gridWindowStart += count;
+
+                // Grow the top spacer by the same pixel amount so the scroll
+                // position is completely undisturbed
+                const spacer = grid.querySelector('#grid-top-spacer');
+                if (spacer) {
+                    spacer.style.height = `${Math.floor(this.state.gridWindowStart / columns) * rowHeight}px`;
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // BOTTOM EVICTION
+        // -----------------------------------------------------------------------
+        // Mirror of the top eviction — removes rendered rows from the bottom
+        // that have fallen outside the ROWS_BELOW buffer when scrolling up.
+        // Also happens invisibly because those rows are below the viewport.
+        // -----------------------------------------------------------------------
+        if (this.state.gridWindowEnd > idealEnd) {
+            const cardsToEvict = this.state.gridWindowEnd - idealEnd;
+            const allCards = grid.querySelectorAll('.media-card');
+            const total = allCards.length;
+            const count = Math.min(cardsToEvict, total);
+            for (let i = total - 1; i >= total - count && i >= 0; i--) {
+                allCards[i].remove();
+            }
+            this.state.gridWindowEnd -= count;
+        }
     }
 
     _renderHorizontalRows(rows) {
@@ -3707,9 +4002,11 @@ class LibraryPage extends Page {
             storage.setItem(`pref:library:gridMode:${this.state.libraryId}`, tempGridMode);
             storage.setItem(`pref:library:gridColumns:${this.state.libraryId}:${tempMode}`, tempColumns);
 
-            // Re-render and reload grid content
-            this._renderGrid(this.state.items);
+            // Re-fetch items with the aligned limit for the new column count,
+            // so every row renders full (no partial last row).
+            this.state.startIndex = 0;
             this._closeModal();
+            this._loadItems();
 
             log.info(
                 `[ViewMode] Applied configuration: Mode=${tempMode}, Grid=${tempGridMode}, Columns=${tempColumns}`

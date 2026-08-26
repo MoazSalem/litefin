@@ -698,6 +698,31 @@ class ScrollController {
         };
 
         // ----------------------------------------------------------------
+        // VERTICAL EPISODE LIST FAST PATH
+        // ----------------------------------------------------------------
+        // For vertical episode list items (e.g. season episodes list & Next Up list),
+        // scroll the page container on EVERY focus change so each focused episode card
+        // is comfortably aligned in the viewport (at 180px top offset).
+        // ----------------------------------------------------------------
+        const isVerticalListCard = element.closest('.episode-row-card, .episode-row, .episode-list-container') || element.classList.contains('episode-row-card');
+        if (isVerticalListCard && pageContent) {
+            const cardEl = element.closest('.episode-row-card') || element;
+            const cardTop = getCumulativeOffsetTop(cardEl, pageContent);
+            const currentScroll = this.getVerticalScroll(pageContent);
+
+            const targetScroll = Math.max(0, cardTop - 180);
+
+            if (Math.abs(targetScroll - currentScroll) > 5) {
+                this.smoothScrollTo(
+                    pageContent,
+                    targetScroll,
+                    options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL
+                );
+            }
+            return;
+        }
+
+        // ----------------------------------------------------------------
         // Determine if we should use row-based vertical scrolling
         // Row scroll aligns the entire .media-row to a top offset
         // ----------------------------------------------------------------

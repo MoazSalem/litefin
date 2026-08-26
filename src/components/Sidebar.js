@@ -760,9 +760,11 @@ class Sidebar extends Component {
         const expandedColorPref = storage.getItem('pref:expandedSidebarColor') || 'theme';
         this.el.classList.toggle('transparent-collapsed', colorPref === 'transparent');
         this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');
+        this.el.classList.toggle('tinted-semi-collapsed', colorPref === 'tinted-semi');
         this.el.classList.toggle('black-collapsed', colorPref === 'black');
         this.el.classList.toggle('transparent-expanded', expandedColorPref === 'transparent');
         this.el.classList.toggle('semi-transparent-expanded', expandedColorPref === 'semi');
+        this.el.classList.toggle('tinted-semi-expanded', expandedColorPref === 'tinted-semi');
         this.el.classList.toggle('black-expanded', expandedColorPref === 'black');
     }
 

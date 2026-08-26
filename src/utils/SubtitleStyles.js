@@ -121,14 +121,12 @@ export function getTextStyles(isHdr = false) {
 
     const borderWidth = PlayerSettings.get('subtitleBorderWidth') ?? 3;
     const borderPx = `${borderWidth}px`;
+    const borderOpacity = PlayerSettings.get('subtitleBorderOpacity') ?? 100;
 
-    // Generate valid RGBA for shadow and highlight (for 3D effects).
-    // Special case: 'border' mode forces 100% opacity for the outline,
-    // but we don't want to overwrite the user's stored 'subtitleDropShadowOpacity'
-    // for when they switch back to other shadow modes.
-    const effectiveOpacity = shadow === 'border' ? 100 : shadowOpacity;
-    const shadowColor = _hexToRgba(shadowColorHex, effectiveOpacity);
-    const highlightColor = _hexToRgba('#ffffff', effectiveOpacity); // Keep highlight white but respect opacity
+    // Generate valid RGBA for shadow, border, and highlight (for 3D effects).
+    const borderShadowColor = _hexToRgba(shadowColorHex, borderOpacity);
+    const shadowColor = _hexToRgba(shadowColorHex, shadowOpacity);
+    const highlightColor = _hexToRgba('#ffffff', shadowOpacity); // Keep highlight white but respect opacity
 
     switch (shadow) {
         case 'heavy':
@@ -158,9 +156,18 @@ export function getTextStyles(isHdr = false) {
             // Solid border logic using -webkit-text-stroke.
             // Using 'paint-order: stroke fill' ensures the border stays behind the text
             // so it doesn't thin out the glyphs even at high widths.
-            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${shadowColor}` });
+            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
             styles.push({ name: 'paintOrder', value: 'stroke fill' });
             styles.push({ name: 'textShadow', value: 'none' });
+            break;
+        case 'uniform_border':
+            // Combines stroke-based border outline with uniform drop shadow blur.
+            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
+            styles.push({ name: 'paintOrder', value: 'stroke fill' });
+            styles.push({
+                name: 'textShadow',
+                value: `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`
+            });
             break;
         case 'none':
             styles.push({ name: 'textShadow', value: 'none' });

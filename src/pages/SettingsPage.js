@@ -32,6 +32,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('SettingsPage');
 
@@ -1078,8 +1079,33 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                                <!-- Performance Tweaks Section -->
+                <!-- Performance Tweaks Section -->
                 <h3 class="setting-section-title" data-i18n="PerformanceTweaks">${i18n.t('PerformanceTweaks') || 'Performance Tweaks'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelUseBatchLatestPlugin">${i18n.t('LabelUseBatchLatestPlugin') || 'Use Plugin for Home Libraries'}</span>
+                        <span class="setting-description" data-i18n="UseBatchLatestPluginDescription">${i18n.t('UseBatchLatestPluginDescription') || 'Fetch all home screen library rows in a single batched HTTP request via the Litefin plugin. Improves home page load speed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:useBatchLatestPlugin') !== 'false' ? 'active' : ''}" 
+                                id="toggle-use-batch-latest-plugin" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UseItemsForSearch">${i18n.t('UseItemsForSearch') || 'Use Items API for Search'}</span>
+                        <span class="setting-description" data-i18n="UseItemsForSearchDescription">${i18n.t('UseItemsForSearchDescription') || 'Query the /Items API instead of /Search/Hints for global search. Required by certain server plugins.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:useItemsForSearch') === 'true' ? 'active' : ''}" 
+                                id="toggle-use-items-for-search" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
@@ -1254,11 +1280,24 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelPlayThemeSongs">${i18n.t('LabelPlayThemeSongs') || 'Play Theme Songs'}</span>
-                        <span class="setting-description" data-i18n="PlayThemeSongsDescription">${i18n.t('PlayThemeSongsDescription') || 'Play show theme songs in the background when viewing details pages.'}</span>
+                        <span class="setting-description" data-i18n="PlayThemeSongsDescription">${i18n.t('PlayThemeSongsDescription') || 'Play theme songs in the background when viewing details pages.'}</span>
                     </div>
                     <div class="setting-control">
                         <button class="toggle-switch ${storage.getItem('pref:playThemeSongs') === 'true' ? 'active' : ''}" 
                                 id="toggle-play-theme-songs" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="theme-song-once-item" style="display: ${storage.getItem('pref:playThemeSongs') === 'true' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelPlayThemeSongsOnce">${i18n.t('LabelPlayThemeSongsOnce') || 'Play Theme Songs Once'}</span>
+                        <span class="setting-description" data-i18n="PlayThemeSongsOnceDescription">${i18n.t('PlayThemeSongsOnceDescription') || 'Play background theme songs only once instead of looping continuously.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:playThemeSongsOnce') !== 'false' ? 'active' : ''}" 
+                                id="toggle-play-theme-songs-once" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -1337,8 +1376,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanExtendedWait">${i18n.t('WakeOnLanExtendedWait')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanExtendedWaitDescription">${i18n.t('WakeOnLanExtendedWaitDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolExtendedWait') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-extended-wait" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Conditional container for MAC Address entry -->
-                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true') ? '' : 'none'}">
+                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true' || storage.getItem('pref:enableWolExtendedWait') === 'true') ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="WolMacAddress">${i18n.t('WolMacAddress')}</span>
                         <span class="setting-description" data-i18n="WolMacAddressDescription">${i18n.t('WolMacAddressDescription')}</span>
@@ -1644,6 +1696,19 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:hideEpisodeCounts') === 'true' ? 'active' : ''}" 
                                  id="toggle-hide-episode-counts" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowMediaSourceCounts">${i18n.t('ShowMediaSourceCounts') || 'Show Version Counts'}</span>
+                        <span class="setting-description" data-i18n="ShowMediaSourceCountsDescription">${i18n.t('ShowMediaSourceCountsDescription') || 'Display a badge showing the number of available video versions on media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showMediaSourceCounts') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-show-media-source-counts" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -2465,6 +2530,10 @@ class SettingsPage extends Page {
                     label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
                 },
                 {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
+                },
+                {
                     value: 'transparent',
                     label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
                 }
@@ -2489,6 +2558,10 @@ class SettingsPage extends Page {
                 {
                     value: 'semi',
                     label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
                 },
                 {
                     value: 'transparent',
@@ -2674,6 +2747,10 @@ class SettingsPage extends Page {
             {
                 value: 'sendWol',
                 label: i18n.t('OptionSendWakeOnLan') || 'Send Wake-on-LAN Packet'
+            },
+            {
+                value: 'randomItem',
+                label: i18n.t('OptionRandomItem') || 'Open Random Item'
             }
         ];
 
@@ -2848,8 +2925,6 @@ class SettingsPage extends Page {
         const audioSettingsHtml =
             currentBackend !== 'tizen'
                 ? `
-                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDisableVbrAudioEncoding">${i18n.t('LabelDisableVbrAudioEncoding') || 'Disable VBR audio encoding'}</span>
@@ -2931,6 +3006,28 @@ class SettingsPage extends Page {
                 { value: 500000, label: i18n.t('BitrateKbps', ['500']) }
             ],
             currentBitrate
+        )}
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AllowedAudioChannels">${i18n.t('AllowedAudioChannels') || 'Maximum Audio Channels'}</span>
+                        <span class="setting-description" data-i18n="AllowedAudioChannelsDescription">${i18n.t('AllowedAudioChannelsDescription') || 'Configure maximum audio channels for video playback. Defaults to 5.1 (6 channels).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'allowed-audio-channels-select',
+            [
+                { value: -1, label: i18n.t('AudioChannelsAuto') || 'Auto (No Limit)' },
+                { value: 8, label: i18n.t('AudioChannels71') || '7.1 Channels' },
+                { value: 6, label: i18n.t('AudioChannels51') || '5.1 Channels (Default)' },
+                { value: 2, label: i18n.t('AudioChannels20') || 'Stereo 2.0' },
+                { value: 1, label: i18n.t('AudioChannels10') || 'Mono 1.0' }
+            ],
+            PlayerSettings.get('allowedAudioChannels') ?? 6
         )}
                     </div>
                 </div>
@@ -3113,6 +3210,20 @@ class SettingsPage extends Page {
             ],
             PlayerSettings.get('osdFocusRestoreMode') || 'always'
         )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OkShowOsdOnly">${i18n.t('OkShowOsdOnly') || 'OK Shows OSD Only'}</span>
+                        <span class="setting-description" data-i18n="OkShowOsdOnlyDescription">${i18n.t('OkShowOsdOnlyDescription') || 'When the player controls are hidden, pressing OK will only show them instead of also running the focused action.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('okShowOsdOnly') ? 'active' : ''}"
+                                id="toggle-ok-show-osd-only"
+                                data-setting="okShowOsdOnly"
+                                tabindex="0">
+                        </button>
                     </div>
                 </div>
 
@@ -3423,9 +3534,8 @@ class SettingsPage extends Page {
                 ],
                 PlayerSettings.get('transcodeAudioCodec') || 'auto'
             )}
-                    </div>
-                </div>
-
+            </div>
+        </div>
                 <!-- ============================================================
                      EAC3 FORCE STATE
                      canPlayType returns '' for EAC3 on many WebOS/browser builds
@@ -4284,6 +4394,7 @@ class SettingsPage extends Page {
                 { value: 'none', label: i18n.t('None') },
                 { value: 'uniform', label: i18n.t('Uniform') },
                 { value: 'border', label: i18n.t('Border') },
+                { value: 'uniform_border', label: i18n.t('UniformBorders') || 'Uniform + borders' },
                 { value: 'dropshadow', label: i18n.t('DropShadow') },
                 { value: 'raised', label: i18n.t('Raised') },
                 { value: 'depressed', label: i18n.t('Depressed') }
@@ -4293,7 +4404,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' ? '' : 'none'}">
+                <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' || PlayerSettings.get('subtitleDropShadow') === 'uniform_border' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BorderWidth">${i18n.t('BorderWidth')}</span>
                         <span class="setting-description" data-i18n="BorderWidthDescription">${i18n.t('BorderWidthDescription')}</span>
@@ -4305,6 +4416,22 @@ class SettingsPage extends Page {
             1,
             20,
             1
+        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-border-opacity-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' || PlayerSettings.get('subtitleDropShadow') === 'uniform_border' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BorderOpacity">${i18n.t('BorderOpacity')}</span>
+                        <span class="setting-description" data-i18n="BorderOpacityDescription">${i18n.t('BorderOpacityDescription')}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+            'subtitle-border-opacity',
+            PlayerSettings.get('subtitleBorderOpacity') ?? 100,
+            0,
+            100,
+            5
         )}
                     </div>
                 </div>
@@ -4552,6 +4679,13 @@ class SettingsPage extends Page {
         const userId = user?.Id;
         const hasPin = userId ? pinManager.hasPin(userId) : false;
 
+        /*
+         * Check whether auto-login for the last active user is enabled.
+         * Default: disabled (false). Adheres to Apple Human Interface Guidelines
+         * for explicit user consent and minimal friction control elements.
+         */
+        const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Account">${i18n.t('Account')}</h2>
@@ -4585,6 +4719,16 @@ class SettingsPage extends Page {
                 `
                 : ''
             }
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RememberLastActiveUser">${i18n.t('RememberLastActiveUser')}</span>
+                        <span class="setting-description" data-i18n="RememberLastActiveUserDescription">${i18n.t('RememberLastActiveUserDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${rememberLastUser ? 'active' : ''}" id="toggle-remember-last-user" tabindex="0"></button>
+                    </div>
+                </div>
 
                 <div class="setting-actions centered">
                     <!-- Navigate to the Who's Watching screen to pick a different profile -->
@@ -5817,6 +5961,29 @@ class SettingsPage extends Page {
             });
         }
 
+        // ==========================================
+        // REMEMBER LAST ACTIVE USER TOGGLE (Account tab)
+        // ==========================================
+        // Controls whether the application automatically boots into the last active
+        // user profile, skipping the "Who's Watching" selection screen on app launch.
+        // Follows Apple Human Interface Guidelines for intuitive binary toggle controls.
+        const rememberLastUserToggle = this.$('#toggle-remember-last-user');
+        if (rememberLastUserToggle) {
+            rememberLastUserToggle.addEventListener('click', () => {
+                // Read current stored boolean status
+                const isCurrentlyActive = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
+                // Invert the setting state
+                const nextState = !isCurrentlyActive;
+
+                // Save preference to local storage
+                storage.setItem('pref:rememberLastActiveUser', nextState);
+
+                // Update UI toggle switch state smoothly with CSS transitions
+                rememberLastUserToggle.classList.toggle('active', nextState);
+            });
+        }
+
         // Toggle My Media
         const myMediaBtn = this.$('#toggle-my-media');
         if (myMediaBtn) {
@@ -5968,6 +6135,18 @@ class SettingsPage extends Page {
 
                 // Log settings adjustment for user session diagnostics.
                 log.info(`Hide Episode Counts set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Show Media Source Counts (Versions)
+        const showMediaSourceCountsBtn = this.$('#toggle-show-media-source-counts');
+        if (showMediaSourceCountsBtn) {
+            showMediaSourceCountsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showMediaSourceCounts') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showMediaSourceCounts', newValue);
+                showMediaSourceCountsBtn.classList.toggle('active', newValue);
+                log.info(`Show Version Counts set to: ${newValue}`);
             });
         }
 
@@ -6225,6 +6404,30 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Use Litefin Plugin for Home Libraries
+        const useBatchPluginBtn = this.$('#toggle-use-batch-latest-plugin');
+        if (useBatchPluginBtn) {
+            useBatchPluginBtn.addEventListener('click', () => {
+                const isCurrentlyEnabled = storage.getItem('pref:useBatchLatestPlugin') !== 'false';
+                const newValue = !isCurrentlyEnabled;
+                storage.setItem('pref:useBatchLatestPlugin', newValue ? 'true' : 'false');
+                useBatchPluginBtn.classList.toggle('active', newValue);
+                log.info(`Use Litefin Plugin for Home Libraries set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Use Items API for Search
+        const useItemsForSearchBtn = this.$('#toggle-use-items-for-search');
+        if (useItemsForSearchBtn) {
+            useItemsForSearchBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:useItemsForSearch') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:useItemsForSearch', newValue.toString());
+                useItemsForSearchBtn.classList.toggle('active', newValue);
+                log.info(`Use Items API for Search set to: ${newValue}`);
+            });
+        }
+
         // Toggle Disable Home Screen Caching
         const homeCacheBtn = this.$('#toggle-home-screen-cache');
         if (homeCacheBtn) {
@@ -6337,17 +6540,37 @@ class SettingsPage extends Page {
                 playThemeSongsBtn.classList.toggle('active', newValue);
                 log.info(`Play Theme Songs background audio set to: ${newValue}`);
 
-                // Toggle visibility of the companion volume control element.
-                // If the overall theme song playback is disabled, the volume setting
-                // is redundant and is hidden visually from the Settings page.
+                // Toggle visibility of the companion settings (volume and play-once).
+                // If the overall theme song playback is disabled, these sub-settings
+                // are redundant and hidden visually from the Settings page.
                 const volumeContainer = this.$('#theme-song-volume-item');
+                const onceContainer = this.$('#theme-song-once-item');
                 if (volumeContainer) {
                     volumeContainer.style.display = newValue ? '' : 'none';
-
-                    // Invalidate settings content focus mapping cache so navigation
-                    // remains stable on Samsung/LG TV hardware.
-                    focusManager.invalidateCache('settings-content');
                 }
+                if (onceContainer) {
+                    onceContainer.style.display = newValue ? '' : 'none';
+                }
+
+                // Invalidate settings content focus mapping cache so navigation
+                // remains stable on Samsung/LG TV hardware.
+                focusManager.invalidateCache('settings-content');
+            });
+        }
+
+        const playThemeSongsOnceBtn = this.$('#toggle-play-theme-songs-once');
+        if (playThemeSongsOnceBtn) {
+            playThemeSongsOnceBtn.addEventListener('click', () => {
+                // Read current setting state (defaults to true / play once)
+                const isEnabled = storage.getItem('pref:playThemeSongsOnce') !== 'false';
+                const newValue = !isEnabled;
+
+                // Save setting value into persistent browser storage
+                storage.setItem('pref:playThemeSongsOnce', newValue ? 'true' : 'false');
+
+                // Update switch element visual presentation
+                playThemeSongsOnceBtn.classList.toggle('active', newValue);
+                log.info(`Play Theme Songs Once set to: ${newValue}`);
             });
         }
 
@@ -6492,9 +6715,10 @@ class SettingsPage extends Page {
             const wolStartup = storage.getItem('pref:enableWolOnStartup') === 'true';
             const wolTimeout = storage.getItem('pref:enableWolOnTimeout') === 'true';
             const wolScan = storage.getItem('pref:enableWolOnServerScan') === 'true';
+            const wolExtended = storage.getItem('pref:enableWolExtendedWait') === 'true';
             const macContainer = this.$('#wol-mac-container');
             if (macContainer) {
-                macContainer.style.display = (wolStartup || wolTimeout || wolScan) ? '' : 'none';
+                macContainer.style.display = (wolStartup || wolTimeout || wolScan || wolExtended) ? '' : 'none';
             }
             focusManager.invalidateCache('settings-content');
         };
@@ -6547,6 +6771,22 @@ class SettingsPage extends Page {
             });
         }
 
+        const wolExtendedToggleBtn = this.$('#toggle-wol-extended-wait');
+        if (wolExtendedToggleBtn) {
+            wolExtendedToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolExtendedWait') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolExtendedWait', newValue ? 'true' : 'false');
+                storage.flush();
+                wolExtendedToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
         // =====================================================================
         // WOL SERVER MAC ADDRESS TEXT INPUT
         // =====================================================================
@@ -6565,7 +6805,7 @@ class SettingsPage extends Page {
             const saveWolMac = (forceFormat = false) => {
                 let currentVal = wolMacInput.value.trim();
                 const hexOnly = currentVal.replace(/[^0-9a-fA-F]/g, '');
-                
+
                 // Format automatically if full 12 hex digits are entered or on blur/change
                 if (forceFormat || hexOnly.length === 12) {
                     const formatted = formatMac(currentVal);
@@ -6665,6 +6905,18 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('osdHideShowName', newValue);
                 hideShowNameBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle OK Shows OSD Only (don't execute the focused action, e.g.
+        // Play/Pause, on the OK press that wakes a hidden OSD)
+        const okShowOsdOnlyBtn = this.$('#toggle-ok-show-osd-only');
+        if (okShowOsdOnlyBtn) {
+            okShowOsdOnlyBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('okShowOsdOnly');
+                const newValue = !currentValue;
+                PlayerSettings.set('okShowOsdOnly', newValue);
+                okShowOsdOnlyBtn.classList.toggle('active', newValue);
             });
         }
 
@@ -7098,6 +7350,7 @@ class SettingsPage extends Page {
             'subtitle-text-opacity': 'subtitleTextOpacity',
             'subtitle-text-opacity-hdr': 'subtitleTextOpacityHdr',
             'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
+            'subtitle-border-opacity': 'subtitleBorderOpacity',
             'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
             'subtitle-shadow-blur': 'subtitleDropShadowBlur',
             'subtitle-custom-pos': 'subtitleVerticalPositionCustom',
@@ -7167,7 +7420,7 @@ class SettingsPage extends Page {
     _renderDropdown(id, options, currentValue, disabled = false) {
         // Find current label (using String conversion to match storage strings with number options)
         const currentOption = options.find((o) => String(o.value) === String(currentValue)) || options[0];
-        const currentLabel = currentOption ? i18n.ensureBiDi(currentOption.label) : i18n.t('Select');
+        const currentLabel = currentOption ? escapeHtml(i18n.ensureBiDi(currentOption.label)) : i18n.t('Select');
 
         // Render as a button that triggers the modal
         return `
@@ -7222,7 +7475,7 @@ class SettingsPage extends Page {
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                             <span style="margin-right: 12px;">${i18n.ensureBiDi(opt.label)}</span>
+                             <span style="margin-right: 12px;">${escapeHtml(i18n.ensureBiDi(opt.label))}</span>
                              ${badge}
                         </button>
                     `;
@@ -7537,6 +7790,8 @@ class SettingsPage extends Page {
             'truehd-force-select': { type: 'player', key: 'enableTrueHd' },
             /* Transcode target codec — used by all three device profiles (Tizen, WebOS, Web) */
             'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
+            /* Maximum audio channels — used by all three device profiles (Tizen, WebOS, Web) */
+            'allowed-audio-channels-select': { type: 'player', key: 'allowedAudioChannels' },
             /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
             'eac3-force-select': { type: 'player', key: 'enableEac3' },
             /* MP2 force-state override — corrects false positives or forces transcoding to avoid stalls */
@@ -7920,7 +8175,14 @@ class SettingsPage extends Page {
                             if (id === 'subtitle-shadow-select') {
                                 const borderWidthContainer = document.getElementById('subtitle-border-width-container');
                                 if (borderWidthContainer) {
-                                    borderWidthContainer.style.display = newValue === 'border' ? '' : 'none';
+                                    borderWidthContainer.style.display =
+                                        newValue === 'border' || newValue === 'uniform_border' ? '' : 'none';
+                                }
+
+                                const borderOpacityContainer = document.getElementById('subtitle-border-opacity-container');
+                                if (borderOpacityContainer) {
+                                    borderOpacityContainer.style.display =
+                                        newValue === 'border' || newValue === 'uniform_border' ? '' : 'none';
                                 }
 
                                 const opacityContainer = document.getElementById('subtitle-shadow-opacity-container');
@@ -9258,8 +9520,8 @@ class SettingsPage extends Page {
                 quality: 90,
                 maxWidth: 300
             });
-            return `<img src="${imageUrl}" class="user-avatar" alt="${user.Name}" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
-                    <div class="user-avatar-placeholder hidden">${user.Name[0].toUpperCase()}</div>`;
+            return `<img src="${imageUrl}" class="user-avatar" alt="${escapeHtml(user.Name)}" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
+                    <div class="user-avatar-placeholder hidden">${escapeHtml(user.Name ? user.Name[0].toUpperCase() : '?')}</div>`;
         }
         return `<div class="user-avatar-placeholder">${user?.Name ? user.Name[0].toUpperCase() : '?'}</div>`;
     }

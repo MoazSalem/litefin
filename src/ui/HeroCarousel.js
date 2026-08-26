@@ -18,6 +18,7 @@ import { imageService } from '../utils/ImageService.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { detailsIcons } from '../utils/Icons.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -134,7 +135,7 @@ class HeroCarousel {
             const logoSrc = isActive ? `src="${logoUrl}"` : `data-src="${logoUrl}"`;
             logoHtml = `<div class="hero-logo-container"><img ${logoSrc} alt="" class="hero-logo"></div>`;
         } else {
-            logoHtml = `<h1 class="hero-item-title">${i18n.ensureBiDi(item.Name)}</h1>`;
+            logoHtml = `<h1 class="hero-item-title">${escapeHtml(i18n.ensureBiDi(item.Name))}</h1>`;
         }
 
         // Meta Info Row
@@ -187,7 +188,7 @@ class HeroCarousel {
                     <div class="hero-meta-row">
                         ${metaHtml}
                     </div>
-                    <p class="hero-description">${i18n.ensureBiDi(item.Overview || '')}</p>
+                    <div class="hero-description" tabindex="-1">${escapeHtml(i18n.ensureBiDi(item.Overview || ''))}</div>
                 </div>
             </div>
         `;

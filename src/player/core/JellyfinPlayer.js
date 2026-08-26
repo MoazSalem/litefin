@@ -192,6 +192,7 @@ export class JellyfinPlayer extends EventEmitter {
         this.serverUrl = options.serverUrl;
         this.authToken = options.authToken;
         this.useTizenPlayer = options.useTizenPlayer || false;
+        this.forcedPlayerBackend = options.playerBackend || null;
 
         // ====================================================================
         // State
@@ -284,7 +285,7 @@ export class JellyfinPlayer extends EventEmitter {
     _initBackend() {
         // Detect Tizen AVPlay API (present on either namespace depending on Tizen version)
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
-        const backendSetting = PlayerSettings.get('playerBackend') || 'auto';
+        const backendSetting = this.forcedPlayerBackend || PlayerSettings.get('playerBackend') || 'auto';
 
         log.info(
             'Initializing backend — useTizenPlayer:', this.useTizenPlayer,
@@ -703,8 +704,11 @@ export class JellyfinPlayer extends EventEmitter {
                     const fallbackSource = options.item.MediaSources[0];
                     const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                     if (ms) {
-                        defaultIndex = ms.DefaultAudioStreamIndex;
                         const audioStreams = (ms.MediaStreams || []).filter(s => s.Type === 'Audio');
+                        const defaultAudioStream = audioStreams.find(s => s.IsDefault) ||
+                            (ms.DefaultAudioStreamIndex !== undefined && ms.DefaultAudioStreamIndex !== null ? audioStreams.find(s => s.Index === ms.DefaultAudioStreamIndex) : null) ||
+                            audioStreams[0];
+                        defaultIndex = defaultAudioStream ? defaultAudioStream.Index : ms.DefaultAudioStreamIndex;
                         if (audioStreams.length > 0) {
                             firstAudioIndex = audioStreams[0].Index;
                         }
@@ -863,7 +867,10 @@ export class JellyfinPlayer extends EventEmitter {
                         }
                     } else {
                         const prefLang = storage.getItem('pref:subtitleLang') || 'none';
-                        const audioStreamIndex = options.audioStreamIndex !== undefined ? options.audioStreamIndex : ms.DefaultAudioStreamIndex;
+                        const defaultAudioStream = (ms.MediaStreams || []).find(s => s.Type === 'Audio' && s.IsDefault) ||
+                            (ms.MediaStreams || []).find(s => s.Type === 'Audio' && s.Index === ms.DefaultAudioStreamIndex) ||
+                            (ms.MediaStreams || []).find(s => s.Type === 'Audio');
+                        const audioStreamIndex = options.audioStreamIndex !== undefined && options.audioStreamIndex !== null ? options.audioStreamIndex : defaultAudioStream?.Index;
                         const audioStream = ms.MediaStreams.find(s => s.Type === 'Audio' && s.Index === audioStreamIndex);
                         const audioLang = audioStream ? (audioStream.Language || 'und') : 'und';
                         
@@ -1341,6 +1348,34 @@ export class JellyfinPlayer extends EventEmitter {
                     }
                     this._playSetupInProgress = false;
                 }
+
+                /*
+                 * -----------------------------------------------------------------
+                 * Secondary Subtitle Re-application (awaitTracks path)
+                 * -----------------------------------------------------------------
+                 * setMediaContext() clears all SubtitleManager state — including
+                 * the secondary track and its cue list — as it sets up a fresh
+                 * session. After the primary subtitle is loaded we must explicitly
+                 * re-fetch and re-apply the secondary track so it is not lost
+                 * across remux/restart events (e.g. audio track switches).
+                 *
+                 * We call _subtitleManager.setSecondaryTrack() directly rather than
+                 * setSecondarySubtitleStreamIndex() to bypass the equality guard —
+                 * that guard blocks re-fetching when the index hasn't changed, but
+                 * the cue list has been wiped by setMediaContext() and MUST be
+                 * re-loaded regardless.
+                 *
+                 * Fire-and-forget secondary loading since its delay does not
+                 * affect video decode or initial frame display.
+                 * -----------------------------------------------------------------
+                 */
+                if (this._currentSecondarySubtitleStreamIndex !== undefined &&
+                    this._currentSecondarySubtitleStreamIndex !== null &&
+                    this._currentSecondarySubtitleStreamIndex !== -1) {
+                    log.info('[Play-Flow] Re-applying secondary subtitle after session restart:', this._currentSecondarySubtitleStreamIndex);
+                    this._subtitleManager.setSecondaryTrack(this._currentSecondarySubtitleStreamIndex)
+                        .catch(err => log.warn('[Play-Flow] Secondary subtitle re-application failed:', err));
+                }
             }
 
             // ====================================================================
@@ -1389,6 +1424,33 @@ export class JellyfinPlayer extends EventEmitter {
                     .catch((err) => log.warn('Initial subtitle setup failed:', err))
                     .finally(() => { this._playSetupInProgress = false; });
             }
+
+            /*
+             * -------------------------------------------------------------------------
+             * Secondary Subtitle Re-application (standard async path)
+             * -------------------------------------------------------------------------
+             * This mirrors the awaitTracks path above. setMediaContext() resets
+             * SubtitleManager's secondary state on every new play() call, including
+             * playback restarts triggered by audio track switches that force a remux.
+             *
+             * We call _subtitleManager.setSecondaryTrack() directly to bypass the
+             * equality guard in setSecondarySubtitleStreamIndex(), which would
+             * otherwise skip re-loading when the same index is passed again after
+             * the cue list has been cleared by setMediaContext().
+             *
+             * Fire-and-forget; secondary cues arriving slightly late is acceptable
+             * since they are a supplemental overlay over the primary subtitle.
+             * -------------------------------------------------------------------------
+             */
+            if (!awaitTracks &&
+                !isAudioItemSetup &&
+                this._currentSecondarySubtitleStreamIndex !== undefined &&
+                this._currentSecondarySubtitleStreamIndex !== null &&
+                this._currentSecondarySubtitleStreamIndex !== -1) {
+                log.info('[Play-Flow] Re-applying secondary subtitle after session restart:', this._currentSecondarySubtitleStreamIndex);
+                this._subtitleManager.setSecondaryTrack(this._currentSecondarySubtitleStreamIndex)
+                    .catch(err => log.warn('[Play-Flow] Secondary subtitle re-application failed:', err));
+            }
         } catch (error) {
             log.error('Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
@@ -1428,12 +1490,12 @@ export class JellyfinPlayer extends EventEmitter {
      * Stop playback
      */
     async stop() {
+        const item = this._currentItem;
+        const positionTicks = this.getCurrentPositionTicks();
+
         if (this._backend) {
             await this._backend.stop();
         }
-
-        const item = this._currentItem;
-        const positionTicks = this.getCurrentPositionTicks();
 
         // Only clear state if NOT restarting
         if (!this._isRestarting) {
@@ -1566,17 +1628,23 @@ export class JellyfinPlayer extends EventEmitter {
     async setAudioStreamIndex(index) {
         this._currentAudioStreamIndex = index;
 
+        // Determine if target track codec is natively supported by current hardware backend
         let isTargetCodecSupported = true;
-        if (this._backendType === 'tizen' || this._backendType === 'webos') {
+        if (this._backendType === 'tizen' || this._backendType === 'webos' || this._backendType === 'html5') {
             const AudioTracks = this.getAudioTracks();
             const targetTrack = AudioTracks.find(t => t.Index === index);
+
             if (targetTrack && targetTrack.Codec) {
                 const targetCodec = targetTrack.Codec.toLowerCase();
-                if (this._backendType === 'tizen' && (targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+
+                // Check FLAC and ALAC audio streams when embedded in video containers
+                if ((targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
                     isTargetCodecSupported = false;
                 } else if (targetCodec.includes('dts') && !isDtsSupported()) {
+                    // Check DTS / DTS-HD / DCA passthrough support
                     isTargetCodecSupported = false;
                 } else if (targetCodec === 'truehd' && !isTrueHdSupported()) {
+                    // Check Dolby TrueHD passthrough support
                     isTargetCodecSupported = false;
                 }
             }
@@ -2154,31 +2222,74 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
+     * Check if an audio track can be played natively by the current backend
+     * without requiring a server-side transcode restart.
+     *
+     * Used by the OSD TrackMenu to visually grey out tracks that the native
+     * player cannot decode (e.g. FLAC in MKV on HTML5 browsers, DTS/TrueHD
+     * when passthrough is disabled). Selecting such a track will still work
+     * — it triggers a playback restart with server transcoding — but the
+     * visual indicator helps the user understand why switching is slower.
+     *
+     * @param {Object} track - Jellyfin MediaStream object with a Codec field
+     * @returns {boolean} true if the track can be toggled natively, false if
+     *                    selecting it would require a transcode restart
+     */
+    isAudioTrackNativelyPlayable(track) {
+        if (!track || !track.Codec) return true;
+        const codec = track.Codec.toLowerCase();
+
+        // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
+        if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+            return false;
+        }
+
+        // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
+        if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
+            return false;
+        }
+
+        // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled
+        if (codec === 'truehd' && !isTrueHdSupported()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Get audio tracks as exposed by the current native backend.
      *
-     * Jellyfin keeps original stream IDs, including tracks the WebOS native
-     * audioTracks API will not expose when passthrough codecs are disabled.
-     * Counting those hidden tracks shifts the backend list index by one.
+     * Native media engines (WebOS HTML5 video and Tizen AVPlay) keep original
+     * container stream IDs, but omit tracks that cannot be output natively when
+     * passthrough audio codecs (e.g., DTS and TrueHD) are disabled or unsupported.
+     * Including those omitted streams shifts the 0-based backend track list index,
+     * which causes the player to select the wrong audio track on in-player switching.
      *
      * @param {Object} [mediaSource]
      * @returns {Array} Backend-visible audio streams
      * @private
      */
     _getBackendAudioTracks(mediaSource = this._currentMediaSource) {
+        // Retrieve all audio streams attached to the current media source
         const tracks = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
 
-        if (this._backendType !== 'webos') {
-            return tracks;
-        }
-
+        // Filter out audio formats that the hardware pipeline or browser omits from native track lists
         return tracks.filter((track) => {
             const codec = (track.Codec || '').toLowerCase();
 
+            // Omit Dolby TrueHD if passthrough/decoding is disabled or unsupported by hardware
             if (codec === 'truehd' && !isTrueHdSupported()) {
                 return false;
             }
 
+            // Omit DTS / DTS-HD / DCA streams if passthrough/decoding is disabled or unsupported
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
+                return false;
+            }
+
+            // Omit FLAC / ALAC in video containers if enableFlacInVideo setting is disabled
+            if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
                 return false;
             }
 

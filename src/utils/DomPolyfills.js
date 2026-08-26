@@ -19,8 +19,12 @@ if (typeof Element !== 'undefined' && !Element.prototype.matches) {
         function (selector) {
             const matches = (this.document || this.ownerDocument).querySelectorAll(selector);
             let i = matches.length;
-            while (--i >= 0 && matches.item(i) !== this) {}
-            return i > -1;
+            while (--i >= 0) {
+                if (matches.item(i) === this) {
+                    return true;
+                }
+            }
+            return false;
         };
 }
 
@@ -32,7 +36,13 @@ if (typeof Element !== 'undefined' && !Element.prototype.closest) {
     Element.prototype.closest = function (selector) {
         let el = this;
         while (el && el.nodeType === 1) {
-            if (el.matches ? el.matches(selector) : el.webkitMatchesSelector ? el.webkitMatchesSelector(selector) : false) {
+            if (
+                el.matches
+                    ? el.matches(selector)
+                    : el.webkitMatchesSelector
+                      ? el.webkitMatchesSelector(selector)
+                      : false
+            ) {
                 return el;
             }
             el = el.parentElement || el.parentNode;
@@ -55,24 +65,79 @@ if (typeof Element !== 'undefined' && !Element.prototype.remove) {
 // ----------------------------------------------------------------------------
 // AbortController — added in Chrome 66. Required for fetch timeout patterns
 // in ApiClient and FontLoader on Tizen 5.0 (Chromium 63).
+//
+// IMPORTANT: The previous stub silently dropped all addEventListener calls,
+// which broke the cancelDiscovery() flow in ApiClient.discoverServers().
+// When testServer() wires up an 'abort' listener via parentSignal.addEventListener,
+// the stub ignored it entirely — meaning onParentAbort() never fired and in-flight
+// XHRs were never cancelled when cancelDiscovery() was called on WebOS 4.x.
+//
+// This functional polyfill properly maintains a listener registry and dispatches
+// 'abort' events to all registered handlers, matching the real AbortSignal API
+// closely enough for our XHR-based usage pattern.
 // ----------------------------------------------------------------------------
 if (typeof AbortController === 'undefined') {
     window.AbortController = function AbortController() {
-        this.signal = Object.create(null);
-        this.signal.aborted = false;
-        this.signal.onabort = null;
-        this.signal.addEventListener = function () {};
-        this.signal.removeEventListener = function () {};
-        this.signal.dispatchEvent = function () {};
+        /*
+         * Internal listener registry: maps eventType -> array of { listener, once }
+         * We only ever fire 'abort' events in practice, but the map is generic.
+         */
+        const _listeners = {};
+        const _signal = Object.create(null);
 
-        const _signal = this.signal;
+        _signal.aborted = false;
+        _signal.onabort = null;
+
+        /*
+         * addEventListener — supports the { once } option so that testServer()'s
+         * onParentAbort is automatically cleaned up after the first abort fires.
+         * Without this, the polyfill stub silently ignored the call and the
+         * XHR abort chain was completely broken on WebOS 4.x / Tizen 3.x.
+         */
+        _signal.addEventListener = function (type, listener, options) {
+            if (!listener) return;
+            if (!_listeners[type]) _listeners[type] = [];
+            const once = options && options.once ? true : false;
+            _listeners[type].push({ fn: listener, once: once });
+        };
+
+        /* removeEventListener — exact mirror of the spec for our use case. */
+        _signal.removeEventListener = function (type, listener) {
+            if (!_listeners[type]) return;
+            _listeners[type] = _listeners[type].filter(function (entry) {
+                return entry.fn !== listener;
+            });
+        };
+
+        /* dispatchEvent — fires all registered handlers for the given type. */
+        _signal.dispatchEvent = function (event) {
+            const type = event && event.type;
+            if (!type || !_listeners[type]) return;
+
+            /* Snapshot before iteration: once-handlers remove themselves mid-loop. */
+            const entries = _listeners[type].slice();
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                entry.fn.call(_signal, event);
+                if (entry.once) {
+                    _signal.removeEventListener(type, entry.fn);
+                }
+            }
+        };
+
+        this.signal = _signal;
 
         this.abort = function () {
             if (_signal.aborted) return;
             _signal.aborted = true;
+
+            /* Fire the legacy onabort callback if set. */
             if (typeof _signal.onabort === 'function') {
                 _signal.onabort({ type: 'abort', target: _signal });
             }
+
+            /* Dispatch the 'abort' event to all addEventListener listeners. */
+            _signal.dispatchEvent({ type: 'abort', target: _signal });
         };
     };
 }
@@ -135,4 +200,24 @@ if (typeof Element !== 'undefined') {
             }
         };
     }
+}
+
+if (typeof DocumentFragment !== 'undefined' && !DocumentFragment.prototype.append) {
+    DocumentFragment.prototype.append = function () {
+        const argArr = Array.prototype.slice.call(arguments);
+        for (let i = 0; i < argArr.length; i++) {
+            const node = typeof argArr[i] === 'string' ? document.createTextNode(argArr[i]) : argArr[i];
+            this.appendChild(node);
+        }
+    };
+}
+
+if (typeof Document !== 'undefined' && !Document.prototype.append) {
+    Document.prototype.append = function () {
+        const argArr = Array.prototype.slice.call(arguments);
+        for (let i = 0; i < argArr.length; i++) {
+            const node = typeof argArr[i] === 'string' ? document.createTextNode(argArr[i]) : argArr[i];
+            this.appendChild(node);
+        }
+    };
 }

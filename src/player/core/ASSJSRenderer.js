@@ -71,9 +71,12 @@ export default class ASSJSRenderer {
         this._lineHeight = 0;
         this._letterSpacing = 0;
         this._bottomOffset = 0;
-        this._styleElement = null;
-
         log.info('ASSJSRenderer initialized');
+    }
+
+    setStyleConfig({ enableModifications, preferredEngine } = {}) {
+        this._enableModifications = enableModifications;
+        this._preferredEngine = preferredEngine;
     }
 
     _createClockProxy() {

@@ -33,6 +33,7 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('Player');
 
@@ -151,6 +152,7 @@ class PlayerPage extends Page {
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
                             <button class="btn btn-secondary focusable" id="error-playback-mode-btn" tabindex="0">Playback Mode</button>
+                            <button class="btn btn-secondary focusable" id="error-html5-backend-btn" tabindex="0">Use HTML5 Player</button>
                             <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
@@ -279,6 +281,9 @@ class PlayerPage extends Page {
             // This makes body/app transparent so hardware video plane is visible
             document.body.classList.add('player-active');
             document.documentElement.classList.add('player-active');
+
+            // Expose debug helper to force player error screen anytime via console
+            window.__forcePlayerError = (msg = 'Simulated playback error for UI testing') => this._showError(msg);
 
             // Parallelize font loading and item details loading
             const fontId = SubtitleStyles.getCurrentFontId();
@@ -828,11 +833,11 @@ class PlayerPage extends Page {
      * Directly imports JellyfinPlayer as an ES module — no UMD bundle or
      * window global required.
      */
-    async _initPlayer() {
-        log.info('_initPlayer called');
+    async _initPlayer(forcedBackend = null) {
+        log.info('_initPlayer called, forcedBackend:', forcedBackend);
 
         // Resolve backend choice
-        const playerBackend = PlayerSettings.get('playerBackend') || 'auto';
+        const playerBackend = forcedBackend || PlayerSettings.get('playerBackend') || 'auto';
         let useTizenPlayer = this._isTizen();
 
         if (playerBackend === 'avplay') {
@@ -848,7 +853,8 @@ class PlayerPage extends Page {
             container: this.$('#player-container'),
             serverUrl: api.serverUrl,
             authToken: api.accessToken,
-            useTizenPlayer: useTizenPlayer
+            useTizenPlayer: useTizenPlayer,
+            ...(forcedBackend ? { playerBackend: forcedBackend } : {})
         });
         log.info('Player initialized:', !!this._player);
 
@@ -1111,9 +1117,36 @@ class PlayerPage extends Page {
             }
         }
 
-        // 3. Fallback to default from MediaSource for Audio if still undefined
-        if (savedAudioIndex === undefined) {
-            savedAudioIndex = mediaSource?.DefaultAudioStreamIndex;
+        // 3. Fallback to default from MediaSource for Audio if still undefined or null
+        // =========================================================================
+        // DEFAULT AUDIO STREAM RESOLUTION (Disposition "default")
+        // =========================================================================
+        // When preSelectedAudio is null or undefined (and session track memory
+        // yielded no match), we resolve the default audio track.
+        // Priority order:
+        //   1. Audio stream with disposition "default" (s.Type === 'Audio' && s.IsDefault)
+        //   2. MediaSource DefaultAudioStreamIndex property
+        //   3. First available audio stream in container (audioStreams[0])
+        // =========================================================================
+        if (savedAudioIndex === undefined || savedAudioIndex === null) {
+            // Filter candidate streams to Audio type
+            const audioStreams = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+
+            // Attempt match by disposition default (IsDefault), then DefaultAudioStreamIndex, then first track
+            const defaultAudioStream =
+                audioStreams.find((s) => s.IsDefault) ||
+                (mediaSource?.DefaultAudioStreamIndex !== undefined && mediaSource?.DefaultAudioStreamIndex !== null
+                    ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
+                    : null) ||
+                audioStreams[0];
+
+            // Assign resolved index
+            if (defaultAudioStream) {
+                savedAudioIndex = defaultAudioStream.Index;
+                log.info(
+                    `[Track Resolution] Resolved default audio track (disposition default): Index ${savedAudioIndex} (${defaultAudioStream.Language || 'und'})`
+                );
+            }
         }
 
         // Note: We leave savedSubtitleIndex as undefined if unresolved, so JellyfinPlayer's SubtitleMode logic handles it.
@@ -1425,7 +1458,10 @@ class PlayerPage extends Page {
             VideoCodec: 'h264',
             AudioCodec: 'aac',
             MaxStreamingBitrate: 120000000,
-            TranscodingMaxAudioChannels: 2,
+            TranscodingMaxAudioChannels: (() => {
+                const userChannels = PlayerSettings.get('allowedAudioChannels');
+                return (userChannels && userChannels > 0) ? userChannels : 6;
+            })(),
             SegmentContainer: 'ts',
             MinSegments: 1,
             BreakOnNonKeyFrames: true
@@ -1537,6 +1573,9 @@ class PlayerPage extends Page {
     _onPlaying() {
         log.info('Playing');
 
+        // Clear pause reporting interval if running
+        this._stopPauseReportTimer();
+
         this._osd?.updateHdrTheme();
 
         eventBus.emit('player:playing', { item: this._item });
@@ -1580,6 +1619,35 @@ class PlayerPage extends Page {
         this._isPaused = true;
         // Report paused state with explicit 'pause' event
         this._reportPlaybackProgress('pause');
+
+        // Start periodic heartbeat while paused so Jellyfin server doesn't kill transcoding (60s limit)
+        this._startPauseReportTimer();
+    }
+
+    /**
+     * Start a periodic timer to report progress while paused.
+     * Prevents Jellyfin server from terminating transcode sessions after 60s of inactivity.
+     * @private
+     */
+    _startPauseReportTimer() {
+        this._stopPauseReportTimer();
+        this._pauseReportTimer = setInterval(() => {
+            if (this._isPaused && this._hasReportedStart && !this._isExiting) {
+                log.info('[Pause Heartbeat] Reporting progress while paused to preserve transcode session');
+                this._reportPlaybackProgress('pause');
+            }
+        }, 10000);
+    }
+
+    /**
+     * Stop the periodic pause report timer.
+     * @private
+     */
+    _stopPauseReportTimer() {
+        if (this._pauseReportTimer) {
+            clearInterval(this._pauseReportTimer);
+            this._pauseReportTimer = null;
+        }
     }
 
     _onEnded() {
@@ -2135,10 +2203,13 @@ class PlayerPage extends Page {
         // Skip progress reporting until playback start has been reported — prevents
         // sending payloads before _currentPlayMethod is resolved, which would send
         // a null/undefined PlayMethod and cause the dashboard to show "Direct Play".
+        // IMPORTANT: We report progress periodically regardless of whether playback is paused
+        // or playing because Jellyfin server automatically terminates/kills transcoding sessions
+        // if no progress report is received for 60 seconds!
         if (this._hasReportedStart) {
             const now = Date.now();
             if (!this._lastReportTime || now - this._lastReportTime > 10000) {
-                this._reportPlaybackProgress();
+                this._reportPlaybackProgress(this._isPaused ? 'pause' : 'timeupdate');
                 this._lastReportTime = now;
             }
         }
@@ -2216,7 +2287,10 @@ class PlayerPage extends Page {
 
         if (data && data.text && data.text.trim().length > 0) {
             // Render subtitle
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Cue text is external content (SRT/VTT/ASS from the server or a
+            // sidecar file); SubtitleParser only strips ASS {...} tags, so
+            // HTML in cue text must be escaped before innerHTML.
+            overlay.innerHTML = `<span class="subtitle-line">${escapeHtml(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -2296,8 +2370,8 @@ class PlayerPage extends Page {
         if (!overlay) return;
 
         if (data && data.text && data.text.trim().length > 0) {
-            // Render the secondary subtitle text
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Render the secondary subtitle text (escaped: external cue content)
+            overlay.innerHTML = `<span class="subtitle-line">${escapeHtml(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -2608,13 +2682,22 @@ class PlayerPage extends Page {
     }
 
     _showError(message) {
+        // Expose debug helper on window so the user or developer can trigger the dialog anytime
+        window.__forcePlayerError = (msg = 'Simulated playback error for UI testing') => this._showError(msg);
+
         this._showLoading(false);
 
         // Ensure focus manager is resumed so we can interact with error buttons
         focusManager.resume();
 
-        // Hide OSD if it's visible
+        // Hide OSD and active submenus if visible
         if (this._osd) {
+            if (this._osd.activeMenu) {
+                try {
+                    this._osd.activeMenu.hide();
+                } catch (e) {}
+                this._osd.activeMenu = null;
+            }
             this._osd.hide?.();
         }
 
@@ -2630,6 +2713,7 @@ class PlayerPage extends Page {
             // Bind buttons
             const retryBtn = this.$('#error-retry-btn');
             const playbackModeBtn = this.$('#error-playback-mode-btn');
+            const html5BackendBtn = this.$('#error-html5-backend-btn');
             const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
@@ -2642,13 +2726,18 @@ class PlayerPage extends Page {
                 playbackModeBtn.onclick = () => this._openPlaybackModeMenuFromError();
             }
 
+            if (html5BackendBtn) {
+                html5BackendBtn.onclick = () => this._retryWithHtml5Backend();
+            }
+
             if (backBtn) {
                 backBtn.onclick = () => router.back();
             }
 
-            // Register Focus Section
+            // Register Focus Section as a 2x2 Grid
             focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
-                orientation: 'horizontal',
+                orientation: 'grid',
+                columns: 2,
                 enterTo: 'last-focused'
             });
 
@@ -2701,6 +2790,60 @@ class PlayerPage extends Page {
         } catch (error) {
             log.error('Retry failed:', error);
             this._showError(error.message || 'Retry failed. Check your connection.');
+        }
+    }
+
+    /**
+     * Retry playback using the HTML5 player backend for this single playback session.
+     * Re-creates the JellyfinPlayer instance with forced HTML5 backend without modifying
+     * persistent user settings.
+     */
+    async _retryWithHtml5Backend() {
+        log.info('Retrying playback with explicit HTML5 player backend override...');
+        
+        // Hide error overlay and unregister focus section
+        const errorEl = this.$('#player-error');
+        if (errorEl) {
+            errorEl.classList.add('hidden');
+            focusManager.unregister('player-error');
+        }
+
+        focusManager.resume();
+
+        if (this._osd) {
+            if (this._osd.activeMenu) {
+                try {
+                    this._osd.activeMenu.hide();
+                } catch (e) {}
+                this._osd.activeMenu = null;
+            }
+            this._osd.hide();
+        }
+
+        try {
+            this._showLoading(true);
+
+            // Destroy existing player instance cleanly if active
+            if (this._player) {
+                try {
+                    await this._player.destroy();
+                } catch (destroyErr) {
+                    log.warn('Error destroying existing player during HTML5 backend switch:', destroyErr);
+                }
+                this._player = null;
+            }
+
+            // Initialize player with forced HTML5 backend setting override
+            // Note: _initPlayer creates JellyfinPlayer and binds all event listeners properly
+            await this._initPlayer('html5');
+
+            // Restart playback
+            await this._startPlayback();
+
+            this._showLoading(false);
+        } catch (error) {
+            log.error('HTML5 backend retry failed:', error);
+            this._showError(error.message || 'HTML5 playback retry failed.');
         }
     }
 
@@ -2834,7 +2977,8 @@ class PlayerPage extends Page {
                     if (errorEl) {
                         errorEl.classList.remove('hidden');
                         focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
-                            orientation: 'horizontal',
+                            orientation: 'grid',
+                            columns: 2,
                             enterTo: 'last-focused'
                         });
                         const retryBtn = errorEl.querySelector('#error-retry-btn');
@@ -2885,19 +3029,23 @@ class PlayerPage extends Page {
             // from the player backend or the fallback parameters.
             let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
 
-            // If the video naturally completed (ended event was fired), we override
-            // the reported position with the total duration ticks of the media.
-            // This prevents minor timing differences between player backend and server
-            // from leaving the item unmarked as watched and failing scrobble sync.
-            if (this._isPlaybackEnded) {
-                const durationTicks =
-                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
-                if (durationTicks > 0) {
-                    log.info(
-                        `Overriding positionTicks with durationTicks (${durationTicks}) due to natural end of playback`
-                    );
-                    rawPosition = durationTicks;
-                }
+            // If the video naturally completed (ended event was fired) or the user
+            // watched >= 90% of the content (defensive heuristic for WebOS where
+            // ended may not fire on certain 4K HEVC streams), override the reported
+            // position with the total duration ticks of the media. This prevents
+            // minor timing differences between player backend and server from
+            // leaving the item unmarked as watched and failing scrobble sync.
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+            const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.9);
+            if (_isNearComplete) {
+                log.info(
+                    `Overriding positionTicks with durationTicks (${durationTicks})` +
+                        (this._isPlaybackEnded
+                            ? ' due to natural end of playback'
+                            : ' due to near-complete playback position')
+                );
+                rawPosition = durationTicks;
             }
 
             const positionTicks = Math.round(rawPosition);
@@ -2998,10 +3146,10 @@ class PlayerPage extends Page {
                 await api.reportPlaybackStopped(data);
             }
 
-            // 4. Clear server-side resume point if playback completed naturally
-            // This prevents stale caches on the server that require a restart to clear.
-            if (this._isPlaybackEnded && this._item?.Id && !this._item.isIntro) {
-                log.info('Playback completed naturally — deleting server resume point');
+            // 4. Clear server-side resume point if playback completed naturally or
+            // the user watched >= 90% of the content (defensive heuristic).
+            if (_isNearComplete && this._item?.Id && !this._item.isIntro) {
+                log.info('Playback completed — deleting server resume point');
                 api.deletePlaybackProgress(this._item.Id).catch((err) => {
                     log.warn('Failed to delete playback progress:', err);
                 });
@@ -3216,11 +3364,11 @@ class PlayerPage extends Page {
         }
         this._isExiting = true;
 
-        try {
-            // Capture session info BEFORE stopping (stop clears internal state)
-            const mediaSource = this._player?.getCurrentMediaSource?.();
-            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        // Capture session info BEFORE stopping (stop clears internal state)
+        const mediaSource = this._player?.getCurrentMediaSource?.();
+        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
+        try {
             // Notify plugins that playback is ending — they clean up OSD widgets
             pluginManager.notifyPlayerStop();
 
@@ -3263,8 +3411,35 @@ class PlayerPage extends Page {
 
         // Invalidate stale caches so pages reload fresh data after playback
         if (this._item) {
-            // Clear the ETag cache so the next API requests get fresh 200
-            // responses instead of stale 304-cached bodies.
+            try {
+                // Update cached played/progress state across library:state:* caches without deleting state
+                // so focus restoration and grid state are preserved when returning to library pages.
+                const itemId = this._item.Id;
+                const durationTicks =
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                const isNearComplete =
+                    this._isPlaybackEnded || (durationTicks > 0 && positionTicks >= durationTicks * 0.9);
+
+                const allState = state.getAll();
+                for (const [key, val] of Object.entries(allState)) {
+                    if (key.startsWith('library:state:') && val?.stateData?.items) {
+                        const match = val.stateData.items.find(({ Id }) => Id === itemId);
+                        if (match) {
+                            match.UserData = match.UserData || {};
+                            if (isNearComplete) {
+                                match.UserData.Played = true;
+                                match.UserData.PlaybackPositionTicks = 0;
+                                match.UserData.UnplayedItemCount = 0;
+                            } else if (positionTicks > 0) {
+                                match.UserData.PlaybackPositionTicks = positionTicks;
+                            }
+                        }
+                    }
+                }
+            } catch (cacheErr) {
+                log.warn('Failed to patch library state cache on stop:', cacheErr);
+            }
+
             api.clearEtagCache();
 
             // Invalidate home page's rendered row cache
@@ -3362,7 +3537,7 @@ class PlayerPage extends Page {
         log.info('Locking screen and remote controls');
         this._isScreenLocked = true;
         if (this._osd) this._osd.hide();
-        
+
         const overlay = this.$('#lock-overlay');
         const iconContainer = this.$('#lock-icon-inner');
         if (overlay) {
@@ -3382,12 +3557,12 @@ class PlayerPage extends Page {
         // Reset the press counter for the next lock cycle.
         this._unlockPressCount = 0;
         this._unlockLastPressTime = null;
-        
+
         const overlay = this.$('#lock-overlay');
         if (overlay) {
             overlay.classList.remove('visible');
         }
-        
+
         // Reset progress ring and icon back to locked state for next use.
         const progressBar = this.$('#lock-progress-bar');
         if (progressBar) {
@@ -3397,7 +3572,7 @@ class PlayerPage extends Page {
         if (iconContainer) {
             iconContainer.innerHTML = osdIcons.lock;
         }
-        
+
         // Show OSD briefly as feedback that it is unlocked
         if (this._osd) {
             this._osd.show();
@@ -3409,7 +3584,7 @@ class PlayerPage extends Page {
         const overlay = this.$('#lock-overlay');
         if (overlay) {
             overlay.classList.add('visible');
-            
+
             if (this._lockIndicatorTimeout) clearTimeout(this._lockIndicatorTimeout);
             this._lockIndicatorTimeout = setTimeout(() => {
                 if (!this._isHoldingUnlock && this._isScreenLocked) {
@@ -3439,13 +3614,13 @@ class PlayerPage extends Page {
      * Window resets if no press arrives within 1.5 seconds.
      */
     _handleUnlockPress() {
-        const PRESS_THRESHOLD = 5;      // presses (fast taps or one held key with autorepeat)
-        const PRESS_WINDOW_MS = 3000;   // window to collect them
+        const PRESS_THRESHOLD = 5; // presses (fast taps or one held key with autorepeat)
+        const PRESS_WINDOW_MS = 3000; // window to collect them
 
         const now = Date.now();
 
         // Reset counter if window expired.
-        if (this._unlockLastPressTime && (now - this._unlockLastPressTime) > PRESS_WINDOW_MS) {
+        if (this._unlockLastPressTime && now - this._unlockLastPressTime > PRESS_WINDOW_MS) {
             this._unlockPressCount = 0;
             // Reset progress ring when window expires.
             const progressBar = this.$('#lock-progress-bar');
@@ -3462,7 +3637,7 @@ class PlayerPage extends Page {
 
         const progressBar = this.$('#lock-progress-bar');
         if (progressBar) {
-            progressBar.style.strokeDashoffset = 283 - (progress * 283);
+            progressBar.style.strokeDashoffset = 283 - progress * 283;
         }
 
         const iconContainer = this.$('#lock-icon-inner');
@@ -3489,6 +3664,9 @@ class PlayerPage extends Page {
 
     destroy() {
         log.info('destroy() called');
+
+        // Stop pause reporting heartbeat timer
+        this._stopPauseReportTimer();
 
         // Destroy player (this also calls stop internally)
         if (this._player?.destroy) {

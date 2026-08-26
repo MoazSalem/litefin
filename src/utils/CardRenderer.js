@@ -8,13 +8,194 @@
  */
 
 import { api } from '../api/index.js';
+import { escapeHtml } from './Utils.js';
 import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
 import { detailsIcons } from './Icons.js';
+import { platformInfo } from './PlatformInfo.js';
 
 class CardRenderer {
+    /**
+     * HTML output cache: keyed by item.Id, scoped to the current render context.
+     * Invalidated automatically when options change or clearCache() is called.
+     * Prevents redundant image URL resolution, BlurHash lookup, quality badge
+     * computation, and string building when cards are re-rendered for the same
+     * data (e.g. progressive grid chunk append/prepend after focus changes).
+     */
+    static _htmlCache = new Map();
+    static _htmlCacheKey = null;
+
+    /**
+     * Clear the HTML output cache. Call this when items, viewMode, columns,
+     * or any other rendering option changes.
+     */
+    static clearCache() {
+        this._htmlCache.clear();
+        this._htmlCacheKey = null;
+    }
+
+    /**
+     * Generate Played (Check Mark) Badge HTML if item is played
+     * @param {Object} item
+     * @returns {string} HTML string
+     */
+    static getPlayedBadgeHtml(item) {
+        if (!item || !item.UserData || !item.UserData.Played) return '';
+        const isMusic =
+            item.Type === 'MusicArtist' ||
+            item.Type === 'Artist' ||
+            item.Type === 'MusicAlbum' ||
+            item.Type === 'Audio';
+        if (isMusic) return '';
+        return `
+            <div class="played-badge">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+        `;
+    }
+
+    /**
+     * Generate Quality (Resolution/HDR) Badge HTML
+     * @param {Object} item
+     * @returns {string} HTML string
+     */
+    static getQualityBadgeHtml(item) {
+        if (!item) return '';
+        const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
+        if (!showQualityBadges) return '';
+
+        let width = item.Width;
+        let height = item.Height;
+
+        // Dynamic range flags for metadata inspection
+        let isHdr = false;
+        let isHdr10Plus = false;
+        let isDovi = false;
+
+        /*
+         * Extract video stream attributes from media source container metadata.
+         * We inspect VideoRange, VideoRangeType, Profile, Title, and Codec strings.
+         */
+        if (item.MediaSources && item.MediaSources.length > 0) {
+            const source = item.MediaSources[0];
+            if (source.Width) width = source.Width;
+            if (source.Height) height = source.Height;
+            if (source.MediaStreams) {
+                const videoStream = source.MediaStreams.find((s) => s.Type === 'Video');
+                if (videoStream) {
+                    if (videoStream.Width) width = videoStream.Width;
+                    if (videoStream.Height) height = videoStream.Height;
+
+                    // Capture top-level item range attributes
+                    const itemRange = `${item.VideoRange || ''} ${item.VideoRangeType || ''}`;
+
+                    // Capture detailed video stream range and codec attributes
+                    const videoRange = videoStream.VideoRange || '';
+                    const videoRangeType = videoStream.VideoRangeType || '';
+                    const profile = videoStream.Profile || '';
+                    const title = videoStream.Title || videoStream.DisplayTitle || '';
+                    const codec = videoStream.Codec || '';
+
+                    // Build a unified inspection string across all item and stream metadata fields
+                    const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${title} ${codec}`.toLowerCase();
+
+                    /*
+                     * 1. Detect HDR10+ specific signaling
+                     * Checks for 'hdr10plus', 'hdr10+', 'hdr10p', or Dolby Vision hybrid 'doviwithhdr10plus'
+                     */
+                    if (
+                        checkString.includes('hdr10plus') ||
+                        checkString.includes('hdr10+') ||
+                        checkString.includes('hdr10p') ||
+                        checkString.includes('doviwithhdr10plus') ||
+                        checkString.includes('doviwithelhdr10plus')
+                    ) {
+                        isHdr10Plus = true;
+                    }
+
+                    /*
+                     * 2. Detect standard HDR / HDR10 signaling
+                     */
+                    if (checkString.includes('hdr')) {
+                        isHdr = true;
+                    }
+
+                    /*
+                     * 3. Detect Dolby Vision (DoVi) signaling
+                     */
+                    if (
+                        checkString.includes('dovi') ||
+                        checkString.includes('dolby vision') ||
+                        codec.toLowerCase().startsWith('dv')
+                    ) {
+                        isDovi = true;
+                    }
+                }
+            }
+        }
+
+        if (width || height) {
+            let resolutionLabel = '';
+            const maxDim = Math.max(width || 0, height || 0);
+            const minDim = Math.min(width || 0, height || 0);
+
+            /*
+             * Classify resolution using relaxed boundaries to account for widescreen cropping
+             */
+            if (maxDim >= 3000 || minDim >= 2000) {
+                resolutionLabel = '4K';
+            } else if (maxDim >= 1600 || minDim >= 900) {
+                resolutionLabel = '1080p';
+            } else if (maxDim >= 1000 || minDim >= 600) {
+                resolutionLabel = '720p';
+            } else if (maxDim > 0) {
+                resolutionLabel = 'SD';
+            }
+
+            /*
+             * Determine dynamic range label prioritization based on target OS platform:
+             *
+             * On Samsung Tizen TVs, Dolby Vision hardware decoders do not exist.
+             * Tizen AVPlay renders the fallback layer (HDR10 or HDR10+) natively.
+             * Therefore, when running on Tizen (platformInfo.isTizen), we prioritize HDR10+ / HDR
+             * over DV so the quality badge accurately reflects what the TV actually renders.
+             *
+             * On non-Tizen platforms (e.g. webOS / Web), DV is prioritized as the top tier.
+             */
+            let rangeLabel = '';
+            if (platformInfo.isTizen) {
+                if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                } else if (isDovi) {
+                    rangeLabel = 'DV';
+                }
+            } else {
+                if (isDovi) {
+                    rangeLabel = 'DV';
+                } else if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                }
+            }
+
+            if (rangeLabel) {
+                resolutionLabel = resolutionLabel ? `${resolutionLabel} ${rangeLabel}` : rangeLabel;
+            }
+
+            if (resolutionLabel) {
+                return `<div class="quality-badge">${resolutionLabel}</div>`;
+            }
+        }
+        return '';
+    }
+
     /**
      * Create HTML string for a media card
      * @param {Object} item - The Jellyfin item object
@@ -25,11 +206,28 @@ class CardRenderer {
      */
     static createCardHtml(item, options = {}) {
         const { isLandscape = false, type = 'poster', contextType = null, isGrid = false, cardWidth = null } = options;
+
+        // ------------------------------------------------------------------
+        // HTML OUTPUT CACHE
+        // ------------------------------------------------------------------
+        // If the rendering context (options that affect HTML output) has not
+        // changed, return the cached HTML for this item — skipping image URL
+        // resolution, BlurHash lookup, quality badge iteration, and string
+        // building. Cache key incorporates every option that changes output.
+        // ------------------------------------------------------------------
+        const cacheKey = `${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}`;
+        if (CardRenderer._htmlCacheKey !== cacheKey) {
+            CardRenderer._htmlCache.clear();
+            CardRenderer._htmlCacheKey = cacheKey;
+        }
+        const itemId = item.Id;
+        const cached = CardRenderer._htmlCache.get(itemId);
+        if (cached !== undefined) return cached;
+
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         let imageUrl = '';
         let imageInnerHtml = '';
-        const itemId = item.Id;
 
         // Captures which image type+tag was resolved for BlurHash lookup
         let resolvedImageType = '';
@@ -428,31 +626,20 @@ class CardRenderer {
         // It is optional and can be disabled via preferences to declutter the UI.
         let badgeHtml = '';
 
-        // Fetch the user preference (defaults to false, meaning counts are shown by default)
+        // Fetch user preferences for badges
         const hideEpisodeCounts = storage.getItem('pref:hideEpisodeCounts') === 'true';
+        const showMediaSourceCounts = storage.getItem('pref:showMediaSourceCounts') !== 'false';
 
-        // Only render the count badge if the user hasn't explicitly disabled it
+        // Only render the unplayed count badge if the user hasn't explicitly disabled it
         if (!hideEpisodeCounts && item.UserData && item.UserData.UnplayedItemCount > 0) {
             badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
+        } else if (showMediaSourceCounts && item.MediaSourceCount > 1) {
+            // Render media source version count badge (e.g. for items with multiple versions like Movies/Episodes)
+            badgeHtml = `<div class="count-badge media-source-count-badge">${item.MediaSourceCount}</div>`;
         }
 
         // Played Badge (Check Mark)
-        let playedBadgeHtml = '';
-        const isMusic =
-            item.Type === 'MusicArtist' ||
-            item.Type === 'Artist' ||
-            item.Type === 'MusicAlbum' ||
-            item.Type === 'Audio';
-
-        if (item.UserData && item.UserData.Played && !isMusic) {
-            playedBadgeHtml = `
-                <div class="played-badge">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                </div>
-            `;
-        }
+        let playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(item);
 
         // Video Badge (Center Play Icon)
         let videoBadgeHtml = '';
@@ -488,96 +675,7 @@ class CardRenderer {
         }
 
         // Quality Badge (Resolution/HDR)
-        let qualityBadgeHtml = '';
-        const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
-        if (showQualityBadges) {
-            let width = item.Width;
-            let height = item.Height;
-            let isHdr = false;
-            let isDovi = false;
-
-            /*
-             * Extract video streams from media source metadata to inspect the encoding range properties.
-             * This allows us to detect advanced color formats like Dolby Vision (DoVi) and HDR.
-             */
-            if (item.MediaSources && item.MediaSources.length > 0) {
-                const source = item.MediaSources[0];
-                if (source.Width) width = source.Width;
-                if (source.Height) height = source.Height;
-                if (source.MediaStreams) {
-                    const videoStream = source.MediaStreams.find((s) => s.Type === 'Video');
-                    if (videoStream) {
-                        if (videoStream.Width) width = videoStream.Width;
-                        if (videoStream.Height) height = videoStream.Height;
-                        const videoRange = videoStream.VideoRange || videoStream.VideoRangeType || '';
-                        const profile = videoStream.Profile || '';
-                        const title = videoStream.Title || videoStream.DisplayTitle || '';
-                        const codec = videoStream.Codec || '';
-
-                        // Combine stream attributes into normalized check strings
-                        const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
-
-                        /*
-                         * Check for standard High Dynamic Range (HDR) naming
-                         */
-                        if (checkString.includes('hdr')) {
-                            isHdr = true;
-                        }
-                        /*
-                         * Dolby Vision can be identified by:
-                         * - 'dovi' or 'dolby vision' in range/profile/title
-                         * - Codec identifiers starting with 'dv' (e.g. dvh1, dvhe)
-                         */
-                        if (
-                            checkString.includes('dovi') ||
-                            checkString.includes('dolby vision') ||
-                            codec.toLowerCase().startsWith('dv')
-                        ) {
-                            isDovi = true;
-                        }
-                    }
-                }
-            }
-
-            if (width || height) {
-                let resolutionLabel = '';
-                const maxDim = Math.max(width || 0, height || 0);
-                const minDim = Math.min(width || 0, height || 0);
-
-                /*
-                 * Resolve resolution boundaries based on dimensions.
-                 * We use relaxed bounds to account for cropped widescreen formats (e.g. 3834x1632 for 4K, 1920x800 for 1080p).
-                 */
-                if (maxDim >= 3000 || minDim >= 2000) {
-                    resolutionLabel = '4K';
-                } else if (maxDim >= 1600 || minDim >= 900) {
-                    resolutionLabel = '1080p';
-                } else if (maxDim >= 1000 || minDim >= 600) {
-                    resolutionLabel = '720p';
-                } else if (maxDim > 0) {
-                    resolutionLabel = 'SD';
-                }
-
-                /*
-                 * Determine the dynamic range suffix for the badge label.
-                 * Dolby Vision (DV) takes precedence as the premium format.
-                 */
-                let rangeLabel = '';
-                if (isDovi) {
-                    rangeLabel = 'DV';
-                } else if (isHdr) {
-                    rangeLabel = 'HDR';
-                }
-
-                if (rangeLabel) {
-                    resolutionLabel = resolutionLabel ? `${resolutionLabel} ${rangeLabel}` : rangeLabel;
-                }
-
-                if (resolutionLabel) {
-                    qualityBadgeHtml = `<div class="quality-badge">${resolutionLabel}</div>`;
-                }
-            }
-        }
+        let qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
 
         // --- 3. Text Generation ---
 
@@ -675,6 +773,12 @@ class CardRenderer {
             }
         }
 
+        // Title/subtitle derive from server-supplied fields (Name, SeriesName,
+        // ChannelName, CurrentProgram.Name, Role...) and land in innerHTML —
+        // escape once here, after all composition is done.
+        titleText = escapeHtml(titleText);
+        subtitleText = escapeHtml(subtitleText);
+
         // --- 3.5. List View Override ---
         // In list-view, we want the Title on the left and EVERY other piece of info
         // (Year, Role, Rating, Score) on the right. We move subtitle parts to metaHtml.
@@ -706,7 +810,7 @@ class CardRenderer {
         // Attach fallback data for LazyLoader to use on error
         const fbData = CardRenderer.getFallbackData(item.Name);
         const hideInitials = type === 'library';
-        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
+        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${escapeHtml(fbData.name)}" data-fb-init="${escapeHtml(fbData.initials)}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
         // ====================================================================
         // Expansion Eligibility Strategy
@@ -804,8 +908,8 @@ class CardRenderer {
                 ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>`
                 : '';
         const imagePart = imageUrl
-            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
-            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>` : ''}`;
+            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
+            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${escapeHtml(i18n.ensureBiDi(item.Name))}</div>` : ''}`;
         const finalContextType = contextType || item.Type;
 
         const isHiddenLibraryLabel =
@@ -872,56 +976,56 @@ class CardRenderer {
             ${qualityBadgeHtml}
         `;
 
-        return `
+        const html = `
             <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" tabindex="0">
                 <div class="card-image">
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
                     ${!options.showMeta ? badgeContainer : ''}
-                    ${
-                        showInside
-                            ? `
+                    ${showInside
+                ? `
                     <div class="card-info inside">
-                        ${
-                            options.showMeta
-                                ? `
+                        ${options.showMeta
+                    ? `
                         <div class="card-title-row">
                             <div class="card-title"><span>${titleText}</span></div>
                             ${badgeContainer}
                         </div>
                         `
-                                : `<div class="card-title"><span>${titleText}</span></div>`
-                        }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                         ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                         ${metaHtml}
                     </div>
                     `
-                            : ''
-                    }
+                : ''
+            }
                 </div>
-                ${
-                    showOutside
-                        ? `
+                ${showOutside
+                ? `
                 <div class="card-info">
-                    ${
-                        options.showMeta
-                            ? `
+                    ${options.showMeta
+                    ? `
                     <div class="card-title-row">
                         <div class="card-title"><span>${titleText}</span></div>
                         ${badgeContainer}
                     </div>
                     `
-                            : `<div class="card-title"><span>${titleText}</span></div>`
-                    }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                     ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                     ${metaHtml}
                 </div>
                 `
-                        : ''
-                }
+                : ''
+            }
             </button>
         `;
+
+        // Cache the output for reuse during this render context
+        CardRenderer._htmlCache.set(itemId, html);
+        return html;
     }
 
     /**
@@ -960,8 +1064,8 @@ class CardRenderer {
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
-                ${!hideInitials ? `<div class="media-fallback-initials">${data.initials}</div>` : ''}
-                ${!isModern ? `<div class="media-fallback-name">${data.name}</div>` : ''}
+                ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(data.initials)}</div>` : ''}
+                ${!isModern ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
             </div>
         `;
     }
@@ -1011,15 +1115,14 @@ class CardRenderer {
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
-                    ${
-                        !skeletonHideLabels
-                            ? `
+                    ${!skeletonHideLabels
+                        ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
                         ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>` : ''}
                     </div>
                     `
-                            : ''
+                        : ''
                     }
                 </div>
             `;

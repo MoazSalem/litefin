@@ -5,7 +5,7 @@
  * Triple-build system supporting:
  * - Native build (Tizen 6.0+): No transpilation, pure ES6+
  * - Modern build (Tizen 5.0+): Transpiled for Chromium 69
- * - Legacy build (Tizen 3.0+): Transpiled for Chromium 47 (ES5)
+ * - Legacy build (Tizen 3.0+): Transpiled for Chromium 38 (ES5)
  * ============================================================================
  */
 
@@ -67,10 +67,15 @@ function getPlugins(tier, options = {}) {
          * will silently fall through to the HTTP scan on WebOS.
          * The file is a no-op on non-WebOS platforms so safe to include in all builds.
          */
-        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
+        { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' },
+        // Copy early boot diagnostic backup logger for all builds
+        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' }
     ];
 
-    if (buildTier === 'modern') {
+    // Include libass-wasm worker assets for both modern and legacy build tiers.
+    // Legacy tier includes the WASM workers for newer devices running legacy builds,
+    // with runtime WebAssembly feature gating falling back to libjass on unsupported hardware.
+    if (buildTier === 'modern' || buildTier === 'legacy') {
         patterns.push(
             {
                 from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.js',
@@ -235,8 +240,8 @@ const normalConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -277,7 +282,7 @@ const normalConfig = {
 };
 
 // ============================================================================
-// Legacy build - Tizen 3.0+ / webOS 4.0+ (Chromium 47, ES5)
+// Legacy build - Tizen 3.0+ / webOS 4.0+ (Chromium 38, true ES5)
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
@@ -316,8 +321,8 @@ const legacyConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -326,7 +331,7 @@ const legacyConfig = {
                             [
                                 '@babel/preset-env',
                                 {
-                                    targets: { chrome: '47' },
+                                    targets: { chrome: '38' },
                                     useBuiltIns: 'usage',
                                     corejs: 3
                                 }
@@ -353,14 +358,8 @@ const legacyConfig = {
         ]
     },
 
-    // Legacy tier: LibassWasmRenderer is stubbed — no WASM workers are shipped.
-    plugins: [
-        ...getPlugins('legacy'),
-        new webpack.NormalModuleReplacementPlugin(
-            /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
-            path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
-        )
-    ]
+    // Legacy tier: Ships full LibassWasmRenderer and WASM workers with runtime feature detection.
+    plugins: getPlugins('legacy')
 };
 
 // ============================================================================
@@ -393,6 +392,8 @@ const ultraLegacyConfig = {
         'core-js/es/array/from', // Array.from — spread/iterator polyfill
         'whatwg-fetch', // fetch() for Tizen 2.x / WebOS 1.x
         'url-search-params-polyfill', // URLSearchParams for Chrome 32
+        './src/utils/DomPolyfills.js',
+        './src/utils/AssJsPolyfills.js',
         './src/index.js'
     ],
 
@@ -551,8 +552,8 @@ const normalOblongConfig = {
         rules: [
             {
                 // Transpile JS using Babel for Chromium 63
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|assjs)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs|assjs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {

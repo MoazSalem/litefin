@@ -114,10 +114,13 @@ export const themeUtils = {
     getAccentVariants(hex) {
         const rgb = this.hexToRgb(hex);
         const hsl = this.hexToHsl(hex);
+        const darkRgbObj = this.hexToRgb(this.hslToHex(hsl.h, Math.max(15, Math.min(hsl.s * 0.5, 40)), 10));
+        const darkRgb = darkRgbObj ? `${darkRgbObj.r}, ${darkRgbObj.g}, ${darkRgbObj.b}` : '15, 15, 20';
 
         return {
             accent: hex,
             accentRgb: `${rgb.r}, ${rgb.g}, ${rgb.b}`,
+            accentDarkRgb: darkRgb,
             accentHover: this.hslToHex(hsl.h, hsl.s, Math.min(hsl.l + 10, 100)),
             accentActive: this.hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 10, 0)),
             accentLight: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`

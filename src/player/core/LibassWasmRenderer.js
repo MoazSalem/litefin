@@ -27,9 +27,16 @@ const getAbsoluteUrl = (relPath) => new URL(relPath, window.location.href).href;
 let _availableFonts = null;
 function getAvailableFonts() {
     if (_availableFonts) return _availableFonts;
+    const defaultFontUrl = getAbsoluteUrl('assets/fonts/Roboto.woff2');
     _availableFonts = {
-        'roboto': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
-        'liberation sans': getAbsoluteUrl('assets/fonts/Roboto.woff2'),
+        'roboto': defaultFontUrl,
+        'liberation sans': defaultFontUrl,
+        'arial': defaultFontUrl,
+        'arial unicode ms': defaultFontUrl,
+        'sans-serif': defaultFontUrl,
+        'tahoma': defaultFontUrl,
+        'verdana': defaultFontUrl,
+        'segoe ui': defaultFontUrl,
         'courier prime': getAbsoluteUrl('assets/fonts/CourierPrime.woff2'),
         'merriweather': getAbsoluteUrl('assets/fonts/Merriweather.woff2'),
         'inconsolata': getAbsoluteUrl('assets/fonts/Inconsolata.woff2'),
@@ -53,6 +60,29 @@ function getAvailableFonts() {
 
 export default class LibassWasmRenderer {
     /**
+     * Runtime capability check for WebAssembly support.
+     * Evaluates whether the current browser engine possesses WebAssembly support
+     * and is capable of compiling a basic WASM binary.
+     *
+     * @returns {boolean} True if WebAssembly execution is supported.
+     */
+    static isSupported() {
+        try {
+            // Validate the presence of the global WebAssembly object and instantiate API
+            if (typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function') {
+                // Instantiate a minimal 8-byte WASM binary module to verify runtime compilation capability
+                const module = new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+                if (module instanceof WebAssembly.Module) {
+                    return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
+                }
+            }
+        } catch (e) {
+            // Trapped execution or instantiation failure indicates lack of WebAssembly support
+        }
+        return false;
+    }
+
+    /**
      * @param {Object} options
      * @param {HTMLElement} options.container - Container element that wraps the video
      * @param {HTMLVideoElement} [options.video] - The video element (for VideoClock sync)
@@ -61,6 +91,11 @@ export default class LibassWasmRenderer {
      * @param {number} [options.videoFrameRate] - Video framerate (for render sync)
      */
     constructor({ container, video, width, height, videoFrameRate, getTime, avplayLatency }) {
+        // Assert WebAssembly capability prior to performing hardware or DOM setup
+        if (!LibassWasmRenderer.isSupported()) {
+            throw new Error('LibassWasmRenderer is not supported on this platform (WebAssembly unavailable)');
+        }
+
         this._container = container;
         this._videoElement = video || null;
         this._isVirtual = !video;
@@ -548,18 +583,55 @@ export default class LibassWasmRenderer {
             return parseInt(line.split(':')[1], 10) || 0;
         };
 
-        const resX = getPlayRes('PlayResX');
-        const resY = getPlayRes('PlayResY');
+        let resX = getPlayRes('PlayResX');
+        let resY = getPlayRes('PlayResY');
+
+        // ====================================================================
+        // Patch missing or invalid PlayResX / PlayResY in [Script Info]
+        //
+        // When PlayResX or PlayResY is omitted or set to 0, libass defaults
+        // PlayResY to 288 and PlayResX to 384. If PlayResX was specified (e.g. 1920)
+        // without PlayResY, or if the header was omitted entirely, libass's
+        // internal coordinate calculations can produce distorted scaling.
+        // We inject safe standard defaults (384x288) if absent.
+        // ====================================================================
+        const safeResX = 384;
+        const safeResY = 288;
 
         if (resX <= 0 || resY <= 0) {
-            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — libass-wasm handles this natively, skipping patch`);
+            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — patching Script Info to ${safeResX}x${safeResY}`);
+
+            const scriptInfoIdx = lines.findIndex(l => /^\[Script Info\]/i.test(l.trim()));
+            const insertAt = scriptInfoIdx !== -1 ? scriptInfoIdx + 1 : 0;
+
+            const setPlayRes = (key, value) => {
+                const idx = lines.findIndex(l => new RegExp(`^${key}\\s*:`, 'i').test(l.trim()));
+                if (idx !== -1) {
+                    lines[idx] = `${key}: ${value}`;
+                } else {
+                    lines.splice(insertAt, 0, `${key}: ${value}`);
+                }
+            };
+
+            if (resX <= 0) {
+                setPlayRes('PlayResX', safeResX);
+                resX = safeResX;
+            }
+            if (resY <= 0) {
+                setPlayRes('PlayResY', safeResY);
+                resY = safeResY;
+            }
         }
 
-        if (!this._enableStyleMods) {
-            // Style modifications disabled: return content as-is
-            return content;
+        const isFfmpegScript = /Script generated by FFmpeg|Lavc|libass/i.test(content);
+        const shouldModifyStyles = this._enableStyleMods || isFfmpegScript || (fontScale && fontScale !== 1.0);
+
+        if (!shouldModifyStyles) {
+            // Style modifications disabled & not an FFmpeg script: return content with PlayRes patched
+            return lines.join('\n');
         }
 
+        const effectivePlayResY = resY > 0 ? resY : safeResY;
         let styleFormat = null;
 
         const processedLines = lines.map(line => {
@@ -574,30 +646,55 @@ export default class LibassWasmRenderer {
                 const parts = line.substring(line.indexOf(':') + 1).split(',');
                 const fontIdx = styleFormat.indexOf('Fontname');
 
-                if (fontIdx !== -1 && fontFamily && fontFamily !== 'null') {
+                if (this._enableStyleMods && fontIdx !== -1 && fontFamily && fontFamily !== 'null') {
                     parts[fontIdx] = fontFamily;
                 }
 
                 const sizeIdx = styleFormat.indexOf('Fontsize');
-                if (sizeIdx !== -1 && fontScale && fontScale !== 1.0) {
-                    const originalSize = parseFloat(parts[sizeIdx]) || 16;
-                    parts[sizeIdx] = String(originalSize * fontScale);
+                if (sizeIdx !== -1) {
+                    let size = parseFloat(parts[sizeIdx]) || 16;
+                    const appliedScale = (fontScale && fontScale !== 1.0) ? fontScale : 1.0;
+                    size *= appliedScale;
+
+                    // ================================================================
+                    // PlayRes Fontsize Normalization for Undersized Subtitles
+                    // ----------------------------------------------------------------
+                    // Standard TV dialogue subtitles should be ~7.5% of PlayResY
+                    // (~81px on 1080p, ~54px on 720p, ~22px on 288p).
+                    // FFmpeg and auto-converters generate ASS scripts with PlayResY: 288
+                    // and Fontsize: 16 (only 5.5% height), or PlayResY: 1080 and Fontsize: 20
+                    // (< 2% height), making subtitles look miniscule on screen.
+                    // If the font size ratio is undersized (< 7.0% of PlayResY),
+                    // auto-scale it up to a comfortable ~7.5% baseline ratio.
+                    // ================================================================
+                    const minRatio = 0.075;
+                    const sizeRatio = size / (effectivePlayResY * appliedScale);
+
+                    if (sizeRatio < 0.070) {
+                        const normalizedSize = Math.round(effectivePlayResY * minRatio * appliedScale);
+                        log.info(`Normalizing undersized ASS Fontsize (${parts[sizeIdx]}px on PlayResY ${effectivePlayResY}, isFfmpeg=${isFfmpegScript}) -> ${normalizedSize}px`);
+                        size = normalizedSize;
+                    }
+
+                    parts[sizeIdx] = String(size);
                 }
 
-                const outlineIdx = styleFormat.indexOf('Outline');
-                if (outlineIdx !== -1 && outlineThickness !== null && outlineThickness !== undefined) {
-                    parts[outlineIdx] = String(outlineThickness);
-                }
+                if (this._enableStyleMods) {
+                    const outlineIdx = styleFormat.indexOf('Outline');
+                    if (outlineIdx !== -1 && outlineThickness !== null && outlineThickness !== undefined) {
+                        parts[outlineIdx] = String(outlineThickness);
+                    }
 
-                const shadowIdx = styleFormat.indexOf('Shadow');
-                if (shadowIdx !== -1 && shadowThickness !== null && shadowThickness !== undefined) {
-                    parts[shadowIdx] = String(shadowThickness);
+                    const shadowIdx = styleFormat.indexOf('Shadow');
+                    if (shadowIdx !== -1 && shadowThickness !== null && shadowThickness !== undefined) {
+                        parts[shadowIdx] = String(shadowThickness);
+                    }
                 }
 
                 return 'Style: ' + parts.join(',');
             }
 
-            if (trimmed.startsWith('Dialogue:')) {
+            if (this._enableStyleMods && trimmed.startsWith('Dialogue:')) {
                 return line.replace(/\\(fn|bord|shad|s?out|s?shad)[^\\})]+(?=[\\})])/g, '');
             }
 

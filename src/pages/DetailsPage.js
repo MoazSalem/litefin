@@ -23,6 +23,7 @@ import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
 import AddToTargetModal from '../components/AddToTargetModal.js';
+import DescriptionModal from '../components/DescriptionModal.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -37,6 +38,7 @@ import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -153,7 +155,7 @@ class DetailsPage extends Page {
 
                             <!-- Overview -->
                             <div class="details-overview">
-                                <p class="overview-text line-clamp-6"></p>
+                                <div class="overview-text line-clamp-6" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -167,14 +169,50 @@ class DetailsPage extends Page {
 
                     <!-- Collection Movies (BoxSet) -->
                     <section class="details-collection-movies media-row hidden" id="collection-movies-section">
-                        <h2 class="row-title" data-i18n="Movies">Movies in Collection</h2>
+                        <h2 class="row-title" data-i18n="Movies">Movies</h2>
                         <div class="collection-row row-items" id="collection-movies-row"></div>
                     </section>
 
                     <!-- Collection Shows (BoxSet) -->
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
-                        <h2 class="row-title" data-i18n="ShowsInCollection">Shows in Collection</h2>
+                        <h2 class="row-title" data-i18n="Series">TV Shows</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
+                    </section>
+
+                    <!-- Collection Episodes (BoxSet) -->
+                    <section class="details-collection-episodes media-row hidden" id="collection-episodes-section">
+                        <h2 class="row-title" data-i18n="Episodes">Episodes</h2>
+                        <div class="collection-row row-items" id="collection-episodes-row"></div>
+                    </section>
+
+                    <!-- Collection Videos (BoxSet) -->
+                    <section class="details-collection-videos media-row hidden" id="collection-videos-section">
+                        <h2 class="row-title" data-i18n="Videos">Videos</h2>
+                        <div class="collection-row row-items" id="collection-videos-row"></div>
+                    </section>
+
+                    <!-- Collection Albums (BoxSet) -->
+                    <section class="details-collection-albums media-row hidden" id="collection-albums-section">
+                        <h2 class="row-title" data-i18n="Albums">Albums</h2>
+                        <div class="collection-row row-items" id="collection-albums-row"></div>
+                    </section>
+
+                    <!-- Collection Books (BoxSet) -->
+                    <section class="details-collection-books media-row hidden" id="collection-books-section">
+                        <h2 class="row-title" data-i18n="Books">Books</h2>
+                        <div class="collection-row row-items" id="collection-books-row"></div>
+                    </section>
+
+                    <!-- Sub-Collections (BoxSet) -->
+                    <section class="details-collection-subcollections media-row hidden" id="collection-subcollections-section">
+                        <h2 class="row-title" data-i18n="Collections">Collections</h2>
+                        <div class="collection-row row-items" id="collection-subcollections-row"></div>
+                    </section>
+
+                    <!-- Collection Other Items (BoxSet) -->
+                    <section class="details-collection-other media-row hidden" id="collection-other-section">
+                        <h2 class="row-title" data-i18n="HeaderOtherItems">Other Items</h2>
+                        <div class="collection-row row-items" id="collection-other-row"></div>
                     </section>
 
                     <!-- Playlist Items — shown when viewing a Playlist type item.
@@ -207,6 +245,12 @@ class DetailsPage extends Page {
                     <section class="details-season-episodes media-row hidden" id="more-from-season-section">
                         <h2 class="row-title" id="more-from-season-title" data-i18n="HeaderMoreFromSeason">More from Season</h2>
                         <div class="season-episodes-row row-items" id="more-from-season-row"></div>
+                    </section>
+
+                    <!-- Additional Parts (Multi-part movies/videos) -->
+                    <section class="details-additional-parts media-row hidden" id="additional-parts-section">
+                        <h2 class="row-title" data-i18n="AdditionalParts">Additional Parts</h2>
+                        <div class="additional-parts-row row-items" id="additional-parts-row"></div>
                     </section>
 
                     <!-- Cast & Crew -->
@@ -543,6 +587,16 @@ class DetailsPage extends Page {
                 this._deferredLoading = true;
             } else {
                 this.setLoading(false);
+
+                // No restore target, so the page is about to become interactive right
+                // now — before secondary content (cast, similar, collections) below has
+                // even started loading. Force focus onto Resume immediately rather than
+                // waiting for the deferred block further down, which only runs once all
+                // of that secondary content finishes. Otherwise there's a multi-second
+                // window where the page looks ready but focus is still on the default
+                // Play button, and a fast OK press starts playback from scratch instead
+                // of resuming.
+                this._resumeFocusForced = this._focusResumeButton();
             }
 
             // ────────────────────────────────────────────────────────────────────────
@@ -622,13 +676,16 @@ class DetailsPage extends Page {
                     state.delete(stateKey);
                 }
 
-                if (!restoredFocus && !this._pendingNavState) {
-                    if (this._item.UserData?.PlaybackPositionTicks > 0) {
-                        const resumeBtn = this.$('.resume-btn');
-                        if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
-                            log.info('Forcing focus to Resume button');
-                            focusManager.focusElement(resumeBtn);
-                        }
+                if (!restoredFocus) {
+                    if (this._pendingNavState) {
+                        // A Back-navigation left us a section/index to restore (e.g.
+                        // returning from Settings via the sidebar). Consume it now —
+                        // otherwise it just sits here forever, since DetailsPage never
+                        // triggers the base-class restore itself, and the Resume-button
+                        // fallback below would be skipped without ever taking its place.
+                        this.restoreScrollFocusWhenReady();
+                    } else if (!this._resumeFocusForced) {
+                        this._focusResumeButton();
                     }
                 }
 
@@ -646,6 +703,21 @@ class DetailsPage extends Page {
             this.showError(i18n.t('FailedToLoadDetails'));
             this.setLoading(false);
         }
+    }
+
+    /**
+     * Focus the Resume button if the item has playback progress and the button
+     * is visible. Returns whether focus was actually forced.
+     */
+    _focusResumeButton() {
+        if (!(this._item.UserData?.PlaybackPositionTicks > 0)) return false;
+
+        const resumeBtn = this.$('.resume-btn');
+        if (!resumeBtn || resumeBtn.classList.contains('hidden')) return false;
+
+        log.info('Forcing focus to Resume button');
+        focusManager.focusElement(resumeBtn);
+        return true;
     }
 
     _showVersionSelectionMenu() {
@@ -824,6 +896,11 @@ class DetailsPage extends Page {
         } else if (hideCast) {
             const peopleSection = this.$('#people-section');
             if (peopleSection) peopleSection.classList.add('hidden');
+        }
+
+        // Additional Parts for multi-part video items (e.g. multi-part movies)
+        if (['Movie', 'Video'].includes(this._item?.Type) || this._item?.PartCount > 1) {
+            await this._loadAdditionalParts();
         }
 
         // Special Features
@@ -1076,12 +1153,19 @@ class DetailsPage extends Page {
             'details-rich-meta',
             'collection-movies-section',
             'collection-shows-section',
+            'collection-episodes-section',
+            'collection-videos-section',
+            'collection-albums-section',
+            'collection-books-section',
+            'collection-subcollections-section',
+            'collection-other-section',
             'details-playlist-items', // Playlist items grid (Playlist type)
             'details-next-up',
             'details-seasons',
             'details-episodes',
             'details-songs',
             'more-from-season-section',
+            'details-additional-parts', // Multi-part movie/video section
             'details-people',
             'details-special-features',
             'artists-section',
@@ -1124,73 +1208,114 @@ class DetailsPage extends Page {
         }
 
         try {
-            const [movies, shows] = await Promise.all([
-                api.getItems({
-                    ParentId: this._itemId,
-                    IncludeItemTypes: 'Movie',
-                    Recursive: true,
-                    Fields: 'ProductionYear',
-                    SortBy: sortBy,
-                    SortOrder: 'Ascending',
-                    Limit: 100 // Increased limit to capture larger collections
-                }),
-                api.getItems({
-                    ParentId: this._itemId,
-                    IncludeItemTypes: 'Series',
-                    Recursive: true,
-                    Fields: 'ProductionYear',
-                    SortBy: sortBy,
-                    SortOrder: 'Ascending',
-                    Limit: 100
-                })
-            ]);
+            // Fetch direct child items of the collection (matching Jellyfin-web behavior)
+            const response = await api.getItems({
+                ParentId: this._itemId,
+                Recursive: false,
+                Fields: 'ProductionYear,PrimaryImageAspectRatio',
+                SortBy: sortBy,
+                SortOrder: 'Ascending',
+                Limit: 300
+            });
 
-            const hasMovies = movies.Items && movies.Items.length > 0;
-            const hasShows = shows.Items && shows.Items.length > 0;
+            const allItems = response.Items || [];
 
-            // Determine what is ABOVE the collection rows (use dynamic helper)
-            const aboveCollection =
-                this._getPreviousVisibleSection('collection-movies-section')?.targetName || 'details-rich-meta';
+            // Define collection item type categories in order (matching Jellyfin-web)
+            const categories = [
+                {
+                    key: 'movies',
+                    sectionId: 'collection-movies-section',
+                    listId: 'collection-movies-row',
+                    filter: (item) => item.Type === 'Movie',
+                    isLandscape: false,
+                    cardType: 'poster'
+                },
+                {
+                    key: 'shows',
+                    sectionId: 'collection-shows-section',
+                    listId: 'collection-shows-row',
+                    filter: (item) => item.Type === 'Series',
+                    isLandscape: false,
+                    cardType: 'poster'
+                },
+                {
+                    key: 'episodes',
+                    sectionId: 'collection-episodes-section',
+                    listId: 'collection-episodes-row',
+                    filter: (item) => item.Type === 'Episode',
+                    isLandscape: true,
+                    cardType: 'thumb'
+                },
+                {
+                    key: 'videos',
+                    sectionId: 'collection-videos-section',
+                    listId: 'collection-videos-row',
+                    filter: (item) => item.MediaType === 'Video' && item.Type !== 'Movie' && item.Type !== 'Series' && item.Type !== 'Episode',
+                    isLandscape: true,
+                    cardType: 'thumb'
+                },
+                {
+                    key: 'albums',
+                    sectionId: 'collection-albums-section',
+                    listId: 'collection-albums-row',
+                    filter: (item) => item.Type === 'MusicAlbum',
+                    isLandscape: false,
+                    cardType: 'square'
+                },
+                {
+                    key: 'books',
+                    sectionId: 'collection-books-section',
+                    listId: 'collection-books-row',
+                    filter: (item) => item.Type === 'Book',
+                    isLandscape: false,
+                    cardType: 'poster'
+                },
+                {
+                    key: 'subcollections',
+                    sectionId: 'collection-subcollections-section',
+                    listId: 'collection-subcollections-row',
+                    filter: (item) => item.Type === 'BoxSet',
+                    isLandscape: false,
+                    cardType: 'poster'
+                }
+            ];
 
-            // Render Rows with correct UP linking
-            if (hasMovies) {
+            let remainingItems = [...allItems];
+            const activeSections = [];
+
+            // Render categorized rows
+            for (const cat of categories) {
+                const categoryItems = remainingItems.filter(cat.filter);
+                remainingItems = remainingItems.filter((i) => !cat.filter(i));
+
+                if (categoryItems.length > 0) {
+                    this._renderCollectionRow(
+                        cat.sectionId,
+                        cat.listId,
+                        categoryItems,
+                        null,
+                        cat.isLandscape,
+                        cat.cardType
+                    );
+                    activeSections.push(cat.sectionId);
+                }
+            }
+
+            // Render leftover "Other Items" row if any exist
+            if (remainingItems.length > 0) {
                 this._renderCollectionRow(
-                    'collection-movies-section',
-                    'collection-movies-row',
-                    movies.Items,
-                    aboveCollection
+                    'collection-other-section',
+                    'collection-other-row',
+                    remainingItems,
+                    null,
+                    false,
+                    'poster'
                 );
-            }
-            if (hasShows) {
-                // Shows row's UP goes to Movies (if exists) or to whatever is above collection
-                const showsUpTarget = hasMovies ? 'collection-movies-section' : aboveCollection;
-                this._renderCollectionRow(
-                    'collection-shows-section',
-                    'collection-shows-row',
-                    shows.Items,
-                    showsUpTarget
-                );
+                activeSections.push('collection-other-section');
             }
 
-            // Link Focus chain (DOWN direction)
-            // Whatever is above -> Movies -> Shows -> Next section
-            let lastSection = aboveCollection;
-
-            if (hasMovies) {
-                this._updateLeaveDown(lastSection, 'collection-movies-section');
-                lastSection = 'collection-movies-section';
-            }
-
-            if (hasShows) {
-                this._updateLeaveDown(lastSection, 'collection-shows-section');
-                lastSection = 'collection-shows-section';
-            }
-
-            // Link last collection row to whatever is next (People, Similar, etc.)
-            const nextSection = this._getNextVisibleSection(lastSection);
-            if (nextSection) {
-                this._updateLeaveDown(lastSection, nextSection.targetName);
-            }
+            // Rebuild focus navigation chain across active sections
+            this._rebuildNavigationChain();
         } catch (e) {
             log.warn('Failed to load collection items', e);
         }
@@ -1350,13 +1475,14 @@ class DetailsPage extends Page {
         this._updateLeaveDown(upwardLink, focusSectionName);
     }
 
-    _renderCollectionRow(sectionId, listId, items, leaveUpTarget) {
+    _renderCollectionRow(sectionId, listId, items, leaveUpTarget, isLandscape = false, cardType = 'poster') {
         this._renderVirtualRow({
             sectionId: sectionId,
             listId: listId,
             items: items,
-            isLandscape: false,
-            renderCard: (item) => this._renderMediaCard(item, false, 'poster'),
+            isLandscape: isLandscape,
+            cardType: cardType,
+            renderCard: (item) => this._renderMediaCard(item, isLandscape, cardType),
             focusSectionName: sectionId,
             leaveUpTarget: leaveUpTarget || 'details-rich-meta'
         });
@@ -1736,13 +1862,14 @@ class DetailsPage extends Page {
      * ========================================================================
      * Background Theme Song Loader and Player
      * ========================================================================
-     * Dynamically queries the theme media associated with the active item.
-     * If a theme song is available, compiles the stream source URL and initiates
-     * background score looping via ThemeSongPlayer.
+     * Dynamically queries the theme media associated with the active item on the server.
+     * Works for any media type (Movies, Series, Seasons, Episodes, Collections, etc.).
+     * If a theme song is available, compiles the authenticated stream source URL and initiates
+     * background score playback via ThemeSongPlayer.
      */
     async _playThemeSong() {
-        // Assert that the loaded item supports theme media playback
-        if (!['Series', 'Season', 'Episode'].includes(this._item.Type)) {
+        // Assert that the item details are fully loaded into memory before querying API
+        if (!this._item) {
             return;
         }
 
@@ -1897,8 +2024,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                  ? item.OriginalTitle
-                  : ''
+                    ? item.OriginalTitle
+                    : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -1913,12 +2040,12 @@ class DetailsPage extends Page {
         if (showTitle) {
             // If there is no logo displayed, style the title to span the full width of the container.
             const titleStyleAttr = !showLogo ? 'style="max-width: 100%;"' : '';
-            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${displayTitle}</h1>`;
+            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${escapeHtml(displayTitle)}</h1>`;
         }
 
         // Add the subtitle element underneath if present.
         if (displaySubtitle && displaySubtitle !== displayTitle) {
-            heroHtml += `<h2 class="details-original-title">${displaySubtitle}</h2>`;
+            heroHtml += `<h2 class="details-original-title">${escapeHtml(displaySubtitle)}</h2>`;
         }
 
         // Render episode season/number details for TV episodes.
@@ -1942,7 +2069,7 @@ class DetailsPage extends Page {
             const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
             const colorClass = useSecondaryColor ? 'secondary-color' : '';
 
-            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${escapeHtml(i18n.ensureBiDi(subtitleText))}</p>`;
         }
 
         // Finish appending standard metadata row and secondary date labels.
@@ -1987,7 +2114,8 @@ class DetailsPage extends Page {
             taglineEl.style.display = tagline ? 'block' : 'none';
         }
 
-        overviewEl.textContent = item.Overview || '';
+        overviewEl.innerHTML = item.Overview || '';
+        overviewEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
 
         // Reset state
         overviewEl.classList.add('line-clamp-6');
@@ -2186,41 +2314,47 @@ class DetailsPage extends Page {
             }
         }
 
-        // Upgrade to primary style
-        resumeBtn.classList.remove('btn-secondary');
-        resumeBtn.classList.add('btn-primary');
+        // The label/style/focus handoff below only applies when Resume is actually
+        // the active button (i.e. a resume point exists) — guard it the same way
+        // visibility was gated above so it doesn't steal focus from Play when there's
+        // nothing to resume.
+        if (userData.PlaybackPositionTicks > 0) {
+            // Upgrade to primary style
+            resumeBtn.classList.remove('btn-secondary');
+            resumeBtn.classList.add('btn-primary');
 
-        // Retrieve the resume position from UserData playback position.
-        // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
-        const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
+            // Retrieve the resume position from UserData playback position.
+            // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
+            const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
 
-        // Define a variable to store our sleekly formatted timestamp string.
-        let timeString = '';
+            // Define a variable to store our sleekly formatted timestamp string.
+            let timeString = '';
 
-        // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
-        // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
-        if (resumeTime >= 60) {
-            // Compute the absolute number of whole hours.
-            const hours = Math.floor(resumeTime / 60);
-            // Calculate the remaining minutes left over.
-            const minutes = resumeTime % 60;
+            // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
+            // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
+            if (resumeTime >= 60) {
+                // Compute the absolute number of whole hours.
+                const hours = Math.floor(resumeTime / 60);
+                // Calculate the remaining minutes left over.
+                const minutes = resumeTime % 60;
 
-            // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
-            // show only the hour to maintain a clean and beautiful minimal aesthetic.
-            timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-        } else {
-            // Under 60 minutes, display in simple minute format (e.g., "45m").
-            timeString = `${resumeTime}m`;
+                // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
+                // show only the hour to maintain a clean and beautiful minimal aesthetic.
+                timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+            } else {
+                // Under 60 minutes, display in simple minute format (e.g., "45m").
+                timeString = `${resumeTime}m`;
+            }
+
+            // Apply localization to the formatted time label to construct the full button label text.
+            const resumeLabel = i18n.t('ResumeAt', [timeString]);
+
+            // Update the inner HTML of the resume button with a play icon and the formatted label.
+            resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
+
+            // We hid the Play button, so move focus to the Resume button.
+            resumeBtn.focus();
         }
-
-        // Apply localization to the formatted time label to construct the full button label text.
-        const resumeLabel = i18n.t('ResumeAt', [timeString]);
-
-        // Update the inner HTML of the resume button with a play icon and the formatted label.
-        resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
-
-        // If we hid the Play button, try to move focus to the Resume button.
-        resumeBtn.focus();
 
         // Watched button
         if (watchedBtn) {
@@ -2346,7 +2480,7 @@ class DetailsPage extends Page {
                     Filters: 'IsUnplayed',
                     SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
-                    Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
@@ -2367,6 +2501,107 @@ class DetailsPage extends Page {
     }
 
     _renderNextUp() {
+        const episodeLayout = storage.getItem('pref:episodeLayout') || 'list';
+        if (episodeLayout === 'list') {
+            const container = this.$('#next-up-row');
+            const section = this.$('#next-up-section');
+            if (!section || !container || !this._nextUp || this._nextUp.length === 0) return;
+
+            section.classList.remove('hidden');
+            section.classList.remove('media-row');
+            container.classList.add('vertical-list');
+
+            let html = '<div class="episode-list-container" style="padding-bottom: 0;">';
+            this._nextUp.forEach((ep) => {
+                const progress =
+                    ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
+                        ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
+                        : 0;
+                const progressHtml = progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : '';
+
+                const playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(ep);
+                const qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(ep);
+
+                const imgUrl = api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality });
+                const episodeTitle = i18n.ensureBiDi(ep.Name);
+                const episodePrefix = ep.ParentIndexNumber && ep.IndexNumber ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. ` : ep.IndexNumber ? `${ep.IndexNumber}. ` : '';
+
+                const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                let runtimeText = '';
+                if (ep.RunTimeTicks) {
+                    const mins = Math.round(ep.RunTimeTicks / 600000000);
+                    runtimeText = `${mins}m`;
+                }
+                let endsAtText = '';
+                if (ep.RunTimeTicks) {
+                    const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                    const timeString = i18n.formatLocalTime(endTime);
+                    endsAtText = i18n.t('EndsAtValue', [timeString]);
+                }
+
+                html += `
+                    <div class="episode-row">
+                        <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                            <div class="episode-row-thumb">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
+                                ${playedBadgeHtml}
+                                ${qualityBadgeHtml}
+                                ${progressHtml}
+                            </div>
+                            <div class="episode-row-info">
+                                <div class="episode-row-title">${episodePrefix}${episodeTitle}</div>
+                                <div class="episode-row-meta">
+                                    ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                    ${runtimeText ? `<span>${runtimeText}</span>` : ''}
+                                    ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                </div>
+                                <div class="episode-row-overview">${ep.Overview || ''}</div>
+                            </div>
+                        </button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+
+            container.onclick = (e) => {
+                const card = e.target.closest('.media-card');
+                if (card && card.dataset.itemId) {
+                    const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: 'details-next-up'
+                        });
+                    }
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
+            };
+
+            lazyLoader.observe(container);
+
+            const upwardLink = this._getPreviousVisibleSection('details-next-up')?.targetName || 'details-actions';
+            const nextSection = this._getNextVisibleSection('details-next-up');
+            const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+            this.registerFocusSection('details-next-up', container, {
+                orientation: 'vertical',
+                leaveUp: upwardLink,
+                leaveDown: leaveDownTarget,
+                leaveLeft: 'sidebar',
+                onEnter: (fromElement, options) => {
+                    if (!this._hasEnteredNextUpGrid) {
+                        this._hasEnteredNextUpGrid = true;
+                        return container.querySelector('.media-card');
+                    }
+                    return null;
+                }
+            });
+
+            this._updateLeaveDown(upwardLink, 'details-next-up');
+            return;
+        }
+
         this._renderVirtualRow({
             sectionId: 'next-up-section',
             listId: 'next-up-row',
@@ -2469,6 +2704,9 @@ class DetailsPage extends Page {
                             ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>`
                             : '';
 
+                    const playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(ep);
+                    const qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(ep);
+
                     const imgUrl = api.getImageUrl(ep.Id, 'Primary', {
                         maxWidth: imageService.getParams('thumb').maxWidth,
                         quality: imageService.getParams('thumb').quality
@@ -2478,7 +2716,7 @@ class DetailsPage extends Page {
                     );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
-                    const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
                     let runtimeText = '';
                     if (ep.RunTimeTicks) {
                         const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -2496,6 +2734,8 @@ class DetailsPage extends Page {
                             <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
                                 <div class="episode-row-thumb">
                                     <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
+                                    ${playedBadgeHtml}
+                                    ${qualityBadgeHtml}
                                     ${progressHtml}
                                 </div>
                                 <div class="episode-row-info">
@@ -2693,30 +2933,18 @@ class DetailsPage extends Page {
     }
 
     /**
-     * Toggles the overview description layout between truncated and expanded states.
+     * Opens the full overview description in a scrollable dialog modal.
      */
     _showFullOverview() {
-        // Fetch references to structural elements
-        const overviewEl = this.$('.overview-text');
-        const seeMoreBtn = this.$('.see-more-btn');
-        if (!overviewEl || !seeMoreBtn) return;
+        if (!this._item) return;
 
-        // Toggle lines clamp styling
-        const isExpanded = !overviewEl.classList.contains('line-clamp-6');
-
-        if (isExpanded) {
-            // Apply line clamping to keep layout neat and clean
-            overviewEl.classList.add('line-clamp-6');
-            seeMoreBtn.textContent = i18n.t('ShowMore');
-            this.el.scrollTop = 0; // Reset scroll view hierarchy
-        } else {
-            // Remove line clamping limits to reveal full description block
-            overviewEl.classList.remove('line-clamp-6');
-            seeMoreBtn.textContent = i18n.t('ShowLess');
-        }
-
-        // Direct focus manager to maintain focus on action button
-        focusManager.focusElement(seeMoreBtn);
+        DescriptionModal.show(
+            {
+                title: this._item.Name,
+                overview: this._item.Overview
+            },
+            this
+        );
     }
 
     _checkOverviewTruncation() {
@@ -2769,6 +2997,36 @@ class DetailsPage extends Page {
                 elementId: '#collection-shows-row',
                 isVisible: () => isNotHidden('#collection-shows-section')
             },
+            {
+                name: 'collection-episodes-section',
+                elementId: '#collection-episodes-row',
+                isVisible: () => isNotHidden('#collection-episodes-section')
+            },
+            {
+                name: 'collection-videos-section',
+                elementId: '#collection-videos-row',
+                isVisible: () => isNotHidden('#collection-videos-section')
+            },
+            {
+                name: 'collection-albums-section',
+                elementId: '#collection-albums-row',
+                isVisible: () => isNotHidden('#collection-albums-section')
+            },
+            {
+                name: 'collection-books-section',
+                elementId: '#collection-books-row',
+                isVisible: () => isNotHidden('#collection-books-section')
+            },
+            {
+                name: 'collection-subcollections-section',
+                elementId: '#collection-subcollections-row',
+                isVisible: () => isNotHidden('#collection-subcollections-section')
+            },
+            {
+                name: 'collection-other-section',
+                elementId: '#collection-other-row',
+                isVisible: () => isNotHidden('#collection-other-section')
+            },
             // Playlist items — shown when the item is of Type 'Playlist'
             {
                 name: 'details-playlist-items',
@@ -2784,20 +3042,26 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#episodes-section')
             },
             {
-                name: 'details-songs',
-                elementId: '#songs-list',
-                isVisible: () => isNotHidden('#songs-section')
-            },
-            {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
+            },
+            // Additional video parts (multi-part movies/videos)
+            {
+                name: 'details-additional-parts',
+                elementId: '#additional-parts-row',
+                isVisible: () => isNotHidden('#additional-parts-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
+            },
+            {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
             },
             {
                 name: 'artists-section',
@@ -2855,20 +3119,26 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#artists-section')
             },
             {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
+            },
+            {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            // Additional video parts (multi-part movies/videos)
+            {
+                name: 'details-additional-parts',
+                elementId: '#additional-parts-row',
+                isVisible: () => isNotHidden('#additional-parts-section')
+            },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
-            },
-            {
-                name: 'details-songs',
-                elementId: '#songs-list',
-                isVisible: () => isNotHidden('#songs-section')
             },
             {
                 name: 'details-episodes',
@@ -2877,13 +3147,45 @@ class DetailsPage extends Page {
             },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
+
             // Playlist items — reverse position mirrors _getNextVisibleSection
             {
                 name: 'details-playlist-items',
                 elementId: '#playlist-items-list',
                 isVisible: () => isNotHidden('#playlist-items-section')
             },
+
             // Collection rows (BoxSet contents) - in reverse order
+            {
+                name: 'collection-other-section',
+                elementId: '#collection-other-row',
+                isVisible: () => isNotHidden('#collection-other-section')
+            },
+            {
+                name: 'collection-subcollections-section',
+                elementId: '#collection-subcollections-row',
+                isVisible: () => isNotHidden('#collection-subcollections-section')
+            },
+            {
+                name: 'collection-books-section',
+                elementId: '#collection-books-row',
+                isVisible: () => isNotHidden('#collection-books-section')
+            },
+            {
+                name: 'collection-albums-section',
+                elementId: '#collection-albums-row',
+                isVisible: () => isNotHidden('#collection-albums-section')
+            },
+            {
+                name: 'collection-videos-section',
+                elementId: '#collection-videos-row',
+                isVisible: () => isNotHidden('#collection-videos-section')
+            },
+            {
+                name: 'collection-episodes-section',
+                elementId: '#collection-episodes-row',
+                isVisible: () => isNotHidden('#collection-episodes-section')
+            },
             {
                 name: 'collection-shows-section',
                 elementId: '#collection-shows-row',
@@ -2962,12 +3264,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                      this._item.SeasonName.toLowerCase().startsWith('season ')
-                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                          : /^\d+$/.test(this._item.SeasonName)
+                    this._item.SeasonName.toLowerCase().startsWith('season ')
+                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                        : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                  ])
+                ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
@@ -3090,6 +3392,85 @@ class DetailsPage extends Page {
         });
     }
 
+    /**
+     * Fetch additional video parts for multi-part items (e.g. Part 2, Part 3 of a multi-disc movie).
+     * Populates the Additional Parts section so users can view or start playback from any part.
+     */
+    async _loadAdditionalParts() {
+        if (!['Movie', 'Video'].includes(this._item?.Type) && !(this._item?.PartCount > 1)) {
+            return;
+        }
+
+        try {
+            log.info('Fetching additional parts for item ID:', this._itemId);
+
+            // Primary item ID to query additional parts for
+            const targetId = this._item.PrimaryItemId || this._itemId;
+            const response = await api.getAdditionalParts(targetId);
+            const additionalParts = response?.Items || [];
+
+            if (additionalParts.length > 0) {
+                log.info(`Loaded ${additionalParts.length} additional video part(s) for item ${targetId}`);
+
+                // If current item is the primary item (Part 1), compile full list [this._item, ...additionalParts]
+                const allParts = [this._item, ...additionalParts];
+
+                // Ensure each part has clean display indexing if missing from server payload
+                allParts.forEach((part, index) => {
+                    if (!part.PartIndex) {
+                        part.PartIndex = index + 1;
+                    }
+                });
+
+                this._renderAdditionalParts(allParts);
+            }
+        } catch (error) {
+            log.warn('Failed to load additional parts for item:', error);
+        }
+    }
+
+    /**
+     * Render the Additional Parts row using Virtual Card Row.
+     * Allows selecting and initiating playback directly from any specific part.
+     * @param {Object[]} parts - Array of video part items
+     */
+    _renderAdditionalParts(parts) {
+        const section = this.$('#additional-parts-section');
+        const container = this.$('#additional-parts-row');
+
+        if (!section || !container || !parts || parts.length === 0) return;
+
+        // Reveal the section on the Details Page
+        section.classList.remove('hidden');
+
+        // Render virtual horizontal card row for additional parts
+        this._renderVirtualRow({
+            sectionId: 'additional-parts-section',
+            listId: 'additional-parts-row',
+            items: parts,
+            isLandscape: true,
+            cardType: 'thumb',
+            renderCard: (partItem) => {
+                // Ensure card displays Part suffix if available
+                const partLabel = partItem.PartIndex ? ` (Part ${partItem.PartIndex})` : '';
+                const displayItem = {
+                    ...partItem,
+                    Name: partItem.Name?.includes('Part') ? partItem.Name : `${this._item.Name}${partLabel}`
+                };
+                return this._renderMediaCard(displayItem, true, 'thumb');
+            },
+            focusSectionName: 'details-additional-parts',
+            onClick: (card) => {
+                const targetItemId = card.dataset.itemId || card.dataset.id;
+                if (targetItemId) {
+                    log.info('Additional part card selected, launching playback from part ID:', targetItemId);
+                    const partToPlay = parts.find((p) => p.Id === targetItemId) || this._item;
+                    this._play({ targetItem: partToPlay });
+                }
+            }
+        });
+    }
+
     async _loadItemCollections() {
         try {
             const cacheKey = `details:collections:${this._itemId}`;
@@ -3114,7 +3495,7 @@ class DetailsPage extends Page {
                 }
             }
         } catch (error) {
-            log.warn('Failed to load item collections', error);
+            log.debug('Item has no collections or failed to fetch collections', error?.message || error);
             const section = this.$('#item-collections-section');
             if (section) {
                 section.classList.add('hidden');
@@ -3138,8 +3519,12 @@ class DetailsPage extends Page {
         });
     }
 
-    async _play({ resume = false, isShufflePlay = false, ghostMode = false } = {}) {
-        let itemToPlay = this._item;
+    async _play({ resume = false, isShufflePlay = false, ghostMode = false, targetItem = null } = {}) {
+        /*
+         * Allow initiating playback directly from a specific target item (e.g. Part 2 or Part 3
+         * selected from the Additional Parts section on the details page).
+         */
+        let itemToPlay = targetItem || this._item;
 
         // If it's a Live TV Program, play the parent Channel instead
         if (this._item.Type === 'Program' && this._item.ChannelId) {
@@ -3727,14 +4112,14 @@ class DetailsPage extends Page {
             </div>
         `
                 : options
-                      .map((opt, i) => {
-                          return `
+                    .map((opt, i) => {
+                        return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-                      })
-                      .join('');
+                    })
+                    .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -4050,8 +4435,8 @@ class DetailsPage extends Page {
                     // begin processing before we re-render the sections.
                     setTimeout(() => {
                         if (!this._isMounted) return;
-                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => {});
-                        this._loadMoreFromSeason().catch(() => {});
+                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => { });
+                        this._loadMoreFromSeason().catch(() => { });
                     }, 500);
                 }
 

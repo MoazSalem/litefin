@@ -301,6 +301,13 @@
     margin-bottom: 40px;
 }
 
+.hero-description a {
+    pointer-events: none;
+    cursor: default;
+    text-decoration: none;
+    color: inherit;
+}
+
 /* ============================================================================
    Dot indicators
    ============================================================================ */

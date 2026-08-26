@@ -310,9 +310,19 @@ class SearchPage extends Page {
                 { type: 'TvChannel' }
             ];
 
+            /*
+             * Determine whether to search using the dedicated /Search/Hints endpoint (default)
+             * or the general /Items endpoint (required by some custom server plugins).
+             */
+            const useItemsEndpoint = storage.getItem('pref:useItemsForSearch') === 'true';
+
             const limit = 12; // Fetch 12 so that with a grid limit of 11, the "See More" button appears
+            const searchFn = useItemsEndpoint
+                ? (type) => api.search(this._query, { IncludeItemTypes: type, Limit: limit })
+                : (type) => api.searchHints(this._query, { IncludeItemTypes: type, Limit: limit });
+
             const requests = [
-                ...searchTypes.map((t) => api.searchHints(this._query, { IncludeItemTypes: t.type, Limit: limit })),
+                ...searchTypes.map((t) => searchFn(t.type)),
                 api.searchPeople(this._query, { Limit: limit })
             ];
 

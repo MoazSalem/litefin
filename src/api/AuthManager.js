@@ -34,6 +34,8 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
 import { buildJellyfinProfile } from './DeviceProfile.js';
+import { focusManager } from '../ui/FocusManager.js';
+import { imageCache } from '../utils/ImageCache.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('AuthManager');
@@ -299,21 +301,24 @@ class AuthManager {
         // =====================================================================
         let user = null;
         let serverInfoResolved = false;
-        
-        // Define retry constraints: 6 attempts spaced by 3 seconds if WOL is active.
-        const maxAttempts = (enableWol && wolMac) ? 6 : 1;
+
+        // Read Extended Wait preference key to allow cold shutdown server boots (~90s total)
+        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+
+        // Define retry constraints: 25 attempts (~90s) if Extended Wait is active, else 6 attempts (~18s) if WOL is active.
+        const maxAttempts = enableWol && wolMac ? (extendedWait ? 25 : 6) : 1;
         const retryDelayMs = 3000;
 
         try {
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
                     log.info(`Validating token by fetching current user (attempt ${attempt}/${maxAttempts})...`);
-                    
+
                     // Fire getPublicInfo in parallel with getCurrentUser.
                     // We use shorter timeouts on retries to fail-fast and move onto the next try.
                     const currentTimeout = attempt === 1 ? 5000 : 3000;
                     const userPromise = api.getCurrentUser({ timeout: currentTimeout });
-                    
+
                     const serverInfoPromise = api
                         .getPublicInfo()
                         .then((info) => {
@@ -330,15 +335,16 @@ class AuthManager {
                     try {
                         await serverInfoPromise;
                     } catch (_) {}
-                    
+
                     // Break out of the retry loop upon successful connection
                     break;
                 } catch (error) {
                     log.warn(`Token validation failed on attempt ${attempt}/${maxAttempts}:`, error);
 
                     // Check if this error represents a network/routing unreachability condition.
-                    const isUnreachable = error instanceof ServerUnreachableError || 
-                                         (error.status === undefined && error.message && error.message.toLowerCase().includes('fetch'));
+                    const isUnreachable =
+                        error instanceof ServerUnreachableError ||
+                        (error.status === undefined && error.message && error.message.toLowerCase().includes('fetch'));
 
                     // If this is the last allowed attempt, or the error is a definitive failure
                     // (like 401/403 Unauthorized which won't change on retry), propagate it.
@@ -438,8 +444,11 @@ class AuthManager {
             });
         }
 
-        // Set max retry attempts: 6 attempts spaced by 3 seconds if WOL is active
-        const maxAttempts = (enableWol && wolMac) ? 6 : 1;
+        // Read Extended Wait preference key to allow cold shutdown server boots (~90s total)
+        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+
+        // Set max retry attempts: 25 attempts (~90s) if Extended Wait is active, else 6 attempts (~18s)
+        const maxAttempts = enableWol && wolMac ? (extendedWait ? 25 : 6) : 1;
         const retryDelayMs = 3000;
         let lastError = null;
 
@@ -713,8 +722,30 @@ class AuthManager {
     async switchUser(userId) {
         log.info(`Switching to user ${userId}...`);
 
-        // Invalidate homepage data cache — it belongs to the previous user/server
-        state.delete('home:pageCache');
+        /*
+         * ====================================================================
+         * FULL USER-SCOPED STATE & CACHE INVALIDATION
+         * ====================================================================
+         * When switching user accounts, we MUST wipe all cached view models,
+         * row structures, details pages, search results, and focus positions
+         * associated with the previous session. Each Jellyfin user has different
+         * library permissions, watched indicators, and custom row orderings.
+         * Failure to clear all prefixes causes cross-account state contamination.
+         * ====================================================================
+         */
+        state.clearByPrefix('home:');
+        state.clearByPrefix('library:');
+        state.clearByPrefix('details:');
+        state.clearByPrefix('favorites:');
+        state.clearByPrefix('search:');
+        state.clearByPrefix('person:');
+        state.clearByPrefix('player:');
+
+        // Clear focus memory so old user's spatial focus targets don't persist
+        focusManager.clearMemory();
+
+        // Abort in-flight prewarm requests and clear image cache
+        imageCache.clear();
 
         const sessions = this._loadSessions();
         const session = sessions.find((s) => s.userId === userId);
@@ -793,8 +824,26 @@ class AuthManager {
     async logout() {
         log.info('Logging out current user...');
 
-        // Invalidate homepage data cache — user-specific data no longer applies
-        state.delete('home:pageCache');
+        /*
+         * ====================================================================
+         * FULL USER-SCOPED STATE & CACHE INVALIDATION
+         * ====================================================================
+         * Wipe all stored session state and focus memories for the user being logged out.
+         * ====================================================================
+         */
+        state.clearByPrefix('home:');
+        state.clearByPrefix('library:');
+        state.clearByPrefix('details:');
+        state.clearByPrefix('favorites:');
+        state.clearByPrefix('search:');
+        state.clearByPrefix('person:');
+        state.clearByPrefix('player:');
+
+        // Clear focus manager memory
+        focusManager.clearMemory();
+
+        // Abort in-flight prewarm requests and clear image cache
+        imageCache.clear();
 
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
         const sessions = this._loadSessions();

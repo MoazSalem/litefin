@@ -258,26 +258,38 @@ export class ApiClient {
         }
 
         // Conditionally request quality/resolution metadata if enabled
-        if (storage.getItem('pref:showQualityBadges') === 'true' && options.params) {
+        if (options.params) {
             const fieldsKey = Object.keys(options.params).find((k) => k.toLowerCase() === 'fields');
             const isItemsEndpoint =
-                endpoint.includes('/Items') ||
+                (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
                 endpoint.includes('/Latest') ||
                 endpoint.includes('/Resume') ||
                 endpoint.includes('/NextUp') ||
                 endpoint.includes('/Upcoming') ||
                 endpoint.includes('/Similar') ||
                 endpoint.includes('/Episodes') ||
-                endpoint.includes('/Search/Hints');
+                endpoint.includes('/Search/Hints') ||
+                endpoint.includes('/Persons') ||
+                endpoint.includes('/MergedRows');
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
                 const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
-                ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
-                    if (!fieldsList.includes(f)) {
-                        fieldsList.push(f);
+                
+                if (storage.getItem('pref:showQualityBadges') === 'true') {
+                    ['Width', 'Height', 'VideoRange', 'VideoRangeType', 'MediaSources'].forEach((f) => {
+                        if (!fieldsList.includes(f)) {
+                            fieldsList.push(f);
+                        }
+                    });
+                }
+
+                if (storage.getItem('pref:showMediaSourceCounts') !== 'false') {
+                    if (!fieldsList.includes('MediaSourceCount')) {
+                        fieldsList.push('MediaSourceCount');
                     }
-                });
+                }
+
                 options.params[targetKey] = fieldsList.join(',');
             }
         }
@@ -399,6 +411,9 @@ export class ApiClient {
                     return this.request(endpoint, options, true);
                 }
 
+                if (options.warnOnError && response) {
+                    response._suppressErrorLog = true;
+                }
                 const error = await this._handleError(response);
                 throw error;
             }
@@ -460,8 +475,9 @@ export class ApiClient {
                         // Send Wake-on-LAN Magic Packet
                         sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
 
-                        // Retry loop: probe server status every 3s for up to 5 attempts (~15 seconds)
-                        const maxAttempts = 5;
+                        // Retry loop: probe server status every 3s (up to 25 attempts / ~90s if Extended Wait is active)
+                        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+                        const maxAttempts = extendedWait ? 25 : 5;
                         const retryDelayMs = 3000;
 
                         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -524,7 +540,7 @@ export class ApiClient {
                     message = data.message || data.Message || message;
                 } catch {
                     // Not JSON — use raw text as the error message (trim to 200 chars max)
-                    const trimmed = bodyText.trim();
+                    const trimmed = (bodyText || '').trim();
                     if (trimmed) {
                         message = trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed;
                     }
@@ -534,10 +550,8 @@ export class ApiClient {
             // Could not read body at all — keep the "HTTP N" default
         }
 
-        // Log 400s at error level so they are always visible in the debug overlay
-        // even when general logging is disabled. The server reason is included so
-        // the developer can diagnose schema issues without needing DevTools.
-        if (response.status === 400) {
+        // Log 400s at error level only if not suppressed via warnOnError
+        if (response.status === 400 && !response._suppressErrorLog) {
             log.error(`Server rejected request (400 Bad Request): ${message}`);
         }
 
@@ -714,7 +728,7 @@ export class ApiClient {
             SortOrder: 'Ascending',
             IncludeItemTypes: '',
             Recursive: true,
-            Fields: 'BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'BackdropImageTags,ParentBackdropImageTags,MediaSourceCount',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             Limit: 100
@@ -810,13 +824,60 @@ export class ApiClient {
     }
 
     /**
+     * Batch fetch latest items for multiple parent library IDs in a single request.
+     * @param {string[]} parentIds - Array of library parent GUIDs
+     * @param {Object} [params] - Optional parameters (Limit, isPlayed, fields)
+     * @returns {Promise<Object>} Object mapping parentId -> BaseItemDto[]
+     */
+    async getBatchLatest(parentIds = [], params = {}) {
+        if (!parentIds || parentIds.length === 0) return {};
+        try {
+            return await this.get('/Litefin/Items/Latest', {
+                parentIds: parentIds.join(','),
+                ...params
+            }, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Batch fetch candidate thumbnail items for multiple parent library IDs in 1 request.
+     * @param {string[]} parentIds - Array of library parent GUIDs
+     * @returns {Promise<Object|null>} Object mapping parentId -> BaseItemDto[]
+     */
+    async getLibraryThumbnails(parentIds = []) {
+        if (!parentIds || parentIds.length === 0) return {};
+        try {
+            return await this.get('/Litefin/Items/Thumbnails', {
+                parentIds: parentIds.join(',')
+            }, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Fetch curated Hero Carousel items (Movies & Series with backdrops) in a single optimized request.
+     * @param {Object} [params] - Optional query parameters (limit, ignoreWatched)
+     * @returns {Promise<Object|null>} QueryResult object with Items array or null on fallback
+     */
+    async getHomeHero(params = {}) {
+        try {
+            return await this.get('/Litefin/Hero', params, { warnOnError: true });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
      * Get next up episodes
      */
     async getNextUp(params = {}) {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
@@ -919,6 +980,23 @@ export class ApiClient {
     }
 
     /**
+     * Fetch additional video parts for multi-part video items (e.g. Part 2, Part 3 of a multi-disc movie).
+     * Jellyfin server endpoint: GET /Videos/{itemId}/AdditionalParts
+     *
+     * @param {string} itemId - The primary video item ID
+     * @returns {Promise<Object>} Paginated query result containing additional part items
+     */
+    async getAdditionalParts(itemId) {
+        /*
+         * Multi-part items in Jellyfin allow split video files (e.g., Lord of the Rings Disc 1 & Disc 2)
+         * to be grouped under a single library entry while preserving individual stream files.
+         */
+        return this.get(`/Videos/${itemId}/AdditionalParts`, {
+            UserId: this._userId
+        });
+    }
+
+    /**
      * Get items inside a server-managed Playlist.
      *
      * We use the dedicated /Playlists/{id}/Items endpoint rather than the
@@ -1016,14 +1094,19 @@ export class ApiClient {
         } catch (err) {
             // Fall back to the Litefin plugin endpoint if the native route is not found
             if (err.status === 404 || err.message?.includes('Not found')) {
-                log.info(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
-                return await this.get(
-                    `/Litefin/Items/${itemId}/Collections`,
-                    { ...defaults, ...params },
-                    { warnOnError: true }
-                );
+                log.debug(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
+                try {
+                    return await this.get(
+                        `/Litefin/Items/${itemId}/Collections`,
+                        { ...defaults, ...params },
+                        { warnOnError: true }
+                    );
+                } catch (fallbackErr) {
+                    return { Items: [] };
+                }
             }
-            throw err;
+            // A 400 Bad Request simply means the item is not part of any collection on this server version
+            return { Items: [] };
         }
     }
 
@@ -1047,7 +1130,7 @@ export class ApiClient {
         // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            Fields: 'Overview,RunTimeTicks,Chapters',
+            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,MediaStreams,Width,Height,UserData',
             IsVirtualUnaired: false,
             IsMissing: false,
             ...params
@@ -1066,18 +1149,21 @@ export class ApiClient {
     }
 
     async getPersonItems(personId) {
-        // Fetch items for this person - Movies, Series, Episodes only
-        // High limit to capture full filmography (some people have many appearances)
-        // Note: People field loaded separately via getPersonItemsWithRoles for performance
-        return this.get(`/Users/${this._userId}/Items`, {
-            PersonIds: personId,
-            IncludeItemTypes: 'Movie,Series,Episode',
-            Recursive: true,
-            Limit: 500,
-            Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
-            SortBy: 'PremiereDate',
-            SortOrder: 'Descending'
-        });
+        // Try custom Litefin plugin endpoint first (single request with roles pre-populated)
+        try {
+            return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 50 }, { warnOnError: true });
+        } catch (err) {
+            // Fallback to standard Jellyfin endpoint if plugin is not installed
+            return this.get(`/Users/${this._userId}/Items`, {
+                PersonIds: personId,
+                IncludeItemTypes: 'Movie,Series,Episode',
+                Recursive: true,
+                Limit: 500,
+                Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
+                SortBy: 'PremiereDate',
+                SortOrder: 'Descending'
+            });
+        }
     }
 
     // Separate call to get items with People field (for character roles)
@@ -1253,7 +1339,7 @@ export class ApiClient {
             SortBy: 'ProductionYear,SortName',
             SortOrder: 'Descending',
             Recursive: true,
-            Limit: 100,
+            Limit: 12,
             Fields: 'ProductionYear,AlbumArtist,Artists'
         };
 
@@ -1274,7 +1360,7 @@ export class ApiClient {
             SortBy: 'SortName',
             SortOrder: 'Ascending',
             Recursive: true,
-            Limit: 200,
+            Limit: 12,
             Fields: 'ProductionYear,AlbumArtist,Artists,RunTimeTicks'
         };
 
@@ -2007,7 +2093,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
                 const info = JSON.parse(xhr.responseText);
 
                 let serverName = info.ServerName;
-                if (!serverName || serverName.trim() === '') {
+                if (!serverName || typeof serverName !== 'string' || serverName.trim() === '') {
                     // Fall back to hostname extracted from the address URL
                     try {
                         serverName = new URL(address).hostname;
@@ -2315,20 +2401,30 @@ export async function sendWakeOnLan(macAddress) {
         }
 
         log.info('Dispatching WOL request to local HTTP proxy on port 8123');
-        try {
-            const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                // Keep-alive or short timeout since it is local loopback
-                timeout: 3000
-            });
-            const data = await res.json();
-            log.info('Local HTTP WOL response received:', data);
-            return !!(data && data.success);
-        } catch (fetchErr) {
-            log.warn('Failed to dispatch WOL request to local HTTP proxy:', fetchErr);
-            return false;
+        const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
+        const maxHttpRetries = 6;
+        const httpRetryDelayMs = 600;
+
+        for (let attempt = 1; attempt <= maxHttpRetries; attempt++) {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    timeout: 3000
+                });
+                const data = await res.json();
+                log.info(`Local HTTP WOL response received (attempt ${attempt}/${maxHttpRetries}):`, data);
+                if (data && data.success) {
+                    return true;
+                }
+            } catch (fetchErr) {
+                log.warn(`WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`, fetchErr.message || fetchErr);
+                if (attempt < maxHttpRetries) {
+                    await new Promise((resolve) => setTimeout(resolve, httpRetryDelayMs));
+                }
+            }
         }
+        log.error('All WOL request attempts to local HTTP proxy failed.');
+        return false;
     }
 
     log.warn('WOL command skipped: background service is disabled or platform is unsupported');
@@ -2336,13 +2432,53 @@ export async function sendWakeOnLan(macAddress) {
 }
 
 /**
- * Discover Jellyfin servers on local network
+ * Check if the current device/platform has a background UDP discovery service.
+ * - WebOS: true if Luna service is available (window.webOS.service)
+ * - Tizen: true if running on Tizen and background service is enabled
+ * - Others: false
+ *
+ * @returns {boolean} True if background UDP discovery service is present
  */
-export async function discoverServers(onProgress = null, onServerFound = null) {
+export function hasBackgroundDiscoveryService() {
+    // 1. WebOS Luna Service check
+    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+        return true;
+    }
+
+    // 2. Tizen HTTP Proxy / Discovery Service check
+    if (typeof tizen !== 'undefined') {
+        try {
+            const bgEnabled = storage.getItem('player:enableBackgroundService') !== 'false';
+            return bgEnabled;
+        } catch (_) {
+            return true;
+        }
+    }
+
+    // 3. Platforms without background UDP discovery service
+    return false;
+}
+
+/**
+ * Discover Jellyfin servers on local network
+ *
+ * @param {Function|null} onProgress - Optional callback receiving (checked, total)
+ * @param {Function|null} onServerFound - Optional callback receiving server info object
+ * @param {Object|boolean} [options={}] - Discovery options or allowHttpFallback flag
+ * @param {boolean} [options.isManual=false] - True if user manually triggered search via button
+ * @param {boolean} [options.allowHttpFallback] - Allow falling back to subnet HTTP scan
+ */
+export async function discoverServers(onProgress = null, onServerFound = null, options = {}) {
+    // Parse options object or boolean flag for backwards compatibility
+    const isManual = typeof options === 'object' && options !== null ? !!options.isManual : false;
+    const allowHttpFallback = typeof options === 'object' && options !== null && 'allowHttpFallback' in options
+        ? !!options.allowHttpFallback
+        : isManual;
+
     // Cancel any existing scan first
     cancelDiscovery();
 
-    log.info('Starting server discovery...');
+    log.info(`Starting server discovery (isManual=${isManual}, allowHttpFallback=${allowHttpFallback})...`);
 
     // =========================================================================
     // WAKE-ON-LAN ON SERVER SCAN
@@ -2383,7 +2519,11 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
             return lunaServers;
         }
 
-        log.warn('Luna service unavailable — falling back to HTTP scan');
+        log.warn('Luna service unavailable');
+        if (!allowHttpFallback) {
+            log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+            return [];
+        }
     }
 
     /*
@@ -2420,10 +2560,24 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
                 return tizenServers;
             }
 
-            log.warn('Tizen /discover unavailable — falling back to HTTP scan');
+            log.warn('Tizen /discover unavailable');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         } else {
-            log.info('Background service disabled — skipping Tizen /discover, using HTTP scan');
+            log.info('Background service disabled — skipping Tizen /discover');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         }
+    }
+
+    // Check if HTTP fallback scan is permitted
+    if (!allowHttpFallback) {
+        log.info('No background discovery service available and HTTP fallback disabled — skipping HTTP subnet scan');
+        return [];
     }
 
     // =========================================================================

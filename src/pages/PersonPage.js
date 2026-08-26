@@ -17,6 +17,7 @@ import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { logger } from '../utils/Logger.js';
@@ -77,7 +78,7 @@ class PersonPage extends Page {
 
                             <!-- Bio -->
                             <div class="details-overview">
-                                <p class="overview-text line-clamp-6" id="person-bio"></p>
+                                <div class="overview-text line-clamp-6" id="person-bio" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -98,6 +99,8 @@ class PersonPage extends Page {
     async _loadPersonDetails() {
         this.setLoading(true);
 
+        let hasFocusTarget = false;
+
         try {
             // ────────────────────────────────────────────────────────────
             // 1. Fetch person metadata + render text (blocking)
@@ -113,25 +116,42 @@ class PersonPage extends Page {
             this._setSmartBackdrop();
 
             // ────────────────────────────────────────────────────────────
-            // 3. Hide loading — text content is visible, images loading in bg
+            // 3. Check focus target — defer hiding loading until rows render
             // ────────────────────────────────────────────────────────────
-            this.setLoading(false);
+            const focusStateKey = `person:lastFocusedItem:${this._personId}`;
+            hasFocusTarget =
+                this._pendingNavState ||
+                (storage.getItem('pref:disableFocusRestore') !== 'true' && state.get(focusStateKey));
+
+            if (!hasFocusTarget) {
+                this.setLoading(false);
+            }
 
             // ────────────────────────────────────────────────────────────
-            // 4. Load works in visual order after loading is hidden
+            // 4. Load works in visual order
             // ────────────────────────────────────────────────────────────
             const isArtist = this._person.Type === 'MusicArtist' || this._person.Type === 'Artist';
 
             if (isArtist) {
-                // 4a. Albums first (top), then Songs (bottom)
-                const albumsResult = await api.getArtistAlbums(this._personId);
-                const albums = albumsResult.Items || [];
-                log.debug('Loaded artist albums', { count: albums.length });
+                // 4a. Try single-pass query first (Albums + Songs)
+                const result = await api.getPersonItems(this._personId);
+                const items = result.Items || [];
 
-                const songsResult = await api.getArtistSongs(this._personId);
-                const songs = songsResult.Items || [];
-                log.debug('Loaded artist songs', { count: songs.length });
+                let albums = items.filter((i) => i.Type === 'MusicAlbum');
+                let songs = items.filter((i) => i.Type === 'Audio');
 
+                // Fallback to separate endpoints if neither type was returned (e.g. legacy server without plugin)
+                if (albums.length === 0 && songs.length === 0) {
+                    log.debug('Single-pass query returned no music items, calling fallback endpoints');
+                    const [albumsResult, songsResult] = await Promise.all([
+                        api.getArtistAlbums(this._personId),
+                        api.getArtistSongs(this._personId)
+                    ]);
+                    albums = albumsResult.Items || [];
+                    songs = songsResult.Items || [];
+                }
+
+                log.debug('Loaded artist works', { albums: albums.length, songs: songs.length });
                 this._renderArtistWorks(albums, songs);
             } else {
                 // 4a. Movies/Shows/Episodes (renders in visual order: Movies → Shows → Episodes)
@@ -155,6 +175,7 @@ class PersonPage extends Page {
         } catch (error) {
             log.error('Failed to load', error);
             this.showError('Failed to load person details');
+            this.setLoading(false);
         }
 
         // ────────────────────────────────────────────────────────────
@@ -194,6 +215,11 @@ class PersonPage extends Page {
 
             if (!restoredFocus) {
                 this.setActiveSection('person-fav-actions');
+            }
+
+            // Reveal page now that focus has been placed (or attempted)
+            if (hasFocusTarget) {
+                this.setLoading(false);
             }
         });
     }
@@ -380,7 +406,8 @@ class PersonPage extends Page {
         const bioEl = this.$('#person-bio');
         if (bioEl) {
             // Assign biography overview content safely
-            bioEl.textContent = p.Overview || '';
+            bioEl.innerHTML = p.Overview || '';
+            bioEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
             // Initially ensure standard clamp class is applied
             bioEl.classList.add('line-clamp-6');
         }
@@ -445,25 +472,15 @@ class PersonPage extends Page {
 
             // Hook up clean click and touch activation behavior
             seeMoreBtn.onclick = () => {
-                // Determine if we are currently expanded or collapsed
-                const isExpanded = !bioEl.classList.contains('line-clamp-6');
+                if (!this._person) return;
 
-                if (isExpanded) {
-                    // Collapse: Restrict lines back to clamp class and update text
-                    bioEl.classList.add('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowMore');
-
-                    // Reset scroll back to top of the page view
-                    const page = this.$('.page-content');
-                    if (page) page.scrollTop = 0;
-                } else {
-                    // Expand: Remove restriction to let browser render full text height
-                    bioEl.classList.remove('line-clamp-6');
-                    seeMoreBtn.textContent = i18n.t('ShowLess');
-                }
-
-                // Immediately focus the button to prevent remote focus loss during layout shifts
-                focusManager.focusElement(seeMoreBtn);
+                DescriptionModal.show(
+                    {
+                        title: this._person.Name,
+                        overview: this._person.Overview
+                    },
+                    this
+                );
             };
         } else {
             // If the biography is short and does not overflow, hide the button completely
@@ -476,6 +493,25 @@ class PersonPage extends Page {
      */
     async _loadRolesInBackground() {
         try {
+            // Check if items already have roles attached via Litefin plugin
+            const hasPrePopulatedRoles = this._items?.some((item) => item.People && item.People.length > 0);
+
+            if (hasPrePopulatedRoles) {
+                this._roleMap = new Map();
+                this._items.forEach((item) => {
+                    if (item.People) {
+                        const person = item.People.find((p) => p.Id === this._personId);
+                        if (person?.Role) {
+                            this._roleMap.set(item.Id, person.Role);
+                        }
+                    }
+                });
+                this._applyRolesToCards();
+                log.debug(`Applied ${this._roleMap.size} character roles from plugin single-pass response`);
+                return;
+            }
+
+            // Fallback: Fetch roles via secondary API request if plugin is not available
             const result = await api.getPersonItemsWithRoles(this._personId);
             const itemsWithPeople = result.Items || [];
 
@@ -493,7 +529,7 @@ class PersonPage extends Page {
             // Apply roles to visible cards
             this._applyRolesToCards();
 
-            log.debug(`Added ${this._roleMap.size} character roles`);
+            log.debug(`Added ${this._roleMap.size} character roles via fallback request`);
         } catch (error) {
             log.warn('Could not load character roles', error);
         }
