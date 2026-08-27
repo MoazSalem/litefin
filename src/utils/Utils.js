@@ -82,7 +82,10 @@ export function sanitizeSubtitleText(text) {
         }
     );
     return escapeHtml(decoded)
-        .replace(/&lt;(\/?)(i|b|u|em|strong|br|font)\s*\/?&gt;/gi, '<$1$2>')
-        .replace(/&lt;font((?:\s+(?:face|size|color)=&quot;[^&]*&quot;)+\s*)&gt;/gi,
+        // HTML tag/attribute whitespace is [ \t\n\r\f] only — JS \s also
+        // matches NBSP/\u2028/\ufeff etc., which browsers treat as attribute
+        // NAME characters, so allowing \s would emit renamed/junk attributes.
+        .replace(/&lt;(\/?)(i|b|u|em|strong|br|font)[ \t\n\r\f]*\/?&gt;/gi, '<$1$2>')
+        .replace(/&lt;font((?:[ \t\n\r\f]+(?:face|size|color)=&quot;[^&]*&quot;)+[ \t\n\r\f]*)&gt;/gi,
             (match, attrs) => '<font' + attrs.replace(/&quot;/g, '"') + '>');
 }
