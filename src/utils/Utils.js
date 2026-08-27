@@ -30,3 +30,24 @@ export function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+
+/**
+ * Sanitizes subtitle cue text for the DOM subtitle overlay.
+ *
+ * SRT/WebVTT cues conventionally carry simple styling tags (<i>, <b>, <u>)
+ * which SubtitleParser._cleanText deliberately preserves, so fully escaping
+ * cue text (the XSS fix) also destroyed that legitimate formatting.
+ * This restores it safely: the input is escaped FIRST, and only the exact
+ * escaped spellings of whitelisted BARE tags are turned back into markup.
+ * No attribute-bearing tag can match the pattern, so event handlers, URLs,
+ * and any non-whitelisted tag (<img>, <script>, <font ...>) remain inert
+ * text.
+ *
+ * @param {*} text - Raw cue text from the subtitle parser
+ * @returns {string} HTML-safe string with basic i/b/u/em/strong styling intact
+ */
+export function sanitizeSubtitleText(text) {
+    if (text === null || text === undefined) return '';
+    return escapeHtml(text)
+        .replace(/&lt;(\/?)(i|b|u|em|strong)&gt;/gi, '<$1$2>');
+}
