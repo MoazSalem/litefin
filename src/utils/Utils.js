@@ -32,22 +32,57 @@ export function escapeHtml(value) {
 }
 
 /**
+ * Named/numeric HTML entities that legitimately appear in subtitle files.
+ * Decoded BEFORE escaping so pre-encoded files don't render as literal text
+ * ("AT&amp;T" -> "AT&T"). Single-pass replace: substituted text is never
+ * re-scanned, so "&amp;lt;" correctly becomes literal "&lt;" text.
+ * @private
+ */
+const SUBTITLE_ENTITIES = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00A0'
+};
+
+/**
  * Sanitizes subtitle cue text for the DOM subtitle overlay.
  *
- * SRT/WebVTT cues conventionally carry simple styling tags (<i>, <b>, <u>)
- * which SubtitleParser._cleanText deliberately preserves, so fully escaping
- * cue text (the XSS fix) also destroyed that legitimate formatting.
- * This restores it safely: the input is escaped FIRST, and only the exact
- * escaped spellings of whitelisted BARE tags are turned back into markup.
- * No attribute-bearing tag can match the pattern, so event handlers, URLs,
- * and any non-whitelisted tag (<img>, <script>, <font ...>) remain inert
- * text.
+ * SRT/WebVTT cues legitimately carry simple markup: styling tags (<i>, <b>,
+ * <u>) preserved by SubtitleParser._cleanText, multi-line cues joined with
+ * <br> by the parser itself, and some releases (e.g. anime fansubs) use
+ * <font face/size/color>. Fully escaping cue text (the XSS fix) turned all
+ * of that into visible literal tags.
+ *
+ * This restores formatting safely, in three provably closed steps:
+ * 1. Decode pre-encoded HTML entities (bounded, single pass).
+ * 2. Escape EVERYTHING — the string is now inert.
+ * 3. Re-allow only the exact escaped spellings of whitelisted bare tags
+ *    (i/b/u/em/strong/br, incl. <br/> and <BR> forms) and font tags whose
+ *    face/size/color attributes are strictly double-quoted with values that
+ *    contain no entities (values therefore cannot break out of the quotes
+ *    or introduce new attributes — event handlers stay impossible).
+ * Anything else (<img>, <script>, attribute-carrying styling tags, unknown
+ * tags) remains escaped, inert text.
  *
  * @param {*} text - Raw cue text from the subtitle parser
- * @returns {string} HTML-safe string with basic i/b/u/em/strong styling intact
+ * @returns {string} HTML-safe string with cue styling and line breaks intact
  */
 export function sanitizeSubtitleText(text) {
     if (text === null || text === undefined) return '';
-    return escapeHtml(text)
-        .replace(/&lt;(\/?)(i|b|u|em|strong)&gt;/gi, '<$1$2>');
+    const decoded = String(text).replace(
+        /&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/gi,
+        (match, entity) => {
+            if (entity[0] === '#') {
+                const code = entity[1] === 'x' || entity[1] === 'X'
+                    ? parseInt(entity.slice(2), 16)
+                    : parseInt(entity.slice(1), 10);
+                return Number.isInteger(code) && code > 0 && code <= 0x10ffff
+                    ? String.fromCodePoint(code)
+                    : match;
+            }
+            return SUBTITLE_ENTITIES[entity.toLowerCase()] ?? match;
+        }
+    );
+    return escapeHtml(decoded)
+        .replace(/&lt;(\/?)(i|b|u|em|strong|br|font)\s*\/?&gt;/gi, '<$1$2>')
+        .replace(/&lt;font((?:\s+(?:face|size|color)=&quot;[^&]*&quot;)+\s*)&gt;/gi,
+            (match, attrs) => '<font' + attrs.replace(/&quot;/g, '"') + '>');
 }
