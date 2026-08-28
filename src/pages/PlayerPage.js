@@ -33,7 +33,7 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
-import { escapeHtml } from '../utils/Utils.js';
+import { sanitizeSubtitleText } from '../utils/Utils.js';
 
 const log = logger.create('Player');
 
@@ -2288,9 +2288,11 @@ class PlayerPage extends Page {
         if (data && data.text && data.text.trim().length > 0) {
             // Render subtitle
             // Cue text is external content (SRT/VTT/ASS from the server or a
-            // sidecar file); SubtitleParser only strips ASS {...} tags, so
-            // HTML in cue text must be escaped before innerHTML.
-            overlay.innerHTML = `<span class="subtitle-line">${escapeHtml(data.text)}</span>`;
+            // sidecar file); SubtitleParser only strips ASS {...} tags, so it
+            // must be sanitized before innerHTML. sanitizeSubtitleText escapes
+            // everything and re-allows only bare <i>/<b>/<u>/<em>/<strong>,
+            // preserving legitimate cue styling without an injection surface.
+            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -2370,8 +2372,9 @@ class PlayerPage extends Page {
         if (!overlay) return;
 
         if (data && data.text && data.text.trim().length > 0) {
-            // Render the secondary subtitle text (escaped: external cue content)
-            overlay.innerHTML = `<span class="subtitle-line">${escapeHtml(data.text)}</span>`;
+            // Render the secondary subtitle text (sanitized: escapes all HTML,
+            // re-allows only bare i/b/u/em/strong styling tags)
+            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
