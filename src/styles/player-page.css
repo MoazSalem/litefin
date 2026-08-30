@@ -113,7 +113,7 @@ body.lyrics-active .audio-player-center {
     position: relative;
     width: 500px;
     height: 500px;
-    border-radius: 24px;
+    border-radius: 18px;
     background-size: cover;
     background-position: center;
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
