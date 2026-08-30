@@ -568,3 +568,158 @@ html[data-layout-tier="ultra-legacy"] .subtitle-line {
     /* Avoid flex/inline-flex display bugs in Chrome 38 */
     vertical-align: baseline !important;
 }
+
+/* ============================================================================
+ * APPLE HIG RECONNECTION HUD (NETWORK RESILIENCE OVERLAY)
+ * ============================================================================
+ * Minimalist, elegant floating notification card inspired by macOS / tvOS.
+ * Uses high-depth backdrop blur, subtle 1px border highlight, soft spring
+ * transitions, and responsive scaling across TV, desktop, and mobile viewports.
+ * ============================================================================
+ */
+
+.reconnect-hud {
+    position: absolute;
+    top: 54px;
+    left: 50%;
+    -webkit-transform: translateX(-50%) translateY(0);
+    transform: translateX(-50%) translateY(0);
+    z-index: 1500;
+    pointer-events: none;
+    opacity: 1;
+    -webkit-transition: opacity 0.4s ease, -webkit-transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: opacity 0.4s ease, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.reconnect-hud.hidden {
+    opacity: 0;
+    pointer-events: none;
+    -webkit-transform: translateX(-50%) translateY(-24px) scale(0.96);
+    transform: translateX(-50%) translateY(-24px) scale(0.96);
+}
+
+.reconnect-card {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 26px 14px 20px;
+    /* High-performance solid dark background without GPU-heavy blur or shadows on TV chips */
+    background: #141418;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 9999px;
+    min-width: 320px;
+    max-width: 90vw;
+}
+
+.reconnect-spinner-wrap {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+}
+
+.reconnect-spinner {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #007aff;
+    border-right-color: #0a84ff;
+    -webkit-animation: reconnect-spin 0.85s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+    animation: reconnect-spin 0.85s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+}
+
+.reconnect-pulse {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0a84ff;
+    -webkit-animation: reconnect-glow 1.5s ease-in-out infinite;
+    animation: reconnect-glow 1.5s ease-in-out infinite;
+}
+
+.reconnect-details {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.reconnect-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    letter-spacing: -0.2px;
+    line-height: 1.2;
+    -webkit-font-smoothing: antialiased;
+}
+
+.reconnect-status {
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.65);
+    letter-spacing: -0.1px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+@-webkit-keyframes reconnect-spin {
+    0% {
+        -webkit-transform: rotate(0deg);
+        transform: rotate(0deg);
+    }
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes reconnect-spin {
+    0% {
+        -webkit-transform: rotate(0deg);
+        transform: rotate(0deg);
+    }
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
+}
+
+@-webkit-keyframes reconnect-glow {
+    0%, 100% {
+        opacity: 0.4;
+        -webkit-transform: scale(0.85);
+        transform: scale(0.85);
+    }
+    50% {
+        opacity: 1;
+        -webkit-transform: scale(1.15);
+        transform: scale(1.15);
+    }
+}
+
+@keyframes reconnect-glow {
+    0%, 100% {
+        opacity: 0.4;
+        -webkit-transform: scale(0.85);
+        transform: scale(0.85);
+    }
+    50% {
+        opacity: 1;
+        -webkit-transform: scale(1.15);
+        transform: scale(1.15);
+    }
+}
+

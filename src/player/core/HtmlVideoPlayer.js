@@ -1510,7 +1510,9 @@ export class HtmlVideoPlayer {
             return;
         }
 
-        this.onEvent({ type: 'error', data: { code: errorCode, message: errorMessage } });
+        const isNetworkError = errorCode === 2 || (errorMessage && /network|connection|pipeline_error_network/i.test(errorMessage));
+
+        this.onEvent({ type: 'error', data: { code: errorCode, message: errorMessage, isNetworkError: isNetworkError } });
     }
 
     /** @private */

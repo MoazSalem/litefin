@@ -328,11 +328,30 @@ export class TizenAVPlayer {
                     // 1. ABR Quality Kickstart: Prevent ABR jump stutter by starting at high quality.
                     // If no bitrate is provided, default to a high value (20Mbps) to ensure hardware
                     // requests high quality immediately.
-                    const bufferPlaySec = PlayerSettings.get('tizenInitialBuffer') || 6;
-                    const bufferResumeSec = PlayerSettings.get('tizenResumeBuffer') || 4;
+                    let bufferPlaySec = PlayerSettings.get('tizenInitialBuffer') || 6;
+                    let bufferResumeSec = PlayerSettings.get('tizenResumeBuffer') || 4;
                     const timeoutSec = 8;
                     const bitrate = options.mediaSource?.Bitrate || 20000000;
                     const isDirectPlay = options.playMethod === 'DirectPlay';
+
+                    // ====================================================================
+                    // HIGH-BITRATE DIRECTPLAY BUFFER PROTECTION (NIC OVERRUN MITIGATION)
+                    // ====================================================================
+                    // When streaming high-bitrate media (>= 18 Mbps or 4K/UHD) via DirectPlay over
+                    // Fast Ethernet (100 Mbps NIC), requesting large buffer horizons (e.g. 6-10s)
+                    // forces AVPlay into unthrottled TCP burst downloads at full line rate.
+                    //
+                    // On Samsung Smart TVs (where 100Mbit NICs connect via internal USB 2.0 bus
+                    // with tiny 16-64KB RX ring buffers), back-to-back TCP packet bursts from high-speed
+                    // servers (e.g., 10Gbps backbone) cause hardware RX FIFO overflow and kernel NIC
+                    // driver lockups. Clamping buffer thresholds to 2-3s for high-bitrate DirectPlay
+                    // keeps the bursts short and allows the TV's USB/NIC queue to drain cleanly.
+                    // ====================================================================
+                    if (isDirectPlay && (bitrate >= 18000000 || (options.mediaSource?.Width && options.mediaSource.Width >= 3840))) {
+                        bufferPlaySec = Math.min(bufferPlaySec, 3);
+                        bufferResumeSec = Math.min(bufferResumeSec, 2);
+                        log.info(`DirectPlay High-Bitrate Buffer Clamp applied: initial=${bufferPlaySec}s, resume=${bufferResumeSec}s for bitrate ${(bitrate / 1000000).toFixed(1)} Mbps`);
+                    }
 
                     // 1. Advanced Property Hints: Accelerate startup & stabilize Wi-Fi
                     // We use individual try-catch and common key variants for maximum compatibility.
@@ -913,7 +932,22 @@ export class TizenAVPlayer {
             },
             onerror: (eventType) => {
                 log.error('Error:', eventType);
-                this.onEvent({ type: 'error', data: { message: eventType } });
+
+                // Check if this error is an underlying network/socket disconnection
+                const isNetworkError =
+                    eventType === 'PLAYER_ERROR_CONNECTION_FAILED' ||
+                    eventType === 'PLAYER_ERROR_SERVER_DISCONNECTED' ||
+                    eventType === 'PLAYER_ERROR_CANT_RESOLVE_HOSTNAME' ||
+                    eventType === 'PLAYER_ERROR_TRANSPORT_TIMEOUT';
+
+                this.onEvent({
+                    type: 'error',
+                    data: {
+                        message: eventType,
+                        code: eventType,
+                        isNetworkError: isNetworkError
+                    }
+                });
             },
             onsubtitlechange: (duration, text, type, attributes) => {
                 // Emit event with subtitle text so the UI layer can display it

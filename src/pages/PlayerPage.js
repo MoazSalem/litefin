@@ -111,6 +111,12 @@ class PlayerPage extends Page {
         // Press-counter for the unlock gesture (3 rapid OK/Enter presses)
         this._unlockPressCount = 0;
         this._unlockLastPressTime = null;
+
+        // Auto-Recovery states for network dropouts / TV NIC driver resets
+        this._isAutoRecovering = false;
+        this._autoRecoveryTimer = null;
+        this._autoRecoveryPositionTicks = 0;
+        this._autoRecoveryAttempts = 0;
     }
 
     /**
@@ -185,11 +191,34 @@ class PlayerPage extends Page {
                         </div>
                     </div>
                 </div>
+
+                <!-- Reconnection HUD Overlay (Apple HIG Frosted Glass Aesthetic) -->
+                <div id="reconnect-hud" class="reconnect-hud hidden">
+                    <div class="reconnect-card glass-panel">
+                        <div class="reconnect-spinner-wrap">
+                            <div class="reconnect-spinner"></div>
+                            <div class="reconnect-pulse"></div>
+                        </div>
+                        <div class="reconnect-details">
+                            <div class="reconnect-title">Connection Lost</div>
+                            <div class="reconnect-status" id="reconnect-status">Reconnecting in background...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
 
     async onInit() {
+        // Reset auto-recovery states for new playback session
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+        this._autoRecoveryPositionTicks = 0;
+        this._autoRecoveryAttempts = 0;
+
         // Reset state for new playback session.
         // CRITICAL: _cachedPlayMethod must be cleared here — if the previous item was
         // DirectPlay, the stale cache would bleed into the new session and cause incorrect
@@ -2181,8 +2210,212 @@ class PlayerPage extends Page {
         }
 
         log.error('Player error:', error);
+
+        // ====================================================================
+        // NETWORK DISCONNECTION & TV NIC RESILIENCE AUTO-RECOVERY
+        // ====================================================================
+        // When high-bitrate streaming triggers an Ethernet NIC blackout (e.g.
+        // Tizen 100Mbps USB-to-Ethernet RX FIFO overflow) or when transient network
+        // dropouts occur, the connection goes down for 30-45s while the kernel resets
+        // the driver. Instead of fatally dumping the user back to the library or
+        // showing a hard error dialog, we engage background auto-recovery:
+        //   1. Save the exact current playback position tick.
+        //   2. Present an Apple HIG frosted-glass Reconnection HUD.
+        //   3. Poll Tizen network status & Jellyfin ping until connectivity restores.
+        //   4. Seamlessly re-open and resume playback from the saved position tick.
+        // ====================================================================
+        const isNetwork = Boolean(
+            error?.isNetworkError ||
+            error?.code === 'PLAYER_ERROR_CONNECTION_FAILED' ||
+            error?.message === 'PLAYER_ERROR_CONNECTION_FAILED' ||
+            (typeof error?.message === 'string' && /connection|network|offline|PLAYER_ERROR_CONNECTION_FAILED|MEDIA_ERR_NETWORK/i.test(error.message))
+        );
+
+        const currentPosTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        if (isNetwork && !this._isAutoRecovering && (this._hasReportedStart || currentPosTicks > 0)) {
+            this._isSwitching = false;
+            this._startAutoRecovery(error);
+            return;
+        }
+
         this._isSwitching = false; // Reset lock on error
-        this._showError(error.message || 'Playback error');
+        this._showError(error?.message || 'Playback error');
+    }
+
+    /**
+     * Show or hide the Apple-style Frosted Glass Reconnection HUD.
+     * @param {boolean} show - Whether to display or hide the HUD
+     * @param {string} [statusText] - Optional status message to show
+     * @private
+     */
+    _showReconnectHUD(show, statusText = '') {
+        const hud = this.$('#reconnect-hud');
+        if (!hud) return;
+
+        if (show) {
+            const statusEl = this.$('#reconnect-status');
+            if (statusEl && statusText) {
+                statusEl.textContent = statusText;
+            }
+            hud.classList.remove('hidden');
+        } else {
+            hud.classList.add('hidden');
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Resilient Auto-Recovery Pipeline for Network Drops & NIC Watchdog Resets
+     * ========================================================================
+     * Preserves the exact playback position, displays a non-intrusive frosted
+     * glass reconnection card, and polls for network recovery before auto-resuming.
+     * ========================================================================
+     * @param {Object|Error} error - The network error that triggered recovery
+     * @private
+     */
+    async _startAutoRecovery(error) {
+        if (this._isAutoRecovering) return;
+        this._isAutoRecovering = true;
+        this._autoRecoveryAttempts = 0;
+
+        // 1. Capture exact playback position before backend is torn down
+        const currentTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
+        // Rewind 2 seconds (20,000,000 ticks) so the viewer doesn't miss the interrupted scene
+        this._autoRecoveryPositionTicks = Math.max(0, currentTicks - 20000000);
+        log.info(
+            `[AutoRecovery] Network dropout detected (${error?.message || error}). Captured position: ${(this._autoRecoveryPositionTicks / 10000000).toFixed(1)}s`
+        );
+
+        // 2. Hide OSD and show sleek Apple HIG Reconnection HUD
+        if (this._osd) this._osd.hide();
+        this._showReconnectHUD(true, 'Connection lost. Reconnecting to server...');
+
+        // 3. Stop backend player without scrobbling 'stopped' to preserve continue-watching state
+        try {
+            if (this._player?.stop) {
+                await this._player.stop();
+            }
+        } catch (stopErr) {
+            log.warn('[AutoRecovery] Backend stop during recovery:', stopErr);
+        }
+
+        // 4. Begin non-blocking polling check loop
+        this._pollForReconnection();
+    }
+
+    /**
+     * Poll for network restoration and Jellyfin server availability.
+     * Uses Tizen webapis.network gateway check alongside periodic /System/Ping calls.
+     * @private
+     */
+    _pollForReconnection() {
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+
+        const maxAttempts = 45; // 45 * 2s = 90s total recovery window
+        const pollInterval = 2000;
+
+        const checkStep = async () => {
+            if (!this._isAutoRecovering) return;
+
+            this._autoRecoveryAttempts++;
+            const statusEl = this.$('#reconnect-status');
+            if (statusEl) {
+                statusEl.textContent = `Reconnecting to server... (${this._autoRecoveryAttempts}/${maxAttempts})`;
+            }
+
+            log.info(`[AutoRecovery] Checking server connectivity (attempt ${this._autoRecoveryAttempts}/${maxAttempts})...`);
+
+            let isOnline = false;
+
+            // Ping Jellyfin server directly
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1800);
+                const pingUrl = `${api.serverUrl}/System/Ping`;
+                const response = await fetch(pingUrl, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    isOnline = true;
+                }
+            } catch (pingErr) {
+                log.debug('[AutoRecovery] Server ping check failed:', pingErr.message);
+            }
+
+            if (isOnline) {
+                log.info('[AutoRecovery] Server connectivity restored! Auto-resuming playback...');
+                if (statusEl) {
+                    statusEl.textContent = 'Connection restored! Resuming playback...';
+                }
+                await new Promise((r) => setTimeout(r, 600));
+                this._finishAutoRecovery();
+                return;
+            }
+
+            if (this._autoRecoveryAttempts >= maxAttempts) {
+                log.warn('[AutoRecovery] Max recovery attempts reached. Presenting manual error screen.');
+                this._cancelAutoRecovery();
+                this._showError('Connection lost. Please check your network connection and try again.');
+                return;
+            }
+
+            this._autoRecoveryTimer = setTimeout(checkStep, pollInterval);
+        };
+
+        this._autoRecoveryTimer = setTimeout(checkStep, pollInterval);
+    }
+
+    /**
+     * Successfully recovered network: re-initialize player and resume from captured position.
+     * @private
+     */
+    async _finishAutoRecovery() {
+        this._showReconnectHUD(false);
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+
+        try {
+            this._showLoading(true);
+
+            // Re-assign resume position
+            this._resumePosition = this._autoRecoveryPositionTicks;
+            this._hasReportedStart = false;
+
+            // Re-initialize player instance
+            if (!this._player || this._player.isDestroyed) {
+                await this._initPlayer();
+            }
+
+            // Start playback from saved position
+            await this._startPlayback();
+            this._showLoading(false);
+        } catch (resumeErr) {
+            log.error('[AutoRecovery] Failed to resume playback after reconnect:', resumeErr);
+            this._showError('Failed to resume playback after reconnection.');
+        }
+    }
+
+    /**
+     * Cancel ongoing auto-recovery process and dismiss HUD.
+     * @private
+     */
+    _cancelAutoRecovery() {
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+        this._showReconnectHUD(false);
     }
 
     _onTimeUpdate(positionTicks) {
@@ -3320,6 +3553,14 @@ class PlayerPage extends Page {
             return;
         }
 
+        // If auto-recovery is in progress, cancel it and exit cleanly
+        if (this._isAutoRecovering) {
+            log.info('Canceling active auto-recovery on user Back navigation');
+            this._cancelAutoRecovery();
+            this._stopAndExit();
+            return true;
+        }
+
         // ====================================================================
         // PHYSICAL / PLATFORM BACK BUTTON TRANSITION GUARD
         // ====================================================================
@@ -3667,6 +3908,9 @@ class PlayerPage extends Page {
 
     destroy() {
         log.info('destroy() called');
+
+        // Cancel any pending auto-recovery timers
+        this._cancelAutoRecovery();
 
         // Stop pause reporting heartbeat timer
         this._stopPauseReportTimer();
