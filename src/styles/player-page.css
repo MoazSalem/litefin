@@ -116,7 +116,7 @@ body.lyrics-active .audio-player-center {
     border-radius: 18px;
     background-size: cover;
     background-position: center;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
     -webkit-transition: opacity 0.4s ease;
     transition: opacity 0.4s ease;
 }
