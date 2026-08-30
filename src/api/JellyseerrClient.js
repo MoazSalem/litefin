@@ -50,7 +50,7 @@ export class JellyseerrClient {
     }
 
     /**
-     * Probes the Litefin server plugin and caches its public Seerr status.
+     * Probes the Litefin server plugin and caches its public Seerr status once per session.
      * @param {boolean} [force=false]
      * @returns {Promise<{configured: boolean, available: boolean}>}
      */
@@ -62,18 +62,44 @@ export class JellyseerrClient {
 
         if (this._status && !force) return this._status;
 
+        // Check session-level cache to ensure probe occurs once per session
+        if (!force && typeof sessionStorage !== 'undefined') {
+            try {
+                const sessionCached = sessionStorage.getItem('seerr:session_status');
+                if (sessionCached) {
+                    this._status = JSON.parse(sessionCached);
+                    return this._status;
+                }
+            } catch (_) {}
+        }
+
         try {
             const payload = await api.get(`${API_ROOT}/Status`);
             this._status = {
                 configured: !!payload?.configured,
                 available: !!payload?.available
             };
+            if (typeof sessionStorage !== 'undefined') {
+                try {
+                    sessionStorage.setItem('seerr:session_status', JSON.stringify(this._status));
+                } catch (_) {}
+            }
         } catch (err) {
             log.debug('Litefin Seerr plugin endpoint is unavailable', err);
             this._status = { configured: false, available: false };
         }
 
         return this._status;
+    }
+
+    /**
+     * Asynchronously checks if Seerr is configured and available (cached once per session).
+     * @param {boolean} [force=false]
+     * @returns {Promise<boolean>}
+     */
+    async isAvailable(force = false) {
+        const s = await this.status(force);
+        return !!(s && s.configured && s.available);
     }
 
     /**

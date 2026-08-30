@@ -17,6 +17,7 @@ import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import { seerr } from '../api/JellyseerrClient.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
@@ -4011,7 +4012,7 @@ class DetailsPage extends Page {
         };
     }
 
-    _showMoreOptionsModal(itemId) {
+    async _showMoreOptionsModal(itemId) {
         const oldOnBack = this.onBack;
         // Store focus context for restoration (only if not already stored by a previous modal layer)
         if (!this._prevFocus) {
@@ -4051,6 +4052,29 @@ class DetailsPage extends Page {
 
         if (this._item?.MediaSources?.length > 0) {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
+        }
+
+        // ── Seerr Details Shortcut (Only if Seerr is configured and available) ──
+        const tmdbId =
+            this._item?.ProviderIds?.Tmdb ||
+            this._item?.ProviderIds?.tmdb ||
+            this._item?.ProviderIds?.TMDB ||
+            this._item?.SeriesTmdbId ||
+            this._item?.SeriesProviderIds?.Tmdb ||
+            this._item?.SeriesProviderIds?.tmdb;
+
+        const isTvType =
+            this._item?.Type === 'Series' ||
+            this._item?.Type === 'Season' ||
+            this._item?.Type === 'Episode';
+
+        const isMovieType =
+            this._item?.Type === 'Movie';
+
+        const isSeerrAvailable = await seerr.isAvailable();
+
+        if (isSeerrAvailable && tmdbId && (isTvType || isMovieType)) {
+            options.push({ id: 'seerr-details', label: i18n.t('SeerrDetails') || 'Seerr Details' });
         }
 
         // ── Refresh Metadata Permission Check ────────────────────────────────
@@ -4278,6 +4302,10 @@ class DetailsPage extends Page {
                         fromMoreOptions: true,
                         oldOnBack: oldOnBack
                     });
+                } else if (id === 'seerr-details') {
+                    this._closeMoreMenu();
+                    const targetMediaType = isTvType ? 'tv' : 'movie';
+                    router.navigate(`/seerr/${targetMediaType}/${tmdbId}`);
                 } else if (id === 'refresh') {
                     this._isMoreMenuOpen = false;
                     overlay.classList.remove('visible');

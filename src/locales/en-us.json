@@ -1112,6 +1112,7 @@
     "SeerrCancelRequest": "Cancel Request",
     "SeerrCancelRequestFailed": "Failed to cancel request",
     "SeerrConnected": "Connected as {0}",
+    "SeerrDetails": "Seerr Details",
     "SeerrDisconnected": "Not connected",
     "SeerrDiscover": "Discover",
     "SeerrLoadFailed": "Could not load content from Jellyseerr.",

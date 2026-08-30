@@ -828,6 +828,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     -webkit-border-radius: var(--jf-border-radius);
     overflow: hidden;
     background-clip: padding-box;
+    background-color: transparent;
+    transition: background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .details-rich-meta:focus,
@@ -1127,14 +1129,13 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     font-size: 2.2rem;
 }
 
-/* Person Page Actions (Favorite) */
+/* Person Page Actions (Favorite, Seerr) */
 .person-actions-row {
     margin-top: 24px;
     margin-bottom: 24px;
     display: flex;
     align-items: center;
-    /* REDUNDANT: Container level */
-    /* transform: translateZ(0); */
+    gap: 16px;
 }
 
 /*

@@ -102,7 +102,7 @@ class Sidebar extends Component {
                         <span class="item-text" data-i18n="Favorites">Favorites</span>
                     </button>
 
-                    <button class="sidebar-item" id="sidebar-discover" tabindex="0" data-path="/discover">
+                    <button class="sidebar-item" id="sidebar-discover" tabindex="0" data-path="/discover" style="display: none;">
                         <div class="item-icon">
                             ${sidebarIcons.discover}
                         </div>
@@ -277,8 +277,9 @@ class Sidebar extends Component {
         const button = this.$('#sidebar-discover');
         if (!button) return;
 
-        const status = await seerr.status(true);
-        button.style.display = status.available ? '' : 'none';
+        const isAvailable = await seerr.isAvailable();
+        button.style.display = isAvailable ? '' : 'none';
+        focusManager.invalidateCache('sidebar');
     }
 
     onDestroyed() {
