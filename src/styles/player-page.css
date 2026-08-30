@@ -82,7 +82,7 @@
     height: 120%;
     background-size: cover;
     background-position: center;
-    filter: blur(40px) brightness(0.4);
+    filter: blur(130px) brightness(0.4);
     z-index: 1;
 }
 
@@ -96,9 +96,9 @@
     -webkit-justify-content: center;
     justify-content: center;
     z-index: 2;
-    /* Translate the cover photo up a bit vertically by default to leave space for info */
-    -webkit-transform: translateY(-30px);
-    transform: translateY(-30px);
+    /* Keep the album art and metadata vertically centered */
+    -webkit-transform: translateY(0px);
+    transform: translateY(0px);
     -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
 }
@@ -111,12 +111,12 @@ body.lyrics-active .audio-player-center {
 
 .audio-album-art {
     position: relative;
-    width: 460px; /* Reduced slightly to ensure it doesn't crowd and fits beautifully on various screen sizes */
-    height: 460px; /* Reduced slightly from 500px */
-    border-radius: 24px;
+    width: 500px;
+    height: 500px;
+    border-radius: 18px;
     background-size: cover;
     background-position: center;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
     -webkit-transition: opacity 0.4s ease;
     transition: opacity 0.4s ease;
 }
