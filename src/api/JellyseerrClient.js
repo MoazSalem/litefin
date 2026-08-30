@@ -174,6 +174,7 @@ export class JellyseerrClient {
             if (options.genre) queryParams += `&genre=${options.genre}`;
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.studio) queryParams += `&studio=${options.studio}`;
+            if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
         return this._normalizeList(await this._request(`/Discover/Movies?${queryParams}`));
     }
@@ -186,24 +187,25 @@ export class JellyseerrClient {
             if (options.genre) queryParams += `&genre=${options.genre}`;
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.network) queryParams += `&network=${options.network}`;
+            if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
         return this._normalizeList(await this._request(`/Discover/Tv?${queryParams}`));
     }
 
-    async moviesByGenre(genreId, page = 1) {
-        return this.discoverMovies(page, { genre: genreId });
+    async moviesByGenre(genreId, page = 1, sortBy = null) {
+        return this.discoverMovies(page, { genre: genreId, sortBy });
     }
 
-    async tvByGenre(genreId, page = 1) {
-        return this.discoverTv(page, { genre: genreId });
+    async tvByGenre(genreId, page = 1, sortBy = null) {
+        return this.discoverTv(page, { genre: genreId, sortBy });
     }
 
-    async moviesByKeyword(keywordId, page = 1) {
-        return this.discoverMovies(page, { keywords: keywordId });
+    async moviesByKeyword(keywordId, page = 1, sortBy = null) {
+        return this.discoverMovies(page, { keywords: keywordId, sortBy });
     }
 
-    async tvByKeyword(keywordId, page = 1) {
-        return this.discoverTv(page, { keywords: keywordId });
+    async tvByKeyword(keywordId, page = 1, sortBy = null) {
+        return this.discoverTv(page, { keywords: keywordId, sortBy });
     }
 
     async moviesByStudio(studioId, page = 1) {

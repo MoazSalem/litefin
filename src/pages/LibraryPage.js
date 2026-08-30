@@ -309,7 +309,6 @@ class LibraryPage extends Page {
                 Name: seerrTitle,
                 CollectionType: 'seerr'
             };
-            this.state.viewMode = 'poster';
             this.$('#library-title').textContent = seerrTitle;
             this.title = seerrTitle;
         } else if (!isVirtualLibrary) {
@@ -922,20 +921,24 @@ class LibraryPage extends Page {
 
             // Calculate active page for Seerr request (each page contains 100 items merged from 5 upstream pages)
             const seerrPage = Math.floor(this.state.startIndex / 100) + 1;
+            const sortField = this.state.sortBy || 'popularity';
+            const sortDir = (this.state.sortOrder || 'Descending').toLowerCase().startsWith('asc') ? 'asc' : 'desc';
+            // Only send sortBy parameter if it differs from the upstream default (popularity.desc)
+            const seerrSortBy = (sortField === 'popularity' && sortDir === 'desc') ? null : `${sortField}.${sortDir}`;
 
             let items = [];
             try {
                 if (seerrType === 'keyword' || seerrType === 'tag' || keywordId) {
                     if (mediaType === 'tv') {
-                        items = await seerr.tvByKeyword(keywordId, seerrPage);
+                        items = await seerr.tvByKeyword(keywordId, seerrPage, seerrSortBy);
                     } else {
-                        items = await seerr.moviesByKeyword(keywordId, seerrPage);
+                        items = await seerr.moviesByKeyword(keywordId, seerrPage, seerrSortBy);
                     }
                 } else if (seerrType === 'genre' || genreId) {
                     if (mediaType === 'tv') {
-                        items = await seerr.tvByGenre(genreId, seerrPage);
+                        items = await seerr.tvByGenre(genreId, seerrPage, seerrSortBy);
                     } else {
-                        items = await seerr.moviesByGenre(genreId, seerrPage);
+                        items = await seerr.moviesByGenre(genreId, seerrPage, seerrSortBy);
                     }
                 } else if (seerrType === 'studio' || studioId) {
                     items = await seerr.moviesByStudio(studioId, seerrPage);
@@ -950,7 +953,6 @@ class LibraryPage extends Page {
             this.state.items = items || [];
             this.state.limit = 100;
             this.state.totalRecordCount = items.totalResults || (items.totalPages ? items.totalPages * 100 : (items.length ? (seerrPage + 1) * 100 : 0));
-            this.state.viewMode = 'poster';
 
             const grid = this.$('#library-grid');
             if (grid) {
@@ -1812,20 +1814,20 @@ class LibraryPage extends Page {
             }
         }
 
-        if (this._isSubView()) {
-            // Sub-views always reset to the poster default rather than inheriting
-            // whatever the parent library is configured to — avoids confusing layouts
-            // when drilling into genres/studios/persons.
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        if (this._isSubView() && !isSeerr) {
+            // Sub-views for standard Jellyfin libraries always reset to poster default
             this.state.viewMode = 'poster';
             return;
         }
 
-        const storageKey = `pref:library:viewMode:${this.state.libraryId}`;
+        const storageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
         const saved = storage.getItem(storageKey);
 
         if (saved) {
             // Validate the value is still a known picker option (guards against stale data)
-            const validModes = ['poster', 'small-poster', 'thumb', 'banner', 'list'];
+            const validModes = isSeerr ? ['poster', 'small-poster'] : ['poster', 'small-poster', 'thumb', 'banner', 'list'];
             this.state.viewMode = validModes.includes(saved) ? saved : 'poster';
         } else {
             // No preference saved — universal default is 'poster'.
@@ -1843,11 +1845,13 @@ class LibraryPage extends Page {
          * custom column counts selected for this viewMode.
          * =========================================================================
          */
-        const modeKey = `pref:library:gridMode:${this.state.libraryId}`;
+        const modeKey = isSeerr ? 'pref:seerr:gridMode' : `pref:library:gridMode:${this.state.libraryId}`;
         const savedMode = storage.getItem(modeKey);
         this.state.gridMode = savedMode === 'static' ? 'static' : 'dynamic';
 
-        const colsKey = `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewMode}`;
+        const colsKey = isSeerr
+            ? `pref:seerr:gridColumns:${this.state.viewMode}`
+            : `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewMode}`;
         const savedCols = parseInt(storage.getItem(colsKey), 10);
         this.state.gridColumns = !isNaN(savedCols) ? savedCols : this._getDefaultColumnsForMode(this.state.viewMode);
     }
@@ -1857,11 +1861,19 @@ class LibraryPage extends Page {
             return; // Sub-views should fallback to defaults
         }
 
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
         const sortByKey = `pref:library:sortBy:${this.state.libraryId}`;
         const sortOrderKey = `pref:library:sortOrder:${this.state.libraryId}`;
 
         const savedSortBy = storage.getItem(sortByKey);
         const savedSortOrder = storage.getItem(sortOrderKey);
+
+        if (isSeerr) {
+            const validSeerrSorts = ['popularity', 'release_date', 'first_air_date', 'vote_average', 'original_title'];
+            this.state.sortBy = savedSortBy && validSeerrSorts.includes(savedSortBy) ? savedSortBy : 'popularity';
+            this.state.sortOrder = savedSortOrder || 'Descending';
+            return;
+        }
 
         if (savedSortBy) {
             this.state.sortBy = savedSortBy;
@@ -2604,11 +2616,13 @@ class LibraryPage extends Page {
                     isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
                     type: this.state.viewMode === 'banner' ? 'banner' : resolvedCardType,
                     contextType:
-                        this.state.viewType === 'Upcoming'
-                            ? 'upcoming'
-                            : this.state.viewType === 'Albums'
-                              ? 'music'
-                              : 'library',
+                        this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr'
+                            ? 'discover'
+                            : this.state.viewType === 'Upcoming'
+                              ? 'upcoming'
+                              : this.state.viewType === 'Albums'
+                                ? 'music'
+                                : 'library',
                     showMeta: !isLandscape && this.state.viewMode === 'list',
                     isGrid: true,
                     cardWidth: cardWidth
@@ -3734,6 +3748,35 @@ class LibraryPage extends Page {
     }
 
     _handleSort() {
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        if (isSeerr) {
+            const mediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
+            const isTv = mediaType === 'tv';
+
+            const sortOptions = isTv
+                ? [
+                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                      { label: 'OptionFirstAirDate', fallback: 'First Air Date', value: 'first_air_date' },
+                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                  ]
+                : [
+                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                      { label: 'OptionReleaseDate', fallback: 'Release Date', value: 'release_date' },
+                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                  ];
+
+            const orderOptions = [
+                { label: 'Descending', fallback: 'Descending', value: 'Descending' },
+                { label: 'Ascending', fallback: 'Ascending', value: 'Ascending' }
+            ];
+
+            this._renderSortModal(sortOptions, orderOptions);
+            return;
+        }
+
         // Define Order Options (Common)
         const orderOptions = [
             { label: 'Ascending', value: 'Ascending' },
@@ -3841,7 +3884,9 @@ class LibraryPage extends Page {
                 .join('');
         };
 
-        const modes = [
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        const allModes = [
             {
                 value: 'poster',
                 label: 'ViewModePoster',
@@ -3899,6 +3944,11 @@ class LibraryPage extends Page {
                 </svg>`
             }
         ];
+
+        // For Seerr discovery, limit view mode options to Poster and Small Poster
+        const modes = isSeerr
+            ? allModes.filter((m) => m.value === 'poster' || m.value === 'small-poster')
+            : allModes;
 
         const updateModalUI = () => {
             const hasGridOptions = tempMode !== 'list';
@@ -4035,7 +4085,9 @@ class LibraryPage extends Page {
 
                 // When switching modes, check if we need to load columns default value
                 const defaultCols = this._getDefaultColumnsForMode(tempMode);
-                const colsKey = `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
+                const colsKey = isSeerr
+                    ? `pref:seerr:gridColumns:${tempMode}`
+                    : `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
                 const savedCols = parseInt(storage.getItem(colsKey), 10);
                 tempColumns = !isNaN(savedCols) ? savedCols : defaultCols;
 
@@ -4066,9 +4118,15 @@ class LibraryPage extends Page {
             this.state.gridColumns = tempColumns;
 
             // Persist to local storage
-            storage.setItem(`pref:library:viewMode:${this.state.libraryId}`, tempMode);
-            storage.setItem(`pref:library:gridMode:${this.state.libraryId}`, tempGridMode);
-            storage.setItem(`pref:library:gridColumns:${this.state.libraryId}:${tempMode}`, tempColumns);
+            if (isSeerr) {
+                storage.setItem('pref:seerr:viewMode', tempMode);
+                storage.setItem('pref:seerr:gridMode', tempGridMode);
+                storage.setItem(`pref:seerr:gridColumns:${tempMode}`, tempColumns);
+            } else {
+                storage.setItem(`pref:library:viewMode:${this.state.libraryId}`, tempMode);
+                storage.setItem(`pref:library:gridMode:${this.state.libraryId}`, tempGridMode);
+                storage.setItem(`pref:library:gridColumns:${this.state.libraryId}:${tempMode}`, tempColumns);
+            }
 
             // Re-fetch items with the aligned limit for the new column count,
             // so every row renders full (no partial last row).
@@ -4117,7 +4175,7 @@ class LibraryPage extends Page {
                                         data-value="${opt.value}"
                                         tabindex="0">
                                     <div class="radio-icon"></div>
-                                    <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
+                                    <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
                                 )
@@ -4137,7 +4195,7 @@ class LibraryPage extends Page {
                                         data-value="${opt.value}"
                                         tabindex="0">
                                     <div class="radio-icon"></div>
-                                    <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
+                                    <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
                                 )
@@ -4841,21 +4899,9 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType;
         const viewType = this.state.viewType;
 
-        // Hide controls, tabs, and alpha picker for Seerr category library views
-        if (collectionType === 'seerr' || this.state.libraryId === 'seerr') {
-            const controls = this.$('#library-controls');
-            const controlsRow = this.$('.library-controls-row');
-            const alphaPicker = this.$('#alpha-picker-container');
-            const tabsContainer = this.$('#library-tabs');
+        const isSeerr = collectionType === 'seerr' || this.state.libraryId === 'seerr';
 
-            if (controlsRow) controlsRow.style.display = 'none';
-            if (controls) controls.style.display = 'none';
-            if (alphaPicker) alphaPicker.style.display = 'none';
-            if (tabsContainer) tabsContainer.style.display = 'none';
-            return;
-        }
-
-        // Condition: only show for Movies (Items), TV Shows (Items), Episodes, and music grid views
+        // Condition: only show for Movies (Items), TV Shows (Items), Episodes, music grid views, and Seerr
         const isMovieMain = collectionType === 'movies' && viewType === 'Items';
         const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
         const isEpisodes = viewType === 'Episodes';
@@ -4879,26 +4925,39 @@ class LibraryPage extends Page {
             (viewType === 'Items' || viewType === 'Folders');
 
         const shouldShow =
-            isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
+            isSeerr || isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
 
         const isSubView = this._isSubView();
         const isSubFolder = this.state.isSubFolder;
 
-        // Controls and Alpha Picker should be visible in main views, sub-views (Genre/Person),
-        // or when navigating into sub-folders.
+        // Controls should be visible in main views, sub-views (Genre/Person), Seerr, or sub-folders
         const isControlsVisible = shouldShow || isSubView || isSubFolder;
-        const isAlphaVisible = shouldShow || isSubView || isSubFolder;
+        // Alpha Picker is hidden for Seerr
+        const isAlphaVisible = !isSeerr && (shouldShow || isSubView || isSubFolder);
 
         const isCollectionsLike = collectionType === 'boxsets' || collectionType === 'playlists';
-        const isTabsVisible = !isCollectionsLike && !isSubView;
+        const isTabsVisible = !isSeerr && !isCollectionsLike && !isSubView;
 
         const controls = this.$('#library-controls');
         const controlsRow = this.$('.library-controls-row');
         const alphaPicker = this.$('#alpha-picker-container');
         const tabsContainer = this.$('#library-tabs');
+        const shuffleBtn = this.$('#btn-shuffle');
+        const filterBtn = this.$('#btn-filter');
+        const sortBtn = this.$('#btn-sort');
+        const isStudioOrNetwork =
+            this.params.seerrType === 'studio' ||
+            this.params.seerrType === 'network' ||
+            !!this.params.studioId ||
+            !!this.params.networkId;
 
         if (controlsRow) controlsRow.style.display = isControlsVisible ? 'flex' : 'none';
+        if (controls) controls.style.display = isControlsVisible ? 'flex' : 'none';
         if (alphaPicker) alphaPicker.style.display = isAlphaVisible ? 'flex' : 'none';
+        if (tabsContainer) tabsContainer.style.display = isTabsVisible ? 'flex' : 'none';
+        if (shuffleBtn) shuffleBtn.style.display = isSeerr ? 'none' : '';
+        if (filterBtn) filterBtn.style.display = isSeerr ? 'none' : '';
+        if (sortBtn) sortBtn.style.display = isSeerr && isStudioOrNetwork ? 'none' : '';
 
         // 1. Configure Tabs (if visible)
         if (tabsContainer && isTabsVisible) {
