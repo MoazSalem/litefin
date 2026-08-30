@@ -97,22 +97,22 @@
     justify-content: center;
     z-index: 2;
     /* Keep the album art and metadata vertically centered */
-    -webkit-transform: translateY(0px);
-    transform: translateY(0px);
+    -webkit-transform: translateY(10px);
+    transform: translateY(10px);
     -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
 }
 
 body.lyrics-active .audio-player-center {
     /* Translate the wrapper to the left and keep the slight upward position when lyrics are active */
-    -webkit-transform: translate(-15vw, -30px);
-    transform: translate(-15vw, -30px);
+    -webkit-transform: translate(-15vw, 10px);
+    transform: translate(-15vw, 10px);
 }
 
 .audio-album-art {
     position: relative;
-    width: 500px;
-    height: 500px;
+    width: 550px;
+    height: 550px;
     border-radius: 18px;
     background-size: cover;
     background-position: center;
