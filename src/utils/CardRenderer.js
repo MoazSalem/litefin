@@ -734,7 +734,11 @@ class CardRenderer {
                 // Support both standard Role and _roleName (from MediaGrid mapping)
                 const role = item.Role || item._roleName;
                 if (role) {
-                    parts.push(i18n.t('LabelAsRole', [role]));
+                    if (item._isCrew) {
+                        parts.push(role);
+                    } else {
+                        parts.push(i18n.t('LabelAsRole', [role]));
+                    }
                 }
             }
 

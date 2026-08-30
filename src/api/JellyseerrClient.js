@@ -120,9 +120,9 @@ export class JellyseerrClient {
     }
 
     /** @private */
-    _normalizeList(payload) {
+    _normalizeList(payload, allowPerson = false) {
         const results = this._resultsOf(payload)
-            .filter((result) => result && result.mediaType !== 'person')
+            .filter((result) => result && (allowPerson || result.mediaType !== 'person'))
             .map(normalizeSeerrItem)
             .filter((item) => item !== null)
             .map((item) => decorateStatusBadge(item));
@@ -195,7 +195,7 @@ export class JellyseerrClient {
      */
     async search(query, page = 1) {
         const path = `/Search?query=${encodeURIComponent(query)}&page=${page}`;
-        return this._normalizeList(await this._request(path));
+        return this._normalizeList(await this._request(path), true);
     }
 
     /**
@@ -262,6 +262,90 @@ export class JellyseerrClient {
         } catch (e) {
             log.warn(`Failed to fetch collection ${collectionId}`, e);
             return { id: collectionId, name: '', items: [] };
+        }
+    }
+
+    /**
+     * Gets person details along with combined cast and crew filmography from Seerr.
+     * Normalizes and decorates each credit item with availability badges.
+     * 
+     * @param {number} personId - The TMDB person identifier.
+     * @returns {Promise<Object>} Normalized person details and appearances.
+     */
+    async person(personId) {
+        try {
+            // Request person entity and combined credits in parallel
+            const [rawPersonRes, creditsRes] = await Promise.allSettled([
+                this._request(`/Person/${personId}`),
+                this._request(`/Person/${personId}/combined_credits`)
+            ]);
+
+            const raw = rawPersonRes.status === 'fulfilled' ? (rawPersonRes.value || {}) : {};
+            const creditsRaw = creditsRes.status === 'fulfilled' ? (creditsRes.value || {}) : {};
+
+            if (!raw && !creditsRaw) throw new Error('SeerrInvalidResponse');
+
+            // Extract cast and crew arrays from combined credits response or person entity
+            const cast =
+                creditsRaw.cast ||
+                creditsRaw.Cast ||
+                creditsRaw.combinedCredits?.cast ||
+                creditsRaw.combined_credits?.cast ||
+                raw.combinedCredits?.cast ||
+                raw.combined_credits?.cast ||
+                raw.credits?.cast ||
+                raw.cast ||
+                [];
+
+            const crew =
+                creditsRaw.crew ||
+                creditsRaw.Crew ||
+                creditsRaw.combinedCredits?.crew ||
+                creditsRaw.combined_credits?.crew ||
+                raw.combinedCredits?.crew ||
+                raw.combined_credits?.crew ||
+                raw.credits?.crew ||
+                raw.crew ||
+                [];
+
+            // Deduplicate items appearing in both cast and crew roles
+            const combined = [...cast, ...crew]
+                .filter((item, index, self) =>
+                    item &&
+                    index === self.findIndex((t) => t && (t.id || t.Id) === (item.id || item.Id) && (t.mediaType || t.media_type) === (item.mediaType || item.media_type))
+                )
+                // Order credits by popularity descending for relevant filmography presentation
+                .sort((a, b) => ((b.popularity || b.voteAverage || 0) - (a.popularity || a.voteAverage || 0)));
+
+            // Convert TMDB credit entries to standard normalized cards with status badges
+            const appearances = combined
+                .map((r) => normalizeSeerrItem(r, r.mediaType || r.media_type || (r.title ? 'movie' : 'tv')))
+                .filter(Boolean)
+                .map(decorateStatusBadge);
+
+            const profile = raw.profilePath || raw.profile_path || raw.ProfilePath || '';
+
+            // Construct unified person view model
+            return {
+                id: raw.id || raw.Id || personId,
+                name: raw.name || raw.Name || '',
+                biography: raw.biography || raw.Biography || raw.overview || raw.Overview || '',
+                birthday: raw.birthday || raw.Birthday || '',
+                deathday: raw.deathday || raw.Deathday || null,
+                placeOfBirth: raw.placeOfBirth || raw.place_of_birth || raw.PlaceOfBirth || '',
+                knownForDepartment: raw.knownForDepartment || raw.known_for_department || raw.KnownForDepartment || '',
+                profilePath: profile,
+                _imageUrl: profile ? `https://image.tmdb.org/t/p/h632${profile}` : '',
+                appearances: appearances,
+                combinedCredits: {
+                    cast: cast,
+                    crew: crew
+                },
+                raw: { ...raw, combinedCredits: { cast, crew } }
+            };
+        } catch (e) {
+            log.warn(`Failed to fetch person ${personId}`, e);
+            throw e;
         }
     }
 

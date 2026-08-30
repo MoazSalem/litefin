@@ -643,7 +643,20 @@ class SeerrDetailsPage extends Page {
                 items: this._item.Cast,
                 isLandscape: false,
                 renderCard: (person) => CardRenderer.createCardHtml(person, { type: 'person' }),
-                focusSectionName: 'seerr-details-people'
+                focusSectionName: 'seerr-details-people',
+                onClick: (card, person) => {
+                    const target = person || this._item.Cast.find((p) => String(p.Id) === String(card.getAttribute('data-id') || card.dataset.id || card.dataset.itemId));
+                    if (target && target.Id) {
+                        const stateKey = `seerr:lastFocusedItem:${this._item._tmdbId}`;
+                        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                            state.set(stateKey, {
+                                itemId: target.Id,
+                                sectionId: 'seerr-details-people'
+                            });
+                        }
+                        router.navigate(`/seerr/person/${target.Id}`);
+                    }
+                }
             });
         }
 

@@ -126,11 +126,18 @@ function extractYear(dateStr) {
 export function normalizeSeerrItem(result, fallbackMediaType = null) {
     if (!result || !result.id) return null;
 
+    const isPerson =
+        result.mediaType === 'person' ||
+        fallbackMediaType === 'person' ||
+        (!result.mediaType && !!result.profilePath && !result.releaseDate && !result.firstAirDate && !result.title);
+
     const isTv =
-        result.mediaType === 'tv' ||
+        !isPerson &&
+        (result.mediaType === 'tv' ||
         (fallbackMediaType && fallbackMediaType === 'tv') ||
-        (!result.mediaType && (!!result.firstAirDate || !!result.seasons || !!result.numberOfSeasons));
-    const mediaType = isTv ? 'tv' : 'movie';
+        (!result.mediaType && (!!result.firstAirDate || !!result.seasons || !!result.numberOfSeasons)));
+
+    const mediaType = isPerson ? 'person' : (isTv ? 'tv' : 'movie');
 
     return {
         // Cannot collide with a Jellyfin GUID, and doubles as the CardRenderer
@@ -142,12 +149,16 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             const main = result.title || result.name || '';
             return orig !== main ? orig : '';
         })(),
-        Type: isTv ? 'Series' : 'Movie',
+        Type: isPerson ? 'Person' : (isTv ? 'Series' : 'Movie'),
         ProductionYear: extractYear(isTv ? result.firstAirDate : result.releaseDate),
         Overview: result.overview || '',
         // Read by CardRenderer to bypass Jellyfin URL building
-        _imageUrl: result.posterPath ? `${TMDB_POSTER_BASE}${result.posterPath}` : '',
-        _detailImageUrl: result.posterPath ? `${TMDB_POSTER_DETAIL_BASE}${result.posterPath}` : '',
+        _imageUrl: result.posterPath
+            ? `${TMDB_POSTER_BASE}${result.posterPath}`
+            : (result.profilePath ? `${TMDB_POSTER_BASE}${result.profilePath}` : ''),
+        _detailImageUrl: result.posterPath
+            ? `${TMDB_POSTER_DETAIL_BASE}${result.posterPath}`
+            : (result.profilePath ? `${TMDB_POSTER_DETAIL_BASE}${result.profilePath}` : ''),
         _backdropUrl: result.backdropPath ? `${TMDB_BACKDROP_BASE}${result.backdropPath}` : '',
         _seerrStatus: (result.mediaInfo && result.mediaInfo.status) || SEERR_STATUS.NOT_REQUESTED,
         _jellyfinMediaId: (() => {

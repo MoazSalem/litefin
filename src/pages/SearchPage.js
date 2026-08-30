@@ -782,11 +782,28 @@ class SearchPage extends Page {
 
         // Seerr navigation logic
         if (this._provider === 'seerr' || card.dataset.contextType === 'discover') {
-            const found = this._results.find((i) => i.Id === card.dataset.itemId);
+            const cardId = card.dataset.itemId || card.getAttribute('data-id');
+            const found = this._results.find((i) => i.Id === cardId || String(i._tmdbId) === String(cardId));
             if (found) {
+                const isPerson =
+                    found.mediaType === 'person' ||
+                    found._mediaType === 'person' ||
+                    found.Type === 'Person' ||
+                    card.dataset.type === 'Person' ||
+                    (typeof cardId === 'string' && cardId.startsWith('tmdb-person-'));
+
+                const cleanTmdbId =
+                    found._tmdbId ||
+                    found.id ||
+                    (typeof cardId === 'string' ? cardId.replace(/^tmdb-(?:movie|tv|person)-/, '') : cardId);
+
+                if (isPerson) {
+                    router.navigate(`/seerr/person/${cleanTmdbId}`);
+                    return;
+                }
+
                 const mediaType = found._mediaType || (found.Type === 'Series' ? 'tv' : 'movie');
-                const tmdbId = found._tmdbId || found.id || card.dataset.itemId;
-                router.navigate(`/seerr/${mediaType}/${tmdbId}`);
+                router.navigate(`/seerr/${mediaType}/${cleanTmdbId}`);
                 return;
             }
         }
