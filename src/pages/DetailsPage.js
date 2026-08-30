@@ -2464,6 +2464,22 @@ class DetailsPage extends Page {
     }
 
     async _loadNextUp() {
+        // =====================================================================
+        // Performance & Visibility Control Check
+        // =====================================================================
+        // Check if the user has enabled the "Hide Next Up" setting.
+        // By handling this check first, we short-circuit fetching Next Up items,
+        // avoiding unnecessary network calls and conserving VRAM on TV hardware.
+        // =====================================================================
+        const hideNextUp = storage.getItem('pref:hideNextUpSection') === 'true';
+        if (hideNextUp) {
+            const nextUpSection = this.$('#next-up-section');
+            if (nextUpSection) {
+                nextUpSection.classList.add('hidden');
+            }
+            return;
+        }
+
         try {
             let response;
 

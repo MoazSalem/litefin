@@ -2056,6 +2056,28 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!--
+                  =============================================================================
+                  Layout Settings - Details Page Next Up Section Toggle
+                  =============================================================================
+                  Allows TV users to toggle the visibility of the Next Up episode row on 
+                  item details pages. When hidden, Litefin skips fetching Next Up items from 
+                  the server, saving VRAM and bandwidth on lower-spec TV hardware.
+                  =============================================================================
+                -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideNextUpSection">${i18n.t('LabelHideNextUpSection') || 'Hide Next Up'}</span>
+                        <span class="setting-description" data-i18n="HideNextUpSectionDescription">${i18n.t('HideNextUpSectionDescription') || 'Do not load or display the Next Up row on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideNextUpSection') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-next-up-section" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelHideGhostMode">${i18n.t('LabelHideGhostMode') || 'Hide Ghost Mode Button'}</span>
@@ -4681,7 +4703,7 @@ class SettingsPage extends Page {
 
         /*
          * Check whether auto-login for the last active user is enabled.
-         * Default: disabled (false). Adheres to Apple Human Interface Guidelines
+         * Default: disabled (false)
          * for explicit user consent and minimal friction control elements.
          */
         const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
@@ -5966,7 +5988,6 @@ class SettingsPage extends Page {
         // ==========================================
         // Controls whether the application automatically boots into the last active
         // user profile, skipping the "Who's Watching" selection screen on app launch.
-        // Follows Apple Human Interface Guidelines for intuitive binary toggle controls.
         const rememberLastUserToggle = this.$('#toggle-remember-last-user');
         if (rememberLastUserToggle) {
             rememberLastUserToggle.addEventListener('click', () => {
@@ -6524,6 +6545,27 @@ class SettingsPage extends Page {
                 storage.setItem('pref:hideSimilarSection', newValue.toString());
                 hideSimilarBtn.classList.toggle('active', newValue);
                 log.info(`Hide Similar Recommendations set to: ${newValue}`);
+            });
+        }
+
+        // =====================================================================
+        // Toggle Hide Next Up Row on Details Page
+        // =====================================================================
+        // Manages local state persistence and tactile UI animation feedback 
+        // for hiding the Next Up episode row on item details pages.
+        // =====================================================================
+        const hideNextUpBtn = this.$('#toggle-hide-next-up-section');
+        if (hideNextUpBtn) {
+            hideNextUpBtn.addEventListener('click', () => {
+                // Fetch the current persistence state of the Next Up row setting
+                const isHidden = storage.getItem('pref:hideNextUpSection') === 'true';
+                const newValue = !isHidden;
+
+                // Save new setting locally to immediately affect DetailsPage behavior
+                storage.setItem('pref:hideNextUpSection', newValue.toString());
+                
+                hideNextUpBtn.classList.toggle('active', newValue);
+                log.info(`Hide Next Up Section set to: ${newValue}`);
             });
         }
 
