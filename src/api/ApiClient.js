@@ -277,7 +277,7 @@ export class ApiClient {
                 const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
                 
                 if (storage.getItem('pref:showQualityBadges') === 'true') {
-                    ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
+                    ['Width', 'Height', 'VideoRange', 'VideoRangeType', 'MediaSources'].forEach((f) => {
                         if (!fieldsList.includes(f)) {
                             fieldsList.push(f);
                         }
@@ -475,8 +475,9 @@ export class ApiClient {
                         // Send Wake-on-LAN Magic Packet
                         sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
 
-                        // Retry loop: probe server status every 3s for up to 5 attempts (~15 seconds)
-                        const maxAttempts = 5;
+                        // Retry loop: probe server status every 3s (up to 25 attempts / ~90s if Extended Wait is active)
+                        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+                        const maxAttempts = extendedWait ? 25 : 5;
                         const retryDelayMs = 3000;
 
                         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -2400,20 +2401,30 @@ export async function sendWakeOnLan(macAddress) {
         }
 
         log.info('Dispatching WOL request to local HTTP proxy on port 8123');
-        try {
-            const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                // Keep-alive or short timeout since it is local loopback
-                timeout: 3000
-            });
-            const data = await res.json();
-            log.info('Local HTTP WOL response received:', data);
-            return !!(data && data.success);
-        } catch (fetchErr) {
-            log.warn('Failed to dispatch WOL request to local HTTP proxy:', fetchErr);
-            return false;
+        const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
+        const maxHttpRetries = 6;
+        const httpRetryDelayMs = 600;
+
+        for (let attempt = 1; attempt <= maxHttpRetries; attempt++) {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    timeout: 3000
+                });
+                const data = await res.json();
+                log.info(`Local HTTP WOL response received (attempt ${attempt}/${maxHttpRetries}):`, data);
+                if (data && data.success) {
+                    return true;
+                }
+            } catch (fetchErr) {
+                log.warn(`WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`, fetchErr.message || fetchErr);
+                if (attempt < maxHttpRetries) {
+                    await new Promise((resolve) => setTimeout(resolve, httpRetryDelayMs));
+                }
+            }
         }
+        log.error('All WOL request attempts to local HTTP proxy failed.');
+        return false;
     }
 
     log.warn('WOL command skipped: background service is disabled or platform is unsupported');

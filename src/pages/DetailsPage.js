@@ -40,6 +40,7 @@ import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -2033,12 +2034,12 @@ class DetailsPage extends Page {
         if (showTitle) {
             // If there is no logo displayed, style the title to span the full width of the container.
             const titleStyleAttr = !showLogo ? 'style="max-width: 100%;"' : '';
-            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${displayTitle}</h1>`;
+            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${escapeHtml(displayTitle)}</h1>`;
         }
 
         // Add the subtitle element underneath if present.
         if (displaySubtitle && displaySubtitle !== displayTitle) {
-            heroHtml += `<h2 class="details-original-title">${displaySubtitle}</h2>`;
+            heroHtml += `<h2 class="details-original-title">${escapeHtml(displaySubtitle)}</h2>`;
         }
 
         // Render episode season/number details for TV episodes.
@@ -2062,7 +2063,7 @@ class DetailsPage extends Page {
             const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
             const colorClass = useSecondaryColor ? 'secondary-color' : '';
 
-            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${escapeHtml(i18n.ensureBiDi(subtitleText))}</p>`;
         }
 
         // Finish appending standard metadata row and secondary date labels.
@@ -2457,6 +2458,22 @@ class DetailsPage extends Page {
     }
 
     async _loadNextUp() {
+        // =====================================================================
+        // Performance & Visibility Control Check
+        // =====================================================================
+        // Check if the user has enabled the "Hide Next Up" setting.
+        // By handling this check first, we short-circuit fetching Next Up items,
+        // avoiding unnecessary network calls and conserving VRAM on TV hardware.
+        // =====================================================================
+        const hideNextUp = storage.getItem('pref:hideNextUpSection') === 'true';
+        if (hideNextUp) {
+            const nextUpSection = this.$('#next-up-section');
+            if (nextUpSection) {
+                nextUpSection.classList.add('hidden');
+            }
+            return;
+        }
+
         try {
             let response;
 

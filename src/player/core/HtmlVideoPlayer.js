@@ -12,8 +12,37 @@ import Screenfull from 'screenfull';
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { getDeviceCapabilities } from '../../api/DeviceProfile.js';
 
 const log = logger.create('HtmlVideoPlayer');
+
+// ============================================================================
+// Platform Audio Codec Helpers
+// ============================================================================
+
+const isTrueHdSupported = () => {
+    const setting = PlayerSettings.get('enableTrueHd');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.truehd;
+    } catch (e) {
+        return false;
+    }
+};
+
+const isDtsSupported = () => {
+    const setting = PlayerSettings.get('enableDts');
+    if (setting === 'enable') return true;
+    if (setting === 'disable') return false;
+    try {
+        const caps = getDeviceCapabilities();
+        return !!caps?.dts;
+    } catch (e) {
+        return false;
+    }
+};
 
 // ============================================================================
 // Constants
@@ -332,11 +361,21 @@ export class HtmlVideoPlayer {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('HLS manifest parsed');
 
+                // =========================================================================
+                // Initial HLS Audio Track Selection Fix
+                // =========================================================================
+                // hls.audioTrack expects a 0-based list index into hls.audioTracks,
+                // NOT the raw Jellyfin StreamID (options.audioStreamIndex).
+                // Use options.audioTrackListIndex pre-computed by JellyfinPlayer.
+                // =========================================================================
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex >= 0) {
-                    const outputIndex = hls.audioTracks.length <= 1 ? 0 : options.audioStreamIndex;
+                    const listIndex = (options.audioTrackListIndex !== undefined && options.audioTrackListIndex !== null && options.audioTrackListIndex >= 0)
+                        ? options.audioTrackListIndex
+                        : 0;
+                    const outputIndex = hls.audioTracks.length <= 1 ? 0 : listIndex;
                     if (outputIndex < hls.audioTracks.length) {
                         hls.audioTrack = outputIndex;
-                        log.debug('Set HLS audio track:', options.audioStreamIndex, 'mapped to', outputIndex);
+                        log.debug(`Set HLS audio track listIndex ${listIndex} mapped to outputIndex ${outputIndex}`);
                     }
                 }
 
@@ -580,15 +619,29 @@ export class HtmlVideoPlayer {
             const onLoadedMetadata = () => {
                 video.removeEventListener('loadedmetadata', onLoadedMetadata);
 
-                // Check if the media fragment naturally landed us at the target
-                if (resumeSeconds > 0 && Math.abs(video.currentTime - resumeSeconds) < 2) {
+                // Check if the media fragment naturally landed us at the target (within 15s GOP keyframe tolerance)
+                const currentPos = video.currentTime || 0;
+                const fragmentDrift = Math.abs(currentPos - resumeSeconds);
+                if (resumeSeconds > 0 && (fragmentDrift < 15 || currentPos >= (resumeSeconds - 15))) {
                     log.info('HtmlVideoPlayer: Media fragment seek (#t=) successfully applied natively');
                     seekCompleted = true;
                 }
 
-                // Apply initially requested tracks once native tracks are populated
+                // =========================================================================
+                // Initial Audio Track Selection Fix
+                // =========================================================================
+                // setAudioStreamIndex expects a 0-based listIndex into native video.audioTracks
+                // (or HLS tracks), NOT the raw Jellyfin audioStreamIndex StreamID.
+                // JellyfinPlayer pre-computes audioTrackListIndex on options for this purpose.
+                // Using raw StreamID (e.g. 4) caused an out-of-bounds index lookup on
+                // video.audioTracks, disabling all tracks and falling back to track 0.
+                // =========================================================================
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
-                    this.setAudioStreamIndex(options.audioStreamIndex);
+                    const listIndex = (options.audioTrackListIndex !== undefined && options.audioTrackListIndex !== null && options.audioTrackListIndex >= 0)
+                        ? options.audioTrackListIndex
+                        : 0;
+                    log.info(`[HtmlVideoPlayer] Applying initial audio track: StreamID ${options.audioStreamIndex} → listIndex ${listIndex}`);
+                    this.setAudioStreamIndex(listIndex);
                 }
                 if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
                     this.setSubtitleStreamIndex(options.subtitleStreamIndex);
@@ -886,20 +939,23 @@ export class HtmlVideoPlayer {
 
         // ====================================================================
         // PLAYHEAD DRIFT CHECK:
-        // If the playhead is already within 10 s of the target, the earlier
+        // If the playhead is already within 15 s of the target, the earlier
         // seek (either the #t= fragment or the currentTime set in loadedmetadata)
         // already worked. Skip the re-seek to avoid a disruptive backward stutter.
         //
-        // We use 10 s (matching WebOS and JellyfinPlayer's own resume-verification
-        // threshold) rather than 2 s, because:
+        // We use 15 s (matching WebOS and JellyfinPlayer's resume-verification
+        // threshold) rather than 2 s or 10 s, because:
         //   1. The browser seeks to the nearest keyframe, not the exact timestamp,
-        //      which can land up to 5 s away.
+        //      which can land up to ~10.4 s away for 24fps 250-frame GOPs.
         //   2. play() may take 1-3+ seconds to resolve on a slow buffer, so the
         //      video may have already played forward from the seek landing point
         //      by the time this guard runs.
         // ====================================================================
-        const drift = Math.abs(video.currentTime - targetSec);
-        if (drift < 10) {
+        const currentPos = video.currentTime || 0;
+        const drift = Math.abs(currentPos - targetSec);
+        const isNearTarget = drift < 15 || currentPos >= (targetSec - 15);
+
+        if (isNearTarget) {
             log.info(`HtmlVideoPlayer: Playhead within ${drift.toFixed(2)} s of target — skipping fallback resume seek.`);
             return;
         }
@@ -909,15 +965,13 @@ export class HtmlVideoPlayer {
 
         // Give it one more chance after a 2-second delay in case the first
         // assignment was too early (buffer not yet ready).
-        //
-        // Use a 10-second acceptance window here too — after a successful seek
-        // to 420 s and a 2-second wait, the video is at ~422 s. The old
-        // threshold of >= 2 always fired on a working seek, causing a pointless
-        // backward-seek stutter every single time.
         setTimeout(() => {
-            const retryDrift = Math.abs(video.currentTime - targetSec);
-            if (retryDrift >= 10) {
-                log.warn(`HtmlVideoPlayer: Resume seek failed (current: ${video.currentTime.toFixed(2)} s, target: ${targetSec} s, drift: ${retryDrift.toFixed(2)} s) — signaling fallback to Remux`);
+            const retryPos = video.currentTime || 0;
+            const retryDrift = Math.abs(retryPos - targetSec);
+            const retryNear = retryDrift < 15 || retryPos >= (targetSec - 15);
+
+            if (!retryNear) {
+                log.warn(`HtmlVideoPlayer: Resume seek failed (current: ${retryPos.toFixed(2)} s, target: ${targetSec} s, drift: ${retryDrift.toFixed(2)} s) — signaling fallback to Remux`);
 
                 // Emit event so JellyfinPlayer can restart playback using Remux/DirectStream
                 // mode. In Remux mode the server streams from the target position, making
@@ -941,6 +995,196 @@ export class HtmlVideoPlayer {
     // ========================================================================
     // Track Selection
     // ========================================================================
+
+    /**
+     * Resolve a Jellyfin-visible audio list index to the actual position inside
+     * the browser's video.audioTracks collection for HTML5 direct-play.
+     *
+     * HTML5 video engines may omit unsupported audio codecs (e.g. FLAC in MKV)
+     * from video.audioTracks while preserving the relative order of remaining
+     * tracks. This method dynamically detects which Jellyfin streams are missing
+     * from the native track list and maps the requested listIndex accordingly.
+     *
+     * Resolution strategy (in priority order):
+     *
+     *   1. Codec-aware playable stream mapping — when nativeTracks.length differs
+     *      from jellyfinAudioStreams.length, filter out "suspect" codecs (FLAC,
+     *      ALAC, TrueHD, DTS) from the Jellyfin list. If the filtered count
+     *      matches nativeTracks.length, use the filtered list to map the target
+     *      stream to its position among playable streams. If the target stream
+     *      itself has an unsupported codec, return -1 to trigger a server-side
+     *      transcode restart.
+     *
+     *   2. Language-tag match — find native tracks matching the target stream's
+     *      language using ISO 639-2 ↔ BCP-47 normalisation.
+     *
+     *   3. Same-language disambiguation — when multiple native tracks share the
+     *      same language, pick by relative position within the playable Jellyfin
+     *      streams for that language.
+     *
+     *   4. Positional fallback — clamped to native track bounds.
+     *
+     * @param   {number}         listIndex    0-based index into Jellyfin audio streams
+     *                                        (from _getBackendAudioTrackListIndex).
+     * @param   {AudioTrackList} nativeTracks video.audioTracks from the HTML5 video element.
+     * @returns {number}  Index to use for audioTracks[i].enabled, or -1 if unmapped.
+     * @private
+     */
+    _resolveNativeAudioIndex(listIndex, nativeTracks) {
+        // Guard: no native tracks exposed by the browser engine
+        if (!nativeTracks || nativeTracks.length === 0) {
+            log.warn('[AudioDebug] HtmlVideoPlayer._resolveNativeAudioIndex: nativeTracks is empty');
+            return -1;
+        }
+
+        // Fast-path: only one native track — no ambiguity possible
+        if (nativeTracks.length === 1) {
+            log.info('[AudioDebug] HtmlVideoPlayer._resolveNativeAudioIndex: single native track fast-path → 0');
+            return 0;
+        }
+
+        // ── Gather Jellyfin audio streams from current media source ──────────
+        const mediaStreams = this._currentPlayOptions?.mediaSource?.MediaStreams || [];
+        const jellyfinAudioStreams = mediaStreams.filter(s => {
+            if (s.Type !== 'Audio') return false;
+            const codec = (s.Codec || '').toLowerCase();
+            if (codec === 'truehd' && !isTrueHdSupported()) return false;
+            if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
+            if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) return false;
+            return true;
+        });
+
+        // ── Detailed diagnostic logging ──────────────────────────────────────
+        log.info('[AudioDebug] HtmlVideoPlayer._resolveNativeAudioIndex:');
+        log.info('  - listIndex requested:', listIndex);
+        log.info('  - Jellyfin Audio Streams count:', jellyfinAudioStreams.length);
+        jellyfinAudioStreams.forEach((s, idx) => {
+            log.info(`    * [${idx}] Index: ${s.Index}, Lang: ${s.Language}, Codec: ${s.Codec}, IsDefault: ${s.IsDefault}`);
+        });
+
+        log.info('  - HTML5 video.audioTracks count:', nativeTracks.length);
+        for (let i = 0; i < nativeTracks.length; i++) {
+            const t = nativeTracks[i];
+            log.info(`    * [${i}] id: ${t.id}, language: ${t.language}, label: ${t.label}, enabled: ${t.enabled}`);
+        }
+
+        // Guard: ensure listIndex points to a valid Jellyfin audio stream
+        const targetStream = jellyfinAudioStreams[listIndex];
+        if (!targetStream) {
+            log.warn('[AudioDebug] HtmlVideoPlayer: listIndex out of range, returning clamped fallback');
+            return Math.min(Math.max(0, listIndex), nativeTracks.length - 1);
+        }
+
+        log.info('  - targetStream Index:', targetStream.Index, 'Language:', targetStream.Language, 'Codec:', targetStream.Codec);
+
+        // ====================================================================
+        // Strategy 1: Codec-Aware Playable Stream Mapping (PRIMARY)
+        //
+        // When the native player exposes fewer tracks than Jellyfin reports,
+        // it means certain codecs were silently dropped by the browser demuxer
+        // (e.g. FLAC in MKV, TrueHD, DTS). We build a "playable" subset of
+        // Jellyfin streams by filtering out suspect codecs, then verify the
+        // count matches native tracks. If it does, we have a reliable 1:1 map.
+        //
+        // This MUST run before language matching because language matching alone
+        // cannot disambiguate when all tracks share the same language but some
+        // codecs were dropped (e.g. 4 English tracks → 3 native tracks).
+        // ====================================================================
+        if (nativeTracks.length !== jellyfinAudioStreams.length) {
+            // Codecs commonly unsupported by HTML5 video element native demuxers
+            const SUSPECT_CODECS = ['flac', 'alac', 'truehd', 'dts', 'dca'];
+
+            // Helper: check if a codec string matches any suspect codec
+            const isUnsupportedCodec = (codec) => {
+                const c = (codec || '').toLowerCase();
+                return SUSPECT_CODECS.some(sc => c === sc || c.includes(sc));
+            };
+
+            // Build the "playable" stream list by removing suspect codecs
+            const playableStreams = jellyfinAudioStreams.filter(s => !isUnsupportedCodec(s.Codec));
+
+            log.info(`  - Codec-aware mapping: ${jellyfinAudioStreams.length} jellyfin → ${playableStreams.length} playable (native: ${nativeTracks.length})`);
+
+            // Verify our hypothesis: playable count should match native track count
+            if (playableStreams.length === nativeTracks.length) {
+                const targetCodec = (targetStream.Codec || '').toLowerCase();
+
+                // If the user selected an unsupported track (e.g. FLAC), signal
+                // that native switching is impossible — caller should trigger a
+                // server-side transcode restart instead.
+                if (isUnsupportedCodec(targetCodec)) {
+                    log.info(`[AudioDebug] HtmlVideoPlayer: Target codec "${targetCodec}" is unsupported by native player → returning -1 for transcode restart`);
+                    return -1;
+                }
+
+                // Find the target stream's position within the playable list
+                const nativeIdx = playableStreams.findIndex(s => s.Index === targetStream.Index);
+                if (nativeIdx >= 0) {
+                    log.info(`[AudioDebug] HtmlVideoPlayer: Codec-aware mapping resolved listIndex ${listIndex} → native index ${nativeIdx}`);
+                    return nativeIdx;
+                }
+            }
+        }
+
+        // ====================================================================
+        // Strategy 2: Language-Tag Matching (ISO 639-2 ↔ BCP-47 / ISO 639-1)
+        //
+        // When track counts match (no codecs were dropped) but the native
+        // player reordered tracks (e.g. moving default track to index 0),
+        // language tags can identify the correct native track position.
+        // ====================================================================
+        const targetLang = (targetStream.Language || '').toLowerCase().trim();
+        if (targetLang && targetLang !== 'und' && targetLang !== 'unknown') {
+            const ISO_MAP = {
+                'eng': 'en', 'zho': 'zh', 'chi': 'zh', 'spa': 'es', 'fre': 'fr', 'fra': 'fr',
+                'ger': 'de', 'deu': 'de', 'jpn': 'ja', 'kor': 'ko', 'rus': 'ru', 'ita': 'it',
+                'por': 'pt', 'dut': 'nl', 'nld': 'nl', 'swe': 'sv', 'nor': 'no', 'dan': 'da',
+                'fin': 'fi', 'pol': 'pl', 'tur': 'tr', 'ara': 'ar', 'hin': 'hi', 'vie': 'vi',
+                'tha': 'th', 'heb': 'he', 'ell': 'el', 'gre': 'el', 'ind': 'id', 'msa': 'ms',
+                'ron': 'ro', 'hun': 'hu', 'ces': 'cs', 'slk': 'sk', 'ukr': 'uk', 'bul': 'bg',
+                'hrv': 'hr', 'srp': 'sr', 'slv': 'sl', 'est': 'et', 'lav': 'lv', 'lit': 'lt'
+            };
+
+            const normalize = (l) => {
+                const clean = (l || '').toLowerCase().trim();
+                return ISO_MAP[clean] || clean;
+            };
+
+            const normTarget = normalize(targetLang);
+            const nativeMatches = [];
+
+            for (let i = 0; i < nativeTracks.length; i++) {
+                const nativeLang = normalize(nativeTracks[i].language);
+                if (!nativeLang) continue;
+                if (nativeLang === normTarget || nativeLang.startsWith(normTarget) || normTarget.startsWith(nativeLang)) {
+                    nativeMatches.push(i);
+                }
+            }
+
+            // Unique language match — unambiguous resolution
+            if (nativeMatches.length === 1) {
+                log.info('[AudioDebug] HtmlVideoPlayer: Resolved native audio index by unique language match', listIndex, '→', nativeMatches[0]);
+                return nativeMatches[0];
+            }
+
+            // Multiple same-language matches — disambiguate by relative position
+            if (nativeMatches.length > 1) {
+                const sameLangStreams = jellyfinAudioStreams.filter(s => normalize(s.Language) === normTarget);
+                const posWithinLang = sameLangStreams.findIndex(s => s.Index === targetStream.Index);
+                if (posWithinLang >= 0 && posWithinLang < nativeMatches.length) {
+                    log.info('[AudioDebug] HtmlVideoPlayer: Disambiguated same language match', listIndex, '→', nativeMatches[posWithinLang]);
+                    return nativeMatches[posWithinLang];
+                }
+            }
+        }
+
+        // ====================================================================
+        // Strategy 3: Positional Fallback — clamped to native track bounds
+        // ====================================================================
+        const fallbackIndex = Math.min(Math.max(0, listIndex), nativeTracks.length - 1);
+        log.info('[AudioDebug] HtmlVideoPlayer: Positional fallback index', listIndex, '→ native index', fallbackIndex);
+        return fallbackIndex;
+    }
 
     /**
      * Set audio stream index.
@@ -974,15 +1218,24 @@ export class HtmlVideoPlayer {
         if (!video) return;
 
         const audioTracks = video.audioTracks;
-        if (!audioTracks || audioTracks.length === 0) return;
+        if (!audioTracks || audioTracks.length === 0) {
+            log.warn('HtmlVideoPlayer: video.audioTracks is empty for direct-play — firing audiotrackswitchfailed to trigger restart');
+            this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
+            return;
+        }
 
-        const outputIndex = audioTracks.length <= 1 ? 0 : listIndex;
+        const nativeIndex = this._resolveNativeAudioIndex(listIndex, audioTracks);
+        if (nativeIndex < 0 || nativeIndex >= audioTracks.length) {
+            log.warn('HtmlVideoPlayer: _resolveNativeAudioIndex out of range — firing audiotrackswitchfailed');
+            this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
+            return;
+        }
 
         for (let i = 0; i < audioTracks.length; i++) {
-            // Enable only the track at the requested list index
-            audioTracks[i].enabled = (i === outputIndex);
+            // Enable only the track at the resolved native index
+            audioTracks[i].enabled = (i === nativeIndex);
         }
-        log.info('Native: switched audio track to list index', listIndex, 'mapped to', outputIndex);
+        log.info('HtmlVideoPlayer: Switched native audio track list index', listIndex, '→ native index', nativeIndex);
     }
 
     /**

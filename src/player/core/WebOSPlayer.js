@@ -818,9 +818,12 @@ export class WebOSPlayer {
         // ====================================================================
         // MEDIA FRAGMENT CHECK:
         // If the media fragment seek already succeeded natively and the video
-        // is close to the resume target, we skip the robust seek retry loop.
+        // is close to the resume target (within 15s GOP keyframe tolerance),
+        // we skip the robust seek retry loop.
         // ====================================================================
-        if (Math.abs(video.currentTime - resumeSeconds) < 2) {
+        const currentPos = video.currentTime || 0;
+        const fragmentDrift = Math.abs(currentPos - resumeSeconds);
+        if (fragmentDrift < 15 || currentPos >= (resumeSeconds - 15)) {
             log.info('WebOSPlayer: Robust resume target already reached (via media fragment). Skipping retry loop.');
             this._robustSeekTarget = null;
             return;
@@ -848,6 +851,13 @@ export class WebOSPlayer {
         tryApply();
     }
 
+    /**
+     * Re-apply resume seek with retry loop if the playhead failed to land.
+     *
+     * @private
+     * @param {number} time - Target resume time in seconds
+     * @param {number} maxRetries - Max retry attempts
+     */
     _seekWithRetry(time, maxRetries = 3) {
         if (this._robustSeekPending) {
             log.debug('WebOSPlayer: Seek already pending, skipping concurrent retry');
@@ -869,46 +879,42 @@ export class WebOSPlayer {
             tries++;
             try {
                 video.currentTime = time;
-            } catch (e) {}
+            } catch (e) {
+                // Ignore synchronous currentTime assignment errors
+            }
 
             // ----------------------------------------------------------------
             // Wait 3 seconds per attempt before checking the result.
             //
-            // We use a generous 10-second acceptance window (matching
-            // JellyfinPlayer's own resume-verification threshold) rather than a
-            // tight 2-second window. Two things widen the apparent gap:
+            // We use a 15-second acceptance window to safely cover standard
+            // 24fps 240/250-frame GOP keyframe intervals (~10.4s) on hardware TV
+            // decoders plus ~3s of forward playback advancement during the wait.
             //
-            //   1. WebOS hardware seeks to the nearest keyframe, not the exact
-            //      requested timestamp — typically landing 1-5 s away.
-            //
-            //   2. The video keeps playing during the 3-second wait interval,
-            //      so by the time we sample currentTime it has advanced another
-            //      ~3 s past the seek landing point.
-            //
-            // Combined worst-case drift: 5 s (keyframe) + 3 s (playback) = 8 s.
-            // A 10-second window safely covers this while still correctly
-            // identifying genuine failures (video stuck at 0, target at 420 s).
+            // Acceptance conditions:
+            //   1. Playhead landed within 15s drift of target, OR
+            //   2. Playhead has advanced past (target - 15s) playing forward.
             // ----------------------------------------------------------------
             setTimeout(() => {
                 if (this._cancelRobustResume) return;
 
                 // Measure how far currentTime landed from our requested target.
-                const drift = Math.abs(video.currentTime - time);
+                const currentPos = video.currentTime || 0;
+                const drift = Math.abs(currentPos - time);
+                const isNearTarget = drift < 15 || currentPos >= (time - 15);
 
-                if (drift < 10) {
-                    // Within 10 s of target — seek landed on a keyframe boundary
-                    // and the video has been playing forward. Accept as success.
-                    log.debug(`WebOSPlayer: Seek accepted on attempt ${tries} (drift ${drift.toFixed(2)} s from target ${time} s)`);
+                if (isNearTarget) {
+                    // Within 15s of target or playing forward — seek landed on a valid keyframe boundary.
+                    log.debug(`WebOSPlayer: Seek accepted on attempt ${tries} (current: ${currentPos.toFixed(2)}s, target: ${time}s, drift: ${drift.toFixed(2)}s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
                     if (!video.paused) this._onPlaying();
                 } else if (tries < maxRetries) {
                     // Still far from target — video may not have seeked yet.
-                    log.debug(`WebOSPlayer: Seek still off (current: ${video.currentTime.toFixed(2)} s, target: ${time} s, drift: ${drift.toFixed(2)} s) — retrying, attempt ${tries + 1}`);
+                    log.debug(`WebOSPlayer: Seek still off (current: ${currentPos.toFixed(2)}s, target: ${time}s, drift: ${drift.toFixed(2)}s) — retrying, attempt ${tries + 1}`);
                     attempt();
                 } else {
                     // All retries exhausted and still far from target — genuine failure.
-                    log.warn(`WebOSPlayer: Seek failed after ${maxRetries} retries (final drift: ${drift.toFixed(2)} s from target ${time} s)`);
+                    log.warn(`WebOSPlayer: Seek failed after ${maxRetries} retries (final drift: ${drift.toFixed(2)}s from target ${time}s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
 
@@ -951,10 +957,12 @@ export class WebOSPlayer {
              // MEDIA FRAGMENT CHECK:
              // The #t= fragment in the URL already hints the native pipeline to
              // start downloading from the resume position. Check if it worked by
-             // verifying the playhead is close to the target.
+             // verifying the playhead is within 15s keyframe tolerance of target.
              // ====================================================================
              try {
-                 if (Math.abs(video.currentTime - resumeSeconds) < 2) {
+                 const currentPos = video.currentTime || 0;
+                 const drift = Math.abs(currentPos - resumeSeconds);
+                 if (drift < 15 || currentPos >= (resumeSeconds - 15)) {
                      log.info('WebOSPlayer: Media fragment already positioned the playhead — skipping explicit seek.');
                      this._doPlayWithResume(video, options, resolve, reject);
                      return;
@@ -1161,10 +1169,11 @@ export class WebOSPlayer {
             seconds = (positionTicks - this._currentPlayOptions.transcodingOffsetTicks) / 10000000;
         }
 
-        // Update the robust seek target so that _onPlaying can detect if this seek snaps back.
-        // We skip this for Live TV where currentTime logic is often non-standard.
+        // Only guard against snap-backs during initial startup resume before first playback.
+        // Once playback is running (_started === true), normal user scrubbing should not arm
+        // the startup _seekWithRetry loop (which could falsely trigger resumeseekfailed on keyframe landing).
         const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId;
-        this._robustSeekTarget = isLive ? null : seconds;
+        this._robustSeekTarget = (!this._started && !isLive) ? seconds : null;
 
         // Re-enable robust check for the new seek
         this._cancelRobustResume = false;
@@ -1314,6 +1323,13 @@ export class WebOSPlayer {
         // ─────────────────────────────────────────────────────────────────────
         const nativeIndex = this._resolveNativeAudioIndex(listIndex, audioTracks);
 
+        // Guard against out-of-bounds index resolution
+        if (nativeIndex < 0 || nativeIndex >= audioTracks.length) {
+            log.warn('WebOSPlayer: _resolveNativeAudioIndex returned out-of-range index', nativeIndex, 'for listIndex', listIndex, '— firing audiotrackswitchfailed');
+            this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
+            return;
+        }
+
         for (let i = 0; i < audioTracks.length; i++) {
             audioTracks[i].enabled = (i === nativeIndex);
         }
@@ -1374,6 +1390,9 @@ export class WebOSPlayer {
             // Exclude DTS / DCA audio formats if disabled in settings
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
 
+            // Exclude FLAC / ALAC audio formats if disabled in settings
+            if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) return false;
+
             return true;
         });
 
@@ -1415,33 +1434,34 @@ export class WebOSPlayer {
      * @private
      */
     _resolveNativeAudioIndex(listIndex, nativeTracks) {
-        // ====================================================================
-        // Fast-path: Skip resolution if native track list is empty or single
-        // track where selection ambiguity is impossible.
-        // ====================================================================
-        if (!nativeTracks || nativeTracks.length <= 1) {
-            log.info('[AudioDebug] _resolveNativeAudioIndex fast-path return:', listIndex);
-            return listIndex;
+        // Guard: empty native track collection exposed by WebOS Chromium
+        if (!nativeTracks || nativeTracks.length === 0) {
+            log.warn('[AudioDebug] WebOSPlayer._resolveNativeAudioIndex: nativeTracks is empty');
+            return -1;
+        }
+
+        // Fast-path: single native track — no ambiguity possible
+        if (nativeTracks.length === 1) {
+            log.info('[AudioDebug] WebOSPlayer._resolveNativeAudioIndex: single native track fast-path → 0');
+            return 0;
         }
 
         // ====================================================================
-        // Rebuild the Jellyfin-visible audio stream list
-        // Apply the same codec filters used by JellyfinPlayer._getBackendAudioTracks
-        // to align the index mapping precisely with the client UI presentation.
+        // Gather Jellyfin-visible audio streams from current media source
+        // Uses the same codec filters as JellyfinPlayer._getBackendAudioTracks
         // ====================================================================
         const mediaStreams = this._currentPlayOptions?.mediaSource?.MediaStreams || [];
         const jellyfinAudioStreams = mediaStreams.filter(s => {
             if (s.Type !== 'Audio') return false;
             const codec = (s.Codec || '').toLowerCase();
-
-            // Exclude passthrough formats that the WebOS system cannot decode natively
             if (codec === 'truehd' && !isTrueHdSupported()) return false;
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
+            if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) return false;
             return true;
         });
 
         // ====================================================================
-        // Temporary OSD and Playback Audio Debugging Logs
+        // Diagnostic logging
         // ====================================================================
         log.info('[AudioDebug] WebOSPlayer._resolveNativeAudioIndex:');
         log.info('  - listIndex:', listIndex);
@@ -1456,28 +1476,58 @@ export class WebOSPlayer {
             log.info(`    * [${i}] id: ${t.id}, language: ${t.language}, label: ${t.label}, enabled: ${t.enabled}`);
         }
 
-        // ====================================================================
-        // Guard check: Ensure target listIndex falls within active streams range.
-        // If not, return the requested index unchanged.
-        // ====================================================================
+        // Guard: ensure listIndex points to a valid Jellyfin audio stream
         const targetStream = jellyfinAudioStreams[listIndex];
         if (!targetStream) {
-            log.warn('[AudioDebug] WebOSPlayer: _resolveNativeAudioIndex — listIndex out of range, returning as-is');
-            return listIndex;
+            log.warn('[AudioDebug] WebOSPlayer: listIndex out of range, returning clamped fallback');
+            return Math.min(Math.max(0, listIndex), nativeTracks.length - 1);
         }
 
-        log.info('  - targetStream Index:', targetStream.Index, 'Language:', targetStream.Language);
+        log.info('  - targetStream Index:', targetStream.Index, 'Language:', targetStream.Language, 'Codec:', targetStream.Codec);
 
         // ====================================================================
-        // Primary: ISO 639-2/T/B to BCP-47 / ISO 639-1 Language Tag Matching
-        // WebOS natively exposes 2-letter codes (e.g. "ja", "en", "de") while
-        // Jellyfin feeds 3-letter ISO codes (e.g. "jpn", "eng", "ger").
-        // This translator maps 3-letter codes to their 2-letter equivalents.
+        // Strategy 1: Codec-Aware Playable Stream Mapping (PRIMARY)
+        //
+        // When the native player exposes fewer tracks than the Jellyfin-filtered
+        // list, additional codecs were silently dropped by the browser demuxer.
+        // Build a "playable" subset by filtering out suspect codecs, verify the
+        // count matches native tracks, then use the filtered list for mapping.
+        //
+        // This MUST run before language matching because language matching alone
+        // cannot disambiguate when all tracks share the same language but some
+        // codecs were dropped (e.g. 4 English tracks → 3 native tracks).
+        // ====================================================================
+        if (nativeTracks.length !== jellyfinAudioStreams.length) {
+            const SUSPECT_CODECS = ['flac', 'alac', 'truehd', 'dts', 'dca'];
+            const isUnsupportedCodec = (codec) => {
+                const c = (codec || '').toLowerCase();
+                return SUSPECT_CODECS.some(sc => c === sc || c.includes(sc));
+            };
+
+            const playableStreams = jellyfinAudioStreams.filter(s => !isUnsupportedCodec(s.Codec));
+            log.info(`  - Codec-aware mapping: ${jellyfinAudioStreams.length} jellyfin → ${playableStreams.length} playable (native: ${nativeTracks.length})`);
+
+            if (playableStreams.length === nativeTracks.length) {
+                const targetCodec = (targetStream.Codec || '').toLowerCase();
+
+                if (isUnsupportedCodec(targetCodec)) {
+                    log.info(`[AudioDebug] WebOSPlayer: Target codec "${targetCodec}" is unsupported by native player → returning -1`);
+                    return -1;
+                }
+
+                const nativeIdx = playableStreams.findIndex(s => s.Index === targetStream.Index);
+                if (nativeIdx >= 0) {
+                    log.info(`[AudioDebug] WebOSPlayer: Codec-aware mapping resolved listIndex ${listIndex} → native index ${nativeIdx}`);
+                    return nativeIdx;
+                }
+            }
+        }
+
+        // ====================================================================
+        // Strategy 2: Language-Tag Matching (ISO 639-2 ↔ BCP-47 / ISO 639-1)
         // ====================================================================
         const targetLang = (targetStream.Language || '').toLowerCase().trim();
         if (targetLang && targetLang !== 'und' && targetLang !== 'unknown') {
-
-            // ISO 639-2 (3-letter) -> ISO 639-1 (2-letter) Mapping Dictionary
             const ISO_MAP = {
                 'eng': 'en', 'zho': 'zh', 'chi': 'zh', 'spa': 'es', 'fre': 'fr', 'fra': 'fr',
                 'ger': 'de', 'deu': 'de', 'jpn': 'ja', 'kor': 'ko', 'rus': 'ru', 'ita': 'it',
@@ -1488,9 +1538,8 @@ export class WebOSPlayer {
                 'hrv': 'hr', 'srp': 'sr', 'slv': 'sl', 'est': 'et', 'lav': 'lv', 'lit': 'lt'
             };
 
-            // Normalize helper to clean and map inputs
             const normalize = (l) => {
-                const clean = l.toLowerCase().trim();
+                const clean = (l || '').toLowerCase().trim();
                 return ISO_MAP[clean] || clean;
             };
 
@@ -1498,40 +1547,25 @@ export class WebOSPlayer {
             const nativeMatches = [];
             log.info(`  - Lang match attempt: targetLang = ${targetLang}, normalized = ${normTarget}`);
 
-            // Scan native tracks and accumulate matches
             for (let i = 0; i < nativeTracks.length; i++) {
                 const nativeLang = (nativeTracks[i].language || '').toLowerCase().trim();
-                if (!nativeLang) {
-                    log.info(`    * Native track [${i}] language is empty, skipping`);
-                    continue;
-                }
-
+                if (!nativeLang) continue;
                 const normNative = normalize(nativeLang);
-                log.info(`    * Native track [${i}] language = ${nativeLang}, normalized = ${normNative}`);
-
-                // Compare values using strict equality and substring matching
                 if (normNative === normTarget || normNative.startsWith(normTarget) || normTarget.startsWith(normNative)) {
-                    log.info(`      -> Match found at index ${i}`);
                     nativeMatches.push(i);
                 }
             }
 
-            // Single unique match found - return immediately
             if (nativeMatches.length === 1) {
-                log.info('[AudioDebug] WebOSPlayer: Resolved native audio index by language match', listIndex, '→', nativeMatches[0]);
+                log.info('[AudioDebug] WebOSPlayer: Resolved native audio index by unique language match', listIndex, '→', nativeMatches[0]);
                 return nativeMatches[0];
             }
 
-            // Multiple matches for the same language - resolve by stream index order
             if (nativeMatches.length > 1) {
-                log.info('  - Multiple matches found, disambiguating...');
-                const sameLanguageStreams = jellyfinAudioStreams.filter(
-                    s => normalize(s.Language || '') === normTarget
-                );
+                const sameLanguageStreams = jellyfinAudioStreams.filter(s => normalize(s.Language || '') === normTarget);
                 const posWithinLang = sameLanguageStreams.findIndex(s => s.Index === targetStream.Index);
-                log.info('    * sameLanguageStreams count:', sameLanguageStreams.length, 'posWithinLang:', posWithinLang);
                 if (posWithinLang >= 0 && posWithinLang < nativeMatches.length) {
-                    log.info('[AudioDebug] WebOSPlayer: Disambiguated multi-track same language match', listIndex, '→', nativeMatches[posWithinLang]);
+                    log.info('[AudioDebug] WebOSPlayer: Disambiguated same language match', listIndex, '→', nativeMatches[posWithinLang]);
                     return nativeMatches[posWithinLang];
                 }
             }
@@ -1540,43 +1574,35 @@ export class WebOSPlayer {
         }
 
         // ====================================================================
-        // Secondary: Deterministic Default-Reordering Fallback Mapping
-        // Runs when language headers are missing/und, or when matching failed.
+        // Strategy 3: Deterministic Default-Reordering Fallback
         // WebOS moves the container's default audio track to native index 0.
-        // The remaining non-default tracks shift down in relative container order.
         // ====================================================================
-        // Fetch the container's actual default audio stream index instead of
-        // the server-preferred DefaultAudioStreamIndex. WebOS's native player
-        // shifts the file's container-defined default track to index 0.
         const defaultStreamIndex = this._getContainerDefaultAudioIndex(this._currentPlayOptions?.mediaSource);
         log.info('  - Default reordering attempt: defaultStreamIndex =', defaultStreamIndex);
         if (defaultStreamIndex !== undefined && defaultStreamIndex !== null) {
-            // Find default track list position in Jellyfin list
             const defaultListIndex = jellyfinAudioStreams.findIndex(s => s.Index === defaultStreamIndex);
             log.info('    * defaultListIndex in jellyfin streams =', defaultListIndex);
 
             if (defaultListIndex !== -1) {
-                // If requested track is the default one, map directly to native index 0
                 if (listIndex === defaultListIndex) {
-                    log.info('[AudioDebug] WebOSPlayer: Resolved native index via default stream reordering (target is default) → 0');
+                    log.info('[AudioDebug] WebOSPlayer: Resolved via default reordering (target is default) → 0');
                     return 0;
                 }
 
-                // If target is non-default, shift it down to skip the default slot.
-                // Tracks before default list position remain listIndex + 1.
-                // Tracks after default list position map to listIndex.
                 const resolvedIndex = listIndex < defaultListIndex ? listIndex + 1 : listIndex;
-                log.info('[AudioDebug] WebOSPlayer: Resolved native index via default stream reordering (target is non-default)', listIndex, '→', resolvedIndex);
-                return resolvedIndex;
+                if (resolvedIndex >= 0 && resolvedIndex < nativeTracks.length) {
+                    log.info('[AudioDebug] WebOSPlayer: Resolved via default reordering (non-default)', listIndex, '→', resolvedIndex);
+                    return resolvedIndex;
+                }
             }
         }
 
         // ====================================================================
-        // Ultimate Fallback: Direct positional indexing
-        // Only hit if all other resolution strategies fail.
+        // Strategy 4: Positional Fallback — clamped to native track bounds
         // ====================================================================
-        log.warn('[AudioDebug] WebOSPlayer: Ultimate fallback used for audio index resolution', listIndex);
-        return listIndex;
+        const fallbackIndex = Math.min(Math.max(0, listIndex), nativeTracks.length - 1);
+        log.info('[AudioDebug] WebOSPlayer: Clamped positional fallback used', listIndex, '→', fallbackIndex);
+        return fallbackIndex;
     }
 
     /**
@@ -1872,26 +1898,23 @@ export class WebOSPlayer {
             const target = this._robustSeekTarget;
             const current = this.getCurrentTime();
             const drift   = Math.abs(current - target);
+            const isNearTarget = drift < 15 || current >= (target - 15);
 
             // ----------------------------------------------------------------
-            // Drift gate: use a 10-second window (matching JellyfinPlayer's
-            // resume-verification threshold) instead of a tight 2-second one.
+            // Drift gate: use a 15-second window to accommodate standard 24fps
+            // 240/250-frame GOP keyframe distances on TV hardware decoders.
             //
-            // WebOS hardware seeks to the nearest keyframe, which can be up to
-            // 5 s away from the requested time. If the video is already within
-            // 10 s of the target when 'playing' fires, the seek (or media-
-            // fragment hint) worked — no retry needed.
-            //
-            // We only escalate to _seekWithRetry when the position is truly
-            // far off (e.g. video still stuck at 0 s when target is 420 s).
+            // If the video is within 15s of target or playing forward, accept.
+            // Only escalate to _seekWithRetry when the playhead is genuinely
+            // stuck (e.g. video stuck at 0s when target was 420s).
             // ----------------------------------------------------------------
-            if (drift >= 10) {
-                log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)} s, expected: ${target} s, drift: ${drift.toFixed(2)} s) — applying robust seek`);
+            if (!isNearTarget) {
+                log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)}s, expected: ${target}s, drift: ${drift.toFixed(2)}s) — applying robust seek`);
                 this._seekWithRetry(target);
                 return; // suppress this playing event until seek resolves
             } else {
-                // Close enough — keyframe boundary or minor offset. Accept.
-                log.debug(`WebOSPlayer: Resume target reached (current: ${current.toFixed(2)} s, target: ${target} s, drift: ${drift.toFixed(2)} s). Clearing seek guard.`);
+                // Close enough — keyframe boundary or normal forward progression. Accept.
+                log.debug(`WebOSPlayer: Resume target reached (current: ${current.toFixed(2)}s, target: ${target}s, drift: ${drift.toFixed(2)}s). Clearing seek guard.`);
                 this._robustSeekTarget = null;
             }
         }

@@ -33,6 +33,7 @@ import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
 import { seerr } from '../api/seerrClient.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('SettingsPage');
 
@@ -1144,6 +1145,18 @@ class SettingsPage extends Page {
                 </div>
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="UseItemsForSearch">${i18n.t('UseItemsForSearch') || 'Use Items API for Search'}</span>
+                        <span class="setting-description" data-i18n="UseItemsForSearchDescription">${i18n.t('UseItemsForSearchDescription') || 'Query the /Items API instead of /Search/Hints for global search. Required by certain server plugins.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:useItemsForSearch') === 'true' ? 'active' : ''}" 
+                                id="toggle-use-items-for-search" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
                         <span class="setting-description" data-i18n="VerticalScrollModeDescription">${i18n.t('VerticalScrollModeDescription') || 'Choose how vertical page scrolling is animated (JS RAF, Native/Smooth, or GPU Accelerated).'}</span>
                     </div>
@@ -1412,8 +1425,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="WakeOnLanExtendedWait">${i18n.t('WakeOnLanExtendedWait')}</span>
+                        <span class="setting-description" data-i18n="WakeOnLanExtendedWaitDescription">${i18n.t('WakeOnLanExtendedWaitDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:enableWolExtendedWait') === 'true' ? 'active' : ''}" 
+                                id="toggle-wol-extended-wait" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Conditional container for MAC Address entry -->
-                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true') ? '' : 'none'}">
+                <div class="setting-item" id="wol-mac-container" style="display: ${(storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true' || storage.getItem('pref:enableWolExtendedWait') === 'true') ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="WolMacAddress">${i18n.t('WolMacAddress')}</span>
                         <span class="setting-description" data-i18n="WolMacAddressDescription">${i18n.t('WolMacAddressDescription')}</span>
@@ -2074,6 +2100,28 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="toggle-switch ${storage.getItem('pref:hideSimilarSection') === 'true' ? 'active' : ''}" 
                                 id="toggle-hide-similar-section" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!--
+                  =============================================================================
+                  Layout Settings - Details Page Next Up Section Toggle
+                  =============================================================================
+                  Allows TV users to toggle the visibility of the Next Up episode row on 
+                  item details pages. When hidden, Litefin skips fetching Next Up items from 
+                  the server, saving VRAM and bandwidth on lower-spec TV hardware.
+                  =============================================================================
+                -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideNextUpSection">${i18n.t('LabelHideNextUpSection') || 'Hide Next Up'}</span>
+                        <span class="setting-description" data-i18n="HideNextUpSectionDescription">${i18n.t('HideNextUpSectionDescription') || 'Do not load or display the Next Up row on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideNextUpSection') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-next-up-section" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -2948,8 +2996,6 @@ class SettingsPage extends Page {
         const audioSettingsHtml =
             currentBackend !== 'tizen'
                 ? `
-                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDisableVbrAudioEncoding">${i18n.t('LabelDisableVbrAudioEncoding') || 'Disable VBR audio encoding'}</span>
@@ -3031,6 +3077,28 @@ class SettingsPage extends Page {
                 { value: 500000, label: i18n.t('BitrateKbps', ['500']) }
             ],
             currentBitrate
+        )}
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AllowedAudioChannels">${i18n.t('AllowedAudioChannels') || 'Maximum Audio Channels'}</span>
+                        <span class="setting-description" data-i18n="AllowedAudioChannelsDescription">${i18n.t('AllowedAudioChannelsDescription') || 'Configure maximum audio channels for video playback. Defaults to 5.1 (6 channels).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'allowed-audio-channels-select',
+            [
+                { value: -1, label: i18n.t('AudioChannelsAuto') || 'Auto (No Limit)' },
+                { value: 8, label: i18n.t('AudioChannels71') || '7.1 Channels' },
+                { value: 6, label: i18n.t('AudioChannels51') || '5.1 Channels (Default)' },
+                { value: 2, label: i18n.t('AudioChannels20') || 'Stereo 2.0' },
+                { value: 1, label: i18n.t('AudioChannels10') || 'Mono 1.0' }
+            ],
+            PlayerSettings.get('allowedAudioChannels') ?? 6
         )}
                     </div>
                 </div>
@@ -3537,9 +3605,8 @@ class SettingsPage extends Page {
                 ],
                 PlayerSettings.get('transcodeAudioCodec') || 'auto'
             )}
-                    </div>
-                </div>
-
+            </div>
+        </div>
                 <!-- ============================================================
                      EAC3 FORCE STATE
                      canPlayType returns '' for EAC3 on many WebOS/browser builds
@@ -6418,6 +6485,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Use Items API for Search
+        const useItemsForSearchBtn = this.$('#toggle-use-items-for-search');
+        if (useItemsForSearchBtn) {
+            useItemsForSearchBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:useItemsForSearch') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:useItemsForSearch', newValue.toString());
+                useItemsForSearchBtn.classList.toggle('active', newValue);
+                log.info(`Use Items API for Search set to: ${newValue}`);
+            });
+        }
+
         // Toggle Disable Home Screen Caching
         const homeCacheBtn = this.$('#toggle-home-screen-cache');
         if (homeCacheBtn) {
@@ -6514,6 +6593,27 @@ class SettingsPage extends Page {
                 storage.setItem('pref:hideSimilarSection', newValue.toString());
                 hideSimilarBtn.classList.toggle('active', newValue);
                 log.info(`Hide Similar Recommendations set to: ${newValue}`);
+            });
+        }
+
+        // =====================================================================
+        // Toggle Hide Next Up Row on Details Page
+        // =====================================================================
+        // Manages local state persistence and tactile UI animation feedback 
+        // for hiding the Next Up episode row on item details pages.
+        // =====================================================================
+        const hideNextUpBtn = this.$('#toggle-hide-next-up-section');
+        if (hideNextUpBtn) {
+            hideNextUpBtn.addEventListener('click', () => {
+                // Fetch the current persistence state of the Next Up row setting
+                const isHidden = storage.getItem('pref:hideNextUpSection') === 'true';
+                const newValue = !isHidden;
+
+                // Save new setting locally to immediately affect DetailsPage behavior
+                storage.setItem('pref:hideNextUpSection', newValue.toString());
+                
+                hideNextUpBtn.classList.toggle('active', newValue);
+                log.info(`Hide Next Up Section set to: ${newValue}`);
             });
         }
 
@@ -6705,9 +6805,10 @@ class SettingsPage extends Page {
             const wolStartup = storage.getItem('pref:enableWolOnStartup') === 'true';
             const wolTimeout = storage.getItem('pref:enableWolOnTimeout') === 'true';
             const wolScan = storage.getItem('pref:enableWolOnServerScan') === 'true';
+            const wolExtended = storage.getItem('pref:enableWolExtendedWait') === 'true';
             const macContainer = this.$('#wol-mac-container');
             if (macContainer) {
-                macContainer.style.display = (wolStartup || wolTimeout || wolScan) ? '' : 'none';
+                macContainer.style.display = (wolStartup || wolTimeout || wolScan || wolExtended) ? '' : 'none';
             }
             focusManager.invalidateCache('settings-content');
         };
@@ -6754,6 +6855,22 @@ class SettingsPage extends Page {
                 storage.setItem('pref:enableWolOnServerScan', newValue ? 'true' : 'false');
                 storage.flush();
                 wolScanToggleBtn.classList.toggle('active', newValue);
+
+                // Synchronize visibility of the MAC address input field row
+                updateWolMacVisibility();
+            });
+        }
+
+        const wolExtendedToggleBtn = this.$('#toggle-wol-extended-wait');
+        if (wolExtendedToggleBtn) {
+            wolExtendedToggleBtn.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:enableWolExtendedWait') === 'true';
+                const newValue = !currentValue;
+
+                // Write updated toggle state to global storage
+                storage.setItem('pref:enableWolExtendedWait', newValue ? 'true' : 'false');
+                storage.flush();
+                wolExtendedToggleBtn.classList.toggle('active', newValue);
 
                 // Synchronize visibility of the MAC address input field row
                 updateWolMacVisibility();
@@ -7397,7 +7514,7 @@ class SettingsPage extends Page {
     _renderDropdown(id, options, currentValue, disabled = false) {
         // Find current label (using String conversion to match storage strings with number options)
         const currentOption = options.find((o) => String(o.value) === String(currentValue)) || options[0];
-        const currentLabel = currentOption ? i18n.ensureBiDi(currentOption.label) : i18n.t('Select');
+        const currentLabel = currentOption ? escapeHtml(i18n.ensureBiDi(currentOption.label)) : i18n.t('Select');
 
         // Render as a button that triggers the modal
         return `
@@ -7452,7 +7569,7 @@ class SettingsPage extends Page {
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                             <span style="margin-right: 12px;">${i18n.ensureBiDi(opt.label)}</span>
+                             <span style="margin-right: 12px;">${escapeHtml(i18n.ensureBiDi(opt.label))}</span>
                              ${badge}
                         </button>
                     `;
@@ -7767,6 +7884,8 @@ class SettingsPage extends Page {
             'truehd-force-select': { type: 'player', key: 'enableTrueHd' },
             /* Transcode target codec — used by all three device profiles (Tizen, WebOS, Web) */
             'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
+            /* Maximum audio channels — used by all three device profiles (Tizen, WebOS, Web) */
+            'allowed-audio-channels-select': { type: 'player', key: 'allowedAudioChannels' },
             /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
             'eac3-force-select': { type: 'player', key: 'enableEac3' },
             /* MP2 force-state override — corrects false positives or forces transcoding to avoid stalls */
@@ -9497,8 +9616,8 @@ class SettingsPage extends Page {
                 quality: 90,
                 maxWidth: 300
             });
-            return `<img src="${imageUrl}" class="user-avatar" alt="${user.Name}" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
-                    <div class="user-avatar-placeholder hidden">${user.Name[0].toUpperCase()}</div>`;
+            return `<img src="${imageUrl}" class="user-avatar" alt="${escapeHtml(user.Name)}" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
+                    <div class="user-avatar-placeholder hidden">${escapeHtml(user.Name ? user.Name[0].toUpperCase() : '?')}</div>`;
         }
         return `<div class="user-avatar-placeholder">${user?.Name ? user.Name[0].toUpperCase() : '?'}</div>`;
     }

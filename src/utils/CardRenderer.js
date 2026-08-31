@@ -8,11 +8,13 @@
  */
 
 import { api } from '../api/index.js';
+import { escapeHtml } from './Utils.js';
 import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
 import { detailsIcons } from './Icons.js';
+import { platformInfo } from './PlatformInfo.js';
 
 class CardRenderer {
     /**
@@ -68,9 +70,16 @@ class CardRenderer {
 
         let width = item.Width;
         let height = item.Height;
+
+        // Dynamic range flags for metadata inspection
         let isHdr = false;
+        let isHdr10Plus = false;
         let isDovi = false;
 
+        /*
+         * Extract video stream attributes from media source container metadata.
+         * We inspect VideoRange, VideoRangeType, Profile, Title, and Codec strings.
+         */
         if (item.MediaSources && item.MediaSources.length > 0) {
             const source = item.MediaSources[0];
             if (source.Width) width = source.Width;
@@ -80,13 +89,44 @@ class CardRenderer {
                 if (videoStream) {
                     if (videoStream.Width) width = videoStream.Width;
                     if (videoStream.Height) height = videoStream.Height;
-                    const videoRange = videoStream.VideoRange || videoStream.VideoRangeType || '';
+
+                    // Capture top-level item range attributes
+                    const itemRange = `${item.VideoRange || ''} ${item.VideoRangeType || ''}`;
+
+                    // Capture detailed video stream range and codec attributes
+                    const videoRange = videoStream.VideoRange || '';
+                    const videoRangeType = videoStream.VideoRangeType || '';
                     const profile = videoStream.Profile || '';
                     const title = videoStream.Title || videoStream.DisplayTitle || '';
                     const codec = videoStream.Codec || '';
 
-                    const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
-                    if (checkString.includes('hdr')) isHdr = true;
+                    // Build a unified inspection string across all item and stream metadata fields
+                    const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${title} ${codec}`.toLowerCase();
+
+                    /*
+                     * 1. Detect HDR10+ specific signaling
+                     * Checks for 'hdr10plus', 'hdr10+', 'hdr10p', or Dolby Vision hybrid 'doviwithhdr10plus'
+                     */
+                    if (
+                        checkString.includes('hdr10plus') ||
+                        checkString.includes('hdr10+') ||
+                        checkString.includes('hdr10p') ||
+                        checkString.includes('doviwithhdr10plus') ||
+                        checkString.includes('doviwithelhdr10plus')
+                    ) {
+                        isHdr10Plus = true;
+                    }
+
+                    /*
+                     * 2. Detect standard HDR / HDR10 signaling
+                     */
+                    if (checkString.includes('hdr')) {
+                        isHdr = true;
+                    }
+
+                    /*
+                     * 3. Detect Dolby Vision (DoVi) signaling
+                     */
                     if (
                         checkString.includes('dovi') ||
                         checkString.includes('dolby vision') ||
@@ -103,6 +143,9 @@ class CardRenderer {
             const maxDim = Math.max(width || 0, height || 0);
             const minDim = Math.min(width || 0, height || 0);
 
+            /*
+             * Classify resolution using relaxed boundaries to account for widescreen cropping
+             */
             if (maxDim >= 3000 || minDim >= 2000) {
                 resolutionLabel = '4K';
             } else if (maxDim >= 1600 || minDim >= 900) {
@@ -113,11 +156,33 @@ class CardRenderer {
                 resolutionLabel = 'SD';
             }
 
+            /*
+             * Determine dynamic range label prioritization based on target OS platform:
+             *
+             * On Samsung Tizen TVs, Dolby Vision hardware decoders do not exist.
+             * Tizen AVPlay renders the fallback layer (HDR10 or HDR10+) natively.
+             * Therefore, when running on Tizen (platformInfo.isTizen), we prioritize HDR10+ / HDR
+             * over DV so the quality badge accurately reflects what the TV actually renders.
+             *
+             * On non-Tizen platforms (e.g. webOS / Web), DV is prioritized as the top tier.
+             */
             let rangeLabel = '';
-            if (isDovi) {
-                rangeLabel = 'DV';
-            } else if (isHdr) {
-                rangeLabel = 'HDR';
+            if (platformInfo.isTizen) {
+                if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                } else if (isDovi) {
+                    rangeLabel = 'DV';
+                }
+            } else {
+                if (isDovi) {
+                    rangeLabel = 'DV';
+                } else if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                }
             }
 
             if (rangeLabel) {
@@ -759,6 +824,12 @@ class CardRenderer {
             }
         }
 
+        // Title/subtitle derive from server-supplied fields (Name, SeriesName,
+        // ChannelName, CurrentProgram.Name, Role...) and land in innerHTML —
+        // escape once here, after all composition is done.
+        titleText = escapeHtml(titleText);
+        subtitleText = escapeHtml(subtitleText);
+
         // --- 3.5. List View Override ---
         // In list-view, we want the Title on the left and EVERY other piece of info
         // (Year, Role, Rating, Score) on the right. We move subtitle parts to metaHtml.
@@ -797,7 +868,7 @@ class CardRenderer {
         // Attach fallback data for LazyLoader to use on error
         const fbData = CardRenderer.getFallbackData(item.Name);
         const hideInitials = type === 'library';
-        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
+        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${escapeHtml(fbData.name)}" data-fb-init="${escapeHtml(fbData.initials)}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
         // ====================================================================
         // Expansion Eligibility Strategy
@@ -895,8 +966,8 @@ class CardRenderer {
                 ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>`
                 : '';
         const imagePart = imageUrl
-            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
-            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>` : ''}`;
+            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
+            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${escapeHtml(i18n.ensureBiDi(item.Name))}</div>` : ''}`;
         const finalContextType = contextType || item.Type;
 
         const isHiddenLibraryLabel =
@@ -971,48 +1042,45 @@ class CardRenderer {
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
-                    ${badgeContainer}
+                    ${!options.showMeta ? badgeContainer : ''}
                     ${
                         showInside
                             ? `
                     <div class="card-info inside">
-                        ${
-                            options.showMeta
-                                ? `
+                        ${options.showMeta
+                    ? `
                         <div class="card-title-row">
                             <div class="card-title"><span>${titleText}</span></div>
                             ${badgeContainer}
                         </div>
                         `
-                                : `<div class="card-title"><span>${titleText}</span></div>`
-                        }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                         ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                         ${metaHtml}
                     </div>
                     `
-                            : ''
-                    }
+                : ''
+            }
                 </div>
-                ${
-                    showOutside
-                        ? `
+                ${showOutside
+                ? `
                 <div class="card-info">
-                    ${
-                        options.showMeta
-                            ? `
+                    ${options.showMeta
+                    ? `
                     <div class="card-title-row">
                         <div class="card-title"><span>${titleText}</span></div>
                         ${badgeContainer}
                     </div>
                     `
-                            : `<div class="card-title"><span>${titleText}</span></div>`
-                    }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                     ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                     ${metaHtml}
                 </div>
                 `
-                        : ''
-                }
+                : ''
+            }
             </button>
         `;
 
@@ -1057,8 +1125,8 @@ class CardRenderer {
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
-                ${!hideInitials ? `<div class="media-fallback-initials">${data.initials}</div>` : ''}
-                ${!isModern ? `<div class="media-fallback-name">${data.name}</div>` : ''}
+                ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(data.initials)}</div>` : ''}
+                ${!isModern ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
             </div>
         `;
     }
@@ -1108,15 +1176,14 @@ class CardRenderer {
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
-                    ${
-                        !skeletonHideLabels
-                            ? `
+                    ${!skeletonHideLabels
+                        ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
                         ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>` : ''}
                     </div>
                     `
-                            : ''
+                        : ''
                     }
                 </div>
             `;

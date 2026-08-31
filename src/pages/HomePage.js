@@ -584,17 +584,15 @@ class HomePage extends Page {
                  *     ratio ("portrait" or "poster" card type).
                  */
                 layout:
-                    lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
+                        ? 'landscape'
+                        : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
                         ? 'square'
                         : 'portrait',
                 cardType:
-                    lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
+                        ? 'thumb'
+                        : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',

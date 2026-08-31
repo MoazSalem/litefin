@@ -2000,9 +2000,13 @@ class LibraryPage extends Page {
         // Custom layout requests from deep links (Music, TV Channels, Artists, People)
         const squareTypes = ['TvChannel', 'MusicAlbum', 'MusicArtist,Artist', 'MusicArtist', 'Audio'];
         if (
-            this.state.libraryInfo?.CollectionType === 'music' ||
-            this.state.libraryInfo?.CollectionType === 'homevideos' ||
             this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos'
+        ) {
+            return 'backdrop';
+        }
+        if (
+            this.state.libraryInfo?.CollectionType === 'music' ||
             (this.params.includeItemTypes && squareTypes.includes(this.params.includeItemTypes))
         ) {
             // For thumb/banner, use backdrop if available; fall back gracefully
@@ -2248,12 +2252,14 @@ class LibraryPage extends Page {
         const pagination = this.$('#library-pagination');
         if (pagination) pagination.style.display = ''; // Restore pagination
 
-        // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks)
-        // These viewTypes always force landscape regardless of user view mode preference.
+        // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks, Music Videos, or Home Videos)
+        // These viewTypes/collections always force landscape regardless of user view mode preference.
         const isLandscape =
             this.state.viewType === 'Episodes' ||
             this.state.viewType === 'Upcoming' ||
-            this.state.viewType === 'Networks';
+            this.state.viewType === 'Networks' ||
+            this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos';
 
         // --------------------------------------------------------------------
         // Apply the view mode CSS modifier class to the grid container.
@@ -2969,10 +2975,32 @@ class LibraryPage extends Page {
                 const spacer = grid.querySelector('#grid-top-spacer');
                 const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
                 const scrolledPastRenderedTop = Math.max(0, scrollTop - spacerHeight);
-                const currentRow =
+
+                // ----------------------------------------------------------------
+                // OVERSHOOT GUARD — skip eviction when scrolled past the grid
+                // ----------------------------------------------------------------
+                // When the user presses DOWN from the last grid row, the page
+                // scrolls to reveal the pagination section below the grid.
+                // scrollTop now includes the pagination section's height, pushing
+                // the computed currentRow ABOVE the last real row. _syncGridWindow
+                // would then evict most of the visible grid to match a phantom row
+                // that doesn't exist, causing all UI elements to "disappear".
+                //
+                // We detect this by checking whether the visible grid content (from
+                // the rendered top + scroll offset within it) would exceed the last
+                // item in the array. If the derived row is higher than the last real
+                // row, we know scrollTop has strayed into the pagination/padding zone
+                // and skip _syncGridWindow entirely for this scroll event.
+                // ----------------------------------------------------------------
+                const maxRow = Math.max(0, Math.ceil(this.state.items.length / currentColumns) - 1);
+                const derivedRow =
                     Math.floor(scrolledPastRenderedTop / rowHeight) +
                     Math.floor(this.state.gridWindowStart / currentColumns);
-                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+
+                // Only sync window if the derived row is within actual content bounds
+                if (derivedRow <= maxRow) {
+                    this._syncGridWindow(grid, this.state.items, currentColumns, derivedRow);
+                }
             }
 
             // Keep the focus-based direction cursor in sync so the next

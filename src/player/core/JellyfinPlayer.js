@@ -438,8 +438,8 @@ export class JellyfinPlayer extends EventEmitter {
             const currentTime = event.data?.time || 0;
 
             if (event.type === PlayerEvent.TIME_UPDATE && currentTime > 0) {
-                // Check if we have arrived near our target resume position
-                if (Math.abs(currentTime - targetSec) < 10 || currentTime >= targetSec) {
+                // Check if we have arrived near our target resume position (within 15s GOP keyframe tolerance)
+                if (Math.abs(currentTime - targetSec) < 15 || currentTime >= (targetSec - 15)) {
                     this._pendingStartPositionTicks = null;
                     log.info(`Resume verified at ${currentTime}s. Dismissing loading screen.`);
                     this.emit(PlayerEvent.PLAYING);
@@ -704,8 +704,11 @@ export class JellyfinPlayer extends EventEmitter {
                     const fallbackSource = options.item.MediaSources[0];
                     const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                     if (ms) {
-                        defaultIndex = ms.DefaultAudioStreamIndex;
                         const audioStreams = (ms.MediaStreams || []).filter(s => s.Type === 'Audio');
+                        const defaultAudioStream = audioStreams.find(s => s.IsDefault) ||
+                            (ms.DefaultAudioStreamIndex !== undefined && ms.DefaultAudioStreamIndex !== null ? audioStreams.find(s => s.Index === ms.DefaultAudioStreamIndex) : null) ||
+                            audioStreams[0];
+                        defaultIndex = defaultAudioStream ? defaultAudioStream.Index : ms.DefaultAudioStreamIndex;
                         if (audioStreams.length > 0) {
                             firstAudioIndex = audioStreams[0].Index;
                         }
@@ -864,7 +867,10 @@ export class JellyfinPlayer extends EventEmitter {
                         }
                     } else {
                         const prefLang = storage.getItem('pref:subtitleLang') || 'none';
-                        const audioStreamIndex = options.audioStreamIndex !== undefined ? options.audioStreamIndex : ms.DefaultAudioStreamIndex;
+                        const defaultAudioStream = (ms.MediaStreams || []).find(s => s.Type === 'Audio' && s.IsDefault) ||
+                            (ms.MediaStreams || []).find(s => s.Type === 'Audio' && s.Index === ms.DefaultAudioStreamIndex) ||
+                            (ms.MediaStreams || []).find(s => s.Type === 'Audio');
+                        const audioStreamIndex = options.audioStreamIndex !== undefined && options.audioStreamIndex !== null ? options.audioStreamIndex : defaultAudioStream?.Index;
                         const audioStream = ms.MediaStreams.find(s => s.Type === 'Audio' && s.Index === audioStreamIndex);
                         const audioLang = audioStream ? (audioStream.Language || 'und') : 'und';
                         
@@ -1218,25 +1224,28 @@ export class JellyfinPlayer extends EventEmitter {
                 this._currentSubtitleStreamIndex = -1;
             }
 
-            // Check play method to determine if we need to force start-at-0 (for Transcode/Remux)
-            // playMethod was already derived above for logging
+            // -------------------------------------------------------------------------
+            // Start Position & Resume Offset Handling
+            // -------------------------------------------------------------------------
+            // We pass the intended startPositionTicks directly to MediaHelper.buildStreamUrl.
+            // For server-managed streams (Transcode/Remux), the server starts ffmpeg
+            // directly at the requested StartTimeTicks (-ss <seconds>).
+            //
+            // MediaHelper handles timeline mapping cleanly:
+            //   - Transcode: transcodingOffsetTicks = startPositionTicks, playerStartPositionTicks = 0
+            //   - Remux/DirectStream: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
+            //   - DirectPlay: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
+            //
+            // This completely eliminates the zero-start stall trap where a client-side seek
+            // was issued into an ungenerated HLS stream on hardware TV players (webOS/Tizen).
+            // -------------------------------------------------------------------------
             const originalStartPositionTicks = options.startPositionTicks || 0;
-            let effectiveStartPositionTicks = originalStartPositionTicks;
-            let isTranscodeSeek = false;
+            const effectiveStartPositionTicks = originalStartPositionTicks;
 
             // Save the intended start position for the UI before the backend initializes.
             this._pendingStartPositionTicks = originalStartPositionTicks > 0 ? originalStartPositionTicks : null;
 
-            // User Request: When transcoding or remuxing, start playback at 0, 
-            // and after it's loaded seek to the resume location if it exists
-            if ((playMethod === 'Transcode' || playMethod === 'DirectStream' || playMethod === 'Remux') && originalStartPositionTicks > 0) {
-                log.info(`Transcode detected: Starting at 0 ticks, will seek to ${originalStartPositionTicks} after load`);
-                effectiveStartPositionTicks = 0;
-                isTranscodeSeek = true;
-                
-                // Do not apply early resume validation yet. We will transfer it once the TranscodeSeek triggers.
-                this._pendingStartPositionTicks = null;
-            } else if (this._pendingStartPositionTicks) {
+            if (this._pendingStartPositionTicks) {
                 // For native client-side seeking, start the 15-second wall-clock timeout immediately
                 this._resumeWaitStartTime = Date.now();
             }
@@ -1266,15 +1275,6 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Start playback on backend
             log.info('Initializing backend playback...');
-
-            // Handle delayed seek for Transcode/Remux
-            // CRITICAL: Set this BEFORE play() to ensure we catch all initial events
-            if (isTranscodeSeek) {
-                log.info('TranscodeSeek: Enabled. Waiting for timeupdate to seek to:', originalStartPositionTicks);
-                this._pendingTranscodeSeekTicks = originalStartPositionTicks;
-                // Explicitly emit WAITING to ensure spinner is shown
-                this.emit(PlayerEvent.WAITING);
-            }
 
             const backendOptions = {
                 ...streamInfo,
@@ -1622,17 +1622,23 @@ export class JellyfinPlayer extends EventEmitter {
     async setAudioStreamIndex(index) {
         this._currentAudioStreamIndex = index;
 
+        // Determine if target track codec is natively supported by current hardware backend
         let isTargetCodecSupported = true;
-        if (this._backendType === 'tizen' || this._backendType === 'webos') {
+        if (this._backendType === 'tizen' || this._backendType === 'webos' || this._backendType === 'html5') {
             const AudioTracks = this.getAudioTracks();
             const targetTrack = AudioTracks.find(t => t.Index === index);
+
             if (targetTrack && targetTrack.Codec) {
                 const targetCodec = targetTrack.Codec.toLowerCase();
-                if (this._backendType === 'tizen' && (targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+
+                // Check FLAC and ALAC audio streams when embedded in video containers
+                if ((targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
                     isTargetCodecSupported = false;
                 } else if (targetCodec.includes('dts') && !isDtsSupported()) {
+                    // Check DTS / DTS-HD / DCA passthrough support
                     isTargetCodecSupported = false;
                 } else if (targetCodec === 'truehd' && !isTrueHdSupported()) {
+                    // Check Dolby TrueHD passthrough support
                     isTargetCodecSupported = false;
                 }
             }
@@ -2210,6 +2216,42 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
+     * Check if an audio track can be played natively by the current backend
+     * without requiring a server-side transcode restart.
+     *
+     * Used by the OSD TrackMenu to visually grey out tracks that the native
+     * player cannot decode (e.g. FLAC in MKV on HTML5 browsers, DTS/TrueHD
+     * when passthrough is disabled). Selecting such a track will still work
+     * — it triggers a playback restart with server transcoding — but the
+     * visual indicator helps the user understand why switching is slower.
+     *
+     * @param {Object} track - Jellyfin MediaStream object with a Codec field
+     * @returns {boolean} true if the track can be toggled natively, false if
+     *                    selecting it would require a transcode restart
+     */
+    isAudioTrackNativelyPlayable(track) {
+        if (!track || !track.Codec) return true;
+        const codec = track.Codec.toLowerCase();
+
+        // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
+        if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+            return false;
+        }
+
+        // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
+        if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
+            return false;
+        }
+
+        // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled
+        if (codec === 'truehd' && !isTrueHdSupported()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Get audio tracks as exposed by the current native backend.
      *
      * Native media engines (WebOS HTML5 video and Tizen AVPlay) keep original
@@ -2226,12 +2268,7 @@ export class JellyfinPlayer extends EventEmitter {
         // Retrieve all audio streams attached to the current media source
         const tracks = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
 
-        // For backends without track filtering quirks (e.g. desktop HTML5), return all streams
-        if (this._backendType !== 'webos' && this._backendType !== 'tizen') {
-            return tracks;
-        }
-
-        // Filter out passthrough audio formats that the hardware pipeline omits from native track lists
+        // Filter out audio formats that the hardware pipeline or browser omits from native track lists
         return tracks.filter((track) => {
             const codec = (track.Codec || '').toLowerCase();
 
@@ -2242,6 +2279,11 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Omit DTS / DTS-HD / DCA streams if passthrough/decoding is disabled or unsupported
             if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
+                return false;
+            }
+
+            // Omit FLAC / ALAC in video containers if enableFlacInVideo setting is disabled
+            if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
                 return false;
             }
 

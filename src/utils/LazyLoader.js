@@ -11,6 +11,7 @@ import { logger } from './Logger.js';
 import { eventBus } from '../core/EventBus.js';
 import BlurHashDecoder from './BlurHashDecoder.js';
 import { storage } from './StorageService.js';
+import { escapeHtml } from './Utils.js';
 
 const log = logger.create('LazyLoader');
 
@@ -458,10 +459,12 @@ class LazyLoader {
 
             if (gradNum && initials && name && !parent.querySelector('.media-fallback')) {
                 const hideInitials = img.dataset.fbHideInitials === 'true';
+                // dataset.* decodes the escaped attribute values back to raw
+                // strings — escape again before insertAdjacentHTML.
                 const fallbackHtml = `
                     <div class="media-fallback grad-${gradNum}">
-                        ${!hideInitials ? `<div class="media-fallback-initials">${initials}</div>` : ''}
-                        ${!isModern ? `<div class="media-fallback-name">${name}</div>` : ''}
+                        ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(initials)}</div>` : ''}
+                        ${!isModern ? `<div class="media-fallback-name">${escapeHtml(name)}</div>` : ''}
                     </div>
                 `;
                 parent.insertAdjacentHTML('afterbegin', fallbackHtml);

@@ -456,22 +456,35 @@ class SearchPage extends Page {
             { type: 'TvChannel' }
         ];
 
-        const limit = 12;
+        /*
+         * Determine whether to search using the dedicated /Search/Hints endpoint (default)
+         * or the general /Items endpoint (required by some custom server plugins).
+         */
+        const useItemsEndpoint = storage.getItem('pref:useItemsForSearch') === 'true';
+
+        const limit = 12; // Fetch 12 so that with a grid limit of 11, the "See More" button appears
+        const searchFn = useItemsEndpoint
+            ? (type) => api.search(this._query, { IncludeItemTypes: type, Limit: limit })
+            : (type) => api.searchHints(this._query, { IncludeItemTypes: type, Limit: limit });
+
         const requests = [
-            ...searchTypes.map((t) => api.searchHints(this._query, { IncludeItemTypes: t.type, Limit: limit })),
+            ...searchTypes.map((t) => searchFn(t.type)),
             api.searchPeople(this._query, { Limit: limit })
         ];
 
         const responses = await Promise.all(requests);
 
+        // Helper to normalize various SearchHint response formats (Array vs Object)
         const normalize = (res, forcedType = null) => {
+            // Jellyfin /Search/Hints can return a raw Array or an object with SearchHints/Items
             const rawItems = Array.isArray(res) ? res : res?.SearchHints || res?.Items || [];
             return rawItems.map((item) => ({
                 ...item,
-                Id: item.ItemId || item.Id,
+                Id: item.ItemId || item.Id, // Normalize search hint IDs
                 ImageTags: item.ImageTags || {
                     Primary: item.PrimaryImageTag
                 },
+                // Ensure Type is correctly set (SearchHints have Type property)
                 Type: forcedType || item.Type
             }));
         };
@@ -486,6 +499,7 @@ class SearchPage extends Page {
         const channels = normalize(responses[7]);
         const people = normalize(responses[8], 'Person');
 
+        // Combine results into a single list for the grouping renderer
         this._results = [
             ...movies,
             ...series,
@@ -497,6 +511,10 @@ class SearchPage extends Page {
             ...collections,
             ...channels
         ];
+
+        log.debug(
+            `Search returned: ${movies.length} movies, ${series.length} series, ${episodes.length} episodes, ${people.length} people`
+        );
 
         if (this._results.length > 0) {
             this._renderResults();

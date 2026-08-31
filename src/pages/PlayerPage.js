@@ -33,6 +33,7 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
+import { sanitizeSubtitleText } from '../utils/Utils.js';
 
 const log = logger.create('Player');
 
@@ -1116,9 +1117,36 @@ class PlayerPage extends Page {
             }
         }
 
-        // 3. Fallback to default from MediaSource for Audio if still undefined
-        if (savedAudioIndex === undefined) {
-            savedAudioIndex = mediaSource?.DefaultAudioStreamIndex;
+        // 3. Fallback to default from MediaSource for Audio if still undefined or null
+        // =========================================================================
+        // DEFAULT AUDIO STREAM RESOLUTION (Disposition "default")
+        // =========================================================================
+        // When preSelectedAudio is null or undefined (and session track memory
+        // yielded no match), we resolve the default audio track.
+        // Priority order:
+        //   1. Audio stream with disposition "default" (s.Type === 'Audio' && s.IsDefault)
+        //   2. MediaSource DefaultAudioStreamIndex property
+        //   3. First available audio stream in container (audioStreams[0])
+        // =========================================================================
+        if (savedAudioIndex === undefined || savedAudioIndex === null) {
+            // Filter candidate streams to Audio type
+            const audioStreams = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+
+            // Attempt match by disposition default (IsDefault), then DefaultAudioStreamIndex, then first track
+            const defaultAudioStream =
+                audioStreams.find((s) => s.IsDefault) ||
+                (mediaSource?.DefaultAudioStreamIndex !== undefined && mediaSource?.DefaultAudioStreamIndex !== null
+                    ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
+                    : null) ||
+                audioStreams[0];
+
+            // Assign resolved index
+            if (defaultAudioStream) {
+                savedAudioIndex = defaultAudioStream.Index;
+                log.info(
+                    `[Track Resolution] Resolved default audio track (disposition default): Index ${savedAudioIndex} (${defaultAudioStream.Language || 'und'})`
+                );
+            }
         }
 
         // Note: We leave savedSubtitleIndex as undefined if unresolved, so JellyfinPlayer's SubtitleMode logic handles it.
@@ -1430,7 +1458,10 @@ class PlayerPage extends Page {
             VideoCodec: 'h264',
             AudioCodec: 'aac',
             MaxStreamingBitrate: 120000000,
-            TranscodingMaxAudioChannels: 2,
+            TranscodingMaxAudioChannels: (() => {
+                const userChannels = PlayerSettings.get('allowedAudioChannels');
+                return (userChannels && userChannels > 0) ? userChannels : 6;
+            })(),
             SegmentContainer: 'ts',
             MinSegments: 1,
             BreakOnNonKeyFrames: true
@@ -2256,7 +2287,12 @@ class PlayerPage extends Page {
 
         if (data && data.text && data.text.trim().length > 0) {
             // Render subtitle
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Cue text is external content (SRT/VTT/ASS from the server or a
+            // sidecar file); SubtitleParser only strips ASS {...} tags, so it
+            // must be sanitized before innerHTML. sanitizeSubtitleText escapes
+            // everything and re-allows only bare <i>/<b>/<u>/<em>/<strong>,
+            // preserving legitimate cue styling without an injection surface.
+            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -2336,8 +2372,9 @@ class PlayerPage extends Page {
         if (!overlay) return;
 
         if (data && data.text && data.text.trim().length > 0) {
-            // Render the secondary subtitle text
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Render the secondary subtitle text (sanitized: escapes all HTML,
+            // re-allows only bare i/b/u/em/strong styling tags)
+            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -3274,11 +3311,11 @@ class PlayerPage extends Page {
         }
         this._isExiting = true;
 
-        try {
-            // Capture session info BEFORE stopping (stop clears internal state)
-            const mediaSource = this._player?.getCurrentMediaSource?.();
-            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        // Capture session info BEFORE stopping (stop clears internal state)
+        const mediaSource = this._player?.getCurrentMediaSource?.();
+        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
+        try {
             // Notify plugins that playback is ending — they clean up OSD widgets
             pluginManager.notifyPlayerStop();
 
@@ -3321,8 +3358,35 @@ class PlayerPage extends Page {
 
         // Invalidate stale caches so pages reload fresh data after playback
         if (this._item) {
-            // Clear the ETag cache so the next API requests get fresh 200
-            // responses instead of stale 304-cached bodies.
+            try {
+                // Update cached played/progress state across library:state:* caches without deleting state
+                // so focus restoration and grid state are preserved when returning to library pages.
+                const itemId = this._item.Id;
+                const durationTicks =
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                const isNearComplete =
+                    this._isPlaybackEnded || (durationTicks > 0 && positionTicks >= durationTicks * 0.9);
+
+                const allState = state.getAll();
+                for (const [key, val] of Object.entries(allState)) {
+                    if (key.startsWith('library:state:') && val?.stateData?.items) {
+                        const match = val.stateData.items.find(({ Id }) => Id === itemId);
+                        if (match) {
+                            match.UserData = match.UserData || {};
+                            if (isNearComplete) {
+                                match.UserData.Played = true;
+                                match.UserData.PlaybackPositionTicks = 0;
+                                match.UserData.UnplayedItemCount = 0;
+                            } else if (positionTicks > 0) {
+                                match.UserData.PlaybackPositionTicks = positionTicks;
+                            }
+                        }
+                    }
+                }
+            } catch (cacheErr) {
+                log.warn('Failed to patch library state cache on stop:', cacheErr);
+            }
+
             api.clearEtagCache();
 
             // Invalidate home page's rendered row cache
