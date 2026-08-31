@@ -12,7 +12,7 @@ import DescriptionModal from '../components/DescriptionModal.js';
 import SeerrRequestModal from '../components/SeerrRequestModal.js';
 import { RichMetadataTable } from '../components/RichMetadataTable.js';
 import { api } from '../api/ApiClient.js';
-import { seerr } from '../api/JellyseerrClient.js';
+import { seerr } from '../api/seerrClient.js';
 import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { focusManager } from '../ui/FocusManager.js';

@@ -15,7 +15,7 @@ import { api } from './ApiClient.js';
 import { normalizeSeerrItem, seerrStatusKey } from './seerrNormalize.js';
 import { buildGenreSliderItems, buildStudioItems, buildNetworkItems } from '../utils/seerrGenres.js';
 
-const log = logger.create('JellyseerrClient');
+const log = logger.create('SeerrClient');
 const API_ROOT = '/Litefin/Seerr';
 
 /**
@@ -29,7 +29,7 @@ export function decorateStatusBadge(item) {
     return item;
 }
 
-export class JellyseerrClient {
+export class SeerrClient {
     constructor() {
         this._status = null;
         this._clearedLegacyCredentials = false;
@@ -753,4 +753,4 @@ export class JellyseerrClient {
     }
 }
 
-export const seerr = new JellyseerrClient();
+export const seerr = new SeerrClient();

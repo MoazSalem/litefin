@@ -23,7 +23,7 @@
 import Page from './Page.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import CardRenderer from '../utils/CardRenderer.js';
-import { seerr } from '../api/JellyseerrClient.js';
+import { seerr } from '../api/seerrClient.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
 import { lazyLoader } from '../utils/LazyLoader.js';

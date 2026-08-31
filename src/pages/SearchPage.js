@@ -8,7 +8,7 @@
 
 import Page from './Page.js';
 import { api } from '../api/index.js';
-import { seerr } from '../api/JellyseerrClient.js';
+import { seerr } from '../api/seerrClient.js';
 import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
 import CardRenderer from '../utils/CardRenderer.js';

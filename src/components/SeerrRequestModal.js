@@ -8,7 +8,7 @@
  */
 
 import { api } from '../api/ApiClient.js';
-import { seerr } from '../api/JellyseerrClient.js';
+import { seerr } from '../api/seerrClient.js';
 import { SEERR_STATUS, seerrStatusKey, seerrSeasonStatusKey } from '../api/seerrNormalize.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';

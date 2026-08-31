@@ -19,7 +19,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { storage } from '../utils/StorageService.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { sidebarIcons, getLibraryIcon } from '../utils/Icons.js';
-import { seerr } from '../api/JellyseerrClient.js';
+import { seerr } from '../api/seerrClient.js';
 
 const log = logger.create('Sidebar');
 
