@@ -30,6 +30,9 @@ import LibraryPage from '../pages/LibraryPage.js';
 import DetailsPage from '../pages/DetailsPage.js';
 import PersonPage from '../pages/PersonPage.js';
 import SearchPage from '../pages/SearchPage.js';
+import DiscoverPage from '../pages/DiscoverPage.js';
+import SeerrDetailsPage from '../pages/SeerrDetailsPage.js';
+import SeerrPersonPage from '../pages/SeerrPersonPage.js';
 import SettingsPage from '../pages/SettingsPage.js';
 import FavoritesPage from '../pages/FavoritesPage.js';
 import OfflinePage from '../pages/OfflinePage.js';
@@ -858,8 +861,11 @@ class App {
         router.register('/library/:id/person/:personId', LibraryPage); // Filtered by Person
         router.register('/library/:id/tag/:tagName', LibraryPage); // Filtered by Tag
         router.register('/details/:id', DetailsPage);
+        router.register('/seerr/person/:id', SeerrPersonPage);
+        router.register('/seerr/:mediaType/:tmdbId', SeerrDetailsPage);
         router.register('/person/:id', PersonPage);
         router.register('/search', SearchPage);
+        router.register('/discover', DiscoverPage);
         router.register('/favorites', FavoritesPage);
         router.register('/settings', SettingsPage);
         router.register('/livetv', LiveTvPage);
@@ -901,8 +907,7 @@ class App {
                  * Check user preference: "Remember Last Active User".
                  * When enabled, the app skips the profile picker on launch and boots directly
                  * into the last active session (unless protected by a local PIN).
-                 * Default: disabled (false). Adheres to Apple Human Interface Guidelines
-                 * for frictionless user experience and user control.
+                 * Default: disabled (false).
                  */
                 const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
 

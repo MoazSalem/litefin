@@ -619,8 +619,10 @@ export class HtmlVideoPlayer {
             const onLoadedMetadata = () => {
                 video.removeEventListener('loadedmetadata', onLoadedMetadata);
 
-                // Check if the media fragment naturally landed us at the target
-                if (resumeSeconds > 0 && Math.abs(video.currentTime - resumeSeconds) < 2) {
+                // Check if the media fragment naturally landed us at the target (within 15s GOP keyframe tolerance)
+                const currentPos = video.currentTime || 0;
+                const fragmentDrift = Math.abs(currentPos - resumeSeconds);
+                if (resumeSeconds > 0 && (fragmentDrift < 15 || currentPos >= (resumeSeconds - 15))) {
                     log.info('HtmlVideoPlayer: Media fragment seek (#t=) successfully applied natively');
                     seekCompleted = true;
                 }
@@ -937,20 +939,23 @@ export class HtmlVideoPlayer {
 
         // ====================================================================
         // PLAYHEAD DRIFT CHECK:
-        // If the playhead is already within 10 s of the target, the earlier
+        // If the playhead is already within 15 s of the target, the earlier
         // seek (either the #t= fragment or the currentTime set in loadedmetadata)
         // already worked. Skip the re-seek to avoid a disruptive backward stutter.
         //
-        // We use 10 s (matching WebOS and JellyfinPlayer's own resume-verification
-        // threshold) rather than 2 s, because:
+        // We use 15 s (matching WebOS and JellyfinPlayer's resume-verification
+        // threshold) rather than 2 s or 10 s, because:
         //   1. The browser seeks to the nearest keyframe, not the exact timestamp,
-        //      which can land up to 5 s away.
+        //      which can land up to ~10.4 s away for 24fps 250-frame GOPs.
         //   2. play() may take 1-3+ seconds to resolve on a slow buffer, so the
         //      video may have already played forward from the seek landing point
         //      by the time this guard runs.
         // ====================================================================
-        const drift = Math.abs(video.currentTime - targetSec);
-        if (drift < 10) {
+        const currentPos = video.currentTime || 0;
+        const drift = Math.abs(currentPos - targetSec);
+        const isNearTarget = drift < 15 || currentPos >= (targetSec - 15);
+
+        if (isNearTarget) {
             log.info(`HtmlVideoPlayer: Playhead within ${drift.toFixed(2)} s of target — skipping fallback resume seek.`);
             return;
         }
@@ -960,15 +965,13 @@ export class HtmlVideoPlayer {
 
         // Give it one more chance after a 2-second delay in case the first
         // assignment was too early (buffer not yet ready).
-        //
-        // Use a 10-second acceptance window here too — after a successful seek
-        // to 420 s and a 2-second wait, the video is at ~422 s. The old
-        // threshold of >= 2 always fired on a working seek, causing a pointless
-        // backward-seek stutter every single time.
         setTimeout(() => {
-            const retryDrift = Math.abs(video.currentTime - targetSec);
-            if (retryDrift >= 10) {
-                log.warn(`HtmlVideoPlayer: Resume seek failed (current: ${video.currentTime.toFixed(2)} s, target: ${targetSec} s, drift: ${retryDrift.toFixed(2)} s) — signaling fallback to Remux`);
+            const retryPos = video.currentTime || 0;
+            const retryDrift = Math.abs(retryPos - targetSec);
+            const retryNear = retryDrift < 15 || retryPos >= (targetSec - 15);
+
+            if (!retryNear) {
+                log.warn(`HtmlVideoPlayer: Resume seek failed (current: ${retryPos.toFixed(2)} s, target: ${targetSec} s, drift: ${retryDrift.toFixed(2)} s) — signaling fallback to Remux`);
 
                 // Emit event so JellyfinPlayer can restart playback using Remux/DirectStream
                 // mode. In Remux mode the server streams from the target position, making

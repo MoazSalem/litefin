@@ -238,7 +238,7 @@ export default class TrackMenu extends BaseMenu {
     /**
      * Handle directional and selection key events within the track menu.
      * 
-     * Aligning with Apple Human Interface Guidelines:
+     * Aligning with TV interface navigation standards:
      * - UP/DOWN cycles focus within available menu items smoothly.
      * - In sub-menus (Secondary Subtitles), BACK/LEFT/RIGHT returns cleanly to the parent level
      *   (Primary Subtitles) rather than unexpectedly closing the menu to the main OSD.

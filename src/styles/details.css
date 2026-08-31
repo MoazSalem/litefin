@@ -828,6 +828,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     -webkit-border-radius: var(--jf-border-radius);
     overflow: hidden;
     background-clip: padding-box;
+    background-color: transparent;
+    transition: background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .details-rich-meta:focus,
@@ -1127,14 +1129,13 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     font-size: 2.2rem;
 }
 
-/* Person Page Actions (Favorite) */
+/* Person Page Actions (Favorite, Seerr) */
 .person-actions-row {
     margin-top: 24px;
     margin-bottom: 24px;
     display: flex;
     align-items: center;
-    /* REDUNDANT: Container level */
-    /* transform: translateZ(0); */
+    gap: 16px;
 }
 
 /*
@@ -1212,4 +1213,84 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 
 .btn-icon-text.active .icon svg {
     fill: currentColor;
+}
+
+/* ============================================================================
+ * Seerr Person Page Tab Switcher & Grid Sizing
+ * ============================================================================ */
+.person-tab-switcher-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-top: 16px;
+    margin-bottom: 24px;
+}
+
+.person-tab-switcher {
+    display: inline-flex;
+    align-items: center;
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
+    border-radius: var(--jf-border-radius-lg, 16px);
+    padding: 4px;
+    gap: 6px;
+    height: 60px;
+    box-sizing: border-box;
+}
+
+[dir="rtl"] .person-tab-switcher {
+    margin-left: 0;
+}
+
+.person-tab-btn {
+    height: 48px;
+    padding: 0 28px;
+    border-radius: var(--jf-border-radius, 12px);
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+}
+
+.person-tab-btn.active {
+    background: var(--jf-accent, #00a4dc);
+    color: var(--jf-accent-content-color, #ffffff);
+    font-weight: 700;
+}
+
+.person-tab-btn:focus,
+.person-tab-btn.focused {
+    outline: 3px solid var(--jf-accent, #00a4dc) !important;
+    outline-offset: 2px;
+    transform: scale(1.03);
+}
+
+.person-tab-btn.active:focus,
+.person-tab-btn.active.focused {
+    outline: 3px solid #ffffff !important;
+    outline-offset: 2px;
+}
+
+/* 9 items per row on Seerr Person Grids */
+.person-grid.seerr-person-grid .media-card {
+    width: calc(11.111% - 16px) !important; /* 100% / 9 items per row */
+    margin-right: 8px !important;
+    margin-left: 8px !important;
+    margin-bottom: 24px !important;
+    flex: none !important;
+    max-width: unset !important;
+    min-width: 0 !important;
+}
+
+.person-grid.seerr-person-grid .card-image {
+    width: 100%;
+    height: 270px; /* Scaled proportionally for 9 items per row (2:3 aspect ratio) */
 }

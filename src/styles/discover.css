@@ -1,0 +1,503 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Discover Page and Status Badges
+ * ============================================================================
+ */
+
+/* ========================================================================
+   Seerr Card Top-Left Media Type Badges (MOVIE / SERIES)
+   ======================================================================== */
+
+.seerr-type-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 8;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+    text-transform: uppercase;
+    line-height: 1.3;
+}
+
+.seerr-type-badge--movie {
+    background-color: rgba(37, 80, 183, 0.7);
+}
+
+.seerr-type-badge--series {
+    background-color: rgba(107, 33, 168, 0.7);
+}
+
+/* ========================================================================
+   Seerr Card Top-Right Status Icons (Requested & Available)
+   ======================================================================== */
+
+.seerr-card-icon {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 8;
+}
+
+.seerr-card-icon svg {
+    width: 23px;
+    height: 23px;
+}
+
+.seerr-card-icon--requested {
+    background-color: rgba(21, 32, 125, 0.7);
+    color: #bdd7fc;
+}
+
+.seerr-card-icon--partial {
+    background-color: rgba(87, 141, 89, 0.7);
+    color: #c7f6d1;
+}
+
+.seerr-card-icon--available {
+    background-color: rgba(87, 141, 89, 0.7);
+    color: #c7f6d1;
+}
+
+/* ========================================================================
+   Seerr Network & Studio Logo Cards (Dark Slate Pill Container with Logo)
+   ======================================================================== */
+
+.media-card.seerr-logo-card .card-image,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image {
+    background: #181d28 !important;
+    background-color: #181d28 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, border-color 0.2s ease !important;
+}
+
+.media-card.seerr-logo-card .card-image img,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card .card-image img,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image img {
+    object-fit: contain !important;
+    padding: 40px 80px !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+}
+
+/* Hide type badges & overlays on network/studio logo cards and genre cards */
+.media-card.seerr-logo-card .seerr-type-badge,
+.media-card.seerr-genre-card .seerr-type-badge,
+.media-card.seerr-logo-card .card-image-tint,
+.media-card.seerr-logo-card .card-overlay-tint {
+    display: none !important;
+}
+
+/* Hide title and subtitle labels under network, studio, and genre cards */
+.media-card.seerr-logo-card .card-info,
+.media-card.seerr-genre-card .card-info {
+    display: none !important;
+}
+
+/* Focus and Hover state for Logo Cards */
+.media-card.seerr-logo-card:focus .card-image,
+.media-card.seerr-logo-card.focused .card-image,
+.media-card.seerr-logo-card:hover .card-image,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:focus .card-image,
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-image {
+    background: #232a3b !important;
+    background-color: #232a3b !important;
+    border-color: rgba(255, 255, 255, 0.9) !important;
+    transform: scale(1.04) !important;
+}
+
+/* ========================================================================
+   Seerr Genre Cards (Landscape with Backdrop Image & Centered Overlay Title)
+   ======================================================================== */
+
+.media-card.seerr-genre-card .card-image {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+.media-card.seerr-genre-card .card-image img {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.media-card.seerr-genre-card:focus .card-image img,
+.media-card.seerr-genre-card.focused .card-image img,
+.media-card.seerr-genre-card:hover .card-image img {
+    transform: scale(1.05) !important;
+}
+
+/* ========================================================================
+   Reduced spacing for rows without card titles below cards (Genres, Studios, Networks)
+   ======================================================================== */
+
+.media-row.media-row--no-card-labels,
+.media-row[data-row-id="genreMovies"],
+.media-row[data-row-id="studios"],
+.media-row[data-row-id="genreSeries"],
+.media-row[data-row-id="networks"] {
+    margin-bottom: 0px !important;
+}
+
+/* ========================================================================
+   Discover page
+   ======================================================================== */
+
+.discover-content {
+    padding: 0 60px;
+}
+
+.discover-controls {
+    padding: 24px 0 8px;
+}
+
+.discover-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    min-height: 40vh;
+    color: var(--jf-text-secondary);
+    text-align: center;
+}
+
+.discover-message .discover-message-actions {
+    display: flex;
+    gap: 16px;
+}
+
+/* ========================================================================
+   Seerr details page action buttons (transparent unfocused, colored focused)
+   ======================================================================== */
+
+.seerr-details-page .details-actions .btn {
+    background: transparent !important;
+    border: 2px solid rgba(255, 255, 255, 0.25) !important;
+    color: var(--jf-text-primary, #ffffff) !important;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.seerr-details-page .details-actions .btn:hover,
+.seerr-details-page .details-actions .btn:focus,
+.seerr-details-page .details-actions .btn.focused {
+    background: var(--jf-btn-primary-bg, var(--jf-accent, #00a4dc)) !important;
+    border-color: var(--jf-btn-primary-border, var(--jf-accent, #00a4dc)) !important;
+    color: var(--jf-btn-primary-color, #ffffff) !important;
+    transform: scale(1.05);
+    outline: none !important;
+}
+
+.seerr-details-page .details-actions .btn svg {
+    margin-right: 10px;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.seerr-rating-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 1.3rem;
+    color: var(--jf-text-primary, #ffffff);
+}
+
+.seerr-rating-icon {
+    height: 28px;
+    width: auto;
+    max-width: 44px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.seerr-meta-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 4px 10px;
+    border-radius: var(--jf-border-radius, 8px);
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+}
+
+/* ========================================================================
+   Request modal
+   ======================================================================== */
+
+.seerr-modal-body {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.seerr-item-title {
+    color: var(--jf-text-primary);
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 12px;
+    margin-left: 6px;
+}
+
+.seerr-modal-status {
+    color: var(--jf-accent);
+    font-weight: 600;
+    margin-bottom: 15px;
+    margin-left: 6px;
+}
+
+.seerr-request-options {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.seerr-request-as-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.seerr-option-label {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--jf-text-primary, #ffffff);
+    margin-left: 2px;
+}
+
+.seerr-user-select-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--jf-border-radius, 8px);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.seerr-user-select-btn.focused {
+    border-color: var(--jf-accent, #00a4dc);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.seerr-user-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.seerr-user-avatar-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.15);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.seerr-user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.seerr-avatar-icon {
+    width: 20px;
+    height: 20px;
+    fill: rgba(255, 255, 255, 0.7);
+}
+
+.seerr-user-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.seerr-user-email {
+    color: var(--jf-text-secondary, #a0a0a0);
+    font-weight: 400;
+    margin-left: 6px;
+}
+
+.seerr-chevron-icon {
+    color: var(--jf-text-secondary, #a0a0a0);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.seerr-user-choice-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 10px 16px;
+    text-align: left;
+    border-radius: var(--jf-border-radius, 8px);
+}
+
+.seerr-user-check {
+    width: 20px;
+    font-weight: 700;
+    color: var(--jf-accent, #00a4dc);
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.seerr-user-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.seerr-user-name {
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+}
+
+.seerr-user-sub {
+    color: var(--jf-text-secondary, #a0a0a0);
+    font-weight: 400;
+}
+
+.seerr-option-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+}
+
+.seerr-option-value {
+    color: var(--jf-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.seerr-season-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 14px 20px;
+    margin-bottom: 8px;
+    border: 2px solid transparent;
+    border-radius: var(--jf-border-radius, 8px);
+    background: var(--jf-card-bg, rgba(255, 255, 255, 0.06));
+    color: var(--jf-text-primary);
+    font-size: 1.15rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.seerr-season-name {
+    font-size: 1.05em;
+    font-weight: 600;
+}
+
+.seerr-season-row.focused {
+    border-color: var(--jf-accent);
+}
+
+.seerr-season-row.is-selected {
+    background: var(--jf-accent);
+    color: var(--jf-accent-content-color, #ffffff);
+}
+
+.seerr-season-row.is-locked {
+    opacity: 0.55;
+}
+
+.seerr-season-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: inherit;
+    font-size: 0.95em;
+    opacity: 0.95;
+}
+
+.seerr-season-badge {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 0.9em;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+/* Status 0 (Not Requested): Neutral pill */
+.seerr-season-badge--0,
+.seerr-season-badge--1 {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* Status 2 (Requested), 3 (Processing), 4 (Partially Available): Accent blue pill */
+.seerr-season-badge--2,
+.seerr-season-badge--3,
+.seerr-season-badge--4 {
+    background: rgba(0, 164, 220, 0.25);
+    color: #64b5f6;
+}
+
+/* Status 5 (Available): Green pill */
+.seerr-season-badge--5 {
+    background: rgba(76, 175, 80, 0.25);
+    color: #81c784;
+}
+
+/* Status 6 (Deleted): Orange pill */
+.seerr-season-badge--6 {
+    background: rgba(255, 152, 0, 0.25);
+    color: #ffb74d;
+}
+
+.seerr-season-error {
+    color: #ff5252;
+    font-size: 0.9em;
+    font-weight: 600;
+    margin-top: 10px;
+    padding: 10px 14px;
+    border-radius: var(--jf-border-radius, 6px);
+    background: rgba(255, 82, 82, 0.15);
+    border: 1px solid rgba(255, 82, 82, 0.35);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

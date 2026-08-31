@@ -20,6 +20,19 @@ import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
+import { seerr } from '../api/seerrClient.js';
+import {
+    getGenreNameById,
+    getGenreMediaType,
+    getStudioNameById,
+    getNetworkNameById,
+    getLanguageNameById,
+    MOVIE_GENRES_FALLBACK,
+    TV_GENRES_FALLBACK,
+    SEERR_LANGUAGES,
+    SEERR_MOVIE_CERTIFICATIONS,
+    SEERR_TV_CERTIFICATIONS
+} from '../utils/seerrGenres.js';
 
 const log = logger.create('Library');
 
@@ -280,10 +293,41 @@ class LibraryPage extends Page {
         this.setLoading(true);
         this.state.libraryId = this.params.id;
 
-        // Special handling for 'virtual' library IDs (e.g. 'all' for search expansion)
+        // Special handling for 'virtual' library IDs (e.g. 'all' for search expansion, 'seerr' for Seerr discovery)
         const isVirtualLibrary = this.state.libraryId === 'all';
+        const isSeerrLibrary = this.state.libraryId === 'seerr';
 
-        if (!isVirtualLibrary) {
+        if (this.params.page) {
+            const pageNum = parseInt(this.params.page, 10);
+            if (!isNaN(pageNum) && pageNum > 0) {
+                const pageLimit = isSeerrLibrary ? 100 : this.state.limit;
+                this.state.startIndex = (pageNum - 1) * pageLimit;
+            }
+        }
+
+        if (isSeerrLibrary) {
+            const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
+            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            let seerrTitle = this.params.name ? decodeURIComponent(this.params.name) : '';
+            const gId = this.params.genreId || this.params.genre;
+            if (!seerrTitle) {
+                const sId = this.params.studioId || this.params.studio;
+                const nId = this.params.networkId || this.params.network;
+                if (gId) seerrTitle = getGenreNameById(gId, mediaType) || i18n.t('HeaderGenre') || 'Genre';
+                else if (sId) seerrTitle = getStudioNameById(sId) || i18n.t('HeaderStudio') || 'Studio';
+                else if (nId) seerrTitle = getNetworkNameById(nId) || i18n.t('Network') || 'Network';
+                else seerrTitle = i18n.t('Discover') || 'Discover';
+            }
+            if (gId && !this.state.filters.genre) {
+                this.state.filters.genre = gId.toString();
+            }
+            this.state.libraryInfo = {
+                Name: seerrTitle,
+                CollectionType: 'seerr'
+            };
+            this.$('#library-title').textContent = seerrTitle;
+            this.title = seerrTitle;
+        } else if (!isVirtualLibrary) {
             await this._fetchLibraryInfo();
         } else {
             // Setup default state for virtual library
@@ -518,6 +562,11 @@ class LibraryPage extends Page {
         // Build an async task that resolves the human-readable title from the server.
         // Year and tag don't need a network call and resolve synchronously.
         const infoFetchPromise = (async () => {
+            // Seerr virtual libraries resolve titles locally and must not call api.getItem()
+            if (this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr') {
+                return;
+            }
+
             if (this.params.genreId) {
                 try {
                     // Fetch basic item and fail gracefully (MusicGenres often 404 on raw getItem)
@@ -735,9 +784,11 @@ class LibraryPage extends Page {
         const parts = [`library:state:${this.params.id}`];
         if (this.params.genreId) parts.push(`genre:${this.params.genreId}`);
         if (this.params.studioId) parts.push(`studio:${this.params.studioId}`);
+        if (this.params.networkId) parts.push(`network:${this.params.networkId}`);
         if (this.params.year) parts.push(`year:${this.params.year}`);
         if (this.params.personId) parts.push(`person:${this.params.personId}`);
         if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
+        if (this.params.page) parts.push(`page:${this.params.page}`);
         return parts.join(':');
     }
 
@@ -879,6 +930,96 @@ class LibraryPage extends Page {
 
     async _loadItems() {
         this.setLoading(true);
+
+        // Special handling for Seerr discovery library
+        if (this.state.libraryId === 'seerr') {
+            const seerrType = this.params.seerrType;
+            const rawMediaType = this.params.mediaType || (seerrType === 'network' ? 'tv' : 'movie');
+            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            const selectedGenre =
+                this.state.filters.genre !== undefined
+                    ? this.state.filters.genre
+                    : this.params.genreId || this.params.genre;
+            const genreId = selectedGenre;
+            const language =
+                this.state.filters.language !== undefined
+                    ? this.state.filters.language
+                    : this.params.language;
+            const certification =
+                this.state.filters.certification !== undefined
+                    ? this.state.filters.certification
+                    : this.params.certification;
+            const studioId = this.params.studioId || this.params.studio;
+            const networkId = this.params.networkId || this.params.network;
+            const keywordId = this.params.keywordId || this.params.keywords || this.params.keyword;
+
+            // Dynamically update title if genre filter changed
+            if (selectedGenre) {
+                const genreIds = selectedGenre.split(',').filter(Boolean);
+                if (genreIds.length === 1) {
+                    const gName = getGenreNameById(genreIds[0], mediaType);
+                    if (gName) {
+                        this.$('#library-title').textContent = gName;
+                        this.title = gName;
+                    }
+                } else if (genreIds.length > 1) {
+                    const names = genreIds.map((id) => getGenreNameById(id, mediaType)).filter(Boolean);
+                    const titleStr = names.join(' & ');
+                    this.$('#library-title').textContent = titleStr || i18n.t('Genres') || 'Genres';
+                    this.title = titleStr || i18n.t('Genres') || 'Genres';
+                }
+            }
+
+            // Calculate active page for Seerr request (each page contains 100 items merged from 5 upstream pages)
+            const seerrPage = Math.floor(this.state.startIndex / 100) + 1;
+            const sortField = this.state.sortBy || 'popularity';
+            const sortDir = (this.state.sortOrder || 'Descending').toLowerCase().startsWith('asc') ? 'asc' : 'desc';
+            // Only send sortBy parameter if it differs from the upstream default (popularity.desc)
+            const seerrSortBy = (sortField === 'popularity' && sortDir === 'desc') ? null : `${sortField}.${sortDir}`;
+
+            let items = [];
+            try {
+                if (seerrType === 'keyword' || seerrType === 'tag' || keywordId) {
+                    if (mediaType === 'tv') {
+                        items = await seerr.discoverTv(seerrPage, { keywords: keywordId, genre: genreId, language, certification, sortBy: seerrSortBy });
+                    } else {
+                        items = await seerr.discoverMovies(seerrPage, { keywords: keywordId, genre: genreId, language, certification, sortBy: seerrSortBy });
+                    }
+                } else if (genreId || language || certification || seerrType === 'genre') {
+                    if (mediaType === 'tv') {
+                        items = await seerr.discoverTv(seerrPage, { genre: genreId, language, certification, sortBy: seerrSortBy });
+                    } else {
+                        items = await seerr.discoverMovies(seerrPage, { genre: genreId, language, certification, sortBy: seerrSortBy });
+                    }
+                } else if (seerrType === 'studio' || studioId) {
+                    items = await seerr.moviesByStudio(studioId, seerrPage);
+                } else if (seerrType === 'network' || networkId) {
+                    items = await seerr.tvByNetwork(networkId, seerrPage);
+                } else {
+                    if (mediaType === 'tv') {
+                        items = await seerr.discoverTv(seerrPage, { language, certification, sortBy: seerrSortBy });
+                    } else {
+                        items = await seerr.discoverMovies(seerrPage, { language, certification, sortBy: seerrSortBy });
+                    }
+                }
+            } catch (err) {
+                log.error('Failed to load Seerr category items', err);
+                items = [];
+            }
+
+            this.state.items = items || [];
+            this.state.limit = 100;
+            this.state.totalRecordCount = items.totalResults || (items.totalPages ? items.totalPages * 100 : (items.length ? (seerrPage + 1) * 100 : 0));
+
+            const grid = this.$('#library-grid');
+            if (grid) {
+                grid.style.display = '';
+                this._renderGrid(this.state.items);
+            }
+            this._updatePaginationUI();
+            this.setLoading(false);
+            return;
+        }
 
         // Capture starting viewType to prevent race conditions
         const capturedViewType = this.state.viewType;
@@ -1730,20 +1871,20 @@ class LibraryPage extends Page {
             }
         }
 
-        if (this._isSubView()) {
-            // Sub-views always reset to the poster default rather than inheriting
-            // whatever the parent library is configured to — avoids confusing layouts
-            // when drilling into genres/studios/persons.
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        if (this._isSubView() && !isSeerr) {
+            // Sub-views for standard Jellyfin libraries always reset to poster default
             this.state.viewMode = 'poster';
             return;
         }
 
-        const storageKey = `pref:library:viewMode:${this.state.libraryId}`;
+        const storageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
         const saved = storage.getItem(storageKey);
 
         if (saved) {
             // Validate the value is still a known picker option (guards against stale data)
-            const validModes = ['poster', 'small-poster', 'thumb', 'banner', 'list'];
+            const validModes = isSeerr ? ['poster', 'small-poster'] : ['poster', 'small-poster', 'thumb', 'banner', 'list'];
             this.state.viewMode = validModes.includes(saved) ? saved : 'poster';
         } else {
             // No preference saved — universal default is 'poster'.
@@ -1761,11 +1902,13 @@ class LibraryPage extends Page {
          * custom column counts selected for this viewMode.
          * =========================================================================
          */
-        const modeKey = `pref:library:gridMode:${this.state.libraryId}`;
+        const modeKey = isSeerr ? 'pref:seerr:gridMode' : `pref:library:gridMode:${this.state.libraryId}`;
         const savedMode = storage.getItem(modeKey);
         this.state.gridMode = savedMode === 'static' ? 'static' : 'dynamic';
 
-        const colsKey = `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewMode}`;
+        const colsKey = isSeerr
+            ? `pref:seerr:gridColumns:${this.state.viewMode}`
+            : `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewMode}`;
         const savedCols = parseInt(storage.getItem(colsKey), 10);
         this.state.gridColumns = !isNaN(savedCols) ? savedCols : this._getDefaultColumnsForMode(this.state.viewMode);
     }
@@ -1775,11 +1918,19 @@ class LibraryPage extends Page {
             return; // Sub-views should fallback to defaults
         }
 
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
         const sortByKey = `pref:library:sortBy:${this.state.libraryId}`;
         const sortOrderKey = `pref:library:sortOrder:${this.state.libraryId}`;
 
         const savedSortBy = storage.getItem(sortByKey);
         const savedSortOrder = storage.getItem(sortOrderKey);
+
+        if (isSeerr) {
+            const validSeerrSorts = ['popularity', 'release_date', 'first_air_date', 'vote_average', 'original_title'];
+            this.state.sortBy = savedSortBy && validSeerrSorts.includes(savedSortBy) ? savedSortBy : 'popularity';
+            this.state.sortOrder = savedSortOrder || 'Descending';
+            return;
+        }
 
         if (savedSortBy) {
             this.state.sortBy = savedSortBy;
@@ -2528,11 +2679,13 @@ class LibraryPage extends Page {
                     isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
                     type: this.state.viewMode === 'banner' ? 'banner' : resolvedCardType,
                     contextType:
-                        this.state.viewType === 'Upcoming'
-                            ? 'upcoming'
-                            : this.state.viewType === 'Albums'
-                              ? 'music'
-                              : 'library',
+                        this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr'
+                            ? 'discover'
+                            : this.state.viewType === 'Upcoming'
+                              ? 'upcoming'
+                              : this.state.viewType === 'Albums'
+                                ? 'music'
+                                : 'library',
                     showMeta: !isLandscape && this.state.viewMode === 'list',
                     isGrid: true,
                     cardWidth: cardWidth
@@ -3487,6 +3640,13 @@ class LibraryPage extends Page {
         const itemId = card.dataset.itemId;
         if (!itemId) return;
 
+        // Special handling for Seerr items: navigate to SeerrDetailsPage
+        if (card.dataset.mediaType && card.dataset.tmdbId) {
+            log.info('Navigating to Seerr details:', card.dataset.mediaType, card.dataset.tmdbId);
+            router.navigate(`/seerr/${card.dataset.mediaType}/${card.dataset.tmdbId}`);
+            return;
+        }
+
         // Special handling for Networks view: navigate to studio-filtered library
         if (this.state.viewType === 'Networks') {
             log.debug('Navigating to Studio:', itemId);
@@ -3542,27 +3702,34 @@ class LibraryPage extends Page {
         // Bounds check
         if (newIndex < 0 || newIndex >= this.state.totalRecordCount) return;
 
-        this.state.startIndex = newIndex;
+        if (this.state.libraryId === 'seerr') {
+            const targetPage = Math.floor(newIndex / 100) + 1;
+            const currentParams = new URLSearchParams();
+            if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
+            if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
+            if (this.params.genreId || this.params.genre) currentParams.set('genreId', this.params.genreId || this.params.genre);
+            if (this.params.studioId || this.params.studio) currentParams.set('studioId', this.params.studioId || this.params.studio);
+            if (this.params.networkId || this.params.network) currentParams.set('networkId', this.params.networkId || this.params.network);
+            if (this.params.keywordId || this.params.keywords || this.params.keyword) currentParams.set('keywordId', this.params.keywordId || this.params.keywords || this.params.keyword);
+            if (this.params.name) currentParams.set('name', this.params.name);
+            currentParams.set('page', targetPage);
 
-        await this._loadItems();
-
-        // Scroll to top of grid
-        const scrollContainer = this.$('#library-scroll-container');
-        if (scrollContainer) scrollContainer.scrollTop = 0;
-
-        // Force focus to first item in grid
-        const grid = this.$('#library-grid');
-        const firstItem = grid ? grid.querySelector('.media-card') : null;
-        if (firstItem) {
-            focusManager.focusElement(firstItem);
-        } else {
-            // Fallback if empty, check if controls are visible
-            if (this.$('#library-controls')?.style.display !== 'none') {
-                this.setActiveSection('library-controls');
-            } else {
-                this.setActiveSection('library-grid');
-            }
+            router.navigate(`/library/seerr?${currentParams.toString()}`);
+            return;
         }
+
+        const targetPage = Math.floor(newIndex / this.state.limit) + 1;
+        const currentParams = new URLSearchParams();
+        if (this.params.genreId) currentParams.set('genreId', this.params.genreId);
+        if (this.params.studioId) currentParams.set('studioId', this.params.studioId);
+        if (this.params.networkId) currentParams.set('networkId', this.params.networkId);
+        if (this.params.year) currentParams.set('year', this.params.year);
+        if (this.params.personId) currentParams.set('personId', this.params.personId);
+        if (this.params.tagName) currentParams.set('tagName', this.params.tagName);
+        if (this.params.name) currentParams.set('name', this.params.name);
+        currentParams.set('page', targetPage);
+
+        router.navigate(`/library/${this.state.libraryId}?${currentParams.toString()}`);
     }
 
     // ========================================================================
@@ -3666,6 +3833,35 @@ class LibraryPage extends Page {
     }
 
     _handleSort() {
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        if (isSeerr) {
+            const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
+            const isTv = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows');
+
+            const sortOptions = isTv
+                ? [
+                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                      { label: 'OptionFirstAirDate', fallback: 'First Air Date', value: 'first_air_date' },
+                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                  ]
+                : [
+                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                      { label: 'OptionReleaseDate', fallback: 'Release Date', value: 'release_date' },
+                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                  ];
+
+            const orderOptions = [
+                { label: 'Descending', fallback: 'Descending', value: 'Descending' },
+                { label: 'Ascending', fallback: 'Ascending', value: 'Ascending' }
+            ];
+
+            this._renderSortModal(sortOptions, orderOptions);
+            return;
+        }
+
         // Define Order Options (Common)
         const orderOptions = [
             { label: 'Ascending', value: 'Ascending' },
@@ -3773,7 +3969,9 @@ class LibraryPage extends Page {
                 .join('');
         };
 
-        const modes = [
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        const allModes = [
             {
                 value: 'poster',
                 label: 'ViewModePoster',
@@ -3831,6 +4029,11 @@ class LibraryPage extends Page {
                 </svg>`
             }
         ];
+
+        // For Seerr discovery, limit view mode options to Poster and Small Poster
+        const modes = isSeerr
+            ? allModes.filter((m) => m.value === 'poster' || m.value === 'small-poster')
+            : allModes;
 
         const updateModalUI = () => {
             const hasGridOptions = tempMode !== 'list';
@@ -3967,7 +4170,9 @@ class LibraryPage extends Page {
 
                 // When switching modes, check if we need to load columns default value
                 const defaultCols = this._getDefaultColumnsForMode(tempMode);
-                const colsKey = `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
+                const colsKey = isSeerr
+                    ? `pref:seerr:gridColumns:${tempMode}`
+                    : `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
                 const savedCols = parseInt(storage.getItem(colsKey), 10);
                 tempColumns = !isNaN(savedCols) ? savedCols : defaultCols;
 
@@ -3998,9 +4203,15 @@ class LibraryPage extends Page {
             this.state.gridColumns = tempColumns;
 
             // Persist to local storage
-            storage.setItem(`pref:library:viewMode:${this.state.libraryId}`, tempMode);
-            storage.setItem(`pref:library:gridMode:${this.state.libraryId}`, tempGridMode);
-            storage.setItem(`pref:library:gridColumns:${this.state.libraryId}:${tempMode}`, tempColumns);
+            if (isSeerr) {
+                storage.setItem('pref:seerr:viewMode', tempMode);
+                storage.setItem('pref:seerr:gridMode', tempGridMode);
+                storage.setItem(`pref:seerr:gridColumns:${tempMode}`, tempColumns);
+            } else {
+                storage.setItem(`pref:library:viewMode:${this.state.libraryId}`, tempMode);
+                storage.setItem(`pref:library:gridMode:${this.state.libraryId}`, tempGridMode);
+                storage.setItem(`pref:library:gridColumns:${this.state.libraryId}:${tempMode}`, tempColumns);
+            }
 
             // Re-fetch items with the aligned limit for the new column count,
             // so every row renders full (no partial last row).
@@ -4049,7 +4260,7 @@ class LibraryPage extends Page {
                                         data-value="${opt.value}"
                                         tabindex="0">
                                     <div class="radio-icon"></div>
-                                    <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
+                                    <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
                                 )
@@ -4069,7 +4280,7 @@ class LibraryPage extends Page {
                                         data-value="${opt.value}"
                                         tabindex="0">
                                     <div class="radio-icon"></div>
-                                    <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
+                                    <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
                                 )
@@ -4186,6 +4397,66 @@ class LibraryPage extends Page {
     }
 
     async _handleFilter() {
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        if (isSeerr) {
+            const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
+            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            const isTv = mediaType === 'tv';
+            // Strictly show movie genres for movies, and TV genres for series
+            const genreList = isTv ? TV_GENRES_FALLBACK : MOVIE_GENRES_FALLBACK;
+            const certList = isTv ? SEERR_TV_CERTIFICATIONS : SEERR_MOVIE_CERTIFICATIONS;
+
+            const currentGenre =
+                this.state.filters.genre !== undefined
+                    ? this.state.filters.genre
+                    : this.params.genreId || this.params.genre;
+
+            // Ensure current selected genre(s) from params or state are recognized
+            if (this.state.filters.genre === undefined && currentGenre) {
+                this.state.filters.genre = currentGenre.toString();
+            }
+
+            const currentLanguage =
+                this.state.filters.language !== undefined
+                    ? this.state.filters.language
+                    : this.params.language;
+
+            if (this.state.filters.language === undefined && currentLanguage) {
+                this.state.filters.language = currentLanguage.toString();
+            }
+
+            const currentCertification =
+                this.state.filters.certification !== undefined
+                    ? this.state.filters.certification
+                    : this.params.certification;
+
+            if (this.state.filters.certification === undefined && currentCertification) {
+                this.state.filters.certification = currentCertification.toString();
+            }
+
+            const filtersData = {
+                Genres: genreList.map((g) => ({
+                    label: g.name,
+                    value: g.id.toString(),
+                    type: 'multi'
+                })),
+                Languages: SEERR_LANGUAGES.map((l) => ({
+                    label: l.name,
+                    value: l.id,
+                    type: 'multi'
+                })),
+                Certifications: certList.map((c) => ({
+                    label: c.name,
+                    value: c.id,
+                    type: 'multi'
+                }))
+            };
+
+            this._renderFilterModal(filtersData);
+            return;
+        }
+
         // 1. Fetch Dynamic Filters
         // We need ParentId and IncludeItemTypes from current params/state
         // Fix: Use libraryInfo or derive types.
@@ -4226,71 +4497,108 @@ class LibraryPage extends Page {
         this._prevFocus = focusManager.getFocused();
         this._prevSection = focusManager.getActiveSection();
 
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
         const isMusic = this.state.libraryInfo?.CollectionType === 'music';
 
+        const genreItems = Array.isArray(data?.Genres)
+            ? data.Genres.map((g) => (typeof g === 'object' ? g : { label: g, value: g, type: 'multi' }))
+            : [];
+
+        const languageItems = Array.isArray(data?.Languages)
+            ? data.Languages.map((l) => (typeof l === 'object' ? l : { label: l, value: l, type: 'multi' }))
+            : [];
+
+        const certificationItems = Array.isArray(data?.Certifications)
+            ? data.Certifications.map((c) => (typeof c === 'object' ? c : { label: c, value: c, type: 'multi' }))
+            : [];
+
         // Sections Definition
-        const sections = [
-            {
-                title: 'Filters',
-                id: 'sec-filters',
-                items: [
-                    { label: 'Played', key: 'IsPlayed', type: 'boolean' },
-                    { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
-                    { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
-                    { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
-                ]
-            },
-            {
-                title: 'Features',
-                id: 'sec-features',
-                hidden: isMusic, // Hide video features for music
-                items: [
-                    { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
-                    { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
-                    { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
-                    { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
-                    { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
-                ]
-            },
-            {
-                title: 'Genres',
-                id: 'sec-genres',
-                itemKey: 'Genres', // Key in state
-                items: data.Genres.map((g) => ({ label: g, value: g, type: 'multi' }))
-            },
-            {
-                title: 'HeaderParentalRatings',
-                id: 'sec-ratings',
-                itemKey: 'OfficialRatings',
-                items: data.OfficialRatings.map((r) => ({ label: r, value: r, type: 'multi' }))
-            },
-            {
-                title: 'Tags',
-                id: 'sec-tags',
-                itemKey: 'Tags',
-                items: data.Tags.map((t) => ({ label: t, value: t, type: 'multi' }))
-            },
-            {
-                title: 'HeaderVideoTypes',
-                id: 'sec-videotypes',
-                hidden: isMusic, // Hide video types for music
-                itemKey: 'VideoTypes', // Comma list
-                items: [
-                    { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
-                    { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
-                    { label: 'Option4K', key: 'Is4K', type: 'boolean' },
-                    { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
-                    { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
-                    { label: 'Option3D', key: 'Is3D', type: 'boolean' }
-                ]
-            },
-            {
-                title: 'HeaderYears',
-                id: 'sec-years',
-                itemKey: 'Years',
-                items: data.Years.map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
-            }
-        ];
+        const sections = isSeerr
+            ? [
+                  {
+                      title: 'Genres',
+                      id: 'sec-genres',
+                      itemKey: 'genre', // Key in state.filters for Seerr
+                      separator: ',',
+                      items: genreItems
+                  },
+                  {
+                      title: 'OriginalLanguage',
+                      id: 'sec-languages',
+                      itemKey: 'language', // Key in state.filters for Seerr
+                      separator: '|', // Pipe-separated ISO codes for Seerr/TMDB e.g. ar|zh
+                      items: languageItems
+                  },
+                  {
+                      title: 'ContentRating',
+                      id: 'sec-certifications',
+                      itemKey: 'certification', // Key in state.filters for Seerr
+                      separator: '|', // Pipe-separated certification values e.g. NR|G|PG-13
+                      items: certificationItems
+                  }
+              ]
+            : [
+                  {
+                      title: 'Filters',
+                      id: 'sec-filters',
+                      items: [
+                          { label: 'Played', key: 'IsPlayed', type: 'boolean' },
+                          { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
+                          { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
+                          { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'Features',
+                      id: 'sec-features',
+                      hidden: isMusic, // Hide video features for music
+                      items: [
+                          { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
+                          { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
+                          { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
+                          { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
+                          { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'Genres',
+                      id: 'sec-genres',
+                      itemKey: 'Genres', // Key in state
+                      items: genreItems
+                  },
+                  {
+                      title: 'HeaderParentalRatings',
+                      id: 'sec-ratings',
+                      itemKey: 'OfficialRatings',
+                      items: (data?.OfficialRatings || []).map((r) => ({ label: r, value: r, type: 'multi' }))
+                  },
+                  {
+                      title: 'Tags',
+                      id: 'sec-tags',
+                      itemKey: 'Tags',
+                      items: (data?.Tags || []).map((t) => ({ label: t, value: t, type: 'multi' }))
+                  },
+                  {
+                      title: 'HeaderVideoTypes',
+                      id: 'sec-videotypes',
+                      hidden: isMusic, // Hide video types for music
+                      itemKey: 'VideoTypes', // Comma list
+                      items: [
+                          { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
+                          { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
+                          { label: 'Option4K', key: 'Is4K', type: 'boolean' },
+                          { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
+                          { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
+                          { label: 'Option3D', key: 'Is3D', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'HeaderYears',
+                      id: 'sec-years',
+                      itemKey: 'Years',
+                      items: (data?.Years || []).map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
+                  }
+              ];
 
         // Filter out empty and hidden sections
         const validSections = sections.filter((s) => s.items.length > 0 && !s.hidden);
@@ -4400,7 +4708,8 @@ class LibraryPage extends Page {
                         } else {
                             const stored = this.state.filters[section.itemKey];
                             if (stored) {
-                                const arr = stored.split(',');
+                                const sep = section.separator || (section.itemKey === 'language' || section.itemKey === 'certification' ? '|' : ',');
+                                const arr = stored.split(sep);
                                 checked = arr.includes(item.value);
                             }
                         }
@@ -4520,11 +4829,13 @@ class LibraryPage extends Page {
                     if (key === 'IsUnplayed' && !isSelected) delete this.state.filters['IsPlayed'];
                 }
             } else {
-                let current = this.state.filters[key] ? this.state.filters[key].split(',') : [];
+                const section = validSections.find((s) => s.itemKey === key || s.id === this.state.activeFilterSection);
+                const sep = section?.separator || (key === 'language' || key === 'certification' ? '|' : ',');
+                let current = this.state.filters[key] ? this.state.filters[key].split(sep).filter(Boolean) : [];
                 if (!isSelected) current.push(val);
                 else current = current.filter((v) => v !== val);
 
-                if (current.length > 0) this.state.filters[key] = current.join(',');
+                if (current.length > 0) this.state.filters[key] = current.join(sep);
                 else delete this.state.filters[key];
             }
 
@@ -4773,7 +5084,9 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType;
         const viewType = this.state.viewType;
 
-        // Condition: only show for Movies (Items), TV Shows (Items), Episodes, and music grid views
+        const isSeerr = collectionType === 'seerr' || this.state.libraryId === 'seerr';
+
+        // Condition: only show for Movies (Items), TV Shows (Items), Episodes, music grid views, and Seerr
         const isMovieMain = collectionType === 'movies' && viewType === 'Items';
         const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
         const isEpisodes = viewType === 'Episodes';
@@ -4797,26 +5110,39 @@ class LibraryPage extends Page {
             (viewType === 'Items' || viewType === 'Folders');
 
         const shouldShow =
-            isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
+            isSeerr || isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
 
         const isSubView = this._isSubView();
         const isSubFolder = this.state.isSubFolder;
 
-        // Controls and Alpha Picker should be visible in main views, sub-views (Genre/Person),
-        // or when navigating into sub-folders.
+        // Controls should be visible in main views, sub-views (Genre/Person), Seerr, or sub-folders
         const isControlsVisible = shouldShow || isSubView || isSubFolder;
-        const isAlphaVisible = shouldShow || isSubView || isSubFolder;
+        // Alpha Picker is hidden for Seerr
+        const isAlphaVisible = !isSeerr && (shouldShow || isSubView || isSubFolder);
 
         const isCollectionsLike = collectionType === 'boxsets' || collectionType === 'playlists';
-        const isTabsVisible = !isCollectionsLike && !isSubView;
+        const isTabsVisible = !isSeerr && !isCollectionsLike && !isSubView;
 
         const controls = this.$('#library-controls');
         const controlsRow = this.$('.library-controls-row');
         const alphaPicker = this.$('#alpha-picker-container');
         const tabsContainer = this.$('#library-tabs');
+        const shuffleBtn = this.$('#btn-shuffle');
+        const filterBtn = this.$('#btn-filter');
+        const sortBtn = this.$('#btn-sort');
+        const isStudioOrNetwork =
+            this.params.seerrType === 'studio' ||
+            this.params.seerrType === 'network' ||
+            !!this.params.studioId ||
+            !!this.params.networkId;
 
         if (controlsRow) controlsRow.style.display = isControlsVisible ? 'flex' : 'none';
+        if (controls) controls.style.display = isControlsVisible ? 'flex' : 'none';
         if (alphaPicker) alphaPicker.style.display = isAlphaVisible ? 'flex' : 'none';
+        if (tabsContainer) tabsContainer.style.display = isTabsVisible ? 'flex' : 'none';
+        if (shuffleBtn) shuffleBtn.style.display = isSeerr ? 'none' : '';
+        if (filterBtn) filterBtn.style.display = isSeerr && isStudioOrNetwork ? 'none' : '';
+        if (sortBtn) sortBtn.style.display = isSeerr && isStudioOrNetwork ? 'none' : '';
 
         // 1. Configure Tabs (if visible)
         if (tabsContainer && isTabsVisible) {

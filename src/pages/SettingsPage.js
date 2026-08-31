@@ -32,6 +32,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { seerr } from '../api/seerrClient.js';
 import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('SettingsPage');
@@ -262,10 +263,58 @@ class SettingsPage extends Page {
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title">${i18n.t('Plugins')}</h2>
+
+                <!-- Server Seerr Status Section (above installed plugins) -->
+                <h3 class="setting-section-title">${i18n.t('SeerrServerStatusTitle', ['Seerr Server Integration'])}</h3>
+                <div class="setting-item" id="seerr-status-card">
+                    <div class="setting-label">
+                        <span class="setting-name">
+                            ${i18n.t('SeerrStatusLabel', ['Seerr Integration State'])}
+                            <span id="seerr-status-badge" class="plugin-status plugin-status--pending">Probing...</span>
+                        </span>
+                        <span class="setting-description" id="seerr-status-description">
+                            Probing server plugin status...
+                        </span>
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title">${i18n.t('InstalledPlugins', ['Installed Plugins'])}</h3>
                 ${content}
             </div>
         `;
+    }
+
+    /** Queries the Litefin server plugin to reflect the Seerr integration state in the Plugins tab. */
+    async _refreshSeerrStatus() {
+        const badgeEl = this.$('#seerr-status-badge');
+        const descEl = this.$('#seerr-status-description');
+        if (!badgeEl || !descEl) return;
+
+        try {
+            const status = await seerr.status(true);
+            if (status.configured && status.available) {
+                badgeEl.className = 'plugin-status plugin-status--active';
+                badgeEl.textContent = i18n.t('ConfiguredAndConnected', ['Configured & Connected']);
+                descEl.textContent = i18n.t('SeerrStatusConnectedDesc', ['Litefin plugin is installed on the Jellyfin server and connected to Seerr.']);
+            } else if (status.configured && !status.available) {
+                badgeEl.className = 'plugin-status plugin-status--disabled';
+                badgeEl.textContent = i18n.t('ServerUnreachable', ['Server Unreachable']);
+                descEl.textContent = i18n.t('SeerrStatusUnreachableDesc', ['Seerr is configured in the Litefin plugin, but the Jellyfin server cannot reach the Seerr server instance.']);
+            } else if (!status.configured && status.available) {
+                badgeEl.className = 'plugin-status plugin-status--pending';
+                badgeEl.textContent = i18n.t('NotConfigured', ['Not Configured']);
+                descEl.textContent = i18n.t('SeerrStatusNotConfiguredDesc', ['Litefin plugin is installed on the Jellyfin server, but Seerr URL or API key is not configured in the Litefin plugin settings.']);
+            } else {
+                badgeEl.className = 'plugin-status plugin-status--disabled';
+                badgeEl.textContent = i18n.t('NotConfigured', ['Not Configured / Missing']);
+                descEl.textContent = i18n.t('SeerrStatusMissingDesc', ['Seerr is not configured in the Litefin plugin or the server cannot reach Seerr.']);
+            }
+        } catch (err) {
+            log.warn('Seerr server integration status check failed', err);
+            badgeEl.className = 'plugin-status plugin-status--disabled';
+            badgeEl.textContent = i18n.t('PluginMissing', ['Plugin Missing / Unreachable']);
+            descEl.textContent = i18n.t('SeerrStatusPluginMissingDesc', ['Litefin plugin is not installed on the Jellyfin server.']);
+        }
     }
 
     _renderAppearanceTab() {
@@ -4703,8 +4752,7 @@ class SettingsPage extends Page {
 
         /*
          * Check whether auto-login for the last active user is enabled.
-         * Default: disabled (false)
-         * for explicit user consent and minimal friction control elements.
+         * Default: disabled (false).
          */
         const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
 
@@ -7326,6 +7374,10 @@ class SettingsPage extends Page {
                 await pluginManager.setPluginEnabled(pluginId, true);
             });
         });
+
+        if (this.activeTab === 'plugins') {
+            this._refreshSeerrStatus();
+        }
     }
 
     /**
@@ -8896,6 +8948,8 @@ class SettingsPage extends Page {
                 this._setupSidebarLayoutUI();
             } else if (tabId === 'backup') {
                 this._updateBackupStatusDisplay();
+            } else if (tabId === 'plugins') {
+                this._refreshSeerrStatus();
             }
 
             // Populate the live storage usage display whenever the debug tab is opened.

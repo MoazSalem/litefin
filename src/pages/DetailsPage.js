@@ -17,6 +17,7 @@ import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import { seerr } from '../api/seerrClient.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
@@ -24,6 +25,7 @@ import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
 import AddToTargetModal from '../components/AddToTargetModal.js';
 import DescriptionModal from '../components/DescriptionModal.js';
+import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -1553,14 +1555,14 @@ class DetailsPage extends Page {
         }
 
         if (genres && genres.length > 0) {
-            htmlParts.push(createRow('Genres', genres));
+            htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
         // Directors (only shown in 'all')
         if (richMetadataStyle === 'all') {
             const directors = (item.People || []).filter((p) => p.Type === 'Director');
             if (directors.length > 0) {
-                htmlParts.push(createRow('Directors', directors));
+                htmlParts.push(RichMetadataTable.createChipRow('Directors', directors));
             }
         }
 
@@ -1572,36 +1574,26 @@ class DetailsPage extends Page {
         ) {
             const writers = (item.People || []).filter((p) => p.Type === 'Writer');
             if (writers.length > 0) {
-                htmlParts.push(createRow('Writers', writers));
+                htmlParts.push(RichMetadataTable.createChipRow('Writers', writers));
             }
         }
 
         // Studios (shown in 'all' or 'genres-studios-writers')
         if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
             if (item.Studios && item.Studios.length > 0) {
-                htmlParts.push(createRow('Studios', item.Studios));
+                htmlParts.push(RichMetadataTable.createChipRow('Studios', item.Studios));
             }
         }
 
         // Tags (only shown in 'all')
         if (richMetadataStyle === 'all') {
             if (item.Tags && item.Tags.length > 0) {
-                htmlParts.push(createRow('Tags', item.Tags));
+                htmlParts.push(RichMetadataTable.createChipRow('Tags', item.Tags));
             }
         }
 
         // Photo EXIF Data (only shown in 'all')
         if (item.Type === 'Photo' && richMetadataStyle === 'all') {
-            const createTextRow = (label, value) => {
-                if (!value) return '';
-                return `
-                    <div class="rich-meta-row">
-                        <div class="meta-label">${label}</div>
-                        <div class="meta-value-text">${value}</div>
-                    </div>
-                `;
-            };
-
             const esc = (str) =>
                 String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -1626,12 +1618,12 @@ class DetailsPage extends Page {
             const focal = item.FocalLength ? `${item.FocalLength} mm` : null;
             const altitude = item.Altitude != null ? `${Math.round(item.Altitude)} m` : null;
 
-            htmlParts.push(createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
-            htmlParts.push(createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
-            htmlParts.push(createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
-            htmlParts.push(createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
-            htmlParts.push(createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
-            htmlParts.push(createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
         }
 
         container = this.$('#rich-meta');
@@ -1714,6 +1706,7 @@ class DetailsPage extends Page {
                 chip.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    this._deactivateRichMeta();
                     this._handleMetaClick(chip);
                 };
 
@@ -1723,6 +1716,7 @@ class DetailsPage extends Page {
                         // Enter
                         e.preventDefault();
                         e.stopPropagation();
+                        this._deactivateRichMeta();
                         this._handleMetaClick(chip);
                     }
                 };
@@ -4035,7 +4029,7 @@ class DetailsPage extends Page {
         };
     }
 
-    _showMoreOptionsModal(itemId) {
+    async _showMoreOptionsModal(itemId) {
         const oldOnBack = this.onBack;
         // Store focus context for restoration (only if not already stored by a previous modal layer)
         if (!this._prevFocus) {
@@ -4075,6 +4069,29 @@ class DetailsPage extends Page {
 
         if (this._item?.MediaSources?.length > 0) {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
+        }
+
+        // ── Seerr Details Shortcut (Only if Seerr is configured and available) ──
+        const tmdbId =
+            this._item?.ProviderIds?.Tmdb ||
+            this._item?.ProviderIds?.tmdb ||
+            this._item?.ProviderIds?.TMDB ||
+            this._item?.SeriesTmdbId ||
+            this._item?.SeriesProviderIds?.Tmdb ||
+            this._item?.SeriesProviderIds?.tmdb;
+
+        const isTvType =
+            this._item?.Type === 'Series' ||
+            this._item?.Type === 'Season' ||
+            this._item?.Type === 'Episode';
+
+        const isMovieType =
+            this._item?.Type === 'Movie';
+
+        const isSeerrAvailable = await seerr.isAvailable();
+
+        if (isSeerrAvailable && tmdbId && (isTvType || isMovieType)) {
+            options.push({ id: 'seerr-details', label: i18n.t('SeerrDetails') || 'Seerr Details' });
         }
 
         // ── Refresh Metadata Permission Check ────────────────────────────────
@@ -4302,6 +4319,10 @@ class DetailsPage extends Page {
                         fromMoreOptions: true,
                         oldOnBack: oldOnBack
                     });
+                } else if (id === 'seerr-details') {
+                    this._closeMoreMenu();
+                    const targetMediaType = isTvType ? 'tv' : 'movie';
+                    router.navigate(`/seerr/${targetMediaType}/${tmdbId}`);
                 } else if (id === 'refresh') {
                     this._isMoreMenuOpen = false;
                     overlay.classList.remove('visible');

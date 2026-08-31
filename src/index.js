@@ -24,6 +24,7 @@ import './styles/login.css';
 import './styles/home.css';
 import './styles/details.css';
 import './styles/search.css';
+import './styles/discover.css';
 import './styles/player-osd.css';
 import './styles/upnext.css';
 import './styles/player-modals.css'; /* Chapters & Queue modal panels */

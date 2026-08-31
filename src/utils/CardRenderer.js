@@ -249,7 +249,12 @@ class CardRenderer {
         // By default, we expect an image. We DO NOT render the fallback DOM yet to save memory.
         imageInnerHtml = '';
 
-        if (type === 'person') {
+        // Poster supplied verbatim by an external provider. Same idea as
+        // _dynamicThumbUrl below: skip Jellyfin URL building, which is
+        // meaningless for a remote item.
+        if (item._imageUrl) {
+            imageUrl = item._imageUrl;
+        } else if (type === 'person') {
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
             const isArtist = item.Type === 'MusicArtist' || item.Type === 'Artist';
 
@@ -600,6 +605,11 @@ class CardRenderer {
         // --- 1.5 Premium Fallbacks & Modern Shadow ---
         if (!imageUrl) {
             imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
+        } else if (item._isGenreCard) {
+            imageInnerHtml = `
+                <div class="card-overlay-tint"></div>
+                <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
+            `;
         } else if (isModern && !isGrid) {
             // Modern horizontal cards get a shadow tint to ensure inside title readability.
             // We bypass this for grid-based cards to keep their artwork fully bright and clear.
@@ -676,6 +686,40 @@ class CardRenderer {
 
         // Quality Badge (Resolution/HDR)
         let qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
+
+        let seerrTypeBadgeHtml = '';
+        let seerrBadgeHtml = '';
+
+        const isSeerrItem =
+            !item._isGenreCard &&
+            !item._isStudioCard &&
+            !item._isNetworkCard &&
+            (item._seerrStatus !== undefined || item._mediaType !== undefined || (item.Id && String(item.Id).startsWith('tmdb-')));
+        if (isSeerrItem) {
+            const mediaType = item._mediaType || (item.Type === 'Series' ? 'tv' : 'movie');
+            if (mediaType === 'tv' || item.Type === 'Series') {
+                seerrTypeBadgeHtml = `<div class="seerr-type-badge seerr-type-badge--series">SERIES</div>`;
+            } else {
+                seerrTypeBadgeHtml = `<div class="seerr-type-badge seerr-type-badge--movie">MOVIE</div>`;
+            }
+        }
+
+        if (item._seerrStatus !== undefined && item._seerrStatus !== null) {
+            const isRequested =
+                item._seerrStatus === 2 ||
+                item._seerrStatus === 3 ||
+                (item._requestId && item._seerrStatus !== 5 && item._seerrStatus !== 4);
+            const isPartial = item._seerrStatus === 4;
+            const isAvailable = item._seerrStatus === 5;
+
+            if (isRequested) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested" title="Requested"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"></path></svg></div>`;
+            } else if (isPartial) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--partial" title="Partially Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"></path></svg></div>`;
+            } else if (isAvailable) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--available" title="Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"></path></svg></div>`;
+            }
+        }
 
         // --- 3. Text Generation ---
 
@@ -755,16 +799,23 @@ class CardRenderer {
                 // Support both standard Role and _roleName (from MediaGrid mapping)
                 const role = item.Role || item._roleName;
                 if (role) {
-                    parts.push(i18n.t('LabelAsRole', [role]));
+                    if (item._isCrew) {
+                        parts.push(role);
+                    } else {
+                        parts.push(i18n.t('LabelAsRole', [role]));
+                    }
                 }
             }
 
             subtitleText = parts.join(' · ');
         }
 
-        // --- 3.4. Label Visibility Styles ---
+        // --- 3.4. Label Visibility Styles & Special Card Overrides ---
         const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
-        if (!options.showMeta) {
+        if (item._isStudioCard || item._isNetworkCard || item._isGenreCard) {
+            titleText = '';
+            subtitleText = '';
+        } else if (!options.showMeta) {
             if (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'titleOnly2Lines') {
                 subtitleText = '';
             } else if (cardLabelStyle === 'hidden') {
@@ -793,6 +844,13 @@ class CardRenderer {
         let cssClass = isLandscape ? 'media-card landscape' : 'media-card';
         // 'artist' is an alias for the square type — same 1:1 aspect ratio card
         if (type === 'square' || type === 'artist') cssClass = 'media-card square';
+
+        if (item._isStudioCard || item._isNetworkCard || type === 'logo') {
+            cssClass += ' seerr-logo-card';
+        }
+        if (item._isGenreCard) {
+            cssClass += ' seerr-genre-card';
+        }
 
         // -------------------------------------------------------------
         // GRID CARD MARKER
@@ -974,17 +1032,20 @@ class CardRenderer {
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
             ${qualityBadgeHtml}
+            ${seerrTypeBadgeHtml}
+            ${seerrBadgeHtml}
         `;
 
         const html = `
-            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" tabindex="0">
+            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" data-media-type="${item._mediaType || ''}" data-tmdb-id="${item._tmdbId || ''}" tabindex="0">
                 <div class="card-image">
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
                     ${!options.showMeta ? badgeContainer : ''}
-                    ${showInside
-                ? `
+                    ${
+                        showInside
+                            ? `
                     <div class="card-info inside">
                         ${options.showMeta
                     ? `

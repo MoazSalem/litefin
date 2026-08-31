@@ -19,6 +19,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { storage } from '../utils/StorageService.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { sidebarIcons, getLibraryIcon } from '../utils/Icons.js';
+import { seerr } from '../api/seerrClient.js';
 
 const log = logger.create('Sidebar');
 
@@ -101,6 +102,13 @@ class Sidebar extends Component {
                         <span class="item-text" data-i18n="Favorites">Favorites</span>
                     </button>
 
+                    <button class="sidebar-item" id="sidebar-discover" tabindex="0" data-path="/discover" style="display: none;">
+                        <div class="item-icon">
+                            ${sidebarIcons.discover}
+                        </div>
+                        <span class="item-text" data-i18n="SeerrDiscover">Discover</span>
+                    </button>
+
                     <button class="sidebar-item" id="sidebar-search" tabindex="0" data-path="/search">
                         <div class="item-icon">
                             ${sidebarIcons.search}
@@ -124,7 +132,7 @@ class Sidebar extends Component {
 
     onMounted() {
         this._bindEvents();
-        this._loadLibraries();
+        this._loadLibraries().then(() => this._updateSeerrVisibility());
         this._updateActiveState();
 
         // Hydrate DOM with translations
@@ -263,6 +271,15 @@ class Sidebar extends Component {
 
         // Initial setup of indicator
         this._updateIndicator();
+    }
+
+    async _updateSeerrVisibility() {
+        const button = this.$('#sidebar-discover');
+        if (!button) return;
+
+        const isAvailable = await seerr.isAvailable();
+        button.style.display = isAvailable ? '' : 'none';
+        focusManager.invalidateCache('sidebar');
     }
 
     onDestroyed() {
