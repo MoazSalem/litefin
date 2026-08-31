@@ -553,17 +553,13 @@ export class HtmlVideoPlayer {
         }
 
         // ====================================================================
-        // MEDIA FRAGMENT INJECTION:
-        // We append the media fragment `#t=seconds` to the stream URL.
-        // This instructs standard HTML5 engines to begin loading and buffering
-        // segments from the target seek position natively.
+        // PROGRESSIVE STREAM URL SETUP:
+        // Use clean stream URL without media fragments (#t=).
+        // Resume positioning is handled reliably by _applyPlaybackResume
+        // after loadedmetadata, avoiding concurrent Range request storms.
         // ====================================================================
-        let url = options.url;
+        const url = options.url;
         const resumeSeconds = (options.playerStartPositionTicks || 0) / 10000000;
-        if (resumeSeconds > 0) {
-            log.info(`HtmlVideoPlayer: Appending media fragment #t=${resumeSeconds} for native seek`);
-            url += `#t=${resumeSeconds}`;
-        }
 
         // ====================================================================
         // RESUME SEEK TIMING FIX:

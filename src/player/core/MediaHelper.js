@@ -156,21 +156,25 @@ export const MediaHelper = {
                 url = serverUrl + mediaSource.TranscodingUrl;
                 isHls = url.includes('.m3u8');
 
-            } else if (mediaSource.SupportsDirectStream && playMethod === 'DirectPlay') {
-                // Static-serve the container file as-is for DirectPlay only
-                url = `${serverUrl}/Videos/${itemId}/stream.${mediaSource.Container}`;
-                url += `?Static=true`;
-                url += `&mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
-                url += `&${authKey}=${encodeURIComponent(authToken)}`;
-                if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
-                    url += `&AudioStreamIndex=${audioStreamIndex}`;
-                }
-
             } else if (mediaSource.SupportsDirectStream) {
-                // Fallback for static container serving when playMethod is unclassified
+                // ============================================================
+                // DIRECTPLAY / DIRECTSTREAM STATIC CONTAINER URL
+                // ============================================================
+                // Static-serve the container file as-is directly from the server.
+                // Include PlaySessionId and DeviceId so the Jellyfin server's
+                // session tracking properly correlates the streaming socket
+                // with the client's reported session (matching official web client).
+                // ============================================================
                 url = `${serverUrl}/Videos/${itemId}/stream.${mediaSource.Container}`;
                 url += `?Static=true`;
                 url += `&mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
+                if (playSessionId) {
+                    url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+                }
+                const deviceId = state.get('device:id') || '';
+                if (deviceId) {
+                    url += `&DeviceId=${encodeURIComponent(deviceId)}`;
+                }
                 url += `&${authKey}=${encodeURIComponent(authToken)}`;
                 if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
                     url += `&AudioStreamIndex=${audioStreamIndex}`;

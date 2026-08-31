@@ -3009,15 +3009,18 @@ class PlayerPage extends Page {
                 MediaSourceId: mediaSource?.Id,
                 ...playerState,
                 IsPaused: isPaused,
-                EventName: eventName,
-
-                // Report the current queue state so the dashboard can reflect what's
-                // up next and remote control queue operations work correctly.
-                NowPlayingQueue: this._buildNowPlayingQueue()
+                EventName: eventName
             };
 
-            // Debug: Log progress reports for pause/unpause events
+            // ================================================================
+            // OPTIMIZED PROGRESS PAYLOAD:
+            // Only attach NowPlayingQueue on explicit state transitions (e.g. pause,
+            // unpause, track change), NOT on every routine 10-second timeupdate.
+            // This cuts megabytes of unnecessary JSON payload serialization and
+            // prevents bandwidth / connection congestion during active video playback.
+            // ================================================================
             if (eventName !== 'timeupdate') {
+                info.NowPlayingQueue = this._buildNowPlayingQueue();
                 log.info(`Reporting ${eventName}, IsPaused:`, isPaused);
             }
 
