@@ -256,7 +256,7 @@ html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-
     font-weight: 700;
     line-height: 1.3;
     margin-top: 12px;
-    margin-left: 20px;
+    margin-left: 6px;
 }
 
 .seerr-modal-status {
@@ -270,6 +270,128 @@ html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-
     display: grid;
     gap: 0.75rem;
     margin-top: 1rem;
+}
+
+.seerr-request-as-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.seerr-option-label {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--jf-text-primary, #ffffff);
+    margin-left: 2px;
+}
+
+.seerr-user-select-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--jf-border-radius, 8px);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.seerr-user-select-btn.focused {
+    border-color: var(--jf-accent, #00a4dc);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.seerr-user-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.seerr-user-avatar-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.15);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.seerr-user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.seerr-avatar-icon {
+    width: 20px;
+    height: 20px;
+    fill: rgba(255, 255, 255, 0.7);
+}
+
+.seerr-user-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.seerr-user-email {
+    color: var(--jf-text-secondary, #a0a0a0);
+    font-weight: 400;
+    margin-left: 6px;
+}
+
+.seerr-chevron-icon {
+    color: var(--jf-text-secondary, #a0a0a0);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.seerr-user-choice-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 10px 16px;
+    text-align: left;
+    border-radius: var(--jf-border-radius, 8px);
+}
+
+.seerr-user-check {
+    width: 20px;
+    font-weight: 700;
+    color: var(--jf-accent, #00a4dc);
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.seerr-user-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.seerr-user-name {
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+}
+
+.seerr-user-sub {
+    color: var(--jf-text-secondary, #a0a0a0);
+    font-weight: 400;
 }
 
 .seerr-option-select {

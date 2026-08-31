@@ -216,14 +216,25 @@ class SeerrDetailsPage extends Page {
         const primaryMeta = [
             item.ProductionYear ? `<span class="meta-item">${item.ProductionYear}</span>` : '',
             runtime ? `<span class="meta-item">${runtime}</span>` : '',
+            item.OfficialRating
+                ? `<span class="meta-item meta-badge seerr-content-rating">${escapeHtml(item.OfficialRating)}</span>`
+                : '',
             item.CommunityRating
                 ? `<span class="meta-item seerr-rating-item seerr-tmdb-rating">${detailsIcons.tmdbRating} ${item.CommunityRating.toFixed(1)}</span>`
                 : ''
         ].filter(Boolean).join('');
 
+        const seasonsCount = item.NumberOfSeasons || (Array.isArray(item.Seasons) ? item.Seasons.length : null) || (Array.isArray(item.seasons) ? item.seasons.length : null);
+        const seasonsLabel = (item.Type === 'Series' || this._mediaType === 'tv' || seasonsCount) && seasonsCount
+            ? `${seasonsCount} ${seasonsCount === 1 ? (i18n.t('Season') || 'Season') : (i18n.t('HeaderSeasons') || 'Seasons')}`
+            : '';
+
         const secondaryMeta = [
             statusKey
                 ? `<span class="meta-item meta-badge seerr-details-status">${escapeHtml(i18n.t(statusKey))}</span>`
+                : '',
+            seasonsLabel
+                ? `<span class="meta-item seerr-meta-card seerr-seasons-badge">${escapeHtml(seasonsLabel)}</span>`
                 : '',
             item.MediaStatus
                 ? `<span class="meta-item seerr-meta-card">${escapeHtml(item.MediaStatus)}</span>`

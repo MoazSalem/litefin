@@ -7,6 +7,7 @@
  * ============================================================================
  */
 
+import { api } from '../api/ApiClient.js';
 import { seerr } from '../api/JellyseerrClient.js';
 import { SEERR_STATUS, seerrStatusKey, seerrSeasonStatusKey } from '../api/seerrNormalize.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -18,6 +19,38 @@ import { logger } from '../utils/Logger.js';
 const log = logger.create('SeerrRequestModal');
 
 const OVERLAY_ID = 'seerr-request-modal';
+
+function escapeHtml(value) {
+    if (!value) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+const DEFAULT_AVATAR_SVG = `<svg class="seerr-avatar-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+
+function getUserAvatarUrl(user) {
+    if (!user) return '';
+    if (user.jellyfinUserId) {
+        return api.getUserImageUrl(user.jellyfinUserId, { maxWidth: 64 });
+    }
+    if (user.avatar && (user.avatar.startsWith('http://') || user.avatar.startsWith('https://') || user.avatar.startsWith('//'))) {
+        return user.avatar;
+    }
+    return '';
+}
+
+function renderUserAvatarHtml(user) {
+    const avatarUrl = getUserAvatarUrl(user);
+    if (avatarUrl) {
+        return `<img class="seerr-user-avatar-img" src="${escapeHtml(avatarUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"/>
+                <span style="display:none;">${DEFAULT_AVATAR_SVG}</span>`;
+    }
+    return DEFAULT_AVATAR_SVG;
+}
 
 class SeerrRequestModal {
     /**
@@ -146,107 +179,258 @@ class SeerrRequestModal {
     static async _renderRequestOptions(overlay, item) {
         const container = overlay.querySelector('#seerr-request-options');
         let options;
+        let users = [];
         try {
-            options = await seerr.requestOptions(item._mediaType);
+            [options, users] = await Promise.all([
+                seerr.requestOptions(item._mediaType),
+                seerr.getUsers()
+            ]);
         } catch (err) {
-            log.warn('Could not load advanced request options', err);
+            log.warn('Could not load advanced request options or users', err);
             return () => ({});
         }
-        if (!options || options.servers.length === 0) return () => ({});
 
-        let selectedServer = options.servers.find((server) => server.isDefault && !server.is4k) || options.servers[0];
+        const hasAdvancedOptions = options && options.servers && options.servers.length > 0;
+        const hasUsers = Array.isArray(users) && users.length > 0;
+
+        if (!hasAdvancedOptions && !hasUsers) return () => ({});
+
+        let selectedUser = null;
+        if (hasUsers) {
+            selectedUser =
+                users.find((u) => u.id === options?.user?.id) ||
+                users[0];
+        }
+
+        let selectedServer = hasAdvancedOptions
+            ? options.servers.find((server) => server.isDefault && !server.is4k) || options.servers[0]
+            : null;
         let selectedProfile = null;
         let selectedRootFolder = null;
-        container.innerHTML = `
-            <button class="modal-option-btn seerr-option-select" id="seerr-server" tabindex="0">
-                <span>${i18n.t('SeerrServer')}</span><span class="seerr-option-value"></span>
-            </button>
-            <button class="modal-option-btn seerr-option-select" id="seerr-profile" tabindex="0">
-                <span>${i18n.t('SeerrQualityProfile')}</span><span class="seerr-option-value"></span>
-            </button>
-            <button class="modal-option-btn seerr-option-select" id="seerr-root-folder" tabindex="0">
-                <span>${i18n.t('SeerrRootFolder')}</span><span class="seerr-option-value"></span>
-            </button>
-        `;
+
+        let html = '';
+
+        if (hasUsers) {
+            html += `
+                <div class="seerr-request-as-group">
+                    <label class="seerr-option-label" data-i18n="SeerrRequestAs">${i18n.t('SeerrRequestAs')}</label>
+                    <button class="modal-option-btn seerr-user-select-btn" id="seerr-user-select" tabindex="0">
+                        <div class="seerr-user-preview">
+                            <div class="seerr-user-avatar-wrap">
+                                ${renderUserAvatarHtml(selectedUser)}
+                            </div>
+                            <div class="seerr-user-title">
+                                <span class="seerr-user-name">${escapeHtml(selectedUser.displayName || selectedUser.jellyfinUsername || selectedUser.username || selectedUser.email)}</span>
+                                ${selectedUser.email ? `<span class="seerr-user-email">(${escapeHtml(selectedUser.email)})</span>` : ''}
+                            </div>
+                        </div>
+                        <span class="seerr-chevron-icon">⌵</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        if (hasAdvancedOptions) {
+            html += `
+                <button class="modal-option-btn seerr-option-select" id="seerr-server" tabindex="0">
+                    <span>${i18n.t('SeerrServer')}</span><span class="seerr-option-value"></span>
+                </button>
+                <button class="modal-option-btn seerr-option-select" id="seerr-profile" tabindex="0">
+                    <span>${i18n.t('SeerrQualityProfile')}</span><span class="seerr-option-value"></span>
+                </button>
+                <button class="modal-option-btn seerr-option-select" id="seerr-root-folder" tabindex="0">
+                    <span>${i18n.t('SeerrRootFolder')}</span><span class="seerr-option-value"></span>
+                </button>
+            `;
+        }
+
+        container.innerHTML = html;
+
+        const userButton = container.querySelector('#seerr-user-select');
         const serverButton = container.querySelector('#seerr-server');
         const profileButton = container.querySelector('#seerr-profile');
         const rootButton = container.querySelector('#seerr-root-folder');
 
-        const sync = () => {
-            const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
-            selectedProfile =
-                detail?.profiles?.find((profile) => profile.id === detail.server.activeProfileId) ||
-                detail?.profiles?.[0] ||
-                null;
-            selectedRootFolder =
-                detail?.rootFolders?.find((folder) => folder.path === detail.server.activeDirectory) ||
-                detail?.rootFolders?.[0] ||
-                null;
-            serverButton.querySelector('.seerr-option-value').textContent =
-                `${selectedServer.name}${selectedServer.is4k ? ' (4K)' : ''}`;
-            profileButton.querySelector('.seerr-option-value').textContent = selectedProfile?.name || '-';
-            rootButton.querySelector('.seerr-option-value').textContent = selectedRootFolder?.path || '-';
-            profileButton.disabled = !selectedProfile;
-            rootButton.disabled = !selectedRootFolder;
-        };
+        if (userButton) {
+            userButton.addEventListener('click', async () => {
+                const choice = await SeerrRequestModal._chooseUser(
+                    i18n.t('SeerrRequestAs'),
+                    users,
+                    selectedUser
+                );
+                if (choice) {
+                    selectedUser = choice;
+                    const previewEl = userButton.querySelector('.seerr-user-preview');
+                    if (previewEl) {
+                        const disp = selectedUser.displayName || selectedUser.jellyfinUsername || selectedUser.username || selectedUser.email;
+                        const sub = selectedUser.email;
+                        previewEl.innerHTML = `
+                            <div class="seerr-user-avatar-wrap">
+                                ${renderUserAvatarHtml(selectedUser)}
+                            </div>
+                            <div class="seerr-user-title">
+                                <span class="seerr-user-name">${escapeHtml(disp)}</span>
+                                ${sub ? `<span class="seerr-user-email">(${escapeHtml(sub)})</span>` : ''}
+                            </div>
+                        `;
+                    }
+                }
+            });
+        }
 
-        serverButton.addEventListener('click', async () => {
-            const choice = await SeerrRequestModal._chooseOption(
-                i18n.t('SeerrServer'),
-                options.servers.map((server) => ({
-                    value: server,
-                    label: `${server.name}${server.is4k ? ' (4K)' : ''}`,
-                    selected: server.id === selectedServer.id
-                }))
-            );
-            if (choice) {
-                selectedServer = choice;
-                sync();
-            }
-        });
-        profileButton.addEventListener('click', async () => {
-            const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
-            const choice = await SeerrRequestModal._chooseOption(
-                i18n.t('SeerrQualityProfile'),
-                (detail?.profiles || []).map((profile) => ({
-                    value: profile,
-                    label: profile.name,
-                    selected: profile.id === selectedProfile?.id
-                }))
-            );
-            if (choice) {
-                selectedProfile = choice;
-                profileButton.querySelector('.seerr-option-value').textContent = choice.name;
-            }
-        });
-        rootButton.addEventListener('click', async () => {
-            const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
-            const choice = await SeerrRequestModal._chooseOption(
-                i18n.t('SeerrRootFolder'),
-                (detail?.rootFolders || []).map((folder) => ({
-                    value: folder,
-                    label: folder.path,
-                    selected: folder.path === selectedRootFolder?.path
-                }))
-            );
-            if (choice) {
-                selectedRootFolder = choice;
-                rootButton.querySelector('.seerr-option-value').textContent = choice.path;
-            }
-        });
-        sync();
+        if (hasAdvancedOptions) {
+            const sync = () => {
+                const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+                selectedProfile =
+                    detail?.profiles?.find((profile) => profile.id === detail.server.activeProfileId) ||
+                    detail?.profiles?.[0] ||
+                    null;
+                selectedRootFolder =
+                    detail?.rootFolders?.find((folder) => folder.path === detail.server.activeDirectory) ||
+                    detail?.rootFolders?.[0] ||
+                    null;
+                serverButton.querySelector('.seerr-option-value').textContent =
+                    `${selectedServer.name}${selectedServer.is4k ? ' (4K)' : ''}`;
+                profileButton.querySelector('.seerr-option-value').textContent = selectedProfile?.name || '-';
+                rootButton.querySelector('.seerr-option-value').textContent = selectedRootFolder?.path || '-';
+                profileButton.disabled = !selectedProfile;
+                rootButton.disabled = !selectedRootFolder;
+            };
+
+            serverButton.addEventListener('click', async () => {
+                const choice = await SeerrRequestModal._chooseOption(
+                    i18n.t('SeerrServer'),
+                    options.servers.map((server) => ({
+                        value: server,
+                        label: `${server.name}${server.is4k ? ' (4K)' : ''}`,
+                        selected: server.id === selectedServer.id
+                    }))
+                );
+                if (choice) {
+                    selectedServer = choice;
+                    sync();
+                }
+            });
+            profileButton.addEventListener('click', async () => {
+                const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+                const choice = await SeerrRequestModal._chooseOption(
+                    i18n.t('SeerrQualityProfile'),
+                    (detail?.profiles || []).map((profile) => ({
+                        value: profile,
+                        label: profile.name,
+                        selected: profile.id === selectedProfile?.id
+                    }))
+                );
+                if (choice) {
+                    selectedProfile = choice;
+                    profileButton.querySelector('.seerr-option-value').textContent = choice.name;
+                }
+            });
+            rootButton.addEventListener('click', async () => {
+                const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+                const choice = await SeerrRequestModal._chooseOption(
+                    i18n.t('SeerrRootFolder'),
+                    (detail?.rootFolders || []).map((folder) => ({
+                        value: folder,
+                        label: folder.path,
+                        selected: folder.path === selectedRootFolder?.path
+                    }))
+                );
+                if (choice) {
+                    selectedRootFolder = choice;
+                    rootButton.querySelector('.seerr-option-value').textContent = choice.path;
+                }
+            });
+            sync();
+        }
+
         focusManager.invalidateCache('__trap__');
 
         return () => {
+            if (!hasAdvancedOptions) {
+                return {
+                    userId: selectedUser ? selectedUser.id : undefined
+                };
+            }
             const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
             return {
                 serverId: selectedServer.id,
                 profileId: selectedProfile?.id,
                 rootFolder: selectedRootFolder?.path,
                 languageProfileId: detail?.server.activeLanguageProfileId,
-                is4k: !!detail?.server.is4k
+                is4k: !!detail?.server.is4k,
+                userId: selectedUser ? selectedUser.id : undefined
             };
         };
+    }
+
+    static _chooseUser(title, users, selectedUser) {
+        return new Promise((resolve) => {
+            const opener = document.activeElement;
+            const subOverlay = document.createElement('div');
+            subOverlay.className = 'modal-overlay visible';
+            subOverlay.innerHTML = `
+                <div class="settings-modal seerr-option-modal" role="dialog" aria-modal="true">
+                    <div class="modal-header"><h2>${escapeHtml(title)}</h2></div>
+                    <div class="modal-options">
+                        ${users
+                    .map((user, index) => {
+                        const isSelected = selectedUser && selectedUser.id === user.id;
+                        const displayName = user.displayName || user.jellyfinUsername || user.username || user.email || 'User';
+                        const subText = user.email || (user.username && user.username !== displayName ? user.username : '');
+                        return `
+                            <button class="modal-option-btn seerr-user-choice-btn ${isSelected ? 'selected' : ''}"
+                                    data-index="${index}" tabindex="0">
+                                <span class="seerr-user-check">${isSelected ? '✓' : ''}</span>
+                                <div class="seerr-user-avatar-wrap">
+                                    ${renderUserAvatarHtml(user)}
+                                </div>
+                                <div class="seerr-user-info">
+                                    <span class="seerr-user-name">${escapeHtml(displayName)}</span>
+                                    ${subText ? `<span class="seerr-user-sub">(${escapeHtml(subText)})</span>` : ''}
+                                </div>
+                            </button>`;
+                    })
+                    .join('')}
+                    </div>
+                </div>`;
+            document.body.appendChild(subOverlay);
+
+            const currentPage = router.getCurrentPage();
+            const oldOnBack = currentPage ? currentPage.onBack : null;
+            const close = (value) => {
+                if (currentPage && currentPage.onBack === onBack) currentPage.onBack = oldOnBack;
+                focusManager.popTrap();
+                subOverlay.remove();
+                const parentPanel = document.querySelector(`#${OVERLAY_ID} .seerr-modal`);
+                if (parentPanel) {
+                    focusManager.register('__trap__', parentPanel, {
+                        orientation: 'grid',
+                        leaveUp: null,
+                        leaveDown: null,
+                        leaveLeft: null,
+                        leaveRight: null
+                    });
+                    focusManager.setActiveSection('__trap__');
+                }
+                if (opener && document.body.contains(opener)) {
+                    focusManager.focusElement(opener);
+                }
+                resolve(value);
+            };
+            const onBack = () => {
+                close(null);
+                return true;
+            };
+            if (currentPage) currentPage.onBack = onBack;
+
+            focusManager.pushTrap(subOverlay.querySelector('.seerr-option-modal'));
+            subOverlay.querySelectorAll('.seerr-user-choice-btn').forEach((button) => {
+                button.addEventListener('click', () => close(users[parseInt(button.dataset.index, 10)]));
+            });
+            const initial = subOverlay.querySelector('.seerr-user-choice-btn.selected, .seerr-user-choice-btn');
+            if (initial) focusManager.focusElement(initial);
+        });
     }
 
     static _chooseOption(title, choices) {

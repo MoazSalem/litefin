@@ -439,22 +439,34 @@ export class JellyseerrClient {
      * @param {string} params.mediaType
      * @param {number} params.tmdbId
      * @param {Array<number>} [params.seasons]
+     * @param {number} [params.userId]
      * @returns {Promise<Object>}
      */
-    async createRequest({ mediaType, tmdbId, seasons, serverId, profileId, rootFolder, languageProfileId, is4k }) {
+    async createRequest({ mediaType, tmdbId, seasons, serverId, profileId, rootFolder, languageProfileId, is4k, userId }) {
         const body = { mediaType, mediaId: tmdbId };
         if (mediaType === 'tv') body.seasons = seasons || [];
         if (serverId != null) body.serverId = serverId;
         if (profileId != null) body.profileId = profileId;
         if (rootFolder) body.rootFolder = rootFolder;
         if (languageProfileId != null) body.languageProfileId = languageProfileId;
+        if (userId != null) body.userId = userId;
         body.is4k = !!is4k;
-        log.info(`Requesting ${mediaType} ${tmdbId}${seasons ? ` seasons ${seasons.join(',')}` : ''}`);
+        log.info(`Requesting ${mediaType} ${tmdbId}${seasons ? ` seasons ${seasons.join(',')}` : ''}${userId != null ? ` for user ${userId}` : ''}`);
         return this._request('/Requests', { method: 'POST', body });
     }
 
     async cancelRequest(requestId) {
         return this._request(`/Requests/${requestId}`, { method: 'DELETE' });
+    }
+
+    async getUsers(take = 1000, sort = 'displayname') {
+        try {
+            const data = await this._request(`/Users?take=${take}&sort=${encodeURIComponent(sort)}`);
+            return data?.results || (Array.isArray(data) ? data : []);
+        } catch (err) {
+            log.warn('Failed to fetch Seerr users', err);
+            return [];
+        }
     }
 
     async getRatingsCombined(mediaType, tmdbId) {
@@ -468,12 +480,13 @@ export class JellyseerrClient {
 
     async requestOptions(mediaType) {
         const user = await this._request('/User');
-        if (!((user.permissions || 0) & (2 | 8192))) return null;
+        const isAdmin = !!((user.permissions || 0) & (2 | 8192));
+        if (!isAdmin) return null;
         const servers = await this._request(`/Services/${mediaType}`);
         const details = await Promise.all(
             servers.map((server) => this._request(`/Services/${mediaType}/${server.id}`))
         );
-        return { servers, details };
+        return { servers, details, user };
     }
 
     /**

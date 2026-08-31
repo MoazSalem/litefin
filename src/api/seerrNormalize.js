@@ -177,6 +177,73 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         Budget: typeof result.budget === 'number' && result.budget > 0 ? result.budget : null,
         Revenue: typeof result.revenue === 'number' && result.revenue > 0 ? result.revenue : null,
         MediaStatus: result.status || result.mediaStatus || '',
+        NumberOfSeasons: (() => {
+            if (typeof result.numberOfSeasons === 'number' && result.numberOfSeasons > 0) {
+                return result.numberOfSeasons;
+            }
+            if (typeof result.number_of_seasons === 'number' && result.number_of_seasons > 0) {
+                return result.number_of_seasons;
+            }
+            if (Array.isArray(result.seasons)) {
+                const regular = result.seasons.filter((s) => s && (s.seasonNumber > 0 || s.season_number > 0));
+                return regular.length > 0 ? regular.length : result.seasons.length;
+            }
+            return null;
+        })(),
+        Seasons: Array.isArray(result.seasons) ? result.seasons : [],
+        OfficialRating: (() => {
+            // Check direct properties if present
+            if (result.certification) return String(result.certification).trim();
+            if (result.rating) return String(result.rating).trim();
+
+            // Check contentRatings (TV shows in Overseerr / TMDB)
+            const rawCr = result.contentRatings || result.content_ratings;
+            const crList = Array.isArray(rawCr)
+                ? rawCr
+                : (rawCr && Array.isArray(rawCr.results) ? rawCr.results : []);
+            if (crList.length > 0) {
+                const usEntry = crList.find((r) => r && (r.iso_3166_1 === 'US' || r.iso3166_1 === 'US'));
+                if (usEntry) {
+                    const rating = usEntry.rating || usEntry.certification;
+                    if (rating) return String(rating).trim();
+                }
+                // Fallback to first available rating if no US
+                for (const entry of crList) {
+                    const rating = entry && (entry.rating || entry.certification);
+                    if (rating) return String(rating).trim();
+                }
+            }
+
+            // Check releases (Movies in Overseerr / TMDB)
+            const rawRel = result.releases || result.release_dates;
+            const relList = Array.isArray(rawRel)
+                ? rawRel
+                : (rawRel && Array.isArray(rawRel.results) ? rawRel.results : []);
+            if (relList.length > 0) {
+                const usEntry = relList.find((r) => r && (r.iso_3166_1 === 'US' || r.iso3166_1 === 'US'));
+                if (usEntry) {
+                    if (usEntry.rating) return String(usEntry.rating).trim();
+                    if (usEntry.certification) return String(usEntry.certification).trim();
+                    if (Array.isArray(usEntry.release_dates)) {
+                        const cert = usEntry.release_dates.find((d) => d && d.certification)?.certification;
+                        if (cert) return String(cert).trim();
+                    }
+                }
+                // Fallback to first available rating if no US
+                for (const entry of relList) {
+                    if (entry) {
+                        if (entry.rating) return String(entry.rating).trim();
+                        if (entry.certification) return String(entry.certification).trim();
+                        if (Array.isArray(entry.release_dates)) {
+                            const cert = entry.release_dates.find((d) => d && d.certification)?.certification;
+                            if (cert) return String(cert).trim();
+                        }
+                    }
+                }
+            }
+
+            return '';
+        })(),
         CommunityRating: typeof result.voteAverage === 'number' ? result.voteAverage : 0,
         Genres: Array.isArray(result.genres)
             ? result.genres.map((g) => (typeof g === 'object' && g ? { Id: g.id || g.Id || '', Name: g.name || g.Name || '' } : { Id: '', Name: String(g) })).filter((g) => g && Boolean(g.Name))
