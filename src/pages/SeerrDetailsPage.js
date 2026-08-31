@@ -131,7 +131,8 @@ class SeerrDetailsPage extends Page {
     }
 
     async onInit() {
-        const mediaType = this.params.mediaType === 'tv' ? 'tv' : 'movie';
+        const mediaType = (this.params.mediaType === 'tv' || this.params.mediaType === 'series') ? 'tv' : 'movie';
+        this._mediaType = mediaType;
         const tmdbId = parseInt(this.params.tmdbId, 10);
 
         if (!tmdbId) {
@@ -142,6 +143,9 @@ class SeerrDetailsPage extends Page {
         this.setLoading(true);
         try {
             this._item = await seerr.details(mediaType, tmdbId);
+            if (this._item) {
+                this._item._mediaType = mediaType;
+            }
             if (mediaType === 'tv') {
                 try {
                     const seasons = await seerr.tvSeasons(tmdbId);
@@ -279,9 +283,9 @@ class SeerrDetailsPage extends Page {
                 const name = chip.dataset.name;
                 const id = chip.dataset.id;
                 const type = chip.dataset.type;
-                const mediaType = this._mediaType || 'movie';
+                const mediaType = this._mediaType || this._item?._mediaType || (this.params.mediaType === 'tv' ? 'tv' : 'movie');
 
-                log.info(`Selected Seerr metadata chip: type=${type}, name=${name}, id=${id}`);
+                log.info(`Selected Seerr metadata chip: type=${type}, name=${name}, id=${id}, mediaType=${mediaType}`);
 
                 if (type === 'tags' || type === 'tag' || type === 'keywords') {
                     if (id) {
@@ -293,7 +297,11 @@ class SeerrDetailsPage extends Page {
                     }
                 } else if (type === 'studios' || type === 'studio') {
                     if (id) {
-                        router.navigate(`/library/seerr?seerrType=studio&studioId=${id}&name=${encodeURIComponent(name)}`);
+                        if (mediaType === 'tv') {
+                            router.navigate(`/library/seerr?seerrType=network&networkId=${id}&name=${encodeURIComponent(name)}`);
+                        } else {
+                            router.navigate(`/library/seerr?seerrType=studio&studioId=${id}&name=${encodeURIComponent(name)}`);
+                        }
                     }
                 } else if (type === 'networks' || type === 'network') {
                     if (id) {

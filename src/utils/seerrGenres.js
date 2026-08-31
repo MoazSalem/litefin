@@ -180,13 +180,29 @@ export function buildNetworkItems() {
     }));
 }
 
-export function getGenreNameById(id) {
+export function getGenreNameById(id, mediaType = null) {
     const numericId = parseInt(id, 10);
+    if (mediaType === 'tv') {
+        const tvMatch = TV_GENRES_FALLBACK.find((g) => g.id === numericId);
+        if (tvMatch) return tvMatch.name;
+    } else if (mediaType === 'movie') {
+        const movieMatch = MOVIE_GENRES_FALLBACK.find((g) => g.id === numericId);
+        if (movieMatch) return movieMatch.name;
+    }
     const movieMatch = MOVIE_GENRES_FALLBACK.find((g) => g.id === numericId);
     if (movieMatch) return movieMatch.name;
     const tvMatch = TV_GENRES_FALLBACK.find((g) => g.id === numericId);
     if (tvMatch) return tvMatch.name;
     return '';
+}
+
+export function getGenreMediaType(id) {
+    const numericId = parseInt(id, 10);
+    const inTv = TV_GENRES_FALLBACK.some((g) => g.id === numericId);
+    const inMovie = MOVIE_GENRES_FALLBACK.some((g) => g.id === numericId);
+    if (inTv && !inMovie) return 'tv';
+    if (inMovie && !inTv) return 'movie';
+    return null;
 }
 
 export function getStudioNameById(id) {
@@ -200,3 +216,103 @@ export function getNetworkNameById(id) {
     const match = STREAMING_NETWORKS.find((n) => n.id === numericId);
     return match ? match.name : '';
 }
+
+export const SEERR_LANGUAGES = [
+    { id: 'en', name: 'English' },
+    { id: 'ar', name: 'Arabic' },
+    { id: 'zh', name: 'Chinese' },
+    { id: 'cn', name: 'Cantonese' },
+    { id: 'ja', name: 'Japanese' },
+    { id: 'ko', name: 'Korean' },
+    { id: 'es', name: 'Spanish' },
+    { id: 'fr', name: 'French' },
+    { id: 'de', name: 'German' },
+    { id: 'it', name: 'Italian' },
+    { id: 'pt', name: 'Portuguese' },
+    { id: 'ru', name: 'Russian' },
+    { id: 'hi', name: 'Hindi' },
+    { id: 'tr', name: 'Turkish' },
+    { id: 'nl', name: 'Dutch' },
+    { id: 'pl', name: 'Polish' },
+    { id: 'sv', name: 'Swedish' },
+    { id: 'da', name: 'Danish' },
+    { id: 'no', name: 'Norwegian' },
+    { id: 'fi', name: 'Finnish' },
+    { id: 'el', name: 'Greek' },
+    { id: 'he', name: 'Hebrew' },
+    { id: 'th', name: 'Thai' },
+    { id: 'vi', name: 'Vietnamese' },
+    { id: 'id', name: 'Indonesian' },
+    { id: 'cs', name: 'Czech' },
+    { id: 'hu', name: 'Hungarian' },
+    { id: 'ro', name: 'Romanian' },
+    { id: 'uk', name: 'Ukrainian' },
+    { id: 'fa', name: 'Persian' },
+    { id: 'bn', name: 'Bengali' },
+    { id: 'ta', name: 'Tamil' },
+    { id: 'te', name: 'Telugu' },
+    { id: 'ml', name: 'Malayalam' },
+    { id: 'kn', name: 'Kannada' },
+    { id: 'mr', name: 'Marathi' },
+    { id: 'pa', name: 'Punjabi' },
+    { id: 'gu', name: 'Gujarati' },
+    { id: 'ur', name: 'Urdu' },
+    { id: 'ms', name: 'Malay' },
+    { id: 'tl', name: 'Tagalog' },
+    { id: 'is', name: 'Icelandic' },
+    { id: 'hr', name: 'Croatian' },
+    { id: 'sr', name: 'Serbian' },
+    { id: 'bs', name: 'Bosnian' },
+    { id: 'bg', name: 'Bulgarian' },
+    { id: 'sk', name: 'Slovak' },
+    { id: 'sl', name: 'Slovenian' },
+    { id: 'lt', name: 'Lithuanian' },
+    { id: 'lv', name: 'Latvian' },
+    { id: 'et', name: 'Estonian' },
+    { id: 'eu', name: 'Basque' },
+    { id: 'ca', name: 'Catalan' },
+    { id: 'gl', name: 'Galician' },
+    { id: 'sq', name: 'Albanian' },
+    { id: 'mk', name: 'Macedonian' },
+    { id: 'ka', name: 'Georgian' },
+    { id: 'hy', name: 'Armenian' },
+    { id: 'az', name: 'Azerbaijani' },
+    { id: 'kk', name: 'Kazakh' },
+    { id: 'uz', name: 'Uzbek' },
+    { id: 'mn', name: 'Mongolian' },
+    { id: 'la', name: 'Latin' },
+    { id: 'eo', name: 'Esperanto' },
+    { id: 'af', name: 'Afrikaans' },
+    { id: 'sw', name: 'Swahili' },
+    { id: 'zu', name: 'Zulu' },
+    { id: 'am', name: 'Amharic' },
+    { id: 'ga', name: 'Irish' },
+    { id: 'cy', name: 'Welsh' },
+    { id: 'gd', name: 'Scottish Gaelic' },
+    { id: 'yi', name: 'Yiddish' }
+];
+
+export function getLanguageNameById(code) {
+    if (!code) return '';
+    const match = SEERR_LANGUAGES.find((l) => l.id.toLowerCase() === code.toLowerCase());
+    return match ? match.name : code.toUpperCase();
+}
+
+export const SEERR_MOVIE_CERTIFICATIONS = [
+    { id: 'NR', name: 'NR' },
+    { id: 'G', name: 'G' },
+    { id: 'PG', name: 'PG' },
+    { id: 'PG-13', name: 'PG-13' },
+    { id: 'R', name: 'R' },
+    { id: 'NC-17', name: 'NC-17' }
+];
+
+export const SEERR_TV_CERTIFICATIONS = [
+    { id: 'NR', name: 'NR' },
+    { id: 'TV-Y', name: 'TV-Y' },
+    { id: 'TV-Y7', name: 'TV-Y7' },
+    { id: 'TV-G', name: 'TV-G' },
+    { id: 'TV-PG', name: 'TV-PG' },
+    { id: 'TV-14', name: 'TV-14' },
+    { id: 'TV-MA', name: 'TV-MA' }
+];

@@ -21,7 +21,18 @@ import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
 import { seerr } from '../api/JellyseerrClient.js';
-import { getGenreNameById, getStudioNameById, getNetworkNameById } from '../utils/seerrGenres.js';
+import {
+    getGenreNameById,
+    getGenreMediaType,
+    getStudioNameById,
+    getNetworkNameById,
+    getLanguageNameById,
+    MOVIE_GENRES_FALLBACK,
+    TV_GENRES_FALLBACK,
+    SEERR_LANGUAGES,
+    SEERR_MOVIE_CERTIFICATIONS,
+    SEERR_TV_CERTIFICATIONS
+} from '../utils/seerrGenres.js';
 
 const log = logger.create('Library');
 
@@ -295,15 +306,20 @@ class LibraryPage extends Page {
         }
 
         if (isSeerrLibrary) {
+            const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
+            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
             let seerrTitle = this.params.name ? decodeURIComponent(this.params.name) : '';
+            const gId = this.params.genreId || this.params.genre;
             if (!seerrTitle) {
-                const gId = this.params.genreId || this.params.genre;
                 const sId = this.params.studioId || this.params.studio;
                 const nId = this.params.networkId || this.params.network;
-                if (gId) seerrTitle = getGenreNameById(gId) || i18n.t('HeaderGenre') || 'Genre';
+                if (gId) seerrTitle = getGenreNameById(gId, mediaType) || i18n.t('HeaderGenre') || 'Genre';
                 else if (sId) seerrTitle = getStudioNameById(sId) || i18n.t('HeaderStudio') || 'Studio';
                 else if (nId) seerrTitle = getNetworkNameById(nId) || i18n.t('Network') || 'Network';
                 else seerrTitle = i18n.t('Discover') || 'Discover';
+            }
+            if (gId && !this.state.filters.genre) {
+                this.state.filters.genre = gId.toString();
             }
             this.state.libraryInfo = {
                 Name: seerrTitle,
@@ -546,6 +562,11 @@ class LibraryPage extends Page {
         // Build an async task that resolves the human-readable title from the server.
         // Year and tag don't need a network call and resolve synchronously.
         const infoFetchPromise = (async () => {
+            // Seerr virtual libraries resolve titles locally and must not call api.getItem()
+            if (this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr') {
+                return;
+            }
+
             if (this.params.genreId) {
                 try {
                     // Fetch basic item and fail gracefully (MusicGenres often 404 on raw getItem)
@@ -913,11 +934,41 @@ class LibraryPage extends Page {
         // Special handling for Seerr discovery library
         if (this.state.libraryId === 'seerr') {
             const seerrType = this.params.seerrType;
-            const mediaType = this.params.mediaType || 'movie';
-            const genreId = this.params.genreId || this.params.genre;
+            const rawMediaType = this.params.mediaType || (seerrType === 'network' ? 'tv' : 'movie');
+            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            const selectedGenre =
+                this.state.filters.genre !== undefined
+                    ? this.state.filters.genre
+                    : this.params.genreId || this.params.genre;
+            const genreId = selectedGenre;
+            const language =
+                this.state.filters.language !== undefined
+                    ? this.state.filters.language
+                    : this.params.language;
+            const certification =
+                this.state.filters.certification !== undefined
+                    ? this.state.filters.certification
+                    : this.params.certification;
             const studioId = this.params.studioId || this.params.studio;
             const networkId = this.params.networkId || this.params.network;
             const keywordId = this.params.keywordId || this.params.keywords || this.params.keyword;
+
+            // Dynamically update title if genre filter changed
+            if (selectedGenre) {
+                const genreIds = selectedGenre.split(',').filter(Boolean);
+                if (genreIds.length === 1) {
+                    const gName = getGenreNameById(genreIds[0], mediaType);
+                    if (gName) {
+                        this.$('#library-title').textContent = gName;
+                        this.title = gName;
+                    }
+                } else if (genreIds.length > 1) {
+                    const names = genreIds.map((id) => getGenreNameById(id, mediaType)).filter(Boolean);
+                    const titleStr = names.join(' & ');
+                    this.$('#library-title').textContent = titleStr || i18n.t('Genres') || 'Genres';
+                    this.title = titleStr || i18n.t('Genres') || 'Genres';
+                }
+            }
 
             // Calculate active page for Seerr request (each page contains 100 items merged from 5 upstream pages)
             const seerrPage = Math.floor(this.state.startIndex / 100) + 1;
@@ -930,20 +981,26 @@ class LibraryPage extends Page {
             try {
                 if (seerrType === 'keyword' || seerrType === 'tag' || keywordId) {
                     if (mediaType === 'tv') {
-                        items = await seerr.tvByKeyword(keywordId, seerrPage, seerrSortBy);
+                        items = await seerr.discoverTv(seerrPage, { keywords: keywordId, genre: genreId, language, certification, sortBy: seerrSortBy });
                     } else {
-                        items = await seerr.moviesByKeyword(keywordId, seerrPage, seerrSortBy);
+                        items = await seerr.discoverMovies(seerrPage, { keywords: keywordId, genre: genreId, language, certification, sortBy: seerrSortBy });
                     }
-                } else if (seerrType === 'genre' || genreId) {
+                } else if (genreId || language || certification || seerrType === 'genre') {
                     if (mediaType === 'tv') {
-                        items = await seerr.tvByGenre(genreId, seerrPage, seerrSortBy);
+                        items = await seerr.discoverTv(seerrPage, { genre: genreId, language, certification, sortBy: seerrSortBy });
                     } else {
-                        items = await seerr.moviesByGenre(genreId, seerrPage, seerrSortBy);
+                        items = await seerr.discoverMovies(seerrPage, { genre: genreId, language, certification, sortBy: seerrSortBy });
                     }
                 } else if (seerrType === 'studio' || studioId) {
                     items = await seerr.moviesByStudio(studioId, seerrPage);
                 } else if (seerrType === 'network' || networkId) {
                     items = await seerr.tvByNetwork(networkId, seerrPage);
+                } else {
+                    if (mediaType === 'tv') {
+                        items = await seerr.discoverTv(seerrPage, { language, certification, sortBy: seerrSortBy });
+                    } else {
+                        items = await seerr.discoverMovies(seerrPage, { language, certification, sortBy: seerrSortBy });
+                    }
                 }
             } catch (err) {
                 log.error('Failed to load Seerr category items', err);
@@ -3751,8 +3808,8 @@ class LibraryPage extends Page {
         const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
 
         if (isSeerr) {
-            const mediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
-            const isTv = mediaType === 'tv';
+            const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
+            const isTv = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows');
 
             const sortOptions = isTv
                 ? [
@@ -4312,6 +4369,66 @@ class LibraryPage extends Page {
     }
 
     async _handleFilter() {
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        if (isSeerr) {
+            const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
+            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            const isTv = mediaType === 'tv';
+            // Strictly show movie genres for movies, and TV genres for series
+            const genreList = isTv ? TV_GENRES_FALLBACK : MOVIE_GENRES_FALLBACK;
+            const certList = isTv ? SEERR_TV_CERTIFICATIONS : SEERR_MOVIE_CERTIFICATIONS;
+
+            const currentGenre =
+                this.state.filters.genre !== undefined
+                    ? this.state.filters.genre
+                    : this.params.genreId || this.params.genre;
+
+            // Ensure current selected genre(s) from params or state are recognized
+            if (this.state.filters.genre === undefined && currentGenre) {
+                this.state.filters.genre = currentGenre.toString();
+            }
+
+            const currentLanguage =
+                this.state.filters.language !== undefined
+                    ? this.state.filters.language
+                    : this.params.language;
+
+            if (this.state.filters.language === undefined && currentLanguage) {
+                this.state.filters.language = currentLanguage.toString();
+            }
+
+            const currentCertification =
+                this.state.filters.certification !== undefined
+                    ? this.state.filters.certification
+                    : this.params.certification;
+
+            if (this.state.filters.certification === undefined && currentCertification) {
+                this.state.filters.certification = currentCertification.toString();
+            }
+
+            const filtersData = {
+                Genres: genreList.map((g) => ({
+                    label: g.name,
+                    value: g.id.toString(),
+                    type: 'multi'
+                })),
+                Languages: SEERR_LANGUAGES.map((l) => ({
+                    label: l.name,
+                    value: l.id,
+                    type: 'multi'
+                })),
+                Certifications: certList.map((c) => ({
+                    label: c.name,
+                    value: c.id,
+                    type: 'multi'
+                }))
+            };
+
+            this._renderFilterModal(filtersData);
+            return;
+        }
+
         // 1. Fetch Dynamic Filters
         // We need ParentId and IncludeItemTypes from current params/state
         // Fix: Use libraryInfo or derive types.
@@ -4352,71 +4469,108 @@ class LibraryPage extends Page {
         this._prevFocus = focusManager.getFocused();
         this._prevSection = focusManager.getActiveSection();
 
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
         const isMusic = this.state.libraryInfo?.CollectionType === 'music';
 
+        const genreItems = Array.isArray(data?.Genres)
+            ? data.Genres.map((g) => (typeof g === 'object' ? g : { label: g, value: g, type: 'multi' }))
+            : [];
+
+        const languageItems = Array.isArray(data?.Languages)
+            ? data.Languages.map((l) => (typeof l === 'object' ? l : { label: l, value: l, type: 'multi' }))
+            : [];
+
+        const certificationItems = Array.isArray(data?.Certifications)
+            ? data.Certifications.map((c) => (typeof c === 'object' ? c : { label: c, value: c, type: 'multi' }))
+            : [];
+
         // Sections Definition
-        const sections = [
-            {
-                title: 'Filters',
-                id: 'sec-filters',
-                items: [
-                    { label: 'Played', key: 'IsPlayed', type: 'boolean' },
-                    { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
-                    { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
-                    { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
-                ]
-            },
-            {
-                title: 'Features',
-                id: 'sec-features',
-                hidden: isMusic, // Hide video features for music
-                items: [
-                    { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
-                    { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
-                    { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
-                    { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
-                    { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
-                ]
-            },
-            {
-                title: 'Genres',
-                id: 'sec-genres',
-                itemKey: 'Genres', // Key in state
-                items: data.Genres.map((g) => ({ label: g, value: g, type: 'multi' }))
-            },
-            {
-                title: 'HeaderParentalRatings',
-                id: 'sec-ratings',
-                itemKey: 'OfficialRatings',
-                items: data.OfficialRatings.map((r) => ({ label: r, value: r, type: 'multi' }))
-            },
-            {
-                title: 'Tags',
-                id: 'sec-tags',
-                itemKey: 'Tags',
-                items: data.Tags.map((t) => ({ label: t, value: t, type: 'multi' }))
-            },
-            {
-                title: 'HeaderVideoTypes',
-                id: 'sec-videotypes',
-                hidden: isMusic, // Hide video types for music
-                itemKey: 'VideoTypes', // Comma list
-                items: [
-                    { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
-                    { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
-                    { label: 'Option4K', key: 'Is4K', type: 'boolean' },
-                    { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
-                    { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
-                    { label: 'Option3D', key: 'Is3D', type: 'boolean' }
-                ]
-            },
-            {
-                title: 'HeaderYears',
-                id: 'sec-years',
-                itemKey: 'Years',
-                items: data.Years.map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
-            }
-        ];
+        const sections = isSeerr
+            ? [
+                  {
+                      title: 'Genres',
+                      id: 'sec-genres',
+                      itemKey: 'genre', // Key in state.filters for Seerr
+                      separator: ',',
+                      items: genreItems
+                  },
+                  {
+                      title: 'OriginalLanguage',
+                      id: 'sec-languages',
+                      itemKey: 'language', // Key in state.filters for Seerr
+                      separator: '|', // Pipe-separated ISO codes for Seerr/TMDB e.g. ar|zh
+                      items: languageItems
+                  },
+                  {
+                      title: 'ContentRating',
+                      id: 'sec-certifications',
+                      itemKey: 'certification', // Key in state.filters for Seerr
+                      separator: '|', // Pipe-separated certification values e.g. NR|G|PG-13
+                      items: certificationItems
+                  }
+              ]
+            : [
+                  {
+                      title: 'Filters',
+                      id: 'sec-filters',
+                      items: [
+                          { label: 'Played', key: 'IsPlayed', type: 'boolean' },
+                          { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
+                          { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
+                          { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'Features',
+                      id: 'sec-features',
+                      hidden: isMusic, // Hide video features for music
+                      items: [
+                          { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
+                          { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
+                          { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
+                          { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
+                          { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'Genres',
+                      id: 'sec-genres',
+                      itemKey: 'Genres', // Key in state
+                      items: genreItems
+                  },
+                  {
+                      title: 'HeaderParentalRatings',
+                      id: 'sec-ratings',
+                      itemKey: 'OfficialRatings',
+                      items: (data?.OfficialRatings || []).map((r) => ({ label: r, value: r, type: 'multi' }))
+                  },
+                  {
+                      title: 'Tags',
+                      id: 'sec-tags',
+                      itemKey: 'Tags',
+                      items: (data?.Tags || []).map((t) => ({ label: t, value: t, type: 'multi' }))
+                  },
+                  {
+                      title: 'HeaderVideoTypes',
+                      id: 'sec-videotypes',
+                      hidden: isMusic, // Hide video types for music
+                      itemKey: 'VideoTypes', // Comma list
+                      items: [
+                          { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
+                          { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
+                          { label: 'Option4K', key: 'Is4K', type: 'boolean' },
+                          { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
+                          { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
+                          { label: 'Option3D', key: 'Is3D', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'HeaderYears',
+                      id: 'sec-years',
+                      itemKey: 'Years',
+                      items: (data?.Years || []).map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
+                  }
+              ];
 
         // Filter out empty and hidden sections
         const validSections = sections.filter((s) => s.items.length > 0 && !s.hidden);
@@ -4526,7 +4680,8 @@ class LibraryPage extends Page {
                         } else {
                             const stored = this.state.filters[section.itemKey];
                             if (stored) {
-                                const arr = stored.split(',');
+                                const sep = section.separator || (section.itemKey === 'language' || section.itemKey === 'certification' ? '|' : ',');
+                                const arr = stored.split(sep);
                                 checked = arr.includes(item.value);
                             }
                         }
@@ -4646,11 +4801,13 @@ class LibraryPage extends Page {
                     if (key === 'IsUnplayed' && !isSelected) delete this.state.filters['IsPlayed'];
                 }
             } else {
-                let current = this.state.filters[key] ? this.state.filters[key].split(',') : [];
+                const section = validSections.find((s) => s.itemKey === key || s.id === this.state.activeFilterSection);
+                const sep = section?.separator || (key === 'language' || key === 'certification' ? '|' : ',');
+                let current = this.state.filters[key] ? this.state.filters[key].split(sep).filter(Boolean) : [];
                 if (!isSelected) current.push(val);
                 else current = current.filter((v) => v !== val);
 
-                if (current.length > 0) this.state.filters[key] = current.join(',');
+                if (current.length > 0) this.state.filters[key] = current.join(sep);
                 else delete this.state.filters[key];
             }
 
@@ -4956,7 +5113,7 @@ class LibraryPage extends Page {
         if (alphaPicker) alphaPicker.style.display = isAlphaVisible ? 'flex' : 'none';
         if (tabsContainer) tabsContainer.style.display = isTabsVisible ? 'flex' : 'none';
         if (shuffleBtn) shuffleBtn.style.display = isSeerr ? 'none' : '';
-        if (filterBtn) filterBtn.style.display = isSeerr ? 'none' : '';
+        if (filterBtn) filterBtn.style.display = isSeerr && isStudioOrNetwork ? 'none' : '';
         if (sortBtn) sortBtn.style.display = isSeerr && isStudioOrNetwork ? 'none' : '';
 
         // 1. Configure Tabs (if visible)

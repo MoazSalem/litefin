@@ -171,7 +171,12 @@ export class JellyseerrClient {
         if (typeof options === 'number' || typeof options === 'string') {
             queryParams += `&genre=${options}`;
         } else if (options && typeof options === 'object') {
-            if (options.genre) queryParams += `&genre=${options.genre}`;
+            if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
+            if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
+            if (options.certification) {
+                const country = options.certificationCountry || 'US';
+                queryParams += `&certificationCountry=${encodeURIComponent(country)}&certification=${encodeURIComponent(options.certification)}`;
+            }
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.studio) queryParams += `&studio=${options.studio}`;
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
@@ -184,7 +189,12 @@ export class JellyseerrClient {
         if (typeof options === 'number' || typeof options === 'string') {
             queryParams += `&genre=${options}`;
         } else if (options && typeof options === 'object') {
-            if (options.genre) queryParams += `&genre=${options.genre}`;
+            if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
+            if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
+            if (options.certification) {
+                const country = options.certificationCountry || 'US';
+                queryParams += `&certificationCountry=${encodeURIComponent(country)}&certification=${encodeURIComponent(options.certification)}`;
+            }
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.network) queryParams += `&network=${options.network}`;
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
@@ -192,12 +202,12 @@ export class JellyseerrClient {
         return this._normalizeList(await this._request(`/Discover/Tv?${queryParams}`));
     }
 
-    async moviesByGenre(genreId, page = 1, sortBy = null) {
-        return this.discoverMovies(page, { genre: genreId, sortBy });
+    async moviesByGenre(genreId, page = 1, sortBy = null, language = null) {
+        return this.discoverMovies(page, { genre: genreId, sortBy, language });
     }
 
-    async tvByGenre(genreId, page = 1, sortBy = null) {
-        return this.discoverTv(page, { genre: genreId, sortBy });
+    async tvByGenre(genreId, page = 1, sortBy = null, language = null) {
+        return this.discoverTv(page, { genre: genreId, sortBy, language });
     }
 
     async moviesByKeyword(keywordId, page = 1, sortBy = null) {
