@@ -438,8 +438,8 @@ export class JellyfinPlayer extends EventEmitter {
             const currentTime = event.data?.time || 0;
 
             if (event.type === PlayerEvent.TIME_UPDATE && currentTime > 0) {
-                // Check if we have arrived near our target resume position
-                if (Math.abs(currentTime - targetSec) < 10 || currentTime >= targetSec) {
+                // Check if we have arrived near our target resume position (within 15s GOP keyframe tolerance)
+                if (Math.abs(currentTime - targetSec) < 15 || currentTime >= (targetSec - 15)) {
                     this._pendingStartPositionTicks = null;
                     log.info(`Resume verified at ${currentTime}s. Dismissing loading screen.`);
                     this.emit(PlayerEvent.PLAYING);
@@ -1224,25 +1224,28 @@ export class JellyfinPlayer extends EventEmitter {
                 this._currentSubtitleStreamIndex = -1;
             }
 
-            // Check play method to determine if we need to force start-at-0 (for Transcode/Remux)
-            // playMethod was already derived above for logging
+            // -------------------------------------------------------------------------
+            // Start Position & Resume Offset Handling
+            // -------------------------------------------------------------------------
+            // We pass the intended startPositionTicks directly to MediaHelper.buildStreamUrl.
+            // For server-managed streams (Transcode/Remux), the server starts ffmpeg
+            // directly at the requested StartTimeTicks (-ss <seconds>).
+            //
+            // MediaHelper handles timeline mapping cleanly:
+            //   - Transcode: transcodingOffsetTicks = startPositionTicks, playerStartPositionTicks = 0
+            //   - Remux/DirectStream: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
+            //   - DirectPlay: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
+            //
+            // This completely eliminates the zero-start stall trap where a client-side seek
+            // was issued into an ungenerated HLS stream on hardware TV players (webOS/Tizen).
+            // -------------------------------------------------------------------------
             const originalStartPositionTicks = options.startPositionTicks || 0;
-            let effectiveStartPositionTicks = originalStartPositionTicks;
-            let isTranscodeSeek = false;
+            const effectiveStartPositionTicks = originalStartPositionTicks;
 
             // Save the intended start position for the UI before the backend initializes.
             this._pendingStartPositionTicks = originalStartPositionTicks > 0 ? originalStartPositionTicks : null;
 
-            // User Request: When transcoding or remuxing, start playback at 0, 
-            // and after it's loaded seek to the resume location if it exists
-            if ((playMethod === 'Transcode' || playMethod === 'DirectStream' || playMethod === 'Remux') && originalStartPositionTicks > 0) {
-                log.info(`Transcode detected: Starting at 0 ticks, will seek to ${originalStartPositionTicks} after load`);
-                effectiveStartPositionTicks = 0;
-                isTranscodeSeek = true;
-                
-                // Do not apply early resume validation yet. We will transfer it once the TranscodeSeek triggers.
-                this._pendingStartPositionTicks = null;
-            } else if (this._pendingStartPositionTicks) {
+            if (this._pendingStartPositionTicks) {
                 // For native client-side seeking, start the 15-second wall-clock timeout immediately
                 this._resumeWaitStartTime = Date.now();
             }
@@ -1272,15 +1275,6 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Start playback on backend
             log.info('Initializing backend playback...');
-
-            // Handle delayed seek for Transcode/Remux
-            // CRITICAL: Set this BEFORE play() to ensure we catch all initial events
-            if (isTranscodeSeek) {
-                log.info('TranscodeSeek: Enabled. Waiting for timeupdate to seek to:', originalStartPositionTicks);
-                this._pendingTranscodeSeekTicks = originalStartPositionTicks;
-                // Explicitly emit WAITING to ensure spinner is shown
-                this.emit(PlayerEvent.WAITING);
-            }
 
             const backendOptions = {
                 ...streamInfo,

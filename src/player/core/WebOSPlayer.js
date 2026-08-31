@@ -818,9 +818,12 @@ export class WebOSPlayer {
         // ====================================================================
         // MEDIA FRAGMENT CHECK:
         // If the media fragment seek already succeeded natively and the video
-        // is close to the resume target, we skip the robust seek retry loop.
+        // is close to the resume target (within 15s GOP keyframe tolerance),
+        // we skip the robust seek retry loop.
         // ====================================================================
-        if (Math.abs(video.currentTime - resumeSeconds) < 2) {
+        const currentPos = video.currentTime || 0;
+        const fragmentDrift = Math.abs(currentPos - resumeSeconds);
+        if (fragmentDrift < 15 || currentPos >= (resumeSeconds - 15)) {
             log.info('WebOSPlayer: Robust resume target already reached (via media fragment). Skipping retry loop.');
             this._robustSeekTarget = null;
             return;
@@ -848,6 +851,13 @@ export class WebOSPlayer {
         tryApply();
     }
 
+    /**
+     * Re-apply resume seek with retry loop if the playhead failed to land.
+     *
+     * @private
+     * @param {number} time - Target resume time in seconds
+     * @param {number} maxRetries - Max retry attempts
+     */
     _seekWithRetry(time, maxRetries = 3) {
         if (this._robustSeekPending) {
             log.debug('WebOSPlayer: Seek already pending, skipping concurrent retry');
@@ -869,46 +879,42 @@ export class WebOSPlayer {
             tries++;
             try {
                 video.currentTime = time;
-            } catch (e) {}
+            } catch (e) {
+                // Ignore synchronous currentTime assignment errors
+            }
 
             // ----------------------------------------------------------------
             // Wait 3 seconds per attempt before checking the result.
             //
-            // We use a generous 10-second acceptance window (matching
-            // JellyfinPlayer's own resume-verification threshold) rather than a
-            // tight 2-second window. Two things widen the apparent gap:
+            // We use a 15-second acceptance window to safely cover standard
+            // 24fps 240/250-frame GOP keyframe intervals (~10.4s) on hardware TV
+            // decoders plus ~3s of forward playback advancement during the wait.
             //
-            //   1. WebOS hardware seeks to the nearest keyframe, not the exact
-            //      requested timestamp — typically landing 1-5 s away.
-            //
-            //   2. The video keeps playing during the 3-second wait interval,
-            //      so by the time we sample currentTime it has advanced another
-            //      ~3 s past the seek landing point.
-            //
-            // Combined worst-case drift: 5 s (keyframe) + 3 s (playback) = 8 s.
-            // A 10-second window safely covers this while still correctly
-            // identifying genuine failures (video stuck at 0, target at 420 s).
+            // Acceptance conditions:
+            //   1. Playhead landed within 15s drift of target, OR
+            //   2. Playhead has advanced past (target - 15s) playing forward.
             // ----------------------------------------------------------------
             setTimeout(() => {
                 if (this._cancelRobustResume) return;
 
                 // Measure how far currentTime landed from our requested target.
-                const drift = Math.abs(video.currentTime - time);
+                const currentPos = video.currentTime || 0;
+                const drift = Math.abs(currentPos - time);
+                const isNearTarget = drift < 15 || currentPos >= (time - 15);
 
-                if (drift < 10) {
-                    // Within 10 s of target — seek landed on a keyframe boundary
-                    // and the video has been playing forward. Accept as success.
-                    log.debug(`WebOSPlayer: Seek accepted on attempt ${tries} (drift ${drift.toFixed(2)} s from target ${time} s)`);
+                if (isNearTarget) {
+                    // Within 15s of target or playing forward — seek landed on a valid keyframe boundary.
+                    log.debug(`WebOSPlayer: Seek accepted on attempt ${tries} (current: ${currentPos.toFixed(2)}s, target: ${time}s, drift: ${drift.toFixed(2)}s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
                     if (!video.paused) this._onPlaying();
                 } else if (tries < maxRetries) {
                     // Still far from target — video may not have seeked yet.
-                    log.debug(`WebOSPlayer: Seek still off (current: ${video.currentTime.toFixed(2)} s, target: ${time} s, drift: ${drift.toFixed(2)} s) — retrying, attempt ${tries + 1}`);
+                    log.debug(`WebOSPlayer: Seek still off (current: ${currentPos.toFixed(2)}s, target: ${time}s, drift: ${drift.toFixed(2)}s) — retrying, attempt ${tries + 1}`);
                     attempt();
                 } else {
                     // All retries exhausted and still far from target — genuine failure.
-                    log.warn(`WebOSPlayer: Seek failed after ${maxRetries} retries (final drift: ${drift.toFixed(2)} s from target ${time} s)`);
+                    log.warn(`WebOSPlayer: Seek failed after ${maxRetries} retries (final drift: ${drift.toFixed(2)}s from target ${time}s)`);
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
 
@@ -951,10 +957,12 @@ export class WebOSPlayer {
              // MEDIA FRAGMENT CHECK:
              // The #t= fragment in the URL already hints the native pipeline to
              // start downloading from the resume position. Check if it worked by
-             // verifying the playhead is close to the target.
+             // verifying the playhead is within 15s keyframe tolerance of target.
              // ====================================================================
              try {
-                 if (Math.abs(video.currentTime - resumeSeconds) < 2) {
+                 const currentPos = video.currentTime || 0;
+                 const drift = Math.abs(currentPos - resumeSeconds);
+                 if (drift < 15 || currentPos >= (resumeSeconds - 15)) {
                      log.info('WebOSPlayer: Media fragment already positioned the playhead — skipping explicit seek.');
                      this._doPlayWithResume(video, options, resolve, reject);
                      return;
@@ -1161,10 +1169,11 @@ export class WebOSPlayer {
             seconds = (positionTicks - this._currentPlayOptions.transcodingOffsetTicks) / 10000000;
         }
 
-        // Update the robust seek target so that _onPlaying can detect if this seek snaps back.
-        // We skip this for Live TV where currentTime logic is often non-standard.
+        // Only guard against snap-backs during initial startup resume before first playback.
+        // Once playback is running (_started === true), normal user scrubbing should not arm
+        // the startup _seekWithRetry loop (which could falsely trigger resumeseekfailed on keyframe landing).
         const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId;
-        this._robustSeekTarget = isLive ? null : seconds;
+        this._robustSeekTarget = (!this._started && !isLive) ? seconds : null;
 
         // Re-enable robust check for the new seek
         this._cancelRobustResume = false;
@@ -1889,26 +1898,23 @@ export class WebOSPlayer {
             const target = this._robustSeekTarget;
             const current = this.getCurrentTime();
             const drift   = Math.abs(current - target);
+            const isNearTarget = drift < 15 || current >= (target - 15);
 
             // ----------------------------------------------------------------
-            // Drift gate: use a 10-second window (matching JellyfinPlayer's
-            // resume-verification threshold) instead of a tight 2-second one.
+            // Drift gate: use a 15-second window to accommodate standard 24fps
+            // 240/250-frame GOP keyframe distances on TV hardware decoders.
             //
-            // WebOS hardware seeks to the nearest keyframe, which can be up to
-            // 5 s away from the requested time. If the video is already within
-            // 10 s of the target when 'playing' fires, the seek (or media-
-            // fragment hint) worked — no retry needed.
-            //
-            // We only escalate to _seekWithRetry when the position is truly
-            // far off (e.g. video still stuck at 0 s when target is 420 s).
+            // If the video is within 15s of target or playing forward, accept.
+            // Only escalate to _seekWithRetry when the playhead is genuinely
+            // stuck (e.g. video stuck at 0s when target was 420s).
             // ----------------------------------------------------------------
-            if (drift >= 10) {
-                log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)} s, expected: ${target} s, drift: ${drift.toFixed(2)} s) — applying robust seek`);
+            if (!isNearTarget) {
+                log.info(`WebOSPlayer: Detected position drift (current: ${current.toFixed(2)}s, expected: ${target}s, drift: ${drift.toFixed(2)}s) — applying robust seek`);
                 this._seekWithRetry(target);
                 return; // suppress this playing event until seek resolves
             } else {
-                // Close enough — keyframe boundary or minor offset. Accept.
-                log.debug(`WebOSPlayer: Resume target reached (current: ${current.toFixed(2)} s, target: ${target} s, drift: ${drift.toFixed(2)} s). Clearing seek guard.`);
+                // Close enough — keyframe boundary or normal forward progression. Accept.
+                log.debug(`WebOSPlayer: Resume target reached (current: ${current.toFixed(2)}s, target: ${target}s, drift: ${drift.toFixed(2)}s). Clearing seek guard.`);
                 this._robustSeekTarget = null;
             }
         }
