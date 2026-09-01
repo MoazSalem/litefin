@@ -746,6 +746,9 @@ class DetailsPage extends Page {
             // Reset track selections when version changes as they are source-specific
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
+
+            // Re-render hero header and technical details to reflect the selected version
+            this._renderHeroText();
         });
     }
 
@@ -1902,6 +1905,287 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * ========================================================================
+     * Technical Media Specifications Parser & Renderer
+     * ========================================================================
+     * Extracts and constructs the technical specification badge pills for the
+     * currently active media source/version. Includes resolution, video codec,
+     * dynamic range (Dolby Vision, HDR10+, HDR, HLG), audio codec with Atmos
+     * detection & channel layout, subtitle count, and container/bitrate.
+     * ========================================================================
+     */
+    _renderTechnicalDetails() {
+        // Assert that the item exists before attempting inspection
+        if (!this._item) {
+            return '';
+        }
+
+        // Identify the active media source based on current user selection or default to primary
+        const source =
+            this._item.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+            this._item.MediaSources?.[0] ||
+            (this._item.MediaStreams ? this._item : null);
+
+        // If no media source or stream metadata is available, omit the row
+        if (!source) {
+            return '';
+        }
+
+        // Extract streams collection from the active media source
+        const streams = source.MediaStreams || this._item.MediaStreams || [];
+        if (!streams || streams.length === 0) {
+            return '';
+        }
+
+        // Separate streams by type for individual parameter extraction
+        const videoStream = streams.find((s) => s.Type === 'Video');
+        const audioStreams = streams.filter((s) => s.Type === 'Audio');
+        const subtitleStreams = streams.filter((s) => s.Type === 'Subtitle');
+
+        const pills = [];
+
+        // --------------------------------------------------------------------
+        // 1. Resolution Classification
+        // --------------------------------------------------------------------
+        const width = videoStream?.Width || source.Width || this._item.Width || 0;
+        const height = videoStream?.Height || source.Height || this._item.Height || 0;
+        let resLabel = '';
+
+        if (width || height) {
+            const maxDim = Math.max(width, height);
+            const minDim = Math.min(width, height);
+
+            // Classify resolution with generous thresholds for widescreen/anamorphic crops
+            if (maxDim >= 3000 || minDim >= 1800) {
+                resLabel = '4K';
+            } else if (maxDim >= 1600 || minDim >= 900) {
+                resLabel = '1080p';
+            } else if (maxDim >= 1000 || minDim >= 600) {
+                resLabel = '720p';
+            } else if (maxDim >= 640 || minDim >= 400) {
+                resLabel = '480p';
+            } else if (maxDim > 0) {
+                resLabel = 'SD';
+            }
+        }
+
+        if (resLabel) {
+            pills.push(`<span class="tech-pill tech-pill-res">${resLabel}</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 2. Video Codec Formatting
+        // --------------------------------------------------------------------
+        const rawVideoCodec = videoStream?.Codec || '';
+        if (rawVideoCodec) {
+            const lowerCodec = rawVideoCodec.toLowerCase();
+            let formattedVideoCodec = '';
+
+            // Map common codec identifiers to standardized notation
+            if (lowerCodec === 'hevc' || lowerCodec === 'h265') {
+                formattedVideoCodec = 'HEVC';
+            } else if (lowerCodec === 'h264' || lowerCodec === 'avc') {
+                formattedVideoCodec = 'H.264';
+            } else if (lowerCodec === 'av1') {
+                formattedVideoCodec = 'AV1';
+            } else if (lowerCodec === 'vp9') {
+                formattedVideoCodec = 'VP9';
+            } else if (lowerCodec === 'vp8') {
+                formattedVideoCodec = 'VP8';
+            } else if (lowerCodec === 'vc1') {
+                formattedVideoCodec = 'VC-1';
+            } else if (lowerCodec === 'mpeg2video' || lowerCodec === 'mpeg2') {
+                formattedVideoCodec = 'MPEG-2';
+            } else if (lowerCodec === 'mpeg4') {
+                formattedVideoCodec = 'MPEG-4';
+            } else {
+                formattedVideoCodec = rawVideoCodec.toUpperCase();
+            }
+
+            pills.push(`<span class="tech-pill tech-pill-codec">${escapeHtml(formattedVideoCodec)}</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 3. Dynamic Range & HDR / Dolby Vision Inspection
+        // --------------------------------------------------------------------
+        const itemRange = `${this._item.VideoRange || ''} ${this._item.VideoRangeType || ''}`;
+        const videoRange = videoStream?.VideoRange || '';
+        const videoRangeType = videoStream?.VideoRangeType || '';
+        const profile = videoStream?.Profile || '';
+        const streamTitle = videoStream?.Title || videoStream?.DisplayTitle || '';
+        const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${streamTitle} ${rawVideoCodec}`.toLowerCase();
+
+        let isHdr10Plus = false;
+        let isDovi = false;
+        let isHdr = false;
+        let isHlg = false;
+
+        // Inspect for HDR10+ dynamic metadata flags
+        if (
+            checkString.includes('hdr10plus') ||
+            checkString.includes('hdr10+') ||
+            checkString.includes('hdr10p') ||
+            checkString.includes('doviwithhdr10plus') ||
+            checkString.includes('doviwithelhdr10plus')
+        ) {
+            isHdr10Plus = true;
+        }
+
+        // Inspect for Dolby Vision profile and codec signaling
+        if (
+            checkString.includes('dovi') ||
+            checkString.includes('dolby vision') ||
+            rawVideoCodec.toLowerCase().startsWith('dv')
+        ) {
+            isDovi = true;
+        }
+
+        // Inspect for baseline static HDR10 metadata
+        if (checkString.includes('hdr') || videoRange === 'HDR') {
+            isHdr = true;
+        }
+
+        // Inspect for Hybrid Log-Gamma signaling
+        if (checkString.includes('hlg')) {
+            isHlg = true;
+        }
+
+        // Push appropriate dynamic range badges
+        if (isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-dovi">Dolby Vision</span>`);
+        }
+        if (isHdr10Plus) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HDR10+</span>`);
+        } else if (isHdr && !isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HDR</span>`);
+        } else if (isHlg && !isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HLG</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 4. Audio Codec, Atmos & Channel Configuration
+        // --------------------------------------------------------------------
+        let activeAudio = null;
+        if (this._selectedAudioIndex !== undefined) {
+            activeAudio = audioStreams.find((s) => s.Index === this._selectedAudioIndex);
+        }
+        if (!activeAudio) {
+            activeAudio =
+                audioStreams.find((s) => s.Index === source.DefaultAudioStreamIndex) ||
+                audioStreams.find((s) => s.IsDefault) ||
+                audioStreams[0];
+        }
+
+        if (activeAudio) {
+            const rawAudioCodec = (activeAudio.Codec || '').toLowerCase();
+            const audioTitle = (activeAudio.Title || activeAudio.DisplayTitle || '').toLowerCase();
+            const audioProfile = (activeAudio.Profile || '').toLowerCase();
+
+            // Detect immersive Dolby Atmos / object audio metadata
+            const isAtmos = audioProfile.includes('atmos') || audioTitle.includes('atmos');
+
+            // Format audio codec label cleanly
+            let audioCodecLabel = '';
+            if (rawAudioCodec === 'truehd') {
+                audioCodecLabel = 'TrueHD';
+            } else if (rawAudioCodec === 'dts-hd ma' || rawAudioCodec === 'dtshd_ma' || (rawAudioCodec === 'dts' && audioProfile.includes('ma'))) {
+                audioCodecLabel = 'DTS-HD MA';
+            } else if (rawAudioCodec === 'dts-hd' || rawAudioCodec === 'dtshd_hra') {
+                audioCodecLabel = 'DTS-HD';
+            } else if (rawAudioCodec === 'dts') {
+                audioCodecLabel = 'DTS';
+            } else if (rawAudioCodec === 'eac3') {
+                audioCodecLabel = isAtmos ? 'Dolby' : 'DD+';
+            } else if (rawAudioCodec === 'ac3') {
+                audioCodecLabel = 'DD';
+            } else if (rawAudioCodec === 'flac') {
+                audioCodecLabel = 'FLAC';
+            } else if (rawAudioCodec === 'aac') {
+                audioCodecLabel = 'AAC';
+            } else if (rawAudioCodec === 'opus') {
+                audioCodecLabel = 'Opus';
+            } else if (rawAudioCodec === 'vorbis') {
+                audioCodecLabel = 'Vorbis';
+            } else if (rawAudioCodec === 'mp3') {
+                audioCodecLabel = 'MP3';
+            } else if (rawAudioCodec.startsWith('pcm')) {
+                audioCodecLabel = 'PCM';
+            } else {
+                audioCodecLabel = (activeAudio.Codec || '').toUpperCase();
+            }
+
+            // Determine surround channel configuration
+            let channelText = '';
+            if (activeAudio.Channels === 8 || activeAudio.ChannelLayout === '7.1') {
+                channelText = '7.1';
+            } else if (activeAudio.Channels === 6 || activeAudio.ChannelLayout === '5.1') {
+                channelText = '5.1';
+            } else if (activeAudio.Channels === 2 || activeAudio.ChannelLayout === 'stereo') {
+                channelText = '2.0';
+            } else if (activeAudio.Channels === 1 || activeAudio.ChannelLayout === 'mono') {
+                channelText = 'Mono';
+            } else if (activeAudio.Channels) {
+                channelText = `${activeAudio.Channels}ch`;
+            }
+
+            // Build cohesive audio string
+            let audioFullString = '';
+            if (isAtmos) {
+                audioFullString = `${audioCodecLabel ? audioCodecLabel + ' ' : ''}Atmos${channelText ? ' ' + channelText : ''}`.trim();
+                pills.push(`<span class="tech-pill tech-pill-atmos">${escapeHtml(audioFullString)}</span>`);
+            } else {
+                audioFullString = `${audioCodecLabel}${channelText ? ' ' + channelText : ''}`.trim();
+                if (audioFullString) {
+                    pills.push(`<span class="tech-pill tech-pill-audio">${escapeHtml(audioFullString)}</span>`);
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 5. Subtitles Count
+        // --------------------------------------------------------------------
+        const subtitleCount = subtitleStreams.length;
+        if (subtitleCount > 0) {
+            const subLabel =
+                subtitleCount === 1
+                    ? `1 ${i18n.t('Subtitle') || 'Subtitle'}`
+                    : `${subtitleCount} ${i18n.t('Subtitles') || 'Subtitles'}`;
+
+            pills.push(`
+                <span class="tech-pill tech-pill-subtitles">
+                    <span>${escapeHtml(subLabel)}</span>
+                </span>
+            `);
+        }
+
+        // --------------------------------------------------------------------
+        // 6. Container Format & Overall Bitrate
+        // --------------------------------------------------------------------
+        const container = source.Container ? source.Container.toUpperCase() : '';
+        let bitrateLabel = '';
+        if (source.Bitrate) {
+            if (source.Bitrate >= 1000000) {
+                bitrateLabel = `${(source.Bitrate / 1000000).toFixed(1)} Mbps`;
+            } else {
+                bitrateLabel = `${Math.round(source.Bitrate / 1000)} Kbps`;
+            }
+        }
+
+        if (container || bitrateLabel) {
+            const containerBitrate = [container, bitrateLabel].filter(Boolean).join(' • ');
+            pills.push(`<span class="tech-pill">${escapeHtml(containerBitrate)}</span>`);
+        }
+
+        // If no pills were generated, return empty string
+        if (pills.length === 0) {
+            return '';
+        }
+
+        // Wrap generated badges inside the technical row container
+        return `<div class="details-tech-row">${pills.join('')}</div>`;
+    }
+
     _renderHeroText() {
         const item = this._item;
 
@@ -2066,12 +2350,19 @@ class DetailsPage extends Page {
             heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${escapeHtml(i18n.ensureBiDi(subtitleText))}</p>`;
         }
 
-        // Finish appending standard metadata row and secondary date labels.
+        // Conditionally construct technical details badges row if enabled by user settings
+        let techHtml = '';
+        if (storage.getItem('pref:showTechnicalDetails') !== 'false') {
+            techHtml = this._renderTechnicalDetails();
+        }
+
+        // Finish appending standard metadata row, secondary date labels, and technical specifications.
         heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
             ${secondaryMetaRow}
+            ${techHtml}
         `;
 
         this.$('#hero-info').innerHTML = heroHtml;
@@ -3813,6 +4104,9 @@ class DetailsPage extends Page {
 
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
+
+            // Re-render hero header to update the audio specifications pill
+            this._renderHeroText();
         });
     }
 

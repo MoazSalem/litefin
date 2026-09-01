@@ -2049,6 +2049,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowTechnicalDetails">${i18n.t('LabelShowTechnicalDetails') || 'Show Technical Details'}</span>
+                        <span class="setting-description" data-i18n="ShowTechnicalDetailsDescription">${i18n.t('ShowTechnicalDetailsDescription') || 'Display technical specifications including resolution, video codec, HDR, audio format, and subtitle count on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showTechnicalDetails') !== 'false' ? 'active' : ''}" 
+                                id="toggle-show-technical-details" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelRichMetadataStyle">${i18n.t('LabelRichMetadataStyle') || 'Rich Metadata Display'}</span>
                         <span class="setting-description" data-i18n="RichMetadataStyleDescription">${i18n.t('RichMetadataStyleDescription') || 'Customize which metadata fields (genres, studios, writers, directors, tags) are shown on the details page.'}</span>
                     </div>
@@ -8713,6 +8726,19 @@ class SettingsPage extends Page {
                 storage.setItem('pref:showDateAired', newValue.toString());
                 showDateAiredToggle.classList.toggle('active', newValue);
                 log.info(`Show Date Aired set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Show Technical Details
+        const showTechnicalDetailsToggle = this.$('#toggle-show-technical-details');
+        if (showTechnicalDetailsToggle) {
+            showTechnicalDetailsToggle.addEventListener('click', () => {
+                // Setting defaults to true (enabled)
+                const currentValue = storage.getItem('pref:showTechnicalDetails') !== 'false';
+                const newValue = !currentValue;
+                storage.setItem('pref:showTechnicalDetails', newValue.toString());
+                showTechnicalDetailsToggle.classList.toggle('active', newValue);
+                log.info(`Show Technical Details set to: ${newValue}`);
             });
         }
 
