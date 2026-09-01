@@ -1086,6 +1086,10 @@ export class WebOSPlayer {
         this._cancelRobustResume = true;
         this._robustSeekTarget   = null;
         this._robustSeekPending  = false;
+        if (this._directSeekVerifyTimeout) {
+            clearTimeout(this._directSeekVerifyTimeout);
+            this._directSeekVerifyTimeout = null;
+        }
         this._clearStallCheck();
         this._destroyHlsPlayer();
 
@@ -1185,6 +1189,33 @@ export class WebOSPlayer {
 
         // Emit a synthetic timeupdate immediately so paused-state UI refreshes
         this.onEvent({ type: 'timeupdate', data: { time: Math.max(0, seconds) } });
+
+        // ---------------------------------------------------------------------
+        // DirectPlay Seek Verification Guard:
+        // When DirectPlaying raw progressive files (like MKVs with chained or
+        // missing SeekHead Cues), the webOS hardware demuxer may silently fail
+        // to seek, staying at 0s or rolling back.
+        //
+        // If this is a direct stream (non-HLS) and the target is >= 5s, we
+        // schedule a verification check after 2.5s. If the playhead has not
+        // arrived near the target, we immediately escalate to _seekWithRetry,
+        // which triggers the Remux fallback path if the hardware cannot seek.
+        // ---------------------------------------------------------------------
+        if (!this._isHls && !isLive && seconds >= 5) {
+            if (this._directSeekVerifyTimeout) {
+                clearTimeout(this._directSeekVerifyTimeout);
+            }
+            this._directSeekVerifyTimeout = setTimeout(() => {
+                if (this._cancelRobustResume || !this._videoElement) return;
+                const cur = this.getCurrentTime();
+                const drift = Math.abs(cur - seconds);
+                const isNear = drift < 15 || cur >= (seconds - 15);
+                if (!isNear) {
+                    log.warn(`WebOSPlayer: DirectPlay seek to ${seconds}s failed (stuck at ${cur.toFixed(2)}s). Escalating to robust seek / Remux.`);
+                    this._seekWithRetry(seconds, 2);
+                }
+            }, 2500);
+        }
     }
 
     // ========================================================================

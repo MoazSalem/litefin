@@ -819,6 +819,32 @@ export class HtmlVideoPlayer {
 
         // Manual timeupdate for paused state (native event is delayed or absent on many browsers)
         this.onEvent({ type: 'timeupdate', data: { time: targetSeconds } });
+
+        // ---------------------------------------------------------------------
+        // DirectPlay Seek Verification Guard:
+        // When DirectPlaying raw progressive files (like MKVs with chained or
+        // missing SeekHead Cues), the browser demuxer may silently fail to seek.
+        // If this is a direct stream (non-HLS) and target >= 5s, verify after 2.5s.
+        // ---------------------------------------------------------------------
+        const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId;
+        if (!this._isHls && !isLive && targetSeconds >= 5) {
+            if (this._directSeekVerifyTimeout) {
+                clearTimeout(this._directSeekVerifyTimeout);
+            }
+            this._directSeekVerifyTimeout = setTimeout(() => {
+                if (!this._videoElement) return;
+                const cur = this.getCurrentTime();
+                const drift = Math.abs(cur - targetSeconds);
+                const isNear = drift < 15 || cur >= (targetSeconds - 15);
+                if (!isNear) {
+                    log.warn(`HtmlVideoPlayer: DirectPlay seek to ${targetSeconds}s failed (stuck at ${cur.toFixed(2)}s) — emitting resumeseekfailed for Remux fallback`);
+                    this.onEvent({
+                        type: 'resumeseekfailed',
+                        data: { targetPositionTicks: positionTicks }
+                    });
+                }
+            }, 2500);
+        }
     }
 
     // ========================================================================

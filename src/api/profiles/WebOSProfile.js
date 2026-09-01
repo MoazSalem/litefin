@@ -1057,25 +1057,21 @@ export function buildJellyfinProfile(options = {}) {
     // -------------------------------------------------------------------------
     // DirectStreamProfiles — raw container output for the DirectStream path.
     //
-    // Without this, Jellyfin has no explicit guidance on what container to use
-    // when it decides to DirectStream (copy video, handle audio). It would fall
-    // through to TranscodingProfiles and emit HLS/TS — which cannot deliver
-    // TrueHD or DTS to eARC on WebOS (see transAudioCodecsArr comment above).
-    //
-    // By specifying MKV here, the server outputs a raw progressive MKV stream
-    // over HTTP. WebOSPlayer receives a non-.m3u8 URL and routes it through
-    // _playNativeDirect() → video.src, giving the native media pipeline a
-    // direct bitstream it can pass through eARC — the same path that works
-    // for DirectPlay.
+    // Gated under direct playback mode. When playbackMode is 'remux' or 'transcode',
+    // DirectStreamProfiles is omitted so Jellyfin falls through to TranscodingProfiles
+    // (HLS master.m3u8). This guarantees that files with broken/unindexed container
+    // headers (like chained SeekHead MKVs) get repackaged into seekable HLS chunks
+    // via FFmpeg instead of re-serving the same unseekable static container stream.
     // -------------------------------------------------------------------------
-    const directStreamProfiles = [
+    const directStreamProfiles = (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') ? [
         {
             Container: 'mkv',
             Type: 'Video',
             VideoCodec: mkvVideoCodecs.join(','),
             AudioCodec: directAudioCodecs
         }
-    ];
+    ] : [];
 
     return {
         Name: `Litefin WebOS${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
