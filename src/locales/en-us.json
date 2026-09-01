@@ -859,6 +859,7 @@
     "LayoutModern": "Modern (Experimental)",
     "LayoutModernLoginPage": "Modern layout",
     "LayoutModernSidebar": "Modern",
+    "LayoutModernCollapsedSidebar": "Modern Collapsed",
     "LayoutOrder": "Home Screen Layout",
     "Library": "Library",
     "LibraryPageSizeDescription": "Choose how many items to load at once in the grid view. Low values improve performance on weaker devices.",

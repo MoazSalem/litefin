@@ -363,6 +363,15 @@ class LayoutManager {
     }
 
     /**
+     * Checks if the sidebar is currently configured with the modern-collapsed layout.
+     * In this mode, the sidebar never expands its rail and displays tooltips on focus.
+     * @returns {boolean} True if sidebar layout is 'modern-collapsed'.
+     */
+    isModernCollapsedSidebarLayout() {
+        return this._sidebarLayout === 'modern-collapsed';
+    }
+
+    /**
      * Set the Theme Mode
      * @param {string} mode Theme mode constant
      * @param {boolean} [save=true]

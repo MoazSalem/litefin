@@ -30,6 +30,7 @@ class Sidebar extends Component {
 
         this.expanded = false;
         this.librariesExpanded = false;
+        this.floatingLibrariesOpen = false;
         this.libraries = [];
         this.activePath = '';
 
@@ -251,6 +252,23 @@ class Sidebar extends Component {
             onMove: (direction, focusedEl) => {
                 const isRtl = document.documentElement.dir === 'rtl';
                 const exitDirection = isRtl ? 'left' : 'right';
+                const backDirection = isRtl ? 'right' : 'left';
+
+                // Handle D-pad navigation inside Modern Collapsed floating libraries popover
+                if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                    const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+                    if (subLibs && subLibs.contains(focusedEl)) {
+                        // Pressing Left (or Right in RTL) returns to Libraries button and closes popover
+                        if (direction === backDirection) {
+                            this._toggleFloatingLibraries(false);
+                            return true;
+                        }
+                        // Pressing Right (or Left in RTL) exits to page content and closes popover
+                        if (direction === exitDirection) {
+                            this._toggleFloatingLibraries(false);
+                        }
+                    }
+                }
 
                 if (direction === exitDirection) {
                     const pageContainer = document.getElementById('page-container');
@@ -355,6 +373,17 @@ class Sidebar extends Component {
 
         if (this._onSidebarItemsAlignChanged) {
             eventBus.off('pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged);
+        }
+
+        // Clean up floating popover event listeners
+        if (this._onBackFloatingLibs) {
+            eventBus.off('key:back', this._onBackFloatingLibs);
+        }
+        if (this._onDocKeyDown) {
+            document.removeEventListener('keydown', this._onDocKeyDown, true);
+        }
+        if (this._onDocClickOutside) {
+            document.removeEventListener('mousedown', this._onDocClickOutside, true);
         }
     }
 
@@ -610,6 +639,10 @@ class Sidebar extends Component {
         const librariesBtn = this.el.querySelector('#sidebar-libraries');
         if (librariesBtn) {
             this._bindItem(librariesBtn, () => {
+                if (layoutManager.isModernCollapsedSidebarLayout()) {
+                    this._toggleFloatingLibraries();
+                    return;
+                }
                 if (!this.expanded) {
                     this._expandedByMouse = true;
                     this._expand(true);
@@ -619,6 +652,40 @@ class Sidebar extends Component {
                 }
             });
         }
+
+        // Back key listener for floating libraries popover in modern-collapsed
+        this._onBackFloatingLibs = () => {
+            if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                this._toggleFloatingLibraries(false);
+                return true;
+            }
+            return false;
+        };
+        eventBus.on('key:back', this._onBackFloatingLibs);
+
+        // Document keydown for Escape / Remote Back
+        this._onDocKeyDown = (e) => {
+            if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                if (e.key === 'Escape' || e.keyCode === 10009 || e.keyCode === 27) {
+                    this._toggleFloatingLibraries(false);
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        };
+        document.addEventListener('keydown', this._onDocKeyDown, true);
+
+        // Click outside floating popover to dismiss
+        this._onDocClickOutside = (e) => {
+            if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+                const libBtn = this.el.querySelector('#sidebar-libraries');
+                if (subLibs && !subLibs.contains(e.target) && libBtn && !libBtn.contains(e.target)) {
+                    this._toggleFloatingLibraries(false);
+                }
+            }
+        };
+        document.addEventListener('mousedown', this._onDocClickOutside, true);
 
         // Sync indicator during scrolling
         const contentContainer = this.el.querySelector('.sidebar-content');
@@ -634,7 +701,7 @@ class Sidebar extends Component {
     }
 
     _expand(expanded) {
-        if (storage.getItem('pref:sidebarMode') === 'collapsed') {
+        if (storage.getItem('pref:sidebarMode') === 'collapsed' || layoutManager.isModernCollapsedSidebarLayout()) {
             expanded = false;
         }
         if (this.expanded === expanded) return;
@@ -784,6 +851,9 @@ class Sidebar extends Component {
                 `;
 
                 this._bindItem(btn, () => {
+                    if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                        this._toggleFloatingLibraries(false);
+                    }
                     router.navigate(buttonPath);
                 });
 
@@ -809,6 +879,101 @@ class Sidebar extends Component {
             focusManager.resetDOMCache();
         } catch (e) {
             log.warn('Failed to load libraries', e);
+        }
+    }
+
+    /**
+     * Toggles the floating libraries popover window in Modern Collapsed layout.
+     * Follows Apple HIG popover presentation principles with instant feedback and focus trapping.
+     * @param {boolean|null} forceState
+     * @private
+     */
+    _toggleFloatingLibraries(forceState = null) {
+        const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+        const libBtn = this.el.querySelector('#sidebar-libraries');
+        if (!subLibs || !libBtn) return;
+
+        // If parent button is hidden, force-close and prevent opening
+        if (libBtn.style.display === 'none' || libBtn.hasAttribute('hidden')) {
+            this.floatingLibrariesOpen = false;
+            subLibs.classList.remove('open');
+            subLibs.classList.add('hidden');
+            subLibs.style.display = 'none';
+            subLibs.setAttribute('hidden', '');
+            return;
+        }
+
+        const next = forceState !== null ? forceState : !this.floatingLibrariesOpen;
+        this.floatingLibrariesOpen = next;
+
+        subLibs.classList.toggle('open', next);
+        subLibs.classList.toggle('hidden', !next);
+        libBtn.classList.toggle('open', next);
+
+        const childBtns = subLibs.querySelectorAll('.library-item');
+
+        if (next) {
+            subLibs.removeAttribute('hidden');
+            subLibs.style.display = 'flex';
+
+            // Calculate vertical positioning beside the libraries button inside .sidebar-content
+            const topOffset = typeof libBtn.offsetTop === 'number' ? libBtn.offsetTop : 150;
+            subLibs.style.top = `${Math.max(10, topOffset - 6)}px`;
+
+            childBtns.forEach((btn) => {
+                btn.classList.remove('hidden');
+                btn.style.display = 'flex';
+                btn.tabIndex = 0;
+            });
+
+            // Refresh DOM focus cache
+            focusManager.resetDOMCache();
+            focusManager.invalidateCache('sidebar');
+
+            // Set active focus inside floating window
+            const activeLib = subLibs.querySelector('.library-item.active') || childBtns[0];
+            if (activeLib) {
+                activeLib.focus();
+            }
+        } else {
+            const wasFocusInside = subLibs.contains(document.activeElement);
+
+            subLibs.setAttribute('hidden', '');
+            subLibs.style.display = 'none';
+            childBtns.forEach((btn) => {
+                btn.classList.add('hidden');
+                btn.style.display = 'none';
+                btn.tabIndex = -1;
+                btn.classList.remove('focused');
+            });
+
+            // Clear inline style
+            subLibs.style.top = '';
+
+            focusManager.resetDOMCache();
+            focusManager.invalidateCache('sidebar');
+
+            // Only restore focus to libBtn if focus was actually inside the popover
+            if (wasFocusInside) {
+                libBtn.focus();
+            }
+        }
+    }
+
+    /**
+     * Checks if the floating libraries window is currently open.
+     * @returns {boolean}
+     */
+    isFloatingLibrariesOpen() {
+        return !!this.floatingLibrariesOpen;
+    }
+
+    /**
+     * Closes the floating libraries popover if open.
+     */
+    closeFloatingLibraries() {
+        if (this.floatingLibrariesOpen) {
+            this._toggleFloatingLibraries(false);
         }
     }
 
@@ -993,7 +1158,11 @@ class Sidebar extends Component {
         if (libToggle) {
             libToggle.classList.toggle('active', isModern && hasActiveLibrary);
             if (isModern) {
-                if (hasActiveLibrary) {
+                if (layoutManager.isModernCollapsedSidebarLayout()) {
+                    if (this.floatingLibrariesOpen) {
+                        this._toggleFloatingLibraries(false);
+                    }
+                } else if (hasActiveLibrary) {
                     // When in an active library route, keep libraries accordion open
                     this._toggleLibraries(true);
                 } else if (this.librariesExpanded && !this.expanded) {

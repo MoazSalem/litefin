@@ -150,8 +150,10 @@
     will-change: transform;
 }
 
-[data-theme-mode="ambient"] .sidebar.expanded,
-[data-theme-mode="ambient"] .sidebar:hover {
+html:not([data-layout-sidebar="modern-collapsed"]) [data-theme-mode="ambient"] .sidebar.expanded,
+html:not([data-layout-sidebar="modern-collapsed"]) [data-theme-mode="ambient"] .sidebar:hover,
+html:not([data-layout-sidebar="modern-collapsed"])[data-theme-mode="ambient"] .sidebar.expanded,
+html:not([data-layout-sidebar="modern-collapsed"])[data-theme-mode="ambient"] .sidebar:hover {
     /* 1. Seamless solid gradient when expanded */
     /* Flows from a rich accent glow (15%) at the top-left to a deep matte charcoal at the bottom-right */
     /* Layered over solid base color #0a0b0c to prevent background elements from bleeding through */

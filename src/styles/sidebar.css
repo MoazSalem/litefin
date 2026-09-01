@@ -648,13 +648,13 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     z-index: 5;
 }
 
-html[data-layout-sidebar="modern"] .sidebar-footer {
+html[data-layout-sidebar^="modern"] .sidebar-footer {
     display: flex;
     margin-top: auto;
     padding-bottom: 16px;
 }
 
-html:not([data-layout-sidebar="modern"]) .sidebar-footer:empty {
+html:not([data-layout-sidebar^="modern"]) .sidebar-footer:empty {
     display: none;
 }
 
@@ -871,7 +871,7 @@ html[data-layout-tier="ultra-legacy"] #sidebar-random.focused .item-icon svg {
 }
 
 /* Hide Modern-specific libraries accordion in classic sidebar layout */
-html:not([data-layout-sidebar="modern"]) #sidebar-libraries,
-html:not([data-layout-sidebar="modern"]) .sidebar-sub-libraries {
+html:not([data-layout-sidebar^="modern"]) #sidebar-libraries,
+html:not([data-layout-sidebar^="modern"]) .sidebar-sub-libraries {
     display: none !important;
 }

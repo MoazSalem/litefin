@@ -1536,7 +1536,8 @@ class SettingsPage extends Page {
                             'sidebar-layout-select',
                             [
                                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
-                                { value: 'modern', label: i18n.t('LayoutModernSidebar') || 'Modern' }
+                                { value: 'modern', label: i18n.t('LayoutModernSidebar') || 'Modern' },
+                                { value: 'modern-collapsed', label: i18n.t('LayoutModernCollapsedSidebar') || 'Modern Collapsed' }
                             ],
                             layoutManager.getSidebarLayout() || 'modern'
                         )}

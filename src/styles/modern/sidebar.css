@@ -2,25 +2,12 @@
  * ============================================================================
  * Litefin Tizen - Modern Sidebar Layout Styles
  * ============================================================================
- * Implements Apple Human Interface Guidelines (HIG) for a modern, sleek,
- * squircle-accented sidebar navigation layout.
- *
- * Design Architecture:
- *   - Collapsed Mode: Independent, centered squircle indicator behind active icon.
- *   - Expanded Mode: Unified, single-surface row capsule (no double box / nesting).
- *   - Single Library Accordion: Libraries condensed into a single expandable item
- *     in modern mode, represented by a collections/books icon in collapsed rail.
- *   - Zero Nudge: Constant width & height across all expansion states for zero
- *     horizontal or vertical icon jitter during open/close transitions.
- *   - Performance-tuned: Zero backdrop blur filters, zero heavy drop shadows.
- *   - Apple fluid spring physics for focus and hover interactions.
- * ============================================================================
  */
 
 /* ----------------------------------------------------------------------------
-   1. Modern Sidebar Container
+   1. Modern Sidebar Container (Applies to both Modern & Modern Collapsed)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar="modern"] .sidebar {
+html[data-layout-sidebar^="modern"] .sidebar {
     /* Rounded outer right profile for a modern floating look */
     border-top-right-radius: 20px;
     border-bottom-right-radius: 20px;
@@ -38,7 +25,7 @@ html[data-layout-sidebar="modern"] .sidebar {
 /* ----------------------------------------------------------------------------
    2. Sidebar Items: Base Layout (Constant geometry for zero nudge)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar="modern"] .sidebar-item {
+html[data-layout-sidebar^="modern"] .sidebar-item {
     width: 100%;
     margin: 0;
     padding: 0;
@@ -55,22 +42,22 @@ html[data-layout-sidebar="modern"] .sidebar-item {
     transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.15s ease;
 }
 
-/* Unselected items: clean muted tone matching reference */
-html[data-layout-sidebar="modern"] .sidebar-item:not(.active):not(:focus):not(.focused) {
+/* Unselected items: clean muted tone */
+html[data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused) {
     color: rgba(255, 255, 255, 0.45);
 }
 
 /* ----------------------------------------------------------------------------
    3. Collapsed Mode: Centered Squircle Icon Indicator
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar="modern"] .item-icon {
+html[data-layout-sidebar^="modern"] .item-icon {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-html[data-layout-sidebar="modern"] .item-icon::before {
+html[data-layout-sidebar^="modern"] .item-icon::before {
     content: '';
     position: absolute;
     top: 50%;
@@ -93,52 +80,52 @@ html[data-layout-sidebar="modern"] .item-icon::before {
 }
 
 /* Active / Selected item in Collapsed Mode: High-contrast squircle highlight */
-html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.active .item-icon::before {
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.active .item-icon::before {
     background: rgba(255, 255, 255, 0.14);
     border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Hover highlight on collapsed squircle */
-html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:hover .item-icon::before {
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:hover .item-icon::before {
     background: rgba(255, 255, 255, 0.08);
 }
 
 /* Active icon: solid crisp white */
-html[data-layout-sidebar="modern"] .sidebar-item.active .item-icon {
+html[data-layout-sidebar^="modern"] .sidebar-item.active .item-icon {
     color: #ffffff;
 }
 
 /* Custom selected color override support */
-html[data-layout-sidebar="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active .item-icon {
+html[data-layout-sidebar^="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active .item-icon {
     color: var(--jf-accent);
 }
 
 /* Focus on collapsed state: scale icon with spring physics */
-html[data-layout-sidebar="modern"] .sidebar-item:focus,
-html[data-layout-sidebar="modern"] .sidebar-item.focused {
+html[data-layout-sidebar^="modern"] .sidebar-item:focus,
+html[data-layout-sidebar^="modern"] .sidebar-item.focused {
     color: var(--jf-primary-btn-color, #ffffff) !important;
     z-index: 20;
 }
 
-html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon,
-html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon {
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon,
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon {
     -webkit-transform: translate3d(250px, 0, 0) scale(1.08) !important;
     transform: translate3d(250px, 0, 0) scale(1.08) !important;
 }
 
-html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon::before,
-html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon::before {
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon::before {
     background: var(--jf-accent, #af52de);
     border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Disable classic sliding focus bar in modern layout mode */
-html[data-layout-sidebar="modern"] .sidebar-focus-indicator {
+html[data-layout-sidebar^="modern"] .sidebar-focus-indicator {
     display: none !important;
 }
 
 /* ----------------------------------------------------------------------------
-   4. Expanded Mode: Unified Single-Surface Row Capsule (Zero Nudge)
+   4. Expanded Mode: Unified Single-Surface Row Capsule (Modern Expandable Only)
    ---------------------------------------------------------------------------- */
 html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item,
 html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item {
@@ -221,12 +208,12 @@ html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item.focused::after {
    5. Modern Libraries Single Accordion Item & Sub-list
    ---------------------------------------------------------------------------- */
 /* Hide classic section header in modern layout */
-html[data-layout-sidebar="modern"] #section-header {
+html[data-layout-sidebar^="modern"] #section-header {
     display: none !important;
 }
 
 /* Ensure modern libraries toggle is visible */
-html[data-layout-sidebar="modern"] #sidebar-libraries {
+html[data-layout-sidebar^="modern"] #sidebar-libraries {
     display: flex;
 }
 
@@ -285,7 +272,7 @@ html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries.open {
 }
 
 /* In collapsed mode, keep sub-libraries completely hidden so only the single libraries icon shows */
-html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-sub-libraries {
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-sub-libraries {
     display: none !important;
 }
 
@@ -346,7 +333,7 @@ html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .librar
 /* ----------------------------------------------------------------------------
    6. Modern Sidebar Footer (User Profile Pinned at Bottom)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar="modern"] .sidebar-footer {
+html[data-layout-sidebar^="modern"] .sidebar-footer {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -359,7 +346,7 @@ html[data-layout-sidebar="modern"] .sidebar-footer {
 /* ----------------------------------------------------------------------------
    7. RTL Support for Modern Sidebar
    ---------------------------------------------------------------------------- */
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar {
+[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
     border-top-left-radius: 20px;
@@ -368,7 +355,7 @@ html[data-layout-sidebar="modern"] .sidebar-footer {
     border-left: none !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     background: -webkit-linear-gradient(right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
     background: linear-gradient(to left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
     border-left-color: transparent !important;
@@ -377,4 +364,385 @@ html[data-layout-sidebar="modern"] .sidebar-footer {
 [dir="rtl"] html[data-layout-sidebar="modern"] .sidebar-chevron {
     margin-left: 18px;
     margin-right: auto;
+}
+
+/* ----------------------------------------------------------------------------
+   8. Modern Collapsed Specific Layout & Tooltip Styles
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern-collapsed"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-content,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-footer,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item {
+    overflow: visible !important;
+}
+
+/* Force fixed collapsed rail translation and width across all hover / expanded states */
+html[data-layout-sidebar="modern-collapsed"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded {
+    width: var(--sidebar-width-expanded) !important;
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+/* Ensure icons and logo stay anchored at 250px on hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(250px, 0, 0) scale(1.08) !important;
+}
+
+/* Hide logo text and hover trigger in modern-collapsed */
+html[data-layout-sidebar="modern-collapsed"] .logo-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-hover-trigger {
+    display: none !important;
+}
+
+/* Tooltip floating to the right of focused / hovered item */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label {
+    position: absolute !important;
+    left: 342px !important;
+    right: auto !important;
+    top: 50% !important;
+    display: inline-block !important;
+    width: auto !important;
+    max-width: 300px !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+    padding: 8px 18px !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+    background: var(--jf-accent, #af52de) !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    box-shadow: none !important;
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.25px !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    z-index: 9999 !important;
+    -webkit-transform: translate3d(0, -50%, 0) scale(0.9) !important;
+    transform: translate3d(0, -50%, 0) scale(0.9) !important;
+    -webkit-transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        visibility 0.2s !important;
+    transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                visibility 0.2s !important;
+}
+
+/* Reveal tooltip with Apple fluid spring scaling on focus / hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-syncplay-label {
+    opacity: 1 !important;
+    visibility: visible !important;
+    -webkit-transform: translate3d(0, -50%, 0) scale(1) !important;
+    transform: translate3d(0, -50%, 0) scale(1) !important;
+}
+
+/* Suppress expanded mode row capsule overlays completely in modern-collapsed */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item::after,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item::after,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded .sidebar-item::after {
+    display: none !important;
+}
+
+/* Maintain active squircle highlight on item in modern-collapsed regardless of hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active .item-icon::before {
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Maintain focused squircle theme accent on item in modern-collapsed regardless of hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon::before {
+    background: var(--jf-accent, #af52de) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Maintain active icon color */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active .item-icon {
+    color: #ffffff !important;
+}
+html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar-item.active .item-icon,
+html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active .item-icon {
+    color: var(--jf-accent) !important;
+}
+
+/* Maintain focused item color */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+/* Maintain unselected items clean muted tone */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: rgba(255, 255, 255, 0.45) !important;
+}
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon::before {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Lock default and themed sidebar container backgrounds across all hover and expanded states */
+html[data-layout-sidebar="modern-collapsed"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded {
+    background-color: var(--sidebar-bg) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar:hover,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.expanded {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+/* Maintain transparent collapsed background gradient on hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed.expanded {
+    background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    box-shadow: none !important;
+    border-right-color: transparent !important;
+}
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed:hover,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed.expanded {
+    background: -webkit-linear-gradient(right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    border-left-color: transparent !important;
+}
+
+/* Maintain custom color backgrounds on modern-collapsed hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed.expanded {
+    background: rgba(16, 16, 16, 0.4) !important;
+    background-image: none !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] .sidebar.tinted-semi-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.tinted-semi-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.tinted-semi-collapsed.expanded {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+    background-image: none !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] .sidebar.black-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.black-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.black-collapsed.expanded {
+    background: #000000 !important;
+    background-image: none !important;
+}
+
+/* Hide chevron in modern-collapsed mode */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-chevron {
+    display: none !important;
+}
+
+/* RTL Support for Modern Collapsed Tooltip */
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label {
+    left: auto !important;
+    right: 342px !important;
+}
+
+/* ----------------------------------------------------------------------------
+   9. Modern Collapsed Floating Libraries Popover Window
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries {
+    position: absolute !important;
+    left: 342px !important;
+    right: auto !important;
+    width: 240px !important;
+    max-height: calc(100vh - 60px) !important;
+    background: #18191c !important;
+    background-color: #18191c !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+    padding: 8px !important;
+    z-index: 10000 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: none;
+    flex-direction: column !important;
+    opacity: 0;
+    visibility: hidden;
+    -webkit-transform: scale(0.92) translate3d(0, 0, 0);
+    transform: scale(0.92) translate3d(0, 0, 0);
+    -webkit-transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        visibility 0.2s;
+    transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                visibility 0.2s;
+}
+
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] #sidebar-sub-libraries {
+    background: #0f1013 !important;
+    background-color: #0f1013 !important;
+    border-color: rgba(var(--jf-accent-rgb), 0.35) !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries.open {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    -webkit-transform: scale(1) translate3d(0, 0, 0) !important;
+    transform: scale(1) translate3d(0, 0, 0) !important;
+}
+
+/* Individual library item row inside modern-collapsed popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    border-radius: 10px !important;
+    padding: 0 12px !important;
+    margin: 2px 0 !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    box-sizing: border-box !important;
+    cursor: pointer;
+    outline: none;
+    border: none;
+    -webkit-transition: background-color 0.2s ease, color 0.15s ease, -webkit-transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background-color 0.2s ease, color 0.15s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Library icon reset inside popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon {
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    margin: 0 10px 0 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    -webkit-transform: none !important;
+    transform: none !important;
+    color: inherit !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon::before {
+    display: none !important;
+}
+
+/* Library text reset inside popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-text {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    color: inherit !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* Active library item in popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.active {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+/* Focused & Hovered library item in popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.focused,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:hover {
+    background: var(--jf-accent, #af52de) !important;
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    -webkit-transform: scale(1.02) !important;
+    transform: scale(1.02) !important;
+}
+
+/* RTL Support for popover */
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries {
+    left: auto !important;
+    right: calc(var(--sidebar-width-collapsed) + 12px) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon {
+    margin: 0 0 0 10px !important;
 }
