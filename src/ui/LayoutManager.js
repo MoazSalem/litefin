@@ -363,12 +363,21 @@ class LayoutManager {
     }
 
     /**
-     * Checks if the sidebar is currently configured with the modern-collapsed layout.
-     * In this mode, the sidebar never expands its rail and displays tooltips on focus.
-     * @returns {boolean} True if sidebar layout is 'modern-collapsed'.
+     * Checks if the sidebar is currently configured with the modern-collapsed or floating-buttons layout.
+     * In these modes, the sidebar never expands its rail and displays tooltips on focus.
+     * @returns {boolean} True if sidebar layout is 'modern-collapsed' or 'floating-buttons'.
      */
     isModernCollapsedSidebarLayout() {
-        return this._sidebarLayout === 'modern-collapsed';
+        return this._sidebarLayout === 'modern-collapsed' || this._sidebarLayout === 'floating-buttons';
+    }
+
+    /**
+     * Checks if the sidebar is currently configured with the floating-buttons layout.
+     * In this mode, each sidebar button renders as an individual floating island.
+     * @returns {boolean} True if sidebar layout is 'floating-buttons'.
+     */
+    isFloatingButtonsSidebarLayout() {
+        return this._sidebarLayout === 'floating-buttons';
     }
 
     /**

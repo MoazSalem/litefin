@@ -1537,7 +1537,8 @@ class SettingsPage extends Page {
                             [
                                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
                                 { value: 'modern', label: i18n.t('LayoutModernSidebar') || 'Modern' },
-                                { value: 'modern-collapsed', label: i18n.t('LayoutModernCollapsedSidebar') || 'Modern Collapsed' }
+                                { value: 'modern-collapsed', label: i18n.t('LayoutModernCollapsedSidebar') || 'Modern Collapsed' },
+                                { value: 'floating-buttons', label: i18n.t('LayoutFloatingButtonsSidebar') || 'Floating Buttons' }
                             ],
                             layoutManager.getSidebarLayout() || 'modern'
                         )}
@@ -2660,7 +2661,7 @@ class SettingsPage extends Page {
                     label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
                 }
             ],
-            storage.getItem('pref:collapsedSidebarColor') || 'theme'
+            storage.getItem('pref:collapsedSidebarColor') || 'transparent'
         )}
                     </div>
                 </div>

@@ -356,6 +356,11 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
     margin-left: 15px;
 }
 
+/* Base logo action tooltip: hidden by default in normal layouts */
+.logo-tooltip {
+    display: none;
+}
+
 /* Items */
 .sidebar-item {
     display: flex;
@@ -648,13 +653,14 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     z-index: 5;
 }
 
-html[data-layout-sidebar^="modern"] .sidebar-footer {
+html[data-layout-sidebar^="modern"] .sidebar-footer,
+html[data-layout-sidebar="floating-buttons"] .sidebar-footer {
     display: flex;
     margin-top: auto;
     padding-bottom: 16px;
 }
 
-html:not([data-layout-sidebar^="modern"]) .sidebar-footer:empty {
+html:not([data-layout-sidebar^="modern"]):not([data-layout-sidebar="floating-buttons"]) .sidebar-footer:empty {
     display: none;
 }
 
@@ -871,7 +877,7 @@ html[data-layout-tier="ultra-legacy"] #sidebar-random.focused .item-icon svg {
 }
 
 /* Hide Modern-specific libraries accordion in classic sidebar layout */
-html:not([data-layout-sidebar^="modern"]) #sidebar-libraries,
-html:not([data-layout-sidebar^="modern"]) .sidebar-sub-libraries {
+html:not([data-layout-sidebar^="modern"]):not([data-layout-sidebar="floating-buttons"]) #sidebar-libraries,
+html:not([data-layout-sidebar^="modern"]):not([data-layout-sidebar="floating-buttons"]) .sidebar-sub-libraries {
     display: none !important;
 }

@@ -452,12 +452,28 @@ class Sidebar extends Component {
             logoHeader.setAttribute('data-focusable', isClickable.toString());
             logoHeader.setAttribute('tabindex', isClickable ? '0' : '-1');
 
+            // Manage dynamic action tooltip for modern-collapsed and floating-buttons layouts
+            let tooltipEl = logoHeader.querySelector('.logo-tooltip');
+            if (!tooltipEl) {
+                tooltipEl = document.createElement('span');
+                tooltipEl.className = 'item-text logo-tooltip';
+                logoHeader.appendChild(tooltipEl);
+            }
+
             if (logoPref === 'settings') {
                 logoHeader.dataset.path = '/settings';
+                tooltipEl.textContent = i18n.t('Settings') || 'Settings';
+                tooltipEl.setAttribute('data-i18n', 'Settings');
+                tooltipEl.style.display = '';
             } else if (logoPref === 'home') {
                 logoHeader.dataset.path = '/home';
+                tooltipEl.textContent = i18n.t('Home') || 'Home';
+                tooltipEl.setAttribute('data-i18n', 'Home');
+                tooltipEl.style.display = '';
             } else {
                 delete logoHeader.dataset.path;
+                tooltipEl.textContent = '';
+                tooltipEl.style.display = 'none';
             }
 
             // Show/hide settings button
@@ -598,9 +614,17 @@ class Sidebar extends Component {
             this._expand(false);
         });
 
-        // Logo click handler
+        // Logo click handler (supports both Settings and Home target paths)
         this._bindItem(this.el.querySelector('#sidebar-logo-header'), () => {
-            router.navigate('/settings');
+            const logoEl = this.el.querySelector('#sidebar-logo-header');
+            const targetPath = logoEl?.dataset?.path;
+            if (targetPath) {
+                if (targetPath === '/home') {
+                    router.reset(targetPath);
+                } else {
+                    router.navigate(targetPath);
+                }
+            }
         });
 
         // Navigation Clicks for other standard items
@@ -1093,7 +1117,7 @@ class Sidebar extends Component {
     }
 
     _updateTransparentCollapsed() {
-        const colorPref = storage.getItem('pref:collapsedSidebarColor') || 'theme';
+        const colorPref = storage.getItem('pref:collapsedSidebarColor') || 'transparent';
         const expandedColorPref = storage.getItem('pref:expandedSidebarColor') || 'theme';
         this.el.classList.toggle('transparent-collapsed', colorPref === 'transparent');
         this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');

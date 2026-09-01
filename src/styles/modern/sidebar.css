@@ -7,7 +7,8 @@
 /* ----------------------------------------------------------------------------
    1. Modern Sidebar Container (Applies to both Modern & Modern Collapsed)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar^="modern"] .sidebar {
+html[data-layout-sidebar^="modern"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar {
     /* Rounded outer right profile for a modern floating look */
     border-top-right-radius: 20px;
     border-bottom-right-radius: 20px;
@@ -25,7 +26,8 @@ html[data-layout-sidebar^="modern"] .sidebar {
 /* ----------------------------------------------------------------------------
    2. Sidebar Items: Base Layout (Constant geometry for zero nudge)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar^="modern"] .sidebar-item {
+html[data-layout-sidebar^="modern"] .sidebar-item,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item {
     width: 100%;
     margin: 0;
     padding: 0;
@@ -43,21 +45,28 @@ html[data-layout-sidebar^="modern"] .sidebar-item {
 }
 
 /* Unselected items: clean muted tone */
-html[data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused) {
+html[data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused) {
     color: rgba(255, 255, 255, 0.45);
 }
 
 /* ----------------------------------------------------------------------------
    3. Collapsed Mode: Centered Squircle Icon Indicator
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar^="modern"] .item-icon {
+html[data-layout-sidebar^="modern"] .item-icon,
+html[data-layout-sidebar^="modern"] .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .item-icon,
+html[data-layout-sidebar="floating-buttons"] .logo-icon {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-html[data-layout-sidebar^="modern"] .item-icon::before {
+html[data-layout-sidebar^="modern"] .item-icon::before,
+html[data-layout-sidebar^="modern"] .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .logo-icon::before {
     content: '';
     position: absolute;
     top: 50%;
@@ -79,8 +88,8 @@ html[data-layout-sidebar^="modern"] .item-icon::before {
                 transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Active / Selected item in Collapsed Mode: High-contrast squircle highlight */
-html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.active .item-icon::before {
+/* Active / Selected item in Collapsed Mode: High-contrast squircle highlight (Only when NOT focused) */
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.active:not(:focus):not(.focused) .item-icon::before {
     background: rgba(255, 255, 255, 0.14);
     border-color: rgba(255, 255, 255, 0.08);
 }
@@ -91,18 +100,22 @@ html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar
 }
 
 /* Active icon: solid crisp white */
-html[data-layout-sidebar^="modern"] .sidebar-item.active .item-icon {
+html[data-layout-sidebar^="modern"] .sidebar-item.active .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active .item-icon {
     color: #ffffff;
 }
 
-/* Custom selected color override support */
-html[data-layout-sidebar^="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active .item-icon {
+/* Custom selected color override support (Only when NOT focused) */
+html[data-layout-sidebar^="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon {
     color: var(--jf-accent);
 }
 
 /* Focus on collapsed state: scale icon with spring physics */
 html[data-layout-sidebar^="modern"] .sidebar-item:focus,
-html[data-layout-sidebar^="modern"] .sidebar-item.focused {
+html[data-layout-sidebar^="modern"] .sidebar-item.focused,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused {
     color: var(--jf-primary-btn-color, #ffffff) !important;
     z-index: 20;
 }
@@ -120,7 +133,8 @@ html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar
 }
 
 /* Disable classic sliding focus bar in modern layout mode */
-html[data-layout-sidebar^="modern"] .sidebar-focus-indicator {
+html[data-layout-sidebar^="modern"] .sidebar-focus-indicator,
+html[data-layout-sidebar="floating-buttons"] .sidebar-focus-indicator {
     display: none !important;
 }
 
@@ -367,19 +381,26 @@ html[data-layout-sidebar^="modern"] .sidebar-footer {
 }
 
 /* ----------------------------------------------------------------------------
-   8. Modern Collapsed Specific Layout & Tooltip Styles
+   8. Modern Collapsed & Floating Buttons Shared Tooltip & Geometry
    ---------------------------------------------------------------------------- */
 html[data-layout-sidebar="modern-collapsed"] .sidebar,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-content,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-footer,
-html[data-layout-sidebar="modern-collapsed"] .sidebar-item {
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item,
+html[data-layout-sidebar="floating-buttons"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar-content,
+html[data-layout-sidebar="floating-buttons"] .sidebar-footer,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item {
     overflow: visible !important;
 }
 
 /* Force fixed collapsed rail translation and width across all hover / expanded states */
 html[data-layout-sidebar="modern-collapsed"] .sidebar,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
-html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded {
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
+html[data-layout-sidebar="floating-buttons"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
+html[data-layout-sidebar="floating-buttons"] .sidebar.expanded {
     width: var(--sidebar-width-expanded) !important;
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
@@ -389,7 +410,11 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded {
 html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
 html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
-html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon {
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon {
     -webkit-transform: translate3d(250px, 0, 0) !important;
     transform: translate3d(250px, 0, 0) !important;
 }
@@ -397,22 +422,50 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon {
 html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
 html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
-html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon {
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
     -webkit-transform: translate3d(250px, 0, 0) scale(1.08) !important;
     transform: translate3d(250px, 0, 0) scale(1.08) !important;
 }
 
-/* Hide logo text and hover trigger in modern-collapsed */
+/* Hide logo text and hover trigger in collapsed modes */
 html[data-layout-sidebar="modern-collapsed"] .logo-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-text,
-html[data-layout-sidebar="modern-collapsed"] .sidebar-hover-trigger {
+html[data-layout-sidebar="modern-collapsed"] .sidebar-hover-trigger,
+html[data-layout-sidebar="floating-buttons"] .logo-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-hover-trigger {
+    display: none !important;
+}
+
+/* Hide logo action tooltip in normal expanded modern and classic sidebars */
+.logo-tooltip,
+#sidebar-logo-header .logo-tooltip,
+html[data-layout-sidebar="modern"] #sidebar-logo-header .logo-tooltip,
+html:not([data-layout-sidebar^="modern"]):not([data-layout-sidebar="floating-buttons"]) #sidebar-logo-header .logo-tooltip {
     display: none !important;
 }
 
 /* Tooltip floating to the right of focused / hovered item */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header .logo-tooltip,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
-html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label {
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label {
     position: absolute !important;
     left: 342px !important;
     right: auto !important;
@@ -452,28 +505,46 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-lab
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .sidebar-user-name,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .sidebar-user-name,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-user-name,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .sidebar-syncplay-label,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .sidebar-syncplay-label,
-html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-syncplay-label {
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .sidebar-syncplay-label {
     opacity: 1 !important;
     visibility: visible !important;
     -webkit-transform: translate3d(0, -50%, 0) scale(1) !important;
     transform: translate3d(0, -50%, 0) scale(1) !important;
 }
 
-/* Suppress expanded mode row capsule overlays completely in modern-collapsed */
+/* Suppress expanded mode row capsule overlays completely in collapsed modes */
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item::after,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item::after,
-html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded .sidebar-item::after {
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded .sidebar-item::after,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item::after,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item::after,
+html[data-layout-sidebar="floating-buttons"] .sidebar.expanded .sidebar-item::after {
     display: none !important;
 }
 
-/* Maintain active squircle highlight on item in modern-collapsed regardless of hover */
-html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active .item-icon::before,
-html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active .item-icon::before {
+/* Maintain active squircle highlight on item in modern-collapsed regardless of hover (Only when NOT focused) */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active:not(:focus):not(.focused) .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon::before {
     background: rgba(255, 255, 255, 0.14) !important;
     border-color: rgba(255, 255, 255, 0.08) !important;
 }
@@ -482,34 +553,82 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-icon::before,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-icon::before,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon::before,
-html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon::before {
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before {
     background: var(--jf-accent, #af52de) !important;
     border-color: rgba(255, 255, 255, 0.25) !important;
 }
 
-/* Maintain active icon color */
-html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active .item-icon,
-html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active .item-icon {
+/* Modern-collapsed focused logo icon color override */
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:focus .logo-icon svg path,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item.focused .logo-icon svg path {
+    fill: currentColor !important;
+}
+
+/* Maintain active icon color (Only when not focused) */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon {
     color: #ffffff !important;
 }
-html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar-item.active .item-icon,
-html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active .item-icon {
+html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon {
     color: var(--jf-accent) !important;
 }
 
-/* Maintain focused item color */
+/* Maintain focused item color (Always crisp solid white on top of active/accent squircle) */
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-icon,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active.focused .item-icon,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
-html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon {
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.active.focused .item-icon {
     color: var(--jf-primary-btn-color, #ffffff) !important;
 }
 
-/* Maintain unselected items clean muted tone */
+html[data-layout-sidebar^="modern"] .sidebar-item:focus .item-icon svg,
+html[data-layout-sidebar^="modern"] .sidebar-item.focused .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-icon svg,
+html[data-layout-sidebar^="modern"] .sidebar-item.active:focus .item-icon svg,
+html[data-layout-sidebar^="modern"] .sidebar-item.active.focused .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active:focus .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active.focused .item-icon svg {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    fill: currentColor !important;
+}
+
+/* Maintain unselected items clean muted tone in modern-collapsed */
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused),
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
     color: rgba(255, 255, 255, 0.45) !important;
@@ -519,6 +638,44 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:foc
 }
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon::before {
     background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Floating Buttons unselected icons match normal action button color and contrast */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
+    color: var(--jf-action-btn-color, #ffffff) !important;
+}
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused):hover,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):hover {
+    color: #ffffff !important;
+}
+
+/* Floating Buttons active logo icon color override */
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+    color: #ffffff !important;
+}
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+    color: var(--jf-accent) !important;
+}
+
+/* Floating Buttons focused logo icon color override */
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:focus .logo-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.focused .logo-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:focus .logo-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active.focused .logo-icon svg path {
+    fill: currentColor !important;
 }
 
 /* Lock default and themed sidebar container backgrounds across all hover and expanded states */
@@ -577,15 +734,19 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar.black-collapsed.expanded {
     background-image: none !important;
 }
 
-/* Hide chevron in modern-collapsed mode */
-html[data-layout-sidebar="modern-collapsed"] .sidebar-chevron {
+/* Hide chevron in collapsed modes */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-chevron,
+html[data-layout-sidebar="floating-buttons"] .sidebar-chevron {
     display: none !important;
 }
 
-/* RTL Support for Modern Collapsed Tooltip */
+/* RTL Support for Tooltips */
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar.expanded {
     -webkit-transform: translate3d(250px, 0, 0) !important;
     transform: translate3d(250px, 0, 0) !important;
 }
@@ -593,7 +754,11 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar-chevron {
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon {
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
 }
@@ -601,22 +766,38 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar-chevron {
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1.08) !important;
     transform: translate3d(-250px, 0, 0) scale(1.08) !important;
 }
 
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label {
     left: auto !important;
     right: 342px !important;
 }
 
 /* ----------------------------------------------------------------------------
-   9. Modern Collapsed Floating Libraries Popover Window
+   9. Floating Libraries Popover Window (Shared across Collapsed & Floating)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries {
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries {
     position: absolute !important;
     left: 342px !important;
     right: auto !important;
@@ -645,13 +826,15 @@ html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries {
                 visibility 0.2s;
 }
 
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] #sidebar-sub-libraries {
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] #sidebar-sub-libraries,
+html[data-layout-sidebar="floating-buttons"][data-theme-mode="ambient"] #sidebar-sub-libraries {
     background: #0f1013 !important;
     background-color: #0f1013 !important;
     border-color: rgba(var(--jf-accent-rgb), 0.35) !important;
 }
 
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries.open {
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries.open,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries.open {
     display: flex !important;
     opacity: 1 !important;
     visibility: visible !important;
@@ -659,8 +842,9 @@ html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries.open {
     transform: scale(1) translate3d(0, 0, 0) !important;
 }
 
-/* Individual library item row inside modern-collapsed popover */
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item {
+/* Individual library item row inside popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item {
     display: flex !important;
     align-items: center !important;
     width: 100% !important;
@@ -680,7 +864,8 @@ html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-ite
 }
 
 /* Library icon reset inside popover */
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon {
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon {
     width: 32px !important;
     min-width: 32px !important;
     height: 32px !important;
@@ -694,12 +879,18 @@ html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-ite
     color: inherit !important;
 }
 
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon::before {
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon::before {
     display: none !important;
+    content: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 /* Library text reset inside popover */
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-text {
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-text,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-text {
     position: static !important;
     left: auto !important;
     top: auto !important;
@@ -721,7 +912,8 @@ html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-ite
 }
 
 /* Active library item in popover */
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.active {
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.active,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item.active {
     background: rgba(255, 255, 255, 0.1) !important;
     color: #ffffff !important;
     font-weight: 600 !important;
@@ -730,7 +922,10 @@ html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-ite
 /* Focused & Hovered library item in popover */
 html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:focus,
 html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.focused,
-html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:hover {
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:hover,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item.focused,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item:hover {
     background: var(--jf-accent, #af52de) !important;
     color: var(--jf-primary-btn-color, #ffffff) !important;
     -webkit-transform: scale(1.02) !important;
@@ -738,11 +933,86 @@ html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-ite
 }
 
 /* RTL Support for popover */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries {
     left: auto !important;
     right: calc(var(--sidebar-width-collapsed) + 12px) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon {
     margin: 0 0 0 10px !important;
+}
+
+/* ----------------------------------------------------------------------------
+   10. Floating Buttons Layout Dedicated Styling
+   ---------------------------------------------------------------------------- */
+/* Transparent sidebar rail container */
+html[data-layout-sidebar="floating-buttons"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
+html[data-layout-sidebar="floating-buttons"] .sidebar.expanded {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Each unselected / unfocused button has its own square/squircle background island matching standard action buttons */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(#sidebar-logo-header):not(.library-item):not(:focus):not(.focused):not(.active) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header:not(:focus):not(.focused):not(.active) .logo-icon::before {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
+    border-radius: 18px !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-transform: scale(1) !important;
+    transform: scale(1) !important;
+}
+
+/* Hover state on unfocused floating button */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(#sidebar-logo-header):not(.library-item):hover:not(:focus):not(.focused):not(.active) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:hover:not(:focus):not(.focused):not(.active) .logo-icon::before {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.14)) !important;
+    border: 2px solid var(--jf-action-btn-active-border, rgba(255, 255, 255, 0.50)) !important;
+    -webkit-transform: scale(1.04) !important;
+    transform: scale(1.04) !important;
+}
+
+/* Active route floating button (Only when NOT focused) */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.library-item).active:not(:focus):not(.focused) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).active:not(:focus):not(.focused) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon::before {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.18)) !important;
+    border: 2px solid var(--jf-action-btn-active-border, rgba(255, 255, 255, 0.35)) !important;
+}
+
+/* Master Focused Floating Button Squircle (Always vibrant accent on focus across all themes & active states) */
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item):focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item).focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item).active:focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item).active.focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item):focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).active:focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).active.focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.active:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.active.focused .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active.focused .logo-icon::before {
+    background: var(--jf-accent, #af52de) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    -webkit-transform: scale(1.08) !important;
+    transform: scale(1.08) !important;
 }
