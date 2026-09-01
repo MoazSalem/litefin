@@ -526,12 +526,12 @@ export class SeerrClient {
 
     /**
      * Gets user requests from Seerr with automatic route fallback.
-     * @param {number} [take=20]
+     * @param {number} [take=12]
      * @param {number} [skip=0]
      * @param {string} [filter='all']
      * @returns {Promise<Array<Object>>}
      */
-    async requests(take = 20, skip = 0, filter = 'all') {
+    async requests(take = 12, skip = 0, filter = 'all') {
         let payload = null;
         // Fallback route chain: /request -> /Request -> /Requests
         try {
@@ -615,10 +615,10 @@ export class SeerrClient {
 
     /**
      * Gets recently added media items from Seerr.
-     * @param {number} [take=20]
+     * @param {number} [take=12]
      * @returns {Promise<Array<Object>>}
      */
-    async recentlyAdded(take = 20) {
+    async recentlyAdded(take = 12) {
         let payload = null;
         try {
             payload = await this._request(`/RecentlyAdded?take=${take}`);
