@@ -2023,25 +2023,38 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelShowAddedDate">${i18n.t('LabelShowAddedDate') || 'Show Added Date'}</span>
-                        <span class="setting-description" data-i18n="ShowAddedDateDescription">${i18n.t('ShowAddedDateDescription') || 'Display the date this item was added to your library on the details page.'}</span>
+                        <span class="setting-name" data-i18n="LabelShowDates">${i18n.t('LabelShowDates') || 'Show Dates'}</span>
+                        <span class="setting-description" data-i18n="ShowDatesDescription">${i18n.t('ShowDatesDescription') || 'Display the date this item was added to your library or its premiere air date on the details page.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:showAddedDate') === 'true' ? 'active' : ''}" 
-                                id="toggle-show-added-date" 
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                'show-dates-select',
+                [
+                    { value: 'none', label: i18n.t('OptionDatesNone') || 'Hide All' },
+                    { value: 'both', label: i18n.t('OptionDatesBoth') || 'Show Both (Added & Aired)' },
+                    { value: 'added', label: i18n.t('OptionDatesAddedOnly') || 'Show Added Date Only' },
+                    { value: 'aired', label: i18n.t('OptionDatesAiredOnly') || 'Show Aired Date Only' }
+                ],
+                storage.getItem('pref:showDates') ||
+                (storage.getItem('pref:showAddedDate') === 'true' && storage.getItem('pref:showDateAired') === 'true'
+                    ? 'both'
+                    : storage.getItem('pref:showAddedDate') === 'true'
+                        ? 'added'
+                        : storage.getItem('pref:showDateAired') === 'true'
+                            ? 'aired'
+                            : 'none')
+            )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelShowDateAired">${i18n.t('LabelShowDateAired') || 'Show Date Aired'}</span>
-                        <span class="setting-description" data-i18n="ShowDateAiredDescription">${i18n.t('ShowDateAiredDescription') || 'Display the premiere date on the details page.'}</span>
+                        <span class="setting-name" data-i18n="LabelShowDatesIncludeYear">${i18n.t('LabelShowDatesIncludeYear') || 'Include Year in Dates'}</span>
+                        <span class="setting-description" data-i18n="ShowDatesIncludeYearDescription">${i18n.t('ShowDatesIncludeYearDescription') || 'Include the calendar year when displaying added and premiere dates on the details page.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:showDateAired') === 'true' ? 'active' : ''}" 
-                                id="toggle-show-date-aired" 
+                        <button class="toggle-switch ${storage.getItem('pref:showDatesIncludeYear') === 'true' ? 'active' : ''}" 
+                                id="toggle-show-dates-include-year" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -7942,6 +7955,7 @@ class SettingsPage extends Page {
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
             'details-layout-select': { key: 'pref:detailsLayout', type: 'local' },
             'episode-layout-select': { key: 'pref:episodeLayout', type: 'local' },
+            'show-dates-select': { key: 'pref:showDates', type: 'local' },
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
@@ -8717,15 +8731,15 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Show Date Aired
-        const showDateAiredToggle = this.$('#toggle-show-date-aired');
-        if (showDateAiredToggle) {
-            showDateAiredToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:showDateAired') === 'true';
+        // Toggle Switch for Include Year in Dates
+        const showDatesIncludeYearToggle = this.$('#toggle-show-dates-include-year');
+        if (showDatesIncludeYearToggle) {
+            showDatesIncludeYearToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:showDatesIncludeYear') === 'true';
                 const newValue = !currentValue;
-                storage.setItem('pref:showDateAired', newValue.toString());
-                showDateAiredToggle.classList.toggle('active', newValue);
-                log.info(`Show Date Aired set to: ${newValue}`);
+                storage.setItem('pref:showDatesIncludeYear', newValue.toString());
+                showDatesIncludeYearToggle.classList.toggle('active', newValue);
+                log.info(`Include Year in Dates set to: ${newValue}`);
             });
         }
 

@@ -2216,7 +2216,13 @@ class DetailsPage extends Page {
             item.CommunityRating && shouldShowScore(item)
                 ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
                 : '';
-        const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
+        const criticScore = item.CriticRating
+            ? (String(item.CriticRating).endsWith('%') ? item.CriticRating : `${Math.round(item.CriticRating)}%`)
+            : '';
+        const criticRating =
+            item.CriticRating && shouldShowScore(item)
+                ? `${detailsIcons.rottenTomatoesFresh}${criticScore}`
+                : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
@@ -2227,30 +2233,52 @@ class DetailsPage extends Page {
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
         // --- Added & Aired Dates ---
-        // Conditionally render library metadata based on global user preferences.
-        let addedHtml = '';
-        if (storage.getItem('pref:showAddedDate') === 'true' && item.DateCreated) {
-            addedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Added')}: ${formatDate(item.DateCreated)}</span>`;
+        // Retrieve merged dates display setting with graceful fallback to legacy preferences
+        let showDatesMode = storage.getItem('pref:showDates');
+        if (!showDatesMode) {
+            const addedLegacy = storage.getItem('pref:showAddedDate') === 'true';
+            const airedLegacy = storage.getItem('pref:showDateAired') === 'true';
+            if (addedLegacy && airedLegacy) {
+                showDatesMode = 'both';
+            } else if (addedLegacy) {
+                showDatesMode = 'added';
+            } else if (airedLegacy) {
+                showDatesMode = 'aired';
+            } else {
+                showDatesMode = 'none';
+            }
         }
 
-        let airedHtml = '';
-        if (storage.getItem('pref:showDateAired') === 'true' && item.PremiereDate) {
-            airedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Aired')}: ${formatDate(item.PremiereDate)}</span>`;
+        const includeYear = storage.getItem('pref:showDatesIncludeYear') === 'true';
+
+        let addedText = '';
+        if ((showDatesMode === 'both' || showDatesMode === 'added') && item.DateCreated) {
+            const formatted = formatDate(item.DateCreated, { includeYear });
+            if (formatted) {
+                addedText = `${i18n.t('Added') || 'Added'} ${formatted}`;
+            }
         }
 
-        // Logic: If both are enabled and present, move them to a new row for better clarity.
-        // Otherwise, append to the main row if only one exists.
-        const bothEnabled =
-            storage.getItem('pref:showAddedDate') === 'true' &&
-            item.DateCreated &&
-            storage.getItem('pref:showDateAired') === 'true' &&
-            item.PremiereDate;
+        let airedText = '';
+        if ((showDatesMode === 'both' || showDatesMode === 'aired') && item.PremiereDate) {
+            const formatted = formatDate(item.PremiereDate, { includeYear });
+            if (formatted) {
+                airedText = `${i18n.t('Aired') || 'Aired'} ${formatted}`;
+            }
+        }
 
-        let secondaryMetaRow = '';
-        if (bothEnabled) {
-            secondaryMetaRow = `<div class="details-meta-row">${addedHtml}${airedHtml}</div>`;
-        } else {
-            metaHtml += addedHtml + airedHtml;
+        // Combine added and aired dates with an interpunct delimiter if both are visible
+        let datesFormattedString = '';
+        if (addedText && airedText) {
+            datesFormattedString = `${addedText} · ${airedText}`;
+        } else if (addedText) {
+            datesFormattedString = addedText;
+        } else if (airedText) {
+            datesFormattedString = airedText;
+        }
+
+        if (datesFormattedString) {
+            metaHtml += `<span class="meta-item meta-item-dates">${datesFormattedString}</span>`;
         }
         let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
         const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
@@ -2356,12 +2384,11 @@ class DetailsPage extends Page {
             techHtml = this._renderTechnicalDetails();
         }
 
-        // Finish appending standard metadata row, secondary date labels, and technical specifications.
+        // Finish appending standard metadata row and technical specifications.
         heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
-            ${secondaryMetaRow}
             ${techHtml}
         `;
 
