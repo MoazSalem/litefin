@@ -84,10 +84,6 @@ class DiscoverPage extends Page {
                     <div class="discover-sentinel" id="discover-sentinel" style="height: 20px; width: 100%;"></div>
 
                     <div class="discover-message hidden" id="discover-message"></div>
-
-                    <div class="page-loading hidden">
-                        <div class="loading-spinner"></div>
-                    </div>
                 </main>
             </div>
         `;
@@ -96,11 +92,15 @@ class DiscoverPage extends Page {
     async onInit() {
         this.title = i18n.t('SeerrDiscover');
 
+        // Show page loading indicator immediately
+        this.setLoading(true);
+
         i18n.translateDOM(this.el);
 
         // Verify that the server-side Seerr integration is available before fetching
         const status = await seerr.status(true);
         if (!status.available) {
+            this.setLoading(false);
             this._showMessage(i18n.t('SeerrNotConfigured'), true);
             this.markReady();
             this.restoreScrollFocusWhenReady();
@@ -122,7 +122,8 @@ class DiscoverPage extends Page {
 
         if (this._isDestroyed) return;
 
-        // Reveal the page immediately with top priority rows fully ready
+        // Dismiss loading spinner and reveal the page immediately
+        this.setLoading(false);
         this.markReady();
         this.restoreScrollFocusWhenReady();
 
@@ -690,11 +691,6 @@ class DiscoverPage extends Page {
         this.$('#discover-message')?.classList.add('hidden');
     }
 
-    setLoading(show) {
-        const spinner = this.$('.page-loading');
-        if (!spinner) return;
-        spinner.classList.toggle('hidden', !show);
-    }
 
     // ========================================================================
     // Lifecycle & Cleanup

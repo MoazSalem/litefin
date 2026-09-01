@@ -116,16 +116,24 @@ html[data-layout-tier="ultra-legacy"] .search-input {
 }
 
 .search-empty,
-.search-no-results {
+.search-no-results,
+.search-loading {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 60vh;
+    height: 80vh;
     /* Occupy vertical space to center */
     color: var(--jf-text-primary);
     /* Remove dimming */
     opacity: 1;
+}
+
+.search-loading .loading-spinner {
+    position: relative;
+    top: auto;
+    left: auto;
+    margin: 0;
 }
 
 .search-empty .empty-icon {

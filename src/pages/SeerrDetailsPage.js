@@ -124,7 +124,6 @@ class SeerrDetailsPage extends Page {
                     </section>
 
                     <div class="discover-message hidden" id="seerr-details-message"></div>
-                    <div class="page-loading hidden"><div class="loading-spinner"></div></div>
                 </div>
             </div>
         `;

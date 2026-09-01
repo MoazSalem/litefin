@@ -75,6 +75,11 @@ class SearchPage extends Page {
                         <!-- Results rendered here -->
                     </div>
                     
+                    <!-- Dedicated search loading spinner -->
+                    <div class="search-loading hidden" id="search-loading">
+                        <div class="loading-spinner"></div>
+                    </div>
+                    
                     <!-- Empty state -->
                     <div class="search-empty hidden" id="search-empty">
                         <p class="empty-icon">
@@ -89,11 +94,6 @@ class SearchPage extends Page {
                     <!-- No results -->
                     <div class="search-no-results hidden" id="no-results">
                         <p id="no-results-text"></p>
-                    </div>
-                    
-                    <!-- Loading -->
-                    <div class="page-loading hidden">
-                        <div class="loading-spinner"></div>
                     </div>
                 </main>
             </div>
@@ -332,8 +332,13 @@ class SearchPage extends Page {
         this.setActiveSection('search-header');
     }
 
+    /**
+     * Toggles the search loading spinner indicator.
+     * Displays a clean centered spinner in the content area without concealing the header.
+     * @param {boolean} show - Whether to display the spinner.
+     */
     setLoading(show) {
-        const spinner = this.$('.page-loading');
+        const spinner = this.$('#search-loading');
         if (spinner) {
             if (show) {
                 spinner.classList.remove('hidden');
@@ -374,6 +379,12 @@ class SearchPage extends Page {
         if (this._query === this._lastSearchedQuery) return;
         this._lastSearchedQuery = this._query;
 
+        // Clear prior results and hide status messages while query is in-flight
+        this._clearResults();
+        this.$('#search-empty')?.classList.add('hidden');
+        this.$('#no-results')?.classList.add('hidden');
+
+        // Display search loading spinner
         this.setLoading(true);
 
         try {
@@ -384,9 +395,10 @@ class SearchPage extends Page {
             }
         } catch (error) {
             log.error('Search failed', error);
+        } finally {
+            // Guarantee spinner is dismissed regardless of success or failure
+            this.setLoading(false);
         }
-
-        this.setLoading(false);
     }
 
     async _searchSeerr() {
