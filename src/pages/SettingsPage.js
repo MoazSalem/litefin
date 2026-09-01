@@ -1521,6 +1521,30 @@ class SettingsPage extends Page {
         )}
                     </div>
                 </div>
+
+                <!-- Sidebar Layout Selection: Configures the layout architecture of the primary navigation bar -->
+                ${
+                    platformInfo.layoutTier !== 'ultra-legacy'
+                        ? `
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarLayout">${i18n.t('SidebarLayout') || 'Sidebar Layout'}</span>
+                        <span class="setting-description" data-i18n="SidebarLayoutDescription">${i18n.t('SidebarLayoutDescription') || 'Choose the layout mode for the navigation sidebar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'sidebar-layout-select',
+                            [
+                                { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
+                                { value: 'modern', label: i18n.t('LayoutModernSidebar') || 'Modern' }
+                            ],
+                            layoutManager.getSidebarLayout() || 'modern'
+                        )}
+                    </div>
+                </div>
+                `
+                        : ''
+                }
              
                 <div class="setting-item">
                     <div class="setting-label">
@@ -2593,7 +2617,7 @@ class SettingsPage extends Page {
                 { value: 'center', label: i18n.t('OptionSidebarItemsAlignCenter') || 'Center' },
                 { value: 'bottom', label: i18n.t('OptionSidebarItemsAlignBottom') || 'Bottom' }
             ],
-            storage.getItem('pref:sidebarItemsAlign') || 'top'
+            storage.getItem('pref:sidebarItemsAlign') || 'center'
         )}
                     </div>
                 </div>
@@ -2746,9 +2770,9 @@ class SettingsPage extends Page {
                                   tabindex="0">
                         </button>
                     </div>
-                </div
+                </div>
 
-                <h3 class="setting-section-title" data-i18n="SidebarLayoutOrder" style="margin-top: 40px;">${i18n.t('SidebarLayoutOrder') || 'Sidebar Layout'}</h3>
+                <h3 class="setting-section-title" data-i18n="SidebarOrder" style="margin-top: 40px;">${i18n.t('SidebarOrder') || 'Sidebar Order'}</h3>
                 <!-- Loaded dynamically via _setupSidebarLayoutUI -->
                 <div class="home-layout-container" id="sidebar-layout-container">
                     <div class="setting-item">
@@ -6637,7 +6661,7 @@ class SettingsPage extends Page {
 
                 // Save new setting locally to immediately affect DetailsPage behavior
                 storage.setItem('pref:hideNextUpSection', newValue.toString());
-                
+
                 hideNextUpBtn.classList.toggle('active', newValue);
                 log.info(`Hide Next Up Section set to: ${newValue}`);
             });
@@ -7835,6 +7859,7 @@ class SettingsPage extends Page {
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
             'media-rows-layout-select': { key: 'pref:mediaRowsLayout', type: 'local', triggerEvent: true },
             'login-page-layout-select': { key: 'pref:loginPageLayout', type: 'local', triggerEvent: true },
+            'sidebar-layout-select': { key: 'pref:sidebarLayoutMode', type: 'local', triggerEvent: true },
             'classic-card-size-scale-select': {
                 key:
                     layoutManager.getMediaRowsLayout() === 'modern'
@@ -8078,6 +8103,10 @@ class SettingsPage extends Page {
                             this._triggerHardReload();
                         } else if (id === 'login-page-layout-select') {
                             layoutManager.setLoginPageLayout(newValue);
+                            this._triggerHardReload();
+                        } else if (id === 'sidebar-layout-select') {
+                            // Apply new sidebar navigation layout mode and reload UI to rebuild components
+                            layoutManager.setSidebarLayout(newValue);
                             this._triggerHardReload();
                         } else if (id === 'card-label-style-select') {
                             storage.setItem('pref:cardLabelStyle', newValue);

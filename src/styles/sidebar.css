@@ -37,7 +37,6 @@
     overflow: hidden;
     /* Hide overflow text when collapsed */
     padding: 20px 0;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
     white-space: nowrap;
     will-change: transform;
     -webkit-transform: translate3d(-250px, 0, 0);
@@ -47,9 +46,10 @@
     backface-visibility: hidden;
 }
 
-/* Transparent collapsed sidebar for all themes when setting is active */
+/* Transparent collapsed sidebar with subtle left-to-right linear gradient fade */
 .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
-    background: transparent !important;
+    background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.15) 75%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(90deg,rgba(0,0,0,.65) 0,rgba(0,0,0,0.15) 75%,transparent)!important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
@@ -429,7 +429,7 @@ html[data-sidebar-unselected-color="accent"] .sidebar-item:not(.active):not(:foc
 }
 
 html[data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
-    color: var(--jf-text-secondary) !important;
+    color: #bcbebf !important;
 }
 
 .sidebar.expanded .sidebar-item:hover,
@@ -636,6 +636,26 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 
 .sidebar.align-bottom .sidebar-content {
     justify-content: flex-end !important;
+}
+
+/* Sidebar Footer (Pinned at bottom) */
+.sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: auto;
+    flex-shrink: 0;
+    z-index: 5;
+}
+
+html[data-layout-sidebar="modern"] .sidebar-footer {
+    display: flex;
+    margin-top: auto;
+    padding-bottom: 16px;
+}
+
+html:not([data-layout-sidebar="modern"]) .sidebar-footer:empty {
+    display: none;
 }
 
 .sidebar-libraries {
@@ -848,4 +868,10 @@ html[data-layout-tier="ultra-legacy"] #sidebar-random.focused .item-icon svg {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Hide Modern-specific libraries accordion in classic sidebar layout */
+html:not([data-layout-sidebar="modern"]) #sidebar-libraries,
+html:not([data-layout-sidebar="modern"]) .sidebar-sub-libraries {
+    display: none !important;
 }

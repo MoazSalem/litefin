@@ -14,36 +14,45 @@
 
 import { storage } from './StorageService.js';
 import { logger } from './Logger.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 
 const log = logger.create('SidebarLayoutManager');
 
 /**
- * The canonical ordered list of static sidebar items.
- * These are the items that always exist regardless of the server's library list.
- * 'syncplay' visibility is further gated by the plugin being enabled at runtime.
+ * The canonical ordered list of static sidebar items for Classic layout.
+ * Order: user, home, discover, favorites, search, random, syncplay, livetv, settings, librariesContainer
  */
-const STATIC_ITEMS = [
-    /* The SyncPlay button — sits above the nav group */
-    { id: 'syncplay', label: 'SyncPlay' },
+const CLASSIC_STATIC_ITEMS = [
     /* User Profile */
     { id: 'user', label: 'User Profile' },
-    /* Core navigation items — displayed inside .sidebar-content */
+    /* Core navigation items */
     { id: 'home', label: 'Home' },
-    { id: 'livetv', label: 'Live TV', hidden: true },
-    { id: 'random', label: 'Random' },
-    { id: 'favorites', label: 'Favorites' },
     { id: 'discover', label: 'SeerrDiscover' },
+    { id: 'favorites', label: 'Favorites' },
     { id: 'search', label: 'Search' },
+    { id: 'random', label: 'Random' },
+    { id: 'syncplay', label: 'SyncPlay' },
+    { id: 'livetv', label: 'Live TV', hidden: true },
     { id: 'settings', label: 'Settings' },
     { id: 'librariesContainer', label: 'Libraries' }
 ];
 
 /**
- * Locked items cannot be hidden by the user. This prevents them
- * from getting stranded with no way to navigate back to the main screen
- * or into settings to change things back.
+ * The canonical ordered list of static sidebar items for Modern layout.
+ * Order: home, discover, favorites, search, random, syncplay, livetv, librariesContainer, settings
+ * Note: 'user' is pinned in the bottom footer and excluded from the re-orderable list.
  */
-const LOCKED_ITEM_IDS = ['home', 'settings', 'user', 'librariesContainer'];
+const MODERN_STATIC_ITEMS = [
+    { id: 'home', label: 'Home' },
+    { id: 'discover', label: 'SeerrDiscover' },
+    { id: 'favorites', label: 'Favorites' },
+    { id: 'search', label: 'Search' },
+    { id: 'random', label: 'Random' },
+    { id: 'syncplay', label: 'SyncPlay' },
+    { id: 'livetv', label: 'Live TV', hidden: true },
+    { id: 'librariesContainer', label: 'Libraries' },
+    { id: 'settings', label: 'Settings' }
+];
 
 /**
  * The storage key used to persist sidebar layout data.
@@ -51,8 +60,28 @@ const LOCKED_ITEM_IDS = ['home', 'settings', 'user', 'librariesContainer'];
 const STORAGE_KEY = 'pref:sidebarLayout';
 
 class SidebarLayoutManager {
-    constructor() {
-        this._storageKey = STORAGE_KEY;
+    /**
+     * Determines whether an item is locked (cannot be hidden) for current layout mode.
+     * In Modern mode, only 'home' and 'settings' are locked (allowing 'librariesContainer' to be hidden).
+     * In Classic mode, 'home', 'settings', 'user', and 'librariesContainer' remain locked.
+     * @param {string} id
+     * @returns {boolean}
+     */
+    isItemLocked(id) {
+        const isModern = !layoutManager.isClassicSidebarLayout();
+        if (isModern) {
+            return id === 'home' || id === 'settings';
+        }
+        return ['home', 'settings', 'user', 'librariesContainer'].includes(id);
+    }
+
+    /**
+     * Returns the layout-specific storage key based on current layout mode.
+     * @returns {string}
+     */
+    getStorageKey() {
+        const isModern = !layoutManager.isClassicSidebarLayout();
+        return isModern ? 'pref:sidebarLayout_modern' : 'pref:sidebarLayout_classic';
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -60,11 +89,16 @@ class SidebarLayoutManager {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Reads the full saved config from storage.
+     * Reads the full saved config from storage for current layout mode.
      * @returns {{ items: Array<{id: string, hidden: boolean, order: number}>, libraryItems: Array<{id: string, hidden: boolean, order: number}>, defaultFocus: string }|null}
      */
     getSavedConfig() {
-        const raw = storage.getItem(this._storageKey);
+        const key = this.getStorageKey();
+        let raw = storage.getItem(key);
+        // Fallback for legacy key if the specific classic one doesn't exist yet
+        if (!raw && layoutManager.isClassicSidebarLayout()) {
+            raw = storage.getItem(STORAGE_KEY);
+        }
         if (!raw) return null;
         try {
             return JSON.parse(raw);
@@ -84,8 +118,9 @@ class SidebarLayoutManager {
         if (config.libraryItems) {
             config.libraryItems.forEach((item, index) => (item.order = index));
         }
-        storage.setItem(this._storageKey, JSON.stringify(config));
-        log.info('Sidebar layout saved.');
+        const key = this.getStorageKey();
+        storage.setItem(key, JSON.stringify(config));
+        log.info(`Sidebar layout saved for key: ${key}`);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -124,8 +159,9 @@ class SidebarLayoutManager {
             staticItems.push({ id: 'librariesContainer', el: null, virtual: true });
         }
 
-        // Build a fallback config from STATIC_ITEMS so the initial unsaved layout matches the canonical order
-        const fallbackConfig = STATIC_ITEMS.map((item, index) => ({
+        // Build a fallback config from static items so the initial unsaved layout matches the canonical order
+        const staticList = this.getStaticItems();
+        const fallbackConfig = staticList.map((item, index) => ({
             id: item.id,
             hidden: item.hidden || false,
             order: index
@@ -137,6 +173,10 @@ class SidebarLayoutManager {
         const hideHeader = storage.getItem('pref:hideSidebarLibraryHeader') === 'true';
         orderedStatic.forEach((item) => {
             if (item.id === 'librariesContainer') {
+                // If it's a physical element (e.g. Modern layout #sidebar-libraries), preserve its position in the list
+                if (!item.virtual && item.el) {
+                    result.push(item);
+                }
                 if (headerItem && orderedLibs.length > 0 && !hideHeader) {
                     result.push({ ...headerItem, hidden: false });
                 }
@@ -165,7 +205,7 @@ class SidebarLayoutManager {
         for (const liveItem of liveSubset) {
             const saved = savedMap.get(liveItem.id);
             if (saved) {
-                const forceVisible = LOCKED_ITEM_IDS.includes(liveItem.id);
+                const forceVisible = this.isItemLocked(liveItem.id);
                 positioned.push({
                     ...liveItem,
                     hidden: forceVisible ? false : saved.hidden || false,
@@ -197,6 +237,9 @@ class SidebarLayoutManager {
      * @returns {Array<{id: string, label: string, hidden: boolean, locked: boolean, order: number}>}
      */
     buildSettingsLayout(liveItems) {
+        const isModern = !layoutManager.isClassicSidebarLayout();
+        const filteredLiveItems = isModern ? liveItems.filter((i) => i.id !== 'user') : liveItems;
+
         const config = this.getSavedConfig();
         const savedItems = config ? config.items || [] : [];
         const savedMap = new Map(savedItems.map((item) => [item.id, item]));
@@ -209,13 +252,15 @@ class SidebarLayoutManager {
          * still live. This preserves the user's custom sort.
          */
         for (const saved of savedItems) {
-            const live = liveItems.find((i) => i.id === saved.id);
+            if (isModern && saved.id === 'user') continue;
+            const live = filteredLiveItems.find((i) => i.id === saved.id);
             if (live) {
+                const locked = this.isItemLocked(saved.id);
                 result.push({
                     id: live.id,
                     label: live.label, // Use fresh label in case it was renamed
-                    hidden: LOCKED_ITEM_IDS.includes(saved.id) ? false : saved.hidden || false,
-                    locked: LOCKED_ITEM_IDS.includes(saved.id),
+                    hidden: locked ? false : saved.hidden || false,
+                    locked: locked,
                     order: nextOrder++
                 });
             }
@@ -225,13 +270,15 @@ class SidebarLayoutManager {
          * Second pass: append live items that aren't in the saved layout yet.
          * This handles newly added libraries without requiring a manual refresh.
          */
-        for (const live of liveItems) {
+        for (const live of filteredLiveItems) {
+            if (isModern && live.id === 'user') continue;
             if (!savedMap.has(live.id)) {
+                const locked = this.isItemLocked(live.id);
                 result.push({
                     id: live.id,
                     label: live.label,
                     hidden: live.hidden || false,
-                    locked: LOCKED_ITEM_IDS.includes(live.id),
+                    locked: locked,
                     order: nextOrder++
                 });
             }
@@ -280,12 +327,13 @@ class SidebarLayoutManager {
     }
 
     /**
-     * Returns the default static items list.
+     * Returns the default static items list based on current layout mode.
      * Used by the Settings UI to build the full live item set before merging.
      * @returns {Array<{id: string, label: string}>}
      */
     getStaticItems() {
-        return STATIC_ITEMS;
+        const isModern = !layoutManager.isClassicSidebarLayout();
+        return isModern ? MODERN_STATIC_ITEMS : CLASSIC_STATIC_ITEMS;
     }
 }
 

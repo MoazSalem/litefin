@@ -55,6 +55,11 @@ class LayoutManager {
         // Granular layout settings
         this._mediaRowsLayout = 'classic';
         this._loginPageLayout = 'classic';
+        /*
+         * Active sidebar layout configuration (e.g., 'modern').
+         * Controls structural presentation and styling of the primary navigation bar.
+         */
+        this._sidebarLayout = 'modern';
 
         // Current theme mode
         // Ambient Glow is now the default theme mode for a premium glassmorphic look.
@@ -150,6 +155,16 @@ class LayoutManager {
             savedLoginPageLayout = legacy === 'true' || legacy === 'modern' ? 'modern' : 'classic';
         }
 
+        /*
+         * Load saved sidebar navigation layout preference.
+         * Ultra-legacy hardware (Chrome <47 / Tizen 2.x / c26 quirks) requires the classic sidebar layout.
+         * Modern/legacy tiers default cleanly to 'modern'.
+         */
+        const isUltraLegacy = platformInfo.layoutTier === 'ultra-legacy';
+        const savedSidebarLayout = isUltraLegacy
+            ? 'classic'
+            : storage.getItem('pref:sidebarLayoutMode') || 'modern';
+
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
         // Default to Ambient theme mode if no user preference is stored.
@@ -190,6 +205,8 @@ class LayoutManager {
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
+        // Initialize sidebar layout without triggering duplicate persistence
+        this.setSidebarLayout(savedSidebarLayout, false);
         this.setThemeMode(initialMode, false);
         this.setThemeColor(savedThemeColor, false);
         this.setUiFont(savedUiFont, false);
@@ -294,6 +311,55 @@ class LayoutManager {
             storage.setItem('pref:loginPageLayout', layout);
         }
         eventBus.emit('loginPageLayout:changed', { layout });
+    }
+
+    /**
+     * Returns the currently active sidebar navigation layout mode.
+     * @returns {string} The active sidebar layout identifier (e.g. 'classic').
+     */
+    getSidebarLayout() {
+        return this._sidebarLayout;
+    }
+
+    /**
+     * Sets and activates the sidebar layout mode across the entire UI.
+     * Stamped onto <html> as data-layout-sidebar to power layout-scoped styling.
+     * Follows Apple HIG principles with clear visual hierarchy and instant feedback.
+     *
+     * @param {string} layout - The target sidebar layout identifier ('classic', etc.)
+     * @param {boolean} [save=true] - Whether to persist this preference in storage
+     */
+    setSidebarLayout(layout, save = true) {
+        // Enforce classic layout on ultra-legacy tier to maintain c26 rendering quirks compatibility
+        if (platformInfo.layoutTier === 'ultra-legacy') {
+            layout = 'classic';
+        }
+
+        // Record new layout state in memory
+        this._sidebarLayout = layout;
+
+        // Stamp root element attribute for pure CSS layout branching
+        document.documentElement.setAttribute('data-layout-sidebar', layout);
+
+        // Persist preference to storage if enabled
+        if (save) {
+            storage.setItem('pref:sidebarLayoutMode', layout);
+        }
+
+        // Notify navigation components of layout modification
+        eventBus.emit('sidebarLayout:changed', { layout });
+    }
+
+    /**
+     * Checks if the sidebar is currently configured with the classic layout.
+     * Always returns true on ultra-legacy (Chrome <47 / Tizen 2.x / c26 quirks) hardware.
+     * @returns {boolean} True if sidebar layout is 'classic' or platform is ultra-legacy.
+     */
+    isClassicSidebarLayout() {
+        if (platformInfo.layoutTier === 'ultra-legacy') {
+            return true;
+        }
+        return this._sidebarLayout === 'classic';
     }
 
     /**

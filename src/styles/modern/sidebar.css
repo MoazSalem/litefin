@@ -1,0 +1,380 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Modern Sidebar Layout Styles
+ * ============================================================================
+ * Implements Apple Human Interface Guidelines (HIG) for a modern, sleek,
+ * squircle-accented sidebar navigation layout.
+ *
+ * Design Architecture:
+ *   - Collapsed Mode: Independent, centered squircle indicator behind active icon.
+ *   - Expanded Mode: Unified, single-surface row capsule (no double box / nesting).
+ *   - Single Library Accordion: Libraries condensed into a single expandable item
+ *     in modern mode, represented by a collections/books icon in collapsed rail.
+ *   - Zero Nudge: Constant width & height across all expansion states for zero
+ *     horizontal or vertical icon jitter during open/close transitions.
+ *   - Performance-tuned: Zero backdrop blur filters, zero heavy drop shadows.
+ *   - Apple fluid spring physics for focus and hover interactions.
+ * ============================================================================
+ */
+
+/* ----------------------------------------------------------------------------
+   1. Modern Sidebar Container
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern"] .sidebar {
+    /* Rounded outer right profile for a modern floating look */
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    border-right: none !important;
+}
+
+/* Subtle linear gradient fade from left to right on transparent collapsed rail */
+.sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    box-shadow: none !important;
+    border-right-color: transparent !important;
+}
+
+/* ----------------------------------------------------------------------------
+   2. Sidebar Items: Base Layout (Constant geometry for zero nudge)
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern"] .sidebar-item {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    height: 72px;
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
+    outline: none;
+    -webkit-transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.15s ease;
+    transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.15s ease;
+}
+
+/* Unselected items: clean muted tone matching reference */
+html[data-layout-sidebar="modern"] .sidebar-item:not(.active):not(:focus):not(.focused) {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+/* ----------------------------------------------------------------------------
+   3. Collapsed Mode: Centered Squircle Icon Indicator
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern"] .item-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+html[data-layout-sidebar="modern"] .item-icon::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 56px;
+    height: 56px;
+    margin-top: -28px;
+    margin-left: -28px;
+    border-radius: 18px;
+    background: transparent;
+    border: 1px solid transparent;
+    z-index: -1;
+    pointer-events: none;
+    -webkit-transition: background-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Active / Selected item in Collapsed Mode: High-contrast squircle highlight */
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.active .item-icon::before {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Hover highlight on collapsed squircle */
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:hover .item-icon::before {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Active icon: solid crisp white */
+html[data-layout-sidebar="modern"] .sidebar-item.active .item-icon {
+    color: #ffffff;
+}
+
+/* Custom selected color override support */
+html[data-layout-sidebar="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active .item-icon {
+    color: var(--jf-accent);
+}
+
+/* Focus on collapsed state: scale icon with spring physics */
+html[data-layout-sidebar="modern"] .sidebar-item:focus,
+html[data-layout-sidebar="modern"] .sidebar-item.focused {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    z-index: 20;
+}
+
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(250px, 0, 0) scale(1.08) !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon::before {
+    background: var(--jf-accent, #af52de);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Disable classic sliding focus bar in modern layout mode */
+html[data-layout-sidebar="modern"] .sidebar-focus-indicator {
+    display: none !important;
+}
+
+/* ----------------------------------------------------------------------------
+   4. Expanded Mode: Unified Single-Surface Row Capsule (Zero Nudge)
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item {
+    width: 100%;
+    margin: 0;
+    height: 72px;
+    min-height: 72px;
+    padding-right: 18px;
+}
+
+/* 
+ * Completely suppress the inner squircle pseudo-element in expanded mode
+ * so the entire row item functions as ONE unified, clean Apple capsule.
+ */
+html[data-layout-sidebar="modern"] .sidebar.expanded .item-icon::before,
+html[data-layout-sidebar="modern"] .sidebar:hover .item-icon::before {
+    display: none !important;
+}
+
+/* 
+ * Inset capsule backdrop overlay for expanded rows.
+ * Maintains zero horizontal/vertical layout shift on icons during expansion.
+ */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    left: 12px;
+    right: 12px;
+    border-radius: 16px;
+    background: transparent;
+    border: 1px solid transparent;
+    z-index: 1;
+    pointer-events: none;
+    -webkit-transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        border-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                border-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Unified Active Capsule */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item.active::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item.active::after {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item.active .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item.active .item-text {
+    font-weight: 600;
+}
+
+/* Hover on unselected item in expanded mode */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:hover:not(:focus):not(.focused):not(.active)::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:hover:not(:focus):not(.focused):not(.active)::after {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:hover:not(:focus):not(.focused):not(.active),
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:hover:not(:focus):not(.focused):not(.active) {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Unified Focus Pill */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:focus::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:focus::after,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item.focused::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item.focused::after {
+    background: var(--jf-accent, #af52de) !important;
+    border-color: rgba(255, 255, 255, 0.2);
+    -webkit-transform: scale(1.02);
+    transform: scale(1.02);
+}
+
+/* ----------------------------------------------------------------------------
+   5. Modern Libraries Single Accordion Item & Sub-list
+   ---------------------------------------------------------------------------- */
+/* Hide classic section header in modern layout */
+html[data-layout-sidebar="modern"] #section-header {
+    display: none !important;
+}
+
+/* Ensure modern libraries toggle is visible */
+html[data-layout-sidebar="modern"] #sidebar-libraries {
+    display: flex;
+}
+
+/* Chevron icon indicator for modern libraries accordion */
+html[data-layout-sidebar="modern"] .sidebar-chevron {
+    margin-left: auto;
+    margin-right: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.4);
+    opacity: 0;
+    visibility: hidden;
+    -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, color 0.15s ease;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, color 0.15s ease;
+    z-index: 6;
+}
+
+/* In expanded mode, chevron becomes visible */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-chevron,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-chevron {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Rotated chevron when sub-libraries accordion is open */
+html[data-layout-sidebar="modern"] #sidebar-libraries.open .sidebar-chevron {
+    -webkit-transform: rotate(180deg);
+    transform: rotate(180deg);
+    color: #ffffff;
+}
+
+/* Focus and hover color highlight for chevron icon */
+html[data-layout-sidebar="modern"] #sidebar-libraries:focus .sidebar-chevron,
+html[data-layout-sidebar="modern"] #sidebar-libraries.focused .sidebar-chevron {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+html[data-layout-sidebar="modern"] #sidebar-libraries:hover:not(:focus):not(.focused) .sidebar-chevron {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* Sub-libraries accordion container */
+html[data-layout-sidebar="modern"] .sidebar-sub-libraries {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Open sub-libraries list in expanded sidebar */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries.open,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries.open {
+    display: flex !important;
+    padding: 0px 20px;
+}
+
+/* In collapsed mode, keep sub-libraries completely hidden so only the single libraries icon shows */
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-sub-libraries {
+    display: none !important;
+}
+
+/* Nested library sub-items styling */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item {
+    height: 60px;
+    min-height: 60px;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item .item-icon {
+    width: 80px;
+    min-width: 80px;
+    padding-left: 12px;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item .item-text {
+    font-size: 1.25rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Selected / Active State: Crisp White with Semi-Bold Weight */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.active .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.active .item-text {
+    color: #ffffff !important;
+    font-weight: 600;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.active .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.active .item-icon {
+    color: #ffffff !important;
+}
+
+/* Focused State: Theme Primary Button Color */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus .item-text,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused .item-text {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused .item-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   6. Modern Sidebar Footer (User Profile Pinned at Bottom)
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern"] .sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: auto;
+    padding-bottom: 20px;
+    flex-shrink: 0;
+    z-index: 5;
+}
+
+/* ----------------------------------------------------------------------------
+   7. RTL Support for Modern Sidebar
+   ---------------------------------------------------------------------------- */
+[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-right: none !important;
+    border-left: none !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    background: -webkit-linear-gradient(right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    border-left-color: transparent !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar-chevron {
+    margin-left: 18px;
+    margin-right: auto;
+}

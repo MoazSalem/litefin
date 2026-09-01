@@ -163,7 +163,12 @@
 
 /* User preference overrides for ambient theme mode */
 [data-theme-mode="ambient"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
-    background: transparent !important;
+    /* Transparent collapsed sidebar with subtle left-to-right linear gradient fade */
+    background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.15) 75%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(90deg,rgba(0,0,0,.65) 0,rgba(0,0,0,0.15) 75%,transparent)!important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
 }
 
 [data-theme-mode="ambient"] .sidebar.semi-transparent-collapsed:not(.expanded):not(:hover) {

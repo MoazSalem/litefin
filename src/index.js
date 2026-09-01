@@ -46,6 +46,7 @@ import './styles/modern/server.css';
 import './styles/modern/manual.css';
 import './styles/modern/users.css';
 import './styles/modern/home.css';
+import './styles/modern/sidebar.css';
 
 /**
  * Bootstrap the application
