@@ -92,7 +92,7 @@ class DiscoverPage extends Page {
     async onInit() {
         this.title = i18n.t('SeerrDiscover');
 
-        // Show page loading indicator immediately
+        // Show page loading indicator immediately to mask initial render and focus restoration
         this.setLoading(true);
 
         i18n.translateDOM(this.el);
@@ -103,29 +103,53 @@ class DiscoverPage extends Page {
             this.setLoading(false);
             this._showMessage(i18n.t('SeerrNotConfigured'), true);
             this.markReady();
-            this.restoreScrollFocusWhenReady();
             return;
         }
 
         // Attach event delegation for clicks and focus tracking on cards
         this._attachDelegatedListeners();
 
+        // Check if there is a pending focus restoration target (back navigation)
+        const savedFocusObj = storage.getItem('pref:disableFocusRestore') !== 'true'
+            ? state.get('discover:lastFocusedItem')
+            : null;
+        const targetRowKey = savedFocusObj ? savedFocusObj.rowId : (
+            this._pendingNavState?.focusSectionName?.replace('discover-row-', '') || null
+        );
+        const hasFocusTarget = Boolean(targetRowKey || this._pendingNavState);
+
         // Check if a valid in-memory page cache exists for instant back-navigation
         const cache = this._getValidCache();
         if (cache) {
             log.info('Restoring Discover page from cache');
-            this._restoreFromCache(cache);
+            this._restoreFromCache(cache, hasFocusTarget);
+
+            // If target row wasn't in cache, fetch rows up to target row
+            if (targetRowKey && !this._rowRegistry.has(targetRowKey) && this._hasMoreRows()) {
+                const targetDefIndex = ROW_DEFINITIONS.findIndex((d) => d.key === targetRowKey);
+                if (targetDefIndex !== -1) {
+                    while (this._nextRowIndexToLoad <= targetDefIndex && this._hasMoreRows() && !this._isDestroyed) {
+                        await this._loadNextBatch(false);
+                    }
+                }
+            }
         } else {
-            // Load the initial prioritized batch of rows (Recently Added, My Requests, Watchlist)
-            await this._loadInitialRows();
+            // Load the initial prioritized batch of rows (extended if target row is requested)
+            await this._loadInitialRows(targetRowKey);
         }
 
         if (this._isDestroyed) return;
 
-        // Dismiss loading spinner and reveal the page immediately
-        this.setLoading(false);
-        this.markReady();
-        this.restoreScrollFocusWhenReady();
+        // Restore focus smoothly before revealing the page to prevent jumping and flashing
+        if (hasFocusTarget) {
+            this._restoreFocusTarget(targetRowKey, savedFocusObj);
+        } else {
+            if (this._orderedRowKeys.length > 0) {
+                this.setActiveSection(`discover-row-${this._orderedRowKeys[0]}`);
+            }
+            this.setLoading(false);
+            this.markReady();
+        }
 
         // Setup the intersection observer sentinel and background prefetch ONLY AFTER rows are mounted
         this._setupScrollObserver();
@@ -169,11 +193,11 @@ class DiscoverPage extends Page {
 
     /**
      * Restores all previously rendered discovery rows from cache instantly without network calls.
-     * @param {Object} cache
+     * @param {Object} cache - Serialized page cache object.
+     * @param {boolean} [hasFocusTarget=false] - Whether a pending focus restoration target exists.
      * @private
      */
-    _restoreFromCache(cache) {
-        this.setLoading(false);
+    _restoreFromCache(cache, hasFocusTarget = false) {
         this._hideMessage();
 
         const cachedRows = cache.rows || {};
@@ -195,8 +219,8 @@ class DiscoverPage extends Page {
         // Rebuild the vertical D-pad navigation chain across all restored rows
         this._rebuildNavigationChain();
 
-        // Set the active focus section to the first restored row
-        if (this._orderedRowKeys.length > 0) {
+        // Only set active section to first row if not restoring a specific target
+        if (!hasFocusTarget && this._orderedRowKeys.length > 0) {
             this.setActiveSection(`discover-row-${this._orderedRowKeys[0]}`);
         }
     }
@@ -240,17 +264,24 @@ class DiscoverPage extends Page {
 
     /**
      * Loads the initial prioritized batch of discovery rows (Recently Added, My Requests, Watchlist).
-     * If some initial rows are empty (e.g. empty requests/watchlist), pulls subsequent rows
-     * until at least 2 populated rows exist or all descriptors are exhausted.
+     * If a target row key is specified for focus restoration, extends the initial batch to include that row.
+     * @param {string|null} [targetRowKey=null] - Target row to prioritize if restoring focus.
      * @private
      */
-    async _loadInitialRows() {
+    async _loadInitialRows(targetRowKey = null) {
         // Lock loading mutex to prevent any concurrent background/sentinel triggers
         this._isLoadingMore = true;
-        this.setLoading(true);
         this._hideMessage();
 
-        const initialTargetCount = INITIAL_ROW_COUNT;
+        // Determine how many initial rows to fetch (extend if focus restoration targets a deeper row)
+        let initialTargetCount = INITIAL_ROW_COUNT;
+        if (targetRowKey) {
+            const targetDefIndex = ROW_DEFINITIONS.findIndex((d) => d.key === targetRowKey);
+            if (targetDefIndex !== -1) {
+                initialTargetCount = Math.min(ROW_DEFINITIONS.length, Math.max(INITIAL_ROW_COUNT, targetDefIndex + 1));
+            }
+        }
+
         let renderedCount = 0;
 
         // Helper to safely isolate row fetch errors so one failed endpoint does not break the page
@@ -264,7 +295,7 @@ class DiscoverPage extends Page {
             }
         };
 
-        // Fetch initial prioritized batch in parallel (Recently Added, My Requests, Watchlist)
+        // Fetch initial prioritized batch in parallel
         const initialBatch = ROW_DEFINITIONS.slice(0, initialTargetCount);
         this._nextRowIndexToLoad = initialTargetCount;
 
@@ -297,8 +328,6 @@ class DiscoverPage extends Page {
             }
         }
 
-        this.setLoading(false);
-
         // If no items were found across all available rows, display a failure message
         if (renderedCount === 0 && this._nextRowIndexToLoad >= ROW_DEFINITIONS.length) {
             this._showMessage(i18n.t('SeerrLoadFailed'), false);
@@ -309,16 +338,85 @@ class DiscoverPage extends Page {
         // Rebuild the vertical D-pad navigation chain across all mounted rows
         this._rebuildNavigationChain();
 
-        // Set the active focus section to the first rendered row (e.g. Recently Added)
-        if (this._orderedRowKeys.length > 0) {
-            this.setActiveSection(`discover-row-${this._orderedRowKeys[0]}`);
-        }
-
         // Snapshot loaded rows into in-memory page cache
         this._savePageCache();
 
         // Release the initial loading lock so subsequent scrolling can trigger next batches
         this._isLoadingMore = false;
+    }
+
+    /**
+     * Smoothly restores focus and scroll position to the target row and card.
+     * Keeps loading state active during alignment to prevent jumping/flashing.
+     * @param {string|null} targetRowKey - The key of the row to focus (e.g. 'movies').
+     * @param {Object|null} savedFocusObj - State containing rowId, itemId, and card index.
+     * @private
+     */
+    _restoreFocusTarget(targetRowKey, savedFocusObj) {
+        if (!targetRowKey || storage.getItem('pref:disableFocusRestore') === 'true') {
+            if (this._orderedRowKeys.length > 0) {
+                this.setActiveSection(`discover-row-${this._orderedRowKeys[0]}`);
+            }
+            this.setLoading(false);
+            this.markReady();
+            return;
+        }
+
+        const sectionName = `discover-row-${targetRowKey}`;
+        const rowEntry = this._rowRegistry.get(targetRowKey);
+
+        if (rowEntry && rowEntry.virtualRow) {
+            // Determine target card index (from savedFocusObj, itemId, or pendingNavState)
+            let targetIdx = savedFocusObj?.index;
+            if (targetIdx == null && savedFocusObj?.itemId) {
+                const foundIdx = rowEntry.virtualRow.items.findIndex(
+                    (item) => String(item.Id) === String(savedFocusObj.itemId) || String(item._tmdbId) === String(savedFocusObj.itemId)
+                );
+                if (foundIdx !== -1) targetIdx = foundIdx;
+            }
+            if (targetIdx == null && this._pendingNavState?.focusElementIndex != null) {
+                targetIdx = this._pendingNavState.focusElementIndex;
+            }
+            if (targetIdx == null || isNaN(targetIdx)) {
+                targetIdx = 0;
+            }
+
+            // Ensure virtual card DOM node is created and mounted in track
+            rowEntry.virtualRow._updateWindow(targetIdx);
+            rowEntry.virtualRow.currentIndex = targetIdx;
+            rowEntry.virtualRow._hasBeenFocused = true;
+
+            // Set active section without triggering premature focus event
+            this.setActiveSection(sectionName, false);
+
+            // Directly focus target node with instantScroll
+            const cardNode = rowEntry.virtualRow.domNodes.get(targetIdx) ||
+                rowEntry.sectionEl.querySelector(`[data-virtual-index="${targetIdx}"]`);
+            if (cardNode) {
+                focusManager.focusElement(cardNode, { instantScroll: true });
+            }
+
+            // Clean up state key
+            state.delete('discover:lastFocusedItem');
+        } else if (this._orderedRowKeys.length > 0) {
+            this.setActiveSection(`discover-row-${this._orderedRowKeys[0]}`);
+        }
+
+        // Apply scroll position from pending navigation state if available
+        if (this._pendingNavState && this._pendingNavState.scrollTop > 0) {
+            const scrollContainer = this.el.querySelector('.page-content') || this.el;
+            if (scrollContainer) {
+                scrollContainer.scrollTop = this._pendingNavState.scrollTop;
+            }
+            this._pendingNavState = null;
+        }
+
+        // Reveal the page now that focus and scroll are in place
+        requestAnimationFrame(() => {
+            if (this._isDestroyed) return;
+            this.setLoading(false);
+            this.markReady();
+        });
     }
 
     /**
@@ -613,6 +711,20 @@ class DiscoverPage extends Page {
             const itemId = card.dataset.itemId;
             if (!itemId) return;
 
+            const sectionEl = card.closest('section[data-row-id]');
+            const rowId = sectionEl ? sectionEl.getAttribute('data-row-id') : null;
+            const rowEntry = rowId ? this._rowRegistry.get(rowId) : null;
+            const cardVirtualIndex = rowEntry ? rowEntry.virtualRow.currentIndex : 0;
+
+            // Persist focused item state for seamless back-navigation restoration
+            if (rowId && storage.getItem('pref:disableFocusRestore') !== 'true') {
+                state.set('discover:lastFocusedItem', {
+                    rowId: rowId,
+                    itemId: itemId,
+                    index: cardVirtualIndex
+                });
+            }
+
             // Find item in registry across all virtual rows
             let found = null;
             for (const [, entry] of this._rowRegistry) {
@@ -646,6 +758,14 @@ class DiscoverPage extends Page {
             const rowEntry = this._rowRegistry.get(rowId);
             if (rowEntry) {
                 rowEntry.virtualRow.syncIndexFromNode(e.target);
+
+                if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                    state.set('discover:lastFocusedItem', {
+                        rowId: rowId,
+                        itemId: e.target.dataset.itemId,
+                        index: rowEntry.virtualRow.currentIndex
+                    });
+                }
             }
 
             // If focus is near the bottom (within the last 2 mounted rows), trigger prefetching
@@ -654,6 +774,27 @@ class DiscoverPage extends Page {
                 this._loadNextBatch(false);
             }
         });
+    }
+
+    /**
+     * Serializes page navigation state for Router history snapshots.
+     * @returns {Object}
+     */
+    getNavigationState() {
+        return {
+            nextRowIndexToLoad: this._nextRowIndexToLoad,
+            lastFocusedItem: state.get('discover:lastFocusedItem')
+        };
+    }
+
+    /**
+     * Restores page navigation state on back-navigation.
+     * @param {Object} pageState
+     */
+    setNavigationState(pageState) {
+        if (pageState && pageState.lastFocusedItem) {
+            state.set('discover:lastFocusedItem', pageState.lastFocusedItem);
+        }
     }
 
     // ========================================================================
