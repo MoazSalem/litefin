@@ -82,7 +82,7 @@
     height: 120%;
     background-size: cover;
     background-position: center;
-    filter: blur(130px) brightness(0.4);
+    filter: blur(150px) brightness(0.4);
     z-index: 1;
 }
 
@@ -97,32 +97,32 @@
     justify-content: center;
     z-index: 2;
     /* Keep the album art and metadata vertically centered */
-    -webkit-transform: translateY(0px);
-    transform: translateY(0px);
+    -webkit-transform: translateY(10px);
+    transform: translateY(10px);
     -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
 }
 
 body.lyrics-active .audio-player-center {
     /* Translate the wrapper to the left and keep the slight upward position when lyrics are active */
-    -webkit-transform: translate(-15vw, -30px);
-    transform: translate(-15vw, -30px);
+    -webkit-transform: translate(-20vw, 10px);
+    transform: translate(-20vw, 10px);
 }
 
 .audio-album-art {
     position: relative;
-    width: 500px;
-    height: 500px;
+    width: 550px;
+    height: 550px;
     border-radius: 18px;
     background-size: cover;
     background-position: center;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 25px 40px rgba(0, 0, 0, 0.35);
     -webkit-transition: opacity 0.4s ease;
     transition: opacity 0.4s ease;
 }
 
 .audio-metadata {
-    margin-top: 28px; /* Clean, spacious distance between cover photo and the track details */
+    margin-top: 24px; /* Clean, spacious distance between cover photo and the track details */
     text-align: center;
     color: #fff;
     max-width: 660px;
@@ -132,11 +132,11 @@ body.lyrics-active .audio-player-center {
 .audio-title {
     font-size: 32px;
     font-weight: 700;
-    margin: 0 0 8px 0;
+    margin: 0 0 2px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     letter-spacing: -0.5px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -149,7 +149,7 @@ body.lyrics-active .audio-player-center {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
