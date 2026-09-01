@@ -258,6 +258,11 @@ export function buildJellyfinProfile(options = {}) {
     const hdrSetting = PlayerSettings.get('enableHDR');
     const enableHDR = hdrSetting === 'enable' ? true : hdrSetting === 'disable' ? false : !!caps.hdr10;
 
+    // Hybrid Dolby Vision: Default to hardware capability unless the user explicitly flipped the setting
+    const dolbyVisionSetting = PlayerSettings.get('enableDolbyVision');
+    const enableDolbyVision =
+        dolbyVisionSetting === 'enable' ? true : dolbyVisionSetting === 'disable' ? false : !!caps.dolbyVision;
+
     if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);
     }
@@ -506,8 +511,15 @@ export function buildJellyfinProfile(options = {}) {
     const h264Level = '51';
     const hevcLevel = '183';
 
+    // -------------------------------------------------------------------------
+    // VideoRangeType restrictions for HTML5/MSE playback
+    // -------------------------------------------------------------------------
+    // Raw 'DOVI' (Profile 5 single-layer ICtCp) requires native Dolby Vision support
+    // and is only included when enableDolbyVision evaluates to true.
+    // Compatibility formats (DOVIWithHDR10, DOVIWithHLG, DOVIWithSDR, etc.) provide
+    // fallback base layers that standard HDR10/SDR renderers can display without distortion.
     const rangeTypes = ['SDR'];
-    if (enableHDR)
+    if (enableHDR) {
         rangeTypes.push(
             'HDR10',
             'HDR10Plus',
@@ -520,6 +532,14 @@ export function buildJellyfinProfile(options = {}) {
             'DOVIWithELHDR10Plus',
             'DOVIInvalid'
         );
+        if (enableDolbyVision) {
+            rangeTypes.push('DOVI');
+        }
+    } else if (enableDolbyVision) {
+        rangeTypes.push('DOVI', 'DOVIWithSDR');
+    } else {
+        rangeTypes.push('DOVIWithSDR');
+    }
 
     const rangeCondition = {
         Condition: 'EqualsAny',
