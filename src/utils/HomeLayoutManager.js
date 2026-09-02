@@ -92,6 +92,16 @@ class HomeLayoutManager {
                     ...desc,
                     _userOrder: config.order
                 });
+            } else if (desc.id === 'trending' || desc.id === 'trending-series') {
+                // If trending row is not yet in saved preferences, default its position
+                // right after 'resume' so it doesn't get pushed to the bottom behind all libraries
+                const resumeConfig = layoutMap.get('resume');
+                const offset = desc.id === 'trending' ? 0.5 : 0.6;
+                const defaultOrder = resumeConfig ? resumeConfig.order + offset : (desc.id === 'trending' ? 1.5 : 1.6);
+                processedDescriptors.push({
+                    ...desc,
+                    _userOrder: defaultOrder
+                });
             } else {
                 // New library or section not in preferences yet!
                 // We'll append it to the end.
@@ -143,6 +153,34 @@ class HomeLayoutManager {
                     hidden: item.hidden || false,
                     order: nextOrder++
                 });
+
+                // If trending rows are not yet in saved preferences, insert them right after 'resume' by default
+                if (item.id === 'resume') {
+                    if (!savedMap.has('trending')) {
+                        const trendingDesc = descriptors.find((d) => d.id === 'trending');
+                        if (trendingDesc) {
+                            settingsList.push({
+                                id: 'trending',
+                                title: trendingDesc.title,
+                                hidden: false,
+                                order: nextOrder++
+                            });
+                            savedMap.set('trending', { id: 'trending' });
+                        }
+                    }
+                    if (!savedMap.has('trending-series')) {
+                        const trendingSeriesDesc = descriptors.find((d) => d.id === 'trending-series');
+                        if (trendingSeriesDesc) {
+                            settingsList.push({
+                                id: 'trending-series',
+                                title: trendingSeriesDesc.title,
+                                hidden: false,
+                                order: nextOrder++
+                            });
+                            savedMap.set('trending-series', { id: 'trending-series' });
+                        }
+                    }
+                }
             }
         });
 

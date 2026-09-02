@@ -323,6 +323,132 @@ class HomePage extends Page {
         // ── Priority 1: Continue Watching & Next Up ──────────────────────────
         const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
 
+        // ── Priority 1: Trending / Em Alta (Movies & Series custom slots) ───
+        const createTrendingDescriptor = (id, type, settingKey, nameKey, defaultTitleKey) => {
+            const settingVal = storage.getItem(settingKey) || (type === 'Movie' ? 'auto' : 'none');
+            if (settingVal === 'none') return null;
+
+            const title = i18n.t(defaultTitleKey);
+
+            return {
+                id,
+                title,
+                priority: 1,
+                layout: 'portrait',
+                cardType: 'poster',
+                contextType: 'trending',
+                fetchFn: async () => {
+                    try {
+                        // 1. If a specific collection or playlist ID is chosen, fetch directly from it
+                        if (settingVal !== 'auto' && settingVal !== 'top-rated') {
+                            let items = null;
+                            try {
+                                const plRes = await api
+                                    .getPlaylistItems(settingVal, { Limit: homeRowLimit })
+                                    .catch(() => null);
+                                items = plRes?.Items;
+                            } catch (_) { }
+
+                            if (!items || items.length === 0) {
+                                const boxRes = await api.getItems({
+                                    ParentId: settingVal,
+                                    Limit: homeRowLimit,
+                                    Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                    Recursive: true
+                                });
+                                items = boxRes?.Items;
+                            }
+
+                            if (items && items.length > 0) {
+                                return items;
+                            }
+                        }
+
+                        // 2. If 'auto', search for matching SmartLists or Jellyfin collections
+                        if (settingVal === 'auto') {
+                            const collectionsRes = await api.getItems({
+                                IncludeItemTypes: 'BoxSet,Playlist',
+                                Recursive: true,
+                                EnableTotalRecordCount: false
+                            });
+
+                            const collections = collectionsRes?.Items || [];
+                            const keywords =
+                                type === 'Movie'
+                                    ? [/filmes?\s*em\s*alta/i, /em\s*alta/i, /trending.*movies?/i, /trending/i]
+                                    : [
+                                        /s[eé]ries?\s*em\s*alta/i,
+                                        /tv.*trending/i,
+                                        /trending.*shows?/i,
+                                        /trending.*series/i
+                                    ];
+
+                            let smartCollection = null;
+                            for (const pattern of keywords) {
+                                smartCollection = collections.find((c) => pattern.test(c.Name || ''));
+                                if (smartCollection) break;
+                            }
+
+                            if (smartCollection) {
+                                log.info(`Found smart trending collection for ${type}: "${smartCollection.Name}"`);
+                                let items = null;
+                                if (smartCollection.Type === 'Playlist') {
+                                    const plRes = await api.getPlaylistItems(smartCollection.Id, {
+                                        Limit: homeRowLimit
+                                    });
+                                    items = plRes?.Items;
+                                } else {
+                                    const boxRes = await api.getItems({
+                                        ParentId: smartCollection.Id,
+                                        Limit: homeRowLimit,
+                                        Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                        Recursive: true
+                                    });
+                                    items = boxRes?.Items;
+                                }
+
+                                if (items && items.length > 0) {
+                                    return items;
+                                }
+                            }
+                        }
+
+                        // 3. Fallback: Query top rated & popular items of the respective type
+                        log.info(`Querying top rated ${type} for trending fallback`);
+                        const fallbackRes = await api.getItems({
+                            IncludeItemTypes: type,
+                            SortBy: 'CommunityRating,PremiereDate',
+                            SortOrder: 'Descending',
+                            Recursive: true,
+                            Limit: homeRowLimit,
+                            Filters: 'IsNotFolder'
+                        });
+
+                        return fallbackRes?.Items?.length > 0 ? fallbackRes.Items : null;
+                    } catch (err) {
+                        log.warn(`Failed to fetch trending ${type}:`, err);
+                        return null;
+                    }
+                }
+            };
+        };
+
+        const trendingMoviesDesc = createTrendingDescriptor(
+            'trending',
+            'Movie',
+            'pref:trendingMoviesCollection',
+            'pref:trendingMoviesCollectionName',
+            'HeaderTrendingMovies'
+        );
+
+        const trendingSeriesDesc = createTrendingDescriptor(
+            'trending-series',
+            'Series',
+            'pref:trendingSeriesCollection',
+            'pref:trendingSeriesCollectionName',
+            'HeaderTrendingSeries'
+        );
+
         if (mergeResumeNextUp) {
             descriptors.push({
                 id: 'resume',
@@ -510,6 +636,12 @@ class HomePage extends Page {
                     return sliced.length > 0 ? sliced : null;
                 }
             });
+            if (trendingMoviesDesc) {
+                descriptors.push(trendingMoviesDesc);
+            }
+            if (trendingSeriesDesc) {
+                descriptors.push(trendingSeriesDesc);
+            }
         } else {
             // Priority 1: Continue Watching (Separate)
             descriptors.push({
@@ -524,6 +656,14 @@ class HomePage extends Page {
                     return res?.Items?.length > 0 ? res.Items : null;
                 }
             });
+
+            // Priority 1: Trending / Em Alta (Movies & Series)
+            if (trendingMoviesDesc) {
+                descriptors.push(trendingMoviesDesc);
+            }
+            if (trendingSeriesDesc) {
+                descriptors.push(trendingSeriesDesc);
+            }
 
             // Priority 1: Next Up (Separate)
             descriptors.push({

@@ -28,6 +28,7 @@ import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { prewarmManager } from '../player/core/PrewarmManager.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
@@ -524,6 +525,10 @@ class DetailsPage extends Page {
                 Fields: requestedFields.join(',')
             });
             this._item = item;
+
+            if (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer') {
+                prewarmManager.prewarm(item);
+            }
 
             // Cache Series item for reuse across child Season/Episode detail pages
             if (item.Type === 'Series') {
@@ -2443,6 +2448,7 @@ class DetailsPage extends Page {
 
             if (this._nextUp.length > 0) {
                 this._renderNextUp();
+                prewarmManager.prewarm(this._nextUp[0]);
             }
         } catch (error) {
             log.warn('Failed to load next up', error);
@@ -2598,6 +2604,10 @@ class DetailsPage extends Page {
             this._episodes = cached;
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
+                if (!this._nextUp || this._nextUp.length === 0) {
+                    const targetEp = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                    if (targetEp) prewarmManager.prewarm(targetEp);
+                }
             }
             return;
         }
@@ -2609,6 +2619,10 @@ class DetailsPage extends Page {
 
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
+                if (!this._nextUp || this._nextUp.length === 0) {
+                    const targetEp = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                    if (targetEp) prewarmManager.prewarm(targetEp);
+                }
             }
         } catch (error) {
             log.warn('Failed to load episodes', error);
@@ -5095,6 +5109,11 @@ class DetailsPage extends Page {
         if (this._episodeGrid) {
             this._episodeGrid.destroy();
             this._episodeGrid = null;
+        }
+
+        const currentPath = router.getCurrentPath?.() || '';
+        if (!currentPath.startsWith('/player')) {
+            prewarmManager.clear();
         }
 
         super.destroy();
