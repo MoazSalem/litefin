@@ -28,6 +28,7 @@ import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { prewarmManager } from '../player/core/PrewarmManager.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
@@ -547,6 +548,13 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
 
+            // Trigger prewarm for playable media items, passing the restored version ID if available
+            if (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer') {
+                prewarmManager.prewarm(item, {
+                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id
+                });
+            }
+
             // Await user data (likely already resolved from state cache)
             this._currentUser = await userPromise;
 
@@ -709,6 +717,13 @@ class DetailsPage extends Page {
             // Reset track selections when version changes as they are source-specific
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
+
+            // Re-trigger zero-latency prewarm for the newly selected version
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: id
+                });
+            }
         });
     }
 
@@ -2443,6 +2458,7 @@ class DetailsPage extends Page {
 
             if (this._nextUp.length > 0) {
                 this._renderNextUp();
+                prewarmManager.prewarm(this._nextUp[0]);
             }
         } catch (error) {
             log.warn('Failed to load next up', error);
@@ -2598,6 +2614,10 @@ class DetailsPage extends Page {
             this._episodes = cached;
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
+                if (!this._nextUp || this._nextUp.length === 0) {
+                    const targetEp = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                    if (targetEp) prewarmManager.prewarm(targetEp);
+                }
             }
             return;
         }
@@ -2609,6 +2629,10 @@ class DetailsPage extends Page {
 
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
+                if (!this._nextUp || this._nextUp.length === 0) {
+                    const targetEp = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                    if (targetEp) prewarmManager.prewarm(targetEp);
+                }
             }
         } catch (error) {
             log.warn('Failed to load episodes', error);
@@ -3658,6 +3682,15 @@ class DetailsPage extends Page {
 
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
+
+            // Re-trigger zero-latency prewarm with updated audio track selection
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: index,
+                    subtitleStreamIndex: this._selectedSubtitleIndex
+                });
+            }
         });
     }
 
@@ -3711,6 +3744,15 @@ class DetailsPage extends Page {
             // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
+
+            // Re-trigger zero-latency prewarm with updated subtitle track selection
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: this._selectedAudioIndex,
+                    subtitleStreamIndex: index
+                });
+            }
         });
     }
 
@@ -5095,6 +5137,11 @@ class DetailsPage extends Page {
         if (this._episodeGrid) {
             this._episodeGrid.destroy();
             this._episodeGrid = null;
+        }
+
+        const currentPath = router.getCurrentPath?.() || '';
+        if (!currentPath.startsWith('/player')) {
+            prewarmManager.clear();
         }
 
         super.destroy();

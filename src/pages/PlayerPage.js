@@ -33,6 +33,7 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
+import { prewarmManager } from '../player/core/PrewarmManager.js';
 
 const log = logger.create('Player');
 
@@ -280,9 +281,14 @@ class PlayerPage extends Page {
             document.body.classList.add('player-active');
             document.documentElement.classList.add('player-active');
 
-            // Parallelize font loading and item details loading
+            // Parallelize font loading and item details loading (using pre-warmed item if available)
             const fontId = SubtitleStyles.getCurrentFontId();
-            const fetchTasks = [api.getItem(itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks,MediaSources' })];
+            const prewarmed = prewarmManager.getPrewarmedItem(itemId);
+            const itemTask = prewarmed
+                ? Promise.resolve(prewarmed)
+                : api.getItem(itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks,MediaSources' });
+
+            const fetchTasks = [itemTask];
             if (fontId) {
                 fetchTasks.push(FontLoader.loadFont(fontId));
             }

@@ -2050,6 +2050,63 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelTrendingMoviesCollection">${i18n.t('LabelTrendingMoviesCollection')}</span>
+                        <span class="setting-description" data-i18n="LabelTrendingMoviesCollectionDescription">${i18n.t('LabelTrendingMoviesCollectionDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                const val = storage.getItem('pref:trendingMoviesCollection') || 'auto';
+                const name = storage.getItem('pref:trendingMoviesCollectionName');
+                const opts = [
+                    { value: 'none', label: i18n.t('Disabled') },
+                    { value: 'auto', label: i18n.t('Auto') },
+                    { value: 'top-rated', label: i18n.t('CommunityRating') }
+                ];
+                if (val && val !== 'none' && val !== 'auto' && val !== 'top-rated') {
+                    opts.push({ value: val, label: name || val });
+                }
+                return this._renderDropdown('trending-movies-collection-select', opts, val);
+            })()}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelTrendingSeriesCollection">${i18n.t('LabelTrendingSeriesCollection')}</span>
+                        <span class="setting-description" data-i18n="LabelTrendingSeriesCollectionDescription">${i18n.t('LabelTrendingSeriesCollectionDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                const val = storage.getItem('pref:trendingSeriesCollection') || 'none';
+                const name = storage.getItem('pref:trendingSeriesCollectionName');
+                const opts = [
+                    { value: 'none', label: i18n.t('Disabled') },
+                    { value: 'auto', label: i18n.t('Auto') },
+                    { value: 'top-rated', label: i18n.t('CommunityRating') }
+                ];
+                if (val && val !== 'none' && val !== 'auto' && val !== 'top-rated') {
+                    opts.push({ value: val, label: name || val });
+                }
+                return this._renderDropdown('trending-series-collection-select', opts, val);
+            })()}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelUseTrendingCollectionName">${i18n.t('LabelUseTrendingCollectionName')}</span>
+                        <span class="setting-description" data-i18n="LabelUseTrendingCollectionNameDescription">${i18n.t('LabelUseTrendingCollectionNameDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:useTrendingCollectionName') === 'true' ? 'active' : ''}" 
+                                 id="toggle-use-trending-collection-name" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLibraryLabels">${i18n.t('HideLibraryLabels')}</span>
                         <span class="setting-description" data-i18n="HideLibraryLabelsDescription">${i18n.t('HideLibraryLabelsDescription')}</span>
                     </div>
@@ -3313,6 +3370,20 @@ class SettingsPage extends Page {
                 `
                 : ''
             }
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelInstantPlayback">${i18n.t('LabelInstantPlayback')}</span>
+                        <span class="setting-description" data-i18n="LabelInstantPlaybackDescription">${i18n.t('LabelInstantPlaybackDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enablePrewarm') !== false ? 'active' : ''}"
+                                id="toggle-instant-playback"
+                                data-setting="enablePrewarm"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -5945,6 +6016,22 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Use Collection Name for Trending Rows
+        // When enabled, displays the specific or matched collection name instead of 'Trending Movies' / 'Trending Series'
+        const useTrendingColNameBtn = this.$('#toggle-use-trending-collection-name');
+        if (useTrendingColNameBtn) {
+            useTrendingColNameBtn.addEventListener('click', () => {
+                // Read existing state defaulting to false
+                const isEnabled = storage.getItem('pref:useTrendingCollectionName') === 'true';
+                const newValue = !isEnabled;
+                // Store updated boolean string representation
+                storage.setItem('pref:useTrendingCollectionName', newValue.toString());
+                // Immediately transition active indicator state
+                useTrendingColNameBtn.classList.toggle('active', newValue);
+                log.info(`Use Trending Collection Name set to: ${newValue}`);
+            });
+        }
+
         // Toggle Hide Library Labels
         const hideLabelsBtn = this.$('#toggle-library-labels');
         if (hideLabelsBtn) {
@@ -6933,6 +7020,8 @@ class SettingsPage extends Page {
             // cache invalidation needed (device caps don't change), but keeping
             // it in this list wires the click → PlayerSettings.set() for us.
             'toggle-interlaced-backend-fallback',
+            // Instant playback prewarm
+            'toggle-instant-playback',
             // Await tracks before starting playback and hiding loading spinner
             'toggle-await-tracks-before-playback'
         ];
@@ -7675,7 +7764,9 @@ class SettingsPage extends Page {
             'collapsed-sidebar-color-select': { key: 'pref:collapsedSidebarColor', type: 'local', triggerEvent: true },
             'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true },
             'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true },
-            'sidebar-items-align-select': { key: 'pref:sidebarItemsAlign', type: 'local', triggerEvent: true }
+            'sidebar-items-align-select': { key: 'pref:sidebarItemsAlign', type: 'local', triggerEvent: true },
+            'trending-movies-collection-select': { key: 'pref:trendingMoviesCollection', type: 'local', triggerEvent: true },
+            'trending-series-collection-select': { key: 'pref:trendingSeriesCollection', type: 'local', triggerEvent: true }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -7690,7 +7781,31 @@ class SettingsPage extends Page {
                 const title =
                     btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || i18n.t('SelectOption');
 
-                if (id === 'jellyfin-fallback-font-select') {
+                if (id === 'trending-movies-collection-select' || id === 'trending-series-collection-select') {
+                    btn.classList.add('disabled');
+                    try {
+                        const collectionsRes = await api.getItems({
+                            IncludeItemTypes: 'BoxSet,Playlist',
+                            Recursive: true,
+                            EnableTotalRecordCount: false
+                        });
+                        const collections = collectionsRes?.Items || [];
+                        options = [
+                            { value: 'none', label: i18n.t('Disabled') || 'Disabled' },
+                            { value: 'auto', label: i18n.t('Auto') || 'Auto' },
+                            { value: 'top-rated', label: i18n.t('CommunityRating') || 'Community Rating' },
+                            ...collections.map((c) => ({
+                                value: c.Id,
+                                label: c.Name
+                            }))
+                        ];
+                        btn.dataset.options = JSON.stringify(options);
+                    } catch (err) {
+                        log.warn('Failed to load collections for trending selector:', err);
+                    } finally {
+                        btn.classList.remove('disabled');
+                    }
+                } else if (id === 'jellyfin-fallback-font-select') {
                     btn.classList.add('disabled');
                     try {
                         const fontsList = await api.get('/FallbackFont/Fonts');
@@ -7719,6 +7834,12 @@ class SettingsPage extends Page {
                     const labelSpan = btn.querySelector('.btn-label');
                     if (labelSpan) labelSpan.innerText = newLabel;
                     btn.dataset.value = newValue;
+
+                    if (id === 'trending-movies-collection-select') {
+                        storage.setItem('pref:trendingMoviesCollectionName', newLabel);
+                    } else if (id === 'trending-series-collection-select') {
+                        storage.setItem('pref:trendingSeriesCollectionName', newLabel);
+                    }
 
                     // Save Setting based on type
                     if (settingConfig) {
@@ -8889,6 +9010,35 @@ class SettingsPage extends Page {
                 { id: 'my-media', title: i18n.t('HeaderMyMedia') },
                 { id: 'resume', title: i18n.t('HeaderContinueWatching') }
             ];
+
+            const useTrendingColName = storage.getItem('pref:useTrendingCollectionName') === 'true';
+            const trendingMoviesCol = storage.getItem('pref:trendingMoviesCollection') || 'auto';
+            const trendingMoviesName = storage.getItem('pref:trendingMoviesCollectionName');
+            if (trendingMoviesCol !== 'none') {
+                // If using collection name and a specific collection is selected, show its name in layout manager
+                const title =
+                    useTrendingColName && trendingMoviesCol !== 'auto' && trendingMoviesCol !== 'top-rated' && trendingMoviesName
+                        ? trendingMoviesName
+                        : i18n.t('HeaderTrendingMovies');
+                descriptors.push({
+                    id: 'trending',
+                    title
+                });
+            }
+
+            const trendingSeriesCol = storage.getItem('pref:trendingSeriesCollection') || 'none';
+            const trendingSeriesName = storage.getItem('pref:trendingSeriesCollectionName');
+            if (trendingSeriesCol !== 'none') {
+                // If using collection name and a specific collection is selected, show its name in layout manager
+                const title =
+                    useTrendingColName && trendingSeriesCol !== 'auto' && trendingSeriesCol !== 'top-rated' && trendingSeriesName
+                        ? trendingSeriesName
+                        : i18n.t('HeaderTrendingSeries');
+                descriptors.push({
+                    id: 'trending-series',
+                    title
+                });
+            }
 
             // If merging is enabled, 'next-up' is handled as part of 'resume' row,
             // so we hide it from the standalone layout sorting to avoid confusion.
