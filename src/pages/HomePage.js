@@ -324,6 +324,27 @@ class HomePage extends Page {
         const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
 
         // ── Priority 1: Trending / Em Alta (Movies & Series custom slots) ───
+        // Shared memoized promise to avoid duplicate recursive collections queries
+        // across concurrent Movie & Series trending descriptors.
+        let sharedCollectionsPromise = null;
+        const getSharedCollections = () => {
+            if (!sharedCollectionsPromise) {
+                // Fetch BoxSets and Playlists recursively once and share among descriptors
+                sharedCollectionsPromise = api
+                    .getItems({
+                        IncludeItemTypes: 'BoxSet,Playlist',
+                        Recursive: true,
+                        EnableTotalRecordCount: false
+                    })
+                    .then((res) => res?.Items || [])
+                    .catch((err) => {
+                        log.warn('Failed to query smart collections for trending rows:', err);
+                        return [];
+                    });
+            }
+            return sharedCollectionsPromise;
+        };
+
         const createTrendingDescriptor = (id, type, settingKey, nameKey, defaultTitleKey) => {
             const settingVal = storage.getItem(settingKey) || (type === 'Movie' ? 'auto' : 'none');
             if (settingVal === 'none') return null;
@@ -366,13 +387,8 @@ class HomePage extends Page {
 
                         // 2. If 'auto', search for matching SmartLists or Jellyfin collections
                         if (settingVal === 'auto') {
-                            const collectionsRes = await api.getItems({
-                                IncludeItemTypes: 'BoxSet,Playlist',
-                                Recursive: true,
-                                EnableTotalRecordCount: false
-                            });
-
-                            const collections = collectionsRes?.Items || [];
+                            // Await the shared collections promise so only 1 network request is made
+                            const collections = await getSharedCollections();
                             const keywords =
                                 type === 'Movie'
                                     ? [/filmes?\s*em\s*alta/i, /em\s*alta/i, /trending.*movies?/i, /trending/i]
@@ -415,14 +431,20 @@ class HomePage extends Page {
 
                         // 3. Fallback: Query top rated & popular items of the respective type
                         log.info(`Querying top rated ${type} for trending fallback`);
-                        const fallbackRes = await api.getItems({
+                        // In Jellyfin, Series items are folders (IsFolder: true).
+                        // Applying Filters: 'IsNotFolder' would completely wipe out TV series results.
+                        const queryParams = {
                             IncludeItemTypes: type,
                             SortBy: 'CommunityRating,PremiereDate',
                             SortOrder: 'Descending',
                             Recursive: true,
-                            Limit: homeRowLimit,
-                            Filters: 'IsNotFolder'
-                        });
+                            Limit: homeRowLimit
+                        };
+                        if (type !== 'Series') {
+                            queryParams.Filters = 'IsNotFolder';
+                        }
+
+                        const fallbackRes = await api.getItems(queryParams);
 
                         return fallbackRes?.Items?.length > 0 ? fallbackRes.Items : null;
                     } catch (err) {
