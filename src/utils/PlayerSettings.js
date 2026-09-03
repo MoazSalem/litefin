@@ -296,6 +296,9 @@ const DEFAULTS = {
     // Enable HDR10/HLG pass-through
     enableHDR: 'auto',
 
+    // Enable Instant Playback (pre-fetches PlaybackInfo & item details in background)
+    enablePrewarm: true,
+
     // Player backend ('auto', 'avplay', 'webos', 'html5')
     playerBackend: 'auto',
 

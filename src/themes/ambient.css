@@ -143,9 +143,6 @@
     -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
     
-    /* 3. Hairline border boundary to maintain layout structure */
-    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
-    
     /* 4. Keeps rendering thread locked for fast GPU translations */
     will-change: transform;
 }

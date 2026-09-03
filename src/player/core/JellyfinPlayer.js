@@ -23,6 +23,7 @@ import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { api } from '../../api/index.js';
 import { storage } from '../../utils/StorageService.js';
+import { prewarmManager } from './PrewarmManager.js';
 
 const log = logger.create('JellyfinPlayer');
 
@@ -2562,6 +2563,22 @@ export class JellyfinPlayer extends EventEmitter {
      * @private
      */
     async _getPlaybackInfo(options, deviceProfile, manualBitrate = null) {
+        // ---------------------------------------------------------------------
+        // Check for Zero-Latency Prewarmed PlaybackInfo
+        // ---------------------------------------------------------------------
+        const prewarmedPromise = prewarmManager.consumePlaybackInfo(options.itemId, options);
+        if (prewarmedPromise) {
+            log.info('[Prewarm] Zero-Latency Cache Hit! Awaiting pre-fetched PlaybackInfo for:', options.itemId);
+            try {
+                const prewarmedData = await prewarmedPromise;
+                if (prewarmedData && prewarmedData.MediaSources?.length) {
+                    return prewarmedData;
+                }
+            } catch (err) {
+                log.warn('[Prewarm] Prewarmed PlaybackInfo failed, falling back to fresh request:', err);
+            }
+        }
+
         const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo?UserId=${options.userId}`;
 
         // Read max bitrate: priority to deviceProfile if passed (it contains the logic)

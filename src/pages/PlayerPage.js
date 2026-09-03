@@ -34,6 +34,7 @@ import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
 import { sanitizeSubtitleText } from '../utils/Utils.js';
+import { prewarmManager } from '../player/core/PrewarmManager.js';
 
 const log = logger.create('Player');
 
@@ -287,7 +288,12 @@ class PlayerPage extends Page {
 
             // Parallelize font loading and item details loading
             const fontId = SubtitleStyles.getCurrentFontId();
-            const fetchTasks = [api.getItem(itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks,MediaSources' })];
+            const prewarmed = prewarmManager.getPrewarmedItem(itemId);
+            const itemTask = prewarmed
+                ? Promise.resolve(prewarmed)
+                : api.getItem(itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks,MediaSources' });
+
+            const fetchTasks = [itemTask];
             if (fontId) {
                 fetchTasks.push(FontLoader.loadFont(fontId));
             }
