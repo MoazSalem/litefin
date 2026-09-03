@@ -27,6 +27,7 @@
     width: 350px;
     background: var(--jf-background-alt, rgba(0, 0, 0, 0.3));
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    border-left: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     padding: 40px 0;
     display: flex;
     flex-direction: column;
@@ -167,6 +168,15 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     letter-spacing: -0.5px;
 }
 
+.content-subtitle {
+    font-size: 0.95rem;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6));
+    margin: -12px 0 10px 0px;
+    padding-bottom: 10px;
+    line-height: 1.5;
+    border-bottom: 2px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+}
+
 .setting-section-title {
     font-size: 1.5rem;
     font-weight: 600;
@@ -288,7 +298,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 
 /* Select Inputs */
 /* Select Buttons (Modal Triggers) */
-.select-btn {
+.select-btn,
+.theme-color-select-btn {
     padding: 12px 24px;
     font-size: 1.1rem;
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
@@ -314,7 +325,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
  * custom-styled border, text color, and background variables.
  */
 .select-btn:focus,
-.select-btn.focused {
+.select-btn.focused,
+.theme-color-select-btn:focus,
+.theme-color-select-btn.focused {
     background: var(--jf-btn-primary-focus-bg) !important;
     color: var(--jf-btn-primary-focus-color) !important;
     border: 2px solid var(--jf-btn-primary-focus-border) !important;
@@ -322,7 +335,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     will-change: transform;
 }
 
-.select-btn:hover {
+.select-btn:hover,
+.theme-color-select-btn:hover {
     border: 2px solid var(--jf-btn-primary-hover-border)!important;
     transform: scale(1.02);
     will-change: transform;
@@ -1027,23 +1041,90 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 }
 
 /* ==========================================================================
-   Theme Color Selection
+/* ==========================================================================
+   Theme Color Selection & Modal Picker
    ========================================================================== */
 
-.theme-color-grid {
+/* Main Settings Page Trigger Button */
+.theme-color-select-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.theme-color-swatch-badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.theme-color-select-btn:focus .theme-color-swatch-badge,
+.theme-color-select-btn.focused .theme-color-swatch-badge {
+    transform: scale(1.15);
+    border-color: #ffffff;
+}
+
+/* Theme Color Dialog Modal */
+.settings-modal.theme-color-modal {
+    width: 800px;
+    max-width: 92%;
+}
+
+.theme-color-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 30px;
+}
+
+.theme-color-modal-header-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--jf-text-primary, #ffffff);
+    margin-right: 10px;
+}
+
+.theme-color-modal-header-preview .preview-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+    display: inline-block;
+}
+
+.theme-color-modal-grid-container {
+    padding: 10px 20px 20px 20px;
+}
+
+.theme-color-modal-grid {
     display: grid;
     grid-template-columns: repeat(10, 1fr);
-    gap: 15px;
-    justify-items: end;
-    max-width: 600px;
+    gap: 16px;
+    justify-items: center;
+    align-items: center;
+    padding: 10px 0;
 }
 
 .color-option {
     display: block;
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    min-height: 38px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     border-radius: 50%;
     border-width: 3px;
     border-style: solid;
@@ -1071,9 +1152,9 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 
 .color-option:focus,
 .color-option.focused {
-    transform: scale(1.2);
-    border-color: rgba(255, 255, 255, 0.8);
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+    transform: scale(1.22);
+    border-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.4);
     z-index: 10;
 }
 
@@ -1102,38 +1183,27 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 }
 
 /* Legacy / ultra-legacy layout support (Tizen 3.0/4.0 and Tizen 2.x) */
-html[data-layout-tier="legacy"] .theme-color-grid,
-html[data-layout-tier="ultra-legacy"] .theme-color-grid {
+html[data-layout-tier="legacy"] .theme-color-modal-grid,
+html[data-layout-tier="ultra-legacy"] .theme-color-modal-grid {
     display: block;
-    text-align: right;
-    /* Eliminate whitespace gaps between inline-block items from the JS template */
+    text-align: center;
     font-size: 0;
-    /* 10 items * (38px + 10px margin) = 480px.
-       500px provides a safe buffer for scaling/sub-pixel issues while still forcing 11th items to wrap. */
-    max-width: 500px;
-    margin-left: auto;
+    margin: 0 auto;
 }
 
-/* ==========================================================================
-   Ultra-Legacy Theme Color Center Fix
-   ========================================================================== */
-
 html[data-layout-tier="ultra-legacy"] .color-option.active::after {
-    /* Bug: 'transform: translate(-50%, -50%)' is unreliable on ancient engines */
     top: 50%;
     left: 50%;
-    margin-top: -6px; /* Dot is 12px wide/high */
+    margin-top: -6px;
     margin-left: -6px;
     transform: none;
     -webkit-transform: none;
 }
 
-
 html[data-layout-tier="legacy"] .color-option,
 html[data-layout-tier="ultra-legacy"] .color-option {
     display: inline-block;
     vertical-align: top;
-    margin: 5px;
-    /* Restore normal font size for any children if needed (none here currently) */
+    margin: 6px;
     font-size: 1rem;
 }
