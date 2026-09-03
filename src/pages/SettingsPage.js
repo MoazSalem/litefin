@@ -2094,6 +2094,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelUseTrendingCollectionName">${i18n.t('LabelUseTrendingCollectionName')}</span>
+                        <span class="setting-description" data-i18n="LabelUseTrendingCollectionNameDescription">${i18n.t('LabelUseTrendingCollectionNameDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:useTrendingCollectionName') === 'true' ? 'active' : ''}" 
+                                 id="toggle-use-trending-collection-name" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLibraryLabels">${i18n.t('HideLibraryLabels')}</span>
                         <span class="setting-description" data-i18n="HideLibraryLabelsDescription">${i18n.t('HideLibraryLabelsDescription')}</span>
                     </div>
@@ -6003,6 +6016,22 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Use Collection Name for Trending Rows
+        // When enabled, displays the specific or matched collection name instead of 'Trending Movies' / 'Trending Series'
+        const useTrendingColNameBtn = this.$('#toggle-use-trending-collection-name');
+        if (useTrendingColNameBtn) {
+            useTrendingColNameBtn.addEventListener('click', () => {
+                // Read existing state defaulting to false
+                const isEnabled = storage.getItem('pref:useTrendingCollectionName') === 'true';
+                const newValue = !isEnabled;
+                // Store updated boolean string representation
+                storage.setItem('pref:useTrendingCollectionName', newValue.toString());
+                // Immediately transition active indicator state
+                useTrendingColNameBtn.classList.toggle('active', newValue);
+                log.info(`Use Trending Collection Name set to: ${newValue}`);
+            });
+        }
+
         // Toggle Hide Library Labels
         const hideLabelsBtn = this.$('#toggle-library-labels');
         if (hideLabelsBtn) {
@@ -8982,19 +9011,32 @@ class SettingsPage extends Page {
                 { id: 'resume', title: i18n.t('HeaderContinueWatching') }
             ];
 
+            const useTrendingColName = storage.getItem('pref:useTrendingCollectionName') === 'true';
             const trendingMoviesCol = storage.getItem('pref:trendingMoviesCollection') || 'auto';
+            const trendingMoviesName = storage.getItem('pref:trendingMoviesCollectionName');
             if (trendingMoviesCol !== 'none') {
+                // If using collection name and a specific collection is selected, show its name in layout manager
+                const title =
+                    useTrendingColName && trendingMoviesCol !== 'auto' && trendingMoviesCol !== 'top-rated' && trendingMoviesName
+                        ? trendingMoviesName
+                        : i18n.t('HeaderTrendingMovies');
                 descriptors.push({
                     id: 'trending',
-                    title: i18n.t('HeaderTrendingMovies')
+                    title
                 });
             }
 
             const trendingSeriesCol = storage.getItem('pref:trendingSeriesCollection') || 'none';
+            const trendingSeriesName = storage.getItem('pref:trendingSeriesCollectionName');
             if (trendingSeriesCol !== 'none') {
+                // If using collection name and a specific collection is selected, show its name in layout manager
+                const title =
+                    useTrendingColName && trendingSeriesCol !== 'auto' && trendingSeriesCol !== 'top-rated' && trendingSeriesName
+                        ? trendingSeriesName
+                        : i18n.t('HeaderTrendingSeries');
                 descriptors.push({
                     id: 'trending-series',
-                    title: i18n.t('HeaderTrendingSeries')
+                    title
                 });
             }
 

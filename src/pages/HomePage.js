@@ -345,13 +345,21 @@ class HomePage extends Page {
             return sharedCollectionsPromise;
         };
 
+        // Check if user enabled custom collection name headers
+        const useTrendingColName = storage.getItem('pref:useTrendingCollectionName') === 'true';
+
         const createTrendingDescriptor = (id, type, settingKey, nameKey, defaultTitleKey) => {
             const settingVal = storage.getItem(settingKey) || (type === 'Movie' ? 'auto' : 'none');
             if (settingVal === 'none') return null;
 
-            const title = i18n.t(defaultTitleKey);
+            const storedName = storage.getItem(nameKey);
+            // If user selected a specific collection and custom name is requested, use its stored name immediately
+            let title =
+                useTrendingColName && settingVal !== 'auto' && settingVal !== 'top-rated' && storedName
+                    ? storedName
+                    : i18n.t(defaultTitleKey);
 
-            return {
+            const descriptor = {
                 id,
                 title,
                 priority: 1,
@@ -407,6 +415,11 @@ class HomePage extends Page {
 
                             if (smartCollection) {
                                 log.info(`Found smart trending collection for ${type}: "${smartCollection.Name}"`);
+                                // If preference is active, dynamically use the detected smart collection's name
+                                if (useTrendingColName && smartCollection.Name) {
+                                    descriptor.title = smartCollection.Name;
+                                }
+
                                 let items = null;
                                 if (smartCollection.Type === 'Playlist') {
                                     const plRes = await api.getPlaylistItems(smartCollection.Id, {
@@ -453,6 +466,8 @@ class HomePage extends Page {
                     }
                 }
             };
+
+            return descriptor;
         };
 
         const trendingMoviesDesc = createTrendingDescriptor(

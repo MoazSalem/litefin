@@ -816,6 +816,8 @@
     "LabelTrendingMoviesCollectionDescription": "Select the collection or playlist that feeds the Trending Movies row.",
     "LabelTrendingSeriesCollection": "Trending Series Collection",
     "LabelTrendingSeriesCollectionDescription": "Select the collection or playlist that feeds the Trending Series row.",
+    "LabelUseTrendingCollectionName": "Use Collection Name as Header",
+    "LabelUseTrendingCollectionNameDescription": "Display the collection or playlist name instead of 'Trending Movies' / 'Trending Series' on the home screen.",
     "Language": "Language",
     "LatestFrom": "Latest {0}",
     "Lavender": "Lavender",
