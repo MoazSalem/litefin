@@ -2007,14 +2007,28 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Enable Collection Rows on Home Screen Toggle -->
                 <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableCollectionRows">${i18n.t('EnableCollectionRows') || 'Enable Collection Rows in Home Screen'}</span>
+                        <span class="setting-description" data-i18n="EnableCollectionRowsDescription">${i18n.t('EnableCollectionRowsDescription') || 'Display custom collection and trending rows on the home screen.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:enableCollectionRows') === 'true' ? 'active' : ''}" 
+                                 id="toggle-enable-collection-rows" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="trending-movies-collection-item" style="display: ${storage.getItem('pref:enableCollectionRows') === 'true' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelTrendingMoviesCollection">${i18n.t('LabelTrendingMoviesCollection')}</span>
                         <span class="setting-description" data-i18n="LabelTrendingMoviesCollectionDescription">${i18n.t('LabelTrendingMoviesCollectionDescription')}</span>
                     </div>
                     <div class="setting-control">
                         ${(() => {
-                const val = storage.getItem('pref:trendingMoviesCollection') || 'auto';
+                const val = storage.getItem('pref:trendingMoviesCollection') || 'none';
                 const name = storage.getItem('pref:trendingMoviesCollectionName');
                 const opts = [
                     { value: 'none', label: i18n.t('Disabled') },
@@ -2029,7 +2043,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
+                <div class="setting-item" id="trending-series-collection-item" style="display: ${storage.getItem('pref:enableCollectionRows') === 'true' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelTrendingSeriesCollection">${i18n.t('LabelTrendingSeriesCollection')}</span>
                         <span class="setting-description" data-i18n="LabelTrendingSeriesCollectionDescription">${i18n.t('LabelTrendingSeriesCollectionDescription')}</span>
@@ -2051,7 +2065,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
+                <div class="setting-item" id="trending-collection-name-item" style="display: ${storage.getItem('pref:enableCollectionRows') === 'true' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelUseTrendingCollectionName">${i18n.t('LabelUseTrendingCollectionName')}</span>
                         <span class="setting-description" data-i18n="LabelUseTrendingCollectionNameDescription">${i18n.t('LabelUseTrendingCollectionNameDescription')}</span>
@@ -6259,6 +6273,58 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getRoundedCorners();
                 layoutManager.setRoundedCorners(newValue);
                 roundedCornersBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Enable Collection Rows in Home Screen
+        const enableCollectionRowsBtn = this.$('#toggle-enable-collection-rows');
+        const moviesColItem = this.$('#trending-movies-collection-item');
+        const seriesColItem = this.$('#trending-series-collection-item');
+        const colNameItem = this.$('#trending-collection-name-item');
+
+        if (enableCollectionRowsBtn) {
+            enableCollectionRowsBtn.addEventListener('click', () => {
+                const isCurrentlyEnabled = storage.getItem('pref:enableCollectionRows') === 'true';
+                const newValue = !isCurrentlyEnabled;
+                storage.setItem('pref:enableCollectionRows', newValue.toString());
+                enableCollectionRowsBtn.classList.toggle('active', newValue);
+
+                if (!newValue) {
+                    // Reset both movies and series collection setting to disabled ('none')
+                    storage.setItem('pref:trendingMoviesCollection', 'none');
+                    storage.setItem('pref:trendingSeriesCollection', 'none');
+
+                    // Update UI labels and values on the select buttons
+                    const moviesBtn = this.$('.select-btn[data-id="trending-movies-collection-select"]');
+                    if (moviesBtn) {
+                        moviesBtn.dataset.value = 'none';
+                        const labelSpan = moviesBtn.querySelector('.btn-label');
+                        if (labelSpan) labelSpan.innerText = i18n.t('Disabled') || 'Disabled';
+                    }
+
+                    const seriesBtn = this.$('.select-btn[data-id="trending-series-collection-select"]');
+                    if (seriesBtn) {
+                        seriesBtn.dataset.value = 'none';
+                        const labelSpan = seriesBtn.querySelector('.btn-label');
+                        if (labelSpan) labelSpan.innerText = i18n.t('Disabled') || 'Disabled';
+                    }
+
+                    // Hide the 3 items
+                    if (moviesColItem) moviesColItem.style.display = 'none';
+                    if (seriesColItem) seriesColItem.style.display = 'none';
+                    if (colNameItem) colNameItem.style.display = 'none';
+                } else {
+                    // Show the 3 items back
+                    if (moviesColItem) moviesColItem.style.display = '';
+                    if (seriesColItem) seriesColItem.style.display = '';
+                    if (colNameItem) colNameItem.style.display = '';
+                }
+
+                log.info(`Enable Collection Rows set to: ${newValue}`);
+
+                // Refresh the home layout ordering manager if present
+                this._setupHomeLayoutUI();
+                focusManager.invalidateCache('settings-content');
             });
         }
 

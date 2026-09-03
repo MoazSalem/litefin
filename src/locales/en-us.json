@@ -613,6 +613,8 @@
     "EnableAV1": "AV1 Decode Force State",
     "EnableBackgroundService": "Enable Background Service",
     "EnableBackgroundServiceDescription": "Enable the background Node.js service for discovery and proxy playback features.",
+    "EnableCollectionRows": "Enable Collection Rows in Home Screen",
+    "EnableCollectionRowsDescription": "Display custom collection and trending rows on the home screen.",
     "EnableDebugLogs": "Enable Debug Logs",
     "EnableDebugLogsDescription": "Allow application to output logs to console",
     "EnableDV": "Dolby Vision Force State",

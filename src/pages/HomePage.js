@@ -349,7 +349,8 @@ class HomePage extends Page {
         const useTrendingColName = storage.getItem('pref:useTrendingCollectionName') === 'true';
 
         const createTrendingDescriptor = (id, type, settingKey, nameKey, defaultTitleKey) => {
-            const settingVal = storage.getItem(settingKey) || (type === 'Movie' ? 'auto' : 'none');
+            if (storage.getItem('pref:enableCollectionRows') !== 'true') return null;
+            const settingVal = storage.getItem(settingKey) || 'none';
             if (settingVal === 'none') return null;
 
             const storedName = storage.getItem(nameKey);
