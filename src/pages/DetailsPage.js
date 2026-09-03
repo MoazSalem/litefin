@@ -526,10 +526,6 @@ class DetailsPage extends Page {
             });
             this._item = item;
 
-            if (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer') {
-                prewarmManager.prewarm(item);
-            }
-
             // Cache Series item for reuse across child Season/Episode detail pages
             if (item.Type === 'Series') {
                 state.set(`details:series:${item.Id}`, item);
@@ -551,6 +547,13 @@ class DetailsPage extends Page {
 
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
+
+            // Trigger prewarm for playable media items, passing the restored version ID if available
+            if (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer') {
+                prewarmManager.prewarm(item, {
+                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id
+                });
+            }
 
             // Await user data (likely already resolved from state cache)
             this._currentUser = await userPromise;
@@ -714,6 +717,13 @@ class DetailsPage extends Page {
             // Reset track selections when version changes as they are source-specific
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
+
+            // Re-trigger zero-latency prewarm for the newly selected version
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: id
+                });
+            }
         });
     }
 
@@ -3672,6 +3682,15 @@ class DetailsPage extends Page {
 
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
+
+            // Re-trigger zero-latency prewarm with updated audio track selection
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: index,
+                    subtitleStreamIndex: this._selectedSubtitleIndex
+                });
+            }
         });
     }
 
@@ -3725,6 +3744,15 @@ class DetailsPage extends Page {
             // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
+
+            // Re-trigger zero-latency prewarm with updated subtitle track selection
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: this._selectedAudioIndex,
+                    subtitleStreamIndex: index
+                });
+            }
         });
     }
 
