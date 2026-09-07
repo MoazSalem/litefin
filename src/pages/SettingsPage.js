@@ -4814,15 +4814,6 @@ class SettingsPage extends Page {
                 </p>
 
                 <h3 class="setting-section-title" data-i18n="AppBehavior">${i18n.t('AppBehavior')}</h3>
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ShowProfilesOnResume">${i18n.t('ShowProfilesOnResume')}</span>
-                        <span class="setting-description" data-i18n="ShowProfilesOnResumeDescription">${i18n.t('ShowProfilesOnResumeDescription')}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${showProfilesOnResume ? 'active' : ''}" id="toggle-profiles-on-resume" tabindex="0"></button>
-                    </div>
-                </div>
 
                 <!-- Application Behavior -->
                 <div class="setting-item">
@@ -4835,6 +4826,16 @@ class SettingsPage extends Page {
                                 id="toggle-confirm-exit" 
                                 tabindex="0">
                         </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowProfilesOnResume">${i18n.t('ShowProfilesOnResume')}</span>
+                        <span class="setting-description" data-i18n="ShowProfilesOnResumeDescription">${i18n.t('ShowProfilesOnResumeDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${showProfilesOnResume ? 'active' : ''}" id="toggle-profiles-on-resume" tabindex="0"></button>
                     </div>
                 </div>
 

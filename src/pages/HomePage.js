@@ -1243,7 +1243,8 @@ class HomePage extends Page {
 
         const libraryIds = latestDescriptors.map((d) => d.id.replace('latest-', ''));
         const hidePlayed = storage.getItem('pref:hidePlayedInLatest') === 'true';
-        const homeRowLimit = parseInt(storage.getItem('pref:homeRowLimit') || '12', 10);
+        // Ensure we read the canonical pref:homeRowsLimit user preference (defaulting to 12)
+        const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || '12', 10);
 
         try {
             const batchMap = await api.getBatchLatest(libraryIds, {
