@@ -15,10 +15,17 @@ import { router } from '../core/Router.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
+import { state } from '../core/StateManager.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('SeerrRequestModal');
 
 const OVERLAY_ID = 'seerr-request-modal';
+
+// Storage keys for preserving user-selected request defaults per media type
+const STORAGE_KEY_DEFAULT_SERVER = 'seerr:defaultServer:';
+const STORAGE_KEY_DEFAULT_PROFILE = 'seerr:defaultProfile:';
+const STORAGE_KEY_DEFAULT_FOLDER = 'seerr:defaultFolder:';
 
 function escapeHtml(value) {
     if (!value) return '';
@@ -190,21 +197,93 @@ class SeerrRequestModal {
             return () => ({});
         }
 
-        const hasAdvancedOptions = options && options.servers && options.servers.length > 0;
+        // --------------------------------------------------------------------
+        // Check Admin Status:
+        // Check Jellyfin User Policy (IsAdministrator) or Seerr permissions (ADMIN / MANAGE_REQUESTS).
+        // Only administrators can switch requested user or customize server, profile, and root folder.
+        // --------------------------------------------------------------------
+        let currentUserData = state.get('user:data');
+        if (!currentUserData && api.userId) {
+            try {
+                currentUserData = await api.getCurrentUser();
+            } catch (err) {
+                log.warn('Could not fetch current Jellyfin user data', err);
+            }
+        }
+        const isJellyfinAdmin = !!(currentUserData?.Policy?.IsAdministrator);
+
+        // Check Seerr user permissions (ADMIN = 2, MANAGE_REQUESTS = 8192)
+        const isSeerrAdmin = !!((options?.user?.permissions || 0) & (2 | 8192));
+
+        // Combined admin check
+        const isAdmin = isJellyfinAdmin || isSeerrAdmin;
+
+        // If user is not an administrator, disable advanced server options and user switching
+        const hasAdvancedOptions = isAdmin && options && options.servers && options.servers.length > 0;
         const hasUsers = Array.isArray(users) && users.length > 0;
+
+        // --------------------------------------------------------------------
+        // Auto-Detect "Request As" User:
+        // Prioritize matching the current Jellyfin user by GUID or username.
+        // Falls back to Seerr API key owner if present, or first user.
+        // --------------------------------------------------------------------
+        let selectedUser = null;
+        if (hasUsers) {
+            // Retrieve current Jellyfin user ID (normalized without hyphens)
+            const currentJfId = (api.userId || '').replace(/-/g, '').toLowerCase();
+
+            // Retrieve current Jellyfin username from StateManager profile or user data
+            const currentProfile = state.get('user:profile') || state.get('user') || currentUserData || {};
+            const currentUsername = (currentProfile.Name || currentProfile.name || '').trim().toLowerCase();
+
+            // Search for an exact match against Seerr linked Jellyfin account
+            selectedUser = users.find((u) => {
+                // Match by Jellyfin User GUID
+                const uJfId = (u.jellyfinUserId || '').replace(/-/g, '').toLowerCase();
+                if (currentJfId && uJfId && uJfId === currentJfId) {
+                    return true;
+                }
+
+                // Match by Jellyfin Username / Display name / Seerr Username
+                const uJfName = (u.jellyfinUsername || '').trim().toLowerCase();
+                const uName = (u.username || '').trim().toLowerCase();
+                const uDisplay = (u.displayName || '').trim().toLowerCase();
+                if (currentUsername && (uJfName === currentUsername || uName === currentUsername || uDisplay === currentUsername)) {
+                    return true;
+                }
+
+                return false;
+            }) || users.find((u) => u.id === options?.user?.id) || users[0];
+        }
+
+        // For non-admin users, if no options to show, return early with selectedUser
+        if (!isAdmin) {
+            return () => ({
+                userId: selectedUser ? selectedUser.id : undefined
+            });
+        }
 
         if (!hasAdvancedOptions && !hasUsers) return () => ({});
 
-        let selectedUser = null;
-        if (hasUsers) {
-            selectedUser =
-                users.find((u) => u.id === options?.user?.id) ||
-                users[0];
+        // --------------------------------------------------------------------
+        // Auto-Detect Default Server, Profile, and Root Folder:
+        // Based on media type ('movie' vs 'tv') and cached user preferences.
+        // --------------------------------------------------------------------
+        const mediaType = item._mediaType || 'movie';
+        const savedServerId = storage.getItem(`${STORAGE_KEY_DEFAULT_SERVER}${mediaType}`);
+
+        let selectedServer = null;
+        if (hasAdvancedOptions) {
+            // Check if user previously picked a preferred server for this media type
+            if (savedServerId != null) {
+                selectedServer = options.servers.find((s) => String(s.id) === String(savedServerId));
+            }
+            // Fall back to default non-4K server configured in Seerr, or first available server
+            if (!selectedServer) {
+                selectedServer = options.servers.find((server) => server.isDefault && !server.is4k) || options.servers[0];
+            }
         }
 
-        let selectedServer = hasAdvancedOptions
-            ? options.servers.find((server) => server.isDefault && !server.is4k) || options.servers[0]
-            : null;
         let selectedProfile = null;
         let selectedRootFolder = null;
 
@@ -279,16 +358,27 @@ class SeerrRequestModal {
         }
 
         if (hasAdvancedOptions) {
+            // Synchronize selected profile and root folder for current server
             const sync = () => {
                 const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
+                const serverId = selectedServer.id;
+
+                // 1. Quality Profile: check cached preference for this server, then server active profile, then first
+                const savedProfileId = storage.getItem(`${STORAGE_KEY_DEFAULT_PROFILE}${mediaType}:${serverId}`);
                 selectedProfile =
+                    (savedProfileId != null ? detail?.profiles?.find((p) => String(p.id) === String(savedProfileId)) : null) ||
                     detail?.profiles?.find((profile) => profile.id === detail.server.activeProfileId) ||
                     detail?.profiles?.[0] ||
                     null;
+
+                // 2. Root Folder: check cached preference for this server, then server active directory, then first
+                const savedFolder = storage.getItem(`${STORAGE_KEY_DEFAULT_FOLDER}${mediaType}:${serverId}`);
                 selectedRootFolder =
+                    (savedFolder ? detail?.rootFolders?.find((f) => f.path === savedFolder) : null) ||
                     detail?.rootFolders?.find((folder) => folder.path === detail.server.activeDirectory) ||
                     detail?.rootFolders?.[0] ||
                     null;
+
                 serverButton.querySelector('.seerr-option-value').textContent =
                     `${selectedServer.name}${selectedServer.is4k ? ' (4K)' : ''}`;
                 profileButton.querySelector('.seerr-option-value').textContent = selectedProfile?.name || '-';
@@ -308,9 +398,12 @@ class SeerrRequestModal {
                 );
                 if (choice) {
                     selectedServer = choice;
+                    // Persist selected server preference for this media type
+                    storage.setItem(`${STORAGE_KEY_DEFAULT_SERVER}${mediaType}`, String(selectedServer.id));
                     sync();
                 }
             });
+
             profileButton.addEventListener('click', async () => {
                 const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
                 const choice = await SeerrRequestModal._chooseOption(
@@ -323,9 +416,12 @@ class SeerrRequestModal {
                 );
                 if (choice) {
                     selectedProfile = choice;
+                    // Persist selected quality profile preference for this server and media type
+                    storage.setItem(`${STORAGE_KEY_DEFAULT_PROFILE}${mediaType}:${selectedServer.id}`, String(choice.id));
                     profileButton.querySelector('.seerr-option-value').textContent = choice.name;
                 }
             });
+
             rootButton.addEventListener('click', async () => {
                 const detail = options.details.find((entry) => entry.server.id === selectedServer.id);
                 const choice = await SeerrRequestModal._chooseOption(
@@ -338,9 +434,12 @@ class SeerrRequestModal {
                 );
                 if (choice) {
                     selectedRootFolder = choice;
+                    // Persist selected root folder preference for this server and media type
+                    storage.setItem(`${STORAGE_KEY_DEFAULT_FOLDER}${mediaType}:${selectedServer.id}`, choice.path);
                     rootButton.querySelector('.seerr-option-value').textContent = choice.path;
                 }
             });
+
             sync();
         }
 
