@@ -182,6 +182,7 @@ html[data-button-style="accent-black"] {
 html[data-hide-unfocused-borders="true"] .btn-primary:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .btn-option:not(.active):not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .select-btn:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .theme-color-select-btn:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .tab-btn:not(.active):not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .control-btn:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .pagination-btn:not(:focus):not(.focused),
@@ -1102,6 +1103,12 @@ body {
     z-index: 8;
 }
 
+.count-badge.media-source-count-badge {
+    background-color: var(--jf-accent, #00a4dc);
+    color: var(--jf-accent-content-color, #ffffff);
+    font-size: 1.1rem;
+}
+
 .played-badge {
     position: absolute;
     bottom: 12px;
@@ -1167,6 +1174,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.count-badge ~ .quality-badge {
+    right: 60px;
 }
 
 
@@ -1488,4 +1499,26 @@ html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):no
     display: inline-block;
     /* Set margin to isolate from rating numeric score values */
     margin-right: 4px;
+}
+
+/*
+ * ── Chrome 26 Quirks Overrides: Media Card Badges Centering ──────────────────
+ * Uses the 2009 webkit-box model to align and center checkmark icons and episode 
+ * numbers inside round card badges, bypassing broken flex alignments.
+ */
+html[data-layout-quirks="c26"] .count-badge,
+html[data-layout-quirks="c26"] .played-badge {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
+    -webkit-box-pack: center !important;
+    -webkit-box-align: center !important;
+}
+
+html[data-layout-quirks="c26"] .count-badge {
+    line-height: 39px !important;
+}
+
+html[data-layout-quirks="c26"] .played-badge svg {
+    display: block !important;
+    margin: 0 !important;
 }

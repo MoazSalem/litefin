@@ -69,10 +69,15 @@ function getPlugins(tier, options = {}) {
          */
         { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' },
         // Copy early boot diagnostic backup logger for all builds
-        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' }
+        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' },
+        // Copy early DOM and ES2015 polyfills script for all builds
+        { from: 'src/early-polyfills.js', to: 'js/early-polyfills.js' }
     ];
 
-    if (buildTier === 'modern') {
+    // Include libass-wasm worker assets for both modern and legacy build tiers.
+    // Legacy tier includes the WASM workers for newer devices running legacy builds,
+    // with runtime WebAssembly feature gating falling back to libjass on unsupported hardware.
+    if (buildTier === 'modern' || buildTier === 'legacy') {
         patterns.push(
             {
                 from: 'node_modules/@jellyfin/libass-wasm/dist/js/subtitles-octopus-worker.js',
@@ -355,14 +360,8 @@ const legacyConfig = {
         ]
     },
 
-    // Legacy tier: LibassWasmRenderer is stubbed — no WASM workers are shipped.
-    plugins: [
-        ...getPlugins('legacy'),
-        new webpack.NormalModuleReplacementPlugin(
-            /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
-            path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
-        )
-    ]
+    // Legacy tier: Ships full LibassWasmRenderer and WASM workers with runtime feature detection.
+    plugins: getPlugins('legacy')
 };
 
 // ============================================================================
@@ -431,7 +430,15 @@ const ultraLegacyConfig = {
                             [
                                 '@babel/preset-env',
                                 {
-                                    targets: { chrome: '32' },
+                                    /*
+                                     * =======================================================================
+                                     * Target Environment Configuration
+                                     * =======================================================================
+                                     * Downgraded target to Chrome 26 to support ancient webOS 1.0 and 2.0
+                                     * platforms which run older Chromium runtimes. This forces Babel to
+                                     * transpile down further and include matching polyfills.
+                                     */
+                                    targets: { chrome: '26' },
                                     useBuiltIns: 'usage',
                                     corejs: 3
                                 }
@@ -509,6 +516,10 @@ const ultraLegacyConfig = {
             new webpack.NormalModuleReplacementPlugin(
                 /src[\/\\]player[\/\\]core[\/\\]LibassWasmRenderer\.js$/,
                 path.resolve(__dirname, 'src/player/core/LibassWasmRenderer.legacy.js')
+            ),
+            new webpack.NormalModuleReplacementPlugin(
+                /src[\/\\]player[\/\\]core[\/\\]ASSJSRenderer\.js$/,
+                path.resolve(__dirname, 'src/player/core/ASSJSRenderer.legacy.js')
             )
         );
 

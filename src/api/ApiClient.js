@@ -158,6 +158,7 @@ export class ApiClient {
         // Wipe page caches — stale data bound to the previous auth session
         state.clearByPrefix('details:');
         state.clearByPrefix('home:');
+        state.clearByPrefix('discover:');
 
         log.info('Authentication cleared');
     }
@@ -258,7 +259,7 @@ export class ApiClient {
         }
 
         // Conditionally request quality/resolution metadata if enabled
-        if (storage.getItem('pref:showQualityBadges') === 'true' && options.params) {
+        if (options.params) {
             const fieldsKey = Object.keys(options.params).find((k) => k.toLowerCase() === 'fields');
             const isItemsEndpoint =
                 (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
@@ -269,16 +270,27 @@ export class ApiClient {
                 endpoint.includes('/Similar') ||
                 endpoint.includes('/Episodes') ||
                 endpoint.includes('/Search/Hints') ||
+                endpoint.includes('/Persons') ||
                 endpoint.includes('/MergedRows');
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
                 const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
-                ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
-                    if (!fieldsList.includes(f)) {
-                        fieldsList.push(f);
+                
+                if (storage.getItem('pref:showQualityBadges') === 'true') {
+                    ['Width', 'Height', 'VideoRange', 'VideoRangeType', 'MediaSources'].forEach((f) => {
+                        if (!fieldsList.includes(f)) {
+                            fieldsList.push(f);
+                        }
+                    });
+                }
+
+                if (storage.getItem('pref:showMediaSourceCounts') !== 'false') {
+                    if (!fieldsList.includes('MediaSourceCount')) {
+                        fieldsList.push('MediaSourceCount');
                     }
-                });
+                }
+
                 options.params[targetKey] = fieldsList.join(',');
             }
         }
@@ -464,8 +476,9 @@ export class ApiClient {
                         // Send Wake-on-LAN Magic Packet
                         sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
 
-                        // Retry loop: probe server status every 3s for up to 5 attempts (~15 seconds)
-                        const maxAttempts = 5;
+                        // Retry loop: probe server status every 3s (up to 25 attempts / ~90s if Extended Wait is active)
+                        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+                        const maxAttempts = extendedWait ? 25 : 5;
                         const retryDelayMs = 3000;
 
                         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -528,7 +541,7 @@ export class ApiClient {
                     message = data.message || data.Message || message;
                 } catch {
                     // Not JSON — use raw text as the error message (trim to 200 chars max)
-                    const trimmed = bodyText.trim();
+                    const trimmed = (bodyText || '').trim();
                     if (trimmed) {
                         message = trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed;
                     }
@@ -716,7 +729,7 @@ export class ApiClient {
             SortOrder: 'Ascending',
             IncludeItemTypes: '',
             Recursive: true,
-            Fields: 'BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'BackdropImageTags,ParentBackdropImageTags,MediaSourceCount',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             Limit: 100
@@ -965,6 +978,23 @@ export class ApiClient {
      */
     async getSpecialFeatures(itemId) {
         return this.get(`/Users/${this._userId}/Items/${itemId}/SpecialFeatures`);
+    }
+
+    /**
+     * Fetch additional video parts for multi-part video items (e.g. Part 2, Part 3 of a multi-disc movie).
+     * Jellyfin server endpoint: GET /Videos/{itemId}/AdditionalParts
+     *
+     * @param {string} itemId - The primary video item ID
+     * @returns {Promise<Object>} Paginated query result containing additional part items
+     */
+    async getAdditionalParts(itemId) {
+        /*
+         * Multi-part items in Jellyfin allow split video files (e.g., Lord of the Rings Disc 1 & Disc 2)
+         * to be grouped under a single library entry while preserving individual stream files.
+         */
+        return this.get(`/Videos/${itemId}/AdditionalParts`, {
+            UserId: this._userId
+        });
     }
 
     /**
@@ -2023,19 +2053,45 @@ export class ApiClient {
 export function testServer(address, timeout = 1000, parentSignal = null) {
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
+        let resolved = false;
 
-        // Hard-kill the request at the OS level after `timeout` ms.
-        // This is the key fix — unlike AbortController, xhr.timeout works on
-        // Chromium 29+ and actually terminates the underlying TCP connection.
-        xhr.timeout = timeout;
-
+        // Clean-up and resolution helper to prevent multiple resolutions
         function done(result) {
+            if (resolved) return;
+            resolved = true;
+
+            // Clear our manual backup abort timer to free up system memory
+            if (abortTimer) {
+                clearTimeout(abortTimer);
+                abortTimer = null;
+            }
+
             // Cleanup the parent signal listener before resolving
             if (parentSignal && onParentAbort) {
                 parentSignal.removeEventListener('abort', onParentAbort);
             }
             resolve(result);
         }
+
+        // ====================================================================
+        // MANUAL ABORT BACKUP TIMER (CHROME < 29 COMPATIBILITY)
+        // ====================================================================
+        // Older Chromium versions (like Chrome 26 on WebOS 1.x / Tizen 2.x)
+        // do not natively support xhr.timeout or throw errors when trying to set it.
+        // We set up a manual setTimeout to trigger xhr.abort() after the timeout period.
+        // This stops the request and frees up the browser's limited connection pool.
+        // ====================================================================
+        let abortTimer = setTimeout(() => {
+            try {
+                xhr.abort();
+            } catch (_) {}
+            done(null);
+        }, timeout);
+
+        // Native timeout setting (supported natively in Chromium 29+)
+        try {
+            xhr.timeout = timeout;
+        } catch (_) {}
 
         // If the parent discovery scan was cancelled, abort this probe too
         const onParentAbort = () => {
@@ -2046,7 +2102,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         if (parentSignal) {
             // Already cancelled before we even started
             if (parentSignal.aborted) {
-                resolve(null);
+                done(null);
                 return;
             }
             parentSignal.addEventListener('abort', onParentAbort, { once: true });
@@ -2055,6 +2111,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) return;
 
+            // Non-200 responses (e.g. server offline, not found) resolve as null
             if (xhr.status !== 200) {
                 done(null);
                 return;
@@ -2064,7 +2121,7 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
                 const info = JSON.parse(xhr.responseText);
 
                 let serverName = info.ServerName;
-                if (!serverName || serverName.trim() === '') {
+                if (!serverName || typeof serverName !== 'string' || serverName.trim() === '') {
                     // Fall back to hostname extracted from the address URL
                     try {
                         serverName = new URL(address).hostname;
@@ -2372,20 +2429,30 @@ export async function sendWakeOnLan(macAddress) {
         }
 
         log.info('Dispatching WOL request to local HTTP proxy on port 8123');
-        try {
-            const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                // Keep-alive or short timeout since it is local loopback
-                timeout: 3000
-            });
-            const data = await res.json();
-            log.info('Local HTTP WOL response received:', data);
-            return !!(data && data.success);
-        } catch (fetchErr) {
-            log.warn('Failed to dispatch WOL request to local HTTP proxy:', fetchErr);
-            return false;
+        const url = `http://localhost:8123/wol?mac=${encodeURIComponent(macAddress)}`;
+        const maxHttpRetries = 6;
+        const httpRetryDelayMs = 600;
+
+        for (let attempt = 1; attempt <= maxHttpRetries; attempt++) {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    timeout: 3000
+                });
+                const data = await res.json();
+                log.info(`Local HTTP WOL response received (attempt ${attempt}/${maxHttpRetries}):`, data);
+                if (data && data.success) {
+                    return true;
+                }
+            } catch (fetchErr) {
+                log.warn(`WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`, fetchErr.message || fetchErr);
+                if (attempt < maxHttpRetries) {
+                    await new Promise((resolve) => setTimeout(resolve, httpRetryDelayMs));
+                }
+            }
         }
+        log.error('All WOL request attempts to local HTTP proxy failed.');
+        return false;
     }
 
     log.warn('WOL command skipped: background service is disabled or platform is unsupported');
@@ -2393,13 +2460,53 @@ export async function sendWakeOnLan(macAddress) {
 }
 
 /**
- * Discover Jellyfin servers on local network
+ * Check if the current device/platform has a background UDP discovery service.
+ * - WebOS: true if Luna service is available (window.webOS.service)
+ * - Tizen: true if running on Tizen and background service is enabled
+ * - Others: false
+ *
+ * @returns {boolean} True if background UDP discovery service is present
  */
-export async function discoverServers(onProgress = null, onServerFound = null) {
+export function hasBackgroundDiscoveryService() {
+    // 1. WebOS Luna Service check
+    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+        return true;
+    }
+
+    // 2. Tizen HTTP Proxy / Discovery Service check
+    if (typeof tizen !== 'undefined') {
+        try {
+            const bgEnabled = storage.getItem('player:enableBackgroundService') !== 'false';
+            return bgEnabled;
+        } catch (_) {
+            return true;
+        }
+    }
+
+    // 3. Platforms without background UDP discovery service
+    return false;
+}
+
+/**
+ * Discover Jellyfin servers on local network
+ *
+ * @param {Function|null} onProgress - Optional callback receiving (checked, total)
+ * @param {Function|null} onServerFound - Optional callback receiving server info object
+ * @param {Object|boolean} [options={}] - Discovery options or allowHttpFallback flag
+ * @param {boolean} [options.isManual=false] - True if user manually triggered search via button
+ * @param {boolean} [options.allowHttpFallback] - Allow falling back to subnet HTTP scan
+ */
+export async function discoverServers(onProgress = null, onServerFound = null, options = {}) {
+    // Parse options object or boolean flag for backwards compatibility
+    const isManual = typeof options === 'object' && options !== null ? !!options.isManual : false;
+    const allowHttpFallback = typeof options === 'object' && options !== null && 'allowHttpFallback' in options
+        ? !!options.allowHttpFallback
+        : isManual;
+
     // Cancel any existing scan first
     cancelDiscovery();
 
-    log.info('Starting server discovery...');
+    log.info(`Starting server discovery (isManual=${isManual}, allowHttpFallback=${allowHttpFallback})...`);
 
     // =========================================================================
     // WAKE-ON-LAN ON SERVER SCAN
@@ -2440,7 +2547,11 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
             return lunaServers;
         }
 
-        log.warn('Luna service unavailable — falling back to HTTP scan');
+        log.warn('Luna service unavailable');
+        if (!allowHttpFallback) {
+            log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+            return [];
+        }
     }
 
     /*
@@ -2477,10 +2588,24 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
                 return tizenServers;
             }
 
-            log.warn('Tizen /discover unavailable — falling back to HTTP scan');
+            log.warn('Tizen /discover unavailable');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         } else {
-            log.info('Background service disabled — skipping Tizen /discover, using HTTP scan');
+            log.info('Background service disabled — skipping Tizen /discover');
+            if (!allowHttpFallback) {
+                log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+                return [];
+            }
         }
+    }
+
+    // Check if HTTP fallback scan is permitted
+    if (!allowHttpFallback) {
+        log.info('No background discovery service available and HTTP fallback disabled — skipping HTTP subnet scan');
+        return [];
     }
 
     // =========================================================================

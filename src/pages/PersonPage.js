@@ -17,6 +17,7 @@ import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
@@ -108,7 +109,7 @@ class PersonPage extends Page {
             this._person = await api.getPerson(this._personId);
             this.title = this._person.Name;
 
-            this._renderPersonInfo();
+            await this._renderPersonInfo();
 
             // ────────────────────────────────────────────────────────────
             // 2. Fire poster/backdrop (non-blocking, fire-and-forget)
@@ -247,7 +248,7 @@ class PersonPage extends Page {
         }
     }
 
-    _renderPersonInfo() {
+    async _renderPersonInfo() {
         const p = this._person;
 
         // Render Favorite Button
@@ -259,7 +260,7 @@ class PersonPage extends Page {
         });
 
         if (favContainer) {
-            // Destroy existing
+            // Destroy existing favorite button
             if (this._favBtn) this._favBtn.destroy();
 
             this._favBtn = new FavoriteButton({
@@ -272,17 +273,41 @@ class PersonPage extends Page {
                 }
             });
 
-            // Clear and mount (force layout)
+            // Clear container and mount Favorite Button
             favContainer.innerHTML = '';
             favContainer.style.display = 'flex'; // FORCE display
             this._favBtn.mount(favContainer);
 
+            // Mount Seerr rounded button beside the favorite button if Seerr is configured and TMDB ID is present
+            const tmdbPersonId = p.ProviderIds?.Tmdb || p.ProviderIds?.tmdb || p.ProviderIds?.TMDB;
+            const isSeerrAvailable = await seerr.isAvailable();
+            if (isSeerrAvailable && tmdbPersonId) {
+                const seerrBtn = document.createElement('button');
+                seerrBtn.className = 'btn btn-icon btn-seerr focusable';
+                seerrBtn.id = 'btn-person-seerr';
+                seerrBtn.setAttribute('title', i18n.t('SeerrDetails') || 'Seerr Details');
+                seerrBtn.setAttribute('aria-label', i18n.t('SeerrDetails') || 'Seerr Details');
+                seerrBtn.setAttribute('tabindex', '0');
+                seerrBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="28" height="28">
+                        <path fill="currentColor" fill-rule="evenodd" d="M256 0C114.6 0 0 114.6 0 256s114.6 256 256 256s256-114.6 256-256S397.4 0 256 0M64 256c0 11.8-9.6 21.3-21.3 21.3c-11.8 0-21.3-9.6-21.3-21.3c-.1-129.6 105-234.7 234.6-234.7c11.8 0 21.3 9.6 21.3 21.3c0 11.8-9.5 21.4-21.3 21.4c-106 0-192 86-192 192m224.1 191.9c-88.4 0-160-71.6-160-160c0-1.3 0-2.7.1-4c-.1-2.2-.2-4.4-.2-6.6c0-15.3 2.3-30.1 6.6-44c11.7 25.9 37.8 44 68.1 44c41.2 0 74.7-33.4 74.7-74.7c0-30.3-18-56.4-44-68.1c13.9-4.3 28.7-6.6 44-6.6c2.1 0 4.3.1 6.4.2c-.4 0-.7 0-1.1-.1c1.8-.1 3.6-.1 5.4-.1c88.4 0 160 71.6 160 160s-71.6 160-160 160"/>
+                    </svg>
+                `;
+
+                seerrBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    router.navigate(`/seerr/person/${tmdbPersonId}`);
+                };
+
+                favContainer.appendChild(seerrBtn);
+            }
+
             // Wait for next frame to ensure DOM is ready
             requestAnimationFrame(() => {
                 focusManager.invalidateCache('person-fav-actions');
-                log.debug('Favorite cache invalidated. Button offsetParent:', this._favBtn.el?.offsetParent);
+                log.debug('Action buttons cache invalidated. Button offsetParent:', this._favBtn.el?.offsetParent);
             });
-            log.debug('Favorite Button mounted');
+            log.debug('Action buttons mounted');
         } else {
             log.error('Could not find #person-fav-actions container');
         }

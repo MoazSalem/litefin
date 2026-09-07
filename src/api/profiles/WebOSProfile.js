@@ -94,7 +94,19 @@ function getProbedCodecs() {
 function getWebOSVersion() {
     const userAgent = navigator.userAgent.toLowerCase();
     const match = /(?:chrome|crios|crmo)\/([0-9.]+)/.exec(userAgent);
-    if (!match) return 0;
+    if (!match) {
+        // Ancient WebOS 1.x/2.x platforms use pure WebKit without Chrome in UserAgent.
+        // Fall back to parsing the AppleWebKit version number:
+        //   AppleWebKit/538.2 -> WebOS 2.x
+        //   AppleWebKit/537.41 -> WebOS 1.x
+        const webkitMatch = /applewebkit\/([0-9.]+)/.exec(userAgent);
+        if (webkitMatch) {
+            const webkitVersion = parseFloat(webkitMatch[1]);
+            if (webkitVersion >= 538) return 2;
+            if (webkitVersion >= 537) return 1;
+        }
+        return 1; // Minimum safe fallback instead of 0
+    }
 
     const versionMajor = parseInt(match[1].split('.')[0], 10);
 
@@ -383,15 +395,13 @@ export function buildJellyfinProfile(options = {}) {
         maxBitrate = 40000000;
     }
 
-    // Keep as integer — the Jellyfin server TranscodingProfileDto schema expects
-    // MaxAudioChannels, MinSegments and SegmentLength to be integers, not strings.
-    // Sending a string (e.g. "6") triggers a JSON-schema validation 400 Bad Request
-    // on strict server versions.
-    const maxAudioChannels = caps.maxAudioChannels;
+    // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
+    const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
+    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
-    const maxAudioChannelsStr = String(caps.maxAudioChannels);
+    const maxAudioChannelsStr = String(maxAudioChannels);
 
     // -------------------------------------------------------------------------
     // fMP4 HLS preference resolution
@@ -778,16 +788,94 @@ export function buildJellyfinProfile(options = {}) {
     // H.264 levels: 5.1 for UHD, 4.1 for 1080p
     const h264Level = caps.uhd ? '51' : '41';
 
-    // We no longer strictly ban DOVI if enableDolbyVision is false because DOVI Profile 7/8
-    // contains an HDR10 baselayer that most HDR10 TVs can play natively.
-    // If the file is strictly Profile 5, it will play with wrong colors, but
-    // transcoding 4K HEVC Profile 5 usually requires significant server power anyway.
+    // ---------------------------------------------------------------------------
+    // Dynamic Range / VideoRangeType Allowed List Evaluation
+    // ---------------------------------------------------------------------------
+    // This controls which dynamic range types the Jellyfin server is permitted
+    // to direct-play or remux (direct-stream) without re-encoding the video.
+    //
+    // DOLBY VISION PROFILE DIFFERENCES & COLOR SPACE BEHAVIOR:
+    // ---------------------------------------------------------------------------
+    // 1. Dual-Layer & Hybrid Profiles (Profile 7, Profile 8.1/8.2/8.4):
+    //    - VideoRangeType: 'DOVIWithHDR10', 'DOVIWithHLG', 'DOVIWithSDR',
+    //      'DOVIWithEL', 'DOVIWithELHDR10Plus'.
+    //    - Structure: Base layer (standard HDR10/HLG/SDR in standard BT.2020/BT.709
+    //      YCbCr color space) + optional enhancement layer + Dolby Vision RPU metadata.
+    //    - Compatibility: Displays without Dolby Vision hardware decoders (or with DV
+    //      disabled) ignore the RPU/EL and seamlessly display the base layer in HDR10
+    //      or SDR. These types are safe to direct-play on HDR10-capable hardware.
+    //
+    // 2. Single-Layer Proprietary Profile (Profile 5):
+    //    - VideoRangeType: 'DOVI'.
+    //    - Structure: Single layer encoded strictly in Dolby's proprietary ICtCp (IPT)
+    //      color space with proprietary non-linear reshaping and dynamic metadata.
+    //      There is NO fallback HDR10/SDR base layer.
+    //    - Non-DV Display Failure Mode: If fed to a display or hardware decoder lacking
+    //      a Dolby Vision processing engine (e.g. LG UP78/UP75/UP80 budget series),
+    //      the ICtCp stream is decoded as if it were standard YCbCr, causing the
+    //      infamous inverted colors, magenta/pink skin tones, and bright green tint.
+    //
+    // 3. Expected Behavior on Non-DV Hardware:
+    //    - When enableDolbyVision is false, raw 'DOVI' (Profile 5) MUST NOT be listed
+    //      in the allowed VideoRangeType condition.
+    //    - Omitting 'DOVI' triggers Jellyfin's server-side VideoRangeTypeNotSupported
+    //      detection, prompting the server to transcode the video stream using FFmpeg's
+    //      tone-mapping pipeline to SDR (or supported HDR format), matching the official
+    //      jellyfin-webos client behavior.
+    //
+    // 4. Expected Behavior on DV-Capable Hardware:
+    //    - When enableDolbyVision is true, 'DOVI' is included so the server direct-plays
+    //      the stream and the LG TV's native Dolby Vision decoder activates.
+    // ---------------------------------------------------------------------------
+    const allowedRangeTypesList = ['SDR'];
+    if (enableHDR) {
+        allowedRangeTypesList.push(
+            'HDR10',
+            'HDR10Plus',
+            'HLG',
+            'DOVIWithHDR10',
+            'DOVIWithHDR10Plus',
+            'DOVIWithHLG',
+            'DOVIWithSDR',
+            'DOVIWithEL',
+            'DOVIWithELHDR10Plus',
+            'DOVIInvalid'
+        );
+        if (enableDolbyVision) {
+            allowedRangeTypesList.push('DOVI');
+        }
+    } else if (enableDolbyVision) {
+        allowedRangeTypesList.push('DOVI', 'DOVIWithSDR');
+    } else {
+        allowedRangeTypesList.push('DOVIWithSDR');
+    }
+
+    const hevcVideoRangeTypes = allowedRangeTypesList.join('|');
 
     const codecProfiles = [
         {
             Type: 'Video',
             Codec: 'h264',
-            Conditions: [{ Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false }]
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: 'high|main|baseline|constrained baseline',
+                    IsRequired: false
+                },
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
+                ...(!enableHDR
+                    ? [
+                          {
+                              Condition: 'EqualsAny',
+                              Property: 'VideoRangeType',
+                              Value: 'SDR',
+                              IsRequired: false
+                          }
+                      ]
+                    : [])
+            ]
         },
         {
             Type: 'Audio',
@@ -803,25 +891,6 @@ export function buildJellyfinProfile(options = {}) {
         }
     ];
 
-    // ---------------------------------------------------------------------------
-    // HEVC VideoRangeType allowed list.
-    //
-    // This string controls which HDR range types the server is permitted to
-    // direct-play or remux without re-encoding the video stream.
-    //
-    // When the user enables DV, we MUST also include the plain HDR10 / HLG
-    // subtypes here — otherwise a file whose VideoRangeType is 'HDR10' (not
-    // a DV subtype) hits the DV encouragement CodecProfile below, fails the
-    // DOVI-only EqualsAny match, and Jellyfin reports VideoRangeTypeNotSupported
-    // — triggering a slow full video transcode for what should be a direct-play.
-    //
-    // Rule: include ALL range types that both HDR and DV paths need.
-    // Mirror of TizenProfile's hevcVideoRangeTypes.
-    // ---------------------------------------------------------------------------
-    const hevcVideoRangeTypes = enableHDR
-        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus'
-        : 'SDR|DOVIWithSDR';
-
     if (enableHEVC) {
         codecProfiles.push({
             Type: 'Video',
@@ -835,9 +904,8 @@ export function buildJellyfinProfile(options = {}) {
                 },
                 {
                     // Explicitly enumerate accepted VideoRangeTypes so Jellyfin knows
-                    // we can handle HDR10 and all DV sub-flavours without transcoding.
-                    // Without this, enabling DV causes HDR10-only files (VideoRangeType=HDR10)
-                    // to fall through with VideoRangeTypeNotSupported.
+                    // we can handle HDR10 and supported DV flavours without transcoding.
+                    // Raw 'DOVI' (Profile 5) is only allowed when enableDolbyVision is true.
                     Condition: 'EqualsAny',
                     Property: 'VideoRangeType',
                     Value: hevcVideoRangeTypes,
@@ -959,7 +1027,7 @@ export function buildJellyfinProfile(options = {}) {
                         // are passthrough — they would be permitted by the main HEVC profile anyway.
                         Condition: 'EqualsAny',
                         Property: 'VideoRangeType',
-                        Value: 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR',
+                        Value: hevcVideoRangeTypes,
                         IsRequired: false
                     }
                 ]
@@ -977,7 +1045,17 @@ export function buildJellyfinProfile(options = {}) {
                     Property: 'VideoProfile',
                     Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
                     IsRequired: false
-                }
+                },
+                ...(!enableHDR
+                    ? [
+                          {
+                              Condition: 'EqualsAny',
+                              Property: 'VideoRangeType',
+                              Value: 'SDR',
+                              IsRequired: false
+                          }
+                      ]
+                    : [])
             ]
         });
     }
@@ -988,6 +1066,12 @@ export function buildJellyfinProfile(options = {}) {
             Codec: 'av1',
             Conditions: [
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '15', IsRequired: false },
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoRangeType',
+                    Value: hevcVideoRangeTypes,
+                    IsRequired: false
+                },
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
@@ -1059,25 +1143,21 @@ export function buildJellyfinProfile(options = {}) {
     // -------------------------------------------------------------------------
     // DirectStreamProfiles — raw container output for the DirectStream path.
     //
-    // Without this, Jellyfin has no explicit guidance on what container to use
-    // when it decides to DirectStream (copy video, handle audio). It would fall
-    // through to TranscodingProfiles and emit HLS/TS — which cannot deliver
-    // TrueHD or DTS to eARC on WebOS (see transAudioCodecsArr comment above).
-    //
-    // By specifying MKV here, the server outputs a raw progressive MKV stream
-    // over HTTP. WebOSPlayer receives a non-.m3u8 URL and routes it through
-    // _playNativeDirect() → video.src, giving the native media pipeline a
-    // direct bitstream it can pass through eARC — the same path that works
-    // for DirectPlay.
+    // Gated under direct playback mode. When playbackMode is 'remux' or 'transcode',
+    // DirectStreamProfiles is omitted so Jellyfin falls through to TranscodingProfiles
+    // (HLS master.m3u8). This guarantees that files with broken/unindexed container
+    // headers (like chained SeekHead MKVs) get repackaged into seekable HLS chunks
+    // via FFmpeg instead of re-serving the same unseekable static container stream.
     // -------------------------------------------------------------------------
-    const directStreamProfiles = [
+    const directStreamProfiles = (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') ? [
         {
             Container: 'mkv',
             Type: 'Video',
             VideoCodec: mkvVideoCodecs.join(','),
             AudioCodec: directAudioCodecs
         }
-    ];
+    ] : [];
 
     return {
         Name: `Litefin WebOS${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,

@@ -1886,6 +1886,7 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
     }
 }
 
+
 /* ==========================================================================
    Description Dialog Modal Styling
    ========================================================================== */
@@ -1922,6 +1923,38 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
     word-break: break-word;
     color: var(--jf-text-primary);
     font-size: 1.65rem;
+}
+
+/*
+ * ── Chrome 26 Quirks Overrides: Modals & Media Fallbacks ────────────────────
+ * Older browser engines lacking flexbox display defaults will stick modals to the 
+ * top-left. We force the overlay block to relative and align settings-modals 
+ * using an absolute offset centering strategy.
+ */
+html[data-layout-quirks="c26"] .modal-overlay {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+html[data-layout-quirks="c26"] .settings-modal {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    -webkit-transform: translate(-50%, -50%) !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+}
+
+/* Vertical and horizontal centering for fallback text inside media cards */
+html[data-layout-quirks="c26"] .media-fallback {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-box-align: center !important;
+    -webkit-box-pack: center !important;
 }
 
 

@@ -8,11 +8,13 @@
  */
 
 import { api } from '../api/index.js';
+import { escapeHtml } from './Utils.js';
 import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
 import { detailsIcons } from './Icons.js';
+import { platformInfo } from './PlatformInfo.js';
 
 class CardRenderer {
     /**
@@ -68,9 +70,16 @@ class CardRenderer {
 
         let width = item.Width;
         let height = item.Height;
+
+        // Dynamic range flags for metadata inspection
         let isHdr = false;
+        let isHdr10Plus = false;
         let isDovi = false;
 
+        /*
+         * Extract video stream attributes from media source container metadata.
+         * We inspect VideoRange, VideoRangeType, Profile, Title, and Codec strings.
+         */
         if (item.MediaSources && item.MediaSources.length > 0) {
             const source = item.MediaSources[0];
             if (source.Width) width = source.Width;
@@ -80,13 +89,44 @@ class CardRenderer {
                 if (videoStream) {
                     if (videoStream.Width) width = videoStream.Width;
                     if (videoStream.Height) height = videoStream.Height;
-                    const videoRange = videoStream.VideoRange || videoStream.VideoRangeType || '';
+
+                    // Capture top-level item range attributes
+                    const itemRange = `${item.VideoRange || ''} ${item.VideoRangeType || ''}`;
+
+                    // Capture detailed video stream range and codec attributes
+                    const videoRange = videoStream.VideoRange || '';
+                    const videoRangeType = videoStream.VideoRangeType || '';
                     const profile = videoStream.Profile || '';
                     const title = videoStream.Title || videoStream.DisplayTitle || '';
                     const codec = videoStream.Codec || '';
 
-                    const checkString = `${videoRange} ${profile} ${title} ${codec}`.toLowerCase();
-                    if (checkString.includes('hdr')) isHdr = true;
+                    // Build a unified inspection string across all item and stream metadata fields
+                    const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${title} ${codec}`.toLowerCase();
+
+                    /*
+                     * 1. Detect HDR10+ specific signaling
+                     * Checks for 'hdr10plus', 'hdr10+', 'hdr10p', or Dolby Vision hybrid 'doviwithhdr10plus'
+                     */
+                    if (
+                        checkString.includes('hdr10plus') ||
+                        checkString.includes('hdr10+') ||
+                        checkString.includes('hdr10p') ||
+                        checkString.includes('doviwithhdr10plus') ||
+                        checkString.includes('doviwithelhdr10plus')
+                    ) {
+                        isHdr10Plus = true;
+                    }
+
+                    /*
+                     * 2. Detect standard HDR / HDR10 signaling
+                     */
+                    if (checkString.includes('hdr')) {
+                        isHdr = true;
+                    }
+
+                    /*
+                     * 3. Detect Dolby Vision (DoVi) signaling
+                     */
                     if (
                         checkString.includes('dovi') ||
                         checkString.includes('dolby vision') ||
@@ -103,6 +143,9 @@ class CardRenderer {
             const maxDim = Math.max(width || 0, height || 0);
             const minDim = Math.min(width || 0, height || 0);
 
+            /*
+             * Classify resolution using relaxed boundaries to account for widescreen cropping
+             */
             if (maxDim >= 3000 || minDim >= 2000) {
                 resolutionLabel = '4K';
             } else if (maxDim >= 1600 || minDim >= 900) {
@@ -113,11 +156,33 @@ class CardRenderer {
                 resolutionLabel = 'SD';
             }
 
+            /*
+             * Determine dynamic range label prioritization based on target OS platform:
+             *
+             * On Samsung Tizen TVs, Dolby Vision hardware decoders do not exist.
+             * Tizen AVPlay renders the fallback layer (HDR10 or HDR10+) natively.
+             * Therefore, when running on Tizen (platformInfo.isTizen), we prioritize HDR10+ / HDR
+             * over DV so the quality badge accurately reflects what the TV actually renders.
+             *
+             * On non-Tizen platforms (e.g. webOS / Web), DV is prioritized as the top tier.
+             */
             let rangeLabel = '';
-            if (isDovi) {
-                rangeLabel = 'DV';
-            } else if (isHdr) {
-                rangeLabel = 'HDR';
+            if (platformInfo.isTizen) {
+                if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                } else if (isDovi) {
+                    rangeLabel = 'DV';
+                }
+            } else {
+                if (isDovi) {
+                    rangeLabel = 'DV';
+                } else if (isHdr10Plus) {
+                    rangeLabel = 'HDR10+';
+                } else if (isHdr) {
+                    rangeLabel = 'HDR';
+                }
             }
 
             if (rangeLabel) {
@@ -184,7 +249,12 @@ class CardRenderer {
         // By default, we expect an image. We DO NOT render the fallback DOM yet to save memory.
         imageInnerHtml = '';
 
-        if (type === 'person') {
+        // Poster supplied verbatim by an external provider. Same idea as
+        // _dynamicThumbUrl below: skip Jellyfin URL building, which is
+        // meaningless for a remote item.
+        if (item._imageUrl) {
+            imageUrl = item._imageUrl;
+        } else if (type === 'person') {
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
             const isArtist = item.Type === 'MusicArtist' || item.Type === 'Artist';
 
@@ -535,6 +605,11 @@ class CardRenderer {
         // --- 1.5 Premium Fallbacks & Modern Shadow ---
         if (!imageUrl) {
             imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
+        } else if (item._isGenreCard) {
+            imageInnerHtml = `
+                <div class="card-overlay-tint"></div>
+                <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
+            `;
         } else if (isModern && !isGrid) {
             // Modern horizontal cards get a shadow tint to ensure inside title readability.
             // We bypass this for grid-based cards to keep their artwork fully bright and clear.
@@ -561,12 +636,16 @@ class CardRenderer {
         // It is optional and can be disabled via preferences to declutter the UI.
         let badgeHtml = '';
 
-        // Fetch the user preference (defaults to false, meaning counts are shown by default)
+        // Fetch user preferences for badges
         const hideEpisodeCounts = storage.getItem('pref:hideEpisodeCounts') === 'true';
+        const showMediaSourceCounts = storage.getItem('pref:showMediaSourceCounts') !== 'false';
 
-        // Only render the count badge if the user hasn't explicitly disabled it
+        // Only render the unplayed count badge if the user hasn't explicitly disabled it
         if (!hideEpisodeCounts && item.UserData && item.UserData.UnplayedItemCount > 0) {
             badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
+        } else if (showMediaSourceCounts && item.MediaSourceCount > 1) {
+            // Render media source version count badge (e.g. for items with multiple versions like Movies/Episodes)
+            badgeHtml = `<div class="count-badge media-source-count-badge">${item.MediaSourceCount}</div>`;
         }
 
         // Played Badge (Check Mark)
@@ -607,6 +686,40 @@ class CardRenderer {
 
         // Quality Badge (Resolution/HDR)
         let qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
+
+        let seerrTypeBadgeHtml = '';
+        let seerrBadgeHtml = '';
+
+        const isSeerrItem =
+            !item._isGenreCard &&
+            !item._isStudioCard &&
+            !item._isNetworkCard &&
+            (item._seerrStatus !== undefined || item._mediaType !== undefined || (item.Id && String(item.Id).startsWith('tmdb-')));
+        if (isSeerrItem) {
+            const mediaType = item._mediaType || (item.Type === 'Series' ? 'tv' : 'movie');
+            if (mediaType === 'tv' || item.Type === 'Series') {
+                seerrTypeBadgeHtml = `<div class="seerr-type-badge seerr-type-badge--series">SERIES</div>`;
+            } else {
+                seerrTypeBadgeHtml = `<div class="seerr-type-badge seerr-type-badge--movie">MOVIE</div>`;
+            }
+        }
+
+        if (item._seerrStatus !== undefined && item._seerrStatus !== null) {
+            const isRequested =
+                item._seerrStatus === 2 ||
+                item._seerrStatus === 3 ||
+                (item._requestId && item._seerrStatus !== 5 && item._seerrStatus !== 4);
+            const isPartial = item._seerrStatus === 4;
+            const isAvailable = item._seerrStatus === 5;
+
+            if (isRequested) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested" title="Requested"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"></path></svg></div>`;
+            } else if (isPartial) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--partial" title="Partially Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"></path></svg></div>`;
+            } else if (isAvailable) {
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--available" title="Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"></path></svg></div>`;
+            }
+        }
 
         // --- 3. Text Generation ---
 
@@ -686,16 +799,23 @@ class CardRenderer {
                 // Support both standard Role and _roleName (from MediaGrid mapping)
                 const role = item.Role || item._roleName;
                 if (role) {
-                    parts.push(i18n.t('LabelAsRole', [role]));
+                    if (item._isCrew) {
+                        parts.push(role);
+                    } else {
+                        parts.push(i18n.t('LabelAsRole', [role]));
+                    }
                 }
             }
 
             subtitleText = parts.join(' · ');
         }
 
-        // --- 3.4. Label Visibility Styles ---
+        // --- 3.4. Label Visibility Styles & Special Card Overrides ---
         const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
-        if (!options.showMeta) {
+        if (item._isStudioCard || item._isNetworkCard || item._isGenreCard) {
+            titleText = '';
+            subtitleText = '';
+        } else if (!options.showMeta) {
             if (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'titleOnly2Lines') {
                 subtitleText = '';
             } else if (cardLabelStyle === 'hidden') {
@@ -703,6 +823,12 @@ class CardRenderer {
                 subtitleText = '';
             }
         }
+
+        // Title/subtitle derive from server-supplied fields (Name, SeriesName,
+        // ChannelName, CurrentProgram.Name, Role...) and land in innerHTML —
+        // escape once here, after all composition is done.
+        titleText = escapeHtml(titleText);
+        subtitleText = escapeHtml(subtitleText);
 
         // --- 3.5. List View Override ---
         // In list-view, we want the Title on the left and EVERY other piece of info
@@ -718,6 +844,13 @@ class CardRenderer {
         let cssClass = isLandscape ? 'media-card landscape' : 'media-card';
         // 'artist' is an alias for the square type — same 1:1 aspect ratio card
         if (type === 'square' || type === 'artist') cssClass = 'media-card square';
+
+        if (item._isStudioCard || item._isNetworkCard || type === 'logo') {
+            cssClass += ' seerr-logo-card';
+        }
+        if (item._isGenreCard) {
+            cssClass += ' seerr-genre-card';
+        }
 
         // -------------------------------------------------------------
         // GRID CARD MARKER
@@ -735,7 +868,7 @@ class CardRenderer {
         // Attach fallback data for LazyLoader to use on error
         const fbData = CardRenderer.getFallbackData(item.Name);
         const hideInitials = type === 'library';
-        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
+        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${escapeHtml(fbData.name)}" data-fb-init="${escapeHtml(fbData.initials)}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
         // ====================================================================
         // Expansion Eligibility Strategy
@@ -833,8 +966,8 @@ class CardRenderer {
                 ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>`
                 : '';
         const imagePart = imageUrl
-            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
-            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>` : ''}`;
+            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
+            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${escapeHtml(i18n.ensureBiDi(item.Name))}</div>` : ''}`;
         const finalContextType = contextType || item.Type;
 
         const isHiddenLibraryLabel =
@@ -899,10 +1032,12 @@ class CardRenderer {
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
             ${qualityBadgeHtml}
+            ${seerrTypeBadgeHtml}
+            ${seerrBadgeHtml}
         `;
 
         const html = `
-            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" tabindex="0">
+            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" data-media-type="${item._mediaType || ''}" data-tmdb-id="${item._tmdbId || ''}" tabindex="0">
                 <div class="card-image">
                     ${imagePart}
                     ${progressHtml}
@@ -912,43 +1047,40 @@ class CardRenderer {
                         showInside
                             ? `
                     <div class="card-info inside">
-                        ${
-                            options.showMeta
-                                ? `
+                        ${options.showMeta
+                    ? `
                         <div class="card-title-row">
                             <div class="card-title"><span>${titleText}</span></div>
                             ${badgeContainer}
                         </div>
                         `
-                                : `<div class="card-title"><span>${titleText}</span></div>`
-                        }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                         ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                         ${metaHtml}
                     </div>
                     `
-                            : ''
-                    }
+                : ''
+            }
                 </div>
-                ${
-                    showOutside
-                        ? `
+                ${showOutside
+                ? `
                 <div class="card-info">
-                    ${
-                        options.showMeta
-                            ? `
+                    ${options.showMeta
+                    ? `
                     <div class="card-title-row">
                         <div class="card-title"><span>${titleText}</span></div>
                         ${badgeContainer}
                     </div>
                     `
-                            : `<div class="card-title"><span>${titleText}</span></div>`
-                    }
+                    : `<div class="card-title"><span>${titleText}</span></div>`
+                }
                     ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                     ${metaHtml}
                 </div>
                 `
-                        : ''
-                }
+                : ''
+            }
             </button>
         `;
 
@@ -993,8 +1125,8 @@ class CardRenderer {
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
-                ${!hideInitials ? `<div class="media-fallback-initials">${data.initials}</div>` : ''}
-                ${!isModern ? `<div class="media-fallback-name">${data.name}</div>` : ''}
+                ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(data.initials)}</div>` : ''}
+                ${!isModern ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
             </div>
         `;
     }
@@ -1044,15 +1176,14 @@ class CardRenderer {
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
-                    ${
-                        !skeletonHideLabels
-                            ? `
+                    ${!skeletonHideLabels
+                        ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
                         ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>` : ''}
                     </div>
                     `
-                            : ''
+                        : ''
                     }
                 </div>
             `;

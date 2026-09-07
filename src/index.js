@@ -24,6 +24,7 @@ import './styles/login.css';
 import './styles/home.css';
 import './styles/details.css';
 import './styles/search.css';
+import './styles/discover.css';
 import './styles/player-osd.css';
 import './styles/upnext.css';
 import './styles/player-modals.css'; /* Chapters & Queue modal panels */
@@ -45,6 +46,7 @@ import './styles/modern/server.css';
 import './styles/modern/manual.css';
 import './styles/modern/users.css';
 import './styles/modern/home.css';
+import './styles/modern/sidebar.css';
 
 /**
  * Bootstrap the application

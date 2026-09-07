@@ -497,8 +497,13 @@ export class VirtualCardRow {
 
             for (let i = start; i <= end; i++) {
                 if (!this.domNodes.has(i)) {
+                    // -----------------------------------------------------------------
+                    // Safely extract HTML representation from renderCard
+                    // Handles potential null/undefined returns gracefully in legacy engines
+                    // -----------------------------------------------------------------
                     const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = this.renderCard(this.items[i]).trim();
+                    const cardHtml = this.renderCard(this.items[i]);
+                    tempDiv.innerHTML = (cardHtml || '').trim();
                     const cardNode = tempDiv.firstElementChild;
                     if (cardNode) {
                         const leftPos = this.sidePadding + i * this.totalItemWidth;
@@ -585,9 +590,13 @@ export class VirtualCardRow {
             if (!this.domNodes.has(i)) {
                 const itemData = this.items[i];
 
-                // Create a temporary container to extract the HTML string into a node
+                // -----------------------------------------------------------------
+                // Safely extract HTML representation from renderCard
+                // Ensures legacy JS engines never throw TypeError if card string is nullish
+                // -----------------------------------------------------------------
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = this.renderCard(itemData).trim();
+                const cardHtml = this.renderCard(itemData);
+                tempDiv.innerHTML = (cardHtml || '').trim();
                 const cardNode = tempDiv.firstElementChild;
 
                 if (cardNode) {

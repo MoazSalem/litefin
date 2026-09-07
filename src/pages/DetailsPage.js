@@ -17,6 +17,7 @@ import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import { seerr } from '../api/seerrClient.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
@@ -24,6 +25,7 @@ import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
 import AddToTargetModal from '../components/AddToTargetModal.js';
 import DescriptionModal from '../components/DescriptionModal.js';
+import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -39,6 +41,7 @@ import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -245,6 +248,12 @@ class DetailsPage extends Page {
                     <section class="details-season-episodes media-row hidden" id="more-from-season-section">
                         <h2 class="row-title" id="more-from-season-title" data-i18n="HeaderMoreFromSeason">More from Season</h2>
                         <div class="season-episodes-row row-items" id="more-from-season-row"></div>
+                    </section>
+
+                    <!-- Additional Parts (Multi-part movies/videos) -->
+                    <section class="details-additional-parts media-row hidden" id="additional-parts-section">
+                        <h2 class="row-title" data-i18n="AdditionalParts">Additional Parts</h2>
+                        <div class="additional-parts-row row-items" id="additional-parts-row"></div>
                     </section>
 
                     <!-- Cast & Crew -->
@@ -588,6 +597,16 @@ class DetailsPage extends Page {
                 this._deferredLoading = true;
             } else {
                 this.setLoading(false);
+
+                // No restore target, so the page is about to become interactive right
+                // now — before secondary content (cast, similar, collections) below has
+                // even started loading. Force focus onto Resume immediately rather than
+                // waiting for the deferred block further down, which only runs once all
+                // of that secondary content finishes. Otherwise there's a multi-second
+                // window where the page looks ready but focus is still on the default
+                // Play button, and a fast OK press starts playback from scratch instead
+                // of resuming.
+                this._resumeFocusForced = this._focusResumeButton();
             }
 
             // ────────────────────────────────────────────────────────────────────────
@@ -667,13 +686,16 @@ class DetailsPage extends Page {
                     state.delete(stateKey);
                 }
 
-                if (!restoredFocus && !this._pendingNavState) {
-                    if (this._item.UserData?.PlaybackPositionTicks > 0) {
-                        const resumeBtn = this.$('.resume-btn');
-                        if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
-                            log.info('Forcing focus to Resume button');
-                            focusManager.focusElement(resumeBtn);
-                        }
+                if (!restoredFocus) {
+                    if (this._pendingNavState) {
+                        // A Back-navigation left us a section/index to restore (e.g.
+                        // returning from Settings via the sidebar). Consume it now —
+                        // otherwise it just sits here forever, since DetailsPage never
+                        // triggers the base-class restore itself, and the Resume-button
+                        // fallback below would be skipped without ever taking its place.
+                        this.restoreScrollFocusWhenReady();
+                    } else if (!this._resumeFocusForced) {
+                        this._focusResumeButton();
                     }
                 }
 
@@ -691,6 +713,21 @@ class DetailsPage extends Page {
             this.showError(i18n.t('FailedToLoadDetails'));
             this.setLoading(false);
         }
+    }
+
+    /**
+     * Focus the Resume button if the item has playback progress and the button
+     * is visible. Returns whether focus was actually forced.
+     */
+    _focusResumeButton() {
+        if (!(this._item.UserData?.PlaybackPositionTicks > 0)) return false;
+
+        const resumeBtn = this.$('.resume-btn');
+        if (!resumeBtn || resumeBtn.classList.contains('hidden')) return false;
+
+        log.info('Forcing focus to Resume button');
+        focusManager.focusElement(resumeBtn);
+        return true;
     }
 
     _showVersionSelectionMenu() {
@@ -718,6 +755,8 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
 
+            // Re-render hero header and technical details to reflect the selected version
+            this._renderHeroText();
             // Re-trigger zero-latency prewarm for the newly selected version
             if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
                 prewarmManager.prewarm(this._item, {
@@ -876,6 +915,11 @@ class DetailsPage extends Page {
         } else if (hideCast) {
             const peopleSection = this.$('#people-section');
             if (peopleSection) peopleSection.classList.add('hidden');
+        }
+
+        // Additional Parts for multi-part video items (e.g. multi-part movies)
+        if (['Movie', 'Video'].includes(this._item?.Type) || this._item?.PartCount > 1) {
+            await this._loadAdditionalParts();
         }
 
         // Special Features
@@ -1140,6 +1184,7 @@ class DetailsPage extends Page {
             'details-episodes',
             'details-songs',
             'more-from-season-section',
+            'details-additional-parts', // Multi-part movie/video section
             'details-people',
             'details-special-features',
             'artists-section',
@@ -1527,14 +1572,14 @@ class DetailsPage extends Page {
         }
 
         if (genres && genres.length > 0) {
-            htmlParts.push(createRow('Genres', genres));
+            htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
         // Directors (only shown in 'all')
         if (richMetadataStyle === 'all') {
             const directors = (item.People || []).filter((p) => p.Type === 'Director');
             if (directors.length > 0) {
-                htmlParts.push(createRow('Directors', directors));
+                htmlParts.push(RichMetadataTable.createChipRow('Directors', directors));
             }
         }
 
@@ -1546,36 +1591,26 @@ class DetailsPage extends Page {
         ) {
             const writers = (item.People || []).filter((p) => p.Type === 'Writer');
             if (writers.length > 0) {
-                htmlParts.push(createRow('Writers', writers));
+                htmlParts.push(RichMetadataTable.createChipRow('Writers', writers));
             }
         }
 
         // Studios (shown in 'all' or 'genres-studios-writers')
         if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
             if (item.Studios && item.Studios.length > 0) {
-                htmlParts.push(createRow('Studios', item.Studios));
+                htmlParts.push(RichMetadataTable.createChipRow('Studios', item.Studios));
             }
         }
 
         // Tags (only shown in 'all')
         if (richMetadataStyle === 'all') {
             if (item.Tags && item.Tags.length > 0) {
-                htmlParts.push(createRow('Tags', item.Tags));
+                htmlParts.push(RichMetadataTable.createChipRow('Tags', item.Tags));
             }
         }
 
         // Photo EXIF Data (only shown in 'all')
         if (item.Type === 'Photo' && richMetadataStyle === 'all') {
-            const createTextRow = (label, value) => {
-                if (!value) return '';
-                return `
-                    <div class="rich-meta-row">
-                        <div class="meta-label">${label}</div>
-                        <div class="meta-value-text">${value}</div>
-                    </div>
-                `;
-            };
-
             const esc = (str) =>
                 String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -1600,12 +1635,12 @@ class DetailsPage extends Page {
             const focal = item.FocalLength ? `${item.FocalLength} mm` : null;
             const altitude = item.Altitude != null ? `${Math.round(item.Altitude)} m` : null;
 
-            htmlParts.push(createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
-            htmlParts.push(createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
-            htmlParts.push(createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
-            htmlParts.push(createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
-            htmlParts.push(createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
-            htmlParts.push(createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
         }
 
         container = this.$('#rich-meta');
@@ -1688,6 +1723,7 @@ class DetailsPage extends Page {
                 chip.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    this._deactivateRichMeta();
                     this._handleMetaClick(chip);
                 };
 
@@ -1697,6 +1733,7 @@ class DetailsPage extends Page {
                         // Enter
                         e.preventDefault();
                         e.stopPropagation();
+                        this._deactivateRichMeta();
                         this._handleMetaClick(chip);
                     }
                 };
@@ -1836,13 +1873,14 @@ class DetailsPage extends Page {
      * ========================================================================
      * Background Theme Song Loader and Player
      * ========================================================================
-     * Dynamically queries the theme media associated with the active item.
-     * If a theme song is available, compiles the stream source URL and initiates
-     * background score looping via ThemeSongPlayer.
+     * Dynamically queries the theme media associated with the active item on the server.
+     * Works for any media type (Movies, Series, Seasons, Episodes, Collections, etc.).
+     * If a theme song is available, compiles the authenticated stream source URL and initiates
+     * background score playback via ThemeSongPlayer.
      */
     async _playThemeSong() {
-        // Assert that the loaded item supports theme media playback
-        if (!['Series', 'Season', 'Episode'].includes(this._item.Type)) {
+        // Assert that the item details are fully loaded into memory before querying API
+        if (!this._item) {
             return;
         }
 
@@ -1881,6 +1919,287 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * ========================================================================
+     * Technical Media Specifications Parser & Renderer
+     * ========================================================================
+     * Extracts and constructs the technical specification badge pills for the
+     * currently active media source/version. Includes resolution, video codec,
+     * dynamic range (Dolby Vision, HDR10+, HDR, HLG), audio codec with Atmos
+     * detection & channel layout, subtitle count, and container/bitrate.
+     * ========================================================================
+     */
+    _renderTechnicalDetails() {
+        // Assert that the item exists before attempting inspection
+        if (!this._item) {
+            return '';
+        }
+
+        // Identify the active media source based on current user selection or default to primary
+        const source =
+            this._item.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+            this._item.MediaSources?.[0] ||
+            (this._item.MediaStreams ? this._item : null);
+
+        // If no media source or stream metadata is available, omit the row
+        if (!source) {
+            return '';
+        }
+
+        // Extract streams collection from the active media source
+        const streams = source.MediaStreams || this._item.MediaStreams || [];
+        if (!streams || streams.length === 0) {
+            return '';
+        }
+
+        // Separate streams by type for individual parameter extraction
+        const videoStream = streams.find((s) => s.Type === 'Video');
+        const audioStreams = streams.filter((s) => s.Type === 'Audio');
+        const subtitleStreams = streams.filter((s) => s.Type === 'Subtitle');
+
+        const pills = [];
+
+        // --------------------------------------------------------------------
+        // 1. Resolution Classification
+        // --------------------------------------------------------------------
+        const width = videoStream?.Width || source.Width || this._item.Width || 0;
+        const height = videoStream?.Height || source.Height || this._item.Height || 0;
+        let resLabel = '';
+
+        if (width || height) {
+            const maxDim = Math.max(width, height);
+            const minDim = Math.min(width, height);
+
+            // Classify resolution with generous thresholds for widescreen/anamorphic crops
+            if (maxDim >= 3000 || minDim >= 1800) {
+                resLabel = '4K';
+            } else if (maxDim >= 1600 || minDim >= 900) {
+                resLabel = '1080p';
+            } else if (maxDim >= 1000 || minDim >= 600) {
+                resLabel = '720p';
+            } else if (maxDim >= 640 || minDim >= 400) {
+                resLabel = '480p';
+            } else if (maxDim > 0) {
+                resLabel = 'SD';
+            }
+        }
+
+        if (resLabel) {
+            pills.push(`<span class="tech-pill tech-pill-res">${resLabel}</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 2. Video Codec Formatting
+        // --------------------------------------------------------------------
+        const rawVideoCodec = videoStream?.Codec || '';
+        if (rawVideoCodec) {
+            const lowerCodec = rawVideoCodec.toLowerCase();
+            let formattedVideoCodec = '';
+
+            // Map common codec identifiers to standardized notation
+            if (lowerCodec === 'hevc' || lowerCodec === 'h265') {
+                formattedVideoCodec = 'HEVC';
+            } else if (lowerCodec === 'h264' || lowerCodec === 'avc') {
+                formattedVideoCodec = 'H.264';
+            } else if (lowerCodec === 'av1') {
+                formattedVideoCodec = 'AV1';
+            } else if (lowerCodec === 'vp9') {
+                formattedVideoCodec = 'VP9';
+            } else if (lowerCodec === 'vp8') {
+                formattedVideoCodec = 'VP8';
+            } else if (lowerCodec === 'vc1') {
+                formattedVideoCodec = 'VC-1';
+            } else if (lowerCodec === 'mpeg2video' || lowerCodec === 'mpeg2') {
+                formattedVideoCodec = 'MPEG-2';
+            } else if (lowerCodec === 'mpeg4') {
+                formattedVideoCodec = 'MPEG-4';
+            } else {
+                formattedVideoCodec = rawVideoCodec.toUpperCase();
+            }
+
+            pills.push(`<span class="tech-pill tech-pill-codec">${escapeHtml(formattedVideoCodec)}</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 3. Dynamic Range & HDR / Dolby Vision Inspection
+        // --------------------------------------------------------------------
+        const itemRange = `${this._item.VideoRange || ''} ${this._item.VideoRangeType || ''}`;
+        const videoRange = videoStream?.VideoRange || '';
+        const videoRangeType = videoStream?.VideoRangeType || '';
+        const profile = videoStream?.Profile || '';
+        const streamTitle = videoStream?.Title || videoStream?.DisplayTitle || '';
+        const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${streamTitle} ${rawVideoCodec}`.toLowerCase();
+
+        let isHdr10Plus = false;
+        let isDovi = false;
+        let isHdr = false;
+        let isHlg = false;
+
+        // Inspect for HDR10+ dynamic metadata flags
+        if (
+            checkString.includes('hdr10plus') ||
+            checkString.includes('hdr10+') ||
+            checkString.includes('hdr10p') ||
+            checkString.includes('doviwithhdr10plus') ||
+            checkString.includes('doviwithelhdr10plus')
+        ) {
+            isHdr10Plus = true;
+        }
+
+        // Inspect for Dolby Vision profile and codec signaling
+        if (
+            checkString.includes('dovi') ||
+            checkString.includes('dolby vision') ||
+            rawVideoCodec.toLowerCase().startsWith('dv')
+        ) {
+            isDovi = true;
+        }
+
+        // Inspect for baseline static HDR10 metadata
+        if (checkString.includes('hdr') || videoRange === 'HDR') {
+            isHdr = true;
+        }
+
+        // Inspect for Hybrid Log-Gamma signaling
+        if (checkString.includes('hlg')) {
+            isHlg = true;
+        }
+
+        // Push appropriate dynamic range badges
+        if (isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-dovi">Dolby Vision</span>`);
+        }
+        if (isHdr10Plus) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HDR10+</span>`);
+        } else if (isHdr && !isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HDR</span>`);
+        } else if (isHlg && !isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HLG</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 4. Audio Codec, Atmos & Channel Configuration
+        // --------------------------------------------------------------------
+        let activeAudio = null;
+        if (this._selectedAudioIndex !== undefined) {
+            activeAudio = audioStreams.find((s) => s.Index === this._selectedAudioIndex);
+        }
+        if (!activeAudio) {
+            activeAudio =
+                audioStreams.find((s) => s.Index === source.DefaultAudioStreamIndex) ||
+                audioStreams.find((s) => s.IsDefault) ||
+                audioStreams[0];
+        }
+
+        if (activeAudio) {
+            const rawAudioCodec = (activeAudio.Codec || '').toLowerCase();
+            const audioTitle = (activeAudio.Title || activeAudio.DisplayTitle || '').toLowerCase();
+            const audioProfile = (activeAudio.Profile || '').toLowerCase();
+
+            // Detect immersive Dolby Atmos / object audio metadata
+            const isAtmos = audioProfile.includes('atmos') || audioTitle.includes('atmos');
+
+            // Format audio codec label cleanly
+            let audioCodecLabel = '';
+            if (rawAudioCodec === 'truehd') {
+                audioCodecLabel = 'TrueHD';
+            } else if (rawAudioCodec === 'dts-hd ma' || rawAudioCodec === 'dtshd_ma' || (rawAudioCodec === 'dts' && audioProfile.includes('ma'))) {
+                audioCodecLabel = 'DTS-HD MA';
+            } else if (rawAudioCodec === 'dts-hd' || rawAudioCodec === 'dtshd_hra') {
+                audioCodecLabel = 'DTS-HD';
+            } else if (rawAudioCodec === 'dts') {
+                audioCodecLabel = 'DTS';
+            } else if (rawAudioCodec === 'eac3') {
+                audioCodecLabel = isAtmos ? 'Dolby' : 'DD+';
+            } else if (rawAudioCodec === 'ac3') {
+                audioCodecLabel = 'DD';
+            } else if (rawAudioCodec === 'flac') {
+                audioCodecLabel = 'FLAC';
+            } else if (rawAudioCodec === 'aac') {
+                audioCodecLabel = 'AAC';
+            } else if (rawAudioCodec === 'opus') {
+                audioCodecLabel = 'Opus';
+            } else if (rawAudioCodec === 'vorbis') {
+                audioCodecLabel = 'Vorbis';
+            } else if (rawAudioCodec === 'mp3') {
+                audioCodecLabel = 'MP3';
+            } else if (rawAudioCodec.startsWith('pcm')) {
+                audioCodecLabel = 'PCM';
+            } else {
+                audioCodecLabel = (activeAudio.Codec || '').toUpperCase();
+            }
+
+            // Determine surround channel configuration
+            let channelText = '';
+            if (activeAudio.Channels === 8 || activeAudio.ChannelLayout === '7.1') {
+                channelText = '7.1';
+            } else if (activeAudio.Channels === 6 || activeAudio.ChannelLayout === '5.1') {
+                channelText = '5.1';
+            } else if (activeAudio.Channels === 2 || activeAudio.ChannelLayout === 'stereo') {
+                channelText = '2.0';
+            } else if (activeAudio.Channels === 1 || activeAudio.ChannelLayout === 'mono') {
+                channelText = 'Mono';
+            } else if (activeAudio.Channels) {
+                channelText = `${activeAudio.Channels}ch`;
+            }
+
+            // Build cohesive audio string
+            let audioFullString = '';
+            if (isAtmos) {
+                audioFullString = `${audioCodecLabel ? audioCodecLabel + ' ' : ''}Atmos${channelText ? ' ' + channelText : ''}`.trim();
+                pills.push(`<span class="tech-pill tech-pill-atmos">${escapeHtml(audioFullString)}</span>`);
+            } else {
+                audioFullString = `${audioCodecLabel}${channelText ? ' ' + channelText : ''}`.trim();
+                if (audioFullString) {
+                    pills.push(`<span class="tech-pill tech-pill-audio">${escapeHtml(audioFullString)}</span>`);
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 5. Subtitles Count
+        // --------------------------------------------------------------------
+        const subtitleCount = subtitleStreams.length;
+        if (subtitleCount > 0) {
+            const subLabel =
+                subtitleCount === 1
+                    ? `1 ${i18n.t('Subtitle') || 'Subtitle'}`
+                    : `${subtitleCount} ${i18n.t('Subtitles') || 'Subtitles'}`;
+
+            pills.push(`
+                <span class="tech-pill tech-pill-subtitles">
+                    <span>${escapeHtml(subLabel)}</span>
+                </span>
+            `);
+        }
+
+        // --------------------------------------------------------------------
+        // 6. Container Format & Overall Bitrate
+        // --------------------------------------------------------------------
+        const container = source.Container ? source.Container.toUpperCase() : '';
+        let bitrateLabel = '';
+        if (source.Bitrate) {
+            if (source.Bitrate >= 1000000) {
+                bitrateLabel = `${(source.Bitrate / 1000000).toFixed(1)} Mbps`;
+            } else {
+                bitrateLabel = `${Math.round(source.Bitrate / 1000)} Kbps`;
+            }
+        }
+
+        if (container || bitrateLabel) {
+            const containerBitrate = [container, bitrateLabel].filter(Boolean).join(' • ');
+            pills.push(`<span class="tech-pill">${escapeHtml(containerBitrate)}</span>`);
+        }
+
+        // If no pills were generated, return empty string
+        if (pills.length === 0) {
+            return '';
+        }
+
+        // Wrap generated badges inside the technical row container
+        return `<div class="details-tech-row">${pills.join('')}</div>`;
+    }
+
     _renderHeroText() {
         const item = this._item;
 
@@ -1911,7 +2230,13 @@ class DetailsPage extends Page {
             item.CommunityRating && shouldShowScore(item)
                 ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
                 : '';
-        const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
+        const criticScore = item.CriticRating
+            ? (String(item.CriticRating).endsWith('%') ? item.CriticRating : `${Math.round(item.CriticRating)}%`)
+            : '';
+        const criticRating =
+            item.CriticRating && shouldShowScore(item)
+                ? `${detailsIcons.rottenTomatoesFresh}${criticScore}`
+                : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
@@ -1922,30 +2247,52 @@ class DetailsPage extends Page {
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
         // --- Added & Aired Dates ---
-        // Conditionally render library metadata based on global user preferences.
-        let addedHtml = '';
-        if (storage.getItem('pref:showAddedDate') === 'true' && item.DateCreated) {
-            addedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Added')}: ${formatDate(item.DateCreated)}</span>`;
+        // Retrieve merged dates display setting with graceful fallback to legacy preferences
+        let showDatesMode = storage.getItem('pref:showDates');
+        if (!showDatesMode) {
+            const addedLegacy = storage.getItem('pref:showAddedDate') === 'true';
+            const airedLegacy = storage.getItem('pref:showDateAired') === 'true';
+            if (addedLegacy && airedLegacy) {
+                showDatesMode = 'both';
+            } else if (addedLegacy) {
+                showDatesMode = 'added';
+            } else if (airedLegacy) {
+                showDatesMode = 'aired';
+            } else {
+                showDatesMode = 'none';
+            }
         }
 
-        let airedHtml = '';
-        if (storage.getItem('pref:showDateAired') === 'true' && item.PremiereDate) {
-            airedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Aired')}: ${formatDate(item.PremiereDate)}</span>`;
+        const includeYear = storage.getItem('pref:showDatesIncludeYear') === 'true';
+
+        let addedText = '';
+        if ((showDatesMode === 'both' || showDatesMode === 'added') && item.DateCreated) {
+            const formatted = formatDate(item.DateCreated, { includeYear });
+            if (formatted) {
+                addedText = `${i18n.t('Added') || 'Added'} ${formatted}`;
+            }
         }
 
-        // Logic: If both are enabled and present, move them to a new row for better clarity.
-        // Otherwise, append to the main row if only one exists.
-        const bothEnabled =
-            storage.getItem('pref:showAddedDate') === 'true' &&
-            item.DateCreated &&
-            storage.getItem('pref:showDateAired') === 'true' &&
-            item.PremiereDate;
+        let airedText = '';
+        if ((showDatesMode === 'both' || showDatesMode === 'aired') && item.PremiereDate) {
+            const formatted = formatDate(item.PremiereDate, { includeYear });
+            if (formatted) {
+                airedText = `${i18n.t('Aired') || 'Aired'} ${formatted}`;
+            }
+        }
 
-        let secondaryMetaRow = '';
-        if (bothEnabled) {
-            secondaryMetaRow = `<div class="details-meta-row">${addedHtml}${airedHtml}</div>`;
-        } else {
-            metaHtml += addedHtml + airedHtml;
+        // Combine added and aired dates with an interpunct delimiter if both are visible
+        let datesFormattedString = '';
+        if (addedText && airedText) {
+            datesFormattedString = `${addedText} · ${airedText}`;
+        } else if (addedText) {
+            datesFormattedString = addedText;
+        } else if (airedText) {
+            datesFormattedString = airedText;
+        }
+
+        if (datesFormattedString) {
+            metaHtml += `<span class="meta-item meta-item-dates">${datesFormattedString}</span>`;
         }
         let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
         const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
@@ -1997,8 +2344,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                  ? item.OriginalTitle
-                  : ''
+                    ? item.OriginalTitle
+                    : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -2013,12 +2360,12 @@ class DetailsPage extends Page {
         if (showTitle) {
             // If there is no logo displayed, style the title to span the full width of the container.
             const titleStyleAttr = !showLogo ? 'style="max-width: 100%;"' : '';
-            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${displayTitle}</h1>`;
+            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${escapeHtml(displayTitle)}</h1>`;
         }
 
         // Add the subtitle element underneath if present.
         if (displaySubtitle && displaySubtitle !== displayTitle) {
-            heroHtml += `<h2 class="details-original-title">${displaySubtitle}</h2>`;
+            heroHtml += `<h2 class="details-original-title">${escapeHtml(displaySubtitle)}</h2>`;
         }
 
         // Render episode season/number details for TV episodes.
@@ -2042,15 +2389,21 @@ class DetailsPage extends Page {
             const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
             const colorClass = useSecondaryColor ? 'secondary-color' : '';
 
-            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${escapeHtml(i18n.ensureBiDi(subtitleText))}</p>`;
         }
 
-        // Finish appending standard metadata row and secondary date labels.
+        // Conditionally construct technical details badges row if enabled by user settings
+        let techHtml = '';
+        if (storage.getItem('pref:showTechnicalDetails') !== 'false') {
+            techHtml = this._renderTechnicalDetails();
+        }
+
+        // Finish appending standard metadata row and technical specifications.
         heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
-            ${secondaryMetaRow}
+            ${techHtml}
         `;
 
         this.$('#hero-info').innerHTML = heroHtml;
@@ -2287,41 +2640,47 @@ class DetailsPage extends Page {
             }
         }
 
-        // Upgrade to primary style
-        resumeBtn.classList.remove('btn-secondary');
-        resumeBtn.classList.add('btn-primary');
+        // The label/style/focus handoff below only applies when Resume is actually
+        // the active button (i.e. a resume point exists) — guard it the same way
+        // visibility was gated above so it doesn't steal focus from Play when there's
+        // nothing to resume.
+        if (userData.PlaybackPositionTicks > 0) {
+            // Upgrade to primary style
+            resumeBtn.classList.remove('btn-secondary');
+            resumeBtn.classList.add('btn-primary');
 
-        // Retrieve the resume position from UserData playback position.
-        // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
-        const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
+            // Retrieve the resume position from UserData playback position.
+            // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
+            const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
 
-        // Define a variable to store our sleekly formatted timestamp string.
-        let timeString = '';
+            // Define a variable to store our sleekly formatted timestamp string.
+            let timeString = '';
 
-        // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
-        // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
-        if (resumeTime >= 60) {
-            // Compute the absolute number of whole hours.
-            const hours = Math.floor(resumeTime / 60);
-            // Calculate the remaining minutes left over.
-            const minutes = resumeTime % 60;
+            // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
+            // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
+            if (resumeTime >= 60) {
+                // Compute the absolute number of whole hours.
+                const hours = Math.floor(resumeTime / 60);
+                // Calculate the remaining minutes left over.
+                const minutes = resumeTime % 60;
 
-            // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
-            // show only the hour to maintain a clean and beautiful minimal aesthetic.
-            timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-        } else {
-            // Under 60 minutes, display in simple minute format (e.g., "45m").
-            timeString = `${resumeTime}m`;
+                // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
+                // show only the hour to maintain a clean and beautiful minimal aesthetic.
+                timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+            } else {
+                // Under 60 minutes, display in simple minute format (e.g., "45m").
+                timeString = `${resumeTime}m`;
+            }
+
+            // Apply localization to the formatted time label to construct the full button label text.
+            const resumeLabel = i18n.t('ResumeAt', [timeString]);
+
+            // Update the inner HTML of the resume button with a play icon and the formatted label.
+            resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
+
+            // We hid the Play button, so move focus to the Resume button.
+            resumeBtn.focus();
         }
-
-        // Apply localization to the formatted time label to construct the full button label text.
-        const resumeLabel = i18n.t('ResumeAt', [timeString]);
-
-        // Update the inner HTML of the resume button with a play icon and the formatted label.
-        resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
-
-        // If we hid the Play button, try to move focus to the Resume button.
-        resumeBtn.focus();
 
         // Watched button
         if (watchedBtn) {
@@ -2431,6 +2790,22 @@ class DetailsPage extends Page {
     }
 
     async _loadNextUp() {
+        // =====================================================================
+        // Performance & Visibility Control Check
+        // =====================================================================
+        // Check if the user has enabled the "Hide Next Up" setting.
+        // By handling this check first, we short-circuit fetching Next Up items,
+        // avoiding unnecessary network calls and conserving VRAM on TV hardware.
+        // =====================================================================
+        const hideNextUp = storage.getItem('pref:hideNextUpSection') === 'true';
+        if (hideNextUp) {
+            const nextUpSection = this.$('#next-up-section');
+            if (nextUpSection) {
+                nextUpSection.classList.add('hidden');
+            }
+            return;
+        }
+
         try {
             let response;
 
@@ -2494,7 +2869,7 @@ class DetailsPage extends Page {
                 const episodeTitle = i18n.ensureBiDi(ep.Name);
                 const episodePrefix = ep.ParentIndexNumber && ep.IndexNumber ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. ` : ep.IndexNumber ? `${ep.IndexNumber}. ` : '';
 
-                const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
                 let runtimeText = '';
                 if (ep.RunTimeTicks) {
                     const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -2692,7 +3067,7 @@ class DetailsPage extends Page {
                     );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
-                    const rating = ep.CommunityRating ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
                     let runtimeText = '';
                     if (ep.RunTimeTicks) {
                         const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -3018,20 +3393,26 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#episodes-section')
             },
             {
-                name: 'details-songs',
-                elementId: '#songs-list',
-                isVisible: () => isNotHidden('#songs-section')
-            },
-            {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
+            },
+            // Additional video parts (multi-part movies/videos)
+            {
+                name: 'details-additional-parts',
+                elementId: '#additional-parts-row',
+                isVisible: () => isNotHidden('#additional-parts-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
+            },
+            {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
             },
             {
                 name: 'artists-section',
@@ -3089,20 +3470,26 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#artists-section')
             },
             {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
+            },
+            {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            // Additional video parts (multi-part movies/videos)
+            {
+                name: 'details-additional-parts',
+                elementId: '#additional-parts-row',
+                isVisible: () => isNotHidden('#additional-parts-section')
+            },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
-            },
-            {
-                name: 'details-songs',
-                elementId: '#songs-list',
-                isVisible: () => isNotHidden('#songs-section')
             },
             {
                 name: 'details-episodes',
@@ -3111,12 +3498,14 @@ class DetailsPage extends Page {
             },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
+
             // Playlist items — reverse position mirrors _getNextVisibleSection
             {
                 name: 'details-playlist-items',
                 elementId: '#playlist-items-list',
                 isVisible: () => isNotHidden('#playlist-items-section')
             },
+
             // Collection rows (BoxSet contents) - in reverse order
             {
                 name: 'collection-other-section',
@@ -3226,12 +3615,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                      this._item.SeasonName.toLowerCase().startsWith('season ')
-                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                          : /^\d+$/.test(this._item.SeasonName)
+                    this._item.SeasonName.toLowerCase().startsWith('season ')
+                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                        : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                  ])
+                ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
@@ -3354,6 +3743,85 @@ class DetailsPage extends Page {
         });
     }
 
+    /**
+     * Fetch additional video parts for multi-part items (e.g. Part 2, Part 3 of a multi-disc movie).
+     * Populates the Additional Parts section so users can view or start playback from any part.
+     */
+    async _loadAdditionalParts() {
+        if (!['Movie', 'Video'].includes(this._item?.Type) && !(this._item?.PartCount > 1)) {
+            return;
+        }
+
+        try {
+            log.info('Fetching additional parts for item ID:', this._itemId);
+
+            // Primary item ID to query additional parts for
+            const targetId = this._item.PrimaryItemId || this._itemId;
+            const response = await api.getAdditionalParts(targetId);
+            const additionalParts = response?.Items || [];
+
+            if (additionalParts.length > 0) {
+                log.info(`Loaded ${additionalParts.length} additional video part(s) for item ${targetId}`);
+
+                // If current item is the primary item (Part 1), compile full list [this._item, ...additionalParts]
+                const allParts = [this._item, ...additionalParts];
+
+                // Ensure each part has clean display indexing if missing from server payload
+                allParts.forEach((part, index) => {
+                    if (!part.PartIndex) {
+                        part.PartIndex = index + 1;
+                    }
+                });
+
+                this._renderAdditionalParts(allParts);
+            }
+        } catch (error) {
+            log.warn('Failed to load additional parts for item:', error);
+        }
+    }
+
+    /**
+     * Render the Additional Parts row using Virtual Card Row.
+     * Allows selecting and initiating playback directly from any specific part.
+     * @param {Object[]} parts - Array of video part items
+     */
+    _renderAdditionalParts(parts) {
+        const section = this.$('#additional-parts-section');
+        const container = this.$('#additional-parts-row');
+
+        if (!section || !container || !parts || parts.length === 0) return;
+
+        // Reveal the section on the Details Page
+        section.classList.remove('hidden');
+
+        // Render virtual horizontal card row for additional parts
+        this._renderVirtualRow({
+            sectionId: 'additional-parts-section',
+            listId: 'additional-parts-row',
+            items: parts,
+            isLandscape: true,
+            cardType: 'thumb',
+            renderCard: (partItem) => {
+                // Ensure card displays Part suffix if available
+                const partLabel = partItem.PartIndex ? ` (Part ${partItem.PartIndex})` : '';
+                const displayItem = {
+                    ...partItem,
+                    Name: partItem.Name?.includes('Part') ? partItem.Name : `${this._item.Name}${partLabel}`
+                };
+                return this._renderMediaCard(displayItem, true, 'thumb');
+            },
+            focusSectionName: 'details-additional-parts',
+            onClick: (card) => {
+                const targetItemId = card.dataset.itemId || card.dataset.id;
+                if (targetItemId) {
+                    log.info('Additional part card selected, launching playback from part ID:', targetItemId);
+                    const partToPlay = parts.find((p) => p.Id === targetItemId) || this._item;
+                    this._play({ targetItem: partToPlay });
+                }
+            }
+        });
+    }
+
     async _loadItemCollections() {
         try {
             const cacheKey = `details:collections:${this._itemId}`;
@@ -3402,8 +3870,12 @@ class DetailsPage extends Page {
         });
     }
 
-    async _play({ resume = false, isShufflePlay = false, ghostMode = false } = {}) {
-        let itemToPlay = this._item;
+    async _play({ resume = false, isShufflePlay = false, ghostMode = false, targetItem = null } = {}) {
+        /*
+         * Allow initiating playback directly from a specific target item (e.g. Part 2 or Part 3
+         * selected from the Additional Parts section on the details page).
+         */
+        let itemToPlay = targetItem || this._item;
 
         // If it's a Live TV Program, play the parent Channel instead
         if (this._item.Type === 'Program' && this._item.ChannelId) {
@@ -3683,6 +4155,8 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
 
+            // Re-render hero header to update the audio specifications pill
+            this._renderHeroText();
             // Re-trigger zero-latency prewarm with updated audio track selection
             if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
                 prewarmManager.prewarm(this._item, {
@@ -3916,7 +4390,7 @@ class DetailsPage extends Page {
         };
     }
 
-    _showMoreOptionsModal(itemId) {
+    async _showMoreOptionsModal(itemId) {
         const oldOnBack = this.onBack;
         // Store focus context for restoration (only if not already stored by a previous modal layer)
         if (!this._prevFocus) {
@@ -3956,6 +4430,29 @@ class DetailsPage extends Page {
 
         if (this._item?.MediaSources?.length > 0) {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
+        }
+
+        // ── Seerr Details Shortcut (Only if Seerr is configured and available) ──
+        const tmdbId =
+            this._item?.ProviderIds?.Tmdb ||
+            this._item?.ProviderIds?.tmdb ||
+            this._item?.ProviderIds?.TMDB ||
+            this._item?.SeriesTmdbId ||
+            this._item?.SeriesProviderIds?.Tmdb ||
+            this._item?.SeriesProviderIds?.tmdb;
+
+        const isTvType =
+            this._item?.Type === 'Series' ||
+            this._item?.Type === 'Season' ||
+            this._item?.Type === 'Episode';
+
+        const isMovieType =
+            this._item?.Type === 'Movie';
+
+        const isSeerrAvailable = await seerr.isAvailable();
+
+        if (isSeerrAvailable && tmdbId && (isTvType || isMovieType)) {
+            options.push({ id: 'seerr-details', label: i18n.t('SeerrDetails') || 'Seerr Details' });
         }
 
         // ── Refresh Metadata Permission Check ────────────────────────────────
@@ -4009,14 +4506,14 @@ class DetailsPage extends Page {
             </div>
         `
                 : options
-                      .map((opt, i) => {
-                          return `
+                    .map((opt, i) => {
+                        return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-                      })
-                      .join('');
+                    })
+                    .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -4183,6 +4680,10 @@ class DetailsPage extends Page {
                         fromMoreOptions: true,
                         oldOnBack: oldOnBack
                     });
+                } else if (id === 'seerr-details') {
+                    this._closeMoreMenu();
+                    const targetMediaType = isTvType ? 'tv' : 'movie';
+                    router.navigate(`/seerr/${targetMediaType}/${tmdbId}`);
                 } else if (id === 'refresh') {
                     this._isMoreMenuOpen = false;
                     overlay.classList.remove('visible');
@@ -4332,8 +4833,8 @@ class DetailsPage extends Page {
                     // begin processing before we re-render the sections.
                     setTimeout(() => {
                         if (!this._isMounted) return;
-                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => {});
-                        this._loadMoreFromSeason().catch(() => {});
+                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => { });
+                        this._loadMoreFromSeason().catch(() => { });
                     }, 500);
                 }
 

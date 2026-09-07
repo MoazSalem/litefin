@@ -531,3 +531,90 @@
     text-overflow: ellipsis;
     margin: 0;
 }
+
+/* ============================================================================
+   Confirm Exit Player Modal Styles
+   ============================================================================ */
+
+.confirm-exit-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease-out;
+}
+
+.confirm-exit-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.confirm-exit-modal {
+    width: 540px;
+    max-width: 90%;
+    background: #161618;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--jf-border-radius-lg, 14px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.confirm-exit-header {
+    padding: 24px 28px 12px;
+    background: transparent;
+    text-align: center;
+}
+
+.confirm-exit-header h2 {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+
+.confirm-exit-body {
+    padding: 24px 28px 24px;
+    text-align: center;
+}
+
+.confirm-exit-message {
+    margin: 0;
+    font-size: 1.15rem;
+    color: rgba(255, 255, 255, 0.75);
+    line-height: 1.5;
+}
+
+.confirm-exit-actions {
+    padding: 16px 28px 24px;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    background: transparent;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.confirm-exit-actions .modal-action-btn {
+    min-width: 130px;
+    padding: 12px 28px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    border-radius: var(--jf-border-radius-lg, 10px);
+    cursor: pointer;
+    text-align: center;
+}

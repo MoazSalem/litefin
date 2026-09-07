@@ -68,7 +68,10 @@ export default class DescriptionModal extends BaseMenu {
 
         const rating = item.OfficialRating;
         const starRating = item.CommunityRating && shouldShowScore(item) ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}` : '';
-        const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
+        const criticScore = item.CriticRating
+            ? (String(item.CriticRating).endsWith('%') ? item.CriticRating : `${Math.round(item.CriticRating)}%`)
+            : '';
+        const criticRating = item.CriticRating && shouldShowScore(item) ? `${detailsIcons.rottenTomatoesFresh}${criticScore}` : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="description-modal__meta-item">${year}</span>`;

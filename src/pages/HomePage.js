@@ -349,7 +349,8 @@ class HomePage extends Page {
         const useTrendingColName = storage.getItem('pref:useTrendingCollectionName') === 'true';
 
         const createTrendingDescriptor = (id, type, settingKey, nameKey, defaultTitleKey) => {
-            const settingVal = storage.getItem(settingKey) || (type === 'Movie' ? 'auto' : 'none');
+            if (storage.getItem('pref:enableCollectionRows') !== 'true') return null;
+            const settingVal = storage.getItem(settingKey) || 'none';
             if (settingVal === 'none') return null;
 
             const storedName = storage.getItem(nameKey);
@@ -580,6 +581,7 @@ class HomePage extends Page {
 
                             // Query played and in-progress episodes belonging to these series IDs,
                             // ordered by play date descending (using the official 'DatePlayed' parameter).
+                            // Limit dynamically accommodates high row limit settings (up to 200).
                             const activeEpisodesRes = await api.getItems({
                                 SeriesIds: uniqueSeriesIds.join(','),
                                 IncludeItemTypes: 'Episode',
@@ -587,7 +589,7 @@ class HomePage extends Page {
                                 SortOrder: 'Descending',
                                 Fields: 'LastPlayedDate',
                                 Recursive: true,
-                                Limit: 100
+                                Limit: Math.max(100, homeRowLimit)
                             });
 
                             // Process the returned episodes to construct the series activity map.
@@ -761,17 +763,15 @@ class HomePage extends Page {
                  *     ratio ("portrait" or "poster" card type).
                  */
                 layout:
-                    lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
+                        ? 'landscape'
+                        : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
                         ? 'square'
                         : 'portrait',
                 cardType:
-                    lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos' ||
-                    lib.CollectionType === 'musicvideos'
+                    lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
+                        ? 'thumb'
+                        : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
                         ? 'square'
                         : 'poster',
                 contextType: 'latest',
@@ -1867,10 +1867,17 @@ class HomePage extends Page {
             placeholder.classList.add('style-compact');
         }
 
-        // Read theme color for skeleton backgrounds
-        const primaryRgb =
-            getComputedStyle(document.documentElement).getPropertyValue('--jf-primary-btn-color-rgb').trim() ||
-            '255, 255, 255';
+        // -------------------------------------------------------------------------
+        // Safe Theme Color Retrieval for Legacy Environments
+        // -------------------------------------------------------------------------
+        // On ultra-legacy webviews (such as Tizen 3.0 or legacy WebOS WebKit engines),
+        // CSSStyleDeclaration.getPropertyValue() returns null when custom CSS properties
+        // are not natively resolved or prior to polyfill injection. Calling .trim()
+        // directly on null triggers a fatal startup exception:
+        // "ERR: Cannot read property 'trim' of null".
+        // -------------------------------------------------------------------------
+        const rawPrimaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--jf-primary-btn-color-rgb');
+        const primaryRgb = (rawPrimaryRgb ? rawPrimaryRgb.trim() : '') || '255, 255, 255';
 
         placeholder.innerHTML = `
             <div id="hero-carousel-container" 
@@ -1920,7 +1927,7 @@ class HomePage extends Page {
             // client-side by checking UserData.Played.
             const ignoreWatched = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
             const fields =
-                'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds';
+                'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds,MediaSourceCount';
             const imageTypes = 'Primary,Backdrop,Logo';
 
             let items = [];
@@ -2605,6 +2612,13 @@ class HomePage extends Page {
             return null;
         }
 
+        // Invalidate if the user changed the row items limit while the cache was active
+        const currentHomeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+        if (cache.homeRowLimit !== undefined && cache.homeRowLimit !== currentHomeRowLimit) {
+            state.delete('home:pageCache');
+            return null;
+        }
+
         if (Date.now() - cache.timestamp > PAGE_CACHE_TTL) {
             state.delete('home:pageCache');
             return null;
@@ -2709,11 +2723,15 @@ class HomePage extends Page {
         // HeroCarousel stores its items array on the instance as ._items.
         const heroItems = this._hero ? this._hero._items : [];
 
+        // Track active homeRowLimit in snapshot so any future change automatically triggers invalidation
+        const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+
         state.set('home:pageCache', {
             libraries: this._libraries,
             thumbUrls,
             rows,
             heroItems,
+            homeRowLimit,
             serverUrl: api._serverUrl,
             userId: api._userId,
             timestamp: Date.now()

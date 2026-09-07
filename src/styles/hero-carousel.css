@@ -19,6 +19,17 @@
    Base Carousel wrapper
    ============================================================================ */
 
+:root {
+    /* 
+     * Hero Carousel Vignette Variables:
+     * Controls dark shadow intensity behind text titles and metadata.
+     * Can be adjusted from 0.0 (fully transparent) to 0.9 (deep dark contrast).
+     */
+    --hero-vignette-start: rgba(0, 0, 0, 0.9);
+    --hero-vignette-mid: rgba(0, 0, 0, 0.4);
+    --hero-vignette-end: rgba(0, 0, 0, 0);
+}
+
 .hero-carousel {
     position: relative;
     width: 100%;
@@ -110,8 +121,9 @@
  * (::before — left-to-right text shadow vignette | ::after — bottom blend)
  * ============================================================================
  * The ::before pseudo-element creates a dark vignette overlay behind the text
- * content. Using a variable --hero-gradient-x allows us to mirror this vignette
- * automatically in RTL layouts without rewriting the whole rule block.
+ * content. Using dynamic CSS variables (--hero-vignette-start, etc.) allows us
+ * to mirror this vignette automatically in RTL layouts without rewriting the 
+ * whole rule block.
  * ============================================================================
  */
 
@@ -129,7 +141,13 @@
     width: 100%;
     height: 100%;
     /* Horizontal gradient fading to transparent - LTR fallback */
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%);
+    background: linear-gradient(
+        to right,
+        var(--hero-vignette-start) 0%,
+        var(--hero-vignette-start) 25%,
+        var(--hero-vignette-mid) 60%,
+        var(--hero-vignette-end) 100%
+    );
     z-index: 1;
     /* Static pseudo-element — no will-change needed */
 }
@@ -140,7 +158,13 @@
  */
 [dir="rtl"] .hero-item::before {
     --hero-gradient-x: 100%;
-    background: linear-gradient(to left, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%);
+    background: linear-gradient(
+        to left,
+        var(--hero-vignette-start) 0%,
+        var(--hero-vignette-start) 25%,
+        var(--hero-vignette-mid) 60%,
+        var(--hero-vignette-end) 100%
+    );
 }
 
 
@@ -151,7 +175,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to top, var(--jf-background) 6%, rgba(0,0,0,0.8) 15%, transparent 30%);
+    background: linear-gradient(to top, var(--jf-background) 3%, rgba(0,0,0,0.8) 10%, transparent 40%);
     z-index: 2;
 }
 
@@ -506,14 +530,6 @@
         transparent 80%);
 }
 
-/* Compact gradient override */
-.hero-carousel-container.compact .hero-item::after {
-    background: linear-gradient(to top,
-        var(--jf-background) 0%,
-        rgba(0, 0, 0, 0.5) 10%,
-        transparent 25%);
-}
-
 /* Banner indicators */
 .hero-carousel-container.banner .hero-indicators {
     bottom: 30px;
@@ -788,32 +804,63 @@
  * ============================================================================
  */
 
-/* Standard widescreen backdrop masking */
-.hero-carousel-container.immersive .hero-backdrop {
-    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 85%) !important;
-    mask-image: linear-gradient(to bottom, black 35%, transparent 85%) !important;
+/* 
+ * ============================================================================
+ * Backdrop Fade (Immersive & Semi-Immersive)
+ * ============================================================================
+ * Masking is strictly applied ONLY in Ambient Glow mode ([data-theme-mode="ambient"]).
+ * Why:
+ * 1. In Ambient Glow mode, true alpha transparency on .hero-backdrop is essential
+ *    so the dynamic colorful ambient mesh on the body can bleed through behind
+ *    the carousel and rows.
+ * 2. In non-ambient modes (Dark, OLED Black, etc.), the background is a solid color.
+ *    Using linear-gradient on ::after blends into var(--jf-background) completely
+ *    on the GPU, avoiding the expensive WebKit/Tizen CPU raster compositing pass.
+ * 3. In Ambient Glow mode with masking active, the faint ::after gradient is redundant
+ *    and causes unnecessary overdraw, so it is disabled.
+ * ============================================================================
+ */
+
+/*
+ * Single-mask approach: apply mask-image to .hero-item (the parent), which clips
+ * both the .hero-backdrop image AND the ::before vignette overlay in one operation.
+ * No need for separate masks on each child.
+ */
+
+/* Standard widescreen - Ambient Glow theme only */
+[data-theme-mode="ambient"] .hero-carousel-container.immersive:not(.compact) .hero-item {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 85%);
+    mask-image: linear-gradient(to bottom, black 35%, transparent 85%);
 }
-.hero-carousel-container.semi-immersive .hero-backdrop {
-    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 90%) !important;
-    mask-image: linear-gradient(to bottom, black 40%, transparent 90%) !important;
+[data-theme-mode="ambient"] .hero-carousel-container.semi-immersive:not(.compact) .hero-item {
+    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 90%);
+    mask-image: linear-gradient(to bottom, black 40%, transparent 90%);
 }
 
-/* Compact widescreen backdrop masking */
-.hero-carousel-container.immersive.compact .hero-backdrop {
-    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 80%) !important;
-    mask-image: linear-gradient(to bottom, black 30%, transparent 80%) !important;
+/* Compact widescreen - Ambient Glow theme only */
+[data-theme-mode="ambient"] .hero-carousel-container.immersive.compact .hero-item {
+    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 80%);
+    mask-image: linear-gradient(to bottom, black 30%, transparent 80%);
 }
-.hero-carousel-container.semi-immersive.compact .hero-backdrop {
-    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 80%) !important;
-    mask-image: linear-gradient(to bottom, black 35%, transparent 80%) !important;
+[data-theme-mode="ambient"] .hero-carousel-container.semi-immersive.compact .hero-item {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 80%);
+    mask-image: linear-gradient(to bottom, black 35%, transparent 80%);
 }
 
-.hero-carousel-container.immersive .hero-item::after,
-.hero-carousel-container.semi-immersive .hero-item::after,
-.hero-carousel-container.immersive.compact .hero-item::after,
-.hero-carousel-container.semi-immersive.compact .hero-item::after {
-    background: linear-gradient(to top,transparent 25%,rgba(0,0,0,0.2) 65%,transparent 125%);
+/* 
+ * Eliminate redundant second gradient layer in Ambient Glow mode:
+ * When alpha masking is already carving out the backdrop transparency,
+ * this overlay gradient is pure overdraw overhead.
+ */
+[data-theme-mode="ambient"] .hero-carousel-container.immersive .hero-item::after,
+[data-theme-mode="ambient"] .hero-carousel-container.semi-immersive .hero-item::after,
+[data-theme-mode="ambient"] .hero-carousel-container.immersive.compact .hero-item::after,
+[data-theme-mode="ambient"] .hero-carousel-container.semi-immersive.compact .hero-item::after {
+    display: none !important;
 }
+
+/* ::before inherits the fade from .hero-item's mask above — no separate mask needed */
+
 
 /* 
  * ============================================================================
@@ -827,43 +874,37 @@
  */
 
 /* 
- * Standard Immersive:
- * Vignette fades out to transparent exactly above the -450px row overlap boundary.
+ * Text Shadow Overlay (::before):
+ * Uses dynamic linear-gradient overlays driven by CSS variables (--hero-vignette-start, etc.).
+ * Designed according to Apple HIG: crisp, deep contrast under typography that transitions
+ * seamlessly into the backdrop artwork without sharp boundary artifacts.
  */
-.hero-carousel-container.immersive .hero-item::before {
-    -webkit-mask-image: none !important;
-    mask-image: none !important;
-    background: radial-gradient(ellipse 60% calc(100% - 450px) at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
-}
-
-/* 
- * Semi-immersive:
- * No row overlap to cover, vignette fades naturally to transparent by 85% height.
- */
-.hero-carousel-container.semi-immersive .hero-item::before {
-    -webkit-mask-image: none !important;
-    mask-image: none !important;
-    background: radial-gradient(ellipse 60% 85% at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
-}
-
-/* 
- * Compact Immersive:
- * Vignette fades out to transparent exactly above the -550px row overlap boundary.
- */
-.hero-carousel-container.immersive.compact .hero-item::before {
-    -webkit-mask-image: none !important;
-    mask-image: none !important;
-    background: radial-gradient(ellipse 60% calc(100% - 550px) at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
-}
-
-/* 
- * Semi-immersive Compact:
- * Vignette fades out naturally to transparent by 75% height.
- */
+.hero-carousel-container.immersive .hero-item::before,
+.hero-carousel-container.semi-immersive .hero-item::before,
+.hero-carousel-container.immersive.compact .hero-item::before,
 .hero-carousel-container.semi-immersive.compact .hero-item::before {
     -webkit-mask-image: none !important;
     mask-image: none !important;
-    background: radial-gradient(ellipse 60% 75% at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
+    background: linear-gradient(
+        to right,
+        var(--hero-vignette-start) 0%,
+        var(--hero-vignette-start) 25%,
+        var(--hero-vignette-mid) 60%,
+        var(--hero-vignette-end) 100%
+    );
+}
+
+[dir="rtl"] .hero-carousel-container.immersive .hero-item::before,
+[dir="rtl"] .hero-carousel-container.semi-immersive .hero-item::before,
+[dir="rtl"] .hero-carousel-container.immersive.compact .hero-item::before,
+[dir="rtl"] .hero-carousel-container.semi-immersive.compact .hero-item::before {
+    background: linear-gradient(
+        to left,
+        var(--hero-vignette-start) 0%,
+        var(--hero-vignette-start) 25%,
+        var(--hero-vignette-mid) 60%,
+        var(--hero-vignette-end) 100%
+    );
 }
 
 /* Ensure the main container frames remain transparent */
@@ -1007,17 +1048,7 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
         margin-top: -420px;
         contain: paint layout;
     }
-    /*
-     * Adjust radial gradient vignette heights to match the responsive row overlap boundaries:
-     * - Standard overlap reduces to -340px.
-     * - Compact overlap reduces to -420px.
-     */
-    .hero-carousel-container.immersive .hero-item::before {
-        background: radial-gradient(ellipse 60% calc(100% - 340px) at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
-    }
-    .hero-carousel-container.immersive.compact .hero-item::before {
-        background: radial-gradient(ellipse 60% calc(100% - 420px) at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
-    }
+
     .hero-carousel-container.immersive .hero-item {
         padding-bottom: 360px;
     }
@@ -1060,17 +1091,7 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
         margin-top: -300px;
         contain: paint layout;
     }
-    /*
-     * Adjust radial gradient vignette heights to match the low-height row overlap boundaries:
-     * - Standard overlap reduces to -240px.
-     * - Compact overlap reduces to -300px.
-     */
-    .hero-carousel-container.immersive .hero-item::before {
-        background: radial-gradient(ellipse 60% calc(100% - 240px) at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
-    }
-    .hero-carousel-container.immersive.compact .hero-item::before {
-        background: radial-gradient(ellipse 60% calc(100% - 300px) at var(--hero-gradient-x) 0%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
-    }
+
     .hero-carousel-container.immersive .hero-item {
         padding-bottom: 260px;
     }
@@ -1203,5 +1224,25 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
     }
 }
 
+/*
+ * ── Chrome 26 Quirks Overrides: Carousel Indicators ────────────────────
+ * Older rendering engines lack support for display: flex. We fall back to 
+ * inline-block spacing for the carousel navigation dots so they sit in a 
+ * horizontal row rather than stacking vertically.
+ */
+html[data-layout-quirks="c26"] .hero-indicators {
+    display: block !important;
+    white-space: nowrap !important;
+}
+
+html[data-layout-quirks="c26"] .hero-dot {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+/* Position hero details at the bottom of the slide on Chrome 26, matching margins/overlaps */
+html[data-layout-quirks="c26"] .hero-content {
+    padding-top: 80px;
+}
 
 

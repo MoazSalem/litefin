@@ -143,15 +143,14 @@
     -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
     
-    /* 3. Hairline border boundary to maintain layout structure */
-    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
-    
     /* 4. Keeps rendering thread locked for fast GPU translations */
     will-change: transform;
 }
 
-[data-theme-mode="ambient"] .sidebar.expanded,
-[data-theme-mode="ambient"] .sidebar:hover {
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) [data-theme-mode="ambient"] .sidebar.expanded,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) [data-theme-mode="ambient"] .sidebar:hover,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"])[data-theme-mode="ambient"] .sidebar.expanded,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"])[data-theme-mode="ambient"] .sidebar:hover {
     /* 1. Seamless solid gradient when expanded */
     /* Flows from a rich accent glow (15%) at the top-left to a deep matte charcoal at the bottom-right */
     /* Layered over solid base color #0a0b0c to prevent background elements from bleeding through */
@@ -163,7 +162,12 @@
 
 /* User preference overrides for ambient theme mode */
 [data-theme-mode="ambient"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
-    background: transparent !important;
+    /* Transparent collapsed sidebar with subtle left-to-right linear gradient fade */
+    background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.15) 75%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(90deg,rgba(0,0,0,.65) 0,rgba(0,0,0,0.15) 75%,transparent)!important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
 }
 
 [data-theme-mode="ambient"] .sidebar.semi-transparent-collapsed:not(.expanded):not(:hover) {

@@ -428,11 +428,57 @@
 
 
 /* Perfect centering for icons/initials without flexbox */
-html[data-layout-tier="ultra-legacy"] .profiles-card-initial,
-html[data-layout-tier="ultra-legacy"] .profiles-add-icon {
+html[data-layout-quirks="c26"] .profiles-card-initial,
+html[data-layout-quirks="c26"] .profiles-add-icon {
     display: block;
     width: 100%;
     height: 100%;
     line-height: 160px; /* Force vertical centering based on card height */
     text-align: center;
+}
+
+/* Centering profiles container shell */
+html[data-layout-quirks="c26"] .profiles-page {
+    display: block !important;
+    text-align: center !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100vh !important;
+    padding-top: 18vh !important;
+}
+
+/* Profiles Grid styling to layout user cards horizontally */
+html[data-layout-quirks="c26"] .profiles-grid {
+    display: block !important;
+    text-align: center !important;
+}
+
+html[data-layout-quirks="c26"] .profiles-profile-item {
+    display: inline-block !important;
+    vertical-align: top !important;
+    text-align: center !important;
+    margin: 20px 28px !important;
+}
+
+html[data-layout-quirks="c26"] .profiles-card {
+    display: inline-block !important;
+}
+
+html[data-layout-quirks="c26"] .profiles-card-name {
+    display: block !important;
+    margin-top: 18px !important;
+    width: 100% !important;
+}
+
+/* Centering actions row at the bottom */
+html[data-layout-quirks="c26"] .profiles-bottom {
+    display: block !important;
+    text-align: center !important;
+    margin-top: 64px !important;
+}
+
+html[data-layout-quirks="c26"] .profiles-sign-out-btn,
+html[data-layout-quirks="c26"] .profiles-switch-server-btn {
+    display: inline-block !important;
+    vertical-align: middle !important;
 }

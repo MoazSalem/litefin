@@ -354,8 +354,9 @@ class ProfilesPage extends Page {
             }
 
             // AuthManager emits auth:login which initialises plugins.
-            // Navigate to home without history so Back doesn't loop back here.
-            router.navigate('/home', { replace: true });
+            // Reset router history completely so the previous user's back stack and navigation
+            // state entries are purged, preventing state leaks or back-button loops.
+            router.reset('/home');
         } catch (e) {
             log.error('Failed to switch user:', e);
             this._isSwitching = false;

@@ -240,15 +240,13 @@ export function buildJellyfinProfile(options = {}) {
             (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
     }
 
-    // Keep as integer — the Jellyfin server TranscodingProfileDto schema expects
-    // MaxAudioChannels, MinSegments and SegmentLength to be integers, not strings.
-    // Sending a string (e.g. "6") causes a JSON-schema validation 400 Bad Request
-    // on strict server versions.
-    const maxAudioChannels = caps.maxAudioChannels;
+    // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
+    const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
+    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
-    const maxAudioChannelsStr = String(caps.maxAudioChannels);
+    const maxAudioChannelsStr = String(maxAudioChannels);
 
     // enableFlacInVideo: when false (default), FLAC is NOT included in the video
     // DirectPlay audio codec list. This forces Jellyfin to transcode FLAC tracks

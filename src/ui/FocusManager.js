@@ -153,10 +153,18 @@ class FocusManager {
 
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
+            // NOTE: Page.setLoading(false) only removes the 'loading' class from the
+            // page root — it never removes the '.page-loading' overlay div itself, so
+            // that element stays in the DOM (just CSS-hidden via display:none) for the
+            // rest of the page's lifetime. Checking for its mere presence therefore
+            // treats the page as "loading" forever after the first spinner, silently
+            // dropping every subsequent focusin (e.g. DetailsPage's resumeBtn.focus()),
+            // so we must also verify it's actually visible before treating it as active.
+            const pageLoadingEl = document.querySelector('.page-loading');
             const isPageLoading =
                 document.body.classList.contains('app-splash-active') ||
                 document.querySelector('.page.loading') ||
-                document.querySelector('.page-loading');
+                (pageLoadingEl && getComputedStyle(pageLoadingEl).display !== 'none');
 
             if (isPageLoading) {
                 const sectionName = this.getSectionForElement(e.target);

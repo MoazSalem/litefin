@@ -25,6 +25,10 @@ class PlatformInfo {
          * Stamped onto <html data-layout-tier> by LayoutManager.init().
          */
         this._layoutTier = 'modern'; // Safe default
+
+        // Cache browser engine version to apply specific rendering patches on ancient devices
+        // (specifically targeting Tizen 2.x and early webOS TV releases running Chrome < 32)
+        this._chromeVersion = 999;
     }
 
     /**
@@ -95,10 +99,14 @@ class PlatformInfo {
                 chromeVersion = 69; // Tizen 5.0+ supports Grid
             else if (tizenVer >= 3)
                 chromeVersion = 47; // Tizen 3/4 support Flexbox
-            else chromeVersion = 34; // Tizen 2.x
-        } else if (/Tizen|WebO?S|NetCast|LG[ -]?Browser/i.test(navigator.userAgent)) {
-            // Ancient Tizen (2.4) and WebOS (1.x/2.x) use pure WebKit without Chrome branding
-            chromeVersion = 34;
+            // Tizen 2.x (e.g. 2.4.0) runs an ancient pure WebKit engine (WebKit 538.1) without Chromium branding.
+            // Setting chromeVersion to 26 ensures `isAncientChrome` (< 32) evaluates to true,
+            // which in turn stamps `data-layout-quirks="c26"` onto <html> for layout rendering patches.
+            else chromeVersion = 26; // Tizen 2.x (pure WebKit engine)
+        } else if (/Tizen|Web[O0]?S|NetCast|LG[ -]?Browser/i.test(navigator.userAgent)) {
+            // Ancient Tizen (2.4) and WebOS (1.x/2.x) use pure WebKit without Chrome branding.
+            // Setting this to 26 ensures quirks mode (data-layout-quirks="c26") is enabled.
+            chromeVersion = 26;
         } else {
             chromeVersion = 999; // Assume modern if totally unknown (e.g. Firefox/Safari Desktop)
         }
@@ -115,6 +123,11 @@ class PlatformInfo {
         } else {
             this._layoutTier = 'ultra-legacy';
         }
+
+        // Cache the parsed chrome version number to the instance variable
+        // to enable custom engine quirk checks down the line
+        this._chromeVersion = chromeVersion;
+
         log.info(`Layout tier: ${this._layoutTier} (Chrome ${chromeVersion === 999 ? 'unknown' : chromeVersion})`);
     }
 
@@ -170,6 +183,24 @@ class PlatformInfo {
      */
     get layoutTier() {
         return this._layoutTier;
+    }
+
+    /**
+     * Expose the detected Chrome browser version.
+     * @returns {number} Chrome version number or 999 for modern browser environments.
+     */
+    get chromeVersion() {
+        return this._chromeVersion;
+    }
+
+    /**
+     * Checks if the device runs an ancient Chromium build (pre-Chrome 32).
+     * This layout tier requires heavy fallback layouts, box-flex styling, 
+     * and specific CSS overrides for WebOS 1.0 and Tizen 2.x platforms.
+     * @returns {boolean} True if Chromium engine is < 32.
+     */
+    get isAncientChrome() {
+        return this._chromeVersion < 32;
     }
 }
 

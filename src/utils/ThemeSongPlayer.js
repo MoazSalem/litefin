@@ -63,8 +63,20 @@ class ThemeSongPlayer {
         log.debug('Initializing HTML5 Audio element instance');
         this._audio = new Audio();
 
-        // Set standard properties for continuous background score ambiance
-        this._audio.loop = true;
+        // ====================================================================
+        // Audio Element Initialization & Lifecycle Listeners
+        // ====================================================================
+        // Initial loop state will be dynamically overwritten in play() based
+        // on the user's preference (pref:playThemeSongsOnce).
+        this._audio.loop = false;
+
+        // Listen for the track completion event when looping is disabled.
+        // Once the theme music reaches the end, reset active track references.
+        this._audio.addEventListener('ended', () => {
+            log.info('Theme song playback finished single cycle');
+            this._currentUrl = null;
+            this._ownerId = null;
+        });
 
         // Ensure volume starts fully silent for visual-auditory transition sync
         this._audio.volume = 0;
@@ -100,6 +112,17 @@ class ThemeSongPlayer {
         log.info('Starting theme song playback for owner', ownerId);
         this._currentUrl = url;
         this._ownerId = ownerId;
+
+        // ====================================================================
+        // Configure Loop Mode Based on User Preference
+        // ====================================================================
+        // Check if the user opted to play theme songs only once.
+        // Defaults to true (play once), so looping is disabled unless the user
+        // explicitly set 'pref:playThemeSongsOnce' to 'false' in Settings.
+        // ====================================================================
+        const playOnce = storage.getItem('pref:playThemeSongsOnce') !== 'false';
+        this._audio.loop = !playOnce;
+        log.debug(`Theme song audio loop mode set to: ${this._audio.loop} (playOnce: ${playOnce})`);
 
         try {
             // Load the new stream path into the HTML5 controller

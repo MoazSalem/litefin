@@ -102,6 +102,19 @@ export default class SettingsMenu extends BaseMenu {
         this.$el.querySelectorAll('.track-item').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                /*
+                 * ================================================================
+                 * TIZEN TV CLICK ORIGIN GUARD
+                 * ================================================================
+                 * Discard synthetic focus-clicks and Enter-synthesized clicks (detail === 0
+                 * or clientX === 0 && clientY === 0). D-pad Enter is handled exclusively
+                 * via handleKey() -> handleEnter().
+                 * ================================================================
+                 */
+                if (btn._programmaticFocus) return;
+                if (e.detail === 0) return;
+                if (e.clientX === 0 && e.clientY === 0) return;
+
                 this.focusIndex = parseInt(btn.dataset.menuIndex);
                 this.handleEnter();
             });
@@ -187,7 +200,9 @@ export default class SettingsMenu extends BaseMenu {
             const isFocused = i === this.focusIndex;
             opt.classList.toggle('focused', isFocused);
             if (isFocused) {
-                opt.focus();
+                opt._programmaticFocus = true;
+                opt.focus({ preventScroll: true });
+                setTimeout(() => { opt._programmaticFocus = false; }, 0);
                 opt.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
             }
         });

@@ -305,10 +305,11 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 options: [
                     { value: 'none', label: i18n.t('None') },
                     { value: 'uniform', label: i18n.t('Uniform') },
+                    { value: 'border', label: i18n.t('Border') },
+                    { value: 'uniform_border', label: i18n.t('UniformBorders') || 'Uniform + borders' },
                     { value: 'dropshadow', label: i18n.t('DropShadow') },
                     { value: 'raised', label: i18n.t('Raised') },
-                    { value: 'depressed', label: i18n.t('Depressed') },
-                    { value: 'border', label: i18n.t('Border') }
+                    { value: 'depressed', label: i18n.t('Depressed') }
                 ]
             },
             {
@@ -318,7 +319,16 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'BorderWidth',
                 key: 'subtitleBorderWidth',
                 min: 1, max: 20, step: 1, unit: 'px',
-                visible: !isASS && shadowType === 'border'
+                visible: !isASS && (shadowType === 'border' || shadowType === 'uniform_border')
+            },
+            {
+                id: 'borderOpacity',
+                type: 'slider',
+                label: i18n.t('BorderOpacity'),
+                labelKey: 'BorderOpacity',
+                key: 'subtitleBorderOpacity',
+                min: 0, max: 100, step: 5, unit: '%',
+                visible: !isASS && (shadowType === 'border' || shadowType === 'uniform_border')
             },
             {
                 id: 'shadowColor',
@@ -346,7 +356,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'ShadowOpacity',
                 key: 'subtitleDropShadowOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
-                visible: !isASS && shadowType !== 'none'
+                visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
             },
             {
                 id: 'shadowBlur',

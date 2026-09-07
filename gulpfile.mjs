@@ -187,11 +187,13 @@ function copySignatures(buildDir) {
  *     meaningless (and potentially harmful) without the service itself.
  *   • Optionally <tizen:setting ... /> — if stripSetting is true, removes setting tag
  *     which causes installation errors on certain legacy hardware.
+ *   • Optionally appId — rewrites the <tizen:application id="..."> attribute (e.g.
+ *     'LitefinApp.litefin' for Ultra-Legacy No-Service builds).
  *
  * We edit the COPY inside buildDir — the root config.xml is never touched,
  * so concurrent build tasks targeting other variants are unaffected.
  */
-function stripServiceFromConfig(buildDir, stripSetting = false) {
+function stripServiceFromConfig(buildDir, stripSetting = false, appId = null) {
     const configPath = path.join(buildDir, 'config.xml');
 
     // Bail out gracefully if webpack hasn't copied the config yet
@@ -220,8 +222,13 @@ function stripServiceFromConfig(buildDir, stripSetting = false) {
         xml = xml.replace(/<tizen:setting[\s\S]*?(?:\/>|<\/tizen:setting>)\s*/g, '');
     }
 
+    // Optionally rewrite application id (e.g. 'LitefinApp.litefin' for Ultra-Legacy No-Service builds)
+    if (appId) {
+        xml = xml.replace(/(<tizen:application[^>]*\bid=")[^"]*(")/, `$1${appId}$2`);
+    }
+
     writeFileSync(configPath, xml, 'utf8');
-    console.info(`Stripped <tizen:service>, use.preview metadata, and preview privilege${stripSetting ? ' (and tizen:setting)' : ''} from ${configPath}`);
+    console.info(`Stripped <tizen:service>, use.preview metadata, and preview privilege${stripSetting ? ' (and tizen:setting)' : ''}${appId ? ` (application id set to '${appId}')` : ''} from ${configPath}`);
 }
 
 /*
@@ -508,9 +515,10 @@ async function packageUltraLegacyNoService() {
     /*
      * Ultra-legacy No Service targets Tizen / WebOS hardware without background service support
      * or where service/metadata/settings tags cause installation failures.
-     * Strips <tizen:service>, use.preview metadata, preview privilege, and <tizen:setting> from config.xml.
+     * Strips <tizen:service>, use.preview metadata, preview privilege, and <tizen:setting> from config.xml,
+     * and sets application id to 'LitefinApp.litefin' (lowercase) specifically for the UL no-service Tizen build.
      */
-    await stripServiceFromConfig(stagingDir, /* stripSetting */ true);
+    await stripServiceFromConfig(stagingDir, /* stripSetting */ true, 'LitefinApp.litefin');
 
     copySignatures(stagingDir);
     console.info(`Creating ${wgtName}...`);

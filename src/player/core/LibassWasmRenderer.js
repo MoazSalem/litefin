@@ -60,6 +60,29 @@ function getAvailableFonts() {
 
 export default class LibassWasmRenderer {
     /**
+     * Runtime capability check for WebAssembly support.
+     * Evaluates whether the current browser engine possesses WebAssembly support
+     * and is capable of compiling a basic WASM binary.
+     *
+     * @returns {boolean} True if WebAssembly execution is supported.
+     */
+    static isSupported() {
+        try {
+            // Validate the presence of the global WebAssembly object and instantiate API
+            if (typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function') {
+                // Instantiate a minimal 8-byte WASM binary module to verify runtime compilation capability
+                const module = new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+                if (module instanceof WebAssembly.Module) {
+                    return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
+                }
+            }
+        } catch (e) {
+            // Trapped execution or instantiation failure indicates lack of WebAssembly support
+        }
+        return false;
+    }
+
+    /**
      * @param {Object} options
      * @param {HTMLElement} options.container - Container element that wraps the video
      * @param {HTMLVideoElement} [options.video] - The video element (for VideoClock sync)
@@ -68,6 +91,11 @@ export default class LibassWasmRenderer {
      * @param {number} [options.videoFrameRate] - Video framerate (for render sync)
      */
     constructor({ container, video, width, height, videoFrameRate, getTime, avplayLatency }) {
+        // Assert WebAssembly capability prior to performing hardware or DOM setup
+        if (!LibassWasmRenderer.isSupported()) {
+            throw new Error('LibassWasmRenderer is not supported on this platform (WebAssembly unavailable)');
+        }
+
         this._container = container;
         this._videoElement = video || null;
         this._isVirtual = !video;
@@ -185,6 +213,21 @@ export default class LibassWasmRenderer {
     tick(timeSeconds) {
         this._lastTime = timeSeconds;
         if (this._isVirtual && this._octopus) {
+            // ================================================================
+            // Tizen 5.5 / broken-WASM guard:
+            // SubtitlesOctopus's internal workerError handler calls dispose()
+            // which sets self.worker = null. If the worker died but we still
+            // hold a live _octopus reference, the next setCurrentTime() call
+            // will crash with "Cannot read property 'postMessage' of null".
+            // Detect this state early and tear down our reference cleanly so
+            // subsequent ticks are silent no-ops instead of repeated crashes.
+            // ================================================================
+            if (this._octopus.worker === null) {
+                log.warn('SubtitlesOctopus worker appears to have died (worker=null); tearing down stale instance');
+                this._octopus = null;
+                return;
+            }
+
             const offsetTime = timeSeconds - this._delaySeconds;
 
             if (this._seekPending) {
@@ -259,6 +302,22 @@ export default class LibassWasmRenderer {
             const prescaleFactor = parseFloat(PlayerSettings.get('subtitleAssPrescaleFactor')) || 0.8;
             const maxHeight = Math.min(2160, typeof screen !== 'undefined' ? (screen.height || 1080) : 1080);
 
+            // ================================================================
+            // onError callback: fired by SubtitlesOctopus's workerError handler
+            // when the web worker crashes internally (e.g. WASM init failure on
+            // Tizen 5.5). At that point octopus already calls dispose() which
+            // sets self.worker = null — but our _octopus reference stays alive.
+            // Hooking onError lets us proactively null it out so that the very
+            // next tick() call doesn't crash on worker.postMessage(). Without
+            // this, every TIME_UPDATE event produces an unhandled TypeError.
+            // ================================================================
+            const onOctopusError = (err) => {
+                log.error('SubtitlesOctopus worker error — renderer disabled for this track:', err);
+                // The octopus instance already disposed its worker internally;
+                // null out our reference so tick() stops calling setCurrentTime.
+                this._octopus = null;
+            };
+
             const options = {
                 video: this._videoElement,
                 canvas: this._isVirtual ? this._canvas : undefined,
@@ -278,7 +337,10 @@ export default class LibassWasmRenderer {
                 prescaleHeightLimit: 1080,
                 maxRenderHeight: maxHeight,
                 resizeVariation: 0.2,
-                renderAhead: this._isVirtual ? 100 : 50
+                renderAhead: this._isVirtual ? 100 : 50,
+                // Notify us immediately if the worker crashes so we can
+                // proactively clean up before the next tick fires.
+                onError: onOctopusError
             };
 
             this._octopus = new SubtitlesOctopus(options);
@@ -480,7 +542,12 @@ export default class LibassWasmRenderer {
                 if (this._isVirtual) {
                     this._octopus.video = null;
                 }
-                this._octopus.dispose();
+                // If the worker already self-disposed (e.g. WASM init failure on
+                // Tizen 5.5 sets worker=null internally), skip calling dispose()
+                // to avoid a redundant crash inside it on worker.postMessage().
+                if (this._octopus.worker !== null) {
+                    this._octopus.dispose();
+                }
             } catch (err) {
                 log.warn('Error disposing SubtitlesOctopus instance:', err);
             }

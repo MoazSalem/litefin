@@ -69,7 +69,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'DateCreated,ProductionYear'
+                        Fields: 'DateCreated,ProductionYear,MediaSourceCount'
                     }),
                     api.getItems({
                         Filters: 'IsFavorite',
@@ -77,7 +77,7 @@ class FavoritesPage extends Page {
                         SortBy: 'SortName',
                         SortOrder: 'Ascending',
                         Limit: 50,
-                        Fields: 'ProductionYear,UnplayedItemCount,UserData'
+                        Fields: 'ProductionYear,UnplayedItemCount,UserData,MediaSourceCount'
                     }),
                     api.getItems({
                         Filters: 'IsFavorite',
