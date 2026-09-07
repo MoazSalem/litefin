@@ -1096,7 +1096,33 @@ class LayoutManager {
      */
     setLoaderStyle(style, save = true) {
         // Validate input against supported styles list with safe fallback to 'dots'
-        const validStyle = ['dots', 'ring'].includes(style) ? style : 'dots';
+        // Supported styles:
+        // - 'dots': Original dual pulsing dots
+        // - 'ring': Minimal rotating circular track
+        // - 'dual-ring': Concentric ring with accent outer arc
+        // - 'orbit': Translucent ring with traveling accent satellite bead
+        // - 'satellite': Inner accent ring with orbiting secondary ring
+        // - 'triple-ring': Multi-tiered concentric counter-rotating ring arcs
+        // - 'dotted-ring': Dual-tone alternating dashed/dotted spinning ring
+        // - 'eclipse-sweep': Inset crescent shadow sweep animation
+        // - 'sonar-ring': Rotating framed disc with opposing aperture arcs
+        // - 'push-pulse': Concentric dual-phase pulsing spheres
+        // - 'horizontal-dots': Trio of fading inline dots with wave progression
+        // - 'pulsing-grid': Dynamic 4-point rotating and morphing quadrant grid
+        const validStyle = [
+            'dots',
+            'ring',
+            'dual-ring',
+            'orbit',
+            'satellite',
+            'triple-ring',
+            'dotted-ring',
+            'eclipse-sweep',
+            'sonar-ring',
+            'push-pulse',
+            'horizontal-dots',
+            'pulsing-grid'
+        ].includes(style) ? style : 'dots';
         this._loaderStyle = validStyle;
 
         // Stamp active loader style attribute onto root element for scoped CSS targeting

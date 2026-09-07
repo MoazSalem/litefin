@@ -757,7 +757,17 @@ class SettingsPage extends Page {
                 const currentStyle = layoutManager.getLoaderStyle() || 'dots';
                 const styleNames = {
                     'dots': i18n.t('LoaderStyleDots') || 'Pulsing Dots',
-                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring'
+                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring',
+                    'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+                    'orbit': i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+                    'satellite': i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+                    'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+                    'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+                    'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                    'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                    'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+                    'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+                    'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
                 };
                 const activeName = styleNames[currentStyle] || 'Pulsing Dots';
                 return `
@@ -7557,7 +7567,17 @@ class SettingsPage extends Page {
             if (triggerLabel) {
                 const styleNames = {
                     'dots': i18n.t('LoaderStyleDots') || 'Pulsing Dots',
-                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring'
+                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring',
+                    'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+                    'orbit': i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+                    'satellite': i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+                    'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+                    'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+                    'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                    'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                    'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+                    'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+                    'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
                 };
                 triggerLabel.textContent = styleNames[style] || style;
             }
@@ -8300,6 +8320,66 @@ class SettingsPage extends Page {
                 name: i18n.t('LoaderStyleRing') || 'Rotating Ring',
                 description: i18n.t('LoaderStyleRingDesc') || 'Lightweight circular ring with minimal GPU & CPU overhead.',
                 badge: i18n.t('LoaderStyleBadgeEfficient') || 'Lightweight'
+            },
+            {
+                id: 'dual-ring',
+                name: i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+                description: i18n.t('LoaderStyleDualRingDesc') || 'Concentric rotating ring with accent outer arc.',
+                badge: i18n.t('LoaderStyleBadgeDynamic') || 'Dual Arc'
+            },
+            {
+                id: 'orbit',
+                name: i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+                description: i18n.t('LoaderStyleOrbitDesc') || 'Translucent circular path with an orbiting accent satellite point.',
+                badge: i18n.t('LoaderStyleBadgeOrbit') || 'Planetary'
+            },
+            {
+                id: 'satellite',
+                name: i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+                description: i18n.t('LoaderStyleSatelliteDesc') || 'Rotating primary accent frame with an offset secondary orbiting ring.',
+                badge: i18n.t('LoaderStyleBadgeSatellite') || 'Dual Axis'
+            },
+            {
+                id: 'triple-ring',
+                name: i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+                description: i18n.t('LoaderStyleTripleRingDesc') || 'Multi-tier concentric arcs spinning in alternating counter directions.',
+                badge: i18n.t('LoaderStyleBadgeTripleRing') || 'Gyroscope'
+            },
+            {
+                id: 'dotted-ring',
+                name: i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+                description: i18n.t('LoaderStyleDottedRingDesc') || 'Dual-ring concentric spinner featuring dotted and solid accent strokes.',
+                badge: i18n.t('LoaderStyleBadgeDottedRing') || 'Dotted'
+            },
+            {
+                id: 'eclipse-sweep',
+                name: i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                description: i18n.t('LoaderStyleEclipseSweepDesc') || 'Minimalist circular disc illuminated by a traveling inset crescent shadow.',
+                badge: i18n.t('LoaderStyleBadgeEclipseSweep') || 'Crescent'
+            },
+            {
+                id: 'sonar-ring',
+                name: i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                description: i18n.t('LoaderStyleSonarRingDesc') || 'Spinning theme-colored disc with opposing high-contrast aperture cutouts.',
+                badge: i18n.t('LoaderStyleBadgeSonarRing') || 'Aperture'
+            },
+            {
+                id: 'push-pulse',
+                name: i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+                description: i18n.t('LoaderStylePushPulseDesc') || 'Interlocking dual spheres expanding and contracting in counter-phase rhythm.',
+                badge: i18n.t('LoaderStyleBadgePushPulse') || 'Dual Pulse'
+            },
+            {
+                id: 'horizontal-dots',
+                name: i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+                description: i18n.t('LoaderStyleHorizontalDotsDesc') || 'Horizontal linear dot triad with progressive wave pulse animations.',
+                badge: i18n.t('LoaderStyleBadgeHorizontalDots') || 'Tri-Dot'
+            },
+            {
+                id: 'pulsing-grid',
+                name: i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid',
+                description: i18n.t('LoaderStylePulsingGridDesc') || 'Geometric four-quadrant pinwheel that contracts, rotates, and expands.',
+                badge: i18n.t('LoaderStyleBadgePulsingGrid') || 'Geometric'
             }
         ];
 
@@ -8418,6 +8498,10 @@ class SettingsPage extends Page {
             if (!focusedEl) return;
             const optionBtn = focusedEl.closest ? focusedEl.closest('.loader-style-option-btn') : null;
             if (optionBtn && optionBtn.dataset) {
+                // Ensure the focused item is visible in the scrollable options column
+                if (typeof optionBtn.scrollIntoView === 'function') {
+                    optionBtn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                }
                 updatePreviewForStyle(
                     optionBtn.dataset.style,
                     optionBtn.dataset.name,
@@ -8478,6 +8562,76 @@ class SettingsPage extends Page {
             return `
                 <div class="loader-preview-sample loader-preview-sample--ring">
                     <div class="preview-spinner-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'dual-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--dual-ring">
+                    <div class="preview-spinner-dual-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'orbit') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--orbit">
+                    <div class="preview-spinner-orbit"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'satellite') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--satellite">
+                    <div class="preview-spinner-satellite"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'triple-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--triple-ring">
+                    <div class="preview-spinner-triple-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'dotted-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--dotted-ring">
+                    <div class="preview-spinner-dotted-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'eclipse-sweep') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--eclipse-sweep">
+                    <div class="preview-spinner-eclipse-sweep"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'sonar-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--sonar-ring">
+                    <div class="preview-spinner-sonar-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'push-pulse') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--push-pulse">
+                    <div class="preview-spinner-push-pulse"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'horizontal-dots') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--horizontal-dots">
+                    <div class="preview-spinner-horizontal-dots"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'pulsing-grid') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--pulsing-grid">
+                    <div class="preview-spinner-pulsing-grid"></div>
                 </div>
             `;
         }

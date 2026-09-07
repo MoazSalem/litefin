@@ -1371,6 +1371,805 @@ html[data-loader-style="ring"] .loading-spinner-small::before {
     display: none !important;
 }
 
+/* 
+ * 5. DUAL RING LOADING INDICATOR
+ * Concentric inner ring with theme accent outer arc.
+ */
+html[data-loader-style="dual-ring"] .loading-spinner,
+html[data-loader-style="dual-ring"] .loading-spinner-small {
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    background: transparent !important;
+}
+
+html[data-loader-style="dual-ring"] .loading-spinner::before,
+html[data-loader-style="dual-ring"] .loading-spinner-small::before {
+    display: none !important;
+}
+
+html[data-loader-style="dual-ring"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-bottom-color: var(--jf-accent);
+    background: transparent !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+html[data-loader-style="dual-ring"] .loading-spinner-small {
+    border-width: 2px;
+}
+
+html[data-loader-style="dual-ring"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-bottom-color: var(--jf-accent);
+    background: transparent !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+/* 
+ * 6. ORBITAL BEAD LOADING INDICATOR (Style 1)
+ * Translucent circular boundary with an orbiting accent satellite dot.
+ */
+html[data-loader-style="orbit"] .loading-spinner,
+html[data-loader-style="orbit"] .loading-spinner-small {
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    background: transparent !important;
+}
+
+html[data-loader-style="orbit"] .loading-spinner-small {
+    border-width: 2px;
+}
+
+html[data-loader-style="orbit"] .loading-spinner::before,
+html[data-loader-style="orbit"] .loading-spinner-small::before {
+    display: none !important;
+}
+
+html[data-loader-style="orbit"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: var(--jf-accent);
+    width: 16px;
+    height: 16px;
+    transform: translate(-50%, 50%);
+    -webkit-transform: translate(-50%, 50%);
+    border-radius: 50%;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+html[data-loader-style="orbit"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: var(--jf-accent);
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, 50%);
+    -webkit-transform: translate(-50%, 50%);
+    border-radius: 50%;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+/* 
+ * 7. SATELLITE RING LOADING INDICATOR (Style 2)
+ * Primary rotating accent ring with an offset secondary orbiting ring.
+ */
+html[data-loader-style="satellite"] .loading-spinner,
+html[data-loader-style="satellite"] .loading-spinner-small {
+    border: 2px solid var(--jf-accent);
+    border-radius: 50%;
+    background: transparent !important;
+}
+
+html[data-loader-style="satellite"] .loading-spinner::before,
+html[data-loader-style="satellite"] .loading-spinner-small::before {
+    display: none !important;
+}
+
+html[data-loader-style="satellite"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+html[data-loader-style="satellite"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+/* 
+ * 8. TRIPLE GYRO LOADING INDICATOR (Style 3)
+ * Concentric dual and triple counter-rotating arcs.
+ */
+html[data-loader-style="triple-ring"] .loading-spinner {
+    border: 3px solid transparent;
+    border-color: rgba(255, 255, 255, 0.85) rgba(255, 255, 255, 0.85) transparent transparent;
+    border-radius: 50%;
+    background: transparent !important;
+}
+
+html[data-loader-style="triple-ring"] .loading-spinner-small {
+    border: 2px solid transparent;
+    border-color: rgba(255, 255, 255, 0.85) rgba(255, 255, 255, 0.85) transparent transparent;
+    border-radius: 50%;
+    background: transparent !important;
+}
+
+html[data-loader-style="triple-ring"] .loading-spinner::before,
+html[data-loader-style="triple-ring"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    border-radius: 50%;
+    background: transparent !important;
+    transform-origin: center center;
+    -webkit-transform-origin: center center;
+}
+
+html[data-loader-style="triple-ring"] .loading-spinner::after {
+    border: 3px solid transparent;
+    border-color: transparent transparent var(--jf-accent) var(--jf-accent);
+    width: 40px;
+    height: 40px;
+    animation: rotationBack 0.5s linear infinite !important;
+    -webkit-animation: rotationBack 0.5s linear infinite !important;
+}
+
+html[data-loader-style="triple-ring"] .loading-spinner::before {
+    border: 3px solid transparent;
+    border-color: rgba(255, 255, 255, 0.85) rgba(255, 255, 255, 0.85) transparent transparent;
+    width: 32px;
+    height: 32px;
+    animation: rotation 1.5s linear infinite !important;
+    -webkit-animation: rotation 1.5s linear infinite !important;
+}
+
+html[data-loader-style="triple-ring"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    border-radius: 50%;
+    background: transparent !important;
+    transform-origin: center center;
+    -webkit-transform-origin: center center;
+    border: 2px solid transparent;
+    border-color: transparent transparent var(--jf-accent) var(--jf-accent);
+    width: 20px;
+    height: 20px;
+    animation: rotationBack 0.5s linear infinite !important;
+    -webkit-animation: rotationBack 0.5s linear infinite !important;
+}
+
+html[data-loader-style="triple-ring"] .loading-spinner-small::before {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    border-radius: 50%;
+    background: transparent !important;
+    transform-origin: center center;
+    -webkit-transform-origin: center center;
+    border: 2px solid transparent;
+    border-color: rgba(255, 255, 255, 0.85) rgba(255, 255, 255, 0.85) transparent transparent;
+    width: 16px;
+    height: 16px;
+    animation: rotation 1.5s linear infinite !important;
+    -webkit-animation: rotation 1.5s linear infinite !important;
+}
+
+/* 
+ * 9. DOTTED ECLIPSE LOADING INDICATOR (Style 4)
+ * Concentric spinner with alternating dotted and solid tracks.
+ */
+html[data-loader-style="dotted-ring"] .loading-spinner {
+    border: 3px dotted rgba(255, 255, 255, 0.85);
+    border-style: solid solid dotted dotted;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: rotation 2s linear infinite;
+    -webkit-animation: rotation 2s linear infinite;
+}
+
+html[data-loader-style="dotted-ring"] .loading-spinner-small {
+    border: 2px dotted rgba(255, 255, 255, 0.85);
+    border-style: solid solid dotted dotted;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: rotation 2s linear infinite;
+    -webkit-animation: rotation 2s linear infinite;
+}
+
+html[data-loader-style="dotted-ring"] .loading-spinner::before,
+html[data-loader-style="dotted-ring"] .loading-spinner-small::before {
+    display: none !important;
+}
+
+html[data-loader-style="dotted-ring"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    border: 3px dotted var(--jf-accent);
+    border-style: solid solid dotted;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: rotationBack 1s linear infinite !important;
+    -webkit-animation: rotationBack 1s linear infinite !important;
+    transform-origin: center center;
+    -webkit-transform-origin: center center;
+}
+
+html[data-loader-style="dotted-ring"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    border: 2px dotted var(--jf-accent);
+    border-style: solid solid dotted;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: rotationBack 1s linear infinite !important;
+    -webkit-animation: rotationBack 1s linear infinite !important;
+    transform-origin: center center;
+    -webkit-transform-origin: center center;
+}
+
+/* Reusable counter-rotation keyframe for multi-ring spinners */
+@keyframes rotationBack {
+    0% {
+        transform: translateZ(0) rotate(0deg);
+    }
+    100% {
+        transform: translateZ(0) rotate(-360deg);
+    }
+}
+
+@-webkit-keyframes rotationBack {
+    0% {
+        -webkit-transform: translateZ(0) rotate(0deg);
+    }
+    100% {
+        -webkit-transform: translateZ(0) rotate(-360deg);
+    }
+}
+
+/* 
+ * 10. CRESCENT SWEEP LOADING INDICATOR (Style 0)
+ * Inset crescent shadow sweep across a circular boundary.
+ */
+html[data-loader-style="eclipse-sweep"] .loading-spinner,
+html[data-loader-style="eclipse-sweep"] .loading-spinner-small {
+    border-radius: 50%;
+    background: transparent !important;
+    animation: eclipse-sweep-anim 1s linear infinite !important;
+    -webkit-animation: eclipse-sweep-anim 1s linear infinite !important;
+}
+
+html[data-loader-style="eclipse-sweep"] .loading-spinner::before,
+html[data-loader-style="eclipse-sweep"] .loading-spinner::after,
+html[data-loader-style="eclipse-sweep"] .loading-spinner-small::before,
+html[data-loader-style="eclipse-sweep"] .loading-spinner-small::after {
+    display: none !important;
+}
+
+@keyframes eclipse-sweep-anim {
+    0% {
+        box-shadow: -72px 0 var(--jf-accent) inset;
+    }
+    100% {
+        box-shadow: 48px 0 var(--jf-accent) inset;
+    }
+}
+
+@-webkit-keyframes eclipse-sweep-anim {
+    0% {
+        -webkit-box-shadow: -72px 0 var(--jf-accent) inset;
+    }
+    100% {
+        -webkit-box-shadow: 48px 0 var(--jf-accent) inset;
+    }
+}
+
+/* 
+ * 11. SONAR APERTURE LOADING INDICATOR (Style 1)
+ * Rotating circular disc with theme-color backdrop and translucent aperture arcs.
+ */
+html[data-loader-style="sonar-ring"] .loading-spinner,
+html[data-loader-style="sonar-ring"] .loading-spinner-small {
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    background: var(--jf-accent) !important;
+    border-radius: 50%;
+    animation: rotation 2s linear infinite;
+    -webkit-animation: rotation 2s linear infinite;
+}
+
+html[data-loader-style="sonar-ring"] .loading-spinner::before,
+html[data-loader-style="sonar-ring"] .loading-spinner-small::before {
+    display: none !important;
+}
+
+html[data-loader-style="sonar-ring"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border: 24px solid;
+    border-color: transparent rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
+    background: transparent !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+html[data-loader-style="sonar-ring"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    box-sizing: border-box;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border: 12px solid;
+    border-color: transparent rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
+    background: transparent !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+/* 
+ * 12. PUSH PULSE LOADING INDICATOR (Style 2)
+ * Alternating concentric dual-pulse spheres expanding and contracting.
+ */
+html[data-loader-style="push-pulse"] .loading-spinner,
+html[data-loader-style="push-pulse"] .loading-spinner-small {
+    background: transparent !important;
+    border: none !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+}
+
+html[data-loader-style="push-pulse"] .loading-spinner::before,
+html[data-loader-style="push-pulse"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    position: absolute;
+    border-radius: 50%;
+    box-sizing: border-box;
+    animation: push-pulse-anim 1s infinite linear alternate !important;
+    -webkit-animation: push-pulse-anim 1s infinite linear alternate !important;
+}
+
+html[data-loader-style="push-pulse"] .loading-spinner::before {
+    right: 0;
+    top: 0;
+    left: auto;
+    bottom: auto;
+    background: var(--jf-accent);
+}
+
+html[data-loader-style="push-pulse"] .loading-spinner::after {
+    left: 0;
+    bottom: 0;
+    top: auto;
+    right: auto;
+    background: rgba(255, 255, 255, 0.85);
+    animation-direction: alternate-reverse !important;
+    -webkit-animation-direction: alternate-reverse !important;
+}
+
+html[data-loader-style="push-pulse"] .loading-spinner-small::before,
+html[data-loader-style="push-pulse"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    position: absolute;
+    border-radius: 50%;
+    box-sizing: border-box;
+    animation: push-pulse-small-anim 1s infinite linear alternate !important;
+    -webkit-animation: push-pulse-small-anim 1s infinite linear alternate !important;
+}
+
+html[data-loader-style="push-pulse"] .loading-spinner-small::before {
+    right: 0;
+    top: 0;
+    left: auto;
+    bottom: auto;
+    background: var(--jf-accent);
+}
+
+html[data-loader-style="push-pulse"] .loading-spinner-small::after {
+    left: 0;
+    bottom: 0;
+    top: auto;
+    right: auto;
+    background: rgba(255, 255, 255, 0.85);
+    animation-direction: alternate-reverse !important;
+    -webkit-animation-direction: alternate-reverse !important;
+}
+
+@keyframes push-pulse-anim {
+    0% {
+        width: 10px;
+        height: 10px;
+    }
+    100% {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+@-webkit-keyframes push-pulse-anim {
+    0% {
+        width: 10px;
+        height: 10px;
+    }
+    100% {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+@keyframes push-pulse-small-anim {
+    0% {
+        width: 6px;
+        height: 6px;
+    }
+    100% {
+        width: 24px;
+        height: 24px;
+    }
+}
+
+@-webkit-keyframes push-pulse-small-anim {
+    0% {
+        width: 6px;
+        height: 6px;
+    }
+    100% {
+        width: 24px;
+        height: 24px;
+    }
+}
+
+/* 
+ * 13. FADING TRIO LOADING INDICATOR (Style 3)
+ * Horizontal inline three-dot sequence with progressive wave shadow fades.
+ */
+html[data-loader-style="horizontal-dots"] .loading-spinner {
+    font-size: 7px;
+    width: 2.5em;
+    height: 2.5em;
+    border-radius: 50%;
+    background: transparent !important;
+    border: none !important;
+    color: var(--jf-accent);
+    text-indent: -9999em;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+    -webkit-animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+    animation-delay: -0.16s !important;
+    -webkit-animation-delay: -0.16s !important;
+}
+
+html[data-loader-style="horizontal-dots"] .loading-spinner::before,
+html[data-loader-style="horizontal-dots"] .loading-spinner::after {
+    content: '';
+    display: block !important;
+    position: absolute;
+    top: 0;
+    width: 2.5em;
+    height: 2.5em;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+    -webkit-animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+}
+
+html[data-loader-style="horizontal-dots"] .loading-spinner::before {
+    left: -3.5em;
+    animation-delay: -0.32s !important;
+    -webkit-animation-delay: -0.32s !important;
+}
+
+html[data-loader-style="horizontal-dots"] .loading-spinner::after {
+    left: 3.5em;
+}
+
+html[data-loader-style="horizontal-dots"] .loading-spinner-small {
+    font-size: 4px;
+    width: 2.5em;
+    height: 2.5em;
+    border-radius: 50%;
+    background: transparent !important;
+    border: none !important;
+    color: var(--jf-accent);
+    text-indent: -9999em;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+    -webkit-animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+    animation-delay: -0.16s !important;
+    -webkit-animation-delay: -0.16s !important;
+}
+
+html[data-loader-style="horizontal-dots"] .loading-spinner-small::before,
+html[data-loader-style="horizontal-dots"] .loading-spinner-small::after {
+    content: '';
+    display: block !important;
+    position: absolute;
+    top: 0;
+    width: 2.5em;
+    height: 2.5em;
+    border-radius: 50%;
+    background: transparent !important;
+    animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+    -webkit-animation: bblFadInOut 1.8s infinite ease-in-out both !important;
+}
+
+html[data-loader-style="horizontal-dots"] .loading-spinner-small::before {
+    left: -3.5em;
+    animation-delay: -0.32s !important;
+    -webkit-animation-delay: -0.32s !important;
+}
+
+html[data-loader-style="horizontal-dots"] .loading-spinner-small::after {
+    left: 3.5em;
+}
+
+@keyframes bblFadInOut {
+    0%,
+    80%,
+    100% {
+        box-shadow: 0 2.5em 0 -1.3em;
+    }
+    40% {
+        box-shadow: 0 2.5em 0 0;
+    }
+}
+
+@-webkit-keyframes bblFadInOut {
+    0%,
+    80%,
+    100% {
+        -webkit-box-shadow: 0 2.5em 0 -1.3em;
+    }
+    40% {
+        -webkit-box-shadow: 0 2.5em 0 0;
+    }
+}
+
+/* 
+ * 14. MORPHING GRID LOADING INDICATOR (Style 4)
+ * Pinwheel four-quadrant pin grid that shrinks, rotates, and expands.
+ */
+html[data-loader-style="pulsing-grid"] .loading-spinner {
+    width: 48px;
+    height: 48px;
+    margin-top: -24px;
+    margin-left: -24px;
+    background-color: transparent !important;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.9) 12px, transparent 0),
+        linear-gradient(var(--jf-accent) 12px, transparent 0),
+        linear-gradient(var(--jf-accent) 12px, transparent 0),
+        linear-gradient(rgba(255, 255, 255, 0.9) 12px, transparent 0);
+    background-repeat: no-repeat;
+    background-size: 12px 12px;
+    background-position:
+        left top,
+        left bottom,
+        right top,
+        right bottom;
+    border: none !important;
+    border-radius: 0 !important;
+    animation: pulsing-grid-anim 1s linear infinite !important;
+    -webkit-animation: pulsing-grid-anim 1s linear infinite !important;
+}
+
+html[data-loader-style="pulsing-grid"] .loading-spinner-small {
+    width: 24px;
+    height: 24px;
+    background-color: transparent !important;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.9) 6px, transparent 0),
+        linear-gradient(var(--jf-accent) 6px, transparent 0),
+        linear-gradient(var(--jf-accent) 6px, transparent 0),
+        linear-gradient(rgba(255, 255, 255, 0.9) 6px, transparent 0);
+    background-repeat: no-repeat;
+    background-size: 6px 6px;
+    background-position:
+        left top,
+        left bottom,
+        right top,
+        right bottom;
+    border: none !important;
+    border-radius: 0 !important;
+    animation: pulsing-grid-small-anim 1s linear infinite !important;
+    -webkit-animation: pulsing-grid-small-anim 1s linear infinite !important;
+}
+
+html[data-loader-style="pulsing-grid"] .loading-spinner::before,
+html[data-loader-style="pulsing-grid"] .loading-spinner::after,
+html[data-loader-style="pulsing-grid"] .loading-spinner-small::before,
+html[data-loader-style="pulsing-grid"] .loading-spinner-small::after {
+    display: none !important;
+}
+
+@keyframes pulsing-grid-anim {
+    0% {
+        width: 48px;
+        height: 48px;
+        margin-top: -24px;
+        margin-left: -24px;
+        transform: translateZ(0) rotate(0deg);
+    }
+    50% {
+        width: 24px;
+        height: 24px;
+        margin-top: -12px;
+        margin-left: -12px;
+        transform: translateZ(0) rotate(180deg);
+    }
+    100% {
+        width: 48px;
+        height: 48px;
+        margin-top: -24px;
+        margin-left: -24px;
+        transform: translateZ(0) rotate(360deg);
+    }
+}
+
+@-webkit-keyframes pulsing-grid-anim {
+    0% {
+        width: 48px;
+        height: 48px;
+        margin-top: -24px;
+        margin-left: -24px;
+        -webkit-transform: translateZ(0) rotate(0deg);
+    }
+    50% {
+        width: 24px;
+        height: 24px;
+        margin-top: -12px;
+        margin-left: -12px;
+        -webkit-transform: translateZ(0) rotate(180deg);
+    }
+    100% {
+        width: 48px;
+        height: 48px;
+        margin-top: -24px;
+        margin-left: -24px;
+        -webkit-transform: translateZ(0) rotate(360deg);
+    }
+}
+
+@keyframes pulsing-grid-small-anim {
+    0% {
+        width: 24px;
+        height: 24px;
+        transform: translateZ(0) rotate(0deg);
+    }
+    50% {
+        width: 14px;
+        height: 14px;
+        transform: translateZ(0) rotate(180deg);
+    }
+    100% {
+        width: 24px;
+        height: 24px;
+        transform: translateZ(0) rotate(360deg);
+    }
+}
+
+@-webkit-keyframes pulsing-grid-small-anim {
+    0% {
+        width: 24px;
+        height: 24px;
+        -webkit-transform: translateZ(0) rotate(0deg);
+    }
+    50% {
+        width: 14px;
+        height: 14px;
+        -webkit-transform: translateZ(0) rotate(180deg);
+    }
+    100% {
+        width: 24px;
+        height: 24px;
+        -webkit-transform: translateZ(0) rotate(360deg);
+    }
+}
+
 /* ============================================================================
    Card Labels Spacing Adjustments
    ============================================================================ */
