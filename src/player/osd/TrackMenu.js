@@ -158,8 +158,22 @@ export default class TrackMenu extends BaseMenu {
                 `;
             }
 
+            // For audio tracks, check if the codec is natively playable by the
+            // current backend. Unsupported tracks (e.g. FLAC in MKV on HTML5)
+            // get a visual indicator showing they'll require a transcode restart.
+            let isUnsupported = false;
+            if (this.type === 'audio' && track.Index !== -1) {
+                isUnsupported = player.isAudioTrackNativelyPlayable
+                    ? !player.isAudioTrackNativelyPlayable(track)
+                    : false;
+
+                if (isUnsupported) {
+                    metadataHtml += `<span class="track-badge track-badge-unsupported">${i18n.t('Transcode') || 'TRANSCODE'}</span>`;
+                }
+            }
+
             return `
-                <button class="track-option track-item ${isSelected ? 'selected' : ''}" data-index="${track.Index}" data-menu-index="${i}">
+                <button class="track-option track-item ${isSelected ? 'selected' : ''} ${isUnsupported ? 'track-unsupported' : ''}" data-index="${track.Index}" data-menu-index="${i}">
                     <span class="track-option-check"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></span>
                     <span class="track-option-label">
                         <span class="track-label-text">${label}</span>
@@ -224,7 +238,7 @@ export default class TrackMenu extends BaseMenu {
     /**
      * Handle directional and selection key events within the track menu.
      * 
-     * Aligning with Apple Human Interface Guidelines:
+     * Aligning with TV interface navigation standards:
      * - UP/DOWN cycles focus within available menu items smoothly.
      * - In sub-menus (Secondary Subtitles), BACK/LEFT/RIGHT returns cleanly to the parent level
      *   (Primary Subtitles) rather than unexpectedly closing the menu to the main OSD.

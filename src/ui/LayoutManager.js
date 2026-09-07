@@ -55,6 +55,11 @@ class LayoutManager {
         // Granular layout settings
         this._mediaRowsLayout = 'classic';
         this._loginPageLayout = 'classic';
+        /*
+         * Active sidebar layout configuration (e.g., 'modern').
+         * Controls structural presentation and styling of the primary navigation bar.
+         */
+        this._sidebarLayout = 'modern';
 
         // Current theme mode
         // Ambient Glow is now the default theme mode for a premium glassmorphic look.
@@ -109,7 +114,7 @@ class LayoutManager {
         this._sidebarUnselectedColor = 'grey';
 
         // Sidebar selected icon color: 'grey', 'white', 'black', 'accent'
-        this._sidebarSelectedColor = 'accent';
+        this._sidebarSelectedColor = 'white';
 
         // OSD Custom Button & Focus Border styles (overrides global)
         this._osdButtonStyle = 'follow-global';
@@ -128,6 +133,13 @@ class LayoutManager {
          * Defaults to 'theme-accent'. Supports: 'white', 'black', 'theme-accent', 'theme-inverted'.
          */
         this._osdSeekBarProgressColor = 'theme-accent';
+
+        /*
+         * Customized contrast level for the hero carousel text vignette gradient.
+         * Controls dark shadow intensity behind titles from 'transparent' (0%) to '90%' (deep dark).
+         * Defaults to '50' (50% opacity) to provide optimal default text readability while revealing artwork.
+         */
+        this._heroVignette = '50';
 
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
@@ -149,6 +161,16 @@ class LayoutManager {
             const legacy = storage.getItem('pref:modernLoginPage') || storage.getItem('litefin:layout');
             savedLoginPageLayout = legacy === 'true' || legacy === 'modern' ? 'modern' : 'classic';
         }
+
+        /*
+         * Load saved sidebar navigation layout preference.
+         * Ultra-legacy hardware (Chrome <47 / Tizen 2.x / c26 quirks) requires the classic sidebar layout.
+         * Modern/legacy tiers default cleanly to 'modern'.
+         */
+        const isUltraLegacy = platformInfo.layoutTier === 'ultra-legacy';
+        const savedSidebarLayout = isUltraLegacy
+            ? 'classic'
+            : storage.getItem('pref:sidebarLayoutMode') || 'modern';
 
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
@@ -180,16 +202,19 @@ class LayoutManager {
         const savedFocusBorderStyle = storage.getItem('litefin:focusBorderStyle') || 'hidden';
         const savedHoverBorderStyle = storage.getItem('litefin:hoverBorderStyle') || 'white';
         const savedSidebarUnselectedColor = storage.getItem('litefin:sidebarUnselectedColor') || 'grey';
-        const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'accent';
+        const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'white';
         const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
         const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
         const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
         const savedOsdUnfocusedButtonStyle = storage.getItem('litefin:osdUnfocusedButtonStyle') || 'icon-only';
         const savedOsdSeekBarThumbColor = storage.getItem('litefin:osdSeekBarThumbColor') || 'white';
         const savedOsdSeekBarProgressColor = storage.getItem('litefin:osdSeekBarProgressColor') || 'theme-accent';
+        const savedHeroVignette = storage.getItem('pref:heroCarouselVignette') || '70';
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
+        // Initialize sidebar layout without triggering duplicate persistence
+        this.setSidebarLayout(savedSidebarLayout, false);
         this.setThemeMode(initialMode, false);
         this.setThemeColor(savedThemeColor, false);
         this.setUiFont(savedUiFont, false);
@@ -217,6 +242,7 @@ class LayoutManager {
         this.setOsdUnfocusedButtonStyle(savedOsdUnfocusedButtonStyle, false);
         this.setOsdSeekBarThumbColor(savedOsdSeekBarThumbColor, false);
         this.setOsdSeekBarProgressColor(savedOsdSeekBarProgressColor, false);
+        this.setHeroVignette(savedHeroVignette, false);
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
@@ -302,6 +328,82 @@ class LayoutManager {
             storage.setItem('pref:loginPageLayout', layout);
         }
         eventBus.emit('loginPageLayout:changed', { layout });
+    }
+
+    /**
+     * Returns the currently active sidebar navigation layout mode.
+     * @returns {string} The active sidebar layout identifier (e.g. 'classic').
+     */
+    getSidebarLayout() {
+        return this._sidebarLayout;
+    }
+
+    /**
+     * Sets and activates the sidebar layout mode across the entire UI.
+     * Stamped onto <html> as data-layout-sidebar to power layout-scoped styling.
+     * Follows Apple HIG principles with clear visual hierarchy and instant feedback.
+     *
+     * @param {string} layout - The target sidebar layout identifier ('classic', etc.)
+     * @param {boolean} [save=true] - Whether to persist this preference in storage
+     */
+    setSidebarLayout(layout, save = true) {
+        // Enforce classic layout on ultra-legacy tier to maintain c26 rendering quirks compatibility
+        if (platformInfo.layoutTier === 'ultra-legacy') {
+            layout = 'classic';
+        }
+
+        // Record new layout state in memory
+        this._sidebarLayout = layout;
+
+        // Stamp root element attribute for pure CSS layout branching
+        document.documentElement.setAttribute('data-layout-sidebar', layout);
+
+        // Persist preference to storage if enabled
+        if (save) {
+            storage.setItem('pref:sidebarLayoutMode', layout);
+        }
+
+        // Notify navigation components of layout modification
+        eventBus.emit('sidebarLayout:changed', { layout });
+    }
+
+    /**
+     * Checks if the sidebar is currently configured with the classic layout.
+     * Always returns true on ultra-legacy (Chrome <47 / Tizen 2.x / c26 quirks) hardware.
+     * @returns {boolean} True if sidebar layout is 'classic' or platform is ultra-legacy.
+     */
+    isClassicSidebarLayout() {
+        if (platformInfo.layoutTier === 'ultra-legacy') {
+            return true;
+        }
+        return this._sidebarLayout === 'classic';
+    }
+
+    /**
+     * Checks if the sidebar is currently configured with the modern-collapsed, floating-buttons, or floating-island layout.
+     * In these modes, the sidebar never expands its rail and displays tooltips on focus.
+     * @returns {boolean} True if sidebar layout is collapsed/floating mode.
+     */
+    isModernCollapsedSidebarLayout() {
+        return this._sidebarLayout === 'modern-collapsed' || this._sidebarLayout === 'floating-buttons' || this._sidebarLayout === 'floating-island';
+    }
+
+    /**
+     * Checks if the sidebar is currently configured with the floating-buttons layout.
+     * In this mode, each sidebar button renders as an individual floating island.
+     * @returns {boolean} True if sidebar layout is 'floating-buttons'.
+     */
+    isFloatingButtonsSidebarLayout() {
+        return this._sidebarLayout === 'floating-buttons';
+    }
+
+    /**
+     * Checks if the sidebar is currently configured with the floating-island layout.
+     * In this mode, middle buttons are grouped inside one continuous floating island capsule.
+     * @returns {boolean} True if sidebar layout is 'floating-island'.
+     */
+    isFloatingIslandSidebarLayout() {
+        return this._sidebarLayout === 'floating-island';
     }
 
     /**
@@ -1047,6 +1149,124 @@ class LayoutManager {
      */
     getOnlyBlurHashBackdrop() {
         return this._onlyBlurHashBackdrop;
+    }
+
+    /**
+     * Get the current hero carousel text vignette contrast level
+     *
+     * @returns {string} e.g. 'transparent', '10', '20', ... '90'
+     * @public
+     */
+    getHeroVignette() {
+        return this._heroVignette;
+    }
+
+    /**
+     * Set and apply the hero carousel text vignette contrast level
+     *
+     * @param {string} value - 'transparent' or opacity percentage string ('10' - '90')
+     * @param {boolean} [save=true] - Persist the preference locally
+     * @public
+     */
+    setHeroVignette(value, save = true) {
+        /*
+         * Fallback to default '70' if value is missing or invalid.
+         * Default level 70 provides clean text contrast without overly dimming backdrop artwork.
+         */
+        this._heroVignette = value || '70';
+        document.documentElement.setAttribute('data-hero-vignette', this._heroVignette);
+
+        /*
+         * Trigger calculation of actual CSS variables on root style sheet
+         * so both standard and immersive theme variants receive immediate visual updates.
+         */
+        this._applyHeroVignetteVariables();
+
+        /*
+         * Persist preference locally if save flag is enabled
+         */
+        if (save) {
+            storage.setItem('pref:heroCarouselVignette', this._heroVignette);
+        }
+
+        /*
+         * Log state change and emit global event to notify active listeners
+         */
+        log.info(`Hero Carousel Vignette set to: ${this._heroVignette}`);
+        eventBus.emit('heroVignette:changed', { value: this._heroVignette });
+    }
+
+    /**
+     * Calculates and updates the CSS custom properties for the hero vignette gradient
+     * on the root element style sheet.
+     * @private
+     */
+    _applyHeroVignetteVariables() {
+        /*
+         * Default alpha values for level 70 (balanced Apple HIG contrast)
+         * Produces a clean ~0.72 start alpha and 0.40 mid-curve.
+         */
+        let startAlpha = 0.72;
+        let midAlpha = 0.40;
+        let endAlpha = 0.0;
+
+        /*
+         * Handle transparent / 0% explicit override case
+         */
+        if (this._heroVignette === 'transparent' || this._heroVignette === '0') {
+            startAlpha = 0;
+            midAlpha = 0;
+            endAlpha = 0;
+        } else {
+            /*
+             * Parse user configured percentage string (e.g. '10' through '90')
+             */
+            const parsed = parseFloat(this._heroVignette);
+            if (!isNaN(parsed)) {
+                /*
+                 * Calibrated perceptual curve:
+                 * On TV screens with bright HDR backdrops, linear 0.90 often looks washed out (like ~70%).
+                 * When set to 90%, we scale up to 0.96 for a rich, deep cinematic dark shadow behind titles.
+                 * When set to 70% (default), we map to 0.72 for clean text contrast without overpowering artwork.
+                 */
+                if (parsed >= 90) {
+                    startAlpha = 0.96;
+                    midAlpha = 0.65;
+                } else if (parsed >= 80) {
+                    startAlpha = 0.84;
+                    midAlpha = 0.52;
+                } else if (parsed >= 70) {
+                    startAlpha = 0.72;
+                    midAlpha = 0.40;
+                } else {
+                    /*
+                     * Proportional linear scaling for lower ranges (10% - 60%)
+                     */
+                    startAlpha = Math.min(Math.max(parsed / 100, 0), 0.70);
+                    midAlpha = parseFloat((startAlpha * 0.50).toFixed(3));
+                }
+                endAlpha = 0.0;
+            }
+        }
+
+        /*
+         * Format RGBA color values for CSS gradient custom properties
+         */
+        const startRgba = `rgba(0, 0, 0, ${startAlpha})`;
+        const midRgba = `rgba(0, 0, 0, ${midAlpha})`;
+        const endRgba = `rgba(0, 0, 0, ${endAlpha})`;
+
+        /*
+         * Apply custom properties directly on document element for immediate cascade
+         */
+        document.documentElement.style.setProperty('--hero-vignette-start', startRgba);
+        document.documentElement.style.setProperty('--hero-vignette-mid', midRgba);
+        document.documentElement.style.setProperty('--hero-vignette-end', endRgba);
+
+        // Notify polyfill for ultra-legacy webviews
+        if (cssVarsPolyfill && typeof cssVarsPolyfill.update === 'function') {
+            cssVarsPolyfill.update();
+        }
     }
 
     // Component registration (Existing logic maintained)

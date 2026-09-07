@@ -182,6 +182,7 @@ html[data-button-style="accent-black"] {
 html[data-hide-unfocused-borders="true"] .btn-primary:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .btn-option:not(.active):not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .select-btn:not(:focus):not(.focused),
+html[data-hide-unfocused-borders="true"] .theme-color-select-btn:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .tab-btn:not(.active):not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .control-btn:not(:focus):not(.focused),
 html[data-hide-unfocused-borders="true"] .pagination-btn:not(:focus):not(.focused),

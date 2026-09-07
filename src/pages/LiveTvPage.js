@@ -696,7 +696,7 @@ class LiveTvPage extends Page {
                         const el = data.rowEl.querySelector(`[data-program-id="${state.epgFocusedProgramId}"]`);
                         if (el) {
                             epg._focusedEl = el;
-                            focusManager.focusElement(el);
+                            focusManager.focusElement(el, { skipScroll: true });
                             this._pendingNavState = null;
                             return;
                         }
@@ -708,7 +708,7 @@ class LiveTvPage extends Page {
                     const data = epg.domNodes.get(state.epgFocusedChannelId);
                     if (data && data.channelEl) {
                         epg._focusedEl = data.channelEl;
-                        focusManager.focusElement(data.channelEl);
+                        focusManager.focusElement(data.channelEl, { skipScroll: true });
                         this._pendingNavState = null;
                         return;
                     }

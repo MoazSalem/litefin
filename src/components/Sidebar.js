@@ -19,6 +19,8 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { storage } from '../utils/StorageService.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { sidebarIcons, getLibraryIcon } from '../utils/Icons.js';
+import { seerr } from '../api/seerrClient.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 
 const log = logger.create( 'Sidebar' );
 
@@ -27,6 +29,8 @@ class Sidebar extends Component {
         super( options );
 
         this.expanded = false;
+        this.librariesExpanded = false;
+        this.floatingLibrariesOpen = false;
         this.libraries = [];
         this.activePath = '';
 
@@ -54,44 +58,18 @@ class Sidebar extends Component {
 
                 <!-- Scrollable Sidebar Content -->
                 <div class="sidebar-content">
-                    <!-- SyncPlay Section -->
-                    <button class="sidebar-item sidebar-syncplay-btn" id="sidebar-syncplay" tabindex="0">
-                        <div class="item-icon sidebar-syncplay-icon-wrap">
-                            <!-- User Provided Icon (3 people) -->
-                            ${sidebarIcons.syncplay}
-                            <!-- Pulsing dot — visible only when in a group -->
-                            <span class="sidebar-syncplay-dot" id="sidebar-syncplay-dot"></span>
-                        </div>
-                        <span class="item-text sidebar-syncplay-label" id="sidebar-syncplay-label">SyncPlay</span>
-                    </button>
-
-                    <!-- User Profile -->
-                    <button class="sidebar-item user-profile-btn" id="sidebar-user" tabindex="0">
-                        <div class="item-icon user-avatar-container">
-                            ${this._renderUserAvatar()}
-                        </div>
-                        <span class="item-text sidebar-user-name">${this._getUserName()}</span>
-                    </button>
-
                     <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
                         <div class="item-icon">
                             ${sidebarIcons.home}
                         </div>
                         <span class="item-text" data-i18n="Home">Home</span>
                     </button>
-                    
-                    <button class="sidebar-item" id="sidebar-livetv" tabindex="0" data-path="/livetv">
-                        <div class="item-icon">
-                            ${sidebarIcons.livetv}
-                        </div>
-                        <span class="item-text" data-i18n="LiveTV">Live TV</span>
-                    </button>
 
-                    <button class="sidebar-item" id="sidebar-random" tabindex="0">
+                    <button class="sidebar-item" id="sidebar-discover" tabindex="0" data-path="/discover" style="display: none;">
                         <div class="item-icon">
-                            ${sidebarIcons.random}
+                            ${sidebarIcons.discover}
                         </div>
-                        <span class="item-text" data-i18n="Random">Random</span>
+                        <span class="item-text" data-i18n="SeerrDiscover">Discover</span>
                     </button>
 
                     <button class="sidebar-item" id="sidebar-favorites" tabindex="0" data-path="/favorites">
@@ -108,11 +86,59 @@ class Sidebar extends Component {
                         <span class="item-text" data-i18n="Search">Search</span>
                     </button>
 
+                    <button class="sidebar-item" id="sidebar-random" tabindex="0">
+                        <div class="item-icon">
+                            ${sidebarIcons.random}
+                        </div>
+                        <span class="item-text" data-i18n="Random">Random</span>
+                    </button>
+
+                    <!-- SyncPlay Section -->
+                    <button class="sidebar-item sidebar-syncplay-btn" id="sidebar-syncplay" tabindex="0" style="display: none;">
+                        <div class="item-icon sidebar-syncplay-icon-wrap">
+                            <!-- User Provided Icon (3 people) -->
+                            ${sidebarIcons.syncplay}
+                            <!-- Pulsing dot — visible only when in a group -->
+                            <span class="sidebar-syncplay-dot" id="sidebar-syncplay-dot"></span>
+                        </div>
+                        <span class="item-text sidebar-syncplay-label" id="sidebar-syncplay-label">SyncPlay</span>
+                    </button>
+                    
+                    <button class="sidebar-item" id="sidebar-livetv" tabindex="0" data-path="/livetv" style="display: none;">
+                        <div class="item-icon">
+                            ${sidebarIcons.livetv}
+                        </div>
+                        <span class="item-text" data-i18n="LiveTV">Live TV</span>
+                    </button>
+
+                    <!-- Modern Libraries Accordion Toggle (Collections / Books Icon) -->
+                    <button class="sidebar-item" id="sidebar-libraries" tabindex="0">
+                        <div class="item-icon">
+                            ${sidebarIcons.libraries}
+                        </div>
+                        <span class="item-text" data-i18n="Libraries">Libraries</span>
+                        <span class="sidebar-chevron">${sidebarIcons.chevronDown}</span>
+                    </button>
+
+                    <!-- Modern Sub-Libraries Container (Hidden by default) -->
+                    <div class="sidebar-sub-libraries hidden" id="sidebar-sub-libraries" style="display: none;" hidden></div>
+
                     <button class="sidebar-item" id="sidebar-settings" tabindex="0" data-path="/settings">
                         <div class="item-icon">
                             ${sidebarIcons.settings}
                         </div>
                         <span class="item-text" data-i18n="Settings">Settings</span>
+                    </button>
+                </div>
+
+                <!-- Footer Section (User Profile pinned at the very bottom in Modern) -->
+                <div class="sidebar-footer" id="sidebar-footer">
+                    <!-- User Profile -->
+                    <button class="sidebar-item user-profile-btn" id="sidebar-user" tabindex="0">
+                        <div class="item-icon user-avatar-container">
+                            ${this._renderUserAvatar()}
+                        </div>
+                        <span class="item-text sidebar-user-name">${this._getUserName()}</span>
                     </button>
                 </div>
 
@@ -124,7 +150,7 @@ class Sidebar extends Component {
 
     onMounted() {
         this._bindEvents();
-        this._loadLibraries();
+        this._loadLibraries().then(() => this._updateSeerrVisibility());
         this._updateActiveState();
 
         // Hydrate DOM with translations
@@ -203,6 +229,12 @@ class Sidebar extends Component {
         };
         eventBus.on( 'prefChanged:sidebarLayout', this._onSidebarLayoutChanged );
 
+        // Listen for layout mode switches (classic vs modern)
+        this._onSidebarLayoutModeChanged = () => {
+            this._loadLibraries();
+        };
+        eventBus.on('sidebarLayout:changed', this._onSidebarLayoutModeChanged);
+
         // Resolve the default focus item from saved prefs (falls back to 'home')
         const defaultFocusId = sidebarLayoutManager.getDefaultFocus();
 
@@ -220,6 +252,39 @@ class Sidebar extends Component {
             onMove: ( direction, focusedEl ) => {
                 const isRtl = document.documentElement.dir === 'rtl';
                 const exitDirection = isRtl ? 'left' : 'right';
+                const backDirection = isRtl ? 'right' : 'left';
+
+                // Handle D-pad navigation inside Modern Collapsed floating libraries popover
+                if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                    const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+                    if (subLibs && (subLibs.contains(focusedEl) || subLibs.querySelector('.focused'))) {
+                        const items = Array.from(subLibs.querySelectorAll('.library-item:not(.hidden)'));
+                        const currentEl = subLibs.contains(focusedEl) ? focusedEl : subLibs.querySelector('.focused');
+                        const currentIndex = items.indexOf(currentEl);
+
+                        // Up on first item -> close popover and return focus to libraries button
+                        if (direction === 'up' && currentIndex === 0) {
+                            this._toggleFloatingLibraries(false);
+                            return true;
+                        }
+
+                        // Down on last item -> close popover and return focus to libraries button
+                        if (direction === 'down' && currentIndex === items.length - 1) {
+                            this._toggleFloatingLibraries(false);
+                            return true;
+                        }
+
+                        // Pressing Left (or Right in RTL) returns to Libraries button and closes popover
+                        if (direction === backDirection) {
+                            this._toggleFloatingLibraries(false);
+                            return true;
+                        }
+                        // Pressing Right (or Left in RTL) exits to page content and closes popover
+                        if (direction === exitDirection) {
+                            this._toggleFloatingLibraries(false);
+                        }
+                    }
+                }
 
                 if ( direction === exitDirection ) {
                     const pageContainer = document.getElementById( 'page-container' );
@@ -265,6 +330,15 @@ class Sidebar extends Component {
         this._updateIndicator();
     }
 
+    async _updateSeerrVisibility() {
+        const button = this.$('#sidebar-discover');
+        if (!button) return;
+
+        const isAvailable = await seerr.isAvailable();
+        button.style.display = isAvailable ? '' : 'none';
+        focusManager.invalidateCache('sidebar');
+    }
+
     onDestroyed() {
         if ( this._focusObserver ) {
             this._focusObserver.disconnect();
@@ -285,6 +359,10 @@ class Sidebar extends Component {
         // Remove sidebar layout hot-reload listener
         if ( this._onSidebarLayoutChanged ) {
             eventBus.off( 'prefChanged:sidebarLayout', this._onSidebarLayoutChanged );
+        }
+
+        if ( this._onSidebarLayoutModeChanged ) {
+            eventBus.off( 'sidebarLayout:changed', this._onSidebarLayoutModeChanged );
         }
 
         if ( this._onLogoSettingsChanged ) {
@@ -311,6 +389,17 @@ class Sidebar extends Component {
 
         if ( this._onSidebarItemsAlignChanged ) {
             eventBus.off( 'pref:sidebarItemsAlign', this._onSidebarItemsAlignChanged );
+        }
+
+        // Clean up floating popover event listeners
+        if (this._onBackFloatingLibs) {
+            eventBus.off('key:back', this._onBackFloatingLibs);
+        }
+        if (this._onDocKeyDown) {
+            document.removeEventListener('keydown', this._onDocKeyDown, true);
+        }
+        if (this._onDocClickOutside) {
+            document.removeEventListener('mousedown', this._onDocClickOutside, true);
         }
     }
 
@@ -362,71 +451,76 @@ class Sidebar extends Component {
         // we must NOT silently swallow it and leave boot frozen.
         // ---------------------------------------------------------------
         try {
-            const isEnabled = storage.getItem( 'pref:logoSettings' ) === 'true';
+            // Retrieve logo preference from persistent storage
+            let logoPref = storage.getItem( 'pref:logoSettings' ) || 'visible';
+
+            // Migrate legacy boolean values to new string keys
+            if ( logoPref === 'true' ) {
+                logoPref = 'settings';
+            } else if ( logoPref === 'false' ) {
+                logoPref = 'visible';
+            }
+
+            // Locate elements in the sidebar DOM
             const logoHeader = this.el.querySelector( '#sidebar-logo-header' );
+            const settingsBtn = this.el.querySelector( '#sidebar-settings' );
+            const homeBtn = this.el.querySelector( '#sidebar-home' );
 
             if ( logoHeader ) {
-                // Toggle whether logo header acts as a focusable sidebar item
-                logoHeader.classList.toggle( 'sidebar-item', isEnabled );
-                logoHeader.setAttribute( 'data-focusable', isEnabled.toString() );
-                logoHeader.setAttribute( 'tabindex', isEnabled ? '0' : '-1' );
+                // Determine whether the logo is visible or hidden
+                const isLogoVisible = logoPref !== 'hidden';
+                logoHeader.style.display = isLogoVisible ? '' : 'none';
+
+                // Determine if logo behaves as an interactive/focusable button
+                const isClickable = logoPref === 'settings' || logoPref === 'home';
+                logoHeader.classList.toggle( 'sidebar-item', isClickable );
+                logoHeader.setAttribute( 'data-focusable', isClickable.toString() );
+                logoHeader.setAttribute( 'tabindex', isClickable ? '0' : '-1' );
+
+                // Manage dynamic action tooltip for modern-collapsed and floating-buttons layouts
+                let tooltipEl = logoHeader.querySelector( '.logo-tooltip' );
+                if ( !tooltipEl ) {
+                    tooltipEl = document.createElement( 'span' );
+                    tooltipEl.className = 'item-text logo-tooltip';
+                    logoHeader.appendChild( tooltipEl );
+                }
 
                 /*
                  * On older webOS web engines (like webOS 2.x), mutating or deleting
                  * properties on the dataset object directly can throw TypeErrors.
-                 * We use standard setAttribute and removeAttribute calls instead.
+                 * We use standard setAttribute and removeAttribute calls while keeping dataset in sync.
                  */
-                if ( isEnabled ) {
+                if ( logoPref === 'settings' ) {
                     logoHeader.setAttribute( 'data-path', '/settings' );
-                    if ( settingsBtn ) settingsBtn.classList.add( 'hidden' );
+                    if ( logoHeader.dataset ) logoHeader.dataset.path = '/settings';
+                    tooltipEl.textContent = i18n.t( 'Settings' ) || 'Settings';
+                    tooltipEl.setAttribute( 'data-i18n', 'Settings' );
+                    tooltipEl.style.display = '';
+                } else if ( logoPref === 'home' ) {
+                    logoHeader.setAttribute( 'data-path', '/home' );
+                    if ( logoHeader.dataset ) logoHeader.dataset.path = '/home';
+                    tooltipEl.textContent = i18n.t( 'Home' ) || 'Home';
+                    tooltipEl.setAttribute( 'data-i18n', 'Home' );
+                    tooltipEl.style.display = '';
                 } else {
                     logoHeader.removeAttribute( 'data-path' );
-                    if ( settingsBtn ) settingsBtn.classList.remove( 'hidden' );
+                    try { if ( logoHeader.dataset ) delete logoHeader.dataset.path; } catch ( e ) {}
+                    tooltipEl.textContent = '';
+                    tooltipEl.style.display = 'none';
                 }
 
-                // Invalidate cache since focusability of a header element changed
+                // Show/hide dedicated settings button if logo is set to settings
+                if ( settingsBtn ) {
+                    settingsBtn.classList.toggle( 'hidden', logoPref === 'settings' );
+                }
+
+                // Show/hide dedicated home button if logo is set to home
+                if ( homeBtn ) {
+                    homeBtn.classList.toggle( 'hidden', logoPref === 'home' );
+                }
+
+                // Invalidate focusManager cache since focusability of a header element changed
                 focusManager.invalidateCache( 'sidebar' );
-                let logoPref = storage.getItem( 'pref:logoSettings' ) || 'visible';
-                // Migrate old boolean values
-                if ( logoPref === 'true' ) {
-                    logoPref = 'settings';
-                } else if ( logoPref === 'false' ) {
-                    logoPref = 'visible';
-                }
-
-                const logoHeader = this.el.querySelector( '#sidebar-logo-header' );
-                const settingsBtn = this.el.querySelector( '#sidebar-settings' );
-                const homeBtn = this.el.querySelector( '#sidebar-home' );
-
-                if ( logoHeader ) {
-                    // Determine if logo is visible
-                    const isLogoVisible = logoPref !== 'hidden';
-                    logoHeader.style.display = isLogoVisible ? '' : 'none';
-
-                    // Clickable status for logo
-                    const isClickable = logoPref === 'settings' || logoPref === 'home';
-                    logoHeader.classList.toggle( 'sidebar-item', isClickable );
-                    logoHeader.setAttribute( 'data-focusable', isClickable.toString() );
-                    logoHeader.setAttribute( 'tabindex', isClickable ? '0' : '-1' );
-
-                    if ( logoPref === 'settings' ) {
-                        logoHeader.dataset.path = '/settings';
-                    } else if ( logoPref === 'home' ) {
-                        logoHeader.dataset.path = '/home';
-                    } else {
-                        delete logoHeader.dataset.path;
-                    }
-
-                    // Show/hide settings button
-                    if ( settingsBtn ) {
-                        settingsBtn.classList.toggle( 'hidden', logoPref === 'settings' );
-                    }
-
-                    // Show/hide home button
-                    if ( homeBtn ) {
-                        homeBtn.classList.toggle( 'hidden', logoPref === 'home' );
-                    }
-                }
             }
         } catch ( err ) {
             log.error( 'Failed to update sidebar logo settings due to DOM error:', err );
@@ -556,15 +650,24 @@ class Sidebar extends Component {
             this._expand( false );
         } );
 
-        // Logo click handler
+        // Logo click handler (supports both Settings and Home target paths)
         this._bindItem( this.el.querySelector( '#sidebar-logo-header' ), () => {
-            router.navigate( '/settings' );
+            const logoEl = this.el.querySelector( '#sidebar-logo-header' );
+            const targetPath = logoEl?.getAttribute ? ( logoEl.getAttribute( 'data-path' ) || logoEl.dataset?.path ) : logoEl?.dataset?.path;
+            if ( targetPath ) {
+                if ( targetPath === '/home' ) {
+                    router.reset( targetPath );
+                } else {
+                    router.navigate( targetPath );
+                }
+            }
         } );
 
         // Navigation Clicks for other standard items
         const items = this.el.querySelectorAll( '.sidebar-item' );
         items.forEach( ( item ) => {
             if ( item.id === 'sidebar-logo-header' ) return; // Handled above
+            if ( item.id === 'sidebar-libraries' ) return; // Handled by accordion toggle
 
             this._bindItem( item, () => {
                 const path = item.dataset.path;
@@ -592,6 +695,92 @@ class Sidebar extends Component {
             } );
         } );
 
+        // Libraries accordion toggle button handler
+        const librariesBtn = this.el.querySelector('#sidebar-libraries');
+        if (librariesBtn) {
+            this._bindItem(librariesBtn, () => {
+                if (layoutManager.isModernCollapsedSidebarLayout()) {
+                    this._toggleFloatingLibraries();
+                    return;
+                }
+                if (!this.expanded) {
+                    this._expandedByMouse = true;
+                    this._expand(true);
+                    this._toggleLibraries(true);
+                } else {
+                    this._toggleLibraries();
+                }
+            });
+        }
+
+        // Back key listener for floating libraries popover in modern-collapsed
+        this._onBackFloatingLibs = () => {
+            if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                this._toggleFloatingLibraries(false);
+                return true;
+            }
+            return false;
+        };
+        eventBus.on('key:back', this._onBackFloatingLibs);
+
+        // Document keydown for Escape / Remote Back and boundary Up/Down dismiss
+        this._onDocKeyDown = (e) => {
+            if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                const isEscape = e.key === 'Escape' || e.keyCode === 10009 || e.keyCode === 27;
+                if (isEscape) {
+                    this._toggleFloatingLibraries(false);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
+                const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+                if (subLibs && subLibs.contains(document.activeElement)) {
+                    const items = Array.from(subLibs.querySelectorAll('.library-item:not(.hidden)'));
+                    const currentIndex = items.indexOf(document.activeElement);
+
+                    // Up on first item -> close popover and return focus to libraries button
+                    if ((e.key === 'ArrowUp' || e.keyCode === 38) && currentIndex === 0) {
+                        this._toggleFloatingLibraries(false);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+
+                    // Down on last item -> close popover and return focus to libraries button
+                    if ((e.key === 'ArrowDown' || e.keyCode === 40) && currentIndex === items.length - 1) {
+                        this._toggleFloatingLibraries(false);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+
+                    // Left arrow (or Right in RTL) -> close popover and return focus to libraries button
+                    const isRTL = document.documentElement.dir === 'rtl';
+                    const isBackDirection = isRTL ? (e.key === 'ArrowRight' || e.keyCode === 39) : (e.key === 'ArrowLeft' || e.keyCode === 37);
+                    if (isBackDirection) {
+                        this._toggleFloatingLibraries(false);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+                }
+            }
+        };
+        document.addEventListener('keydown', this._onDocKeyDown, true);
+
+        // Click outside floating popover to dismiss
+        this._onDocClickOutside = (e) => {
+            if (layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen) {
+                const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+                const libBtn = this.el.querySelector('#sidebar-libraries');
+                if (subLibs && !subLibs.contains(e.target) && libBtn && !libBtn.contains(e.target)) {
+                    this._toggleFloatingLibraries(false);
+                }
+            }
+        };
+        document.addEventListener('mousedown', this._onDocClickOutside, true);
+
         // Sync indicator during scrolling
         const contentContainer = this.el.querySelector( '.sidebar-content' );
         if ( contentContainer ) {
@@ -606,7 +795,7 @@ class Sidebar extends Component {
     }
 
     _expand( expanded ) {
-        if ( storage.getItem( 'pref:sidebarMode' ) === 'collapsed' ) {
+        if ( storage.getItem( 'pref:sidebarMode' ) === 'collapsed' || layoutManager.isModernCollapsedSidebarLayout() ) {
             expanded = false;
         }
         if ( this.expanded === expanded ) return;
@@ -650,6 +839,48 @@ class Sidebar extends Component {
             if ( this.el.contains( document.activeElement ) ) {
                 document.activeElement.blur();
             }
+
+            // If not active on a library page, auto-close the libraries accordion on sidebar collapse
+            const isModern = !layoutManager.isClassicSidebarLayout();
+            const isLibraryActive = this.activePath && (this.activePath.startsWith('/library/') || !!this.el.querySelector('.library-item.active'));
+            if (isModern && !isLibraryActive && this.librariesExpanded) {
+                this._toggleLibraries(false);
+            }
+
+            // In collapsed mode, child library items must never receive focus
+            const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+            if (subLibs) {
+                subLibs.style.display = 'none';
+                subLibs.classList.add('hidden');
+                subLibs.setAttribute('hidden', '');
+                subLibs.querySelectorAll('.library-item').forEach((btn) => {
+                    btn.classList.add('hidden');
+                    btn.style.display = 'none';
+                    btn.tabIndex = -1;
+                    btn.classList.remove('focused');
+                });
+            }
+            focusManager.invalidateCache('sidebar');
+        } else {
+            // When expanded, if libraries accordion is open (or if currently in a library route), restore focusability
+            const isModern = !layoutManager.isClassicSidebarLayout();
+            const isLibraryActive = this.activePath && (this.activePath.startsWith('/library/') || !!this.el.querySelector('.library-item.active'));
+            if (isModern && isLibraryActive && !this.librariesExpanded) {
+                this._toggleLibraries(true);
+            } else if (this.librariesExpanded) {
+                const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+                if (subLibs) {
+                    subLibs.style.display = 'flex';
+                    subLibs.classList.remove('hidden');
+                    subLibs.removeAttribute('hidden');
+                    subLibs.querySelectorAll('.library-item').forEach((btn) => {
+                        btn.classList.remove('hidden');
+                        btn.style.display = '';
+                        btn.tabIndex = 0;
+                    });
+                }
+                focusManager.invalidateCache('sidebar');
+            }
         }
 
         const pageContainer = document.getElementById( 'page-container' );
@@ -668,11 +899,16 @@ class Sidebar extends Component {
             const sidebarContent = this.el.querySelector( '.sidebar-content' );
             if ( !sidebarContent ) return;
 
+            const subContainer = this.el.querySelector('#sidebar-sub-libraries');
+            if (subContainer) subContainer.innerHTML = '';
+
             // Remove any previously rendered libraries and headers to allow clean reloading
             sidebarContent.querySelectorAll( '.library-item, .sidebar-section-header' ).forEach( ( el ) => el.remove() );
 
+            const isModern = !layoutManager.isClassicSidebarLayout();
             const hideHeader = storage.getItem( 'pref:hideSidebarLibraryHeader' ) === 'true';
-            if ( items.length > 0 && !hideHeader ) {
+
+            if ( !isModern && items.length > 0 && !hideHeader ) {
                 // Determine header label based on layout block ('My Media')
                 const header = document.createElement( 'div' );
                 header.className = 'sidebar-section-header';
@@ -685,7 +921,13 @@ class Sidebar extends Component {
             items.forEach( ( lib ) => {
                 const btn = document.createElement( 'button' );
                 btn.className = 'sidebar-item library-item';
-                btn.tabIndex = 0;
+                const canFocus = isModern ? ( this.expanded && this.librariesExpanded ) : true;
+                btn.tabIndex = canFocus ? 0 : -1;
+
+                if ( isModern && !this.librariesExpanded ) {
+                    btn.classList.add( 'hidden' );
+                    btn.style.display = 'none';
+                }
 
                 // Route livetv to the unified Live TV page
                 const isLiveTv = lib.CollectionType === 'livetv';
@@ -702,9 +944,18 @@ class Sidebar extends Component {
                     <span class="item-text">${lib.Name}</span>
                 `;
 
-                this._bindItem( btn, () => router.navigate( buttonPath ) );
+                this._bindItem( btn, () => {
+                    if ( layoutManager.isModernCollapsedSidebarLayout() && this.floatingLibrariesOpen ) {
+                        this._toggleFloatingLibraries( false );
+                    }
+                    router.navigate( buttonPath );
+                } );
 
-                sidebarContent.appendChild( btn );
+                if ( isModern && subContainer ) {
+                    subContainer.appendChild( btn );
+                } else {
+                    sidebarContent.appendChild( btn );
+                }
             } );
 
             /*
@@ -713,6 +964,7 @@ class Sidebar extends Component {
              * any that the user has hidden are correctly suppressed.
              */
             this._applySidebarLayout();
+            this._updateActiveState();
 
             // Re-evaluate alignment now that libraries are loaded and overflow metrics are active
             setTimeout( () => this._updateSidebarItemsAlign(), 0 );
@@ -722,6 +974,154 @@ class Sidebar extends Component {
         } catch ( e ) {
             log.warn( 'Failed to load libraries', e );
         }
+    }
+
+    /**
+     * Toggles the floating libraries popover window in Modern Collapsed layout.
+     * Follows Apple HIG popover presentation principles with instant feedback and focus trapping.
+     * @param {boolean|null} forceState
+     * @private
+     */
+    _toggleFloatingLibraries(forceState = null) {
+        const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+        const libBtn = this.el.querySelector('#sidebar-libraries');
+        if (!subLibs || !libBtn) return;
+
+        // If parent button is hidden, force-close and prevent opening
+        if (libBtn.style.display === 'none' || libBtn.hasAttribute('hidden')) {
+            this.floatingLibrariesOpen = false;
+            subLibs.classList.remove('open');
+            subLibs.classList.add('hidden');
+            subLibs.style.display = 'none';
+            subLibs.setAttribute('hidden', '');
+            return;
+        }
+
+        const next = forceState !== null ? forceState : !this.floatingLibrariesOpen;
+        this.floatingLibrariesOpen = next;
+
+        subLibs.classList.toggle('open', next);
+        subLibs.classList.toggle('hidden', !next);
+        libBtn.classList.toggle('open', next);
+
+        const childBtns = subLibs.querySelectorAll('.library-item');
+
+        if (next) {
+            subLibs.removeAttribute('hidden');
+            subLibs.style.display = 'flex';
+
+            // Calculate vertical positioning beside the libraries button inside .sidebar-content
+            const topOffset = typeof libBtn.offsetTop === 'number' ? libBtn.offsetTop : 150;
+            subLibs.style.top = `${Math.max(10, topOffset - 6)}px`;
+
+            childBtns.forEach((btn) => {
+                btn.classList.remove('hidden');
+                btn.style.display = 'flex';
+                btn.tabIndex = 0;
+            });
+
+            // Refresh DOM focus cache
+            focusManager.resetDOMCache();
+            focusManager.invalidateCache('sidebar');
+
+            // Set active focus inside floating window
+            const activeLib = subLibs.querySelector('.library-item.active') || childBtns[0];
+            if (activeLib) {
+                focusManager.focusElement(activeLib);
+            }
+        } else {
+            const wasFocusInside = subLibs.contains(document.activeElement) || Boolean(subLibs.querySelector('.focused'));
+
+            subLibs.setAttribute('hidden', '');
+            subLibs.style.display = 'none';
+            childBtns.forEach((btn) => {
+                btn.classList.add('hidden');
+                btn.style.display = 'none';
+                btn.tabIndex = -1;
+                btn.classList.remove('focused');
+            });
+
+            // Clear inline style
+            subLibs.style.top = '';
+
+            focusManager.resetDOMCache();
+            focusManager.invalidateCache('sidebar');
+
+            // Only restore focus to libBtn if focus was actually inside the popover
+            if (wasFocusInside) {
+                focusManager.focusElement(libBtn);
+            }
+        }
+    }
+
+    /**
+     * Checks if the floating libraries window is currently open.
+     * @returns {boolean}
+     */
+    isFloatingLibrariesOpen() {
+        return !!this.floatingLibrariesOpen;
+    }
+
+    /**
+     * Closes the floating libraries popover if open.
+     */
+    closeFloatingLibraries() {
+        if (this.floatingLibrariesOpen) {
+            this._toggleFloatingLibraries(false);
+        }
+    }
+
+    /**
+     * Toggles the open/collapsed state of the sub-libraries list in Modern layout.
+     * @param {boolean|null} forceState
+     * @private
+     */
+    _toggleLibraries(forceState = null) {
+        const subLibs = this.el.querySelector('#sidebar-sub-libraries');
+        const libBtn = this.el.querySelector('#sidebar-libraries');
+        if (!subLibs || !libBtn) return;
+
+        // If parent libraries button is hidden, force-close and prevent opening
+        if (libBtn.style.display === 'none' || libBtn.hasAttribute('hidden')) {
+            this.librariesExpanded = false;
+            subLibs.classList.remove('open');
+            subLibs.classList.add('hidden');
+            subLibs.style.display = 'none';
+            subLibs.setAttribute('hidden', '');
+            return;
+        }
+
+        const next = forceState !== null ? forceState : !this.librariesExpanded;
+        this.librariesExpanded = next;
+
+        subLibs.classList.toggle('open', next);
+        subLibs.classList.toggle('hidden', !next);
+        libBtn.classList.toggle('open', next);
+
+        // Update tabindex, visibility classes, and display on child library buttons
+        const childBtns = subLibs.querySelectorAll('.library-item');
+        if (next) {
+            subLibs.removeAttribute('hidden');
+            subLibs.style.display = 'flex';
+            childBtns.forEach((btn) => {
+                btn.classList.remove('hidden');
+                btn.style.display = '';
+                btn.tabIndex = this.expanded ? 0 : -1;
+            });
+        } else {
+            subLibs.setAttribute('hidden', '');
+            subLibs.style.display = 'none';
+            childBtns.forEach((btn) => {
+                btn.classList.add('hidden');
+                btn.style.display = 'none';
+                btn.tabIndex = -1;
+                btn.classList.remove('focused');
+            });
+        }
+
+        // Re-evaluate alignment metrics and refresh focus manager cache
+        this._updateSidebarItemsAlign();
+        focusManager.invalidateCache('sidebar');
     }
 
     _renderUserAvatar() {
@@ -787,7 +1187,7 @@ class Sidebar extends Component {
     }
 
     _updateTransparentCollapsed() {
-        const colorPref = storage.getItem( 'pref:collapsedSidebarColor' ) || 'theme';
+        const colorPref = storage.getItem( 'pref:collapsedSidebarColor' ) || 'transparent';
         const expandedColorPref = storage.getItem( 'pref:expandedSidebarColor' ) || 'theme';
         this.el.classList.toggle( 'transparent-collapsed', colorPref === 'transparent' );
         this.el.classList.toggle( 'semi-transparent-collapsed', colorPref === 'semi' );
@@ -800,7 +1200,7 @@ class Sidebar extends Component {
     }
 
     _updateSidebarItemsAlign() {
-        const alignPref = storage.getItem( 'pref:sidebarItemsAlign' ) || 'top';
+        const alignPref = storage.getItem( 'pref:sidebarItemsAlign' ) || 'center';
         const scrollContainer = this.el.querySelector( '.sidebar-content' );
 
         let shouldAlign = false;
@@ -828,17 +1228,43 @@ class Sidebar extends Component {
     }
 
     _updateActiveState() {
+        const isModern = !layoutManager.isClassicSidebarLayout();
         const items = this.el.querySelectorAll( '.sidebar-item' );
+        let hasActiveLibrary = false;
+
         items.forEach( ( item ) => {
+            if ( item.id === 'sidebar-libraries' ) return; // Handled separately below
             const itemPath = item.dataset.path;
             if ( itemPath && this.activePath.startsWith( itemPath ) ) {
                 // Approximate match (e.g. /home matches /home)
                 // Exception: /library/:id needs exact start logic
                 item.classList.add( 'active' );
+                if ( item.classList.contains( 'library-item' ) ) {
+                    hasActiveLibrary = true;
+                }
             } else {
                 item.classList.remove( 'active' );
             }
         } );
+
+        // In Modern mode, if any library is active, highlight the parent Libraries toggle button as active too
+        const libToggle = this.el.querySelector( '#sidebar-libraries' );
+        if ( libToggle ) {
+            libToggle.classList.toggle( 'active', isModern && hasActiveLibrary );
+            if ( isModern ) {
+                if ( layoutManager.isModernCollapsedSidebarLayout() ) {
+                    if ( this.floatingLibrariesOpen ) {
+                        this._toggleFloatingLibraries( false );
+                    }
+                } else if ( hasActiveLibrary ) {
+                    // When in an active library route, keep libraries accordion open
+                    this._toggleLibraries( true );
+                } else if ( this.librariesExpanded && !this.expanded ) {
+                    // If not on an active library route and sidebar is collapsed, close it
+                    this._toggleLibraries( false );
+                }
+            }
+        }
     }
 
     /**
@@ -924,41 +1350,43 @@ class Sidebar extends Component {
         const sidebarContent = sidebarEl.querySelector( '.sidebar-content' );
         if ( !sidebarContent ) return;
 
+        const isModern = !layoutManager.isClassicSidebarLayout();
+        const subLibrariesContainer = sidebarEl.querySelector('#sidebar-sub-libraries');
+        const librariesToggleBtn = sidebarEl.querySelector('#sidebar-libraries');
+        const sidebarFooter = sidebarEl.querySelector('#sidebar-footer');
+
         /* ── 1. Collect all sidebar items with their layout IDs ────────────── */
         /*
          * Avoid using querySelectorAll with ':scope > ...' selector because the ':scope'
          * pseudo-class was introduced in Chrome 27. On Chromium 26 (webOS 1.x/2.x),
          * it throws a DOMException 12 (SyntaxError).
          * 
-         * Instead, we manually iterate over the direct DOM children of sidebarContent
-         * and filter by their classes ('sidebar-item' or 'sidebar-section-header').
+         * Instead, we query all sidebar items and section headers across the sidebar container
+         * (.sidebar-content, #sidebar-sub-libraries, and #sidebar-footer) without using ':scope'.
          */
         const allItems = [];
-        const children = sidebarContent.children;
-        const len = children.length;
+        const items = sidebarEl.querySelectorAll( '.sidebar-item, .sidebar-section-header' );
+        const itemsLen = items.length;
 
-        /* Iterate over children elements using a safe traditional loop */
-        for ( let i = 0; i < len; i++ ) {
-            const el = children[ i ];
+        // Iterate over collected items using a safe loop
+        for ( let i = 0; i < itemsLen; i++ ) {
+            const el = items[ i ];
+            if ( el.id === 'sidebar-logo-header' ) continue;
 
-            /* Verify if the element matches our target sidebar items */
-            const isSidebarItem = el.classList.contains( 'sidebar-item' );
-            const isSectionHeader = el.classList.contains( 'sidebar-section-header' );
-
-            if ( isSidebarItem || isSectionHeader ) {
-                if ( el.classList.contains( 'library-item' ) ) {
-                    /* It's a dynamically injected library shortcut */
-                    allItems.push( { id: el.dataset.layoutId, el: el } );
-                } else if ( el.id === 'section-header' ) {
-                    /* It's the library section header label */
-                    allItems.push( { id: 'section-header', el: el } );
-                } else {
-                    /* It's a static main navigation item (Home, Search, Settings, etc.) */
-                    const rawId = el.id ? el.id.replace( 'sidebar-', '' ) : null;
-                    if ( rawId ) {
-                        allItems.push( { id: rawId, el: el } );
-                    }
-                }
+            if ( el.classList.contains( 'library-item' ) ) {
+                // Dynamically injected library shortcut
+                const layoutId = el.dataset?.layoutId || el.getAttribute( 'data-layout-id' );
+                allItems.push( { id: layoutId, el: el } );
+            } else if ( el.id === 'section-header' ) {
+                // Classic library section header
+                allItems.push( { id: 'section-header', el: el } );
+            } else if ( el.id === 'sidebar-libraries' ) {
+                // Modern libraries accordion toggle button
+                allItems.push( { id: 'librariesContainer', el: el } );
+            } else {
+                // Static navigation item (Home, Search, Settings, etc.)
+                const rawId = el.id ? el.id.replace( 'sidebar-', '' ) : null;
+                if ( rawId ) allItems.push( { id: rawId, el: el } );
             }
         }
 
@@ -966,17 +1394,85 @@ class Sidebar extends Component {
         const ordered = sidebarLayoutManager.applyLayout( allItems );
 
         /* ── 3. Re-insert items and apply visibility ───────────────────────── */
-        ordered.forEach( ( { id, el, hidden } ) => {
-            const isSyncPlay = id === 'syncplay';
-            const pluginHidden = isSyncPlay && !pluginManager.isEnabled( 'syncplay' );
-            const shouldHide = hidden || pluginHidden;
+        if ( isModern ) {
+            // Modern Mode: Single expandable item + nested sub-libraries container + pinned footer
+            if ( librariesToggleBtn ) {
+                librariesToggleBtn.style.display = '';
+            }
 
-            // Apply visibility
-            el.style.display = shouldHide ? 'none' : '';
+            ordered.forEach( ( { id, el, hidden } ) => {
+                if ( !el ) return;
 
-            // Sequentially append back into the shared container
-            sidebarContent.appendChild( el );
-        } );
+                if ( id === 'section-header' ) {
+                    el.style.display = 'none';
+                    return;
+                }
+
+                if ( id.startsWith( 'lib-' ) ) {
+                    // Place child library inside the sub-libraries container
+                    const canFocus = this.expanded && this.librariesExpanded;
+                    el.tabIndex = canFocus ? 0 : -1;
+                    if ( isModern && !this.librariesExpanded ) {
+                        el.classList.add( 'hidden' );
+                        el.style.display = 'none';
+                    } else {
+                        el.classList.toggle( 'hidden', !!hidden );
+                        el.style.display = hidden ? 'none' : '';
+                    }
+                    if ( subLibrariesContainer ) {
+                        subLibrariesContainer.appendChild( el );
+                    }
+                    return;
+                }
+
+                if ( id === 'user' ) {
+                    // In Modern mode, pin user profile in the dedicated sidebar-footer at the bottom
+                    if ( sidebarFooter ) {
+                        sidebarFooter.appendChild( el );
+                    }
+                    el.style.display = hidden ? 'none' : '';
+                    return;
+                }
+
+                const isSyncPlay = id === 'syncplay';
+                const pluginHidden = isSyncPlay && !pluginManager.isEnabled( 'syncplay' );
+                const shouldHide = hidden || pluginHidden;
+
+                el.style.display = shouldHide ? 'none' : '';
+                sidebarContent.appendChild( el );
+
+                // If this is the modern libraries container, place sub-libraries container right after it
+                if ( id === 'librariesContainer' && subLibrariesContainer ) {
+                    if ( shouldHide ) {
+                        subLibrariesContainer.style.display = 'none';
+                        subLibrariesContainer.classList.add( 'hidden' );
+                        subLibrariesContainer.setAttribute( 'hidden', '' );
+                    }
+                    sidebarContent.appendChild( subLibrariesContainer );
+                }
+            } );
+        } else {
+            // Classic Mode: Flat list with section header
+            if ( librariesToggleBtn ) librariesToggleBtn.style.display = 'none';
+            if ( subLibrariesContainer ) subLibrariesContainer.style.display = 'none';
+
+            ordered.forEach( ( { id, el, hidden } ) => {
+                if ( !el ) return;
+
+                if ( id === 'librariesContainer' ) {
+                    // Suppress modern toggle in classic mode
+                    el.style.display = 'none';
+                    return;
+                }
+
+                const isSyncPlay = id === 'syncplay';
+                const pluginHidden = isSyncPlay && !pluginManager.isEnabled( 'syncplay' );
+                const shouldHide = hidden || pluginHidden;
+
+                el.style.display = shouldHide ? 'none' : '';
+                sidebarContent.appendChild( el );
+            } );
+        }
 
         /* ── 4. Update the FocusManager's defaultFocusSelector ─────────────── */
         const defaultFocusId = sidebarLayoutManager.getDefaultFocus();

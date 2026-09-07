@@ -36,6 +36,7 @@ import { storage } from '../utils/StorageService.js';
 import { buildJellyfinProfile } from './DeviceProfile.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
+import { seerr } from './seerrClient.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('AuthManager');
@@ -302,8 +303,11 @@ class AuthManager {
         let user = null;
         let serverInfoResolved = false;
 
-        // Define retry constraints: 6 attempts spaced by 3 seconds if WOL is active.
-        const maxAttempts = enableWol && wolMac ? 6 : 1;
+        // Read Extended Wait preference key to allow cold shutdown server boots (~90s total)
+        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+
+        // Define retry constraints: 25 attempts (~90s) if Extended Wait is active, else 6 attempts (~18s) if WOL is active.
+        const maxAttempts = enableWol && wolMac ? (extendedWait ? 25 : 6) : 1;
         const retryDelayMs = 3000;
 
         try {
@@ -441,8 +445,11 @@ class AuthManager {
             });
         }
 
-        // Set max retry attempts: 6 attempts spaced by 3 seconds if WOL is active
-        const maxAttempts = enableWol && wolMac ? 6 : 1;
+        // Read Extended Wait preference key to allow cold shutdown server boots (~90s total)
+        const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
+
+        // Set max retry attempts: 25 attempts (~90s) if Extended Wait is active, else 6 attempts (~18s)
+        const maxAttempts = enableWol && wolMac ? (extendedWait ? 25 : 6) : 1;
         const retryDelayMs = 3000;
         let lastError = null;
 
@@ -734,6 +741,10 @@ class AuthManager {
         state.clearByPrefix('search:');
         state.clearByPrefix('person:');
         state.clearByPrefix('player:');
+        state.clearByPrefix('discover:');
+
+        // Wipe Seerr client response cache so user-scoped requests and watchlist are refetched
+        seerr.clearCache();
 
         // Clear focus memory so old user's spatial focus targets don't persist
         focusManager.clearMemory();
@@ -832,6 +843,10 @@ class AuthManager {
         state.clearByPrefix('search:');
         state.clearByPrefix('person:');
         state.clearByPrefix('player:');
+        state.clearByPrefix('discover:');
+
+        // Wipe Seerr client response cache so user-scoped requests and watchlist are refetched
+        seerr.clearCache();
 
         // Clear focus manager memory
         focusManager.clearMemory();

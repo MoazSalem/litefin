@@ -42,6 +42,16 @@ class NavigationState {
         if (storage.getItem('pref:disableFocusRestore') !== 'true') {
             focusedEl = focusManager.getFocused();
             sectionName = focusManager.getSectionForElement(focusedEl);
+
+            // If focus is currently on an inner metadata chip inside RichMetadataTable,
+            // capture the outer rich table container instead so restoration doesn't get trapped.
+            if (focusedEl && (focusedEl.classList.contains('meta-chip') || focusedEl.closest('.details-rich-meta, #rich-meta'))) {
+                const outerTable = document.getElementById('rich-meta') || document.querySelector('.details-rich-meta');
+                if (outerTable) {
+                    focusedEl = outerTable;
+                    sectionName = 'details-rich-meta';
+                }
+            }
         }
 
         // If the user is navigating via the sidebar, their focus is currently on the sidebar block.
@@ -262,6 +272,17 @@ class NavigationState {
      * @private
      */
     _restoreFocus(state) {
+        // Safeguard for rich metadata table: restore focus to outer container, not inner chips
+        if (state.focusSectionName === 'details-rich-meta' || (state.focusElementSelector && state.focusElementSelector.includes('meta-chip'))) {
+            const outerTable = document.getElementById('rich-meta') || document.querySelector('.details-rich-meta');
+            if (outerTable) {
+                if (this._debug) log.debug('Restoring focus to outer rich metadata table container');
+                focusManager.setActiveSection('details-rich-meta', false);
+                focusManager.focusElement(outerTable, { skipScroll: true });
+                return;
+            }
+        }
+
         // First check if the section config defines an explicit index restorer
         // Essential for virtualized lists where querySelector fails since off-screen
         // nodes aren't generated in the DOM yet

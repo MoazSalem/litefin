@@ -1,10 +1,11 @@
 {
     "name": "litefin-tizen",
-    "version": "1.5.12",
+    "version": "1.5.60",
     "description": "Native Jellyfin client for Samsung Tizen TVs",
     "main": "src/index.js",
     "type": "module",
     "scripts": {
+        "test": "node --test tests/*.test.js",
         "build": "webpack --config webpack.config.cjs",
         "build:modern": "webpack --config webpack.config.cjs --config-name modern",
         "build:normal": "webpack --config webpack.config.cjs --config-name normal",

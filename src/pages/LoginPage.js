@@ -23,6 +23,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { escapeHtml } from '../utils/Utils.js';
 import { eventBus } from '../core/EventBus.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { imageService } from '../utils/ImageService.js';
@@ -1649,11 +1650,11 @@ class LoginPage extends Page {
                                     </div>
                                     <div class="server-info">
                                         <div class="name-row">
-                                            <span class="server-name">${server.name}</span>
+                                            <span class="server-name">${escapeHtml(server.name)}</span>
                                             <span class="server-badge" data-i18n="SavedBadge">${i18n.t('SavedBadge') || 'Saved'}</span>
-                                            ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                                            ${server.version ? `<span class="server-version">v${escapeHtml(server.version)}</span>` : ''}
                                         </div>
-                                        <span class="server-address">${server.address}</span>
+                                        <span class="server-address">${escapeHtml(server.address)}</span>
                                     </div>
                                 </li>
                             `;
@@ -1671,10 +1672,10 @@ class LoginPage extends Page {
                                     </div>
                                     <div class="server-info">
                                         <div class="name-row">
-                                            <span class="server-name">${server.name}</span>
-                                            ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                                            <span class="server-name">${escapeHtml(server.name)}</span>
+                                            ${server.version ? `<span class="server-version">v${escapeHtml(server.version)}</span>` : ''}
                                         </div>
-                                        <span class="server-address">${server.address}</span>
+                                        <span class="server-address">${escapeHtml(server.address)}</span>
                                     </div>
                                 </li>
                             `;
@@ -1691,10 +1692,10 @@ class LoginPage extends Page {
                     const index = this._discoveredServers.indexOf(server);
                     return `
                     <li class="server-item" data-server-index="${index}" tabindex="0">
-                        <span class="server-name">${server.name}</span>
+                        <span class="server-name">${escapeHtml(server.name)}</span>
                         <span class="server-badge" data-i18n="SavedBadge">Saved</span>
-                        <span class="server-address">${server.address}</span>
-                        ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                        <span class="server-address">${escapeHtml(server.address)}</span>
+                        ${server.version ? `<span class="server-version">v${escapeHtml(server.version)}</span>` : ''}
                     </li>
                 `;
                 })
@@ -1714,9 +1715,9 @@ class LoginPage extends Page {
                         const index = this._discoveredServers.indexOf(server);
                         return `
                         <li class="server-item" data-server-index="${index}" tabindex="0">
-                            <span class="server-name">${server.name}</span>
-                            <span class="server-address">${server.address}</span>
-                            ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                            <span class="server-name">${escapeHtml(server.name)}</span>
+                            <span class="server-address">${escapeHtml(server.address)}</span>
+                            ${server.version ? `<span class="server-version">v${escapeHtml(server.version)}</span>` : ''}
                         </li>
                     `;
                     })

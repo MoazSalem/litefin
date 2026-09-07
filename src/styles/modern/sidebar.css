@@ -1,0 +1,1426 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Modern Sidebar Layout Styles
+ * ============================================================================
+ */
+
+/* ----------------------------------------------------------------------------
+   1. Modern Sidebar Container (Applies to both Modern & Modern Collapsed)
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar^="modern"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar,
+html[data-layout-sidebar="floating-island"] .sidebar {
+    /* Rounded outer right profile for a modern floating look */
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    border-right: none !important;
+}
+
+/* Subtle linear gradient fade from left to right on transparent collapsed rail */
+.sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    box-shadow: none !important;
+    border-right-color: transparent !important;
+}
+
+/* ----------------------------------------------------------------------------
+   2. Sidebar Items: Base Layout (Constant geometry for zero nudge)
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar^="modern"] .sidebar-item,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item,
+html[data-layout-sidebar="floating-island"] .sidebar-item {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    height: 72px;
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
+    outline: none;
+    -webkit-transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.15s ease;
+    transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1), color 0.15s ease;
+}
+
+/* Unselected items: clean muted tone */
+html[data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+/* ----------------------------------------------------------------------------
+   3. Collapsed Mode: Centered Squircle Icon Indicator
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar^="modern"] .item-icon,
+html[data-layout-sidebar^="modern"] .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .item-icon,
+html[data-layout-sidebar="floating-buttons"] .logo-icon,
+html[data-layout-sidebar="floating-island"] .item-icon,
+html[data-layout-sidebar="floating-island"] .logo-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+html[data-layout-sidebar^="modern"] .item-icon::before,
+html[data-layout-sidebar^="modern"] .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .logo-icon::before,
+html[data-layout-sidebar="floating-island"] .item-icon::before,
+html[data-layout-sidebar="floating-island"] .logo-icon::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 56px;
+    height: 56px;
+    margin-top: -28px;
+    margin-left: -28px;
+    border-radius: 18px;
+    background: transparent;
+    border: 1px solid transparent;
+    z-index: -1;
+    pointer-events: none;
+    -webkit-transition: background-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Active / Selected item in Collapsed Mode: High-contrast squircle highlight (Only when NOT focused) */
+html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item.active:not(:focus):not(.focused) .item-icon::before {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Hover highlight on collapsed squircle */
+html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item:hover .item-icon::before {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Active icon: solid crisp white */
+html[data-layout-sidebar^="modern"] .sidebar-item.active .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar-item.active .item-icon {
+    color: #ffffff;
+}
+
+/* Custom selected color override support (Only when NOT focused) */
+html[data-layout-sidebar^="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon {
+    color: var(--jf-accent);
+}
+
+/* Focus on collapsed state: scale icon with spring physics */
+html[data-layout-sidebar^="modern"] .sidebar-item:focus,
+html[data-layout-sidebar^="modern"] .sidebar-item.focused,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused,
+html[data-layout-sidebar="floating-island"] .sidebar-item:focus,
+html[data-layout-sidebar="floating-island"] .sidebar-item.focused {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    z-index: 20;
+}
+
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon,
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(250px, 0, 0) scale(1.08) !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon::before {
+    background: var(--jf-accent, #af52de);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Disable classic sliding focus bar in modern layout mode */
+html[data-layout-sidebar^="modern"] .sidebar-focus-indicator,
+html[data-layout-sidebar="floating-buttons"] .sidebar-focus-indicator,
+html[data-layout-sidebar="floating-island"] .sidebar-focus-indicator {
+    display: none !important;
+}
+
+/* ----------------------------------------------------------------------------
+   4. Unified Morphing Indicator Capsule (Modern Expandable Only)
+   ----------------------------------------------------------------------------
+   Links the collapsed 56px squircle indicator seamlessly with the full-width
+   expanded row capsule so the background morphs smoothly during hover/expansion.
+   ---------------------------------------------------------------------------- */
+/* Suppress separate icon squircle pseudo-element in expandable modern so the morphing capsule is the single source of truth */
+html[data-layout-sidebar="modern"] .item-icon::before {
+    display: none !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar-item {
+    position: relative;
+}
+
+/* Base Indicator Capsule (Collapsed Geometry: 56px squared squircle anchored over the 100px rail) */
+html[data-layout-sidebar="modern"] .sidebar-item::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 272px;
+    right: 22px;
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    box-shadow: none !important;
+    z-index: 1;
+    pointer-events: none;
+    -webkit-transition: left 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        right 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        top 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        bottom 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        border-radius 0.25s cubic-bezier(0.2, 0, 0, 1),
+                        background-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        border-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: left 0.25s cubic-bezier(0.2, 0, 0, 1),
+                right 0.25s cubic-bezier(0.2, 0, 0, 1),
+                top 0.25s cubic-bezier(0.2, 0, 0, 1),
+                bottom 0.25s cubic-bezier(0.2, 0, 0, 1),
+                border-radius 0.25s cubic-bezier(0.2, 0, 0, 1),
+                background-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                border-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Expanded state: morphs smoothly into full-width squared row capsule */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
+    left: 12px;
+    right: 12px;
+    top: 6px;
+    bottom: 6px;
+    border-radius: 10px;
+    box-shadow: none !important;
+}
+
+/* RTL Support for collapsed indicator morphing */
+[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item::after {
+    left: 22px !important;
+    right: 272px !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item::after,
+[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
+    left: 12px !important;
+    right: 12px !important;
+}
+
+/* Unified Active Capsule (Morphs seamlessly from 56px squared squircle to full row pill) */
+html[data-layout-sidebar="modern"] .sidebar-item.active::after {
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: none !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item.active .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item.active .item-text {
+    font-weight: 600;
+}
+
+/* Hover on unselected item in collapsed & expanded mode */
+html[data-layout-sidebar="modern"] .sidebar-item:hover:not(:focus):not(.focused):not(.active)::after {
+    background: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: none !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:hover:not(:focus):not(.focused):not(.active),
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:hover:not(:focus):not(.focused):not(.active) {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Unified Focus Pill (Morphs seamlessly from 56px focus squircle to full row focus pill) */
+html[data-layout-sidebar="modern"] .sidebar-item:focus::after,
+html[data-layout-sidebar="modern"] .sidebar-item.focused::after {
+    background: var(--jf-accent, #af52de) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    box-shadow: none !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus::after,
+html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused::after {
+    -webkit-transform: scale(1.08);
+    transform: scale(1.08);
+    box-shadow: none !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:focus::after,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item.focused::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:focus::after,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item.focused::after {
+    -webkit-transform: scale(1.02);
+    transform: scale(1.02);
+    box-shadow: none !important;
+}
+
+/* ----------------------------------------------------------------------------
+   5. Modern Libraries Single Accordion Item & Sub-list
+   ---------------------------------------------------------------------------- */
+/* Hide classic section header in modern layout */
+html[data-layout-sidebar^="modern"] #section-header {
+    display: none !important;
+}
+
+/* Ensure modern libraries toggle is visible */
+html[data-layout-sidebar^="modern"] #sidebar-libraries {
+    display: flex;
+}
+
+/* Chevron icon indicator for modern libraries accordion */
+html[data-layout-sidebar="modern"] .sidebar-chevron {
+    margin-left: auto;
+    margin-right: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.4);
+    opacity: 0;
+    visibility: hidden;
+    -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, color 0.15s ease;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, color 0.15s ease;
+    z-index: 6;
+}
+
+/* In expanded mode, chevron becomes visible */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-chevron,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-chevron {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Rotated chevron when sub-libraries accordion is open */
+html[data-layout-sidebar="modern"] #sidebar-libraries.open .sidebar-chevron {
+    -webkit-transform: rotate(180deg);
+    transform: rotate(180deg);
+    color: #ffffff;
+}
+
+/* Focus and hover color highlight for chevron icon */
+html[data-layout-sidebar="modern"] #sidebar-libraries:focus .sidebar-chevron,
+html[data-layout-sidebar="modern"] #sidebar-libraries.focused .sidebar-chevron {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+html[data-layout-sidebar="modern"] #sidebar-libraries:hover:not(:focus):not(.focused) .sidebar-chevron {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* Sub-libraries accordion container */
+html[data-layout-sidebar="modern"] .sidebar-sub-libraries {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Open sub-libraries list in expanded sidebar */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries.open,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries.open {
+    display: flex !important;
+    padding: 0px 20px;
+}
+
+/* In collapsed mode, keep sub-libraries completely hidden so only the single libraries icon shows */
+html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-sub-libraries {
+    display: none !important;
+}
+
+/* Nested library sub-items styling */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item {
+    height: 60px;
+    min-height: 60px;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item .item-icon {
+    width: 80px;
+    min-width: 80px;
+    padding-left: 12px;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item .item-text {
+    font-size: 1.25rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Selected / Active State: Crisp White with Semi-Bold Weight */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.active .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.active .item-text {
+    color: #ffffff !important;
+    font-weight: 600;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.active .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.active .item-icon {
+    color: #ffffff !important;
+}
+
+/* Focused State: Theme Primary Button Color */
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus .item-text,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused .item-text,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused .item-text {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused .item-icon,
+html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused .item-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   6. Modern Sidebar Footer (User Profile Pinned at Bottom)
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar^="modern"] .sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: auto;
+    padding-bottom: 20px;
+    flex-shrink: 0;
+    z-index: 5;
+}
+
+/* ----------------------------------------------------------------------------
+   7. RTL Support for Modern Sidebar
+   ---------------------------------------------------------------------------- */
+[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-right: none !important;
+    border-left: none !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    background: -webkit-linear-gradient(right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    border-left-color: transparent !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar-chevron {
+    margin-left: 18px;
+    margin-right: auto;
+}
+
+/* ----------------------------------------------------------------------------
+   8. Modern Collapsed, Floating Buttons & Floating Island Shared Tooltip & Geometry
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern-collapsed"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-content,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-footer,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item,
+html[data-layout-sidebar="floating-buttons"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar-content,
+html[data-layout-sidebar="floating-buttons"] .sidebar-footer,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item,
+html[data-layout-sidebar="floating-island"] .sidebar,
+html[data-layout-sidebar="floating-island"] .sidebar-content,
+html[data-layout-sidebar="floating-island"] .sidebar-footer,
+html[data-layout-sidebar="floating-island"] .sidebar-item {
+    overflow: visible !important;
+}
+
+/* Force fixed collapsed rail translation and width across all hover / expanded states */
+html[data-layout-sidebar="modern-collapsed"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
+html[data-layout-sidebar="floating-buttons"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
+html[data-layout-sidebar="floating-buttons"] .sidebar.expanded,
+html[data-layout-sidebar="floating-island"] .sidebar,
+html[data-layout-sidebar="floating-island"] .sidebar:hover,
+html[data-layout-sidebar="floating-island"] .sidebar.expanded {
+    width: var(--sidebar-width-expanded) !important;
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+/* Ensure icons and logo stay anchored at 250px on hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    -webkit-transform: translate3d(250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(250px, 0, 0) scale(1.08) !important;
+}
+
+/* Hide logo text and hover trigger in collapsed modes */
+html[data-layout-sidebar="modern-collapsed"] .logo-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-hover-trigger,
+html[data-layout-sidebar="floating-buttons"] .logo-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-hover-trigger,
+html[data-layout-sidebar="floating-island"] .logo-text,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .logo-text,
+html[data-layout-sidebar="floating-island"] .sidebar-hover-trigger {
+    display: none !important;
+}
+
+/* Hide logo action tooltip in normal expanded modern and classic sidebars */
+.logo-tooltip,
+#sidebar-logo-header .logo-tooltip,
+html[data-layout-sidebar="modern"] #sidebar-logo-header .logo-tooltip,
+html:not([data-layout-sidebar^="modern"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) #sidebar-logo-header .logo-tooltip {
+    display: none !important;
+}
+
+/* Tooltip floating to the right of focused / hovered item */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-island"] .sidebar-item .item-text,
+html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-user-name,
+html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-label {
+    position: absolute !important;
+    left: 342px !important;
+    right: auto !important;
+    top: 50% !important;
+    display: inline-block !important;
+    width: auto !important;
+    max-width: 300px !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+    padding: 8px 18px !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+    background: var(--jf-accent, #af52de) !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    box-shadow: none !important;
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.25px !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    z-index: 9999 !important;
+    -webkit-transform: translate3d(0, -50%, 0) scale(0.9) !important;
+    transform: translate3d(0, -50%, 0) scale(0.9) !important;
+    -webkit-transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        visibility 0.2s !important;
+    transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                visibility 0.2s !important;
+}
+
+/* Reveal tooltip with Apple fluid spring scaling on focus / hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-island"] .sidebar-item:focus .item-text,
+html[data-layout-sidebar="floating-island"] .sidebar-item.focused .item-text,
+html[data-layout-sidebar="floating-island"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
+html[data-layout-sidebar="floating-island"] .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="floating-island"] .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="floating-island"] .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="floating-island"] .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-island"] .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-island"] .sidebar-item:hover .sidebar-syncplay-label {
+    opacity: 1 !important;
+    visibility: visible !important;
+    -webkit-transform: translate3d(0, -50%, 0) scale(1) !important;
+    transform: translate3d(0, -50%, 0) scale(1) !important;
+}
+
+/* Suppress expanded mode row capsule overlays completely in collapsed modes */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item::after,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item::after,
+html[data-layout-sidebar="floating-island"] .sidebar-item::after {
+    display: none !important;
+}
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item::after,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded .sidebar-item::after,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item::after,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item::after,
+html[data-layout-sidebar="floating-buttons"] .sidebar.expanded .sidebar-item::after {
+    display: none !important;
+}
+
+/* Maintain active squircle highlight on item in modern-collapsed regardless of hover (Only when NOT focused) */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active:not(:focus):not(.focused) .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon::before {
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Maintain focused squircle theme accent on item in modern-collapsed regardless of hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before {
+    background: var(--jf-accent, #af52de) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Modern-collapsed focused logo icon color override */
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:focus .logo-icon svg path,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item.focused .logo-icon svg path {
+    fill: currentColor !important;
+}
+
+/* Maintain active icon color (Only when not focused) */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon {
+    color: #ffffff !important;
+}
+html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="modern-collapsed"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon {
+    color: var(--jf-accent) !important;
+}
+
+/* Maintain focused item color (Always crisp solid white on top of active/accent squircle) */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item.active.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.active:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.active.focused .item-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+html[data-layout-sidebar^="modern"] .sidebar-item:focus .item-icon svg,
+html[data-layout-sidebar^="modern"] .sidebar-item.focused .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-icon svg,
+html[data-layout-sidebar^="modern"] .sidebar-item.active:focus .item-icon svg,
+html[data-layout-sidebar^="modern"] .sidebar-item.active.focused .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active:focus .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active.focused .item-icon svg {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    fill: currentColor !important;
+}
+
+html[data-layout-sidebar^="modern"] .sidebar-item:focus .item-icon svg path,
+html[data-layout-sidebar^="modern"] .sidebar-item.focused .item-icon svg path,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-icon svg path,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-icon svg path,
+html[data-layout-sidebar^="modern"] .sidebar-item.active:focus .item-icon svg path,
+html[data-layout-sidebar^="modern"] .sidebar-item.active.focused .item-icon svg path,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active:focus .item-icon svg path,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item.active.focused .item-icon svg path {
+    fill: currentColor !important;
+    color: inherit !important;
+}
+
+/* Maintain unselected items clean muted tone in modern-collapsed */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: rgba(255, 255, 255, 0.45) !important;
+}
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon::before {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Floating Buttons unselected icons match normal action button color and contrast */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
+    color: var(--jf-action-btn-color, #ffffff) !important;
+}
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused):hover,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):hover {
+    color: #ffffff !important;
+}
+
+/* Floating Buttons active logo icon color override */
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+    color: #ffffff !important;
+}
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+    color: var(--jf-accent) !important;
+}
+
+/* Floating Buttons focused logo icon color override */
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active.focused .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:focus .logo-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.focused .logo-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:focus .logo-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active.focused .logo-icon svg path {
+    fill: currentColor !important;
+}
+
+/* Lock default and themed sidebar container backgrounds across all hover and expanded states */
+html[data-layout-sidebar="modern-collapsed"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded {
+    background-color: var(--sidebar-bg) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar:hover,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.expanded {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+/* Maintain transparent collapsed background gradient on hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed.expanded {
+    background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    box-shadow: none !important;
+    border-right-color: transparent !important;
+}
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed:hover,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed.expanded {
+    background: -webkit-linear-gradient(right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
+    border-left-color: transparent !important;
+}
+
+/* Maintain custom color backgrounds on modern-collapsed hover */
+html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed.expanded {
+    background: rgba(16, 16, 16, 0.4) !important;
+    background-image: none !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] .sidebar.tinted-semi-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.tinted-semi-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.tinted-semi-collapsed.expanded {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.65) !important;
+    background-image: none !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] .sidebar.black-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.black-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.black-collapsed.expanded {
+    background: #000000 !important;
+    background-image: none !important;
+}
+
+/* Hide chevron in collapsed modes */
+html[data-layout-sidebar="modern-collapsed"] .sidebar-chevron,
+html[data-layout-sidebar="floating-buttons"] .sidebar-chevron {
+    display: none !important;
+}
+
+/* RTL Support for Tooltips */
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar.expanded,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar.expanded {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .item-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .item-text,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-user-name,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-label {
+    left: auto !important;
+    right: 342px !important;
+}
+
+/* ----------------------------------------------------------------------------
+   9. Floating Libraries Popover Window (Shared across Collapsed, Buttons & Island)
+   ---------------------------------------------------------------------------- */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries {
+    position: absolute !important;
+    left: 342px !important;
+    right: auto !important;
+    width: 270px !important;
+    min-width: 260px !important;
+    max-height: calc(100vh - 60px) !important;
+    background: #18191c !important;
+    background-color: #18191c !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 18px !important;
+    box-shadow: none !important;
+    padding: 8px !important;
+    z-index: 10000 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: none;
+    flex-direction: column !important;
+    opacity: 0;
+    visibility: hidden;
+    -webkit-transform: scale(0.92) translate3d(0, 0, 0);
+    transform: scale(0.92) translate3d(0, 0, 0);
+    -webkit-transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                        -webkit-transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        visibility 0.2s;
+    transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1),
+                transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                visibility 0.2s;
+}
+
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] #sidebar-sub-libraries,
+html[data-layout-sidebar="floating-buttons"][data-theme-mode="ambient"] #sidebar-sub-libraries,
+html[data-layout-sidebar="floating-island"][data-theme-mode="ambient"] #sidebar-sub-libraries {
+    background: #0f1013 !important;
+    background-color: #0f1013 !important;
+    border-color: rgba(var(--jf-accent-rgb), 0.35) !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries.open,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries.open,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries.open {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    -webkit-transform: scale(1) translate3d(0, 0, 0) !important;
+    transform: scale(1) translate3d(0, 0, 0) !important;
+}
+
+/* Individual library item row inside popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    border-radius: 12px !important;
+    padding: 0 14px !important;
+    margin: 2px 0 !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    box-sizing: border-box !important;
+    cursor: pointer;
+    outline: none;
+    border: none;
+    -webkit-transition: background-color 0.2s ease, color 0.15s ease, -webkit-transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background-color 0.2s ease, color 0.15s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Library icon reset inside popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-icon {
+    width: 28px !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    margin: 0 12px 0 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    -webkit-transform: none !important;
+    transform: none !important;
+    color: inherit !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon::before,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-icon::before {
+    display: none !important;
+    content: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Library text reset inside popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-text,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-text,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-text {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    font-size: 1.05rem !important;
+    font-weight: 500 !important;
+    color: inherit !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* Active library item in popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.active,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item.active,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item.active {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+/* Focused & Hovered library item in popover */
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.focused,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:hover,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item.focused,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item:hover,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item:focus,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item.focused,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item:hover {
+    background: var(--jf-accent, #af52de) !important;
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+    -webkit-transform: scale(1.02) !important;
+    transform: scale(1.02) !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.focused .item-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item.focused .item-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item.focused .item-icon {
+    color: #ffffff !important;
+}
+
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:focus .item-icon svg,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.focused .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item:focus .item-icon svg,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item.focused .item-icon svg,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item:focus .item-icon svg,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item.focused .item-icon svg,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item:focus .item-icon svg path,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item.focused .item-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item:focus .item-icon svg path,
+html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item.focused .item-icon svg path,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item:focus .item-icon svg path,
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item.focused .item-icon svg path {
+    color: #ffffff !important;
+    fill: #ffffff !important;
+}
+
+/* RTL Support for popover */
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries {
+    left: auto !important;
+    right: calc(var(--sidebar-width-collapsed) + 12px) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-icon {
+    margin: 0 0 0 12px !important;
+}
+
+/* ----------------------------------------------------------------------------
+   10. Floating Buttons Layout Dedicated Styling
+   ---------------------------------------------------------------------------- */
+/* Transparent sidebar rail container */
+html[data-layout-sidebar="floating-buttons"] .sidebar,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
+html[data-layout-sidebar="floating-buttons"] .sidebar.expanded {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Each unselected / unfocused button has its own square/squircle background island matching standard action buttons */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(#sidebar-logo-header):not(.library-item):not(:focus):not(.focused):not(.active) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header:not(:focus):not(.focused):not(.active) .logo-icon::before {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
+    border-radius: 18px !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-transform: scale(1) !important;
+    transform: scale(1) !important;
+}
+
+/* Hover state on unfocused floating button */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(#sidebar-logo-header):not(.library-item):hover:not(:focus):not(.focused):not(.active) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:hover:not(:focus):not(.focused):not(.active) .logo-icon::before {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.14)) !important;
+    border: 2px solid var(--jf-action-btn-active-border, rgba(255, 255, 255, 0.50)) !important;
+    -webkit-transform: scale(1.04) !important;
+    transform: scale(1.04) !important;
+}
+
+/* Active route floating button (Only when NOT focused) */
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.library-item).active:not(:focus):not(.focused) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).active:not(:focus):not(.focused) .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon::before {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.18)) !important;
+    border: 2px solid var(--jf-action-btn-active-border, rgba(255, 255, 255, 0.35)) !important;
+    border-radius: 18px !important;
+}
+
+/* Master Focused Floating Button Squircle (Always vibrant accent on focus across all themes & active states) */
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item):focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item).focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item).active:focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:not(.library-item).active.focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item):focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).active:focus .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:not(.library-item).active.focused .item-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.active:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.active.focused .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:focus .logo-icon::before,
+html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active.focused .logo-icon::before {
+    background: var(--jf-accent, #af52de) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    border-radius: 18px !important;
+    -webkit-transform: scale(1.08) !important;
+    transform: scale(1.08) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   11. Floating Island Layout Dedicated Styling
+   ---------------------------------------------------------------------------- */
+/* Transparent sidebar rail container */
+html[data-layout-sidebar="floating-island"] .sidebar,
+html[data-layout-sidebar="floating-island"] .sidebar:hover,
+html[data-layout-sidebar="floating-island"] .sidebar.expanded {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    height: 100vh !important;
+    padding: 20px 0 16px 0 !important;
+    box-sizing: border-box !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Litefin Logo Rounded Floating Island Base */
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header {
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+    height: 72px !important;
+    min-height: 72px !important;
+}
+
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header .logo-icon::before {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
+    border-radius: 36px !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-transform: scale(1) !important;
+    transform: scale(1) !important;
+}
+
+/* User Profile in footer Rounded Floating Island Base */
+html[data-layout-sidebar="floating-island"] .sidebar-footer {
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+html[data-layout-sidebar="floating-island"] .sidebar-footer .sidebar-item .item-icon::before {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
+    border-radius: 36px !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-transform: scale(1) !important;
+    transform: scale(1) !important;
+}
+
+/* User Profile Focus Border */
+html[data-layout-sidebar="floating-island"] .sidebar-footer .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar-footer .sidebar-item.focused .item-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer .sidebar-item.focused .item-icon::before {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.14)) !important;
+    border: 2px solid var(--jf-accent, #af52de) !important;
+    -webkit-transform: scale(1.06) !important;
+    transform: scale(1.06) !important;
+}
+
+/* Logo Header Focus Border when focused as a button */
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.14)) !important;
+    border: 2px solid var(--jf-accent, #af52de) !important;
+    -webkit-transform: scale(1.06) !important;
+    transform: scale(1.06) !important;
+}
+
+/* Middle items continuous unified floating island capsule */
+html[data-layout-sidebar="floating-island"] .sidebar-content {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    max-height: calc(100vh - 200px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    position: relative !important;
+    margin: auto 0 !important;
+    padding: 8px 0 !important;
+    box-sizing: border-box !important;
+}
+
+html[data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item {
+    height: 60px !important;
+    min-height: 60px !important;
+    margin: 2px 0 !important;
+}
+
+html[data-layout-sidebar="floating-island"] .sidebar-content::before {
+    content: '';
+    position: absolute;
+    left: 268px;
+    top: 0;
+    bottom: 0;
+    width: 64px;
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.10)) !important;
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.20)) !important;
+    border-radius: 36px !important;
+    z-index: 1;
+    pointer-events: none;
+    box-shadow: none !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content::before {
+    left: auto !important;
+    right: 262px !important;
+}
+
+/* All middle buttons in floating island have NO background pseudo-elements */
+html[data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item .item-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item.active .item-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item:focus .item-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item.focused .item-icon::before,
+html[data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item:hover .item-icon::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* Floating Island Unselected Icon Appearance */
+html[data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
+    color: var(--jf-action-btn-color, rgba(255, 255, 255, 0.65)) !important;
+    -webkit-transform: translate3d(250px, 0, 0) scale(1) !important;
+    transform: translate3d(250px, 0, 0) scale(1) !important;
+}
+
+/* Floating Island Hover on Unfocused Icon */
+html[data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):hover .logo-icon {
+    color: #ffffff !important;
+    -webkit-transform: translate3d(250px, 0, 0) scale(1.10) !important;
+    transform: translate3d(250px, 0, 0) scale(1.10) !important;
+}
+
+/* Floating Island Active (Selected) Route: Solid Crisp White Icon */
+html[data-layout-sidebar="floating-island"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+    color: #ffffff !important;
+    -webkit-transform: translate3d(250px, 0, 0) scale(1.05) !important;
+    transform: translate3d(250px, 0, 0) scale(1.05) !important;
+}
+
+html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+    color: var(--jf-accent) !important;
+}
+
+/* Floating Island Focused State: Scale & Accent-Color the Icon Directly (Zero Background Box) */
+html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item:focus .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item.focused .item-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    color: var(--jf-accent, #af52de) !important;
+    -webkit-transform: translate3d(250px, 0, 0) scale(1.22) !important;
+    transform: translate3d(250px, 0, 0) scale(1.22) !important;
+    z-index: 10 !important;
+}
+
+html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon svg,
+html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon svg,
+html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon svg,
+html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon svg,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-icon svg,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-icon svg,
+html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon svg path,
+html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon svg path,
+html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon svg path,
+html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon svg path,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-icon svg path,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-icon svg path {
+    color: var(--jf-accent, #af52de) !important;
+    fill: currentColor !important;
+}
+
+/* RTL Support for Floating Island */
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) scale(1) !important;
+    transform: translate3d(-250px, 0, 0) scale(1) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) scale(1.05) !important;
+    transform: translate3d(-250px, 0, 0) scale(1.05) !important;
+}
+
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item:focus .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item.focused .item-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) scale(1.22) !important;
+    transform: translate3d(-250px, 0, 0) scale(1.22) !important;
+}

@@ -199,6 +199,18 @@
 .description-modal__meta-tomato {
     color: #fa320a;
     font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.description-modal__meta-tomato svg,
+.description-modal__meta-tomato .seerr-rating-icon {
+    width: 1.1em;
+    height: 1.1em;
+    display: inline-block;
+    vertical-align: -0.15em;
+    flex-shrink: 0;
 }
 
 .description-modal__tagline {

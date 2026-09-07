@@ -17,6 +17,7 @@ import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import { seerr } from '../api/seerrClient.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
@@ -24,10 +25,12 @@ import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
 import AddToTargetModal from '../components/AddToTargetModal.js';
 import DescriptionModal from '../components/DescriptionModal.js';
+import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { prewarmManager } from '../player/core/PrewarmManager.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
@@ -38,6 +41,7 @@ import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -553,6 +557,13 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
 
+            // Trigger prewarm for playable media items, passing the restored version ID if available
+            if (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer') {
+                prewarmManager.prewarm(item, {
+                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id
+                });
+            }
+
             // Await user data (likely already resolved from state cache)
             this._currentUser = await userPromise;
 
@@ -743,6 +754,15 @@ class DetailsPage extends Page {
             // Reset track selections when version changes as they are source-specific
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
+
+            // Re-render hero header and technical details to reflect the selected version
+            this._renderHeroText();
+            // Re-trigger zero-latency prewarm for the newly selected version
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: id
+                });
+            }
         });
     }
 
@@ -1552,14 +1572,14 @@ class DetailsPage extends Page {
         }
 
         if (genres && genres.length > 0) {
-            htmlParts.push(createRow('Genres', genres));
+            htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
         // Directors (only shown in 'all')
         if (richMetadataStyle === 'all') {
             const directors = (item.People || []).filter((p) => p.Type === 'Director');
             if (directors.length > 0) {
-                htmlParts.push(createRow('Directors', directors));
+                htmlParts.push(RichMetadataTable.createChipRow('Directors', directors));
             }
         }
 
@@ -1571,36 +1591,26 @@ class DetailsPage extends Page {
         ) {
             const writers = (item.People || []).filter((p) => p.Type === 'Writer');
             if (writers.length > 0) {
-                htmlParts.push(createRow('Writers', writers));
+                htmlParts.push(RichMetadataTable.createChipRow('Writers', writers));
             }
         }
 
         // Studios (shown in 'all' or 'genres-studios-writers')
         if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
             if (item.Studios && item.Studios.length > 0) {
-                htmlParts.push(createRow('Studios', item.Studios));
+                htmlParts.push(RichMetadataTable.createChipRow('Studios', item.Studios));
             }
         }
 
         // Tags (only shown in 'all')
         if (richMetadataStyle === 'all') {
             if (item.Tags && item.Tags.length > 0) {
-                htmlParts.push(createRow('Tags', item.Tags));
+                htmlParts.push(RichMetadataTable.createChipRow('Tags', item.Tags));
             }
         }
 
         // Photo EXIF Data (only shown in 'all')
         if (item.Type === 'Photo' && richMetadataStyle === 'all') {
-            const createTextRow = (label, value) => {
-                if (!value) return '';
-                return `
-                    <div class="rich-meta-row">
-                        <div class="meta-label">${label}</div>
-                        <div class="meta-value-text">${value}</div>
-                    </div>
-                `;
-            };
-
             const esc = (str) =>
                 String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -1625,12 +1635,12 @@ class DetailsPage extends Page {
             const focal = item.FocalLength ? `${item.FocalLength} mm` : null;
             const altitude = item.Altitude != null ? `${Math.round(item.Altitude)} m` : null;
 
-            htmlParts.push(createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
-            htmlParts.push(createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
-            htmlParts.push(createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
-            htmlParts.push(createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
-            htmlParts.push(createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
-            htmlParts.push(createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
+            htmlParts.push(RichMetadataTable.createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
         }
 
         container = this.$('#rich-meta');
@@ -1713,6 +1723,7 @@ class DetailsPage extends Page {
                 chip.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    this._deactivateRichMeta();
                     this._handleMetaClick(chip);
                 };
 
@@ -1722,6 +1733,7 @@ class DetailsPage extends Page {
                         // Enter
                         e.preventDefault();
                         e.stopPropagation();
+                        this._deactivateRichMeta();
                         this._handleMetaClick(chip);
                     }
                 };
@@ -1907,6 +1919,287 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * ========================================================================
+     * Technical Media Specifications Parser & Renderer
+     * ========================================================================
+     * Extracts and constructs the technical specification badge pills for the
+     * currently active media source/version. Includes resolution, video codec,
+     * dynamic range (Dolby Vision, HDR10+, HDR, HLG), audio codec with Atmos
+     * detection & channel layout, subtitle count, and container/bitrate.
+     * ========================================================================
+     */
+    _renderTechnicalDetails() {
+        // Assert that the item exists before attempting inspection
+        if (!this._item) {
+            return '';
+        }
+
+        // Identify the active media source based on current user selection or default to primary
+        const source =
+            this._item.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+            this._item.MediaSources?.[0] ||
+            (this._item.MediaStreams ? this._item : null);
+
+        // If no media source or stream metadata is available, omit the row
+        if (!source) {
+            return '';
+        }
+
+        // Extract streams collection from the active media source
+        const streams = source.MediaStreams || this._item.MediaStreams || [];
+        if (!streams || streams.length === 0) {
+            return '';
+        }
+
+        // Separate streams by type for individual parameter extraction
+        const videoStream = streams.find((s) => s.Type === 'Video');
+        const audioStreams = streams.filter((s) => s.Type === 'Audio');
+        const subtitleStreams = streams.filter((s) => s.Type === 'Subtitle');
+
+        const pills = [];
+
+        // --------------------------------------------------------------------
+        // 1. Resolution Classification
+        // --------------------------------------------------------------------
+        const width = videoStream?.Width || source.Width || this._item.Width || 0;
+        const height = videoStream?.Height || source.Height || this._item.Height || 0;
+        let resLabel = '';
+
+        if (width || height) {
+            const maxDim = Math.max(width, height);
+            const minDim = Math.min(width, height);
+
+            // Classify resolution with generous thresholds for widescreen/anamorphic crops
+            if (maxDim >= 3000 || minDim >= 1800) {
+                resLabel = '4K';
+            } else if (maxDim >= 1600 || minDim >= 900) {
+                resLabel = '1080p';
+            } else if (maxDim >= 1000 || minDim >= 600) {
+                resLabel = '720p';
+            } else if (maxDim >= 640 || minDim >= 400) {
+                resLabel = '480p';
+            } else if (maxDim > 0) {
+                resLabel = 'SD';
+            }
+        }
+
+        if (resLabel) {
+            pills.push(`<span class="tech-pill tech-pill-res">${resLabel}</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 2. Video Codec Formatting
+        // --------------------------------------------------------------------
+        const rawVideoCodec = videoStream?.Codec || '';
+        if (rawVideoCodec) {
+            const lowerCodec = rawVideoCodec.toLowerCase();
+            let formattedVideoCodec = '';
+
+            // Map common codec identifiers to standardized notation
+            if (lowerCodec === 'hevc' || lowerCodec === 'h265') {
+                formattedVideoCodec = 'HEVC';
+            } else if (lowerCodec === 'h264' || lowerCodec === 'avc') {
+                formattedVideoCodec = 'H.264';
+            } else if (lowerCodec === 'av1') {
+                formattedVideoCodec = 'AV1';
+            } else if (lowerCodec === 'vp9') {
+                formattedVideoCodec = 'VP9';
+            } else if (lowerCodec === 'vp8') {
+                formattedVideoCodec = 'VP8';
+            } else if (lowerCodec === 'vc1') {
+                formattedVideoCodec = 'VC-1';
+            } else if (lowerCodec === 'mpeg2video' || lowerCodec === 'mpeg2') {
+                formattedVideoCodec = 'MPEG-2';
+            } else if (lowerCodec === 'mpeg4') {
+                formattedVideoCodec = 'MPEG-4';
+            } else {
+                formattedVideoCodec = rawVideoCodec.toUpperCase();
+            }
+
+            pills.push(`<span class="tech-pill tech-pill-codec">${escapeHtml(formattedVideoCodec)}</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 3. Dynamic Range & HDR / Dolby Vision Inspection
+        // --------------------------------------------------------------------
+        const itemRange = `${this._item.VideoRange || ''} ${this._item.VideoRangeType || ''}`;
+        const videoRange = videoStream?.VideoRange || '';
+        const videoRangeType = videoStream?.VideoRangeType || '';
+        const profile = videoStream?.Profile || '';
+        const streamTitle = videoStream?.Title || videoStream?.DisplayTitle || '';
+        const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${streamTitle} ${rawVideoCodec}`.toLowerCase();
+
+        let isHdr10Plus = false;
+        let isDovi = false;
+        let isHdr = false;
+        let isHlg = false;
+
+        // Inspect for HDR10+ dynamic metadata flags
+        if (
+            checkString.includes('hdr10plus') ||
+            checkString.includes('hdr10+') ||
+            checkString.includes('hdr10p') ||
+            checkString.includes('doviwithhdr10plus') ||
+            checkString.includes('doviwithelhdr10plus')
+        ) {
+            isHdr10Plus = true;
+        }
+
+        // Inspect for Dolby Vision profile and codec signaling
+        if (
+            checkString.includes('dovi') ||
+            checkString.includes('dolby vision') ||
+            rawVideoCodec.toLowerCase().startsWith('dv')
+        ) {
+            isDovi = true;
+        }
+
+        // Inspect for baseline static HDR10 metadata
+        if (checkString.includes('hdr') || videoRange === 'HDR') {
+            isHdr = true;
+        }
+
+        // Inspect for Hybrid Log-Gamma signaling
+        if (checkString.includes('hlg')) {
+            isHlg = true;
+        }
+
+        // Push appropriate dynamic range badges
+        if (isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-dovi">Dolby Vision</span>`);
+        }
+        if (isHdr10Plus) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HDR10+</span>`);
+        } else if (isHdr && !isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HDR</span>`);
+        } else if (isHlg && !isDovi) {
+            pills.push(`<span class="tech-pill tech-pill-hdr">HLG</span>`);
+        }
+
+        // --------------------------------------------------------------------
+        // 4. Audio Codec, Atmos & Channel Configuration
+        // --------------------------------------------------------------------
+        let activeAudio = null;
+        if (this._selectedAudioIndex !== undefined) {
+            activeAudio = audioStreams.find((s) => s.Index === this._selectedAudioIndex);
+        }
+        if (!activeAudio) {
+            activeAudio =
+                audioStreams.find((s) => s.Index === source.DefaultAudioStreamIndex) ||
+                audioStreams.find((s) => s.IsDefault) ||
+                audioStreams[0];
+        }
+
+        if (activeAudio) {
+            const rawAudioCodec = (activeAudio.Codec || '').toLowerCase();
+            const audioTitle = (activeAudio.Title || activeAudio.DisplayTitle || '').toLowerCase();
+            const audioProfile = (activeAudio.Profile || '').toLowerCase();
+
+            // Detect immersive Dolby Atmos / object audio metadata
+            const isAtmos = audioProfile.includes('atmos') || audioTitle.includes('atmos');
+
+            // Format audio codec label cleanly
+            let audioCodecLabel = '';
+            if (rawAudioCodec === 'truehd') {
+                audioCodecLabel = 'TrueHD';
+            } else if (rawAudioCodec === 'dts-hd ma' || rawAudioCodec === 'dtshd_ma' || (rawAudioCodec === 'dts' && audioProfile.includes('ma'))) {
+                audioCodecLabel = 'DTS-HD MA';
+            } else if (rawAudioCodec === 'dts-hd' || rawAudioCodec === 'dtshd_hra') {
+                audioCodecLabel = 'DTS-HD';
+            } else if (rawAudioCodec === 'dts') {
+                audioCodecLabel = 'DTS';
+            } else if (rawAudioCodec === 'eac3') {
+                audioCodecLabel = isAtmos ? 'Dolby' : 'DD+';
+            } else if (rawAudioCodec === 'ac3') {
+                audioCodecLabel = 'DD';
+            } else if (rawAudioCodec === 'flac') {
+                audioCodecLabel = 'FLAC';
+            } else if (rawAudioCodec === 'aac') {
+                audioCodecLabel = 'AAC';
+            } else if (rawAudioCodec === 'opus') {
+                audioCodecLabel = 'Opus';
+            } else if (rawAudioCodec === 'vorbis') {
+                audioCodecLabel = 'Vorbis';
+            } else if (rawAudioCodec === 'mp3') {
+                audioCodecLabel = 'MP3';
+            } else if (rawAudioCodec.startsWith('pcm')) {
+                audioCodecLabel = 'PCM';
+            } else {
+                audioCodecLabel = (activeAudio.Codec || '').toUpperCase();
+            }
+
+            // Determine surround channel configuration
+            let channelText = '';
+            if (activeAudio.Channels === 8 || activeAudio.ChannelLayout === '7.1') {
+                channelText = '7.1';
+            } else if (activeAudio.Channels === 6 || activeAudio.ChannelLayout === '5.1') {
+                channelText = '5.1';
+            } else if (activeAudio.Channels === 2 || activeAudio.ChannelLayout === 'stereo') {
+                channelText = '2.0';
+            } else if (activeAudio.Channels === 1 || activeAudio.ChannelLayout === 'mono') {
+                channelText = 'Mono';
+            } else if (activeAudio.Channels) {
+                channelText = `${activeAudio.Channels}ch`;
+            }
+
+            // Build cohesive audio string
+            let audioFullString = '';
+            if (isAtmos) {
+                audioFullString = `${audioCodecLabel ? audioCodecLabel + ' ' : ''}Atmos${channelText ? ' ' + channelText : ''}`.trim();
+                pills.push(`<span class="tech-pill tech-pill-atmos">${escapeHtml(audioFullString)}</span>`);
+            } else {
+                audioFullString = `${audioCodecLabel}${channelText ? ' ' + channelText : ''}`.trim();
+                if (audioFullString) {
+                    pills.push(`<span class="tech-pill tech-pill-audio">${escapeHtml(audioFullString)}</span>`);
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 5. Subtitles Count
+        // --------------------------------------------------------------------
+        const subtitleCount = subtitleStreams.length;
+        if (subtitleCount > 0) {
+            const subLabel =
+                subtitleCount === 1
+                    ? `1 ${i18n.t('Subtitle') || 'Subtitle'}`
+                    : `${subtitleCount} ${i18n.t('Subtitles') || 'Subtitles'}`;
+
+            pills.push(`
+                <span class="tech-pill tech-pill-subtitles">
+                    <span>${escapeHtml(subLabel)}</span>
+                </span>
+            `);
+        }
+
+        // --------------------------------------------------------------------
+        // 6. Container Format & Overall Bitrate
+        // --------------------------------------------------------------------
+        const container = source.Container ? source.Container.toUpperCase() : '';
+        let bitrateLabel = '';
+        if (source.Bitrate) {
+            if (source.Bitrate >= 1000000) {
+                bitrateLabel = `${(source.Bitrate / 1000000).toFixed(1)} Mbps`;
+            } else {
+                bitrateLabel = `${Math.round(source.Bitrate / 1000)} Kbps`;
+            }
+        }
+
+        if (container || bitrateLabel) {
+            const containerBitrate = [container, bitrateLabel].filter(Boolean).join(' • ');
+            pills.push(`<span class="tech-pill">${escapeHtml(containerBitrate)}</span>`);
+        }
+
+        // If no pills were generated, return empty string
+        if (pills.length === 0) {
+            return '';
+        }
+
+        // Wrap generated badges inside the technical row container
+        return `<div class="details-tech-row">${pills.join('')}</div>`;
+    }
+
     _renderHeroText() {
         const item = this._item;
 
@@ -1937,7 +2230,13 @@ class DetailsPage extends Page {
             item.CommunityRating && shouldShowScore(item)
                 ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
                 : '';
-        const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
+        const criticScore = item.CriticRating
+            ? (String(item.CriticRating).endsWith('%') ? item.CriticRating : `${Math.round(item.CriticRating)}%`)
+            : '';
+        const criticRating =
+            item.CriticRating && shouldShowScore(item)
+                ? `${detailsIcons.rottenTomatoesFresh}${criticScore}`
+                : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
@@ -1948,30 +2247,52 @@ class DetailsPage extends Page {
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
         // --- Added & Aired Dates ---
-        // Conditionally render library metadata based on global user preferences.
-        let addedHtml = '';
-        if (storage.getItem('pref:showAddedDate') === 'true' && item.DateCreated) {
-            addedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Added')}: ${formatDate(item.DateCreated)}</span>`;
+        // Retrieve merged dates display setting with graceful fallback to legacy preferences
+        let showDatesMode = storage.getItem('pref:showDates');
+        if (!showDatesMode) {
+            const addedLegacy = storage.getItem('pref:showAddedDate') === 'true';
+            const airedLegacy = storage.getItem('pref:showDateAired') === 'true';
+            if (addedLegacy && airedLegacy) {
+                showDatesMode = 'both';
+            } else if (addedLegacy) {
+                showDatesMode = 'added';
+            } else if (airedLegacy) {
+                showDatesMode = 'aired';
+            } else {
+                showDatesMode = 'none';
+            }
         }
 
-        let airedHtml = '';
-        if (storage.getItem('pref:showDateAired') === 'true' && item.PremiereDate) {
-            airedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Aired')}: ${formatDate(item.PremiereDate)}</span>`;
+        const includeYear = storage.getItem('pref:showDatesIncludeYear') === 'true';
+
+        let addedText = '';
+        if ((showDatesMode === 'both' || showDatesMode === 'added') && item.DateCreated) {
+            const formatted = formatDate(item.DateCreated, { includeYear });
+            if (formatted) {
+                addedText = `${i18n.t('Added') || 'Added'} ${formatted}`;
+            }
         }
 
-        // Logic: If both are enabled and present, move them to a new row for better clarity.
-        // Otherwise, append to the main row if only one exists.
-        const bothEnabled =
-            storage.getItem('pref:showAddedDate') === 'true' &&
-            item.DateCreated &&
-            storage.getItem('pref:showDateAired') === 'true' &&
-            item.PremiereDate;
+        let airedText = '';
+        if ((showDatesMode === 'both' || showDatesMode === 'aired') && item.PremiereDate) {
+            const formatted = formatDate(item.PremiereDate, { includeYear });
+            if (formatted) {
+                airedText = `${i18n.t('Aired') || 'Aired'} ${formatted}`;
+            }
+        }
 
-        let secondaryMetaRow = '';
-        if (bothEnabled) {
-            secondaryMetaRow = `<div class="details-meta-row">${addedHtml}${airedHtml}</div>`;
-        } else {
-            metaHtml += addedHtml + airedHtml;
+        // Combine added and aired dates with an interpunct delimiter if both are visible
+        let datesFormattedString = '';
+        if (addedText && airedText) {
+            datesFormattedString = `${addedText} · ${airedText}`;
+        } else if (addedText) {
+            datesFormattedString = addedText;
+        } else if (airedText) {
+            datesFormattedString = airedText;
+        }
+
+        if (datesFormattedString) {
+            metaHtml += `<span class="meta-item meta-item-dates">${datesFormattedString}</span>`;
         }
         let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
         const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
@@ -2039,12 +2360,12 @@ class DetailsPage extends Page {
         if (showTitle) {
             // If there is no logo displayed, style the title to span the full width of the container.
             const titleStyleAttr = !showLogo ? 'style="max-width: 100%;"' : '';
-            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${displayTitle}</h1>`;
+            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${escapeHtml(displayTitle)}</h1>`;
         }
 
         // Add the subtitle element underneath if present.
         if (displaySubtitle && displaySubtitle !== displayTitle) {
-            heroHtml += `<h2 class="details-original-title">${displaySubtitle}</h2>`;
+            heroHtml += `<h2 class="details-original-title">${escapeHtml(displaySubtitle)}</h2>`;
         }
 
         // Render episode season/number details for TV episodes.
@@ -2068,15 +2389,21 @@ class DetailsPage extends Page {
             const useSecondaryColor = storage.getItem('pref:secondaryTitleSecondaryColor') !== 'false';
             const colorClass = useSecondaryColor ? 'secondary-color' : '';
 
-            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+            heroHtml += `<p class="details-episode-info clickable-subtitle ${colorClass}" id="episode-subtitle-link">${escapeHtml(i18n.ensureBiDi(subtitleText))}</p>`;
         }
 
-        // Finish appending standard metadata row and secondary date labels.
+        // Conditionally construct technical details badges row if enabled by user settings
+        let techHtml = '';
+        if (storage.getItem('pref:showTechnicalDetails') !== 'false') {
+            techHtml = this._renderTechnicalDetails();
+        }
+
+        // Finish appending standard metadata row and technical specifications.
         heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
-            ${secondaryMetaRow}
+            ${techHtml}
         `;
 
         this.$('#hero-info').innerHTML = heroHtml;
@@ -2463,6 +2790,22 @@ class DetailsPage extends Page {
     }
 
     async _loadNextUp() {
+        // =====================================================================
+        // Performance & Visibility Control Check
+        // =====================================================================
+        // Check if the user has enabled the "Hide Next Up" setting.
+        // By handling this check first, we short-circuit fetching Next Up items,
+        // avoiding unnecessary network calls and conserving VRAM on TV hardware.
+        // =====================================================================
+        const hideNextUp = storage.getItem('pref:hideNextUpSection') === 'true';
+        if (hideNextUp) {
+            const nextUpSection = this.$('#next-up-section');
+            if (nextUpSection) {
+                nextUpSection.classList.add('hidden');
+            }
+            return;
+        }
+
         try {
             let response;
 
@@ -2490,6 +2833,7 @@ class DetailsPage extends Page {
 
             if (this._nextUp.length > 0) {
                 this._renderNextUp();
+                prewarmManager.prewarm(this._nextUp[0]);
             }
         } catch (error) {
             log.warn('Failed to load next up', error);
@@ -2645,6 +2989,10 @@ class DetailsPage extends Page {
             this._episodes = cached;
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
+                if (!this._nextUp || this._nextUp.length === 0) {
+                    const targetEp = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                    if (targetEp) prewarmManager.prewarm(targetEp);
+                }
             }
             return;
         }
@@ -2656,6 +3004,10 @@ class DetailsPage extends Page {
 
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
+                if (!this._nextUp || this._nextUp.length === 0) {
+                    const targetEp = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                    if (targetEp) prewarmManager.prewarm(targetEp);
+                }
             }
         } catch (error) {
             log.warn('Failed to load episodes', error);
@@ -3802,6 +4154,17 @@ class DetailsPage extends Page {
 
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
+
+            // Re-render hero header to update the audio specifications pill
+            this._renderHeroText();
+            // Re-trigger zero-latency prewarm with updated audio track selection
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: index,
+                    subtitleStreamIndex: this._selectedSubtitleIndex
+                });
+            }
         });
     }
 
@@ -3855,6 +4218,15 @@ class DetailsPage extends Page {
             // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
+
+            // Re-trigger zero-latency prewarm with updated subtitle track selection
+            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+                prewarmManager.prewarm(this._item, {
+                    mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: this._selectedAudioIndex,
+                    subtitleStreamIndex: index
+                });
+            }
         });
     }
 
@@ -4018,7 +4390,7 @@ class DetailsPage extends Page {
         };
     }
 
-    _showMoreOptionsModal(itemId) {
+    async _showMoreOptionsModal(itemId) {
         const oldOnBack = this.onBack;
         // Store focus context for restoration (only if not already stored by a previous modal layer)
         if (!this._prevFocus) {
@@ -4058,6 +4430,29 @@ class DetailsPage extends Page {
 
         if (this._item?.MediaSources?.length > 0) {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
+        }
+
+        // ── Seerr Details Shortcut (Only if Seerr is configured and available) ──
+        const tmdbId =
+            this._item?.ProviderIds?.Tmdb ||
+            this._item?.ProviderIds?.tmdb ||
+            this._item?.ProviderIds?.TMDB ||
+            this._item?.SeriesTmdbId ||
+            this._item?.SeriesProviderIds?.Tmdb ||
+            this._item?.SeriesProviderIds?.tmdb;
+
+        const isTvType =
+            this._item?.Type === 'Series' ||
+            this._item?.Type === 'Season' ||
+            this._item?.Type === 'Episode';
+
+        const isMovieType =
+            this._item?.Type === 'Movie';
+
+        const isSeerrAvailable = await seerr.isAvailable();
+
+        if (isSeerrAvailable && tmdbId && (isTvType || isMovieType)) {
+            options.push({ id: 'seerr-details', label: i18n.t('SeerrDetails') || 'Seerr Details' });
         }
 
         // ── Refresh Metadata Permission Check ────────────────────────────────
@@ -4285,6 +4680,10 @@ class DetailsPage extends Page {
                         fromMoreOptions: true,
                         oldOnBack: oldOnBack
                     });
+                } else if (id === 'seerr-details') {
+                    this._closeMoreMenu();
+                    const targetMediaType = isTvType ? 'tv' : 'movie';
+                    router.navigate(`/seerr/${targetMediaType}/${tmdbId}`);
                 } else if (id === 'refresh') {
                     this._isMoreMenuOpen = false;
                     overlay.classList.remove('visible');
@@ -5239,6 +5638,11 @@ class DetailsPage extends Page {
         if (this._episodeGrid) {
             this._episodeGrid.destroy();
             this._episodeGrid = null;
+        }
+
+        const currentPath = router.getCurrentPath?.() || '';
+        if (!currentPath.startsWith('/player')) {
+            prewarmManager.clear();
         }
 
         super.destroy();

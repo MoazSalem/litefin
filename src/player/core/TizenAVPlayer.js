@@ -320,32 +320,39 @@ export class TizenAVPlayer {
                     // 3. ABR Quality Kickstart (HLS/Adaptive Only)
                     if (!isDirectPlay) {
                         try {
-                            // Derive FIXED_MAX_RESOLUTION from device capabilities + content resolution.
-                            // Per Samsung docs, only needed when the manifest doesn't describe resolutions,
-                            // but we set it unconditionally as a safety cap so AVPlay never requests
-                            // segments beyond what the device can decode.
+                            // Extract content width and height from media source metadata
                             const contentWidth = options.mediaSource?.Width || 0;
                             const contentHeight = options.mediaSource?.Height || 0;
                             let fixedMaxRes;
+
+                            // Limit FIXED_MAX_RESOLUTION to 4K (3840x2160) max.
+                            // 8K hardware decoder targets (7680x4320) cause HLS pipeline initialization
+                            // failures on certain Samsung TVs during adaptive stream setup.
+                            const maxAllowedWidth = Math.min(DEVICE_CAPS.screenWidth || 3840, 3840);
+                            const maxAllowedHeight = Math.min(DEVICE_CAPS.screenHeight || 2160, 2160);
+
+                            // Calculate final resolution bounds for the AVPlay ABR pipeline
                             if (contentWidth > 0 && contentHeight > 0) {
-                                const w = Math.min(contentWidth, DEVICE_CAPS.screenWidth);
-                                const h = Math.min(contentHeight, DEVICE_CAPS.screenHeight);
+                                // Cap resolution to the minimum of stream resolution and 4K bounds
+                                const w = Math.min(contentWidth, maxAllowedWidth);
+                                const h = Math.min(contentHeight, maxAllowedHeight);
                                 fixedMaxRes = `${w}x${h}`;
                             } else {
-                                // No content resolution info — tell AVPlay the device's max so ABR
-                                // doesn't limit itself (common with 8K manifests missing resolution data).
-                                fixedMaxRes = `${DEVICE_CAPS.screenWidth}x${DEVICE_CAPS.screenHeight}`;
+                                // Fallback when stream dimensions are unknown: enforce 4K max ceiling
+                                fixedMaxRes = `${maxAllowedWidth}x${maxAllowedHeight}`;
                             }
 
+                            // Construct ADAPTIVE_INFO string for Samsung AVPlay hardware streaming
                             const props = [
                                 `FIXED_MAX_RESOLUTION=${fixedMaxRes}`,
-                                'STARTBITRATE=HIGHEST', // Force hardware to skip ramp-up delay
-                                'USER_AGENT=JellyfinTizenClient', // Modern way to set UA in 5.0+
+                                'STARTBITRATE=HIGHEST', // Force hardware decoder to initialize at top tier
                                 `INITIAL_BUFFER_DURATION=${bufferPlaySec * 1000}`,
                                 `RESUME_BUFFER_DURATION=${bufferResumeSec * 1000}`
                             ].join('|');
+
+                            // Pass property hints to native Tizen AVPlay engine
                             this._avplay.setStreamingProperty("ADAPTIVE_INFO", props);
-                            log.info(`Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin, FIXED_MAX_RESOLUTION=${fixedMaxRes}`);
+                            log.info(`Hardware ABR Optimized: STARTBITRATE=HIGHEST, FIXED_MAX_RESOLUTION=${fixedMaxRes}`);
                         } catch (e) {
                             log.warn('Failed to set hls-specific properties:', e.message || e);
                         }
@@ -1260,12 +1267,13 @@ export class TizenAVPlayer {
                 (s) => s.Type === 'Audio'
             );
 
-            // Filter out unsupported passthrough audio formats (TrueHD/DTS)
-            // Tizen AVPlay omits unsupported DTS/TrueHD tracks from getTotalTrackInfo().
+            // Filter out unsupported passthrough audio formats (TrueHD/DTS/FLAC in video)
+            // Tizen AVPlay omits unsupported DTS/TrueHD/FLAC tracks from getTotalTrackInfo().
             jellyfinAudioStreams = jellyfinAudioStreams.filter((track) => {
                 const codec = (track.Codec || '').toLowerCase();
                 if (codec === 'truehd' && !isTrueHdSupported()) return false;
                 if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
+                if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) return false;
                 return true;
             });
 
@@ -1748,6 +1756,7 @@ export class TizenAVPlayer {
                 const codec = (s.Codec || '').toLowerCase();
                 if (codec === 'truehd' && !isTrueHdSupported()) return false;
                 if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) return false;
+                if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) return false;
                 return true;
             });
 

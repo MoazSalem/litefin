@@ -14,7 +14,7 @@
  */
 
 import Page from './Page.js';
-import { api } from '../api/index.js';
+import { api, auth } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
@@ -33,6 +33,8 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
+import { sanitizeSubtitleText } from '../utils/Utils.js';
+import { prewarmManager } from '../player/core/PrewarmManager.js';
 
 const log = logger.create('Player');
 
@@ -55,6 +57,11 @@ class PlayerPage extends Page {
         // Track reporting state
         this._hasReportedStart = false;
         this._isPaused = false;
+        this._resumeProfileSelectionActive = false;
+        this._resumePlaybackAfterProfileSelection = false;
+        this._resumeMutedAfterProfileSelection = false;
+        this._resumeVideoDisplayAfterProfileSelection = '';
+        this._backgroundPrepared = false;
 
         // Cached media source for stop reporting
         // (player clears this internally after stop, so we need a copy)
@@ -286,7 +293,12 @@ class PlayerPage extends Page {
 
             // Parallelize font loading and item details loading
             const fontId = SubtitleStyles.getCurrentFontId();
-            const fetchTasks = [api.getItem(itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks,MediaSources' })];
+            const prewarmed = prewarmManager.getPrewarmedItem(itemId);
+            const itemTask = prewarmed
+                ? Promise.resolve(prewarmed)
+                : api.getItem(itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks,MediaSources' });
+
+            const fetchTasks = [itemTask];
             if (fontId) {
                 fetchTasks.push(FontLoader.loadFont(fontId));
             }
@@ -387,6 +399,7 @@ class PlayerPage extends Page {
 
             const lockCheck = (fn) => {
                 return (...args) => {
+                    if (this._resumeProfileSelectionActive) return;
                     if (this._isScreenLocked) {
                         this._showLockIndicator();
                         return;
@@ -1116,9 +1129,36 @@ class PlayerPage extends Page {
             }
         }
 
-        // 3. Fallback to default from MediaSource for Audio if still undefined
-        if (savedAudioIndex === undefined) {
-            savedAudioIndex = mediaSource?.DefaultAudioStreamIndex;
+        // 3. Fallback to default from MediaSource for Audio if still undefined or null
+        // =========================================================================
+        // DEFAULT AUDIO STREAM RESOLUTION (Disposition "default")
+        // =========================================================================
+        // When preSelectedAudio is null or undefined (and session track memory
+        // yielded no match), we resolve the default audio track.
+        // Priority order:
+        //   1. Audio stream with disposition "default" (s.Type === 'Audio' && s.IsDefault)
+        //   2. MediaSource DefaultAudioStreamIndex property
+        //   3. First available audio stream in container (audioStreams[0])
+        // =========================================================================
+        if (savedAudioIndex === undefined || savedAudioIndex === null) {
+            // Filter candidate streams to Audio type
+            const audioStreams = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+
+            // Attempt match by disposition default (IsDefault), then DefaultAudioStreamIndex, then first track
+            const defaultAudioStream =
+                audioStreams.find((s) => s.IsDefault) ||
+                (mediaSource?.DefaultAudioStreamIndex !== undefined && mediaSource?.DefaultAudioStreamIndex !== null
+                    ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
+                    : null) ||
+                audioStreams[0];
+
+            // Assign resolved index
+            if (defaultAudioStream) {
+                savedAudioIndex = defaultAudioStream.Index;
+                log.info(
+                    `[Track Resolution] Resolved default audio track (disposition default): Index ${savedAudioIndex} (${defaultAudioStream.Language || 'und'})`
+                );
+            }
         }
 
         // Note: We leave savedSubtitleIndex as undefined if unresolved, so JellyfinPlayer's SubtitleMode logic handles it.
@@ -1543,6 +1583,11 @@ class PlayerPage extends Page {
     // ========================================================================
 
     _onPlaying() {
+        if (this._resumeProfileSelectionActive) {
+            this._player?.pause?.();
+            return;
+        }
+
         log.info('Playing');
 
         // Clear pause reporting interval if running
@@ -2259,7 +2304,12 @@ class PlayerPage extends Page {
 
         if (data && data.text && data.text.trim().length > 0) {
             // Render subtitle
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Cue text is external content (SRT/VTT/ASS from the server or a
+            // sidecar file); SubtitleParser only strips ASS {...} tags, so it
+            // must be sanitized before innerHTML. sanitizeSubtitleText escapes
+            // everything and re-allows only bare <i>/<b>/<u>/<em>/<strong>,
+            // preserving legitimate cue styling without an injection surface.
+            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -2339,8 +2389,9 @@ class PlayerPage extends Page {
         if (!overlay) return;
 
         if (data && data.text && data.text.trim().length > 0) {
-            // Render the secondary subtitle text
-            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            // Render the secondary subtitle text (sanitized: escapes all HTML,
+            // re-allows only bare i/b/u/em/strong styling tags)
+            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
             overlay.classList.remove('hidden');
 
             /* -------------------------------------------------------------
@@ -3185,9 +3236,33 @@ class PlayerPage extends Page {
      */
     _handleAppHidden() {
         // Don't pause if we're already in the process of stopping playback
-        if (this._isExiting) return;
+        if (this._isExiting || this._backgroundPrepared) return;
+
+        this._backgroundPrepared = true;
 
         log.info('App backgrounded, pausing playback');
+        this._resumePlaybackAfterProfileSelection = this._player?.isPaused
+            ? !this._player.isPaused()
+            : !this._isPaused;
+        const shouldGateProfileSelection =
+            storage.getItem('pref:showProfilesOnResume') === 'true' &&
+            state.get('user:sessionCount', 0) > 1;
+
+        if (shouldGateProfileSelection) {
+            this._resumeMutedAfterProfileSelection = Boolean(this._player?.isMuted?.());
+
+            // Muting and hiding the media element synchronously is necessary on webOS:
+            // its native video pipeline can become visible/audible before the page gets
+            // its foreground visibility callback.
+            this._player?.setMuted?.(true);
+            const videoElement = document.querySelector('.jellyfin-video-player');
+            if (videoElement) {
+                this._resumeVideoDisplayAfterProfileSelection = videoElement.style.display;
+                videoElement.style.opacity = '0';
+                videoElement.style.visibility = 'hidden';
+                videoElement.style.display = 'none';
+            }
+        }
 
         // Pause the backend player (preserves video frame, keeps session alive)
         if (this._player?.pause && !this._isPaused) {
@@ -3204,6 +3279,13 @@ class PlayerPage extends Page {
                 this._osd.updatePlayPauseButton();
             }
         }
+
+        // Prepare the takeover while the app is still hidden. webOS may paint the
+        // video surface before the first foreground callback, so waiting until
+        // app:visible would briefly expose the previous stream.
+        if (shouldGateProfileSelection) {
+            this.showResumeProfileSelector();
+        }
     }
 
     /**
@@ -3212,6 +3294,8 @@ class PlayerPage extends Page {
      */
     _handleAppVisible() {
         if (this._isExiting) return;
+
+        if (!this._resumeProfileSelectionActive) this._backgroundPrepared = false;
 
         log.info('App foregrounded, player paused state preserved');
         // The player remains paused. When the user presses play, the normal
@@ -3270,7 +3354,7 @@ class PlayerPage extends Page {
      * @param {string} [reason='userStop']
      *   The reason for stopping playback, passed to the 'player:stopped' event.
      */
-    async _stopAndExit(clearChain = true, reason = 'userStop') {
+    async _stopAndExit(clearChain = true, reason = 'userStop', navigateAfterStop = true) {
         // Prevent multiple calls
         if (this._isExiting) {
             return;
@@ -3373,6 +3457,8 @@ class PlayerPage extends Page {
         // the item they were just watching is more intuitive than returning
         // to the initial entry point.
         // ----------------------------------------------------------------
+        if (!navigateAfterStop) return;
+
         const isTvChannel = this._item?.Type === 'TvChannel';
         const shouldNavigateTv =
             isTvChannel && (this.params.fromGuide === 'true' || this.params.fromDetails === 'true');
@@ -3439,6 +3525,58 @@ class PlayerPage extends Page {
         } else {
             // Standard back navigation for special types (Live TV default, Intros) or if no item state exists.
             router.back();
+        }
+    }
+
+    showResumeProfileSelector() {
+        if (!this._osd || this._isExiting) return;
+        this._resumeProfileSelectionActive = true;
+        this._player?.pause?.();
+        this._isPaused = true;
+        document.body.classList.add('resume-profile-selection-active');
+        this._osd.showResumeProfiles((userId) => this._selectResumeProfile(userId));
+    }
+
+    async _selectResumeProfile(userId) {
+        const currentUserId = auth.getCurrentUser()?.Id;
+        if (!userId) return;
+
+        const resumePlayback = this._resumePlaybackAfterProfileSelection;
+        const restoreMuted = this._resumeMutedAfterProfileSelection;
+        this._resumePlaybackAfterProfileSelection = false;
+        this._resumeMutedAfterProfileSelection = false;
+        if (userId === currentUserId) {
+            this._resumeProfileSelectionActive = false;
+            this._backgroundPrepared = false;
+            this._osd?.closeMenu();
+            document.body.classList.remove('resume-profile-selection-active');
+            const videoElement = document.querySelector('.jellyfin-video-player');
+            if (videoElement) {
+                videoElement.style.display = this._resumeVideoDisplayAfterProfileSelection;
+                videoElement.style.visibility = '';
+                videoElement.style.opacity = '';
+            }
+            this._resumeVideoDisplayAfterProfileSelection = '';
+            this._player?.setMuted?.(restoreMuted);
+            if (resumePlayback) this._player?.unpause?.();
+            return;
+        }
+
+        // Keep the opaque takeover and playback lock active while the old player
+        // stops and the selected user's Home page is prepared.
+        await this._stopAndExit(true, 'profileSwitch', false);
+        try {
+            await auth.switchUser(userId);
+            if (storage.getItem('litefin:settings_per_user') === 'true') {
+                storage.setItem('litefin:skip_profiles_once', 'true');
+                storage.flush();
+                window.location.href = window.location.href.split('#')[0];
+                return;
+            }
+            router.reset('/home');
+        } catch (error) {
+            log.error('Failed to switch profile after playback:', error);
+            router.reset('/profiles');
         }
     }
 
@@ -3576,6 +3714,12 @@ class PlayerPage extends Page {
     // ========================================================================
 
     destroy() {
+        document.body.classList.remove('resume-profile-selection-active');
+        this._resumeProfileSelectionActive = false;
+        this._resumePlaybackAfterProfileSelection = false;
+        this._resumeMutedAfterProfileSelection = false;
+        this._resumeVideoDisplayAfterProfileSelection = '';
+        this._backgroundPrepared = false;
         log.info('destroy() called');
 
         // Stop pause reporting heartbeat timer

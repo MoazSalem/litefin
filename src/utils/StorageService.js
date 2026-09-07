@@ -117,6 +117,7 @@ class StorageService {
             'litefin:userId',
             'app_platform',
             'litefin:settings_per_user',
+            'pref:showProfilesOnResume',
             'litefin:skip_profiles_once'
         ];
         if (globalKeys.includes(key)) return true;

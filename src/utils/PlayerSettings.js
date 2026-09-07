@@ -296,6 +296,9 @@ const DEFAULTS = {
     // Enable HDR10/HLG pass-through
     enableHDR: 'auto',
 
+    // Enable Instant Playback (pre-fetches PlaybackInfo & item details in background)
+    enablePrewarm: true,
+
     // Player backend ('auto', 'avplay', 'webos', 'html5')
     playerBackend: 'auto',
 
@@ -448,6 +451,13 @@ const DEFAULTS = {
 
     // Instant seek when OSD is hidden using directional arrows
     seekWithArrows: true,
+
+    // Confirm before exiting the player to prevent accidental playback dismissal.
+    // When enabled, pressing Back while controls are hidden (or activating exit)
+    // presents a confirmation modal before stopping playback and leaving the player.
+    confirmExitPlayer: false,
+    // Remote timeline previews are applied only when OK is pressed.
+    confirmSeekWithOK: false,
 
     // Enable mouse/magic cursor support in the OSD (hover and click)
     // Disabled by default on Tizen due to cursor interaction bugs
