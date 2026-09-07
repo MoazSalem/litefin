@@ -477,11 +477,29 @@ class App {
                     api.openWebSocket();
                 }
 
-                // Force a reload of the current view to fetch fresh data
-                // e.g., when the Tizen TV turns on from suspended sleep state.
-                // We skip reloading if the user is in the player to avoid interrupting playback.
+                // When returning from the background with multiple saved profiles,
+                // optionally show "Who's Watching" instead of restoring the previous user.
+                // This preference is independent of cold-start auto-login.
                 const currentPath = router.getCurrentPath?.() || '';
-                if (!currentPath.startsWith('/player')) {
+                const sessionCount = state.get('user:sessionCount', 0);
+                const showProfilesOnResume = storage.getItem('pref:showProfilesOnResume') === 'true';
+
+                if (
+                    showProfilesOnResume &&
+                    state.get('user:authenticated') &&
+                    sessionCount > 1 &&
+                    currentPath !== '/profiles'
+                ) {
+                    log.info(`App resumed with ${sessionCount} profiles - showing profile selector`);
+                    if (currentPath.startsWith('/player')) {
+                        router.getCurrentPage()?.showResumeProfileSelector?.();
+                    } else {
+                        pluginManager.destroy();
+                        router.reset('/profiles');
+                    }
+                } else if (!currentPath.startsWith('/player')) {
+                    // Preserve the original Litefin behaviour when profile selection
+                    // is not required.
                     router.reload();
                 }
             }

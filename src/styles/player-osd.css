@@ -2089,3 +2089,36 @@ body.hdr-darker-white .track-menu-overlay .track-option:not(.focused):not(.selec
 body.hdr-darker-white .track-menu-overlay .track-menu-title {
     color: #a9a9a9 !important;
 }
+.resume-profiles-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2147483647;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--jf-background, #000);
+}
+
+.resume-profiles-overlay.visible {
+    display: flex;
+}
+
+.resume-profiles-panel h1 {
+    margin: 0 0 64px;
+    color: var(--jf-text-primary);
+    font-size: 3.8rem;
+    text-align: center;
+}
+
+body.resume-profile-selection-active .jellyfin-video-player {
+    visibility: hidden !important;
+}
+
+.resume-profiles-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}

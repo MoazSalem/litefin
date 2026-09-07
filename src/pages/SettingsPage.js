@@ -4737,6 +4737,7 @@ class SettingsPage extends Page {
      * @returns {string} The fully compiled HTML template representing active tab UI.
      */
     _renderControlsTab() {
+        const showProfilesOnResume = storage.getItem('pref:showProfilesOnResume') === 'true';
         // Retrieve localized keys or fallback gracefully to default values.
         const scrollNavEnabled = storage.getItem('pref:hoverScrollNavigation') === 'true';
         const magicCursorEnabled = PlayerSettings.get('enableMagicCursor');
@@ -4811,6 +4812,17 @@ class SettingsPage extends Page {
                 <p class="content-subtitle" data-i18n="ControlsTabDescription">
                     ${i18n.t('ControlsTabDescription') || 'Map physical remote buttons, mouse cursor behavior, and navigation gestures.'}
                 </p>
+
+                <h3 class="setting-section-title" data-i18n="AppBehavior">${i18n.t('AppBehavior')}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowProfilesOnResume">${i18n.t('ShowProfilesOnResume')}</span>
+                        <span class="setting-description" data-i18n="ShowProfilesOnResumeDescription">${i18n.t('ShowProfilesOnResumeDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${showProfilesOnResume ? 'active' : ''}" id="toggle-profiles-on-resume" tabindex="0"></button>
+                    </div>
+                </div>
 
                 <!-- Application Behavior -->
                 <div class="setting-item">
@@ -6235,6 +6247,16 @@ class SettingsPage extends Page {
                         });
                     }
                 });
+            });
+        }
+
+        // Device-wide resume behavior (Controls tab).
+        const profilesOnResumeToggle = this.$('#toggle-profiles-on-resume');
+        if (profilesOnResumeToggle) {
+            profilesOnResumeToggle.addEventListener('click', () => {
+                const enabled = storage.getItem('pref:showProfilesOnResume') !== 'true';
+                storage.setItem('pref:showProfilesOnResume', String(enabled));
+                profilesOnResumeToggle.classList.toggle('active', enabled);
             });
         }
 

@@ -24,6 +24,7 @@ import LyricsModal from './LyricsModal.js';
 import DescriptionModal from './DescriptionModal.js';
 import SyncPlayNotification from './SyncPlayNotification.js';
 import ConfirmExitModal from './ConfirmExitModal.js';
+import ResumeProfilesMenu from './ResumeProfilesMenu.js';
 
 import '../../styles/description-modal.css';
 
@@ -282,6 +283,7 @@ export default class OSDController extends Component {
 
         // SyncPlay notification overlay
         this.syncPlayNotification = new SyncPlayNotification(this);
+        this.resumeProfilesMenu = new ResumeProfilesMenu(this);
 
         // Confirm exit modal — prompts before exiting playback
         this.confirmExitModal = new ConfirmExitModal(this);
@@ -304,8 +306,15 @@ export default class OSDController extends Component {
             this.lyricsModal,
             this.descriptionModal,
             this.syncPlayNotification,
-            this.confirmExitModal
+            this.confirmExitModal,
+            this.resumeProfilesMenu
         ];
+    }
+
+    showResumeProfiles(onSelect) {
+        this.activeMenu = this.resumeProfilesMenu;
+        this.resumeProfilesMenu.open(onSelect);
+        this._cacheFocusableElements();
     }
 
     // Public API for components

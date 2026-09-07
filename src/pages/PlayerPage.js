@@ -14,7 +14,7 @@
  */
 
 import Page from './Page.js';
-import { api } from '../api/index.js';
+import { api, auth } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
@@ -57,6 +57,11 @@ class PlayerPage extends Page {
         // Track reporting state
         this._hasReportedStart = false;
         this._isPaused = false;
+        this._resumeProfileSelectionActive = false;
+        this._resumePlaybackAfterProfileSelection = false;
+        this._resumeMutedAfterProfileSelection = false;
+        this._resumeVideoDisplayAfterProfileSelection = '';
+        this._backgroundPrepared = false;
 
         // Cached media source for stop reporting
         // (player clears this internally after stop, so we need a copy)
@@ -394,6 +399,7 @@ class PlayerPage extends Page {
 
             const lockCheck = (fn) => {
                 return (...args) => {
+                    if (this._resumeProfileSelectionActive) return;
                     if (this._isScreenLocked) {
                         this._showLockIndicator();
                         return;
@@ -1577,6 +1583,11 @@ class PlayerPage extends Page {
     // ========================================================================
 
     _onPlaying() {
+        if (this._resumeProfileSelectionActive) {
+            this._player?.pause?.();
+            return;
+        }
+
         log.info('Playing');
 
         // Clear pause reporting interval if running
@@ -3225,9 +3236,33 @@ class PlayerPage extends Page {
      */
     _handleAppHidden() {
         // Don't pause if we're already in the process of stopping playback
-        if (this._isExiting) return;
+        if (this._isExiting || this._backgroundPrepared) return;
+
+        this._backgroundPrepared = true;
 
         log.info('App backgrounded, pausing playback');
+        this._resumePlaybackAfterProfileSelection = this._player?.isPaused
+            ? !this._player.isPaused()
+            : !this._isPaused;
+        const shouldGateProfileSelection =
+            storage.getItem('pref:showProfilesOnResume') === 'true' &&
+            state.get('user:sessionCount', 0) > 1;
+
+        if (shouldGateProfileSelection) {
+            this._resumeMutedAfterProfileSelection = Boolean(this._player?.isMuted?.());
+
+            // Muting and hiding the media element synchronously is necessary on webOS:
+            // its native video pipeline can become visible/audible before the page gets
+            // its foreground visibility callback.
+            this._player?.setMuted?.(true);
+            const videoElement = document.querySelector('.jellyfin-video-player');
+            if (videoElement) {
+                this._resumeVideoDisplayAfterProfileSelection = videoElement.style.display;
+                videoElement.style.opacity = '0';
+                videoElement.style.visibility = 'hidden';
+                videoElement.style.display = 'none';
+            }
+        }
 
         // Pause the backend player (preserves video frame, keeps session alive)
         if (this._player?.pause && !this._isPaused) {
@@ -3244,6 +3279,13 @@ class PlayerPage extends Page {
                 this._osd.updatePlayPauseButton();
             }
         }
+
+        // Prepare the takeover while the app is still hidden. webOS may paint the
+        // video surface before the first foreground callback, so waiting until
+        // app:visible would briefly expose the previous stream.
+        if (shouldGateProfileSelection) {
+            this.showResumeProfileSelector();
+        }
     }
 
     /**
@@ -3252,6 +3294,8 @@ class PlayerPage extends Page {
      */
     _handleAppVisible() {
         if (this._isExiting) return;
+
+        if (!this._resumeProfileSelectionActive) this._backgroundPrepared = false;
 
         log.info('App foregrounded, player paused state preserved');
         // The player remains paused. When the user presses play, the normal
@@ -3310,7 +3354,7 @@ class PlayerPage extends Page {
      * @param {string} [reason='userStop']
      *   The reason for stopping playback, passed to the 'player:stopped' event.
      */
-    async _stopAndExit(clearChain = true, reason = 'userStop') {
+    async _stopAndExit(clearChain = true, reason = 'userStop', navigateAfterStop = true) {
         // Prevent multiple calls
         if (this._isExiting) {
             return;
@@ -3413,6 +3457,8 @@ class PlayerPage extends Page {
         // the item they were just watching is more intuitive than returning
         // to the initial entry point.
         // ----------------------------------------------------------------
+        if (!navigateAfterStop) return;
+
         const isTvChannel = this._item?.Type === 'TvChannel';
         const shouldNavigateTv =
             isTvChannel && (this.params.fromGuide === 'true' || this.params.fromDetails === 'true');
@@ -3479,6 +3525,58 @@ class PlayerPage extends Page {
         } else {
             // Standard back navigation for special types (Live TV default, Intros) or if no item state exists.
             router.back();
+        }
+    }
+
+    showResumeProfileSelector() {
+        if (!this._osd || this._isExiting) return;
+        this._resumeProfileSelectionActive = true;
+        this._player?.pause?.();
+        this._isPaused = true;
+        document.body.classList.add('resume-profile-selection-active');
+        this._osd.showResumeProfiles((userId) => this._selectResumeProfile(userId));
+    }
+
+    async _selectResumeProfile(userId) {
+        const currentUserId = auth.getCurrentUser()?.Id;
+        if (!userId) return;
+
+        const resumePlayback = this._resumePlaybackAfterProfileSelection;
+        const restoreMuted = this._resumeMutedAfterProfileSelection;
+        this._resumePlaybackAfterProfileSelection = false;
+        this._resumeMutedAfterProfileSelection = false;
+        if (userId === currentUserId) {
+            this._resumeProfileSelectionActive = false;
+            this._backgroundPrepared = false;
+            this._osd?.closeMenu();
+            document.body.classList.remove('resume-profile-selection-active');
+            const videoElement = document.querySelector('.jellyfin-video-player');
+            if (videoElement) {
+                videoElement.style.display = this._resumeVideoDisplayAfterProfileSelection;
+                videoElement.style.visibility = '';
+                videoElement.style.opacity = '';
+            }
+            this._resumeVideoDisplayAfterProfileSelection = '';
+            this._player?.setMuted?.(restoreMuted);
+            if (resumePlayback) this._player?.unpause?.();
+            return;
+        }
+
+        // Keep the opaque takeover and playback lock active while the old player
+        // stops and the selected user's Home page is prepared.
+        await this._stopAndExit(true, 'profileSwitch', false);
+        try {
+            await auth.switchUser(userId);
+            if (storage.getItem('litefin:settings_per_user') === 'true') {
+                storage.setItem('litefin:skip_profiles_once', 'true');
+                storage.flush();
+                window.location.href = window.location.href.split('#')[0];
+                return;
+            }
+            router.reset('/home');
+        } catch (error) {
+            log.error('Failed to switch profile after playback:', error);
+            router.reset('/profiles');
         }
     }
 
@@ -3616,6 +3714,12 @@ class PlayerPage extends Page {
     // ========================================================================
 
     destroy() {
+        document.body.classList.remove('resume-profile-selection-active');
+        this._resumeProfileSelectionActive = false;
+        this._resumePlaybackAfterProfileSelection = false;
+        this._resumeMutedAfterProfileSelection = false;
+        this._resumeVideoDisplayAfterProfileSelection = '';
+        this._backgroundPrepared = false;
         log.info('destroy() called');
 
         // Stop pause reporting heartbeat timer
