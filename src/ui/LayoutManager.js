@@ -89,6 +89,14 @@ class LayoutManager {
         // Simple Loader: Lightweight rotating ring instead of pulsing dots
         this._simpleLoader = false;
 
+        /*
+         * Loading Indicator Visual Style
+         * Controls the visual presentation of loading spinners and activity indicators.
+         * Default: 'dots' (pulsing dual dots).
+         * Supported: 'dots', 'ring'.
+         */
+        this._loaderStyle = 'dots';
+
         // Disable BlurHash: Disables color-accurate blurred canvas rendering during image load
         this._disableBlurhash = false;
 
@@ -191,6 +199,12 @@ class LayoutManager {
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
+        /*
+         * Retrieve user preference for loading indicator animation aesthetic.
+         * If litefin:loaderStyle is not set, fallback seamlessly to legacy simpleLoader
+         * boolean preference ('ring' when true, otherwise 'dots').
+         */
+        const savedLoaderStyle = storage.getItem('litefin:loaderStyle') || (savedSimpleLoader ? 'ring' : 'dots');
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
@@ -224,7 +238,9 @@ class LayoutManager {
 
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
-        this.setSimpleLoader(savedSimpleLoader, false);
+
+        // Apply loading indicator style and sync legacy simple loader flag
+        this.setLoaderStyle(savedLoaderStyle, false);
         this.setDisableBlurhash(savedDisableBlurhash, false);
         this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
         this.setBadgeStyle(savedBadgeStyle, false);
@@ -585,11 +601,11 @@ class LayoutManager {
         // ====================================================================
         if (platformInfo.isAncientChrome) {
             // Resolve the exact background color for the current theme mode
-            const resolvedBg = this._themeMode === THEME_MODES.TINTED 
-                ? themeUtils.getTintedColors(this._themeColor).background 
-                : (this._themeMode === THEME_MODES.AMBIENT ? '#0a0b0c' 
-                : (this._themeMode === THEME_MODES.BLACK ? '#000000' 
-                : (this._themeMode === THEME_MODES.CLASSIC_LIGHT ? '#f5f5f5' : '#101010')));
+            const resolvedBg = this._themeMode === THEME_MODES.TINTED
+                ? themeUtils.getTintedColors(this._themeColor).background
+                : (this._themeMode === THEME_MODES.AMBIENT ? '#0a0b0c'
+                    : (this._themeMode === THEME_MODES.BLACK ? '#000000'
+                        : (this._themeMode === THEME_MODES.CLASSIC_LIGHT ? '#f5f5f5' : '#101010')));
 
             // Write static background-color rule directly to body
             dynamicCss += `\n/* Direct theme overrides for Chrome < 32 */\n`;
@@ -1052,29 +1068,68 @@ class LayoutManager {
     }
 
     /**
-     * Enable or disable Simple Loader
+     * Enable or disable Simple Loader (Legacy compatibility wrapper).
+     * Maps boolean state to loader visual style ('ring' vs 'dots').
+     *
      * @param {boolean} enabled
      * @param {boolean} [save=true]
      */
     setSimpleLoader(enabled, save = true) {
-        this._simpleLoader = enabled;
+        // Delegate directly to setLoaderStyle to preserve single source of truth
+        this.setLoaderStyle(enabled ? 'ring' : 'dots', save);
+    }
 
-        if (enabled) {
+    /**
+     * Retrieve simple loader boolean status for legacy consumers.
+     * @returns {boolean}
+     */
+    getSimpleLoader() {
+        return this._loaderStyle === 'ring';
+    }
+
+    /**
+     * Set loading indicator visual presentation style.
+     * Supports Apple HIG inspired design variants: 'dots', 'ring', etc.
+     *
+     * @param {string} style - The identifier of the loader style ('dots' | 'ring')
+     * @param {boolean} [save=true] - Whether to persist choice to storage
+     */
+    setLoaderStyle(style, save = true) {
+        // Validate input against supported styles list with safe fallback to 'dots'
+        const validStyle = ['dots', 'ring'].includes(style) ? style : 'dots';
+        this._loaderStyle = validStyle;
+
+        // Stamp active loader style attribute onto root element for scoped CSS targeting
+        document.documentElement.setAttribute('data-loader-style', validStyle);
+
+        // Keep backwards compatibility with legacy simpleLoader attribute & internal state
+        const isLegacyRing = validStyle === 'ring';
+        this._simpleLoader = isLegacyRing;
+        if (isLegacyRing) {
             document.documentElement.setAttribute('data-simple-loader', 'true');
         } else {
             document.documentElement.removeAttribute('data-simple-loader');
         }
 
+        // Persist preferences if save is requested
         if (save) {
-            storage.setItem('litefin:simpleLoader', enabled ? 'true' : 'false');
+            storage.setItem('litefin:loaderStyle', validStyle);
+            storage.setItem('litefin:simpleLoader', isLegacyRing ? 'true' : 'false');
         }
 
-        log.info(`Simple Loader set to: ${enabled}`);
-        eventBus.emit('simpleLoader:changed', { enabled });
+        log.info(`Loading indicator style set to: ${validStyle}`);
+
+        // Broadcast change events to subscribers
+        eventBus.emit('loaderStyle:changed', { style: validStyle });
+        eventBus.emit('simpleLoader:changed', { enabled: isLegacyRing });
     }
 
-    getSimpleLoader() {
-        return this._simpleLoader;
+    /**
+     * Retrieve the current loading indicator visual style.
+     * @returns {string}
+     */
+    getLoaderStyle() {
+        return this._loaderStyle;
     }
 
     /**

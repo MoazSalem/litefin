@@ -299,7 +299,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 /* Select Inputs */
 /* Select Buttons (Modal Triggers) */
 .select-btn,
-.theme-color-select-btn {
+.theme-color-select-btn,
+.loader-style-select-btn {
     padding: 12px 24px;
     font-size: 1.1rem;
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
@@ -327,7 +328,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 .select-btn:focus,
 .select-btn.focused,
 .theme-color-select-btn:focus,
-.theme-color-select-btn.focused {
+.theme-color-select-btn.focused,
+.loader-style-select-btn:focus,
+.loader-style-select-btn.focused {
     background: var(--jf-btn-primary-focus-bg) !important;
     color: var(--jf-btn-primary-focus-color) !important;
     border: 2px solid var(--jf-btn-primary-focus-border) !important;
@@ -336,7 +339,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .select-btn:hover,
-.theme-color-select-btn:hover {
+.theme-color-select-btn:hover,
+.loader-style-select-btn:hover {
     border: 2px solid var(--jf-btn-primary-hover-border)!important;
     transform: scale(1.02);
     will-change: transform;
@@ -1299,4 +1303,313 @@ html[data-layout-quirks="c26"] .setting-control {
 html[data-layout-quirks="c26"] .setting-control > * {
     display: inline-block !important;
     vertical-align: middle !important;
+}
+
+/* ============================================================================
+ * LOADING INDICATOR STYLE MODAL & INTERACTIVE PREVIEW STAGE
+ * ============================================================================
+
+/* Dialog Container — Lightweight High-Performance Window (No blur/shadow overhead) */
+.settings-modal.loader-style-modal {
+    width: 820px;
+    max-width: 92%;
+    border-radius: 24px;
+    background: #16181e;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+}
+
+/* Header with Title and Current Mode Indicator */
+.loader-style-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 32px 18px 32px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.loader-modal-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--jf-accent, #00a4dc);
+}
+
+/* Master-Detail Split Grid Layout */
+.loader-style-modal-split {
+    display: flex;
+    min-height: 290px;
+    padding: 24px 32px;
+    gap: 28px;
+    box-sizing: border-box;
+}
+
+/* Left Column: Interactive Option Buttons List */
+.loader-style-options-column {
+    flex: 1.1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    justify-content: center;
+}
+
+/* Individual Style Choice Button */
+.loader-style-option-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    cursor: pointer;
+    text-align: left;
+    outline: none;
+    box-sizing: border-box;
+    color: #ffffff;
+    position: relative;
+    /* Fluid Spring Scale Animation */
+    transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background 0.2s ease,
+                border-color 0.2s ease;
+    -webkit-transition: -webkit-transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        background 0.2s ease,
+                        border-color 0.2s ease;
+}
+
+/* Mouse Hover State */
+.loader-style-option-btn:hover,
+.loader-style-option-btn.hovered {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* TV Remote D-Pad / Keyboard Focus State with Fluid Spring Scale */
+.loader-style-option-btn:focus,
+.loader-style-option-btn.focused {
+    transform: scale(1.03);
+    -webkit-transform: scale(1.03);
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.85);
+    z-index: 2;
+}
+
+/* Currently Active Setting State */
+.loader-style-option-btn.selected {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: var(--jf-accent, #00a4dc);
+}
+
+.loader-style-option-btn.selected:focus,
+.loader-style-option-btn.selected.focused {
+    border-color: #ffffff;
+}
+
+/* Title & Description Stack */
+.loader-style-option-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.loader-style-option-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #ffffff;
+}
+
+.loader-style-option-desc {
+    font-size: 0.84rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+/* Category Badge Capsule */
+.loader-style-option-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+    flex-shrink: 0;
+}
+
+/* Checkmark Indicator */
+.loader-style-check-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--jf-accent, #00a4dc);
+    opacity: 0;
+    transform: scale(0.6);
+    -webkit-transform: scale(0.6);
+    transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+    -webkit-transition: opacity 0.2s ease, -webkit-transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+}
+
+.loader-style-option-btn.selected .loader-style-check-icon {
+    opacity: 1;
+    transform: scale(1);
+    -webkit-transform: scale(1);
+}
+
+/* ============================================================================
+ * RIGHT COLUMN: LIVE ANIMATED PREVIEW STAGE
+ * ============================================================================ */
+.loader-style-preview-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Presentation Display Card */
+.loader-preview-card {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Central Pedestal Holding the Animated Spinner */
+.loader-preview-pedestal {
+    width: 110px;
+    height: 110px;
+    border-radius: 24px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+    position: relative;
+    z-index: 1;
+}
+
+.loader-preview-spinner-mount {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Descriptive Metadata Below the Pedestal */
+.loader-preview-meta {
+    text-align: center;
+    z-index: 1;
+    max-width: 240px;
+}
+
+.loader-preview-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 4px;
+    letter-spacing: -0.01em;
+}
+
+.loader-preview-subtitle {
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* ============================================================================
+ * ISOLATED PREVIEW SPINNERS
+ * Completely decoupled from page-level data-loader-style attributes.
+ * ============================================================================ */
+.loader-preview-sample {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 1. Pulsing Dots Preview */
+.preview-spinner-dots {
+    width: 48px;
+    height: 48px;
+    position: relative;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-dots::before,
+.preview-spinner-dots::after {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    animation: animloader-gpu 1s infinite ease-in-out;
+    -webkit-animation: animloader-gpu 1s infinite ease-in-out;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-dots::after {
+    top: 0;
+    left: 0;
+    background-color: #ffffff;
+}
+
+.preview-spinner-dots::before {
+    bottom: 0;
+    right: 0;
+    background-color: var(--jf-accent, #00a4dc);
+}
+
+/* 2. Rotating Ring Preview */
+.preview-spinner-ring {
+    width: 44px;
+    height: 44px;
+    border: 3.5px solid rgba(255, 255, 255, 0.16);
+    border-top-color: var(--jf-accent, #00a4dc);
+    border-radius: 50%;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+
+/* Ultra-Legacy Platform Fallback (Samsung Tizen 2.x & Chrome 26 quirks) */
+html[data-layout-quirks="c26"] .loader-style-modal-split {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
 }

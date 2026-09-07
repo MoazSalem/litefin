@@ -746,6 +746,33 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Loading Indicator Style Selection -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLoaderStyle">${i18n.t('LabelLoaderStyle') || 'Loading Indicator Style'}</span>
+                        <span class="setting-description" data-i18n="LoaderStyleDescription">${i18n.t('LoaderStyleDescription') || 'Choose the visual animation style for loading spinners and indicators across the app.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                const currentStyle = layoutManager.getLoaderStyle() || 'dots';
+                const styleNames = {
+                    'dots': i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring'
+                };
+                const activeName = styleNames[currentStyle] || 'Pulsing Dots';
+                return `
+                                <button class="setting-action-btn loader-style-select-btn" 
+                                        id="btn-loader-style-picker" 
+                                        tabindex="0"
+                                        data-focusable="true"
+                                        title="${escapeHtml(activeName)}">
+                                    <span class="btn-label" id="loader-style-btn-label">${escapeHtml(activeName)}</span>
+                                </button>
+                            `;
+            })()}
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ButtonStyle">${i18n.t('ButtonStyle') || 'Button Style'}</span>
@@ -4658,19 +4685,6 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelSimpleLoader">${i18n.t('LabelSimpleLoader') || 'Simple Loading Indicator'}</span>
-                        <span class="setting-description" data-i18n="SimpleLoaderDescription">${i18n.t('SimpleLoaderDescription') || 'Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getSimpleLoader() ? 'active' : ''}" 
-                                id="toggle-simple-loader" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDisableBlurHash">${i18n.t('LabelDisableBlurHash') || 'Disable BlurHash'}</span>
                         <span class="setting-description" data-i18n="DisableBlurHashDescription">${i18n.t('DisableBlurHashDescription') || 'Stop showing color-accurate blurred backgrounds while images are loading. Uses standard dark skeletons instead.'}</span>
                     </div>
@@ -6807,16 +6821,6 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Simple Loader
-        const simpleLoaderBtn = this.$('#toggle-simple-loader');
-        if (simpleLoaderBtn) {
-            simpleLoaderBtn.addEventListener('click', () => {
-                const newValue = !layoutManager.getSimpleLoader();
-                layoutManager.setSimpleLoader(newValue);
-                simpleLoaderBtn.classList.toggle('active', newValue);
-            });
-        }
-
         // Toggle Disable BlurHash
         // Toggles the state of our TV-optimized canvas blurhash background system
         const disableBlurhashBtn = this.$('#toggle-disable-blurhash');
@@ -7539,6 +7543,26 @@ class SettingsPage extends Page {
             });
         }
 
+        // Loading Indicator Style Picker Dialog Trigger
+        const btnLoaderStylePicker = this.$('#btn-loader-style-picker');
+        if (btnLoaderStylePicker) {
+            btnLoaderStylePicker.addEventListener('click', () => {
+                this._openLoaderStyleModal();
+            });
+        }
+
+        // Keep loading style button label in sync
+        eventBus.on('loaderStyle:changed', ({ style }) => {
+            const triggerLabel = this.$('#loader-style-btn-label');
+            if (triggerLabel) {
+                const styleNames = {
+                    'dots': i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring'
+                };
+                triggerLabel.textContent = styleNames[style] || style;
+            }
+        });
+
         // Initialize Custom Dropdowns
         this._bindDropdownEvents();
 
@@ -7943,6 +7967,7 @@ class SettingsPage extends Page {
 
         // Unregister modal focus
         focusManager.unregister('modal-options');
+        focusManager.unregister('modal-loader-options');
         focusManager.unregister('modal-color-grid');
         focusManager.unregister('modal-actions');
         focusManager.unregister('modal-error-content');
@@ -8238,6 +8263,230 @@ class SettingsPage extends Page {
                 focusManager.focusElement(activeSwatch);
             }
         }, 50);
+    }
+
+    /**
+     * =========================================================================
+     * Open Loading Indicator Style Selection Modal Dialog
+     * =========================================================================
+     * Opens a detail dialog allowing users to select their preferred loading
+     * indicator visual style.
+     * 
+     * Features:
+     * - Left options column with tactile spring feedback on focus / hover
+     * - Right live animated preview stage on an isolated glass pedestal
+     * - Decoupled preview rendering immune to page-level attribute states
+     * - Full D-Pad / TV remote navigation with graceful focus restoration
+     * =========================================================================
+     */
+    _openLoaderStyleModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Store focus context for seamless restoration upon modal dismissal
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
+        // Catalog of supported loading indicator styles
+        const styles = [
+            {
+                id: 'dots',
+                name: i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+                description: i18n.t('LoaderStyleDotsDesc') || 'Signature multi-dot animation with vibrant theme glow.',
+                badge: i18n.t('LoaderStyleBadgeModern') || 'Standard'
+            },
+            {
+                id: 'ring',
+                name: i18n.t('LoaderStyleRing') || 'Rotating Ring',
+                description: i18n.t('LoaderStyleRingDesc') || 'Lightweight circular ring with minimal GPU & CPU overhead.',
+                badge: i18n.t('LoaderStyleBadgeEfficient') || 'Lightweight'
+            }
+        ];
+
+        // Retrieve current active style from LayoutManager
+        const currentStyle = layoutManager.getLoaderStyle() || 'dots';
+        const activeObj = styles.find((s) => s.id === currentStyle) || styles[0];
+
+        overlay.innerHTML = `
+            <div class="settings-modal loader-style-modal" role="dialog" aria-modal="true">
+                <div class="modal-header loader-style-modal-header">
+                    <h2 data-i18n="LabelLoaderStyle">${i18n.t('LabelLoaderStyle') || 'Loading Indicator Style'}</h2>
+                    <span class="loader-modal-badge" id="loader-preview-badge">${escapeHtml(activeObj.badge)}</span>
+                </div>
+                <div class="loader-style-modal-split">
+                    <!-- Left Column: Interactive Options List -->
+                    <div class="loader-style-options-column" id="modal-loader-options-list">
+                        ${styles
+                .map(
+                    (s) => `
+                            <button class="loader-style-option-btn ${currentStyle === s.id ? 'selected' : ''}" 
+                                    data-style="${s.id}"
+                                    data-name="${escapeHtml(s.name)}"
+                                    data-desc="${escapeHtml(s.description)}"
+                                    data-badge="${escapeHtml(s.badge)}"
+                                    tabindex="0"
+                                    data-focusable="true">
+                                <div class="loader-style-option-info">
+                                    <span class="loader-style-option-title">${escapeHtml(s.name)}</span>
+                                    <span class="loader-style-option-desc">${escapeHtml(s.description)}</span>
+                                </div>
+                                <span class="loader-style-option-pill">${escapeHtml(s.badge)}</span>
+                                <span class="loader-style-check-icon">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                    </svg>
+                                </span>
+                            </button>
+                        `
+                )
+                .join('')}
+                    </div>
+
+                    <!-- Right Column: Live Animated Preview Stage -->
+                    <div class="loader-style-preview-stage">
+                        <div class="loader-preview-card" id="loader-preview-card">
+                            <div class="loader-preview-pedestal">
+                                <div class="loader-preview-spinner-mount" id="loader-preview-spinner-mount">
+                                    ${this._renderLoaderPreviewSample(activeObj.id)}
+                                </div>
+                            </div>
+                            <div class="loader-preview-meta">
+                                <div class="loader-preview-title" id="loader-preview-title">${escapeHtml(activeObj.name)}</div>
+                                <div class="loader-preview-subtitle" id="loader-preview-desc">${escapeHtml(activeObj.description)}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="ButtonCancel">${i18n.t('ButtonCancel') || 'Cancel'}</button>
+                </div>
+            </div>
+        `;
+
+        // Reveal modal overlay with smooth HIG backdrop transition
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+
+        const previewMount = overlay.querySelector('#loader-preview-spinner-mount');
+        const previewTitle = overlay.querySelector('#loader-preview-title');
+        const previewDesc = overlay.querySelector('#loader-preview-desc');
+        const previewBadge = overlay.querySelector('#loader-preview-badge');
+
+        // Centralized preview updater function
+        const updatePreviewForStyle = (styleId, name, desc, badge) => {
+            if (previewMount) {
+                previewMount.innerHTML = this._renderLoaderPreviewSample(styleId);
+            }
+            if (previewTitle && name) previewTitle.textContent = name;
+            if (previewDesc && desc) previewDesc.textContent = desc;
+            if (previewBadge && badge) previewBadge.textContent = badge;
+        };
+
+        // Bind interactive event handlers for style option buttons
+        overlay.querySelectorAll('.loader-style-option-btn').forEach((btn) => {
+            const styleId = btn.dataset.style;
+            const name = btn.dataset.name;
+            const desc = btn.dataset.desc;
+            const badge = btn.dataset.badge;
+
+            // Live preview update on pointer hover or focus
+            const handleFocusOrHover = () => {
+                updatePreviewForStyle(styleId, name, desc, badge);
+            };
+
+            btn.addEventListener('focus', handleFocusOrHover);
+            btn.addEventListener('mouseenter', handleFocusOrHover);
+
+            // Selection confirmation on click / enter press
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                layoutManager.setLoaderStyle(styleId);
+
+                // Update settings trigger button label
+                const triggerLabel = this.$('#loader-style-btn-label');
+                if (triggerLabel) triggerLabel.textContent = name;
+
+                this._closeSelectionModal();
+            });
+        });
+
+        // Listen for FocusManager remote D-pad changes (Tizen / webOS spatial navigation)
+        if (this._modalFocusChangedHandler) {
+            eventBus.off('focus:changed', this._modalFocusChangedHandler);
+        }
+        this._modalFocusChangedHandler = (focusedEl) => {
+            if (!focusedEl) return;
+            const optionBtn = focusedEl.closest ? focusedEl.closest('.loader-style-option-btn') : null;
+            if (optionBtn && optionBtn.dataset) {
+                updatePreviewForStyle(
+                    optionBtn.dataset.style,
+                    optionBtn.dataset.name,
+                    optionBtn.dataset.desc,
+                    optionBtn.dataset.badge
+                );
+            }
+        };
+        eventBus.on('focus:changed', this._modalFocusChangedHandler);
+
+        // Cancel button dismisses modal and restores previous focus
+        overlay.querySelector('#btn-modal-cancel').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._closeSelectionModal();
+        });
+
+        // Register Focus Section for the options column
+        this.registerFocusSection('modal-loader-options', overlay.querySelector('#modal-loader-options-list'), {
+            orientation: 'vertical',
+            leaveDown: 'modal-actions',
+            enterTo: 'last-focused'
+        });
+
+        // Register Focus Section for modal actions (Cancel button)
+        this.registerFocusSection('modal-actions', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveUp: 'modal-loader-options',
+            onMove: (direction) => {
+                if (direction === 'up') {
+                    focusManager.setActiveSection('modal-loader-options', true, null, { enterTo: 'last-focused' });
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        // Set initial focus to the currently selected style option button
+        focusManager.setActiveSection('modal-loader-options');
+        setTimeout(() => {
+            const activeBtn =
+                overlay.querySelector('.loader-style-option-btn.selected') ||
+                overlay.querySelector('.loader-style-option-btn');
+            if (activeBtn) {
+                focusManager.focusElement(activeBtn);
+            }
+        }, 50);
+    }
+
+    /**
+     * Render isolated live preview spinner markup for a specific style ID.
+     * This creates a pure preview stage decoupled from outer page attributes.
+     *
+     * @param {string} styleId - Style identifier ('dots' | 'ring')
+     * @returns {string} HTML markup string
+     */
+    _renderLoaderPreviewSample(styleId) {
+        if (styleId === 'ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--ring">
+                    <div class="preview-spinner-ring"></div>
+                </div>
+            `;
+        }
+        // Default to signature pulsing dots
+        return `
+            <div class="loader-preview-sample loader-preview-sample--dots">
+                <div class="preview-spinner-dots"></div>
+            </div>
+        `;
     }
 
     _bindDropdownEvents() {
