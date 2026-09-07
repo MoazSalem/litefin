@@ -11,6 +11,7 @@
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { storage } from '../utils/StorageService.js';
+import { state } from '../core/StateManager.js';
 import { api } from './ApiClient.js';
 import { normalizeSeerrItem, seerrStatusKey } from './seerrNormalize.js';
 import { buildGenreSliderItems, buildStudioItems, buildNetworkItems } from '../utils/seerrGenres.js';
@@ -38,10 +39,14 @@ export class SeerrClient {
     }
 
     /**
-     * Clears all cached network responses.
+     * Clears all cached network responses and invalidates Discover page state.
      */
     clearCache() {
+        // Clear in-memory HTTP response cache for Seerr requests
         this._cache.clear();
+
+        // Invalidate DiscoverPage rendered rows cache so navigating back displays fresh data
+        state.delete('discover:pageCache');
     }
 
     /** Last known server-side configuration state. */

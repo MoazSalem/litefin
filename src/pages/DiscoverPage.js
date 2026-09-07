@@ -837,6 +837,15 @@ class DiscoverPage extends Page {
     // Lifecycle & Cleanup
     // ========================================================================
 
+    /**
+     * Clears the in-memory cached row state so subsequent navigations
+     * to DiscoverPage re-fetch live data from the server.
+     */
+    static invalidateCache() {
+        state.delete('discover:pageCache');
+        log.info('Discover page cache invalidated');
+    }
+
     _destroyVirtualRows() {
         for (const [key] of this._rowRegistry) {
             focusManager.unregister(`discover-row-${key}`);

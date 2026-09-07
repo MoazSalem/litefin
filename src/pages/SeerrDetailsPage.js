@@ -533,11 +533,20 @@ class SeerrDetailsPage extends Page {
             const button = this.$('.seerr-watchlist-btn');
             button.disabled = true;
             try {
-                if (this._isWatchlisted) await seerr.removeFromWatchlist(this._item);
-                else await seerr.addToWatchlist(this._item);
+                // 1. Send update to Seerr API
+                if (this._isWatchlisted) {
+                    await seerr.removeFromWatchlist(this._item);
+                } else {
+                    await seerr.addToWatchlist(this._item);
+                }
+
+                // 2. Toggle local button state and notify user
                 this._isWatchlisted = !this._isWatchlisted;
                 this._updateWatchlistButton();
                 toast.show(i18n.t(this._isWatchlisted ? 'SeerrAddedToWatchlist' : 'SeerrRemovedFromWatchlist'));
+
+                // 3. Clear cache and invalidate Discover page so returning to it reflects watchlist updates
+                seerr.clearCache();
             } catch (err) {
                 log.warn('Unable to update Seerr watchlist', err);
                 toast.show(i18n.t('SeerrWatchlistFailed'));

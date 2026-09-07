@@ -256,11 +256,11 @@ class SeerrRequestModal {
             }) || users.find((u) => u.id === options?.user?.id) || users[0];
         }
 
-        // For non-admin users, if no options to show, return early with selectedUser
+        // For non-admin users, all advanced parameters (including explicitly specifying userId)
+        // are forbidden by Seerr. Seerr Controller automatically identifies and attributes the request
+        // to the authenticated user via X-Api-User header derived from their Jellyfin session.
         if (!isAdmin) {
-            return () => ({
-                userId: selectedUser ? selectedUser.id : undefined
-            });
+            return () => ({});
         }
 
         if (!hasAdvancedOptions && !hasUsers) return () => ({});
