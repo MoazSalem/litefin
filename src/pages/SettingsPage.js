@@ -7930,6 +7930,12 @@ class SettingsPage extends Page {
         const overlay = this.$('#modal-overlay');
         if (!overlay || !overlay.classList.contains('visible')) return;
 
+        // Clean up modal focus listener to prevent memory leaks or dangling event handlers
+        if (this._modalFocusChangedHandler) {
+            eventBus.off('focus:changed', this._modalFocusChangedHandler);
+            this._modalFocusChangedHandler = null;
+        }
+
         overlay.classList.remove('visible');
         overlay.setAttribute('aria-hidden', 'true');
         overlay.innerHTML = '';
@@ -8148,6 +8154,12 @@ class SettingsPage extends Page {
         const previewDot = overlay.querySelector('#theme-color-preview-dot');
         const previewName = overlay.querySelector('#theme-color-preview-name');
 
+        // Centralized helper to update header live-preview dot and title
+        const updatePreviewForColor = (color, name) => {
+            if (previewDot && color) previewDot.style.backgroundColor = color;
+            if (previewName && name) previewName.textContent = name;
+        };
+
         // Bind interactive color swatch events
         overlay.querySelectorAll('.color-option').forEach((btn) => {
             const color = btn.dataset.color;
@@ -8155,8 +8167,7 @@ class SettingsPage extends Page {
 
             // Live preview update on focus / hover
             const updatePreview = () => {
-                if (previewDot && color) previewDot.style.backgroundColor = color;
-                if (previewName && name) previewName.textContent = name;
+                updatePreviewForColor(color, name);
             };
 
             btn.addEventListener('focus', updatePreview);
@@ -8176,6 +8187,20 @@ class SettingsPage extends Page {
                 this._closeSelectionModal();
             });
         });
+
+        // Listen for FocusManager focus transitions across color swatches (TV remote / D-pad spatial navigation)
+        if (this._modalFocusChangedHandler) {
+            eventBus.off('focus:changed', this._modalFocusChangedHandler);
+        }
+        this._modalFocusChangedHandler = (focusedEl) => {
+            if (!focusedEl) return;
+            // Check if the newly focused element is a color swatch in our grid
+            const optionBtn = focusedEl.closest ? focusedEl.closest('.color-option') : null;
+            if (optionBtn && optionBtn.dataset) {
+                updatePreviewForColor(optionBtn.dataset.color, optionBtn.dataset.name);
+            }
+        };
+        eventBus.on('focus:changed', this._modalFocusChangedHandler);
 
         // Cancel button
         overlay.querySelector('#btn-modal-cancel').addEventListener('click', (e) => {
