@@ -139,6 +139,32 @@ class SeerrDetailsPage extends Page {
             return;
         }
 
+        // --------------------------------------------------------------------
+        // Resolve Seerr admin status up-front so _updateRequestButton can
+        // correctly gate the cancel button based on request status.
+        //
+        // Seerr rules:
+        //   - PENDING  → any user can cancel (queued, not yet approved)
+        //   - PROCESSING / beyond → only Seerr admins can cancel (approved)
+        //
+        // We match the current Jellyfin user ID against the Seerr users list
+        // and check their permissions bitmask: ADMIN=2, MANAGE_REQUESTS=8192.
+        // Defaults to false so non-admins are safe if the fetch fails.
+        // --------------------------------------------------------------------
+        this._isSeerrAdmin = false;
+        seerr.getUsers().then((users) => {
+            if (!Array.isArray(users)) return;
+            const currentJfId = (api.userId || '').replace(/-/g, '').toLowerCase();
+            const me = users.find((u) => {
+                const uJfId = (u.jellyfinUserId || '').replace(/-/g, '').toLowerCase();
+                return currentJfId && uJfId && uJfId === currentJfId;
+            });
+            // Bits: 2 = ADMIN, 8192 = MANAGE_REQUESTS
+            this._isSeerrAdmin = !!((me?.permissions || 0) & (2 | 8192));
+            // Re-evaluate cancel button visibility now that admin status is known
+            this._updateRequestButton();
+        }).catch(() => { /* silently default to non-admin */ });
+
         this.setLoading(true);
         try {
             this._item = await seerr.details(mediaType, tmdbId);
@@ -996,8 +1022,17 @@ class SeerrDetailsPage extends Page {
         button.classList.toggle('hidden', !requestable);
         button.tabIndex = requestable ? 0 : -1;
 
-        // Cancel button is available when a request ID exists and media isn't fully available
-        const canCancel = !!(this._item._requestId && this._item._seerrStatus !== SEERR_STATUS.AVAILABLE);
+        // ----------------------------------------------------------------
+        // Cancel button visibility:
+        //   PENDING  → any user can cancel (just a queue entry, no admin
+        //              approval involved yet — Seerr allows this for all)
+        //   Anything past PENDING (PROCESSING, PARTIALLY_AVAILABLE, etc.) →
+        //              admin-approved work has started; only Seerr admins
+        //              can retract it at this point.
+        // ----------------------------------------------------------------
+        const hasRequest = !!(this._item._requestId && this._item._seerrStatus !== SEERR_STATUS.AVAILABLE);
+        const isPending = this._item._seerrStatus === SEERR_STATUS.PENDING;
+        const canCancel = hasRequest && (isPending || this._isSeerrAdmin);
         if (cancelBtn) {
             cancelBtn.classList.toggle('hidden', !canCancel);
             cancelBtn.tabIndex = canCancel ? 0 : -1;

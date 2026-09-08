@@ -198,25 +198,31 @@ class SeerrRequestModal {
         }
 
         // --------------------------------------------------------------------
-        // Check Admin Status:
-        // Check Jellyfin User Policy (IsAdministrator) or Seerr permissions (ADMIN / MANAGE_REQUESTS).
-        // Only administrators can switch requested user or customize server, profile, and root folder.
+        // Check Admin Status (Seerr-side):
+        //
+        // We check the current user's OWN Seerr permissions — NOT the API key
+        // owner's permissions (`options.user` is always the admin key holder),
+        // and NOT Jellyfin's IsAdministrator flag (a user can be a Jellyfin
+        // admin without being a Seerr admin, e.g. BigTv).
+        //
+        // Strategy: match the current Jellyfin user ID against the `users` list
+        // (which we already fetched), then read their Seerr `permissions` bitmask.
+        // ADMIN = 2, MANAGE_REQUESTS = 8192.
         // --------------------------------------------------------------------
-        let currentUserData = state.get('user:data');
-        if (!currentUserData && api.userId) {
-            try {
-                currentUserData = await api.getCurrentUser();
-            } catch (err) {
-                log.warn('Could not fetch current Jellyfin user data', err);
-            }
-        }
-        const isJellyfinAdmin = !!(currentUserData?.Policy?.IsAdministrator);
 
-        // Check Seerr user permissions (ADMIN = 2, MANAGE_REQUESTS = 8192)
-        const isSeerrAdmin = !!((options?.user?.permissions || 0) & (2 | 8192));
+        // Normalize the current Jellyfin user ID for comparison (strip hyphens)
+        const currentJfId = (api.userId || '').replace(/-/g, '').toLowerCase();
 
-        // Combined admin check
-        const isAdmin = isJellyfinAdmin || isSeerrAdmin;
+        // Find this user's Seerr account by matching their Jellyfin user ID
+        const currentSeerrUser = Array.isArray(users)
+            ? users.find((u) => {
+                const uJfId = (u.jellyfinUserId || '').replace(/-/g, '').toLowerCase();
+                return currentJfId && uJfId && uJfId === currentJfId;
+            }) || null
+            : null;
+
+        // Check if the current user's Seerr permissions include ADMIN (2) or MANAGE_REQUESTS (8192)
+        const isAdmin = !!((currentSeerrUser?.permissions || 0) & (2 | 8192));
 
         // If user is not an administrator, disable advanced server options and user switching
         const hasAdvancedOptions = isAdmin && options && options.servers && options.servers.length > 0;
@@ -224,36 +230,23 @@ class SeerrRequestModal {
 
         // --------------------------------------------------------------------
         // Auto-Detect "Request As" User:
-        // Prioritize matching the current Jellyfin user by GUID or username.
-        // Falls back to Seerr API key owner if present, or first user.
+        // We already matched the current Jellyfin user to their Seerr account
+        // above (`currentSeerrUser`). Use that directly, falling back to the
+        // first user in the list if no match was found.
         // --------------------------------------------------------------------
         let selectedUser = null;
         if (hasUsers) {
-            // Retrieve current Jellyfin user ID (normalized without hyphens)
-            const currentJfId = (api.userId || '').replace(/-/g, '').toLowerCase();
-
-            // Retrieve current Jellyfin username from StateManager profile or user data
-            const currentProfile = state.get('user:profile') || state.get('user') || currentUserData || {};
-            const currentUsername = (currentProfile.Name || currentProfile.name || '').trim().toLowerCase();
-
-            // Search for an exact match against Seerr linked Jellyfin account
-            selectedUser = users.find((u) => {
-                // Match by Jellyfin User GUID
-                const uJfId = (u.jellyfinUserId || '').replace(/-/g, '').toLowerCase();
-                if (currentJfId && uJfId && uJfId === currentJfId) {
-                    return true;
-                }
-
-                // Match by Jellyfin Username / Display name / Seerr Username
+            // Primary match: exact Jellyfin user ID match (already resolved above)
+            // Secondary: match by username/display name in case jellyfinUserId wasn't set
+            selectedUser = currentSeerrUser || users.find((u) => {
                 const uJfName = (u.jellyfinUsername || '').trim().toLowerCase();
                 const uName = (u.username || '').trim().toLowerCase();
                 const uDisplay = (u.displayName || '').trim().toLowerCase();
-                if (currentUsername && (uJfName === currentUsername || uName === currentUsername || uDisplay === currentUsername)) {
-                    return true;
-                }
-
-                return false;
-            }) || users.find((u) => u.id === options?.user?.id) || users[0];
+                // Try to match against Jellyfin username from state if available
+                const profile = state.get('user:profile') || state.get('user') || {};
+                const currentUsername = (profile.Name || profile.name || '').trim().toLowerCase();
+                return currentUsername && (uJfName === currentUsername || uName === currentUsername || uDisplay === currentUsername);
+            }) || users[0];
         }
 
         // For non-admin users, all advanced parameters (including explicitly specifying userId)
