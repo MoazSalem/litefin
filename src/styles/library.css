@@ -105,8 +105,8 @@
  * and text variables to follow user display customization preferences.
  */
 .tab-btn.active {
-    background-color: var(--jf-btn-primary-bg) !important;
-    color: var(--jf-btn-primary-color) !important;
+    background-color: var(--jf-btn-primary-color) !important;
+    color: var(--jf-btn-primary-bg) !important; 
     border-color: var(--jf-btn-primary-border) !important;
 }
 
