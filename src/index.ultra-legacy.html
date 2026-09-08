@@ -196,6 +196,13 @@
                 // Stamp the theme mode tag on documentElement for CSS styling
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
+                // Restore loading indicator style to prevent flash of wrong spinner
+                var validLoaderStyles = ['dots','ring','dual-ring','orbit','satellite','triple-ring','dotted-ring','eclipse-sweep','sonar-ring','push-pulse','horizontal-dots','pulsing-grid'];
+                var savedLoaderStyle = localStorage.getItem('litefin:loaderStyle');
+                var savedSimpleLoader = localStorage.getItem('litefin:simpleLoader') === 'true';
+                var loaderStyle = validLoaderStyles.includes(savedLoaderStyle) ? savedLoaderStyle : (savedSimpleLoader ? 'ring' : 'dots');
+                document.documentElement.setAttribute('data-loader-style', loaderStyle);
+
                 // Theme variables for early loading (must match CSS definitions)
                 // These provide standard values before Webpack bundle is loaded.
                 var themes = {
