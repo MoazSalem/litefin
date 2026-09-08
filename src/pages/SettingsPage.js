@@ -7573,8 +7573,8 @@ class SettingsPage extends Page {
                     'satellite': i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
                     'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
                     'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
-                    'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
                     'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                    'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
                     'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
                     'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
                     'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
@@ -8352,16 +8352,16 @@ class SettingsPage extends Page {
                 badge: i18n.t('LoaderStyleBadgeDottedRing') || 'Dotted'
             },
             {
-                id: 'eclipse-sweep',
-                name: i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
-                description: i18n.t('LoaderStyleEclipseSweepDesc') || 'Minimalist circular disc illuminated by a traveling inset crescent shadow.',
-                badge: i18n.t('LoaderStyleBadgeEclipseSweep') || 'Crescent'
-            },
-            {
                 id: 'sonar-ring',
                 name: i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
                 description: i18n.t('LoaderStyleSonarRingDesc') || 'Spinning theme-colored disc with opposing high-contrast aperture cutouts.',
                 badge: i18n.t('LoaderStyleBadgeSonarRing') || 'Aperture'
+            },
+            {
+                id: 'eclipse-sweep',
+                name: i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                description: i18n.t('LoaderStyleEclipseSweepDesc') || 'Minimalist circular disc illuminated by a traveling inset crescent shadow.',
+                badge: i18n.t('LoaderStyleBadgeEclipseSweep') || 'Crescent'
             },
             {
                 id: 'push-pulse',
