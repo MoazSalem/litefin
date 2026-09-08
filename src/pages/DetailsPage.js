@@ -502,7 +502,9 @@ class DetailsPage extends Page {
                 'Aperture',
                 'Altitude',
                 'DateCreated',
-                'PremiereDate'
+                'PremiereDate',
+                'ProviderIds',
+                'SeriesTmdbId'
             ];
 
             if (!hideRich) {
@@ -758,7 +760,13 @@ class DetailsPage extends Page {
             // Re-render hero header and technical details to reflect the selected version
             this._renderHeroText();
             // Re-trigger zero-latency prewarm for the newly selected version
-            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+            if (
+                this._item &&
+                (this._item.Type === 'Movie' ||
+                    this._item.Type === 'Episode' ||
+                    this._item.Type === 'Video' ||
+                    this._item.Type === 'Trailer')
+            ) {
                 prewarmManager.prewarm(this._item, {
                     mediaSourceId: id
                 });
@@ -1269,7 +1277,11 @@ class DetailsPage extends Page {
                     key: 'videos',
                     sectionId: 'collection-videos-section',
                     listId: 'collection-videos-row',
-                    filter: (item) => item.MediaType === 'Video' && item.Type !== 'Movie' && item.Type !== 'Series' && item.Type !== 'Episode',
+                    filter: (item) =>
+                        item.MediaType === 'Video' &&
+                        item.Type !== 'Movie' &&
+                        item.Type !== 'Series' &&
+                        item.Type !== 'Episode',
                     isLandscape: true,
                     cardType: 'thumb'
                 },
@@ -2028,7 +2040,8 @@ class DetailsPage extends Page {
         const videoRangeType = videoStream?.VideoRangeType || '';
         const profile = videoStream?.Profile || '';
         const streamTitle = videoStream?.Title || videoStream?.DisplayTitle || '';
-        const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${streamTitle} ${rawVideoCodec}`.toLowerCase();
+        const checkString =
+            `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${streamTitle} ${rawVideoCodec}`.toLowerCase();
 
         let isHdr10Plus = false;
         let isDovi = false;
@@ -2103,7 +2116,11 @@ class DetailsPage extends Page {
             let audioCodecLabel = '';
             if (rawAudioCodec === 'truehd') {
                 audioCodecLabel = 'TrueHD';
-            } else if (rawAudioCodec === 'dts-hd ma' || rawAudioCodec === 'dtshd_ma' || (rawAudioCodec === 'dts' && audioProfile.includes('ma'))) {
+            } else if (
+                rawAudioCodec === 'dts-hd ma' ||
+                rawAudioCodec === 'dtshd_ma' ||
+                (rawAudioCodec === 'dts' && audioProfile.includes('ma'))
+            ) {
                 audioCodecLabel = 'DTS-HD MA';
             } else if (rawAudioCodec === 'dts-hd' || rawAudioCodec === 'dtshd_hra') {
                 audioCodecLabel = 'DTS-HD';
@@ -2146,7 +2163,8 @@ class DetailsPage extends Page {
             // Build cohesive audio string
             let audioFullString = '';
             if (isAtmos) {
-                audioFullString = `${audioCodecLabel ? audioCodecLabel + ' ' : ''}Atmos${channelText ? ' ' + channelText : ''}`.trim();
+                audioFullString =
+                    `${audioCodecLabel ? audioCodecLabel + ' ' : ''}Atmos${channelText ? ' ' + channelText : ''}`.trim();
                 pills.push(`<span class="tech-pill tech-pill-atmos">${escapeHtml(audioFullString)}</span>`);
             } else {
                 audioFullString = `${audioCodecLabel}${channelText ? ' ' + channelText : ''}`.trim();
@@ -2231,12 +2249,12 @@ class DetailsPage extends Page {
                 ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
                 : '';
         const criticScore = item.CriticRating
-            ? (String(item.CriticRating).endsWith('%') ? item.CriticRating : `${Math.round(item.CriticRating)}%`)
+            ? String(item.CriticRating).endsWith('%')
+                ? item.CriticRating
+                : `${Math.round(item.CriticRating)}%`
             : '';
         const criticRating =
-            item.CriticRating && shouldShowScore(item)
-                ? `${detailsIcons.rottenTomatoesFresh}${criticScore}`
-                : '';
+            item.CriticRating && shouldShowScore(item) ? `${detailsIcons.rottenTomatoesFresh}${criticScore}` : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
@@ -2860,14 +2878,25 @@ class DetailsPage extends Page {
                     ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
                         ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
                         : 0;
-                const progressHtml = progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : '';
+                const progressHtml =
+                    progress > 0
+                        ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>`
+                        : '';
 
                 const playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(ep);
                 const qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(ep);
 
-                const imgUrl = api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality });
+                const imgUrl = api.getImageUrl(ep.Id, 'Primary', {
+                    maxWidth: imageService.getParams('thumb').maxWidth,
+                    quality: imageService.getParams('thumb').quality
+                });
                 const episodeTitle = i18n.ensureBiDi(ep.Name);
-                const episodePrefix = ep.ParentIndexNumber && ep.IndexNumber ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. ` : ep.IndexNumber ? `${ep.IndexNumber}. ` : '';
+                const episodePrefix =
+                    ep.ParentIndexNumber && ep.IndexNumber
+                        ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. `
+                        : ep.IndexNumber
+                            ? `${ep.IndexNumber}. `
+                            : '';
 
                 const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
                 let runtimeText = '';
@@ -3067,7 +3096,8 @@ class DetailsPage extends Page {
                     );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
-                    const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    const rating =
+                        ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
                     let runtimeText = '';
                     if (ep.RunTimeTicks) {
                         const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -4158,7 +4188,13 @@ class DetailsPage extends Page {
             // Re-render hero header to update the audio specifications pill
             this._renderHeroText();
             // Re-trigger zero-latency prewarm with updated audio track selection
-            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+            if (
+                this._item &&
+                (this._item.Type === 'Movie' ||
+                    this._item.Type === 'Episode' ||
+                    this._item.Type === 'Video' ||
+                    this._item.Type === 'Trailer')
+            ) {
                 prewarmManager.prewarm(this._item, {
                     mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
                     audioStreamIndex: index,
@@ -4220,7 +4256,13 @@ class DetailsPage extends Page {
             log.info('Selected Subtitle Index:', index);
 
             // Re-trigger zero-latency prewarm with updated subtitle track selection
-            if (this._item && (this._item.Type === 'Movie' || this._item.Type === 'Episode' || this._item.Type === 'Video' || this._item.Type === 'Trailer')) {
+            if (
+                this._item &&
+                (this._item.Type === 'Movie' ||
+                    this._item.Type === 'Episode' ||
+                    this._item.Type === 'Video' ||
+                    this._item.Type === 'Trailer')
+            ) {
                 prewarmManager.prewarm(this._item, {
                     mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
                     audioStreamIndex: this._selectedAudioIndex,
@@ -4420,6 +4462,29 @@ class DetailsPage extends Page {
             options.push({ id: 'go-to-album', label: i18n.t('GoToAlbum') });
         }
 
+        // ── Seerr Details Shortcut (Only if Seerr is configured and available) ──
+        const tmdbId =
+            this._item?.ProviderIds?.Tmdb ||
+            this._item?.ProviderIds?.tmdb ||
+            this._item?.ProviderIds?.TMDB ||
+            this._item?.SeriesTmdbId ||
+            this._item?.SeriesProviderIds?.Tmdb ||
+            this._item?.SeriesProviderIds?.tmdb ||
+            this._parentSeries?.ProviderIds?.Tmdb ||
+            this._parentSeries?.ProviderIds?.tmdb ||
+            this._parentSeries?.SeriesTmdbId;
+
+        const isTvType =
+            this._item?.Type === 'Series' || this._item?.Type === 'Season' || this._item?.Type === 'Episode';
+
+        const isMovieType = this._item?.Type === 'Movie';
+
+        const isSeerrAvailable = await seerr.isAvailable();
+
+        if (isSeerrAvailable && tmdbId) {
+            options.push({ id: 'seerr-details', label: i18n.t('SeerrDetails') || 'Seerr Details' });
+        }
+
         if (this._item?.MediaSources?.length > 1) {
             options.push({ id: 'select-version', label: i18n.t('SelectVersion') });
         }
@@ -4430,29 +4495,6 @@ class DetailsPage extends Page {
 
         if (this._item?.MediaSources?.length > 0) {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
-        }
-
-        // ── Seerr Details Shortcut (Only if Seerr is configured and available) ──
-        const tmdbId =
-            this._item?.ProviderIds?.Tmdb ||
-            this._item?.ProviderIds?.tmdb ||
-            this._item?.ProviderIds?.TMDB ||
-            this._item?.SeriesTmdbId ||
-            this._item?.SeriesProviderIds?.Tmdb ||
-            this._item?.SeriesProviderIds?.tmdb;
-
-        const isTvType =
-            this._item?.Type === 'Series' ||
-            this._item?.Type === 'Season' ||
-            this._item?.Type === 'Episode';
-
-        const isMovieType =
-            this._item?.Type === 'Movie';
-
-        const isSeerrAvailable = await seerr.isAvailable();
-
-        if (isSeerrAvailable && tmdbId) {
-            options.push({ id: 'seerr-details', label: i18n.t('SeerrDetails') || 'Seerr Details' });
         }
 
         // ── Refresh Metadata Permission Check ────────────────────────────────
