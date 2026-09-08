@@ -4451,7 +4451,7 @@ class DetailsPage extends Page {
 
         const isSeerrAvailable = await seerr.isAvailable();
 
-        if (isSeerrAvailable && tmdbId && (isTvType || isMovieType)) {
+        if (isSeerrAvailable && tmdbId) {
             options.push({ id: 'seerr-details', label: i18n.t('SeerrDetails') || 'Seerr Details' });
         }
 

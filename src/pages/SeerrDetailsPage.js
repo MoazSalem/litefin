@@ -72,6 +72,10 @@ class SeerrDetailsPage extends Page {
                                     ${detailsIcons.play}
                                     <span>${i18n.t('Play')}</span>
                                 </button>
+                                <button class="btn btn-action seerr-jellyfin-btn hidden" tabindex="0">
+                                    ${detailsIcons.jellyfinDetails}
+                                    <span>${i18n.t('SeerrViewInJellyfin')}</span>
+                                </button>
                                 <button class="btn btn-action seerr-request-btn" tabindex="0">
                                     ${detailsIcons.add}
                                     <span>${i18n.t('SeerrRequest')}</span>
@@ -446,10 +450,21 @@ class SeerrDetailsPage extends Page {
 
     _updatePlayButton() {
         const playBtn = this.$('.seerr-play-btn');
+        const jellyfinBtn = this.$('.seerr-jellyfin-btn');
         if (!playBtn) return;
+
         const isAvailable = !!this._jellyfinMediaId;
+
+        // Play button — shown whenever the Jellyfin media ID is resolved
         playBtn.classList.toggle('hidden', !isAvailable);
         playBtn.tabIndex = isAvailable ? 0 : -1;
+
+        const showJellyfinBtn = isAvailable;
+        if (jellyfinBtn) {
+            jellyfinBtn.classList.toggle('hidden', !showJellyfinBtn);
+            jellyfinBtn.tabIndex = showJellyfinBtn ? 0 : -1;
+        }
+
         focusManager.invalidateCache('seerr-details-actions');
     }
 
@@ -589,6 +604,14 @@ class SeerrDetailsPage extends Page {
             } else {
                 router.navigate(`/player/${this._jellyfinMediaId}/false`);
             }
+        });
+
+        // Navigate to the Jellyfin details page — for TV shows this lets the
+        // user browse seasons and episodes directly within Jellyfin rather than
+        // going straight to the player.
+        this.$('.seerr-jellyfin-btn')?.addEventListener('click', () => {
+            if (!this._jellyfinMediaId) return;
+            router.navigate(`/details/${this._jellyfinMediaId}`);
         });
 
         this.$('.seerr-trailer-btn')?.addEventListener('click', () => {
@@ -1038,15 +1061,25 @@ class SeerrDetailsPage extends Page {
             cancelBtn.tabIndex = canCancel ? 0 : -1;
         }
 
-        // When partially available or already pending/processing, show "Request More"
-        const isPartialOrPending =
-            isTv &&
-            (this._item._seerrStatus === SEERR_STATUS.PENDING ||
-                this._item._seerrStatus === SEERR_STATUS.PROCESSING ||
-                this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE);
+        // Button label reflects the state of the series:
+        //   PARTIALLY_AVAILABLE → "Request More" (some content is available, more can be added)
+        //   PENDING / PROCESSING → "View Request" (content is queued/downloading, nothing available yet;
+        //                          the modal still lets the user add more seasons if needed)
+        //   Default             → "Request"
         const span = button.querySelector('span');
-        if (span) {
-            span.textContent = i18n.t(isPartialOrPending ? 'SeerrRequestMore' : 'SeerrRequest');
+        if (span && isTv) {
+            let labelKey = 'SeerrRequest';
+            if (this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE) {
+                labelKey = 'SeerrRequestMore';
+            } else if (
+                this._item._seerrStatus === SEERR_STATUS.PENDING ||
+                this._item._seerrStatus === SEERR_STATUS.PROCESSING
+            ) {
+                labelKey = 'SeerrViewRequest';
+            }
+            span.textContent = i18n.t(labelKey);
+        } else if (span) {
+            span.textContent = i18n.t('SeerrRequest');
         }
 
         // Re-evaluate focus layout for action buttons

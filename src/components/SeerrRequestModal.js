@@ -77,12 +77,16 @@ class SeerrRequestModal {
         const isAvailable = item._seerrStatus === SEERR_STATUS.AVAILABLE;
         const statusKey = seerrStatusKey(item._seerrStatus);
 
-        const isPartialOrPending =
+        // Inside the modal the submit button always says "Request More" when
+        // the series has any active/pending request — the modal context makes
+        // the intent clear (season picker is shown). The outer details button
+        // is the one that says "View Request" for PENDING/PROCESSING.
+        const isPartiallyAvailableOrActive =
             isTv &&
-            (item._seerrStatus === SEERR_STATUS.PENDING ||
-                item._seerrStatus === SEERR_STATUS.PROCESSING ||
-                item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE);
-        const requestBtnLabel = i18n.t(isPartialOrPending ? 'SeerrRequestMore' : 'SeerrRequest');
+            (item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE ||
+                item._seerrStatus === SEERR_STATUS.PENDING ||
+                item._seerrStatus === SEERR_STATUS.PROCESSING);
+        const requestBtnLabel = i18n.t(isPartiallyAvailableOrActive ? 'SeerrRequestMore' : 'SeerrRequest');
 
         const itemTitle = `${item.Name}${item.ProductionYear ? ` (${item.ProductionYear})` : ''}`;
         const modalHeaderTitle = isTv ? `${i18n.t('SeerrRequestSeries')} - ${itemTitle}` : i18n.t('SeerrRequestMovie');

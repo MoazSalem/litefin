@@ -13,7 +13,7 @@ import { i18n } from '../utils/i18n.js';
 import { storage } from '../utils/StorageService.js';
 import { state } from '../core/StateManager.js';
 import { api } from './ApiClient.js';
-import { normalizeSeerrItem, seerrStatusKey } from './seerrNormalize.js';
+import { normalizeSeerrItem, seerrStatusKey, SEERR_STATUS } from './seerrNormalize.js';
 import { buildGenreSliderItems, buildStudioItems, buildNetworkItems } from '../utils/seerrGenres.js';
 
 const log = logger.create('SeerrClient');
@@ -403,6 +403,28 @@ export class SeerrClient {
         const seasons = (detail && detail.seasons) || [];
         const seasonStatuses = {};
 
+        // -------------------------------------------------------------------
+        // Seerr uses TWO separate status enums:
+        //
+        //   MediaStatus (mediaInfo.status, mediaInfo.seasons[].status):
+        //     1=UNKNOWN, 2=PENDING, 3=PROCESSING, 4=PARTIALLY_AVAILABLE, 5=AVAILABLE
+        //
+        //   RequestStatus (requests[].status, requests[].seasons[].status):
+        //     1=PENDING (awaiting admin approval)
+        //     2=APPROVED (downloader picked it up)
+        //     3=DECLINED
+        //
+        // We must translate RequestStatus → MediaStatus before comparing.
+        // -------------------------------------------------------------------
+        const requestStatusToMediaStatus = (rs) => {
+            switch (rs) {
+                case 1: return SEERR_STATUS.PENDING;     // Request pending → MediaStatus PENDING (2)
+                case 2: return SEERR_STATUS.PROCESSING;  // Request approved → MediaStatus PROCESSING (3)
+                default: return 0;                        // Declined or unknown → ignore
+            }
+        };
+
+        // Pass 1: read season statuses from mediaInfo.seasons (uses MediaStatus directly)
         const infoSeasons = (detail && detail.mediaInfo && detail.mediaInfo.seasons) || [];
         infoSeasons.forEach((season) => {
             const sNum = season.seasonNumber ?? season.season_number;
@@ -411,16 +433,22 @@ export class SeerrClient {
             }
         });
 
+        // Pass 2: overlay statuses from active requests (translate RequestStatus → MediaStatus)
         const requests = (detail && detail.mediaInfo && detail.mediaInfo.requests) || [];
         requests.forEach((req) => {
+            // Translate this request's status to MediaStatus
+            const reqMediaStatus = requestStatusToMediaStatus(req.status);
+            if (!reqMediaStatus) return; // DECLINED — skip entirely
+
             const reqSeasons = req.seasons || [];
             reqSeasons.forEach((s) => {
                 const sNum = s.seasonNumber ?? s.season_number;
                 if (sNum != null) {
                     const numKey = Number(sNum);
-                    if (!seasonStatuses[numKey] || seasonStatuses[numKey] === 0) {
-                        seasonStatuses[numKey] = s.status || req.status || 2;
-                    }
+                    // Take the higher of any existing MediaStatus and this request's translated status
+                    // so AVAILABLE (5) is never downgraded to PENDING (2) by a stale request.
+                    const existing = seasonStatuses[numKey] || 0;
+                    seasonStatuses[numKey] = Math.max(existing, reqMediaStatus);
                 }
             });
         });
