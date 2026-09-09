@@ -69,6 +69,19 @@ const IMAGE_PREWARM_PER_ROW = 10;
 const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /**
+ * Number of Priority-2 ("Latest from Library") rows to load eagerly on first render
+ * before deferring the rest to scroll/idle. 2 covers the first visible section below
+ * the fold on a typical 1080p TV without over-fetching.
+ */
+const INITIAL_DEFERRED_COUNT = 2;
+
+/**
+ * Number of P2 rows to fetch per lazy-load batch (scroll or D-pad trigger).
+ * Matches DiscoverPage's BATCH_ROW_COUNT for consistency.
+ */
+const DEFERRED_BATCH_SIZE = 3;
+
+/**
  * Card width definitions (matching home.css) — used by VirtualCardRow internally.
  * Landscape: 400px, Portrait: 240px, gap: 24px.
  * Kept here for reference; VirtualCardRow reads these from its own constructor options.
@@ -149,6 +162,41 @@ class HomePage extends Page {
         this._hero = null;
 
         /**
+         * Flat ordered array of Priority-2 RowDescriptors waiting to be loaded on demand.
+         * Populated in _startRenderPipeline() after P0/P1 rows are kicked off.
+         * @type {RowDescriptor[]}
+         */
+        this._deferredDescriptors = [];
+
+        /**
+         * Index into _deferredDescriptors of the next descriptor to load.
+         * Incremented each time _loadNextDeferredBatch() consumes a batch.
+         * @type {number}
+         */
+        this._nextDeferredDescIndex = 0;
+
+        /**
+         * Mutex: true while a deferred batch is in-flight.
+         * Prevents the sentinel observer and D-pad hook from firing overlapping fetches.
+         * @type {boolean}
+         */
+        this._isDeferredLoading = false;
+
+        /**
+         * IntersectionObserver watching the #home-rows-sentinel element.
+         * Fires _loadNextDeferredBatch() as the user scrolls near the bottom.
+         * @type {IntersectionObserver|null}
+         */
+        this._homeSentinelObserver = null;
+
+        /**
+         * setTimeout handle for the post-initial idle prefetch.
+         * Cleared on destroy to prevent callbacks on a dead page instance.
+         * @type {number|null}
+         */
+        this._homeIdlePrefetchTimer = null;
+
+        /**
          * Callback stored by _tryInitializeFocus() when a target row renders.
          * Step 7's rAF calls this after ALL rows are done to restore focus and
          * then hide the loading overlay. This ensures the page layout is stable
@@ -169,6 +217,11 @@ class HomePage extends Page {
                     <div id="home-hero-placeholder"></div>
                     <div class="home-rows" id="home-rows">
                         <!-- Rows are progressively injected here by _loadAndRenderRow() -->
+
+                        <!-- Sentinel element watched by IntersectionObserver.
+                             Moved below each batch of newly inserted skeleton rows
+                             so it always trails the last visible P2 batch. -->
+                        <div class="home-rows-sentinel" id="home-rows-sentinel" style="height:20px;width:100%;"></div>
                     </div>
                 </main>
             </div>
@@ -211,6 +264,16 @@ class HomePage extends Page {
         if (this._hero) {
             this._hero.destroy();
             this._hero = null;
+        }
+
+        // Disconnect the scroll sentinel observer and clear any pending idle-prefetch timer
+        if (this._homeSentinelObserver) {
+            this._homeSentinelObserver.disconnect();
+            this._homeSentinelObserver = null;
+        }
+        if (this._homeIdlePrefetchTimer) {
+            clearTimeout(this._homeIdlePrefetchTimer);
+            this._homeIdlePrefetchTimer = null;
         }
     }
 
@@ -953,11 +1016,15 @@ class HomePage extends Page {
                 return;
             }
 
-            // ─── Step 4: Insert skeleton placeholders ─────────────────────────
-            // Static dark card rectangles (no animated shimmer) give the row
-            // correct visual sizing while data loads. BlurHash on live cards
-            // provides the actual loading state once _renderRow() replaces them.
-            this._insertSkeletonRows(descriptors);
+            // ─── Step 4: Insert skeleton placeholders (P0 + P1 only) ──────────
+            // We only pre-insert skeletons for rows that will render eagerly
+            // (Priority 0 and 1). Priority-2 library rows are deferred to scroll
+            // so we deliberately withhold their skeletons here — they get injected
+            // by _loadNextDeferredBatch() immediately before their API call fires.
+            // This prevents a wall of empty skeleton cards from appearing for
+            // libraries the user may never scroll to.
+            const eagerDescriptors = descriptors.filter((d) => d.priority < 2);
+            this._insertSkeletonRows(eagerDescriptors);
 
             // ─── Step 5: Group descriptors by priority ────────────────────────
             // Rows within the same priority group run in parallel.
@@ -988,6 +1055,10 @@ class HomePage extends Page {
                 }
             }
             if (targetDescriptor && !earlyPriorities.includes(targetDescriptor.priority)) {
+                // The focus target is a P2 (library) row that hasn't had its skeleton
+                // inserted yet (Step 4 skipped P2 rows intentionally). Insert it now so
+                // _renderRow can find its placeholder element during focus restoration.
+                this._insertSkeletonRows([targetDescriptor]);
                 earlyPromises.push(this._loadAndRenderRow(targetDescriptor));
             }
             if (heroPromise) {
@@ -1036,17 +1107,54 @@ class HomePage extends Page {
                 this._hideSplash();
             });
 
-            // ─── Step 9: Render remaining priority groups in background ────
-            // These rows are below the fold — non-critical for first interaction.
-            // We load them sequentially (one priority group at a time) so the
-            // HTTP connection pool isn't overwhelmed on slow TV processors.
+            // ─── Step 9: Lazy-load remaining Priority-2 (library) rows ──────
+            //
+            // Previously this fired ALL remaining rows immediately via
+            // _loadBackgroundRows(), causing N API calls + DOM mutations + VirtualCardRow
+            // inits for every library even if the user never scrolls down.
+            //
+            // Now:
+            //   • The first INITIAL_DEFERRED_COUNT P2 rows load eagerly as before.
+            //   • Remaining P2 rows are stored in this._deferredDescriptors.
+            //   • An IntersectionObserver on #home-rows-sentinel fires batches on scroll.
+            //   • The D-pad leaveDown on the last live row triggers the next batch.
+            //   • A 1.2 s idle prefetch silently pulls one batch after the splash hides.
             const remainingPriorities = priorities.filter((p) => p !== 0 && p !== 1);
             if (remainingPriorities.length > 0) {
-                this._loadBackgroundRows(remainingPriorities, priorityGroups).catch((err) =>
-                    log.error('Background row loading failed', err)
-                );
+                // Collect all remaining descriptors in priority-sorted order
+                const allDeferredDescs = [];
+                for (const p of remainingPriorities) {
+                    const group = priorityGroups.get(p);
+                    if (group) allDeferredDescs.push(...group);
+                }
+
+                // Partition: first N rows load eagerly; the rest are deferred
+                const eagerDeferred = allDeferredDescs.slice(0, INITIAL_DEFERRED_COUNT);
+                this._deferredDescriptors = allDeferredDescs;
+                this._nextDeferredDescIndex = eagerDeferred.length;
+
+                if (eagerDeferred.length > 0) {
+                    // Insert skeleton placeholders for the eager batch immediately
+                    // so the page doesn't jump when they render
+                    this._insertSkeletonRows(eagerDeferred);
+
+                    // Fire and forget — these rows render progressively as data arrives
+                    Promise.all(eagerDeferred.map((d) => this._loadAndRenderRow(d)))
+                        .then(() => {
+                            if (!this._isMounted) return;
+                            // After the eager batch is done, start the scroll observer and
+                            // schedule the idle prefetch for whatever's left
+                            this._setupHomeScrollObserver();
+                            this._scheduleHomeIdlePrefetch();
+                        })
+                        .catch((err) => log.error('Eager deferred rows failed', err));
+                } else {
+                    // All P2 rows are deferred from the start — set up observers immediately
+                    this._setupHomeScrollObserver();
+                    this._scheduleHomeIdlePrefetch();
+                }
             } else {
-                // No background rows — do cleanup now
+                // No P2 rows at all (rare: no libraries configured)
                 this._prewarmScrollCache();
                 this.restoreScrollFocusWhenReady();
                 this.markReady();
@@ -1306,6 +1414,152 @@ class HomePage extends Page {
         if (!this._wasPageCached) {
             this._savePageCache();
         }
+    }
+
+    // =========================================================================
+    // Scroll-Triggered Lazy Row Loading (Priority-2 / Library Rows)
+    // =========================================================================
+
+    /**
+     * Fetches and renders the next batch of deferred P2 descriptors.
+     *
+     * Called by:
+     *   - The IntersectionObserver sentinel when the user scrolls near the bottom.
+     *   - The D-pad leaveDown hook on the last rendered live row.
+     *   - The idle prefetch timer (1.2 s after initial rows are painted).
+     *
+     * @param {boolean} [autoFocus=false] - Whether to move D-pad focus to the
+     *   first newly rendered row (true when triggered by D-pad leaveDown).
+     */
+    async _loadNextDeferredBatch(autoFocus = false) {
+        // Guard against concurrent fetches and stale callbacks after navigation
+        if (this._isDeferredLoading || !this._isMounted) return;
+        if (this._nextDeferredDescIndex >= this._deferredDescriptors.length) return;
+
+        this._isDeferredLoading = true;
+
+        // Slice out the next batch from the deferred descriptor queue
+        const startIdx  = this._nextDeferredDescIndex;
+        const endIdx    = Math.min(startIdx + DEFERRED_BATCH_SIZE, this._deferredDescriptors.length);
+        const batch     = this._deferredDescriptors.slice(startIdx, endIdx);
+        this._nextDeferredDescIndex = endIdx;
+
+        log.debug(`Loading deferred P2 batch [${startIdx}–${endIdx - 1}] (${batch.length} rows)`);
+
+        // Insert skeleton placeholders for all batch rows up-front so
+        // layout doesn't jump when each row resolves independently
+        this._insertSkeletonRows(batch);
+
+        // Move the sentinel below the newly inserted skeletons so the observer
+        // fires at the correct position for the NEXT batch
+        const sentinel = this.$('#home-rows-sentinel');
+        const container = this.$('#home-rows');
+        if (sentinel && container) {
+            container.appendChild(sentinel);
+        }
+
+        // Track the first descriptor key that successfully renders for autofocus
+        let firstRenderedDescId = null;
+
+        // Render rows in parallel; each one replaces its skeleton as it resolves
+        await Promise.all(
+            batch.map(async (descriptor) => {
+                try {
+                    await this._loadAndRenderRow(descriptor);
+                    if (!firstRenderedDescId) firstRenderedDescId = descriptor.id;
+                } catch (err) {
+                    log.warn(`Deferred row "${descriptor.id}" failed`, err);
+                }
+            })
+        );
+
+        if (!this._isMounted) {
+            this._isDeferredLoading = false;
+            return;
+        }
+
+        // Optionally move D-pad focus to the first newly rendered row
+        if (autoFocus && firstRenderedDescId) {
+            const entry = this._rowRegistry.get(firstRenderedDescId);
+            if (entry && entry.sectionEl) {
+                const rowId = firstRenderedDescId;
+                this.setActiveSection(`home-row-${rowId}`);
+                const firstCard = entry.sectionEl.querySelector('.media-card');
+                if (firstCard) {
+                    focusManager.focusElement(firstCard);
+                }
+            }
+        }
+
+        // Persist newly rendered rows into the page cache
+        if (!this._wasPageCached) {
+            this._savePageCache();
+        }
+
+        this._isDeferredLoading = false;
+
+        // If there are still rows left, keep the scroll observer alive;
+        // otherwise clean up and call the standard post-render hooks
+        if (this._nextDeferredDescIndex >= this._deferredDescriptors.length) {
+            // All deferred rows are loaded — run final cleanup
+            this._prewarmScrollCache();
+            this.restoreScrollFocusWhenReady();
+            this.markReady();
+        }
+    }
+
+    /**
+     * Sets up the IntersectionObserver on #home-rows-sentinel.
+     * Triggers _loadNextDeferredBatch() as the user scrolls near the bottom
+     * of the last rendered P2 batch. Mirrors DiscoverPage._setupScrollObserver().
+     * @private
+     */
+    _setupHomeScrollObserver() {
+        const sentinel = this.$('#home-rows-sentinel');
+        if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+
+        // Disconnect any previously-attached observer before creating a new one
+        if (this._homeSentinelObserver) {
+            this._homeSentinelObserver.disconnect();
+        }
+
+        // rootMargin '600px 0px' triggers loading slightly before the sentinel
+        // enters the viewport, giving the fetch time to complete before the user
+        // actually reaches the bottom — same tuning as DiscoverPage.
+        this._homeSentinelObserver = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                if (
+                    entry &&
+                    entry.isIntersecting &&
+                    !this._isDeferredLoading &&
+                    this._nextDeferredDescIndex < this._deferredDescriptors.length
+                ) {
+                    this._loadNextDeferredBatch(false);
+                }
+            },
+            { rootMargin: '600px 0px', threshold: 0.01 }
+        );
+
+        this._homeSentinelObserver.observe(sentinel);
+        log.debug('Home scroll sentinel observer attached');
+    }
+
+    /**
+     * Schedules a low-priority idle background prefetch 1.2 s after the initial
+     * rows are painted. Silently loads the next batch so content is ready before
+     * the user finishes watching the first row.
+     * Matches DiscoverPage._scheduleIdlePrefetch().
+     * @private
+     */
+    _scheduleHomeIdlePrefetch() {
+        if (this._homeIdlePrefetchTimer) clearTimeout(this._homeIdlePrefetchTimer);
+        this._homeIdlePrefetchTimer = setTimeout(() => {
+            if (this._isMounted && this._nextDeferredDescIndex < this._deferredDescriptors.length) {
+                log.debug('Home idle prefetch triggered');
+                this._loadNextDeferredBatch(false);
+            }
+        }, 1200);
     }
 
     /**
@@ -1813,11 +2067,27 @@ class HomePage extends Page {
         const prevEl = idx > 0 ? liveSections[idx - 1] : null;
         const nextEl = idx < liveSections.length - 1 ? liveSections[idx + 1] : null;
 
-        // Patch the new row
+        // Patch the new row's up/down neighbors
         const newConfig = focusManager.getSectionConfig(`home-row-${rowId}`);
         if (newConfig) {
             newConfig.leaveUp = sId(prevEl);
-            newConfig.leaveDown = sId(nextEl);
+
+            // If there IS a next live row, point down to it as normal.
+            // If this is the last live row BUT deferred rows remain, install a D-pad
+            // hook that triggers the next lazy batch — matching DiscoverPage's pattern.
+            if (nextEl) {
+                newConfig.leaveDown = sId(nextEl);
+            } else if (this._nextDeferredDescIndex < this._deferredDescriptors.length) {
+                newConfig.leaveDown = () => {
+                    // Load the next batch and auto-focus its first row so the cursor
+                    // lands naturally on new content instead of staying frozen.
+                    this._loadNextDeferredBatch(true);
+                    return false; // Tell FocusManager we handled navigation ourselves
+                };
+            } else {
+                // All deferred rows exhausted — no more to load
+                newConfig.leaveDown = null;
+            }
         }
 
         // Patch the row above: its leaveDown should now point to this new row
