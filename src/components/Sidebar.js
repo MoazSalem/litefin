@@ -425,10 +425,12 @@ class Sidebar extends Component {
         if ( auth.isAuthenticated() ) {
             this._loadLibraries();
         } else {
-            // Clear libraries on logout
-            const container = this.el.querySelector( '#sidebar-libraries' );
-            if ( container ) {
-                container.innerHTML = '';
+            // Clear loaded library items from the sub-libraries container on logout.
+            // NOTE: Do NOT clear #sidebar-libraries (the toggle button itself) — that would wipe its
+            // icon, label, and chevron, leaving it as an invisible-but-focusable empty element.
+            const subContainer = this.el.querySelector( '#sidebar-sub-libraries' );
+            if ( subContainer ) {
+                subContainer.innerHTML = '';
                 focusManager.resetDOMCache();
             }
         }
