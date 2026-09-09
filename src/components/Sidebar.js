@@ -60,6 +60,7 @@ class Sidebar extends Component {
                 <!-- Logo Section -->
                 <div class="sidebar-header" id="sidebar-logo-header">
                     <div class="logo-icon">
+                        <img src="assets/icon-130.png" class="sidebar-logo-img" alt="Litefin Logo" />
                         ${sidebarIcons.logo}
                     </div>
                     <span class="logo-text">Litefin</span>

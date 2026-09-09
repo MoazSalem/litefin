@@ -27,10 +27,12 @@
     margin-bottom: 8px;
 }
 
-.login-logo-svg {
+.login-logo-svg,
+.login-logo-img {
     width: 80px;
     height: 80px;
     margin-right: 20px;
+    object-fit: contain;
 }
 
 .login-logo-svg path {

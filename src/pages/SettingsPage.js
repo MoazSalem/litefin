@@ -2505,7 +2505,7 @@ class SettingsPage extends Page {
                 { value: 'floating-buttons', label: i18n.t('LayoutFloatingButtonsSidebar') || 'Floating Buttons' },
                 { value: 'floating-island', label: i18n.t('LayoutFloatingIslandSidebar') || 'Floating Island' }
             ],
-            layoutManager.getSidebarLayout() || 'modern'
+            layoutManager.getSidebarLayout() || 'modern-collapsed'
         )}
                     </div>
                 </div>
@@ -2683,6 +2683,25 @@ class SettingsPage extends Page {
                 if (val === 'false') return 'visible';
                 return val;
             })()
+        )}
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarLogoColor">${i18n.t('SidebarLogoColor') || 'Sidebar Logo Color'}</span>
+                        <span class="setting-description" data-i18n="SidebarLogoColorDescription">${i18n.t('SidebarLogoColorDescription') || 'Choose the color for the sidebar Litefin logo.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'sidebar-logo-color-select',
+            [
+                { value: 'icon-colors', label: i18n.t('SidebarColorIconColors') || 'Icon Colors' },
+                { value: 'follow-theme', label: i18n.t('SidebarColorFollowTheme') || 'Follow Theme' },
+                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' }
+            ],
+            layoutManager.getSidebarLogoColor()
         )}
                     </div>
                 </div>
@@ -8074,9 +8093,9 @@ class SettingsPage extends Page {
     _getThemeColors() {
         return [
             // Row 1: Primary Swatches
+            { name: 'Litefin Purple Blue', hex: '#6b6ede' },
             { name: 'Jellyfin Blue', hex: '#00a4dc' },
             { name: 'Litefin Blue', hex: '#007aff' },
-            { name: 'Indigo', hex: '#5856d6' },
             { name: 'Royal Blue', hex: '#2962ff' },
             { name: 'Deep Purple', hex: '#6200ea' },
             { name: 'Lavender', hex: '#af52de' },
@@ -8122,7 +8141,7 @@ class SettingsPage extends Page {
             { name: 'Electric Lime', hex: '#7FFF00' },
 
             // Row 5: Deep & Earthy
-            { name: 'Slate Blue', hex: '#6A5ACD' },
+            { name: 'Indigo', hex: '#5856d6' },
             { name: 'Sea Green', hex: '#2E8B57' },
             { name: 'Cadet Blue', hex: '#5F9EA0' },
             { name: 'Burnt Orange', hex: '#CC5500' },
@@ -8786,6 +8805,7 @@ class SettingsPage extends Page {
             'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' },
             'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
             'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
+            'sidebar-logo-color-select': { key: 'litefin:sidebarLogoColor', type: 'local' },
             'osd-button-style-select': { key: 'litefin:osdButtonStyle', type: 'local' },
             'osd-focus-border-style-select': { key: 'litefin:osdFocusBorderStyle', type: 'local' },
             'osd-button-shape-select': { key: 'litefin:osdButtonShape', type: 'local' },
@@ -8893,6 +8913,9 @@ class SettingsPage extends Page {
                         } else if (id === 'sidebar-unselected-color-select') {
                             // SPECIAL CASE: Sidebar Unselected Color handled by LayoutManager
                             layoutManager.setSidebarUnselectedColor(newValue);
+                        } else if (id === 'sidebar-logo-color-select') {
+                            // SPECIAL CASE: Sidebar Logo Color handled by LayoutManager
+                            layoutManager.setSidebarLogoColor(newValue);
                         } else if (id === 'osd-button-style-select') {
                             // SPECIAL CASE: OSD Button Style handled by LayoutManager
                             layoutManager.setOsdButtonStyle(newValue);

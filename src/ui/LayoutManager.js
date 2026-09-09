@@ -38,8 +38,8 @@ const THEME_MODES = {
     AMBIENT: 'ambient'
 };
 
-// Default Theme Color (Lavender)
-const DEFAULT_THEME_COLOR = '#af52de';
+// Default Theme Color (Litefin Purple Blue)
+const DEFAULT_THEME_COLOR = '#6b6ede';
 
 class LayoutManager {
     constructor() {
@@ -56,10 +56,10 @@ class LayoutManager {
         this._mediaRowsLayout = 'classic';
         this._loginPageLayout = 'classic';
         /*
-         * Active sidebar layout configuration (e.g., 'modern').
+         * Active sidebar layout configuration (e.g., 'modern-collapsed').
          * Controls structural presentation and styling of the primary navigation bar.
          */
-        this._sidebarLayout = 'modern';
+        this._sidebarLayout = 'modern-collapsed';
 
         // Current theme mode
         // Black (OLED) is the default — zero compositing, pure black pixels, maximum performance.
@@ -124,6 +124,9 @@ class LayoutManager {
         // Sidebar selected icon color: 'grey', 'white', 'black', 'accent'
         this._sidebarSelectedColor = 'white';
 
+        // Sidebar logo icon color: 'icon-colors', 'follow-theme', 'white', 'black'
+        this._sidebarLogoColor = 'icon-colors';
+
         // OSD Custom Button & Focus Border styles (overrides global)
         this._osdButtonStyle = 'follow-global';
         this._osdFocusBorderStyle = 'follow-global';
@@ -183,7 +186,7 @@ class LayoutManager {
         const isUltraLegacy = platformInfo.layoutTier === 'ultra-legacy';
         const savedSidebarLayout = isUltraLegacy
             ? 'classic'
-            : storage.getItem('pref:sidebarLayoutMode') || 'modern';
+            : storage.getItem('pref:sidebarLayoutMode') || 'modern-collapsed';
 
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
@@ -223,6 +226,7 @@ class LayoutManager {
         const savedHoverBorderStyle = storage.getItem('litefin:hoverBorderStyle') || 'white';
         const savedSidebarUnselectedColor = storage.getItem('litefin:sidebarUnselectedColor') || 'grey';
         const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'white';
+        const savedSidebarLogoColor = storage.getItem('litefin:sidebarLogoColor') || 'icon-colors';
         const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
         const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
         const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
@@ -258,6 +262,7 @@ class LayoutManager {
         this.setHoverBorderStyle(savedHoverBorderStyle, false);
         this.setSidebarUnselectedColor(savedSidebarUnselectedColor, false);
         this.setSidebarSelectedColor(savedSidebarSelectedColor, false);
+        this.setSidebarLogoColor(savedSidebarLogoColor, false);
         this.setOsdButtonStyle(savedOsdButtonStyle, false);
         this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
         this.setOsdButtonShape(savedOsdButtonShape, false);
@@ -883,6 +888,24 @@ class LayoutManager {
         }
         log.info(`Sidebar selected color updated: ${color}`);
         eventBus.emit('sidebarSelectedColor:changed', { color });
+    }
+
+    getSidebarLogoColor() {
+        return this._sidebarLogoColor;
+    }
+
+    setSidebarLogoColor(color, save = true) {
+        if (!['icon-colors', 'follow-theme', 'white', 'black'].includes(color)) {
+            log.warn(`Invalid sidebar logo color specified: "${color}"`);
+            return;
+        }
+        this._sidebarLogoColor = color;
+        document.documentElement.setAttribute('data-sidebar-logo-color', color);
+        if (save) {
+            storage.setItem('litefin:sidebarLogoColor', color);
+        }
+        log.info(`Sidebar logo color updated: ${color}`);
+        eventBus.emit('sidebarLogoColor:changed', { color });
     }
 
     getOsdButtonStyle() {

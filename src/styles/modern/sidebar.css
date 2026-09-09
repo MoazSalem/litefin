@@ -139,7 +139,7 @@ html[data-layout-sidebar^="modern"] .sidebar:not(.expanded):not(:hover) .sidebar
 
 html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon::before,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon::before {
-    background: var(--jf-accent, #af52de);
+    background: var(--jf-accent, #6b6ede);
     border-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -246,7 +246,7 @@ html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:hover:not(:focus
 /* Unified Focus Pill (Morphs seamlessly from 56px focus squircle to full row focus pill) */
 html[data-layout-sidebar="modern"] .sidebar-item:focus::after,
 html[data-layout-sidebar="modern"] .sidebar-item.focused::after {
-    background: var(--jf-accent, #af52de) !important;
+    background: var(--jf-accent, #6b6ede) !important;
     border-color: rgba(255, 255, 255, 0.25) !important;
     box-shadow: none !important;
 }
@@ -553,7 +553,7 @@ html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-labe
     padding: 8px 18px !important;
     margin: 0 !important;
     border-radius: 12px !important;
-    background: var(--jf-accent, #af52de) !important;
+    background: var(--jf-accent, #6b6ede) !important;
     border: 1px solid rgba(255, 255, 255, 0.25) !important;
     box-shadow: none !important;
     color: var(--jf-primary-btn-color, #ffffff) !important;
@@ -649,7 +649,7 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sideb
 html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before {
-    background: var(--jf-accent, #af52de) !important;
+    background: var(--jf-accent, #6b6ede) !important;
     border-color: rgba(255, 255, 255, 0.25) !important;
 }
 
@@ -1063,7 +1063,7 @@ html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-ite
 html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item:focus,
 html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item.focused,
 html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item:hover {
-    background: var(--jf-accent, #af52de) !important;
+    background: var(--jf-accent, #6b6ede) !important;
     color: var(--jf-primary-btn-color, #ffffff) !important;
     -webkit-transform: scale(1.02) !important;
     transform: scale(1.02) !important;
@@ -1176,7 +1176,7 @@ html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header
 html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before,
 html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:focus .logo-icon::before,
 html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.active.focused .logo-icon::before {
-    background: var(--jf-accent, #af52de) !important;
+    background: var(--jf-accent, #6b6ede) !important;
     border-color: rgba(255, 255, 255, 0.35) !important;
     border-radius: 18px !important;
     -webkit-transform: scale(1.08) !important;
@@ -1255,7 +1255,7 @@ html[data-layout-sidebar="floating-island"] .sidebar-footer .sidebar-item.focuse
 html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer .sidebar-item:focus .item-icon::before,
 html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer .sidebar-item.focused .item-icon::before {
     background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.14)) !important;
-    border: 2px solid var(--jf-accent, #af52de) !important;
+    border: 2px solid var(--jf-accent, #6b6ede) !important;
     -webkit-transform: scale(1.06) !important;
     transform: scale(1.06) !important;
 }
@@ -1266,7 +1266,7 @@ html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.fo
 html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon::before,
 html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon::before {
     background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.14)) !important;
-    border: 2px solid var(--jf-accent, #af52de) !important;
+    border: 2px solid var(--jf-accent, #6b6ede) !important;
     -webkit-transform: scale(1.06) !important;
     transform: scale(1.06) !important;
 }
@@ -1370,7 +1370,7 @@ html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .si
 html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item.focused .item-icon,
 html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
 html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
-    color: var(--jf-accent, #af52de) !important;
+    color: var(--jf-accent, #6b6ede) !important;
     -webkit-transform: translate3d(250px, 0, 0) scale(1.22) !important;
     transform: translate3d(250px, 0, 0) scale(1.22) !important;
     z-index: 10 !important;
@@ -1388,7 +1388,7 @@ html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focu
 html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon svg path,
 html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-icon svg path,
 html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-icon svg path {
-    color: var(--jf-accent, #af52de) !important;
+    color: var(--jf-accent, #6b6ede) !important;
     fill: currentColor !important;
 }
 
