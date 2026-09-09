@@ -95,8 +95,11 @@ class DetailsPage extends Page {
             layoutClass = 'layout-backdrop-left';
         }
 
+        const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
+        const tooltipsClass = showTooltips ? '' : 'tooltips-disabled';
+
         return `
-            <div class="page details-page ${layoutClass}">
+            <div class="page details-page ${layoutClass} ${tooltipsClass}">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="backdrop">
                     <div class="backdrop-gradient"></div>
@@ -120,40 +123,43 @@ class DetailsPage extends Page {
 
                             <!-- Actions -->
                             <section class="details-actions" id="actions">
-                                <button class="btn btn-primary play-btn" tabindex="0">
+                                <button class="btn btn-primary play-btn" tabindex="0" data-tooltip="${i18n.t('Play')}">
                                     ${detailsIcons.play}
                                     <span data-i18n="Play">Play</span>
                                 </button>
-                                <button class="btn btn-secondary resume-btn hidden" tabindex="-1">
-                                    <span data-i18n="ButtonResume">Resume</span>
+                                <button class="btn btn-secondary resume-btn hidden" tabindex="-1" data-tooltip="${i18n.t('ResumePlayback') || 'Resume Playback'}">
+                                    <span data-i18n="ResumePlayback">Resume Playback</span>
                                 </button>
-                                <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}">
+                                <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}" data-tooltip="${i18n.t('ResetProgress')}">
                                     ${detailsIcons.reset}
                                 </button>
-                                <button class="btn btn-icon ghost-btn hidden" tabindex="-1" aria-label="${i18n.t('GhostMode') || 'Ghost Mode'}">
+                                <button class="btn btn-icon ghost-btn hidden" tabindex="-1" aria-label="${i18n.t('GhostMode') || 'Ghost Mode'}" data-tooltip="${i18n.t('GhostMode') || 'Ghost Mode'}">
                                     ${detailsIcons.ghost}
                                 </button>
                                 <!-- Trailer button — shown only when item has local or remote trailers.
                                      Visibility is set dynamically by _updateTrailerButton() after load. -->
-                                <button class="btn btn-icon trailer-btn hidden" tabindex="-1" aria-label="${i18n.t('WatchTrailer') || 'Watch Trailer'}">
+                                <button class="btn btn-icon trailer-btn hidden" tabindex="-1" aria-label="${i18n.t('WatchTrailer') || 'Watch Trailer'}" data-tooltip="${i18n.t('WatchTrailer') || 'Watch Trailer'}">
                                     ${detailsIcons.trailer}
                                 </button>
-                                <button class="btn btn-icon shuffle-btn hidden" tabindex="-1" aria-label="${i18n.t('Shuffle')}">
+                                <button class="btn btn-icon shuffle-btn hidden" tabindex="-1" aria-label="${i18n.t('Shuffle')}" data-tooltip="${i18n.t('Shuffle')}">
                                     ${detailsIcons.shuffle}
                                 </button>
-                                <button class="btn btn-icon watched-btn" tabindex="0" aria-label="${i18n.t('MarkWatched')}">
+                                <button class="btn btn-icon watched-btn" tabindex="0" aria-label="${i18n.t('MarkWatched')}" data-tooltip="${i18n.t('MarkWatched')}">
                                     ${detailsIcons.watchedOutline}
                                 </button>
                                 <!-- Favorite Button Injected Here -->
-                                <button class="btn btn-icon audio-btn" tabindex="0" aria-label="${i18n.t('AudioTracks')}">
+                                <button class="btn btn-icon audio-btn" tabindex="0" aria-label="${i18n.t('AudioTracks')}" data-tooltip="${i18n.t('AudioTracks')}">
                                     ${detailsIcons.audio}
                                 </button>
-                                <button class="btn btn-icon subtitle-btn" tabindex="0" aria-label="${i18n.t('SubtitleTracks')}">
+                                <button class="btn btn-icon subtitle-btn" tabindex="0" aria-label="${i18n.t('SubtitleTracks')}" data-tooltip="${i18n.t('SubtitleTracks')}">
                                     ${detailsIcons.subtitle}
                                 </button>
-                                <button class="btn btn-icon more-btn" tabindex="0" aria-label="${i18n.t('MoreOptions')}">
+                                <button class="btn btn-icon more-btn" tabindex="0" aria-label="${i18n.t('MoreOptions')}" data-tooltip="${i18n.t('MoreOptions')}">
                                     ${detailsIcons.more}
                                 </button>
+                                <div class="action-btn-tooltip-bar" id="action-tooltip-bar">
+                                    <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
+                                </div>
                             </section>
 
                             <!-- Overview -->
@@ -314,6 +320,9 @@ class DetailsPage extends Page {
             // Bind actions
             this._bindActions();
 
+            // Setup action button tooltip listener
+            this._setupTooltipListener();
+
             // Translate static UI labels
             i18n.translateDOM(this.el);
 
@@ -471,6 +480,92 @@ class DetailsPage extends Page {
             seeMoreBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showFullOverview()));
             seeMoreBtn.addEventListener('click', (e) => handleActivate(e, () => this._showFullOverview()));
         }
+    }
+
+    /**
+     * Listen for focus changes and update the action button tooltip label.
+     * Positions the tooltip centered directly underneath the currently focused button.
+     */
+    _setupTooltipListener() {
+        const tooltipBar = this.$('#action-tooltip-bar');
+        const tooltipText = this.$('#action-tooltip-text');
+        if (!tooltipBar || !tooltipText) return;
+
+        this._onFocusChangedForTooltip = (focusedEl) => {
+            const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+            const targetEl = focusedEl || document.activeElement;
+            if (!isEnabled || !targetEl) {
+                tooltipBar.classList.remove('visible');
+                return;
+            }
+
+            // Check if the focused element is an action button inside #actions
+            const actionsContainer = this.$('#actions');
+            if (actionsContainer && actionsContainer.contains(targetEl)) {
+                let text = targetEl.getAttribute('data-tooltip') || targetEl.getAttribute('aria-label');
+                if (!text) {
+                    const span = targetEl.querySelector('span[data-i18n], span');
+                    if (span) text = span.textContent?.trim();
+                }
+
+                if (text) {
+                    // Calculate fixed position centered under the focused button relative to actionsContainer.
+                    // Uses offset metrics rather than getBoundingClientRect to prevent 1-2px vertical jitter
+                    // caused by scale(1.05) focus animations.
+                    const btnCenterX = targetEl.offsetLeft + (targetEl.offsetWidth / 2);
+                    const btnBottomY = targetEl.offsetTop + targetEl.offsetHeight;
+
+                    tooltipBar.style.left = `${btnCenterX}px`;
+                    tooltipBar.style.top = `${btnBottomY}px`;
+                    tooltipText.textContent = text;
+                    tooltipBar.classList.add('visible');
+                    return;
+                }
+            }
+
+            tooltipBar.classList.remove('visible');
+        };
+
+        eventBus.on('focus:changed', this._onFocusChangedForTooltip);
+
+        const actionsContainer = this.$('#actions');
+        if (actionsContainer) {
+            actionsContainer.addEventListener('mouseover', (e) => {
+                const btn = e.target.closest('.btn, button');
+                if (btn) this._onFocusChangedForTooltip(btn);
+            });
+
+            actionsContainer.addEventListener('mouseout', (e) => {
+                const related = e.relatedTarget;
+                if (!related || !actionsContainer.contains(related)) {
+                    const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
+                    if (activeInActions) {
+                        this._onFocusChangedForTooltip(document.activeElement);
+                    } else {
+                        tooltipBar.classList.remove('visible');
+                    }
+                } else {
+                    const newBtn = related.closest('.btn, button');
+                    if (newBtn) {
+                        this._onFocusChangedForTooltip(newBtn);
+                    }
+                }
+            });
+        }
+
+        // Run initial evaluation so tooltip displays immediately for initial focused button
+        const updateInitial = () => {
+            const targetEl = (document.activeElement && document.activeElement.closest('#actions'))
+                ? document.activeElement
+                : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
+            if (targetEl) {
+                this._onFocusChangedForTooltip(targetEl);
+            }
+        };
+        updateInitial();
+        requestAnimationFrame(updateInitial);
+        setTimeout(updateInitial, 150);
+        setTimeout(updateInitial, 400);
     }
 
     async _loadDetails() {
@@ -2692,12 +2787,22 @@ class DetailsPage extends Page {
 
             // Apply localization to the formatted time label to construct the full button label text.
             const resumeLabel = i18n.t('ResumeAt', [timeString]);
+            const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
 
-            // Update the inner HTML of the resume button with a play icon and the formatted label.
-            resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
+            if (showTooltips) {
+                // When tooltips are enabled, display timestamp only on the button pill
+                // and present "Resume Playback" in the tooltip bar.
+                resumeBtn.innerHTML = `${detailsIcons.play} <span>${timeString}</span>`;
+                resumeBtn.setAttribute('data-tooltip', i18n.t('ResumePlayback') || 'Resume Playback');
+            } else {
+                // When tooltips are disabled, display full "Resume at {time}" inside the button.
+                resumeBtn.innerHTML = `${detailsIcons.play} <span>${resumeLabel}</span>`;
+                resumeBtn.setAttribute('data-tooltip', resumeLabel);
+            }
 
             // We hid the Play button, so move focus to the Resume button.
             resumeBtn.focus();
+            this._onFocusChangedForTooltip?.(resumeBtn);
         }
 
         // Watched button
@@ -2805,6 +2910,14 @@ class DetailsPage extends Page {
                 subtitleBtn.setAttribute('tabindex', '-1');
             }
         }
+
+        // Ensure tooltip is evaluated and displayed for whichever action button is currently active/focused (Play or Resume)
+        requestAnimationFrame(() => {
+            const activeActionsBtn = (document.activeElement && document.activeElement.closest('#actions'))
+                ? document.activeElement
+                : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
+            this._onFocusChangedForTooltip?.(activeActionsBtn);
+        });
     }
 
     async _loadNextUp() {
@@ -5502,6 +5615,10 @@ class DetailsPage extends Page {
 
             this._favBtn.mount(actionsContainer);
 
+            if (this._favBtn.el) {
+                this._favBtn.el.setAttribute('data-tooltip', i18n.t('Favorite') || 'Favorite');
+            }
+
             // Move Favorite Button BEFORE Audio/Subtitle buttons if they exist
             const audioBtn = actionsContainer.querySelector('.audio-btn');
             if (audioBtn && this._favBtn.el) {
@@ -5654,6 +5771,11 @@ class DetailsPage extends Page {
             themeSongPlayer.stopDeferred(2000);
         } else {
             themeSongPlayer.stop();
+        }
+
+        if (this._onFocusChangedForTooltip) {
+            eventBus.off('focus:changed', this._onFocusChangedForTooltip);
+            this._onFocusChangedForTooltip = null;
         }
 
         if (this._header) {

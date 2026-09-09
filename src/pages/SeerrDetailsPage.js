@@ -28,6 +28,7 @@ import CardRenderer from '../utils/CardRenderer.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { router } from '../core/Router.js';
 import { state } from '../core/StateManager.js';
+import { eventBus } from '../core/EventBus.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrDetailsPage');
@@ -57,8 +58,11 @@ class SeerrDetailsPage extends Page {
             backdropLeft: 'layout-backdrop-left'
         };
 
+        const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
+        const tooltipsClass = showTooltips ? '' : 'tooltips-disabled';
+
         return `
-            <div class="page details-page seerr-details-page ${layoutClasses[detailsLayout] || 'layout-poster-left'}">
+            <div class="page details-page seerr-details-page ${layoutClasses[detailsLayout] || 'layout-poster-left'} ${tooltipsClass}">
                 <div class="details-backdrop" id="backdrop">
                     <div class="backdrop-gradient"></div>
                 </div>
@@ -68,30 +72,33 @@ class SeerrDetailsPage extends Page {
                         <div class="details-info-col" id="details-info-col">
                             <div class="hero-info" id="hero-info"></div>
                             <section class="details-actions" id="actions">
-                                <button class="btn btn-action btn-primary seerr-play-btn hidden" tabindex="0">
+                                <button class="btn btn-action btn-primary seerr-play-btn hidden" tabindex="0" data-tooltip="${i18n.t('Play')}">
                                     ${detailsIcons.play}
                                     <span>${i18n.t('Play')}</span>
                                 </button>
-                                <button class="btn btn-action seerr-jellyfin-btn hidden" tabindex="0">
+                                <button class="btn btn-action seerr-jellyfin-btn hidden" tabindex="0" data-tooltip="${i18n.t('SeerrViewInJellyfin') || 'View in Jellyfin'}">
                                     ${detailsIcons.jellyfinDetails}
                                     <span>${i18n.t('SeerrViewInJellyfin')}</span>
                                 </button>
-                                <button class="btn btn-action seerr-request-btn" tabindex="0">
+                                <button class="btn btn-action seerr-request-btn" tabindex="0" data-tooltip="${i18n.t('SeerrRequest') || 'Request'}">
                                     ${detailsIcons.add}
                                     <span>${i18n.t('SeerrRequest')}</span>
                                 </button>
-                                <button class="btn btn-action seerr-cancel-request-btn hidden" tabindex="0">
+                                <button class="btn btn-action seerr-cancel-request-btn hidden" tabindex="0" data-tooltip="${i18n.t('SeerrCancelRequest') || 'Cancel Request'}">
                                     ${detailsIcons.cancel}
                                     <span>${i18n.t('SeerrCancelRequest')}</span>
                                 </button>
-                                <button class="btn btn-action seerr-trailer-btn hidden" tabindex="0">
+                                <button class="btn btn-action seerr-trailer-btn hidden" tabindex="0" data-tooltip="${i18n.t('WatchTrailer') || 'Watch Trailer'}">
                                     ${detailsIcons.trailer}
                                     <span>${i18n.t('WatchTrailer')}</span>
                                 </button>
-                                <button class="btn btn-action seerr-watchlist-btn" tabindex="0">
+                                <button class="btn btn-action seerr-watchlist-btn" tabindex="0" data-tooltip="${i18n.t('SeerrAddToWatchlist') || 'Add to Watchlist'}">
                                     ${detailsIcons.watchlist}
                                     <span>${i18n.t('SeerrAddToWatchlist')}</span>
                                 </button>
+                                <div class="action-btn-tooltip-bar" id="action-tooltip-bar">
+                                    <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
+                                </div>
                             </section>
                             <div class="details-overview">
                                 <div class="overview-text line-clamp-6" id="overview-text" tabindex="-1"></div>
@@ -200,6 +207,7 @@ class SeerrDetailsPage extends Page {
             }
             this._renderDetails();
             this._bindActions();
+            this._setupTooltipListener();
             this._registerFocus();
             if (this._item._seerrStatus === SEERR_STATUS.AVAILABLE || this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE) {
                 void this._checkJellyfinMediaAvailability(mediaType, tmdbId);
@@ -1067,8 +1075,8 @@ class SeerrDetailsPage extends Page {
         //                          the modal still lets the user add more seasons if needed)
         //   Default             → "Request"
         const span = button.querySelector('span');
-        if (span && isTv) {
-            let labelKey = 'SeerrRequest';
+        let labelKey = 'SeerrRequest';
+        if (isTv) {
             if (this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE) {
                 labelKey = 'SeerrRequestMore';
             } else if (
@@ -1077,19 +1085,102 @@ class SeerrDetailsPage extends Page {
             ) {
                 labelKey = 'SeerrViewRequest';
             }
-            span.textContent = i18n.t(labelKey);
-        } else if (span) {
-            span.textContent = i18n.t('SeerrRequest');
         }
+        const labelText = i18n.t(labelKey);
+        if (span) {
+            span.textContent = labelText;
+        }
+        button.setAttribute('data-tooltip', labelText);
 
         // Re-evaluate focus layout for action buttons
         focusManager.invalidateCache('seerr-details-actions');
     }
 
     _updateWatchlistButton() {
+        const btn = this.$('.seerr-watchlist-btn');
         const label = this.$('.seerr-watchlist-btn span');
-        if (label) label.textContent = i18n.t(this._isWatchlisted ? 'SeerrRemoveFromWatchlist' : 'SeerrAddToWatchlist');
+        const text = i18n.t(this._isWatchlisted ? 'SeerrRemoveFromWatchlist' : 'SeerrAddToWatchlist');
+        if (label) label.textContent = text;
+        if (btn) btn.setAttribute('data-tooltip', text);
         focusManager.invalidateCache('seerr-details-actions');
+    }
+
+    _setupTooltipListener() {
+        const tooltipBar = this.$('#action-tooltip-bar');
+        const tooltipText = this.$('#action-tooltip-text');
+        if (!tooltipBar || !tooltipText) return;
+
+        this._onFocusChangedForTooltip = (focusedEl) => {
+            const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+            const targetEl = focusedEl || document.activeElement;
+            if (!isEnabled || !targetEl) {
+                tooltipBar.classList.remove('visible');
+                return;
+            }
+
+            const actionsContainer = this.$('#actions');
+            if (actionsContainer && actionsContainer.contains(targetEl)) {
+                let text = targetEl.getAttribute('data-tooltip') || targetEl.getAttribute('aria-label');
+                if (!text) {
+                    const span = targetEl.querySelector('span[data-i18n], span');
+                    if (span) text = span.textContent?.trim();
+                }
+
+                if (text) {
+                    const btnCenterX = targetEl.offsetLeft + (targetEl.offsetWidth / 2);
+                    const btnBottomY = targetEl.offsetTop + targetEl.offsetHeight;
+
+                    tooltipBar.style.left = `${btnCenterX}px`;
+                    tooltipBar.style.top = `${btnBottomY}px`;
+                    tooltipText.textContent = text;
+                    tooltipBar.classList.add('visible');
+                    return;
+                }
+            }
+
+            tooltipBar.classList.remove('visible');
+        };
+
+        eventBus.on('focus:changed', this._onFocusChangedForTooltip);
+
+        const actionsContainer = this.$('#actions');
+        if (actionsContainer) {
+            actionsContainer.addEventListener('mouseover', (e) => {
+                const btn = e.target.closest('.btn, button');
+                if (btn) this._onFocusChangedForTooltip(btn);
+            });
+
+            actionsContainer.addEventListener('mouseout', (e) => {
+                const related = e.relatedTarget;
+                if (!related || !actionsContainer.contains(related)) {
+                    const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
+                    if (activeInActions) {
+                        this._onFocusChangedForTooltip(document.activeElement);
+                    } else {
+                        tooltipBar.classList.remove('visible');
+                    }
+                } else {
+                    const newBtn = related.closest('.btn, button');
+                    if (newBtn) {
+                        this._onFocusChangedForTooltip(newBtn);
+                    }
+                }
+            });
+        }
+
+        const updateInitial = () => {
+            const actionsContainer = this.$('#actions');
+            const targetEl = (document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement))
+                ? document.activeElement
+                : this.$('#actions .btn-action:not(.hidden)');
+            if (targetEl) {
+                this._onFocusChangedForTooltip(targetEl);
+            }
+        };
+        updateInitial();
+        requestAnimationFrame(updateInitial);
+        setTimeout(updateInitial, 150);
+        setTimeout(updateInitial, 400);
     }
 
     _renderStatus() {
@@ -1165,6 +1256,10 @@ class SeerrDetailsPage extends Page {
     }
 
     destroy() {
+        if (this._onFocusChangedForTooltip) {
+            eventBus.off('focus:changed', this._onFocusChangedForTooltip);
+            this._onFocusChangedForTooltip = null;
+        }
         BackdropManager.clearBackdrop(this.$('#backdrop'));
         super.destroy();
     }

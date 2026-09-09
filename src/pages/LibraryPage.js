@@ -98,7 +98,7 @@ class LibraryPage extends Page {
              */
             viewMode: 'poster',
             gridMode: 'dynamic',
-            gridColumns: 5
+            gridColumns: 7
         };
 
         // Bindings
@@ -281,7 +281,7 @@ class LibraryPage extends Page {
                 return 1;
             case 'poster':
             default:
-                return 5;
+                return 7;
         }
     }
 
@@ -2302,7 +2302,7 @@ class LibraryPage extends Page {
 
             // Compute card width minus margins to feed ImageService parameters
             const containerWidth = grid.clientWidth || 1720;
-            const columns = this.state.gridColumns || 5;
+            const columns = this.state.gridColumns || 7;
             const margin = 20; // Must align with --grid-card-margin in library.css
             cardWidth = Math.round((containerWidth - (columns - 1) * margin) / columns);
         } else {

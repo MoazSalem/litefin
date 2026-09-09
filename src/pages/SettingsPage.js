@@ -1807,6 +1807,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowActionTooltips">${i18n.t('ShowActionTooltips') || 'Show Button Names Tooltip'}</span>
+                        <span class="setting-description" data-i18n="ShowActionTooltipsDescription">${i18n.t('ShowActionTooltipsDescription') || 'Display a label under focused action buttons on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showActionTooltips') !== 'false' ? 'active' : ''}" 
+                                id="toggle-show-action-tooltips" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelHideOriginalTitle">${i18n.t('LabelHideOriginalTitle') || 'Hide Original Language Title'}</span>
                         <span class="setting-description" data-i18n="HideOriginalTitleDescription">${i18n.t('HideOriginalTitleDescription') || 'Do not show the original language title under the main title on the details page.'}</span>
                     </div>
@@ -6492,6 +6505,25 @@ class SettingsPage extends Page {
                 // Instantly update the visual active state using the iOS-style slider transition.
                 hideGhostModeBtn.classList.toggle('active', newValue);
                 log.info(`Hide Ghost Mode Button set to: ${newValue}`);
+            });
+        }
+
+        // =====================================================================
+        // TOGGLE SHOW ACTION BUTTON NAMES TOOLTIP
+        // =====================================================================
+        // Controls whether dynamic tooltip names appear directly below focused
+        // action buttons on the item details page.
+        // =====================================================================
+        const showActionTooltipsBtn = this.$('#toggle-show-action-tooltips');
+        if (showActionTooltipsBtn) {
+            showActionTooltipsBtn.addEventListener('click', () => {
+                // Enabled by default (true unless explicitly stored as 'false')
+                const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+                const newValue = !isEnabled;
+
+                storage.setItem('pref:showActionTooltips', newValue.toString());
+                showActionTooltipsBtn.classList.toggle('active', newValue);
+                log.info(`Show Action Tooltips set to: ${newValue}`);
             });
         }
 

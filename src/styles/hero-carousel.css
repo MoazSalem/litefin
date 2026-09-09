@@ -876,7 +876,6 @@
 /* 
  * Text Shadow Overlay (::before):
  * Uses dynamic linear-gradient overlays driven by CSS variables (--hero-vignette-start, etc.).
- * Designed according to Apple HIG: crisp, deep contrast under typography that transitions
  * seamlessly into the backdrop artwork without sharp boundary artifacts.
  */
 .hero-carousel-container.immersive .hero-item::before,

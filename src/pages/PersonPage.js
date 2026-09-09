@@ -16,6 +16,7 @@ import MediaGrid from '../components/MediaGrid.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 
+import { eventBus } from '../core/EventBus.js';
 import FavoriteButton from '../components/FavoriteButton.js';
 import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
@@ -45,6 +46,7 @@ class PersonPage extends Page {
 
         try {
             this._setupFocus();
+            this._setupTooltipListener();
             this._loadPersonDetails();
         } catch (err) {
             log.error('onInit critical failure', err);
@@ -53,8 +55,11 @@ class PersonPage extends Page {
     }
 
     render() {
+        const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
+        const tooltipsClass = showTooltips ? '' : 'tooltips-disabled';
+
         return `
-            <div class="page person-page" id="person-page">
+            <div class="page person-page ${tooltipsClass}" id="person-page">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="person-backdrop">
                     <div class="backdrop-gradient"></div>
@@ -83,8 +88,12 @@ class PersonPage extends Page {
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
                             </div>
 
-                            <!-- Actions (Favorite) -->
-                            <div class="person-actions-row" id="person-fav-actions"></div>
+                            <!-- Actions (Favorite, Seerr) -->
+                            <div class="person-actions-row" id="person-fav-actions">
+                                <div class="action-btn-tooltip-bar" id="action-tooltip-bar">
+                                    <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -277,6 +286,22 @@ class PersonPage extends Page {
             favContainer.innerHTML = '';
             favContainer.style.display = 'flex'; // FORCE display
             this._favBtn.mount(favContainer);
+            if (this._favBtn.el) {
+                this._favBtn.el.setAttribute('data-tooltip', i18n.t('Favorite') || 'Favorite');
+            }
+
+            // Append tooltip bar to favContainer synchronously before any async operations
+            let tooltipBar = favContainer.querySelector('#action-tooltip-bar');
+            if (!tooltipBar) {
+                tooltipBar = document.createElement('div');
+                tooltipBar.className = 'action-btn-tooltip-bar';
+                tooltipBar.id = 'action-tooltip-bar';
+                tooltipBar.innerHTML = `<span class="action-btn-tooltip-text" id="action-tooltip-text"></span>`;
+                favContainer.appendChild(tooltipBar);
+            }
+
+            // Trigger immediate tooltip evaluation for the mounted buttons
+            this._onFocusChangedForTooltip?.(document.activeElement);
 
             // Mount Seerr rounded button beside the favorite button if Seerr is configured and TMDB ID is present
             const tmdbPersonId = p.ProviderIds?.Tmdb || p.ProviderIds?.tmdb || p.ProviderIds?.TMDB;
@@ -287,6 +312,7 @@ class PersonPage extends Page {
                 seerrBtn.id = 'btn-person-seerr';
                 seerrBtn.setAttribute('title', i18n.t('SeerrDetails') || 'Seerr Details');
                 seerrBtn.setAttribute('aria-label', i18n.t('SeerrDetails') || 'Seerr Details');
+                seerrBtn.setAttribute('data-tooltip', i18n.t('SeerrDetails') || 'Seerr Details');
                 seerrBtn.setAttribute('tabindex', '0');
                 seerrBtn.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="28" height="28">
@@ -299,7 +325,12 @@ class PersonPage extends Page {
                     router.navigate(`/seerr/person/${tmdbPersonId}`);
                 };
 
-                favContainer.appendChild(seerrBtn);
+                // Insert seerrBtn BEFORE tooltipBar so tooltipBar stays at the end of the container
+                if (tooltipBar && tooltipBar.parentNode === favContainer) {
+                    favContainer.insertBefore(seerrBtn, tooltipBar);
+                } else {
+                    favContainer.appendChild(seerrBtn);
+                }
             }
 
             // Wait for next frame to ensure DOM is ready
@@ -917,7 +948,92 @@ class PersonPage extends Page {
         });
     }
 
+    _setupTooltipListener() {
+        this._onFocusChangedForTooltip = (focusedEl) => {
+            const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+            const targetEl = focusedEl || document.activeElement;
+            const bar = this.$('#action-tooltip-bar');
+            const txt = this.$('#action-tooltip-text');
+
+            if (!isEnabled || !targetEl || !bar || !txt) {
+                if (bar) bar.classList.remove('visible');
+                return;
+            }
+
+            const actionsContainer = this.$('#person-fav-actions');
+            if (actionsContainer && actionsContainer.contains(targetEl)) {
+                let text = targetEl.getAttribute('data-tooltip') || targetEl.getAttribute('aria-label') || targetEl.getAttribute('title');
+                if (!text) {
+                    const span = targetEl.querySelector('span[data-i18n], span');
+                    if (span) text = span.textContent?.trim();
+                }
+
+                if (text) {
+                    const btnCenterX = targetEl.offsetLeft + (targetEl.offsetWidth / 2);
+                    const btnBottomY = targetEl.offsetTop + targetEl.offsetHeight;
+
+                    bar.style.left = `${btnCenterX}px`;
+                    bar.style.top = `${btnBottomY}px`;
+                    txt.textContent = text;
+                    bar.classList.add('visible');
+                    return;
+                }
+            }
+
+            if (bar) bar.classList.remove('visible');
+        };
+
+        eventBus.on('focus:changed', this._onFocusChangedForTooltip);
+
+        const actionsContainer = this.$('#person-fav-actions');
+        if (actionsContainer) {
+            actionsContainer.addEventListener('mouseover', (e) => {
+                const btn = e.target.closest('.btn, button');
+                if (btn) this._onFocusChangedForTooltip(btn);
+            });
+
+            actionsContainer.addEventListener('mouseout', (e) => {
+                const bar = this.$('#action-tooltip-bar');
+                const related = e.relatedTarget;
+                if (!related || !actionsContainer.contains(related)) {
+                    const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
+                    if (activeInActions) {
+                        this._onFocusChangedForTooltip(document.activeElement);
+                    } else if (bar) {
+                        bar.classList.remove('visible');
+                    }
+                } else {
+                    const newBtn = related.closest('.btn, button');
+                    if (newBtn) {
+                        this._onFocusChangedForTooltip(newBtn);
+                    }
+                }
+            });
+        }
+
+        // Initial evaluation for already focused button on page load
+        const updateInitial = () => {
+            const actionsContainer = this.$('#person-fav-actions');
+            const favBtn = this._favBtn?.el || this.$('.favorite-btn');
+            const targetEl = (document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement))
+                ? document.activeElement
+                : favBtn;
+            if (targetEl) {
+                this._onFocusChangedForTooltip(targetEl);
+            }
+        };
+        updateInitial();
+        requestAnimationFrame(updateInitial);
+        setTimeout(updateInitial, 150);
+        setTimeout(updateInitial, 400);
+    }
+
     destroy() {
+        if (this._onFocusChangedForTooltip) {
+            eventBus.off('focus:changed', this._onFocusChangedForTooltip);
+            this._onFocusChangedForTooltip = null;
+        }
+
         if (this._favBtn) {
             this._favBtn.destroy();
             this._favBtn = null;

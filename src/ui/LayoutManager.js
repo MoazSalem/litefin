@@ -368,7 +368,6 @@ class LayoutManager {
     /**
      * Sets and activates the sidebar layout mode across the entire UI.
      * Stamped onto <html> as data-layout-sidebar to power layout-scoped styling.
-     * Follows Apple HIG principles with clear visual hierarchy and instant feedback.
      *
      * @param {string} layout - The target sidebar layout identifier ('classic', etc.)
      * @param {boolean} [save=true] - Whether to persist this preference in storage
@@ -1118,7 +1117,6 @@ class LayoutManager {
 
     /**
      * Set loading indicator visual presentation style.
-     * Supports Apple HIG inspired design variants: 'dots', 'ring', etc.
      *
      * @param {string} style - The identifier of the loader style ('dots' | 'ring')
      * @param {boolean} [save=true] - Whether to persist choice to storage
@@ -1313,7 +1311,7 @@ class LayoutManager {
      */
     _applyHeroVignetteVariables() {
         /*
-         * Default alpha values for level 70 (balanced Apple HIG contrast)
+         * Default alpha values for level 70 
          * Produces a clean ~0.72 start alpha and 0.40 mid-curve.
          */
         let startAlpha = 0.72;
