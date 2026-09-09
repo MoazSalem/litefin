@@ -1049,14 +1049,13 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${
-                                            user.PrimaryImageTag
-                                                ? api.getUserImageUrl(user.Id, {
-                                                      maxWidth: imageService.getParams('avatar').maxWidth,
-                                                      quality: imageService.getParams('avatar').quality
-                                                  })
-                                                : ''
-                                        }"
+                                        src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -1071,14 +1070,13 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${
-                                        user.PrimaryImageTag
-                                            ? api.getUserImageUrl(user.Id, {
-                                                  maxWidth: imageService.getParams('avatar').maxWidth,
-                                                  quality: imageService.getParams('avatar').quality
-                                              })
-                                            : ''
-                                    }"
+                                    src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
@@ -1622,7 +1620,7 @@ class LoginPage extends Page {
             if (this._discoveredServers.length === 0) {
                 // If LAN discovery has finished and there are zero servers, show a clean fallback
                 if (!this._isDiscovering) {
-                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
+                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoServersFound')}</li>`;
                 } else {
                     // Empty list while the background discovery scan is actively searching
                     this._serverList.innerHTML = '';
@@ -1705,7 +1703,7 @@ class LoginPage extends Page {
             if (otherServers.length === 0) {
                 // Show empty indicator only if scanning has stopped and no saved servers either
                 if (!this._isDiscovering && savedServers.length === 0) {
-                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
+                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoServersFound')}</li>`;
                 } else {
                     this._serverList.innerHTML = '';
                 }

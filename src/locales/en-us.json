@@ -992,6 +992,7 @@
     "NoBackupFound": "No settings backup for this user found on the server.",
     "NoFavoritesFound": "No favorites found. Go add some!",
     "NoItemsFound": "No items found",
+    "NoServersFound": "No servers found",
     "NoItemsFoundDescription": "Try adjusting your filters or search to find what you're looking for.",
     "NoLibraries": "No libraries found. Please check your Jellyfin user permissions.",
     "NoLocalTrailersFound": "No local trailers found.",

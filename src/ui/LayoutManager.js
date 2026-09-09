@@ -62,8 +62,8 @@ class LayoutManager {
         this._sidebarLayout = 'modern';
 
         // Current theme mode
-        // Ambient Glow is now the default theme mode for a premium glassmorphic look.
-        this._themeMode = THEME_MODES.AMBIENT;
+        // Black (OLED) is the default — zero compositing, pure black pixels, maximum performance.
+        this._themeMode = THEME_MODES.BLACK;
 
         // Current theme color (HEX)
         this._themeColor = DEFAULT_THEME_COLOR;
@@ -92,10 +92,10 @@ class LayoutManager {
         /*
          * Loading Indicator Visual Style
          * Controls the visual presentation of loading spinners and activity indicators.
-         * Default: 'dots' (pulsing dual dots).
-         * Supported: 'dots', 'ring'.
+         * Default: 'ring' (Rotating Ring) — lightest possible option for CPU/GPU overhead.
+         * Supported: 'dots', 'ring', 'dual-ring', 'orbit', 'satellite', etc.
          */
-        this._loaderStyle = 'dots';
+        this._loaderStyle = 'ring';
 
         // Disable BlurHash: Disables color-accurate blurred canvas rendering during image load
         this._disableBlurhash = false;
@@ -167,7 +167,12 @@ class LayoutManager {
         let savedLoginPageLayout = storage.getItem('pref:loginPageLayout');
         if (!savedLoginPageLayout) {
             const legacy = storage.getItem('pref:modernLoginPage') || storage.getItem('litefin:layout');
-            savedLoginPageLayout = legacy === 'true' || legacy === 'modern' ? 'modern' : 'classic';
+            // Hardware with c26 quirks (Chrome <32 / Tizen 2.4 ancient WebKit) defaults to classic login layout.
+            if (platformInfo.isAncientChrome) {
+                savedLoginPageLayout = 'classic';
+            } else {
+                savedLoginPageLayout = legacy === 'false' ? 'classic' : 'modern';
+            }
         }
 
         /*
@@ -182,8 +187,8 @@ class LayoutManager {
 
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
-        // Default to Ambient theme mode if no user preference is stored.
-        let initialMode = THEME_MODES.AMBIENT;
+        // Default to Black (OLED) theme mode — zero compositing overhead, best for performance.
+        let initialMode = THEME_MODES.BLACK;
 
         if (savedThemeMode && Object.values(THEME_MODES).includes(savedThemeMode)) {
             initialMode = savedThemeMode;
@@ -203,8 +208,9 @@ class LayoutManager {
          * Retrieve user preference for loading indicator animation aesthetic.
          * If litefin:loaderStyle is not set, fallback seamlessly to legacy simpleLoader
          * boolean preference ('ring' when true, otherwise 'dots').
+         * Default is 'ring' (Rotating Ring) — the most CPU/GPU-efficient option.
          */
-        const savedLoaderStyle = storage.getItem('litefin:loaderStyle') || (savedSimpleLoader ? 'ring' : 'dots');
+        const savedLoaderStyle = storage.getItem('litefin:loaderStyle') || (savedSimpleLoader ? 'ring' : 'ring');
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
