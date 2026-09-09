@@ -807,7 +807,7 @@ class LibraryPage extends Page {
 
     /**
      * Get page state for navigation history.
-     * Saves filters, sort, pagination, tab selection, AND view mode.
+     * Saves filters, sort, pagination, tab selection, view mode, and grid sizing config.
      */
     getNavigationState() {
         return {
@@ -818,7 +818,9 @@ class LibraryPage extends Page {
             nameStartsWith: this.state.nameStartsWith,
             startIndex: this.state.startIndex,
             limit: this.state.limit,
-            viewMode: this.state.viewMode
+            viewMode: this.state.viewMode,
+            gridMode: this.state.gridMode,
+            gridColumns: this.state.gridColumns
         };
     }
 
@@ -839,8 +841,10 @@ class LibraryPage extends Page {
             nameStartsWith: savedState.nameStartsWith || null,
             startIndex: savedState.startIndex || 0,
             limit: savedState.limit || this.state.limit,
-            // Restore view mode from nav state (set before _renderGrid runs)
-            viewMode: savedState.viewMode || this.state.viewMode
+            // Restore view mode and column layouts from nav state
+            viewMode: savedState.viewMode || this.state.viewMode,
+            gridMode: savedState.gridMode || this.state.gridMode,
+            gridColumns: savedState.gridColumns || this.state.gridColumns
         });
 
         log.info('Navigation state restored:', savedState);
@@ -1085,7 +1089,10 @@ class LibraryPage extends Page {
 
         // Align limit to grid columns so the last rendered row is always full.
         // Avoids visual partial-row gaps when navigating the grid via D-pad.
-        const alignCols = this.state.gridMode === 'dynamic' ? this.state.gridColumns : 0;
+        const effectiveLimitCols = (isLandscape && this.state.viewMode !== 'thumb')
+            ? this._getDefaultColumnsForMode('thumb')
+            : (this.state.gridColumns || this._getDefaultColumnsForMode(this.state.viewMode));
+        const alignCols = this.state.gridMode === 'dynamic' ? effectiveLimitCols : 0;
         if (alignCols > 0) {
             this.state.limit = Math.ceil(this.state.limit / alignCols) * alignCols;
         }
@@ -1861,56 +1868,75 @@ class LibraryPage extends Page {
     _loadPersistedViewMode() {
         const validModes = ['poster', 'small-poster', 'thumb', 'banner', 'list'];
 
-        // If an initial viewing mode index is provided in the URL, use it and don't persist it.
+        // Determine if the current tab/collection forces a 16:9 landscape orientation (e.g. Episodes)
+        const isLandscape =
+            this.state.viewType === 'Episodes' ||
+            this.state.viewType === 'Upcoming' ||
+            this.state.viewType === 'Networks' ||
+            this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos' ||
+            (this.params.includeItemTypes && this.params.includeItemTypes.includes('Episode'));
+
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        // ---------------------------------------------------------------------
+        // 1. Resolve Active View Mode
+        // ---------------------------------------------------------------------
+        // Priority order:
+        //  a) Explicit URL numerical index (?viewModeIndex=2 -> 'thumb')
+        //  b) Explicit URL string (?viewMode=thumb)
+        //  c) Sub-view reset (standard Jellyfin sub-views default to poster or thumb)
+        //  d) Saved local storage preference for this library
+        //  e) Standard fallback: 'thumb' for landscape collections, 'poster' otherwise
+        // ---------------------------------------------------------------------
         if (this.params.viewModeIndex !== undefined) {
             const index = parseInt(this.params.viewModeIndex, 10);
             if (!isNaN(index) && validModes[index]) {
                 this.state.viewMode = validModes[index];
                 log.info(`[ViewMode] Loaded view mode index from URL: ${index} -> ${this.state.viewMode}`);
-                return;
+            }
+        } else if (this.params.viewMode && validModes.includes(this.params.viewMode)) {
+            this.state.viewMode = this.params.viewMode;
+            log.info(`[ViewMode] Loaded view mode string from URL: ${this.state.viewMode}`);
+        } else if (this._isSubView() && !isSeerr) {
+            // Sub-views for standard Jellyfin libraries reset to standard view
+            this.state.viewMode = isLandscape ? 'thumb' : 'poster';
+        } else {
+            const storageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
+            const saved = storage.getItem(storageKey);
+
+            if (saved) {
+                // Validate the value is still a known picker option (guards against stale data)
+                const allowedModes = isSeerr ? ['poster', 'small-poster'] : validModes;
+                this.state.viewMode = allowedModes.includes(saved) ? saved : 'poster';
+            } else {
+                // Universal default is 'thumb' for landscape tabs, 'poster' for portrait
+                this.state.viewMode = isLandscape ? 'thumb' : 'poster';
             }
         }
 
-        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
-
-        if (this._isSubView() && !isSeerr) {
-            // Sub-views for standard Jellyfin libraries always reset to poster default
-            this.state.viewMode = 'poster';
-            return;
-        }
-
-        const storageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
-        const saved = storage.getItem(storageKey);
-
-        if (saved) {
-            // Validate the value is still a known picker option (guards against stale data)
-            const validModes = isSeerr ? ['poster', 'small-poster'] : ['poster', 'small-poster', 'thumb', 'banner', 'list'];
-            this.state.viewMode = validModes.includes(saved) ? saved : 'poster';
-        } else {
-            // No preference saved — universal default is 'poster'.
-            // Music albums show as square cards via _resolveCardType(), not via viewMode.
-            this.state.viewMode = 'poster';
-        }
-
-        log.info(`[ViewMode] Loaded view mode: ${this.state.viewMode} for library ${this.state.libraryId}`);
+        log.info(`[ViewMode] Active view mode: ${this.state.viewMode} for library ${this.state.libraryId}`);
 
         /*
          * =========================================================================
          * REHYDRATE GRID CONFIGURATIONS
          * =========================================================================
          * Loads whether we are using Static or Dynamic sizing modes, and the specific
-         * custom column counts selected for this viewMode.
+         * custom column counts selected for this viewMode (or effective landscape mode).
+         * Never exit early so gridColumns is guaranteed to match the active layout!
          * =========================================================================
          */
         const modeKey = isSeerr ? 'pref:seerr:gridMode' : `pref:library:gridMode:${this.state.libraryId}`;
         const savedMode = storage.getItem(modeKey);
         this.state.gridMode = savedMode === 'static' ? 'static' : 'dynamic';
 
+        // Effective layout mode drives the column count (e.g. forced landscape needs 4 cols, not 7)
+        const effectiveMode = isLandscape ? 'thumb' : this.state.viewMode;
         const colsKey = isSeerr
-            ? `pref:seerr:gridColumns:${this.state.viewMode}`
-            : `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewMode}`;
+            ? `pref:seerr:gridColumns:${effectiveMode}`
+            : `pref:library:gridColumns:${this.state.libraryId}:${effectiveMode}`;
         const savedCols = parseInt(storage.getItem(colsKey), 10);
-        this.state.gridColumns = !isNaN(savedCols) ? savedCols : this._getDefaultColumnsForMode(this.state.viewMode);
+        this.state.gridColumns = !isNaN(savedCols) ? savedCols : this._getDefaultColumnsForMode(effectiveMode);
     }
 
     _loadPersistedSortMode() {
@@ -2298,11 +2324,25 @@ class LibraryPage extends Page {
         let cardWidth = null;
         if (this.state.gridMode === 'dynamic' && this.state.viewMode !== 'list') {
             grid.classList.add('mode-dynamic');
-            grid.style.setProperty('--grid-columns', this.state.gridColumns);
+
+            // Effective columns must reflect forced-landscape tabs (e.g. Episodes = 4 cols, not poster's 7)
+            const effectiveMode = isLandscape ? 'thumb' : this.state.viewMode;
+            let effectiveColumns = this.state.gridColumns;
+            if (isLandscape && this.state.viewMode !== 'thumb') {
+                const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+                const savedThumbCols = parseInt(storage.getItem(
+                    isSeerr ? 'pref:seerr:gridColumns:thumb' : `pref:library:gridColumns:${this.state.libraryId}:thumb`
+                ), 10);
+                effectiveColumns = !isNaN(savedThumbCols) ? savedThumbCols : this._getDefaultColumnsForMode('thumb');
+            } else if (!effectiveColumns) {
+                effectiveColumns = this._getDefaultColumnsForMode(effectiveMode);
+            }
+
+            grid.style.setProperty('--grid-columns', effectiveColumns);
 
             // Compute card width minus margins to feed ImageService parameters
             const containerWidth = grid.clientWidth || 1720;
-            const columns = this.state.gridColumns || 7;
+            const columns = effectiveColumns || 7;
             const margin = 20; // Must align with --grid-card-margin in library.css
             cardWidth = Math.round((containerWidth - (columns - 1) * margin) / columns);
         } else {
@@ -2454,8 +2494,17 @@ class LibraryPage extends Page {
         //
         // Chunk sizing: (columns × 5 rows) gives ~2 visible screens worth of content.
         // ====================================================================
-        const columns =
-            this.state.gridColumns || this._getDefaultColumnsForMode(isLandscape ? 'thumb' : this.state.viewMode);
+        const effectiveMode = isLandscape ? 'thumb' : this.state.viewMode;
+        let columns = this.state.gridColumns;
+        if (isLandscape && this.state.viewMode !== 'thumb') {
+            const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+            const savedThumbCols = parseInt(storage.getItem(
+                isSeerr ? 'pref:seerr:gridColumns:thumb' : `pref:library:gridColumns:${this.state.libraryId}:thumb`
+            ), 10);
+            columns = !isNaN(savedThumbCols) ? savedThumbCols : this._getDefaultColumnsForMode('thumb');
+        } else if (!columns) {
+            columns = this._getDefaultColumnsForMode(effectiveMode);
+        }
 
         // Store rendering context + column count on state so _appendGridChunk
         // and _prependGridChunk can access them without re-deriving
@@ -2520,10 +2569,7 @@ class LibraryPage extends Page {
         }
 
         // Re-register focus for grid items
-        const currentColumns =
-            this.state.gridMode === 'dynamic' && this.state.viewMode !== 'list'
-                ? this.state.gridColumns
-                : this._getDefaultColumnsForMode(isLandscape ? 'thumb' : this.state.viewMode);
+        const currentColumns = this.state.viewMode === 'list' ? 1 : columns;
 
         focusManager.register('library-grid', grid, {
             orientation: 'grid',
@@ -3944,17 +3990,46 @@ class LibraryPage extends Page {
         this._prevFocus = focusManager.getFocused();
         this._prevSection = focusManager.getActiveSection();
 
-        const current = this.state.viewMode;
+        // Check if current tab forces landscape layout (Episodes, etc.)
+        const isLandscape =
+            this.state.viewType === 'Episodes' ||
+            this.state.viewType === 'Upcoming' ||
+            this.state.viewType === 'Networks' ||
+            this.state.libraryInfo?.CollectionType === 'musicvideos' ||
+            this.state.libraryInfo?.CollectionType === 'homevideos';
+
+        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+
+        const current = isLandscape ? 'thumb' : this.state.viewMode;
         let tempMode = current;
         let tempGridMode = this.state.gridMode;
-        let tempColumns = this.state.gridColumns;
 
+        // Grid column options available for each view mode layout
         const colOptionsMap = {
             poster: [4, 5, 6, 7],
-            'small-poster': [6, 8, 10, 12],
+            // Small poster density: 8, 9 (default), 10, or 12 cards per row
+            'small-poster': [8, 9, 10, 12],
             thumb: [3, 4, 5, 6],
             banner: [2, 3, 4, 5]
         };
+
+        // Determine the initial column count: check saved preference for this specific mode first,
+        // otherwise default to the standard column count for this mode.
+        const defaultInitialCols = this._getDefaultColumnsForMode(tempMode);
+        const initialColsKey = isSeerr
+            ? `pref:seerr:gridColumns:${tempMode}`
+            : `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
+        const initialSavedCols = parseInt(storage.getItem(initialColsKey), 10);
+        const validInitialOpts = colOptionsMap[tempMode] || [];
+
+        let tempColumns;
+        if (validInitialOpts.includes(initialSavedCols)) {
+            tempColumns = initialSavedCols;
+        } else if (validInitialOpts.includes(this.state.gridColumns) && this.state.viewMode === tempMode && !isLandscape) {
+            tempColumns = this.state.gridColumns;
+        } else {
+            tempColumns = defaultInitialCols;
+        }
 
         const getColumnsHtml = (mode, currentVal) => {
             const opts = colOptionsMap[mode] || [];
@@ -3968,8 +4043,6 @@ class LibraryPage extends Page {
                 )
                 .join('');
         };
-
-        const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
 
         const allModes = [
             {
@@ -4168,13 +4241,20 @@ class LibraryPage extends Page {
                     b.classList.toggle('selected', b.dataset.mode === tempMode);
                 });
 
-                // When switching modes, check if we need to load columns default value
+                // When switching layout styles, load this mode's saved column preference
+                // if valid, or fall back to the exact default column count for this mode.
                 const defaultCols = this._getDefaultColumnsForMode(tempMode);
                 const colsKey = isSeerr
                     ? `pref:seerr:gridColumns:${tempMode}`
                     : `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
                 const savedCols = parseInt(storage.getItem(colsKey), 10);
-                tempColumns = !isNaN(savedCols) ? savedCols : defaultCols;
+                const validOpts = colOptionsMap[tempMode] || [];
+
+                if (validOpts.includes(savedCols)) {
+                    tempColumns = savedCols;
+                } else {
+                    tempColumns = defaultCols;
+                }
 
                 updateModalUI();
             });

@@ -731,8 +731,11 @@ body.player-active #sidebar-container {
     width: 100vw;
     height: 100vh;
     display: none;
+    /* Covers everything including the sidebar — z-index 9999 sits above
+     * #sidebar-container (z-index 200) and all modals below 9999.
+     * Background fills the full screen so the sidebar doesn't bleed through. */
     z-index: 9999;
-    background-color: transparent;
+    background-color: var(--jf-background, #000000);
 }
 
 .page.loading .page-loading {
