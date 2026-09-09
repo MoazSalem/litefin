@@ -43,6 +43,15 @@ class Sidebar extends Component {
          * @type {boolean}
          */
         this._expandedByMouse = false;
+
+        /**
+         * Cached result of the last resolved Seerr availability check.
+         * Starts as false (hidden) and is updated reactively once the probe
+         * completes. _applySidebarLayout() reads this to decide whether to
+         * show the Discover sidebar button, so it survives any layout rebuild.
+         * @type {boolean}
+         */
+        this._seerrAvailable = false;
     }
 
     render() {
@@ -150,7 +159,7 @@ class Sidebar extends Component {
 
     onMounted() {
         this._bindEvents();
-        this._loadLibraries().then(() => this._updateSeerrVisibility());
+        this._loadLibraries().then( () => this._updateSeerrVisibility() );
         this._updateActiveState();
 
         // Hydrate DOM with translations
@@ -234,6 +243,18 @@ class Sidebar extends Component {
             this._loadLibraries();
         };
         eventBus.on('sidebarLayout:changed', this._onSidebarLayoutModeChanged);
+
+        // React to seerr status being resolved (after auth is set up and server responds).
+        // This fires from SeerrClient after a successful status probe, allowing us to
+        // update the Discover button without a separate network call.
+        this._onSeerrStatusResolved = (status) => {
+            const available = !!(status && status.configured && status.available);
+            if (this._seerrAvailable !== available) {
+                this._seerrAvailable = available;
+                this._applySidebarLayout();
+            }
+        };
+        eventBus.on('seerr:statusResolved', this._onSeerrStatusResolved);
 
         // Resolve the default focus item from saved prefs (falls back to 'home')
         const defaultFocusId = sidebarLayoutManager.getDefaultFocus();
@@ -334,7 +355,16 @@ class Sidebar extends Component {
         const button = this.$('#sidebar-discover');
         if (!button) return;
 
+        // Don't probe while unauthenticated — the API call will fail and may
+        // cause other pages to read a stale 'false' result from the in-memory cache.
+        // The auth:restored → _onAuthChange path ensures we re-run once ready.
+        if (!auth.isAuthenticated()) return;
+
         const isAvailable = await seerr.isAvailable();
+
+        // Cache locally so _applySidebarLayout() can preserve this state
+        // across any layout rebuild without an additional network call
+        this._seerrAvailable = isAvailable;
         button.style.display = isAvailable ? '' : 'none';
         focusManager.invalidateCache('sidebar');
     }
@@ -363,6 +393,10 @@ class Sidebar extends Component {
 
         if ( this._onSidebarLayoutModeChanged ) {
             eventBus.off( 'sidebarLayout:changed', this._onSidebarLayoutModeChanged );
+        }
+
+        if ( this._onSeerrStatusResolved ) {
+            eventBus.off( 'seerr:statusResolved', this._onSeerrStatusResolved );
         }
 
         if ( this._onLogoSettingsChanged ) {
@@ -423,7 +457,9 @@ class Sidebar extends Component {
 
         // Reload libraries if logged in
         if ( auth.isAuthenticated() ) {
-            this._loadLibraries();
+            // Re-check seerr availability after auth change so the discover button
+            // and any other seerr UI reflects the current session state correctly
+            this._loadLibraries().then( () => this._updateSeerrVisibility() );
         } else {
             // Clear loaded library items from the sub-libraries container on logout.
             // NOTE: Do NOT clear #sidebar-libraries (the toggle button itself) — that would wipe its
@@ -1438,7 +1474,11 @@ class Sidebar extends Component {
 
                 const isSyncPlay = id === 'syncplay';
                 const pluginHidden = isSyncPlay && !pluginManager.isEnabled( 'syncplay' );
-                const shouldHide = hidden || pluginHidden;
+                // Discover requires Seerr to be available — hide it if the probe hasn't
+                // confirmed availability yet, regardless of the saved layout preference
+                const isDiscover = id === 'discover';
+                const seerrHidden = isDiscover && !this._seerrAvailable;
+                const shouldHide = hidden || pluginHidden || seerrHidden;
 
                 el.style.display = shouldHide ? 'none' : '';
                 sidebarContent.appendChild( el );
@@ -1469,7 +1509,10 @@ class Sidebar extends Component {
 
                 const isSyncPlay = id === 'syncplay';
                 const pluginHidden = isSyncPlay && !pluginManager.isEnabled( 'syncplay' );
-                const shouldHide = hidden || pluginHidden;
+                // Same seerr-awareness as Modern mode — discover stays hidden until probed
+                const isDiscover = id === 'discover';
+                const seerrHidden = isDiscover && !this._seerrAvailable;
+                const shouldHide = hidden || pluginHidden || seerrHidden;
 
                 el.style.display = shouldHide ? 'none' : '';
                 sidebarContent.appendChild( el );

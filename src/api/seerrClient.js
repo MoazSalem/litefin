@@ -13,6 +13,7 @@ import { i18n } from '../utils/i18n.js';
 import { storage } from '../utils/StorageService.js';
 import { state } from '../core/StateManager.js';
 import { api } from './ApiClient.js';
+import { eventBus } from '../core/EventBus.js';
 import { normalizeSeerrItem, seerrStatusKey, SEERR_STATUS } from './seerrNormalize.js';
 import { buildGenreSliderItems, buildStudioItems, buildNetworkItems } from '../utils/seerrGenres.js';
 
@@ -89,9 +90,15 @@ export class SeerrClient {
                     sessionStorage.setItem('seerr:session_status', JSON.stringify(this._status));
                 } catch (_) {}
             }
+            // Notify all components that seerr availability is now resolved so they
+            // can update their UI without an additional probe round-trip
+            eventBus.emit('seerr:statusResolved', this._status);
         } catch (err) {
-            log.debug('Litefin Seerr plugin endpoint is unavailable', err);
-            this._status = { configured: false, available: false };
+            // Do NOT cache failure in this._status — the request may have failed due to
+            // an auth race condition (sidebar probing before session is fully restored).
+            // Leaving this._status null allows the next caller to retry cleanly.
+            log.debug('Litefin Seerr plugin endpoint is unavailable or not yet ready', err);
+            return { configured: false, available: false };
         }
 
         return this._status;
