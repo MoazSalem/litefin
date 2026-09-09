@@ -1016,23 +1016,14 @@ class HomePage extends Page {
                 return;
             }
 
-            // ─── Step 4: Insert skeleton placeholders (P0 + P1 only) ──────────
-            // We only pre-insert skeletons for rows that will render eagerly
-            // (Priority 0 and 1). Priority-2 library rows are deferred to scroll
-            // so we deliberately withhold their skeletons here — they get injected
-            // by _loadNextDeferredBatch() immediately before their API call fires.
-            // This prevents a wall of empty skeleton cards from appearing for
-            // libraries the user may never scroll to.
-            const eagerDescriptors = descriptors.filter((d) => d.priority < 2);
-            this._insertSkeletonRows(eagerDescriptors);
-
-            // ─── Step 5: Group descriptors by priority ────────────────────────
+            // ─── Step 4: Group descriptors by priority ────────────────────────
             // Rows within the same priority group run in parallel.
-            // Priority 0 renders first and we await it before firing priority 1, etc.
+            // Priority 0 (My Media) and 1 (Continue Watching / Next Up) are core.
             const priorityGroups = this._groupByPriority(descriptors);
             const priorities = Array.from(priorityGroups.keys()).sort((a, b) => a - b);
 
-            // ─── Step 5.5: Batch pre-fetch latest library rows via plugin ────
+            // ─── Step 4.5: Batch pre-fetch latest library rows via plugin ────
+            // Pre-loads all latest rows across libraries in one round-trip
             await this._preFetchLatestRows(descriptors);
 
             // Find target focus row if restoring back-navigation state
@@ -1042,7 +1033,49 @@ class HomePage extends Page {
             const targetRowId = savedFocusObj ? savedFocusObj.rowId : null;
             const targetDescriptor = targetRowId ? descriptors.find((d) => d.id === targetRowId) : null;
 
-            // ─── Step 6: Render priority 0 + 1 + hero + target focus row ──────
+            // ─── Step 5: Partition eager vs deferred rows ─────────────────────
+            // Collect all Priority 2+ (library) descriptors in natural sequence.
+            const remainingPriorities = priorities.filter((p) => p !== 0 && p !== 1);
+            const allDeferredDescs = [];
+            for (const p of remainingPriorities) {
+                const group = priorityGroups.get(p);
+                if (group) allDeferredDescs.push(...group);
+            }
+
+            // Determine how many P2 rows need to be loaded eagerly.
+            // If restoring focus to a P2 row, we MUST eagerly load all rows up to
+            // and including the target row in natural sequence so that:
+            //   1. The DOM order is strictly preserved.
+            //   2. The target row is ready before focus restoration runs.
+            //   3. No duplicate skeleton or out-of-order insertion occurs.
+            let eagerP2Count = Math.min(INITIAL_DEFERRED_COUNT, allDeferredDescs.length);
+            let mustAwaitP2 = false;
+            if (targetDescriptor && targetDescriptor.priority >= 2) {
+                const targetIdx = allDeferredDescs.findIndex((d) => d.id === targetDescriptor.id);
+                if (targetIdx !== -1) {
+                    // Extend the eager slice to encompass the focus target and preceding rows
+                    eagerP2Count = Math.max(eagerP2Count, targetIdx + 1);
+                    mustAwaitP2 = true; // Block splash dismiss until target is rendered
+                }
+            }
+
+            // Slice out the eager P2 batch and track remaining deferred descriptors
+            const eagerDeferred = allDeferredDescs.slice(0, eagerP2Count);
+            this._deferredDescriptors = allDeferredDescs;
+            this._nextDeferredDescIndex = eagerDeferred.length;
+
+            // ─── Step 5.5: Insert skeletons in exact natural order ───────────
+            // Skeletons for P0, P1, and any eager P2 rows are inserted in one go
+            // so the DOM hierarchy accurately mirrors the final layout structure.
+            const earlyDescriptors = descriptors.filter((d) => d.priority < 2);
+            const initialSkeletons = [...earlyDescriptors];
+            if (mustAwaitP2) {
+                // If focus target is in P2, mount eager P2 skeletons immediately in order
+                initialSkeletons.push(...eagerDeferred);
+            }
+            this._insertSkeletonRows(initialSkeletons);
+
+            // ─── Step 6: Render priority 0 + 1 + hero (+ target row if in P2) ──
             // My Media (P0), Continue Watching/Next Up (P1), Hero Carousel, and
             // target focus row are rendered and awaited BEFORE revealing the page
             // so focus restoration succeeds without flashes or skeleton resets.
@@ -1054,12 +1087,9 @@ class HomePage extends Page {
                     earlyPromises.push(...group.map((d) => this._loadAndRenderRow(d)));
                 }
             }
-            if (targetDescriptor && !earlyPriorities.includes(targetDescriptor.priority)) {
-                // The focus target is a P2 (library) row that hasn't had its skeleton
-                // inserted yet (Step 4 skipped P2 rows intentionally). Insert it now so
-                // _renderRow can find its placeholder element during focus restoration.
-                this._insertSkeletonRows([targetDescriptor]);
-                earlyPromises.push(this._loadAndRenderRow(targetDescriptor));
+            if (mustAwaitP2) {
+                // Target is in P2: await eager P2 rows so focus target is ready in DOM
+                earlyPromises.push(...eagerDeferred.map((d) => this._loadAndRenderRow(d)));
             }
             if (heroPromise) {
                 earlyPromises.push(heroPromise);
@@ -1071,7 +1101,7 @@ class HomePage extends Page {
             if (!this._isMounted) return;
 
             // Dismiss the loading spinner now that critical content is rendered.
-            // If there's a focus target, _hideSplash() in Step 8 handles it after
+            // If there's a focus target, _hideSplash() in Step 7 handles it after
             // focus restoration — so we only dismiss here when there's no target.
             if (!hasFocusTarget) {
                 this.setLoading(false);
@@ -1108,32 +1138,12 @@ class HomePage extends Page {
             });
 
             // ─── Step 9: Lazy-load remaining Priority-2 (library) rows ──────
-            //
-            // Previously this fired ALL remaining rows immediately via
-            // _loadBackgroundRows(), causing N API calls + DOM mutations + VirtualCardRow
-            // inits for every library even if the user never scrolls down.
-            //
-            // Now:
-            //   • The first INITIAL_DEFERRED_COUNT P2 rows load eagerly as before.
-            //   • Remaining P2 rows are stored in this._deferredDescriptors.
-            //   • An IntersectionObserver on #home-rows-sentinel fires batches on scroll.
-            //   • The D-pad leaveDown on the last live row triggers the next batch.
-            //   • A 1.2 s idle prefetch silently pulls one batch after the splash hides.
-            const remainingPriorities = priorities.filter((p) => p !== 0 && p !== 1);
-            if (remainingPriorities.length > 0) {
-                // Collect all remaining descriptors in priority-sorted order
-                const allDeferredDescs = [];
-                for (const p of remainingPriorities) {
-                    const group = priorityGroups.get(p);
-                    if (group) allDeferredDescs.push(...group);
-                }
-
-                // Partition: first N rows load eagerly; the rest are deferred
-                const eagerDeferred = allDeferredDescs.slice(0, INITIAL_DEFERRED_COUNT);
-                this._deferredDescriptors = allDeferredDescs;
-                this._nextDeferredDescIndex = eagerDeferred.length;
-
-                if (eagerDeferred.length > 0) {
+            // If P2 rows were not awaited in Step 6 (normal flow), start their
+            // eager batch in the background now. If they were already awaited
+            // (focus target was in P2), attach the scroll observer and idle prefetch
+            // for the remaining descriptors right away.
+            if (allDeferredDescs.length > 0) {
+                if (!mustAwaitP2 && eagerDeferred.length > 0) {
                     // Insert skeleton placeholders for the eager batch immediately
                     // so the page doesn't jump when they render
                     this._insertSkeletonRows(eagerDeferred);
@@ -1149,7 +1159,7 @@ class HomePage extends Page {
                         })
                         .catch((err) => log.error('Eager deferred rows failed', err));
                 } else {
-                    // All P2 rows are deferred from the start — set up observers immediately
+                    // Eager rows were already mounted in Step 6 — attach observers immediately
                     this._setupHomeScrollObserver();
                     this._scheduleHomeIdlePrefetch();
                 }
@@ -1194,13 +1204,24 @@ class HomePage extends Page {
      * @param {RowDescriptor[]} descriptors
      */
     _insertSkeletonRows(descriptors) {
+        // Container element holding all homepage row sections
         const container = this.$('#home-rows');
         if (!container) return;
 
+        // Sentinel element watched by IntersectionObserver to trigger deferred loading
+        const sentinel = container.querySelector('#home-rows-sentinel');
+        // Layout helper to determine aspect ratio per row
         const isLandscape = (descriptor) => descriptor.layout === 'landscape';
+        // User preference to suppress labels on library tiles
         const hideLibraryLabels = storage.getItem('pref:hideLibraryLabels') === 'true';
 
         for (const descriptor of descriptors) {
+            // Defensive guard: never add a skeleton if this row already exists in the container
+            // This prevents duplicate skeleton rows when resuming or switching views
+            if (container.querySelector(`[data-row-id="${descriptor.id}"]`)) {
+                continue;
+            }
+
             const landscape = isLandscape(descriptor);
             const isLibrary = descriptor.id === 'my-media';
             const shouldHideLabels = isLibrary && hideLibraryLabels;
@@ -1271,7 +1292,13 @@ class HomePage extends Page {
             `
             );
 
-            container.appendChild(sectionEl);
+            // Always insert before the scroll sentinel so the sentinel remains
+            // trailing at the very end of the row stream
+            if (sentinel) {
+                container.insertBefore(sectionEl, sentinel);
+            } else {
+                container.appendChild(sectionEl);
+            }
         }
     }
 
@@ -1287,6 +1314,11 @@ class HomePage extends Page {
      */
     async _loadAndRenderRow(descriptor) {
         if (!this._isMounted) return;
+
+        // Defensive guard: if row is already fully rendered in the registry, avoid duplicate load
+        if (this._rowRegistry.has(descriptor.id)) {
+            return;
+        }
 
         try {
             // Fetch this row's data via its individual fetch function
@@ -1578,11 +1610,24 @@ class HomePage extends Page {
         const container = this.$('#home-rows');
         if (!container) return;
 
-        // Find the skeleton placeholder for this descriptor
-        const sectionEl = container.querySelector(`[data-row-id="${descriptor.id}"]`);
+        // Find the placeholder element for this descriptor, preferring unrendered skeleton
+        let sectionEl = container.querySelector(`.media-row--skeleton[data-row-id="${descriptor.id}"]`);
+        if (!sectionEl) {
+            sectionEl = container.querySelector(`[data-row-id="${descriptor.id}"]`);
+        }
         if (!sectionEl) {
             log.warn(`No placeholder found for row "${descriptor.id}" — skipping render`);
             return;
+        }
+
+        // Clean up any extraneous duplicate skeleton elements with this row ID
+        const allMatching = Array.from(container.querySelectorAll(`[data-row-id="${descriptor.id}"]`));
+        if (allMatching.length > 1) {
+            allMatching.forEach((el) => {
+                if (el !== sectionEl && el.classList.contains('media-row--skeleton')) {
+                    el.remove();
+                }
+            });
         }
 
         const isLandscape = descriptor.layout === 'landscape';
