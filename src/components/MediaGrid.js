@@ -31,6 +31,7 @@ class MediaGrid extends Component {
         this.isLandscape = config.isLandscape || false;
         this.gridClass = config.gridClass || '';
         this.allowSeeMore = config.allowSeeMore !== undefined ? config.allowSeeMore : true;
+        this.showSeeMoreIfFull = config.showSeeMoreIfFull !== undefined ? config.showSeeMoreIfFull : false;
 
         // Path for "See More" navigation (Standard pattern replacing in-place expansion)
         this.moreUrl = config.moreUrl || null;
@@ -202,7 +203,11 @@ class MediaGrid extends Component {
     }
 
     _shouldShowButton() {
-        return this.allowSeeMore && this.items.length > this.limit;
+        if (!this.allowSeeMore) return false;
+        if (this.showSeeMoreIfFull) {
+            return this.items.length >= this.limit;
+        }
+        return this.items.length > this.limit;
     }
 
     _updateButtonVisibility() {

@@ -1472,6 +1472,52 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     height: 270px; /* Scaled proportionally for 9 items per row (2:3 aspect ratio) */
 }
 
+/* ============================================================================
+ * Person Page Appearances Grid (7 items per row)
+ * ============================================================================
+ * Precision 7-column layout adhering to Apple HIG proportional spacing.
+ * Width is calculated as 100% / 7 with 8px horizontal gutters (16px total).
+ * Fixed 350px image height preserves standard 2:3 theatrical poster ratio on 1080p.
+ * ============================================================================ */
+.person-grid.person-appearances-grid .media-card {
+    width: calc(14.2857% - 16px) !important; /* 100% / 7 items per row */
+    margin-right: 8px !important;
+    margin-left: 8px !important;
+    margin-bottom: 24px !important;
+    flex: none !important;
+    max-width: unset !important;
+    min-width: 0 !important;
+}
+
+.person-grid.person-appearances-grid .card-image {
+    width: 100%;
+    height: 350px; /* Proportionally scaled for 7 items per row (2:3 aspect ratio) */
+}
+
+/* ============================================================================
+ * Person Page Episodes Grid (5 items per row)
+ * ============================================================================
+ * 5-column landscape layout for episodic guest appearances and credits.
+ * Width is calculated as 100% / 5 with 8px horizontal gutters (16px total).
+ * Fixed 194px image height maintains true 16:9 widescreen broadcast proportion.
+ * ============================================================================ */
+.person-grid.landscape-grid.person-episodes-grid .media-card,
+.person-page #person-episodes .media-card {
+    width: calc(20% - 16px) !important; /* 100% / 5 items per row */
+    margin-right: 8px !important;
+    margin-left: 8px !important;
+    margin-bottom: 24px !important;
+    flex: none !important;
+    max-width: unset !important;
+    min-width: 0 !important;
+}
+
+.person-grid.landscape-grid.person-episodes-grid .card-image,
+.person-page #person-episodes .card-image {
+    width: 100%;
+    height: 194px !important; /* True 16:9 widescreen ratio (~344px card width) */
+}
+
 
 /*
  * ── Chrome 26 Quirks Overrides: Details Page Split Layout ────────────────────
