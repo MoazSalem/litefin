@@ -842,6 +842,21 @@ function _getLayoutQuirks() {
 }
 
 /**
+ * Read the layout tier from the document element.
+ * Set during LayoutManager.init() as data-layout-tier attribute on <html>.
+ * Returns 'ultra-legacy' / 'legacy' / 'modern' (or null before DOM is ready).
+ * Wrapped in try/catch for safety if called before DOM is ready.
+ * @returns {string|null}
+ */
+function _getLayoutTier() {
+    try {
+        return document.documentElement.getAttribute('data-layout-tier');
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * Resolves the final SVG markup based on the user's icon variant preferences.
  * Supports object-based definitions with separate outlined/filled templates.
  * Also keeps full backward compatibility with legacy raw HTML string templates.
@@ -873,11 +888,17 @@ function resolveIcon(iconEntry) {
         } else {
             // dynamic: return both, adding the required class to each SVG independently.
             //
-            // On ancient WebKit (data-layout-quirks="c26"), the CSS outline↔filled
-            // swap on focus breaks — the `.icon-outline` gets display:none but the
-            // `.icon-filled` never shows, leaving the button blank.  Fall back to
-            // outlined-only to prevent the swap from running.
-            if (_getLayoutQuirks() === 'c26') {
+            // On ancient WebKit engines the CSS outline↔filled display swap on focus
+            // is unreliable — `.icon-outline` gets display:none but `.icon-filled`
+            // never becomes visible, leaving the button completely blank.
+            //
+            // This affects two tiers:
+            //   • data-layout-quirks="c26"  — Chrome < 32  (Tizen 2.x / WebOS 1.x pure WebKit)
+            //   • data-layout-tier="ultra-legacy" — Chrome 32–46 (Tizen 2.x / older WebOS)
+            //
+            // Both receive outlined-only so the swap never runs and icons stay visible.
+            const isAncientEngine = _getLayoutQuirks() === 'c26' || _getLayoutTier() === 'ultra-legacy';
+            if (isAncientEngine) {
                 return iconEntry.outlined;
             }
             const outlineSvg = addClassToSvg(iconEntry.outlined, 'icon-outline');
