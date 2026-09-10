@@ -299,7 +299,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 /* Select Inputs */
 /* Select Buttons (Modal Triggers) */
 .select-btn,
-.theme-color-select-btn {
+.theme-color-select-btn,
+.loader-style-select-btn {
     padding: 12px 24px;
     font-size: 1.1rem;
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
@@ -327,7 +328,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 .select-btn:focus,
 .select-btn.focused,
 .theme-color-select-btn:focus,
-.theme-color-select-btn.focused {
+.theme-color-select-btn.focused,
+.loader-style-select-btn:focus,
+.loader-style-select-btn.focused {
     background: var(--jf-btn-primary-focus-bg) !important;
     color: var(--jf-btn-primary-focus-color) !important;
     border: 2px solid var(--jf-btn-primary-focus-border) !important;
@@ -336,7 +339,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .select-btn:hover,
-.theme-color-select-btn:hover {
+.theme-color-select-btn:hover,
+.loader-style-select-btn:hover {
     border: 2px solid var(--jf-btn-primary-hover-border)!important;
     transform: scale(1.02);
     will-change: transform;
@@ -1299,4 +1303,681 @@ html[data-layout-quirks="c26"] .setting-control {
 html[data-layout-quirks="c26"] .setting-control > * {
     display: inline-block !important;
     vertical-align: middle !important;
+}
+
+/* ============================================================================
+ * LOADING INDICATOR STYLE MODAL & INTERACTIVE PREVIEW STAGE
+ * ============================================================================
+
+/* Dialog Container — Lightweight High-Performance Window (No blur/shadow overhead) */
+.settings-modal.loader-style-modal {
+    width: 840px;
+    max-width: 92%;
+    max-height: 85vh;
+    border-radius: 24px;
+    background: #16181e;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header with Title and Current Mode Indicator */
+.loader-style-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 32px 18px 32px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.loader-modal-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--jf-accent, #00a4dc);
+}
+
+/* Master-Detail Split Grid Layout */
+.loader-style-modal-split {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    max-height: calc(85vh - 145px);
+    padding: 20px 32px;
+    gap: 28px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Left Column: Interactive Option Buttons Scrollable List */
+.loader-style-options-column {
+    flex: 1.15;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    padding: 12px 14px 16px 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.loader-style-options-column::-webkit-scrollbar {
+    width: 6px;
+}
+
+.loader-style-options-column::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+}
+
+/* Individual Style Choice Button */
+.loader-style-option-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 24px;
+    margin: 2px 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    cursor: pointer;
+    text-align: left;
+    outline: none;
+    box-sizing: border-box;
+    color: #ffffff;
+    position: relative;
+    /* Fluid Spring Scale Animation */
+    transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background 0.2s ease,
+                border-color 0.2s ease;
+    -webkit-transition: -webkit-transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        background 0.2s ease,
+                        border-color 0.2s ease;
+}
+
+/* Mouse Hover State */
+.loader-style-option-btn:hover,
+.loader-style-option-btn.hovered {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* TV Remote D-Pad / Keyboard Focus State with Fluid Spring Scale */
+.loader-style-option-btn:focus,
+.loader-style-option-btn.focused {
+    transform: scale(1.02);
+    -webkit-transform: scale(1.02);
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.95);
+    z-index: 2;
+}
+
+/* Currently Active Setting State */
+.loader-style-option-btn.selected {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: var(--jf-accent, #00a4dc);
+}
+
+.loader-style-option-btn.selected:focus,
+.loader-style-option-btn.selected.focused {
+    border-color: #ffffff;
+}
+
+/* Title & Description Stack */
+.loader-style-option-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.loader-style-option-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #ffffff;
+}
+
+.loader-style-option-desc {
+    font-size: 0.84rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+/* Category Badge Capsule */
+.loader-style-option-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+    flex-shrink: 0;
+}
+
+/* Checkmark Indicator */
+.loader-style-check-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--jf-accent, #00a4dc);
+    opacity: 0;
+    transform: scale(0.6);
+    -webkit-transform: scale(0.6);
+    transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+    -webkit-transition: opacity 0.2s ease, -webkit-transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+}
+
+.loader-style-option-btn.selected .loader-style-check-icon {
+    opacity: 1;
+    transform: scale(1);
+    -webkit-transform: scale(1);
+}
+
+/* ============================================================================
+ * RIGHT COLUMN: LIVE ANIMATED PREVIEW STAGE
+ * ============================================================================ */
+.loader-style-preview-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Presentation Display Card */
+.loader-preview-card {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Central Pedestal Holding the Animated Spinner */
+.loader-preview-pedestal {
+    width: 110px;
+    height: 110px;
+    border-radius: 24px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+    position: relative;
+    z-index: 1;
+}
+
+.loader-preview-spinner-mount {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Descriptive Metadata Below the Pedestal */
+.loader-preview-meta {
+    text-align: center;
+    z-index: 1;
+    max-width: 240px;
+}
+
+.loader-preview-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 4px;
+    letter-spacing: -0.01em;
+}
+
+.loader-preview-subtitle {
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* ============================================================================
+ * ISOLATED PREVIEW SPINNERS
+ * Completely decoupled from page-level data-loader-style attributes.
+ * ============================================================================ */
+.loader-preview-sample {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 1. Pulsing Dots Preview */
+.preview-spinner-dots {
+    width: 48px;
+    height: 48px;
+    position: relative;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-dots::before,
+.preview-spinner-dots::after {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    animation: animloader-gpu 1s infinite ease-in-out;
+    -webkit-animation: animloader-gpu 1s infinite ease-in-out;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-dots::after {
+    top: 0;
+    left: 0;
+    background-color: #ffffff;
+}
+
+.preview-spinner-dots::before {
+    bottom: 0;
+    right: 0;
+    background-color: var(--jf-accent, #00a4dc);
+}
+
+/* 2. Rotating Ring Preview */
+.preview-spinner-ring {
+    width: 44px;
+    height: 44px;
+    border: 3.5px solid rgba(255, 255, 255, 0.16);
+    border-top-color: var(--jf-accent, #00a4dc);
+    border-radius: 50%;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+/* 3. Dual Ring Preview */
+.preview-spinner-dual-ring {
+    width: 44px;
+    height: 44px;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    position: relative;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-dual-ring::after {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-bottom-color: var(--jf-accent, #00a4dc);
+}
+
+/* 4. Orbital Bead Preview */
+.preview-spinner-orbit {
+    width: 44px;
+    height: 44px;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-orbit::after {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: var(--jf-accent, #00a4dc);
+    width: 15px;
+    height: 15px;
+    transform: translate(-50%, 50%);
+    -webkit-transform: translate(-50%, 50%);
+    border-radius: 50%;
+}
+
+/* 5. Satellite Ring Preview */
+.preview-spinner-satellite {
+    width: 44px;
+    height: 44px;
+    border: 2.5px solid var(--jf-accent, #00a4dc);
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-satellite::after {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+/* 6. Triple Gyro Preview */
+.preview-spinner-triple-ring {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    border: 3px solid transparent;
+    border-color: rgba(255, 255, 255, 0.9) rgba(255, 255, 255, 0.9) transparent transparent;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-triple-ring::after,
+.preview-spinner-triple-ring::before {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    transform-origin: center center;
+    -webkit-transform-origin: center center;
+}
+
+.preview-spinner-triple-ring::after {
+    border-color: transparent transparent var(--jf-accent, #00a4dc) var(--jf-accent, #00a4dc);
+    width: 36px;
+    height: 36px;
+    animation: rotationBack 0.5s linear infinite;
+    -webkit-animation: rotationBack 0.5s linear infinite;
+}
+
+.preview-spinner-triple-ring::before {
+    border-color: rgba(255, 255, 255, 0.9) rgba(255, 255, 255, 0.9) transparent transparent;
+    width: 28px;
+    height: 28px;
+    animation: rotation 1.5s linear infinite;
+    -webkit-animation: rotation 1.5s linear infinite;
+}
+
+/* 7. Dotted Eclipse Preview */
+.preview-spinner-dotted-ring {
+    width: 44px;
+    height: 44px;
+    border: 3px dotted rgba(255, 255, 255, 0.9);
+    border-style: solid solid dotted dotted;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    box-sizing: border-box;
+    animation: rotation 2s linear infinite;
+    -webkit-animation: rotation 2s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-dotted-ring::after {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: auto;
+    border: 3px dotted var(--jf-accent, #00a4dc);
+    border-style: solid solid dotted;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    animation: rotationBack 1s linear infinite;
+    -webkit-animation: rotationBack 1s linear infinite;
+    transform-origin: center center;
+    -webkit-transform-origin: center center;
+}
+
+/* 8. Crescent Sweep Preview */
+.preview-spinner-eclipse-sweep {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: eclipse-sweep-anim 1s linear infinite;
+    -webkit-animation: eclipse-sweep-anim 1s linear infinite;
+}
+
+/* 9. Sonar Aperture Preview */
+.preview-spinner-sonar-ring {
+    width: 44px;
+    height: 44px;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    background: var(--jf-accent, #00a4dc);
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    box-sizing: border-box;
+    animation: rotation 2s linear infinite;
+    -webkit-animation: rotation 2s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.preview-spinner-sonar-ring::after {
+    content: '';
+    box-sizing: border-box;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border: 22px solid;
+    border-color: transparent rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
+}
+
+/* 10. Push Pulse Preview */
+.preview-spinner-push-pulse {
+    width: 48px;
+    height: 48px;
+    position: relative;
+    display: inline-block;
+}
+
+.preview-spinner-push-pulse::before,
+.preview-spinner-push-pulse::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    box-sizing: border-box;
+    animation: push-pulse-anim 1s infinite linear alternate;
+    -webkit-animation: push-pulse-anim 1s infinite linear alternate;
+}
+
+.preview-spinner-push-pulse::before {
+    right: 0;
+    top: 0;
+    background: var(--jf-accent, #00a4dc);
+}
+
+.preview-spinner-push-pulse::after {
+    bottom: 0;
+    left: 0;
+    background: rgba(255, 255, 255, 0.9);
+    animation-direction: alternate-reverse;
+    -webkit-animation-direction: alternate-reverse;
+}
+
+/* 11. Fading Trio Preview */
+.preview-spinner-horizontal-dots {
+    font-size: 7px;
+    width: 2.5em;
+    height: 2.5em;
+    border-radius: 50%;
+    position: relative;
+    display: block;
+    color: var(--jf-accent, #00a4dc);
+    text-indent: -9999em;
+    /* Offset by -2.5em to account for the vertical 0 2.5em shadow drop in bblFadInOut */
+    margin-top: -2.5em;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    animation: bblFadInOut 1.8s infinite ease-in-out both;
+    -webkit-animation: bblFadInOut 1.8s infinite ease-in-out both;
+    animation-delay: -0.16s;
+    -webkit-animation-delay: -0.16s;
+}
+
+.preview-spinner-horizontal-dots::before,
+.preview-spinner-horizontal-dots::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 2.5em;
+    height: 2.5em;
+    border-radius: 50%;
+    animation: bblFadInOut 1.8s infinite ease-in-out both;
+    -webkit-animation: bblFadInOut 1.8s infinite ease-in-out both;
+}
+
+.preview-spinner-horizontal-dots::before {
+    left: -3.5em;
+    animation-delay: -0.32s;
+    -webkit-animation-delay: -0.32s;
+}
+
+.preview-spinner-horizontal-dots::after {
+    left: 3.5em;
+}
+
+/* 12. Morphing Grid Preview */
+.preview-spinner-pulsing-grid {
+    width: 48px;
+    height: 48px;
+    position: relative;
+    display: block;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.9) 12px, transparent 0),
+        linear-gradient(var(--jf-accent, #00a4dc) 12px, transparent 0),
+        linear-gradient(var(--jf-accent, #00a4dc) 12px, transparent 0),
+        linear-gradient(rgba(255, 255, 255, 0.9) 12px, transparent 0);
+    background-repeat: no-repeat;
+    background-size: 12px 12px;
+    background-position:
+        left top,
+        left bottom,
+        right top,
+        right bottom;
+    animation: preview-pulsing-grid-anim 1s linear infinite;
+    -webkit-animation: preview-pulsing-grid-anim 1s linear infinite;
+}
+
+@keyframes preview-pulsing-grid-anim {
+    0% {
+        width: 48px;
+        height: 48px;
+        transform: translateZ(0) rotate(0deg);
+    }
+    50% {
+        width: 24px;
+        height: 24px;
+        transform: translateZ(0) rotate(180deg);
+    }
+    100% {
+        width: 48px;
+        height: 48px;
+        transform: translateZ(0) rotate(360deg);
+    }
+}
+
+@-webkit-keyframes preview-pulsing-grid-anim {
+    0% {
+        width: 48px;
+        height: 48px;
+        -webkit-transform: translateZ(0) rotate(0deg);
+    }
+    50% {
+        width: 24px;
+        height: 24px;
+        -webkit-transform: translateZ(0) rotate(180deg);
+    }
+    100% {
+        width: 48px;
+        height: 48px;
+        -webkit-transform: translateZ(0) rotate(360deg);
+    }
+}
+
+/* Ultra-Legacy Platform Fallback (Samsung Tizen 2.x & Chrome 26 quirks) */
+html[data-layout-quirks="c26"] .loader-style-modal-split {
+    display: -webkit-box !important;
+    -webkit-box-orient: horizontal !important;
 }

@@ -96,5 +96,8 @@ html[data-layout-login="modern"] .quick-connect-btn:focus,
 html[data-layout-login="modern"] .quick-connect-btn.focused {
     transform: scale(1.02);
     border-color: var(--jf-button-border-focus, #ffffff);
+    background: var(--jf-primary-btn-color);
+    border-color: var(--jf-button-border-focus);
+    color: var(--jf-accent);
 }
 

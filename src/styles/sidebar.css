@@ -321,14 +321,57 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
     color: inherit;
 }
 
-.logo-icon svg {
+.logo-icon svg,
+.sidebar-logo-img {
     width: 40px;
     height: 40px;
+    object-fit: contain;
+}
+
+.sidebar-logo-img {
+    display: none;
+    -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
+    transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
+}
+
+/* Toggle visibility between Icon Colors (PNG image) and SVG path logo colors */
+html[data-sidebar-logo-color="icon-colors"] .sidebar-logo-img,
+html:not([data-sidebar-logo-color]) .sidebar-logo-img {
+    display: block !important;
+}
+
+html[data-sidebar-logo-color="icon-colors"] .sidebar-logo-svg,
+html:not([data-sidebar-logo-color]) .sidebar-logo-svg {
+    display: none !important;
+}
+
+html[data-sidebar-logo-color]:not([data-sidebar-logo-color="icon-colors"]) .sidebar-logo-img {
+    display: none !important;
+}
+
+html[data-sidebar-logo-color]:not([data-sidebar-logo-color="icon-colors"]) .sidebar-logo-svg {
+    display: block !important;
 }
 
 .sidebar-logo-svg path {
     fill: currentColor;
     transition: fill 0.15s ease;
+}
+
+/* Sidebar Logo Color Customization (Follow Theme, White, Black) */
+html[data-sidebar-logo-color="follow-theme"] #sidebar-logo-header:not(:focus):not(.focused) .logo-icon,
+html[data-sidebar-logo-color="follow-theme"] .sidebar-header:not(:focus):not(.focused) .logo-icon {
+    color: var(--jf-accent) !important;
+}
+
+html[data-sidebar-logo-color="white"] #sidebar-logo-header:not(:focus):not(.focused) .logo-icon,
+html[data-sidebar-logo-color="white"] .sidebar-header:not(:focus):not(.focused) .logo-icon {
+    color: #ffffff !important;
+}
+
+html[data-sidebar-logo-color="black"] #sidebar-logo-header:not(:focus):not(.focused) .logo-icon,
+html[data-sidebar-logo-color="black"] .sidebar-header:not(:focus):not(.focused) .logo-icon {
+    color: #000000 !important;
 }
 
 .logo-text {

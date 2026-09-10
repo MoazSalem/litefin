@@ -54,10 +54,12 @@ html[data-layout-login="modern"] .login-logo-container {
     margin-bottom: 24px;
 }
 
-html[data-layout-login="modern"] .login-logo-svg {
+html[data-layout-login="modern"] .login-logo-svg,
+html[data-layout-login="modern"] .login-logo-img {
     width: 70px;
     height: 70px;
     margin-right: 20px;
+    object-fit: contain;
 }
 
 html[data-layout-login="modern"] .login-logo {

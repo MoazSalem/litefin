@@ -746,6 +746,43 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Loading Indicator Style Selection -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLoaderStyle">${i18n.t('LabelLoaderStyle') || 'Loading Indicator Style'}</span>
+                        <span class="setting-description" data-i18n="LoaderStyleDescription">${i18n.t('LoaderStyleDescription') || 'Choose the visual animation style for loading spinners and indicators across the app.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                const currentStyle = layoutManager.getLoaderStyle() || 'dots';
+                const styleNames = {
+                    'dots': i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring',
+                    'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+                    'orbit': i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+                    'satellite': i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+                    'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+                    'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+                    'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                    'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                    'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+                    'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+                    'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
+                };
+                const activeName = styleNames[currentStyle] || 'Pulsing Dots';
+                return `
+                                <button class="setting-action-btn loader-style-select-btn" 
+                                        id="btn-loader-style-picker" 
+                                        tabindex="0"
+                                        data-focusable="true"
+                                        title="${escapeHtml(activeName)}">
+                                    <span class="btn-label" id="loader-style-btn-label">${escapeHtml(activeName)}</span>
+                                </button>
+                            `;
+            })()}
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ButtonStyle">${i18n.t('ButtonStyle') || 'Button Style'}</span>
@@ -1770,6 +1807,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowActionTooltips">${i18n.t('ShowActionTooltips') || 'Show Button Names Tooltip'}</span>
+                        <span class="setting-description" data-i18n="ShowActionTooltipsDescription">${i18n.t('ShowActionTooltipsDescription') || 'Display a label under focused action buttons on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showActionTooltips') !== 'false' ? 'active' : ''}" 
+                                id="toggle-show-action-tooltips" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelHideOriginalTitle">${i18n.t('LabelHideOriginalTitle') || 'Hide Original Language Title'}</span>
                         <span class="setting-description" data-i18n="HideOriginalTitleDescription">${i18n.t('HideOriginalTitleDescription') || 'Do not show the original language title under the main title on the details page.'}</span>
                     </div>
@@ -2468,7 +2518,7 @@ class SettingsPage extends Page {
                 { value: 'floating-buttons', label: i18n.t('LayoutFloatingButtonsSidebar') || 'Floating Buttons' },
                 { value: 'floating-island', label: i18n.t('LayoutFloatingIslandSidebar') || 'Floating Island' }
             ],
-            layoutManager.getSidebarLayout() || 'modern'
+            layoutManager.getSidebarLayout() || 'modern-collapsed'
         )}
                     </div>
                 </div>
@@ -2646,6 +2696,25 @@ class SettingsPage extends Page {
                 if (val === 'false') return 'visible';
                 return val;
             })()
+        )}
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarLogoColor">${i18n.t('SidebarLogoColor') || 'Sidebar Logo Color'}</span>
+                        <span class="setting-description" data-i18n="SidebarLogoColorDescription">${i18n.t('SidebarLogoColorDescription') || 'Choose the color for the sidebar Litefin logo.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'sidebar-logo-color-select',
+            [
+                { value: 'icon-colors', label: i18n.t('SidebarColorIconColors') || 'Icon Colors' },
+                { value: 'follow-theme', label: i18n.t('SidebarColorFollowTheme') || 'Follow Theme' },
+                { value: 'white', label: i18n.t('SidebarColorWhite') || 'White' },
+                { value: 'black', label: i18n.t('SidebarColorBlack') || 'Black' }
+            ],
+            layoutManager.getSidebarLogoColor()
         )}
                     </div>
                 </div>
@@ -3467,6 +3536,20 @@ class SettingsPage extends Page {
                         <button class="toggle-switch ${PlayerSettings.get('forceTranscode') ? 'active' : ''}" 
                                 id="toggle-force-transcode" 
                                 data-setting="forceTranscode"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RemuxMkvToMp4">${i18n.t('RemuxMkvToMp4') || 'Remux MKV to MP4'}</span>
+                        <span class="setting-description" data-i18n="RemuxMkvToMp4Description">${i18n.t('RemuxMkvToMp4Description') || 'Always remux MKV containers to MP4. Streams are copied losslessly — no re-encoding. Off by default.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('remuxMkvToMp4') ? 'active' : ''}" 
+                                id="toggle-remux-mkv-to-mp4" 
+                                data-setting="remuxMkvToMp4"
                                 tabindex="0">
                         </button>
                     </div>
@@ -4658,19 +4741,6 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelSimpleLoader">${i18n.t('LabelSimpleLoader') || 'Simple Loading Indicator'}</span>
-                        <span class="setting-description" data-i18n="SimpleLoaderDescription">${i18n.t('SimpleLoaderDescription') || 'Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getSimpleLoader() ? 'active' : ''}" 
-                                id="toggle-simple-loader" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDisableBlurHash">${i18n.t('LabelDisableBlurHash') || 'Disable BlurHash'}</span>
                         <span class="setting-description" data-i18n="DisableBlurHashDescription">${i18n.t('DisableBlurHashDescription') || 'Stop showing color-accurate blurred backgrounds while images are loading. Uses standard dark skeletons instead.'}</span>
                     </div>
@@ -4814,15 +4884,6 @@ class SettingsPage extends Page {
                 </p>
 
                 <h3 class="setting-section-title" data-i18n="AppBehavior">${i18n.t('AppBehavior')}</h3>
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ShowProfilesOnResume">${i18n.t('ShowProfilesOnResume')}</span>
-                        <span class="setting-description" data-i18n="ShowProfilesOnResumeDescription">${i18n.t('ShowProfilesOnResumeDescription')}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${showProfilesOnResume ? 'active' : ''}" id="toggle-profiles-on-resume" tabindex="0"></button>
-                    </div>
-                </div>
 
                 <!-- Application Behavior -->
                 <div class="setting-item">
@@ -4835,6 +4896,16 @@ class SettingsPage extends Page {
                                 id="toggle-confirm-exit" 
                                 tabindex="0">
                         </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowProfilesOnResume">${i18n.t('ShowProfilesOnResume')}</span>
+                        <span class="setting-description" data-i18n="ShowProfilesOnResumeDescription">${i18n.t('ShowProfilesOnResumeDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${showProfilesOnResume ? 'active' : ''}" id="toggle-profiles-on-resume" tabindex="0"></button>
                     </div>
                 </div>
 
@@ -6451,6 +6522,25 @@ class SettingsPage extends Page {
             });
         }
 
+        // =====================================================================
+        // TOGGLE SHOW ACTION BUTTON NAMES TOOLTIP
+        // =====================================================================
+        // Controls whether dynamic tooltip names appear directly below focused
+        // action buttons on the item details page.
+        // =====================================================================
+        const showActionTooltipsBtn = this.$('#toggle-show-action-tooltips');
+        if (showActionTooltipsBtn) {
+            showActionTooltipsBtn.addEventListener('click', () => {
+                // Enabled by default (true unless explicitly stored as 'false')
+                const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+                const newValue = !isEnabled;
+
+                storage.setItem('pref:showActionTooltips', newValue.toString());
+                showActionTooltipsBtn.classList.toggle('active', newValue);
+                log.info(`Show Action Tooltips set to: ${newValue}`);
+            });
+        }
+
         // ==========================================
         // TOGGLE FORCE EXPANDABLE POSTERS (MODERN)
         // ==========================================
@@ -6803,16 +6893,6 @@ class SettingsPage extends Page {
                 storage.setItem('pref:homeScreenCache', newValue ? 'false' : 'true');
                 homeCacheBtn.classList.toggle('active', newValue);
                 log.info(`Disable home screen caching set to: ${newValue}`);
-            });
-        }
-
-        // Toggle Simple Loader
-        const simpleLoaderBtn = this.$('#toggle-simple-loader');
-        if (simpleLoaderBtn) {
-            simpleLoaderBtn.addEventListener('click', () => {
-                const newValue = !layoutManager.getSimpleLoader();
-                layoutManager.setSimpleLoader(newValue);
-                simpleLoaderBtn.classList.toggle('active', newValue);
             });
         }
 
@@ -7538,6 +7618,36 @@ class SettingsPage extends Page {
             });
         }
 
+        // Loading Indicator Style Picker Dialog Trigger
+        const btnLoaderStylePicker = this.$('#btn-loader-style-picker');
+        if (btnLoaderStylePicker) {
+            btnLoaderStylePicker.addEventListener('click', () => {
+                this._openLoaderStyleModal();
+            });
+        }
+
+        // Keep loading style button label in sync
+        eventBus.on('loaderStyle:changed', ({ style }) => {
+            const triggerLabel = this.$('#loader-style-btn-label');
+            if (triggerLabel) {
+                const styleNames = {
+                    'dots': i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+                    'ring': i18n.t('LoaderStyleRing') || 'Rotating Ring',
+                    'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+                    'orbit': i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+                    'satellite': i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+                    'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+                    'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+                    'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                    'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                    'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+                    'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+                    'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
+                };
+                triggerLabel.textContent = styleNames[style] || style;
+            }
+        });
+
         // Initialize Custom Dropdowns
         this._bindDropdownEvents();
 
@@ -7930,12 +8040,19 @@ class SettingsPage extends Page {
         const overlay = this.$('#modal-overlay');
         if (!overlay || !overlay.classList.contains('visible')) return;
 
+        // Clean up modal focus listener to prevent memory leaks or dangling event handlers
+        if (this._modalFocusChangedHandler) {
+            eventBus.off('focus:changed', this._modalFocusChangedHandler);
+            this._modalFocusChangedHandler = null;
+        }
+
         overlay.classList.remove('visible');
         overlay.setAttribute('aria-hidden', 'true');
         overlay.innerHTML = '';
 
         // Unregister modal focus
         focusManager.unregister('modal-options');
+        focusManager.unregister('modal-loader-options');
         focusManager.unregister('modal-color-grid');
         focusManager.unregister('modal-actions');
         focusManager.unregister('modal-error-content');
@@ -8022,9 +8139,9 @@ class SettingsPage extends Page {
     _getThemeColors() {
         return [
             // Row 1: Primary Swatches
+            { name: 'Litefin Purple Blue', hex: '#6b6ede' },
             { name: 'Jellyfin Blue', hex: '#00a4dc' },
             { name: 'Litefin Blue', hex: '#007aff' },
-            { name: 'Indigo', hex: '#5856d6' },
             { name: 'Royal Blue', hex: '#2962ff' },
             { name: 'Deep Purple', hex: '#6200ea' },
             { name: 'Lavender', hex: '#af52de' },
@@ -8070,7 +8187,7 @@ class SettingsPage extends Page {
             { name: 'Electric Lime', hex: '#7FFF00' },
 
             // Row 5: Deep & Earthy
-            { name: 'Slate Blue', hex: '#6A5ACD' },
+            { name: 'Indigo', hex: '#5856d6' },
             { name: 'Sea Green', hex: '#2E8B57' },
             { name: 'Cadet Blue', hex: '#5F9EA0' },
             { name: 'Burnt Orange', hex: '#CC5500' },
@@ -8148,6 +8265,12 @@ class SettingsPage extends Page {
         const previewDot = overlay.querySelector('#theme-color-preview-dot');
         const previewName = overlay.querySelector('#theme-color-preview-name');
 
+        // Centralized helper to update header live-preview dot and title
+        const updatePreviewForColor = (color, name) => {
+            if (previewDot && color) previewDot.style.backgroundColor = color;
+            if (previewName && name) previewName.textContent = name;
+        };
+
         // Bind interactive color swatch events
         overlay.querySelectorAll('.color-option').forEach((btn) => {
             const color = btn.dataset.color;
@@ -8155,8 +8278,7 @@ class SettingsPage extends Page {
 
             // Live preview update on focus / hover
             const updatePreview = () => {
-                if (previewDot && color) previewDot.style.backgroundColor = color;
-                if (previewName && name) previewName.textContent = name;
+                updatePreviewForColor(color, name);
             };
 
             btn.addEventListener('focus', updatePreview);
@@ -8176,6 +8298,20 @@ class SettingsPage extends Page {
                 this._closeSelectionModal();
             });
         });
+
+        // Listen for FocusManager focus transitions across color swatches (TV remote / D-pad spatial navigation)
+        if (this._modalFocusChangedHandler) {
+            eventBus.off('focus:changed', this._modalFocusChangedHandler);
+        }
+        this._modalFocusChangedHandler = (focusedEl) => {
+            if (!focusedEl) return;
+            // Check if the newly focused element is a color swatch in our grid
+            const optionBtn = focusedEl.closest ? focusedEl.closest('.color-option') : null;
+            if (optionBtn && optionBtn.dataset) {
+                updatePreviewForColor(optionBtn.dataset.color, optionBtn.dataset.name);
+            }
+        };
+        eventBus.on('focus:changed', this._modalFocusChangedHandler);
 
         // Cancel button
         overlay.querySelector('#btn-modal-cancel').addEventListener('click', (e) => {
@@ -8212,6 +8348,364 @@ class SettingsPage extends Page {
                 focusManager.focusElement(activeSwatch);
             }
         }, 50);
+    }
+
+    /**
+     * =========================================================================
+     * Open Loading Indicator Style Selection Modal Dialog
+     * =========================================================================
+     * Opens a detail dialog allowing users to select their preferred loading
+     * indicator visual style.
+     * 
+     * Features:
+     * - Left options column with tactile spring feedback on focus / hover
+     * - Right live animated preview stage on an isolated glass pedestal
+     * - Decoupled preview rendering immune to page-level attribute states
+     * - Full D-Pad / TV remote navigation with graceful focus restoration
+     * =========================================================================
+     */
+    _openLoaderStyleModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Store focus context for seamless restoration upon modal dismissal
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
+        // Catalog of supported loading indicator styles
+        const styles = [
+            {
+                id: 'dots',
+                name: i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+                description: i18n.t('LoaderStyleDotsDesc') || 'Signature multi-dot animation with vibrant theme glow.',
+                badge: i18n.t('LoaderStyleBadgeModern') || 'Standard'
+            },
+            {
+                id: 'ring',
+                name: i18n.t('LoaderStyleRing') || 'Rotating Ring',
+                description: i18n.t('LoaderStyleRingDesc') || 'Lightweight circular ring with minimal GPU & CPU overhead.',
+                badge: i18n.t('LoaderStyleBadgeEfficient') || 'Lightweight'
+            },
+            {
+                id: 'dual-ring',
+                name: i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+                description: i18n.t('LoaderStyleDualRingDesc') || 'Concentric rotating ring with accent outer arc.',
+                badge: i18n.t('LoaderStyleBadgeDynamic') || 'Dual Arc'
+            },
+            {
+                id: 'orbit',
+                name: i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+                description: i18n.t('LoaderStyleOrbitDesc') || 'Translucent circular path with an orbiting accent satellite point.',
+                badge: i18n.t('LoaderStyleBadgeOrbit') || 'Planetary'
+            },
+            {
+                id: 'satellite',
+                name: i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+                description: i18n.t('LoaderStyleSatelliteDesc') || 'Rotating primary accent frame with an offset secondary orbiting ring.',
+                badge: i18n.t('LoaderStyleBadgeSatellite') || 'Dual Axis'
+            },
+            {
+                id: 'triple-ring',
+                name: i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+                description: i18n.t('LoaderStyleTripleRingDesc') || 'Multi-tier concentric arcs spinning in alternating counter directions.',
+                badge: i18n.t('LoaderStyleBadgeTripleRing') || 'Gyroscope'
+            },
+            {
+                id: 'dotted-ring',
+                name: i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+                description: i18n.t('LoaderStyleDottedRingDesc') || 'Dual-ring concentric spinner featuring dotted and solid accent strokes.',
+                badge: i18n.t('LoaderStyleBadgeDottedRing') || 'Dotted'
+            },
+            {
+                id: 'sonar-ring',
+                name: i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                description: i18n.t('LoaderStyleSonarRingDesc') || 'Spinning theme-colored disc with opposing high-contrast aperture cutouts.',
+                badge: i18n.t('LoaderStyleBadgeSonarRing') || 'Aperture'
+            },
+            {
+                id: 'eclipse-sweep',
+                name: i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                description: i18n.t('LoaderStyleEclipseSweepDesc') || 'Minimalist circular disc illuminated by a traveling inset crescent shadow.',
+                badge: i18n.t('LoaderStyleBadgeEclipseSweep') || 'Crescent'
+            },
+            {
+                id: 'push-pulse',
+                name: i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+                description: i18n.t('LoaderStylePushPulseDesc') || 'Interlocking dual spheres expanding and contracting in counter-phase rhythm.',
+                badge: i18n.t('LoaderStyleBadgePushPulse') || 'Dual Pulse'
+            },
+            {
+                id: 'horizontal-dots',
+                name: i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+                description: i18n.t('LoaderStyleHorizontalDotsDesc') || 'Horizontal linear dot triad with progressive wave pulse animations.',
+                badge: i18n.t('LoaderStyleBadgeHorizontalDots') || 'Tri-Dot'
+            },
+            {
+                id: 'pulsing-grid',
+                name: i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid',
+                description: i18n.t('LoaderStylePulsingGridDesc') || 'Geometric four-quadrant pinwheel that contracts, rotates, and expands.',
+                badge: i18n.t('LoaderStyleBadgePulsingGrid') || 'Geometric'
+            }
+        ];
+
+        // Retrieve current active style from LayoutManager
+        const currentStyle = layoutManager.getLoaderStyle() || 'dots';
+        const activeObj = styles.find((s) => s.id === currentStyle) || styles[0];
+
+        overlay.innerHTML = `
+            <div class="settings-modal loader-style-modal" role="dialog" aria-modal="true">
+                <div class="modal-header loader-style-modal-header">
+                    <h2 data-i18n="LabelLoaderStyle">${i18n.t('LabelLoaderStyle') || 'Loading Indicator Style'}</h2>
+                    <span class="loader-modal-badge" id="loader-preview-badge">${escapeHtml(activeObj.badge)}</span>
+                </div>
+                <div class="loader-style-modal-split">
+                    <!-- Left Column: Interactive Options List -->
+                    <div class="loader-style-options-column" id="modal-loader-options-list">
+                        ${styles
+                .map(
+                    (s) => `
+                            <button class="loader-style-option-btn ${currentStyle === s.id ? 'selected' : ''}" 
+                                    data-style="${s.id}"
+                                    data-name="${escapeHtml(s.name)}"
+                                    data-desc="${escapeHtml(s.description)}"
+                                    data-badge="${escapeHtml(s.badge)}"
+                                    tabindex="0"
+                                    data-focusable="true">
+                                <div class="loader-style-option-info">
+                                    <span class="loader-style-option-title">${escapeHtml(s.name)}</span>
+                                    <span class="loader-style-option-desc">${escapeHtml(s.description)}</span>
+                                </div>
+                                <span class="loader-style-option-pill">${escapeHtml(s.badge)}</span>
+                                <span class="loader-style-check-icon">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                    </svg>
+                                </span>
+                            </button>
+                        `
+                )
+                .join('')}
+                    </div>
+
+                    <!-- Right Column: Live Animated Preview Stage -->
+                    <div class="loader-style-preview-stage">
+                        <div class="loader-preview-card" id="loader-preview-card">
+                            <div class="loader-preview-pedestal">
+                                <div class="loader-preview-spinner-mount" id="loader-preview-spinner-mount">
+                                    ${this._renderLoaderPreviewSample(activeObj.id)}
+                                </div>
+                            </div>
+                            <div class="loader-preview-meta">
+                                <div class="loader-preview-title" id="loader-preview-title">${escapeHtml(activeObj.name)}</div>
+                                <div class="loader-preview-subtitle" id="loader-preview-desc">${escapeHtml(activeObj.description)}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="ButtonCancel">${i18n.t('ButtonCancel') || 'Cancel'}</button>
+                </div>
+            </div>
+        `;
+
+        // Reveal modal overlay with smooth HIG backdrop transition
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+
+        const previewMount = overlay.querySelector('#loader-preview-spinner-mount');
+        const previewTitle = overlay.querySelector('#loader-preview-title');
+        const previewDesc = overlay.querySelector('#loader-preview-desc');
+        const previewBadge = overlay.querySelector('#loader-preview-badge');
+
+        // Centralized preview updater function
+        const updatePreviewForStyle = (styleId, name, desc, badge) => {
+            if (previewMount) {
+                previewMount.innerHTML = this._renderLoaderPreviewSample(styleId);
+            }
+            if (previewTitle && name) previewTitle.textContent = name;
+            if (previewDesc && desc) previewDesc.textContent = desc;
+            if (previewBadge && badge) previewBadge.textContent = badge;
+        };
+
+        // Bind interactive event handlers for style option buttons
+        overlay.querySelectorAll('.loader-style-option-btn').forEach((btn) => {
+            const styleId = btn.dataset.style;
+            const name = btn.dataset.name;
+            const desc = btn.dataset.desc;
+            const badge = btn.dataset.badge;
+
+            // Live preview update on pointer hover or focus
+            const handleFocusOrHover = () => {
+                updatePreviewForStyle(styleId, name, desc, badge);
+            };
+
+            btn.addEventListener('focus', handleFocusOrHover);
+            btn.addEventListener('mouseenter', handleFocusOrHover);
+
+            // Selection confirmation on click / enter press
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                layoutManager.setLoaderStyle(styleId);
+
+                // Update settings trigger button label
+                const triggerLabel = this.$('#loader-style-btn-label');
+                if (triggerLabel) triggerLabel.textContent = name;
+
+                this._closeSelectionModal();
+            });
+        });
+
+        // Listen for FocusManager remote D-pad changes (Tizen / webOS spatial navigation)
+        if (this._modalFocusChangedHandler) {
+            eventBus.off('focus:changed', this._modalFocusChangedHandler);
+        }
+        this._modalFocusChangedHandler = (focusedEl) => {
+            if (!focusedEl) return;
+            const optionBtn = focusedEl.closest ? focusedEl.closest('.loader-style-option-btn') : null;
+            if (optionBtn && optionBtn.dataset) {
+                // Ensure the focused item is visible in the scrollable options column
+                if (typeof optionBtn.scrollIntoView === 'function') {
+                    optionBtn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                }
+                updatePreviewForStyle(
+                    optionBtn.dataset.style,
+                    optionBtn.dataset.name,
+                    optionBtn.dataset.desc,
+                    optionBtn.dataset.badge
+                );
+            }
+        };
+        eventBus.on('focus:changed', this._modalFocusChangedHandler);
+
+        // Cancel button dismisses modal and restores previous focus
+        overlay.querySelector('#btn-modal-cancel').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._closeSelectionModal();
+        });
+
+        // Register Focus Section for the options column
+        this.registerFocusSection('modal-loader-options', overlay.querySelector('#modal-loader-options-list'), {
+            orientation: 'vertical',
+            leaveDown: 'modal-actions',
+            enterTo: 'last-focused'
+        });
+
+        // Register Focus Section for modal actions (Cancel button)
+        this.registerFocusSection('modal-actions', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveUp: 'modal-loader-options',
+            onMove: (direction) => {
+                if (direction === 'up') {
+                    focusManager.setActiveSection('modal-loader-options', true, null, { enterTo: 'last-focused' });
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        // Set initial focus to the currently selected style option button
+        focusManager.setActiveSection('modal-loader-options');
+        setTimeout(() => {
+            const activeBtn =
+                overlay.querySelector('.loader-style-option-btn.selected') ||
+                overlay.querySelector('.loader-style-option-btn');
+            if (activeBtn) {
+                focusManager.focusElement(activeBtn);
+            }
+        }, 50);
+    }
+
+    /**
+     * Render isolated live preview spinner markup for a specific style ID.
+     * This creates a pure preview stage decoupled from outer page attributes.
+     *
+     * @param {string} styleId - Style identifier ('dots' | 'ring')
+     * @returns {string} HTML markup string
+     */
+    _renderLoaderPreviewSample(styleId) {
+        if (styleId === 'ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--ring">
+                    <div class="preview-spinner-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'dual-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--dual-ring">
+                    <div class="preview-spinner-dual-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'orbit') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--orbit">
+                    <div class="preview-spinner-orbit"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'satellite') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--satellite">
+                    <div class="preview-spinner-satellite"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'triple-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--triple-ring">
+                    <div class="preview-spinner-triple-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'dotted-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--dotted-ring">
+                    <div class="preview-spinner-dotted-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'eclipse-sweep') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--eclipse-sweep">
+                    <div class="preview-spinner-eclipse-sweep"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'sonar-ring') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--sonar-ring">
+                    <div class="preview-spinner-sonar-ring"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'push-pulse') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--push-pulse">
+                    <div class="preview-spinner-push-pulse"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'horizontal-dots') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--horizontal-dots">
+                    <div class="preview-spinner-horizontal-dots"></div>
+                </div>
+            `;
+        }
+        if (styleId === 'pulsing-grid') {
+            return `
+                <div class="loader-preview-sample loader-preview-sample--pulsing-grid">
+                    <div class="preview-spinner-pulsing-grid"></div>
+                </div>
+            `;
+        }
+        // Default to signature pulsing dots
+        return `
+            <div class="loader-preview-sample loader-preview-sample--dots">
+                <div class="preview-spinner-dots"></div>
+            </div>
+        `;
     }
 
     _bindDropdownEvents() {
@@ -8357,6 +8851,7 @@ class SettingsPage extends Page {
             'hover-border-style-select': { key: 'litefin:hoverBorderStyle', type: 'local' },
             'sidebar-selected-color-select': { key: 'litefin:sidebarSelectedColor', type: 'local' },
             'sidebar-unselected-color-select': { key: 'litefin:sidebarUnselectedColor', type: 'local' },
+            'sidebar-logo-color-select': { key: 'litefin:sidebarLogoColor', type: 'local' },
             'osd-button-style-select': { key: 'litefin:osdButtonStyle', type: 'local' },
             'osd-focus-border-style-select': { key: 'litefin:osdFocusBorderStyle', type: 'local' },
             'osd-button-shape-select': { key: 'litefin:osdButtonShape', type: 'local' },
@@ -8464,6 +8959,9 @@ class SettingsPage extends Page {
                         } else if (id === 'sidebar-unselected-color-select') {
                             // SPECIAL CASE: Sidebar Unselected Color handled by LayoutManager
                             layoutManager.setSidebarUnselectedColor(newValue);
+                        } else if (id === 'sidebar-logo-color-select') {
+                            // SPECIAL CASE: Sidebar Logo Color handled by LayoutManager
+                            layoutManager.setSidebarLogoColor(newValue);
                         } else if (id === 'osd-button-style-select') {
                             // SPECIAL CASE: OSD Button Style handled by LayoutManager
                             layoutManager.setOsdButtonStyle(newValue);

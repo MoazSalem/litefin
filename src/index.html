@@ -195,14 +195,21 @@
                 // Stamp the theme mode tag on documentElement for CSS styling
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
+                // Restore loading indicator style to prevent flash of wrong spinner
+                var validLoaderStyles = ['dots','ring','dual-ring','orbit','satellite','triple-ring','dotted-ring','eclipse-sweep','sonar-ring','push-pulse','horizontal-dots','pulsing-grid'];
+                var savedLoaderStyle = localStorage.getItem('litefin:loaderStyle');
+                var savedSimpleLoader = localStorage.getItem('litefin:simpleLoader') === 'true';
+                var loaderStyle = validLoaderStyles.includes(savedLoaderStyle) ? savedLoaderStyle : (savedSimpleLoader ? 'ring' : 'dots');
+                document.documentElement.setAttribute('data-loader-style', loaderStyle);
+
                 // Theme variables for early loading (must match CSS definitions)
                 // These provide standard values before Webpack bundle is loaded.
                 var themes = {
-                    'ambient': { accent: '#af52de', bg: '#0a0b0c', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
-                    'tinted': { accent: '#af52de', bg: '#0f0a14', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
-                    'black': { accent: '#af52de', bg: '#000000', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
-                    'classic-dark': { accent: '#af52de', bg: '#101010', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
-                    'classic-light': { accent: '#af52de', bg: '#f5f5f5', text: '#101010', textSec: '#666666' }
+                    'ambient': { accent: '#6b6ede', bg: '#0a0b0c', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
+                    'tinted': { accent: '#6b6ede', bg: '#0f0a14', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
+                    'black': { accent: '#6b6ede', bg: '#000000', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
+                    'classic-dark': { accent: '#6b6ede', bg: '#101010', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
+                    'classic-light': { accent: '#6b6ede', bg: '#f5f5f5', text: '#101010', textSec: '#666666' }
                 };
 
                 // Fall back to ambient if savedTheme is not found in the dictionary

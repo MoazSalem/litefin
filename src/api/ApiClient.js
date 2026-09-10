@@ -258,20 +258,30 @@ export class ApiClient {
             throw new Error('Server URL not configured');
         }
 
-        // Conditionally request quality/resolution metadata if enabled
+        // Conditionally request quality/resolution metadata if enabled.
+        // We skip injection on single-item fetches (endpoint ends with a GUID segment like
+        // /Items/{id} or /Users/{id}/Items/{id}) — Persons, Detail headers, etc. don't
+        // have media sources and requesting MediaSourceCount on them forces Jellyfin to
+        // do an expensive full-library count join, adding 2–4 seconds of latency.
         if (options.params) {
             const fieldsKey = Object.keys(options.params).find((k) => k.toLowerCase() === 'fields');
+
+            // Match a 32-character hex GUID at the very end of the endpoint path
+            const endsWithSingleItemId = /\/[0-9a-f]{32}$/i.test(endpoint.replace(/\?.*$/, ''));
+
             const isItemsEndpoint =
-                (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
-                endpoint.includes('/Latest') ||
-                endpoint.includes('/Resume') ||
-                endpoint.includes('/NextUp') ||
-                endpoint.includes('/Upcoming') ||
-                endpoint.includes('/Similar') ||
-                endpoint.includes('/Episodes') ||
-                endpoint.includes('/Search/Hints') ||
-                endpoint.includes('/Persons') ||
-                endpoint.includes('/MergedRows');
+                !endsWithSingleItemId && (
+                    (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
+                    endpoint.includes('/Latest') ||
+                    endpoint.includes('/Resume') ||
+                    endpoint.includes('/NextUp') ||
+                    endpoint.includes('/Upcoming') ||
+                    endpoint.includes('/Similar') ||
+                    endpoint.includes('/Episodes') ||
+                    endpoint.includes('/Search/Hints') ||
+                    endpoint.includes('/Persons') ||
+                    endpoint.includes('/MergedRows')
+                );
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
@@ -1152,7 +1162,7 @@ export class ApiClient {
     async getPersonItems(personId) {
         // Try custom Litefin plugin endpoint first (single request with roles pre-populated)
         try {
-            return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 50 }, { warnOnError: true });
+            return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 100 }, { warnOnError: true });
         } catch (err) {
             // Fallback to standard Jellyfin endpoint if plugin is not installed
             return this.get(`/Users/${this._userId}/Items`, {

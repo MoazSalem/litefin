@@ -22,7 +22,6 @@ const log = logger.create('EpgGrid');
 class EpgGrid {
     /**
      * Constructs the EPG grid component.
-     * Aligns with Apple Human Interface Guidelines for TV interfaces with smooth layout and spatial clarity.
      * @param {HTMLElement} container - The container element to mount the EPG grid in
      * @param {Object} options - Configuration options for navigation and callbacks
      */
@@ -357,7 +356,7 @@ class EpgGrid {
         channelEl.tabIndex = 0;
         channelEl.dataset.channelId = channel.Id;
         channelEl.dataset.rowIndex = String(index);
-        
+
         channelEl.onclick = () => this._handleChannelClick(channel);
         channelEl.onfocus = () => this._handleChannelFocus(channelEl);
 
@@ -388,11 +387,10 @@ class EpgGrid {
         const fallbackData = CardRenderer.getFallbackData(channel.Name);
 
         channelEl.innerHTML = `
-            ${
-                logoUrl
-                    ? `<img class="epg-channel-logo" src="${logoUrl}" 
+            ${logoUrl
+                ? `<img class="epg-channel-logo" src="${logoUrl}" 
                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />`
-                    : ''
+                : ''
             }
             <div class="epg-channel-logo-fallback grad-${fallbackData.gradNum}" 
                  style="${logoUrl ? 'display: none;' : 'display: flex;'}">
@@ -459,7 +457,7 @@ class EpgGrid {
             progEl.dataset.programId = program.Id;
             progEl.dataset.channelId = channelId;
             progEl.dataset.rowIndex = rowIndex;
-            
+
             progEl.__programData = program;
             progEl._epgLeft = left;
             progEl._epgWidth = width;

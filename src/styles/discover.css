@@ -217,6 +217,32 @@ html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-
     flex-shrink: 0;
 }
 
+/* Circular Action Buttons when tooltips mode is active */
+.seerr-details-page:not(.tooltips-disabled) .details-actions .btn {
+    width: 72px !important;
+    height: 72px !important;
+    min-width: 72px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    -webkit-border-radius: 50% !important;
+    justify-content: center;
+}
+
+.seerr-details-page:not(.tooltips-disabled) .details-actions .btn span {
+    display: none !important;
+}
+
+.seerr-details-page:not(.tooltips-disabled) .details-actions .btn svg {
+    margin-right: 0 !important;
+    width: 28px !important;
+    height: 28px !important;
+}
+
+/* Spacing reduction when tooltips disabled */
+.seerr-details-page.tooltips-disabled .details-actions {
+    margin-bottom: 20px;
+}
+
 .seerr-rating-item {
     display: inline-flex;
     align-items: center;

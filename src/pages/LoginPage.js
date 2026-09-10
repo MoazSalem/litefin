@@ -448,28 +448,11 @@ class LoginPage extends Page {
     }
 
     /**
-     * Shared logo SVG markup — extracted so both layouts stay DRY.
-     * Returns the raw SVG string for embedding in either template.
+     * Shared logo image markup for both login page layouts.
+     * Uses icon-130.png for the Litefin brand logo icon.
      */
     _logoSvg() {
-        return `<svg viewBox="0 0 100 100" class="login-logo-svg" preserveAspectRatio="xMidYMid meet">
-            <path class="logo-path-outer" d="M19.57,91c-2.24,0-4.73-0.44-6.87-2.02c-2.07-1.53-3.32-3.6-3.62-5.97
-				c-0.51-4.01,1.81-7.59,3.24-9.37c4.82-5.97,9.41-12.5,10.36-19.76c0.8-6.13-1-12.33-2.9-18.9c-0.59-2.04-1.21-4.16-1.73-6.27
-				c-0.8-3.17-1.42-6.59-0.53-10.08c1.8-7.06,9.11-10.26,21.74-9.53c10.63,0.62,21.35,5.21,30.19,12.91
-				C82.12,33.08,93.56,53.11,90.5,72.93c-0.23,1.54-0.58,2.97-1.04,4.26c-1.28,3.66-3.47,6.32-6.34,7.68
-				c-3.63,1.71-7.38,1.01-10.39,0.44c-2.45-0.46-5.35-0.99-8.34-1.37c-6.72-0.86-12.12-0.79-17.02,0.21
-				c-3.5,0.71-6.9,1.8-10.49,2.95c-4.51,1.44-9.17,2.94-14.09,3.64C21.84,90.88,20.74,91,19.57,91z M35.69,16
-				c-5.23,0-10.52,0.9-11.4,4.36c-0.5,1.98-0.04,4.37,0.53,6.65c0.5,1.99,1.09,4.04,1.67,6.02c2.02,6.97,4.11,14.17,3.12,21.75
-				c-1.17,8.98-6.38,16.48-11.85,23.25c-1.19,1.47-1.87,3.08-1.75,4.08c0.04,0.31,0.17,0.73,0.85,1.23
-				c0.89,0.66,2.51,0.81,4.95,0.46c4.34-0.62,8.53-1.96,12.95-3.38c3.61-1.16,7.35-2.35,11.22-3.14c5.67-1.16,11.81-1.26,19.31-0.3
-				c3.17,0.41,6.2,0.95,8.74,1.43c2.32,0.44,4.52,0.85,6.1,0.11c1.15-0.54,2.07-1.78,2.72-3.66l0-0.01c0.31-0.87,0.55-1.88,0.72-3
-				c2.65-17.2-7.5-34.78-18.74-44.57c-7.68-6.69-16.92-10.67-26-11.2C37.81,16.04,36.75,16,35.69,16z" />
-            <path class="logo-path-inner" d="M69.3,63.51c0.19-0.64,0.32-1.3,0.41-1.95
-				c1.26-9.44-3.2-19.55-9.22-25.63c-3.64-3.67-8.19-6.14-13.02-6.47c-2.7-0.18-7.56-0.15-8.41,3.7c-0.32,1.47-0.07,3.03,0.25,4.49
-				c1.01,4.7,2.72,9.41,2.18,14.21C41,56.22,38.72,60,36.34,63.41c-1.14,1.63-1.9,4.02-0.12,5.54c0.97,0.83,2.3,0.8,3.49,0.6
-				c3.88-0.64,7.47-2.62,11.3-3.52c2.77-0.66,5.63-0.55,8.42-0.14c1.33,0.2,2.64,0.47,3.96,0.75c1.25,0.27,2.62,0.57,3.82-0.09
-				C68.26,65.98,68.91,64.81,69.3,63.51z" />
-        </svg>`;
+        return `<img src="assets/icon-130.png" class="login-logo-img" alt="Litefin Logo" />`;
     }
 
     onMounted() {
@@ -1049,14 +1032,13 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${
-                                            user.PrimaryImageTag
-                                                ? api.getUserImageUrl(user.Id, {
-                                                      maxWidth: imageService.getParams('avatar').maxWidth,
-                                                      quality: imageService.getParams('avatar').quality
-                                                  })
-                                                : ''
-                                        }"
+                                        src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -1071,14 +1053,13 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${
-                                        user.PrimaryImageTag
-                                            ? api.getUserImageUrl(user.Id, {
-                                                  maxWidth: imageService.getParams('avatar').maxWidth,
-                                                  quality: imageService.getParams('avatar').quality
-                                              })
-                                            : ''
-                                    }"
+                                    src="${user.PrimaryImageTag
+                            ? api.getUserImageUrl(user.Id, {
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            })
+                            : ''
+                        }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
@@ -1622,7 +1603,7 @@ class LoginPage extends Page {
             if (this._discoveredServers.length === 0) {
                 // If LAN discovery has finished and there are zero servers, show a clean fallback
                 if (!this._isDiscovering) {
-                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
+                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoServersFound')}</li>`;
                 } else {
                     // Empty list while the background discovery scan is actively searching
                     this._serverList.innerHTML = '';
@@ -1705,7 +1686,7 @@ class LoginPage extends Page {
             if (otherServers.length === 0) {
                 // Show empty indicator only if scanning has stopped and no saved servers either
                 if (!this._isDiscovering && savedServers.length === 0) {
-                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
+                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoServersFound')}</li>`;
                 } else {
                     this._serverList.innerHTML = '';
                 }

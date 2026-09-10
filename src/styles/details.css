@@ -168,7 +168,6 @@
     justify-content: center;
     width: 100%;
     margin-top: 12px;
-    margin-bottom: 24px;
 }
 
 .details-page.layout-backdrop-minimal .details-overview {
@@ -620,6 +619,10 @@
     flex-wrap: wrap;
     align-items: center;
     /* Reduce margin-bottom slightly to compensate for button margins below  */
+    margin-bottom: 44px;
+}
+
+.details-page.tooltips-disabled .details-actions {
     margin-bottom: 20px;
 }
 
@@ -629,6 +632,53 @@
 
 .details-actions>*:last-child {
     margin-right: 0;
+}
+
+/* Focused Action Button Tooltip Bar */
+.details-info-col {
+    position: relative;
+}
+
+.details-actions {
+    position: relative;
+}
+
+.action-btn-tooltip-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, 12px);
+    -webkit-transform: translate(-50%, 12px);
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease-in-out, visibility 0.2s;
+    -webkit-transition: opacity 0.2s ease-in-out, visibility 0.2s;
+    white-space: nowrap;
+}
+
+.action-btn-tooltip-bar.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 12px);
+    -webkit-transform: translate(-50%, 12px);
+}
+
+.action-btn-tooltip-text {
+    display: inline-block;
+    padding: 6px 14px;
+    background-color: var(--jf-badge-bg, rgba(255, 255, 255, 0.14));
+    color: var(--jf-text-primary, #ffffff);
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.22));
+    border-radius: var(--jf-border-radius-md, 8px);
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    text-shadow: none !important;
 }
 
 /* Action Buttons */
@@ -679,6 +729,34 @@
     width: 24px;
     height: 24px;
     flex-shrink: 0;
+}
+
+/* Circular Play Button when tooltips mode is active */
+.details-page:not(.tooltips-disabled) .play-btn {
+    width: 72px !important;
+    height: 72px !important;
+    min-width: 72px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    -webkit-border-radius: 50% !important;
+    justify-content: center;
+}
+
+.details-page:not(.tooltips-disabled) .play-btn span {
+    display: none !important;
+}
+
+.details-page:not(.tooltips-disabled) .play-btn svg {
+    margin-right: 0 !important;
+    width: 28px !important;
+    height: 28px !important;
+}
+
+/* Compact Resume Button when tooltips mode is active */
+.details-page:not(.tooltips-disabled) .resume-btn {
+    padding: 0 22px !important;
+    border-radius: 36px !important;
+    -webkit-border-radius: 36px !important;
 }
 
 /* Reset Button */
@@ -1225,11 +1303,16 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 
 /* Person Page Actions (Favorite, Seerr) */
 .person-actions-row {
+    position: relative;
     margin-top: 24px;
-    margin-bottom: 24px;
+    margin-bottom: 44px;
     display: flex;
     align-items: center;
     gap: 16px;
+}
+
+.person-page.tooltips-disabled .person-actions-row {
+    margin-bottom: 20px;
 }
 
 /*
@@ -1373,9 +1456,42 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     outline-offset: 2px;
 }
 
-/* 9 items per row on Seerr Person Grids */
+/* ============================================================================
+ * Seerr Person Page Grids (7 items per row)
+ * ============================================================================
+ * Precision 7-column layout adhering to Apple HIG proportional spacing.
+ * Width is calculated as 100% / 7 with 8px horizontal gutters (16px total).
+ * Fixed 350px image height preserves standard 2:3 theatrical poster ratio on 1080p.
+ * ============================================================================ */
 .person-grid.seerr-person-grid .media-card {
-    width: calc(11.111% - 16px) !important; /* 100% / 9 items per row */
+    /* Set 7 items per row (100% / 7 = 14.2857%) minus lateral margin gutters */
+    width: calc(14.2857% - 16px) !important;
+    /* Apple-style balanced 8px horizontal separation */
+    margin-right: 8px !important;
+    margin-left: 8px !important;
+    /* Generous vertical breathing room between grid rows */
+    margin-bottom: 24px !important;
+    flex: none !important;
+    max-width: unset !important;
+    min-width: 0 !important;
+}
+
+.person-grid.seerr-person-grid .card-image {
+    /* Full width card container fill */
+    width: 100%;
+    /* Height scaled to 350px for 7 items per row maintaining authentic 2:3 poster ratio */
+    height: 350px;
+}
+
+/* ============================================================================
+ * Person Page Appearances Grid (7 items per row)
+ * ============================================================================
+ * Precision 7-column layout adhering to Apple HIG proportional spacing.
+ * Width is calculated as 100% / 7 with 8px horizontal gutters (16px total).
+ * Fixed 350px image height preserves standard 2:3 theatrical poster ratio on 1080p.
+ * ============================================================================ */
+.person-grid.person-appearances-grid .media-card {
+    width: calc(14.2857% - 16px) !important; /* 100% / 7 items per row */
     margin-right: 8px !important;
     margin-left: 8px !important;
     margin-bottom: 24px !important;
@@ -1384,9 +1500,33 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     min-width: 0 !important;
 }
 
-.person-grid.seerr-person-grid .card-image {
+.person-grid.person-appearances-grid .card-image {
     width: 100%;
-    height: 270px; /* Scaled proportionally for 9 items per row (2:3 aspect ratio) */
+    height: 350px; /* Proportionally scaled for 7 items per row (2:3 aspect ratio) */
+}
+
+/* ============================================================================
+ * Person Page Episodes Grid (5 items per row)
+ * ============================================================================
+ * 5-column landscape layout for episodic guest appearances and credits.
+ * Width is calculated as 100% / 5 with 8px horizontal gutters (16px total).
+ * Fixed 194px image height maintains true 16:9 widescreen broadcast proportion.
+ * ============================================================================ */
+.person-grid.landscape-grid.person-episodes-grid .media-card,
+.person-page #person-episodes .media-card {
+    width: calc(20% - 16px) !important; /* 100% / 5 items per row */
+    margin-right: 8px !important;
+    margin-left: 8px !important;
+    margin-bottom: 24px !important;
+    flex: none !important;
+    max-width: unset !important;
+    min-width: 0 !important;
+}
+
+.person-grid.landscape-grid.person-episodes-grid .card-image,
+.person-page #person-episodes .card-image {
+    width: 100%;
+    height: 194px !important; /* True 16:9 widescreen ratio (~344px card width) */
 }
 
 
@@ -1673,4 +1813,4 @@ html[data-layout-quirks="c26"] .episode-row-overview {
     margin-left: 4px !important;
 }
 
-
+

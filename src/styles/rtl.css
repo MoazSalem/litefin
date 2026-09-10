@@ -631,3 +631,9 @@
     margin-right: 0;
     margin-left: 12px;
 }
+
+/* Seerr Media Type Badges */
+[dir="rtl"] .seerr-type-badge {
+    left: auto;
+    right: 10px;
+}

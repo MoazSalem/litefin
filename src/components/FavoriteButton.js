@@ -30,7 +30,7 @@ class FavoriteButton extends Component {
         const iconInfo = this._getIcon();
 
         return `
-            <button class="${this.className} ${activeClass}" id="${this.id}" tabindex="0" aria-label="Favorite">
+            <button class="${this.className} ${activeClass}" id="${this.id}" tabindex="0" aria-label="Favorite" data-tooltip="Favorite">
                 ${iconInfo}
             </button>
         `;

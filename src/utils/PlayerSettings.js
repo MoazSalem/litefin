@@ -336,6 +336,18 @@ const DEFAULTS = {
     forceDirectPlay: false,
 
     // -------------------------------------------------------------------------
+    // MKV → MP4 REMUX
+    // -------------------------------------------------------------------------
+    // When enabled, MKV containers are stripped from the DirectPlay profile so
+    // the server is forced to remux (DirectStream) them into MP4 instead of
+    // serving the raw MKV byte-stream.  All video/audio streams are copied
+    // losslessly — no re-encoding happens.  Useful on players or AVRs that
+    // handle MP4 more reliably than raw Matroska over HTTP progressive download.
+    //
+    // Default: false (DirectPlay MKV as-is, server decides the container)
+    remuxMkvToMp4: false,
+
+    // -------------------------------------------------------------------------
     // fMP4 HLS CONTAINER PREFERENCES
     // -------------------------------------------------------------------------
     // When enabled, the device profile will advertise an fMP4 (ISOBMFF) HLS

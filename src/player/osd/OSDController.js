@@ -25,6 +25,7 @@ import DescriptionModal from './DescriptionModal.js';
 import SyncPlayNotification from './SyncPlayNotification.js';
 import ConfirmExitModal from './ConfirmExitModal.js';
 import ResumeProfilesMenu from './ResumeProfilesMenu.js';
+import PlayerMediaInfoModal from './PlayerMediaInfoModal.js';
 
 import '../../styles/description-modal.css';
 
@@ -288,6 +289,9 @@ export default class OSDController extends Component {
         // Confirm exit modal — prompts before exiting playback
         this.confirmExitModal = new ConfirmExitModal(this);
 
+        // Technical media information modal
+        this.playerMediaInfoModal = new PlayerMediaInfoModal(this);
+
         this.menus = [
             this.audioMenu,
             this.subtitleMenu,
@@ -307,7 +311,8 @@ export default class OSDController extends Component {
             this.descriptionModal,
             this.syncPlayNotification,
             this.confirmExitModal,
-            this.resumeProfilesMenu
+            this.resumeProfilesMenu,
+            this.playerMediaInfoModal
         ];
     }
 
@@ -3371,6 +3376,26 @@ export default class OSDController extends Component {
                 this.activeMenu = null;
             }
             this.descriptionModal.hide();
+            this._cacheFocusableElements();
+            this.show();
+        }
+    }
+
+    /**
+     * Open or close the technical Media Info modal.
+     * Follows the BaseMenu modal lifecycle pattern.
+     * 
+     * @param {boolean} show - True to open, false to close.
+     */
+    toggleMediaInfoModal(show) {
+        if (show) {
+            this.activeMenu = this.playerMediaInfoModal;
+            this.playerMediaInfoModal.open(this._currentItem);
+        } else {
+            if (this.activeMenu === this.playerMediaInfoModal) {
+                this.activeMenu = null;
+            }
+            this.playerMediaInfoModal.hide();
             this._cacheFocusableElements();
             this.show();
         }

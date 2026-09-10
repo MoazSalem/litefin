@@ -252,8 +252,10 @@ export default {
 
         html += '</div>';
 
-        // Inject below the meta row
-        metaRow.insertAdjacentHTML('afterend', html);
+        // Inject below techRow if present, otherwise below metaRow
+        const techRow = pageEl.querySelector('.details-tech-row');
+        const targetRow = techRow || metaRow;
+        targetRow.insertAdjacentHTML('afterend', html);
 
         // Add subtle entrance animation
         requestAnimationFrame(() => {
@@ -356,12 +358,10 @@ export default {
 
         html += '</div>';
 
-        // Inject below ratings row if present, otherwise directly below metaRow
-        if (ratingsRow) {
-            ratingsRow.insertAdjacentHTML('afterend', html);
-        } else {
-            metaRow.insertAdjacentHTML('afterend', html);
-        }
+        // Inject below ratings row if present, otherwise techRow if present, otherwise metaRow
+        const techRow = pageEl.querySelector('.details-tech-row');
+        const targetRow = ratingsRow || techRow || metaRow;
+        targetRow.insertAdjacentHTML('afterend', html);
 
         // Entrance animation
         requestAnimationFrame(() => {

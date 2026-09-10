@@ -71,8 +71,11 @@ export function normalizeSeerrBaseUrl(url) {
 export function seerrStatusKey(status) {
     switch (status) {
         case SEERR_STATUS.PENDING:
-        case SEERR_STATUS.PROCESSING:
+            // Awaiting admin approval — not yet picked up by the downloader
             return 'SeerrStatusPending';
+        case SEERR_STATUS.PROCESSING:
+            // Approved by admin, downloader is actively working on it
+            return 'SeerrStatusProcessing';
         case SEERR_STATUS.PARTIALLY_AVAILABLE:
             return 'SeerrStatusPartial';
         case SEERR_STATUS.AVAILABLE:

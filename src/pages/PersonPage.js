@@ -16,6 +16,7 @@ import MediaGrid from '../components/MediaGrid.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 
+import { eventBus } from '../core/EventBus.js';
 import FavoriteButton from '../components/FavoriteButton.js';
 import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
@@ -32,6 +33,8 @@ class PersonPage extends Page {
         this._person = null;
         this._items = [];
         this._grids = {}; // Store component instances
+        // Active filter state: 'all' | 'movie' | 'tv' (matching Seerr person details)
+        this._selectedFilter = 'all';
     }
 
     onInit() {
@@ -45,6 +48,7 @@ class PersonPage extends Page {
 
         try {
             this._setupFocus();
+            this._setupTooltipListener();
             this._loadPersonDetails();
         } catch (err) {
             log.error('onInit critical failure', err);
@@ -53,8 +57,11 @@ class PersonPage extends Page {
     }
 
     render() {
+        const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
+        const tooltipsClass = showTooltips ? '' : 'tooltips-disabled';
+
         return `
-            <div class="page person-page" id="person-page">
+            <div class="page person-page ${tooltipsClass}" id="person-page">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="person-backdrop">
                     <div class="backdrop-gradient"></div>
@@ -83,8 +90,21 @@ class PersonPage extends Page {
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
                             </div>
 
-                            <!-- Actions (Favorite) -->
-                            <div class="person-actions-row" id="person-fav-actions"></div>
+                            <!-- Actions (Favorite, Seerr) -->
+                            <div class="person-actions-row" id="person-fav-actions">
+                                <div class="action-btn-tooltip-bar" id="action-tooltip-bar">
+                                    <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Center Tab Switcher Row (Below Details, Centered Above Grids) -->
+                    <div class="person-tab-switcher-container" id="person-tab-switcher-container">
+                        <div class="person-tab-switcher" id="person-tab-switcher">
+                            <button class="person-tab-btn focusable active" data-filter="all" tabindex="0">${i18n.t('All') || 'All'}</button>
+                            <button class="person-tab-btn focusable" data-filter="movie" tabindex="0">${i18n.t('Movies') || 'Movies'}</button>
+                            <button class="person-tab-btn focusable" data-filter="tv" tabindex="0">${i18n.t('TypeOptionPluralSeries') || 'Series'}</button>
                         </div>
                     </div>
 
@@ -99,8 +119,6 @@ class PersonPage extends Page {
 
     async _loadPersonDetails() {
         this.setLoading(true);
-
-        let hasFocusTarget = false;
 
         try {
             // ────────────────────────────────────────────────────────────
@@ -117,21 +135,29 @@ class PersonPage extends Page {
             this._setSmartBackdrop();
 
             // ────────────────────────────────────────────────────────────
-            // 3. Check focus target — defer hiding loading until rows render
+            // 3. Check if there is a saved focus state to restore
             // ────────────────────────────────────────────────────────────
             const focusStateKey = `person:lastFocusedItem:${this._personId}`;
-            hasFocusTarget =
-                this._pendingNavState ||
-                (storage.getItem('pref:disableFocusRestore') !== 'true' && state.get(focusStateKey));
-
-            if (!hasFocusTarget) {
-                this.setLoading(false);
+            const savedFocusObj = state.get(focusStateKey);
+            if (savedFocusObj?.filter) {
+                // Restore the previously active tab filter
+                this._selectedFilter = savedFocusObj.filter;
             }
+
+            const hasFocusTarget =
+                this._pendingNavState ||
+                (storage.getItem('pref:disableFocusRestore') !== 'true' && savedFocusObj);
 
             // ────────────────────────────────────────────────────────────
             // 4. Load works in visual order
             // ────────────────────────────────────────────────────────────
             const isArtist = this._person.Type === 'MusicArtist' || this._person.Type === 'Artist';
+
+            // Hide tab switcher for music artists (they use Albums / Songs sections)
+            const switcherContainer = this.$('#person-tab-switcher-container');
+            if (switcherContainer) {
+                switcherContainer.style.display = isArtist ? 'none' : 'flex';
+            }
 
             if (isArtist) {
                 // 4a. Try single-pass query first (Albums + Songs)
@@ -154,8 +180,11 @@ class PersonPage extends Page {
 
                 log.debug('Loaded artist works', { albums: albums.length, songs: songs.length });
                 this._renderArtistWorks(albums, songs);
+
+                // Dismiss loading after artist works are mounted
+                this._finishLoading(hasFocusTarget, focusStateKey, savedFocusObj);
             } else {
-                // 4a. Movies/Shows/Episodes (renders in visual order: Movies → Shows → Episodes)
+                // 4b. Movies/Shows/Episodes — fetch all items first
                 const result = await api.getPersonItems(this._personId);
                 this._items = result.Items || [];
                 log.debug('Loaded items', {
@@ -165,31 +194,61 @@ class PersonPage extends Page {
                     episodes: this._items.filter((i) => i.Type === 'Episode').length
                 });
 
-                this._renderWorks();
+                // Sync button active classes with restored filter
+                const switcher = this.$('#person-tab-switcher');
+                if (switcher) {
+                    switcher.querySelectorAll('.person-tab-btn').forEach((b) => {
+                        b.classList.toggle('active', b.dataset.filter === this._selectedFilter);
+                    });
+                }
+
+                // ── Phase 1: Mount appearances grid first, then release loading ──
+                // This lets the user interact immediately without waiting for episodes.
+                this._renderAppearances();
+
+                // Bind tab switcher events (All / Movies / Series)
+                this._bindSwitcherEvents();
 
                 // Re-apply backdrop now that _items is populated (for work-based fallback)
                 this._setSmartBackdrop();
 
-                // 4b. Background: Fetch role names and update UI when ready
-                this._loadRolesInBackground();
+                // Dismiss loading / restore focus now that appearances are visible
+                this._finishLoading(hasFocusTarget, focusStateKey, savedFocusObj);
+
+                // ── Phase 2: Mount episodes grid in the next event loop tick ──
+                // This ensures the browser paints + yields focus before we do more DOM work.
+                setTimeout(() => {
+                    this._renderEpisodes();
+                    // Re-link focus chain to include the newly added episodes section
+                    this._registerWorkSections();
+                    // Background: fetch and apply character role names once episodes are in DOM too
+                    this._loadRolesInBackground();
+                }, 0);
             }
         } catch (error) {
             log.error('Failed to load', error);
             this.showError('Failed to load person details');
             this.setLoading(false);
         }
+    }
 
-        // ────────────────────────────────────────────────────────────
-        // 5. Focus restoration (runs after works are in DOM)
-        // ────────────────────────────────────────────────────────────
+    /**
+     * Finalizes page load: places focus (restoring saved state if available) and
+     * dismisses the loading overlay. Called after the primary appearances grid is
+     * mounted so the user can interact without waiting for the episodes grid.
+     *
+     * @param {boolean} hasFocusTarget - Whether a saved focus target exists to restore.
+     * @param {string}  focusStateKey  - State key used to look up the saved focus object.
+     * @param {object}  savedFocusObj  - The previously saved focus state object (may be null).
+     */
+    _finishLoading(hasFocusTarget, focusStateKey, savedFocusObj) {
         requestAnimationFrame(() => {
-            const stateKey = `person:lastFocusedItem:${this._personId}`;
             let lastFocusedObj = null;
 
             if (storage.getItem('pref:disableFocusRestore') !== 'true') {
-                lastFocusedObj = state.get(stateKey);
+                lastFocusedObj = savedFocusObj;
             } else {
-                state.delete(stateKey);
+                state.delete(focusStateKey);
             }
 
             let restoredFocus = false;
@@ -201,27 +260,27 @@ class PersonPage extends Page {
                 const sectionConfig = focusManager.getSectionConfig(sectionId);
                 const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
 
-                const savedCard = sectionContainer.querySelector(
+                const savedCard = sectionContainer?.querySelector(
                     `[data-item-id="${targetId}"], [data-id="${targetId}"]`
                 );
 
                 if (savedCard) {
-                    this.setActiveSection(sectionId, false);
+                    const actualSectionId = sectionConfig ? sectionId : 'person-appearances-items';
+                    this.setActiveSection(actualSectionId, false);
                     focusManager.focusElement(savedCard, { instantScroll: true });
                     restoredFocus = true;
                 }
 
-                state.delete(stateKey);
+                state.delete(focusStateKey);
             }
 
             if (!restoredFocus) {
+                // Default: land focus on the action bar (favorite button, etc.)
                 this.setActiveSection('person-fav-actions');
             }
 
-            // Reveal page now that focus has been placed (or attempted)
-            if (hasFocusTarget) {
-                this.setLoading(false);
-            }
+            // Page is now interactive — hide the loading overlay
+            this.setLoading(false);
         });
     }
 
@@ -277,6 +336,22 @@ class PersonPage extends Page {
             favContainer.innerHTML = '';
             favContainer.style.display = 'flex'; // FORCE display
             this._favBtn.mount(favContainer);
+            if (this._favBtn.el) {
+                this._favBtn.el.setAttribute('data-tooltip', i18n.t('Favorite') || 'Favorite');
+            }
+
+            // Append tooltip bar to favContainer synchronously before any async operations
+            let tooltipBar = favContainer.querySelector('#action-tooltip-bar');
+            if (!tooltipBar) {
+                tooltipBar = document.createElement('div');
+                tooltipBar.className = 'action-btn-tooltip-bar';
+                tooltipBar.id = 'action-tooltip-bar';
+                tooltipBar.innerHTML = `<span class="action-btn-tooltip-text" id="action-tooltip-text"></span>`;
+                favContainer.appendChild(tooltipBar);
+            }
+
+            // Trigger immediate tooltip evaluation for the mounted buttons
+            this._onFocusChangedForTooltip?.(document.activeElement);
 
             // Mount Seerr rounded button beside the favorite button if Seerr is configured and TMDB ID is present
             const tmdbPersonId = p.ProviderIds?.Tmdb || p.ProviderIds?.tmdb || p.ProviderIds?.TMDB;
@@ -287,6 +362,7 @@ class PersonPage extends Page {
                 seerrBtn.id = 'btn-person-seerr';
                 seerrBtn.setAttribute('title', i18n.t('SeerrDetails') || 'Seerr Details');
                 seerrBtn.setAttribute('aria-label', i18n.t('SeerrDetails') || 'Seerr Details');
+                seerrBtn.setAttribute('data-tooltip', i18n.t('SeerrDetails') || 'Seerr Details');
                 seerrBtn.setAttribute('tabindex', '0');
                 seerrBtn.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="28" height="28">
@@ -299,7 +375,12 @@ class PersonPage extends Page {
                     router.navigate(`/seerr/person/${tmdbPersonId}`);
                 };
 
-                favContainer.appendChild(seerrBtn);
+                // Insert seerrBtn BEFORE tooltipBar so tooltipBar stays at the end of the container
+                if (tooltipBar && tooltipBar.parentNode === favContainer) {
+                    favContainer.insertBefore(seerrBtn, tooltipBar);
+                } else {
+                    favContainer.appendChild(seerrBtn);
+                }
             }
 
             // Wait for next frame to ensure DOM is ready
@@ -593,75 +674,247 @@ class PersonPage extends Page {
         });
     }
 
-    _renderWorks() {
-        const worksContainer = this.$('#person-works');
-        worksContainer.innerHTML = ''; // Clear previous
+    /**
+     * Binds click and remote activation handlers to the Tab Switcher buttons (All / Movies / Series).
+     * Follows Apple Human Interface Guidelines for responsive, tactile segmented controls.
+     */
+    _bindSwitcherEvents() {
+        const switcher = this.$('#person-tab-switcher');
+        if (!switcher) return;
 
-        // Helper: Find character name for this person in an item
+        const buttons = switcher.querySelectorAll('.person-tab-btn');
+        buttons.forEach((btn) => {
+            const filterType = btn.dataset.filter;
+
+            // Handle selection event for both click and keydown
+            const handleSwitch = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (this._selectedFilter === filterType) return;
+                this._selectedFilter = filterType;
+
+                // Update active highlight on buttons with spring-like transition
+                buttons.forEach((b) => {
+                    b.classList.toggle('active', b.dataset.filter === filterType);
+                });
+
+                // Re-render works with active filter applied
+                this._renderWorks();
+            };
+
+            btn.onclick = handleSwitch;
+            btn.onkeydown = (e) => {
+                if (e.keyCode === 13 || e.key === 'Enter') {
+                    handleSwitch(e);
+                }
+            };
+        });
+    }
+
+    /**
+     * Builds a filtered+sorted appearances list from this._items.
+     * Shared between the initial render and tab switcher re-renders.
+     *
+     * @returns {{ appearances: object[], includeTypes: string }}
+     */
+    _buildAppearancesList() {
+        const filter = this._selectedFilter; // 'all' | 'movie' | 'tv'
+
+        // Helper: find character role for this person inside an item's People array
         const getRole = (item) => {
+            if (this._roleMap && this._roleMap.has(item.Id)) {
+                return this._roleMap.get(item.Id);
+            }
             if (!item.People) return null;
             const person = item.People.find((p) => p.Id === this._personId);
             return person?.Role || null;
         };
 
-        // Categories - get all movies/shows with roles, limit episodes to 100
-        const movies = this._items
-            .filter((i) => i.Type === 'Movie')
-            .map((item) => ({ ...item, _roleName: getRole(item) }));
+        // Filter predicate matching active tab selection
+        const matchesFilter = (item) => {
+            if (!item) return false;
+            if (filter === 'all') return item.Type === 'Movie' || item.Type === 'Series';
+            if (filter === 'movie') return item.Type === 'Movie';
+            if (filter === 'tv') return item.Type === 'Series';
+            return false;
+        };
 
-        const shows = this._items
-            .filter((i) => i.Type === 'Series')
-            .map((item) => ({ ...item, _roleName: getRole(item) }));
+        // Extract a sortable timestamp from available date fields
+        const getItemDateScore = (item) => {
+            const rawDate = item.PremiereDate || item.ReleaseDate;
+            if (rawDate) {
+                const parsed = new Date(rawDate).getTime();
+                if (!isNaN(parsed)) return parsed;
+            }
+            // Fallback to ProductionYear if no precise date is present
+            if (item.ProductionYear) {
+                const yearParsed = new Date(`${item.ProductionYear}-01-01`).getTime();
+                if (!isNaN(yearParsed)) return yearParsed;
+            }
+            return 0;
+        };
 
+        // Newest-first comparator with alphabetical tie-breaker
+        const sortByDateDesc = (a, b) => {
+            const diff = getItemDateScore(b) - getItemDateScore(a);
+            return diff !== 0 ? diff : (a.Name || '').localeCompare(b.Name || '');
+        };
+
+        // Build the final list: filter → sort → annotate with role + media type badge
+        const appearances = this._items
+            .filter(matchesFilter)
+            .sort(sortByDateDesc)
+            .map((item) => ({
+                ...item,
+                _roleName: getRole(item),
+                // Badge tag drives the 'MOVIE' / 'SERIES' pill rendered by CardRenderer
+                _mediaType: item.Type === 'Series' ? 'tv' : 'movie'
+            }));
+
+        let includeTypes = 'Movie,Series';
+        if (filter === 'movie') includeTypes = 'Movie';
+        if (filter === 'tv') includeTypes = 'Series';
+
+        return { appearances, includeTypes };
+    }
+
+    /**
+     * Phase 1 render — mounts the Appearances grid only.
+     * Called immediately after items are fetched so the user can interact
+     * while the (heavier) episodes grid is still pending.
+     *
+     * NOTE: Does NOT touch the episodes grid.  Episodes are mounted separately
+     *       in _renderEpisodes() which is deferred to the next event loop tick.
+     */
+    _renderAppearances() {
+        const worksContainer = this.$('#person-works');
+        if (!worksContainer) return;
+
+        // Destroy existing grid instances to prevent memory leaks on filter change
+        Object.values(this._grids).forEach((comp) => comp.destroy());
+        this._grids = {};
+        worksContainer.innerHTML = '';
+
+        // Invalidate card HTML cache so fresh media-type badges are generated
+        CardRenderer.clearCache();
+
+        const { appearances, includeTypes } = this._buildAppearancesList();
+
+        // Mount Appearances grid (7 per row, up to 100 items)
+        if (appearances.length > 0) {
+            this._grids.appearances = new MediaGrid({
+                id: 'person-appearances',
+                title: i18n.t('HeaderAppearances') || i18n.t('Appearances') || 'Appearances',
+                items: appearances,
+                type: 'poster',
+                gridClass: 'person-grid person-appearances-grid',
+                limit: 100,
+                showSeeMoreIfFull: true,
+                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._person?.Name || '')}&includeItemTypes=${includeTypes}`,
+                onClick: (card) => this._saveStateAndNavigate('person-appearances-items', card)
+            });
+            this._grids.appearances.mount(worksContainer);
+        }
+
+        // Register focus chain for the appearances grid only (episodes not yet in DOM)
+        this._registerWorkSections();
+    }
+
+    /**
+     * Phase 2 render — mounts the Episodes grid.
+     * Deferred to run after the loading overlay is dismissed and the appearances
+     * grid is interactive, so the user is never blocked waiting for this.
+     */
+    _renderEpisodes() {
+        const worksContainer = this.$('#person-works');
+        if (!worksContainer) return;
+
+        // Episodes are always shown regardless of the tab switcher filter
         const episodes = this._items.filter((i) => i.Type === 'Episode').slice(0, 100);
 
-        // Create Components
-        this._grids = {};
+        if (episodes.length === 0) return;
 
-        // 1. Movies
-        if (movies.length > 0) {
-            this._grids.movies = new MediaGrid({
-                id: 'person-movies',
-                title: i18n.t('Movies'),
-                items: movies,
+        // Guard: avoid double-mounting if called again (e.g. from tab switcher)
+        if (this._grids.episodes) {
+            this._grids.episodes.destroy();
+            delete this._grids.episodes;
+        }
+
+        // Mount Episodes grid (landscape, 5 per row, 10 shown with see-more)
+        this._grids.episodes = new MediaGrid({
+            id: 'person-episodes',
+            title: i18n.t('Episodes'),
+            items: episodes,
+            type: 'episode-primary',
+            isLandscape: true,
+            gridClass: 'person-grid landscape-grid person-episodes-grid',
+            limit: 10,
+            showSeeMoreIfFull: true,
+            moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._person?.Name || '')}&includeItemTypes=Episode&viewModeIndex=2`,
+            onClick: (card) => this._saveStateAndNavigate('person-episodes-items', card)
+        });
+        this._grids.episodes.mount(worksContainer);
+    }
+
+    /**
+     * Full re-render triggered by the tab switcher (All / Movies / Series).
+     * Re-builds appearances only (episodes grid is not affected by the filter)
+     * then re-links the focus chain to reflect the new DOM state.
+     */
+    _renderWorks() {
+        // Destroy and re-mount appearances; preserve episodes grid instance
+        const episodesGrid = this._grids.episodes || null;
+
+        const worksContainer = this.$('#person-works');
+        if (!worksContainer) return;
+
+        // Destroy appearances (and any other non-episode grids)
+        Object.entries(this._grids).forEach(([key, comp]) => {
+            if (key !== 'episodes') comp.destroy();
+        });
+        this._grids = episodesGrid ? { episodes: episodesGrid } : {};
+
+        // Clear only the DOM nodes that belong to appearances
+        // (remove everything then re-append episodes node if it exists)
+        const episodesEl = episodesGrid?.el || worksContainer.querySelector('.person-episodes-grid')?.closest('.media-row-section');
+        worksContainer.innerHTML = '';
+        if (episodesEl && episodesEl.parentNode !== worksContainer) {
+            // Re-attach episodes after clearing (it was detached by innerHTML reset)
+            worksContainer.appendChild(episodesEl);
+        }
+
+        // Invalidate cache so badge labels reflect the current filter
+        CardRenderer.clearCache();
+
+        const { appearances, includeTypes } = this._buildAppearancesList();
+
+        // Mount fresh appearances grid before the episodes section in the DOM
+        if (appearances.length > 0) {
+            this._grids.appearances = new MediaGrid({
+                id: 'person-appearances',
+                title: i18n.t('HeaderAppearances') || i18n.t('Appearances') || 'Appearances',
+                items: appearances,
                 type: 'poster',
-                limit: 10,
-                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Movie`,
-                onClick: (card) => this._saveStateAndNavigate('person-movies-items', card)
+                gridClass: 'person-grid person-appearances-grid',
+                limit: 100,
+                showSeeMoreIfFull: true,
+                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._person?.Name || '')}&includeItemTypes=${includeTypes}`,
+                onClick: (card) => this._saveStateAndNavigate('person-appearances-items', card)
             });
-            this._grids.movies.mount(worksContainer);
+
+            // Always mount into the live container so that onMounted() can use
+            // getElementById correctly (requires the element to be in the document).
+            // If episodes are already present we then reorder the appended node to
+            // sit before them, preserving the appearances → episodes visual order.
+            this._grids.appearances.mount(worksContainer);
+            if (episodesEl && worksContainer.contains(episodesEl)) {
+                // Move the newly appended appearances el to just before episodes
+                worksContainer.insertBefore(this._grids.appearances.el, episodesEl);
+            }
         }
 
-        // 2. Shows
-        if (shows.length > 0) {
-            this._grids.shows = new MediaGrid({
-                id: 'person-shows',
-                title: i18n.t('Series'),
-                items: shows,
-                type: 'poster',
-                limit: 10,
-                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Series`,
-                onClick: (card) => this._saveStateAndNavigate('person-shows-items', card)
-            });
-            this._grids.shows.mount(worksContainer);
-        }
-
-        // 3. Episodes
-        if (episodes.length > 0) {
-            this._grids.episodes = new MediaGrid({
-                id: 'person-episodes',
-                title: i18n.t('Episodes'),
-                items: episodes,
-                type: 'episode-primary',
-                isLandscape: true,
-                limit: 9,
-                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Episode&viewModeIndex=2`,
-                onClick: (card) => this._saveStateAndNavigate('person-episodes-items', card)
-            });
-            this._grids.episodes.mount(worksContainer);
-        }
-
-        // Register focus
+        // Re-link the full focus navigation chain (appearances + episodes if present)
         this._registerWorkSections();
     }
 
@@ -791,60 +1044,64 @@ class PersonPage extends Page {
         });
     }
 
+    /**
+     * Registers vertical spatial navigation sections connecting the header action bar,
+     * the Apple-style segmented Tab Switcher, and the filmography works grids.
+     */
     _registerWorkSections() {
-        // We iterate our created grids in order of appearance
-        // Order: movies, shows, episodes
-        const sectionOrder = ['movies', 'shows', 'episodes'];
+        const sectionOrder = ['appearances', 'episodes'];
         const activeTypes = sectionOrder.filter((type) => this._grids[type]);
 
-        if (activeTypes.length === 0) return;
-
-        const firstType = activeTypes[0];
-
-        // 1.5 Favorite Button Row
+        // 1. Favorite Button Row
         const favActionsEl = this.$('#person-fav-actions');
         if (favActionsEl) {
-            // Dynamically check if the see more button is visible
-            // to connect navigation properly and prevent focus trapping
             const seeMoreEl = this.$('.see-more-btn');
             const leaveUpTarget = seeMoreEl && seeMoreEl.style.display !== 'none' ? 'person-see-more' : null;
 
             this.registerFocusSection('person-fav-actions', favActionsEl, {
                 orientation: 'horizontal',
                 leaveUp: leaveUpTarget,
-                leaveDown: `person-${firstType}-items`,
+                leaveDown: 'person-tab-switcher',
                 leaveLeft: 'sidebar',
-                scrollOffsetTop: 50 // Match standardized top alignment
+                scrollOffsetTop: 50
             });
         }
 
-        // 2. Register Each Grid
+        // 2. Tab Switcher Section
+        const switcherEl = this.$('#person-tab-switcher');
+        const firstGridZone = activeTypes.length > 0 ? `person-${activeTypes[0]}-items` : null;
+        if (switcherEl) {
+            this.registerFocusSection('person-tab-switcher', switcherEl, {
+                orientation: 'horizontal',
+                leaveUp: 'person-fav-actions',
+                leaveDown: firstGridZone,
+                leaveLeft: 'sidebar'
+            });
+        }
+
+        if (activeTypes.length === 0) return;
+
+        // 3. Register Each Grid
         activeTypes.forEach((type, index) => {
             const gridComp = this._grids[type];
-            const baseId = gridComp.id; // e.g. 'person-movies'
+            const baseId = gridComp.id; // e.g. 'person-appearances' or 'person-episodes'
 
-            // IDs defined in MediaGrid
-            const gridZone = `${baseId}-items`; // The grid container
-            const btnZone = `${baseId}-btn-zone`; // Wrapper around button (custom reg name)
-            const btnId = `${baseId}-btn`; // The actual button ID
+            const gridZone = `${baseId}-items`;
+            const btnZone = `${baseId}-btn-zone`;
+            const btnId = `${baseId}-btn`;
 
             const gridContainer = this.$(`#${gridZone}`);
             const btn = this.$(`#${btnId}`);
-            const btnContainer = btn?.parentElement; // .see-more-container
+            const btnContainer = btn?.parentElement;
 
-            // CRITICAL FIX: Trust the DOM visibility over internal logic to avoid Focus Traps
-            // If button is hidden (offsetParent is null), do NOT register it.
             const isButtonVisible = btn && btn.offsetParent !== null;
 
-            // Determine Previous/Next Links
             const prevType = index > 0 ? activeTypes[index - 1] : null;
             const nextType = index < activeTypes.length - 1 ? activeTypes[index + 1] : null;
 
-            // --- Grid Zone ---
-            // UP
-            let gridLeaveUp = 'person-fav-actions';
+            // UP target: previous grid's button or items, or tab switcher if first
+            let gridLeaveUp = 'person-tab-switcher';
             if (prevType) {
-                // Check if previous had a "See More" that was visible
                 const prevComp = this._grids[prevType];
                 const prevBaseId = prevComp.id;
                 const prevBtn = this.$(`#${prevBaseId}-btn`);
@@ -857,7 +1114,7 @@ class PersonPage extends Page {
                 }
             }
 
-            // DOWN
+            // DOWN target: own see more button, or next grid, or null
             let gridLeaveDown = null;
             if (isButtonVisible) {
                 gridLeaveDown = btnZone;
@@ -874,12 +1131,9 @@ class PersonPage extends Page {
                 });
             }
 
-            // --- Button Zone ---
+            // Button Zone
             if (isButtonVisible && btnContainer) {
-                // UP: Back to own grid
                 const btnLeaveUp = gridZone;
-
-                // DOWN: Next grid
                 const btnLeaveDown = nextType ? `${this._grids[nextType].id}-items` : null;
 
                 this.registerFocusSection(btnZone, btnContainer, {
@@ -899,7 +1153,8 @@ class PersonPage extends Page {
         if (storage.getItem('pref:disableFocusRestore') !== 'true') {
             state.set(stateKey, {
                 itemId: card.dataset.itemId,
-                sectionId: sectionId
+                sectionId: sectionId,
+                filter: this._selectedFilter
             });
         }
 
@@ -911,13 +1166,108 @@ class PersonPage extends Page {
         this.registerFocusSection('person-fav-actions', this.$('#person-fav-actions'), {
             orientation: 'horizontal',
             leaveUp: null,
-            leaveDown: null,
+            leaveDown: 'person-tab-switcher',
             leaveLeft: 'sidebar',
             scrollOffsetTop: 50
         });
+
+        const switcherEl = this.$('#person-tab-switcher');
+        if (switcherEl) {
+            this.registerFocusSection('person-tab-switcher', switcherEl, {
+                orientation: 'horizontal',
+                leaveUp: 'person-fav-actions',
+                leaveDown: null,
+                leaveLeft: 'sidebar'
+            });
+        }
+    }
+
+    _setupTooltipListener() {
+        this._onFocusChangedForTooltip = (focusedEl) => {
+            const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+            const targetEl = focusedEl || document.activeElement;
+            const bar = this.$('#action-tooltip-bar');
+            const txt = this.$('#action-tooltip-text');
+
+            if (!isEnabled || !targetEl || !bar || !txt) {
+                if (bar) bar.classList.remove('visible');
+                return;
+            }
+
+            const actionsContainer = this.$('#person-fav-actions');
+            if (actionsContainer && actionsContainer.contains(targetEl)) {
+                let text = targetEl.getAttribute('data-tooltip') || targetEl.getAttribute('aria-label') || targetEl.getAttribute('title');
+                if (!text) {
+                    const span = targetEl.querySelector('span[data-i18n], span');
+                    if (span) text = span.textContent?.trim();
+                }
+
+                if (text) {
+                    const btnCenterX = targetEl.offsetLeft + (targetEl.offsetWidth / 2);
+                    const btnBottomY = targetEl.offsetTop + targetEl.offsetHeight;
+
+                    bar.style.left = `${btnCenterX}px`;
+                    bar.style.top = `${btnBottomY}px`;
+                    txt.textContent = text;
+                    bar.classList.add('visible');
+                    return;
+                }
+            }
+
+            if (bar) bar.classList.remove('visible');
+        };
+
+        eventBus.on('focus:changed', this._onFocusChangedForTooltip);
+
+        const actionsContainer = this.$('#person-fav-actions');
+        if (actionsContainer) {
+            actionsContainer.addEventListener('mouseover', (e) => {
+                const btn = e.target.closest('.btn, button');
+                if (btn) this._onFocusChangedForTooltip(btn);
+            });
+
+            actionsContainer.addEventListener('mouseout', (e) => {
+                const bar = this.$('#action-tooltip-bar');
+                const related = e.relatedTarget;
+                if (!related || !actionsContainer.contains(related)) {
+                    const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
+                    if (activeInActions) {
+                        this._onFocusChangedForTooltip(document.activeElement);
+                    } else if (bar) {
+                        bar.classList.remove('visible');
+                    }
+                } else {
+                    const newBtn = related.closest('.btn, button');
+                    if (newBtn) {
+                        this._onFocusChangedForTooltip(newBtn);
+                    }
+                }
+            });
+        }
+
+        // Initial evaluation for already focused button on page load
+        const updateInitial = () => {
+            const actionsContainer = this.$('#person-fav-actions');
+            const favBtn = this._favBtn?.el || this.$('.favorite-btn');
+            const targetEl = (document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement))
+                ? document.activeElement
+                : favBtn;
+            if (targetEl) {
+                this._onFocusChangedForTooltip(targetEl);
+            }
+        };
+        updateInitial();
+        requestAnimationFrame(updateInitial);
+        setTimeout(updateInitial, 150);
+        setTimeout(updateInitial, 400);
     }
 
     destroy() {
+        if (this._onFocusChangedForTooltip) {
+            eventBus.off('focus:changed', this._onFocusChangedForTooltip);
+            this._onFocusChangedForTooltip = null;
+        }
+
         if (this._favBtn) {
             this._favBtn.destroy();
             this._favBtn = null;

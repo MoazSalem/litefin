@@ -38,8 +38,8 @@ const THEME_MODES = {
     AMBIENT: 'ambient'
 };
 
-// Default Theme Color (Lavender)
-const DEFAULT_THEME_COLOR = '#af52de';
+// Default Theme Color (Litefin Purple Blue)
+const DEFAULT_THEME_COLOR = '#6b6ede';
 
 class LayoutManager {
     constructor() {
@@ -56,14 +56,14 @@ class LayoutManager {
         this._mediaRowsLayout = 'classic';
         this._loginPageLayout = 'classic';
         /*
-         * Active sidebar layout configuration (e.g., 'modern').
+         * Active sidebar layout configuration (e.g., 'modern-collapsed').
          * Controls structural presentation and styling of the primary navigation bar.
          */
-        this._sidebarLayout = 'modern';
+        this._sidebarLayout = 'modern-collapsed';
 
         // Current theme mode
-        // Ambient Glow is now the default theme mode for a premium glassmorphic look.
-        this._themeMode = THEME_MODES.AMBIENT;
+        // Black (OLED) is the default — zero compositing, pure black pixels, maximum performance.
+        this._themeMode = THEME_MODES.BLACK;
 
         // Current theme color (HEX)
         this._themeColor = DEFAULT_THEME_COLOR;
@@ -88,6 +88,14 @@ class LayoutManager {
 
         // Simple Loader: Lightweight rotating ring instead of pulsing dots
         this._simpleLoader = false;
+
+        /*
+         * Loading Indicator Visual Style
+         * Controls the visual presentation of loading spinners and activity indicators.
+         * Default: 'ring' (Rotating Ring) — lightest possible option for CPU/GPU overhead.
+         * Supported: 'dots', 'ring', 'dual-ring', 'orbit', 'satellite', etc.
+         */
+        this._loaderStyle = 'ring';
 
         // Disable BlurHash: Disables color-accurate blurred canvas rendering during image load
         this._disableBlurhash = false;
@@ -115,6 +123,9 @@ class LayoutManager {
 
         // Sidebar selected icon color: 'grey', 'white', 'black', 'accent'
         this._sidebarSelectedColor = 'white';
+
+        // Sidebar logo icon color: 'icon-colors', 'follow-theme', 'white', 'black'
+        this._sidebarLogoColor = 'icon-colors';
 
         // OSD Custom Button & Focus Border styles (overrides global)
         this._osdButtonStyle = 'follow-global';
@@ -159,7 +170,12 @@ class LayoutManager {
         let savedLoginPageLayout = storage.getItem('pref:loginPageLayout');
         if (!savedLoginPageLayout) {
             const legacy = storage.getItem('pref:modernLoginPage') || storage.getItem('litefin:layout');
-            savedLoginPageLayout = legacy === 'true' || legacy === 'modern' ? 'modern' : 'classic';
+            // Hardware with c26 quirks (Chrome <32 / Tizen 2.4 ancient WebKit) defaults to classic login layout.
+            if (platformInfo.isAncientChrome) {
+                savedLoginPageLayout = 'classic';
+            } else {
+                savedLoginPageLayout = legacy === 'false' ? 'classic' : 'modern';
+            }
         }
 
         /*
@@ -170,12 +186,12 @@ class LayoutManager {
         const isUltraLegacy = platformInfo.layoutTier === 'ultra-legacy';
         const savedSidebarLayout = isUltraLegacy
             ? 'classic'
-            : storage.getItem('pref:sidebarLayoutMode') || 'modern';
+            : storage.getItem('pref:sidebarLayoutMode') || 'modern-collapsed';
 
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
-        // Default to Ambient theme mode if no user preference is stored.
-        let initialMode = THEME_MODES.AMBIENT;
+        // Default to Black (OLED) theme mode — zero compositing overhead, best for performance.
+        let initialMode = THEME_MODES.BLACK;
 
         if (savedThemeMode && Object.values(THEME_MODES).includes(savedThemeMode)) {
             initialMode = savedThemeMode;
@@ -191,6 +207,13 @@ class LayoutManager {
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
+        /*
+         * Retrieve user preference for loading indicator animation aesthetic.
+         * If litefin:loaderStyle is not set, fallback seamlessly to legacy simpleLoader
+         * boolean preference ('ring' when true, otherwise 'dots').
+         * Default is 'ring' (Rotating Ring) — the most CPU/GPU-efficient option.
+         */
+        const savedLoaderStyle = storage.getItem('litefin:loaderStyle') || (savedSimpleLoader ? 'ring' : 'ring');
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
@@ -203,6 +226,7 @@ class LayoutManager {
         const savedHoverBorderStyle = storage.getItem('litefin:hoverBorderStyle') || 'white';
         const savedSidebarUnselectedColor = storage.getItem('litefin:sidebarUnselectedColor') || 'grey';
         const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'white';
+        const savedSidebarLogoColor = storage.getItem('litefin:sidebarLogoColor') || 'icon-colors';
         const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
         const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
         const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
@@ -224,7 +248,9 @@ class LayoutManager {
 
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
-        this.setSimpleLoader(savedSimpleLoader, false);
+
+        // Apply loading indicator style and sync legacy simple loader flag
+        this.setLoaderStyle(savedLoaderStyle, false);
         this.setDisableBlurhash(savedDisableBlurhash, false);
         this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
         this.setBadgeStyle(savedBadgeStyle, false);
@@ -236,6 +262,7 @@ class LayoutManager {
         this.setHoverBorderStyle(savedHoverBorderStyle, false);
         this.setSidebarUnselectedColor(savedSidebarUnselectedColor, false);
         this.setSidebarSelectedColor(savedSidebarSelectedColor, false);
+        this.setSidebarLogoColor(savedSidebarLogoColor, false);
         this.setOsdButtonStyle(savedOsdButtonStyle, false);
         this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
         this.setOsdButtonShape(savedOsdButtonShape, false);
@@ -341,7 +368,6 @@ class LayoutManager {
     /**
      * Sets and activates the sidebar layout mode across the entire UI.
      * Stamped onto <html> as data-layout-sidebar to power layout-scoped styling.
-     * Follows Apple HIG principles with clear visual hierarchy and instant feedback.
      *
      * @param {string} layout - The target sidebar layout identifier ('classic', etc.)
      * @param {boolean} [save=true] - Whether to persist this preference in storage
@@ -585,11 +611,11 @@ class LayoutManager {
         // ====================================================================
         if (platformInfo.isAncientChrome) {
             // Resolve the exact background color for the current theme mode
-            const resolvedBg = this._themeMode === THEME_MODES.TINTED 
-                ? themeUtils.getTintedColors(this._themeColor).background 
-                : (this._themeMode === THEME_MODES.AMBIENT ? '#0a0b0c' 
-                : (this._themeMode === THEME_MODES.BLACK ? '#000000' 
-                : (this._themeMode === THEME_MODES.CLASSIC_LIGHT ? '#f5f5f5' : '#101010')));
+            const resolvedBg = this._themeMode === THEME_MODES.TINTED
+                ? themeUtils.getTintedColors(this._themeColor).background
+                : (this._themeMode === THEME_MODES.AMBIENT ? '#0a0b0c'
+                    : (this._themeMode === THEME_MODES.BLACK ? '#000000'
+                        : (this._themeMode === THEME_MODES.CLASSIC_LIGHT ? '#f5f5f5' : '#101010')));
 
             // Write static background-color rule directly to body
             dynamicCss += `\n/* Direct theme overrides for Chrome < 32 */\n`;
@@ -863,6 +889,24 @@ class LayoutManager {
         eventBus.emit('sidebarSelectedColor:changed', { color });
     }
 
+    getSidebarLogoColor() {
+        return this._sidebarLogoColor;
+    }
+
+    setSidebarLogoColor(color, save = true) {
+        if (!['icon-colors', 'follow-theme', 'white', 'black'].includes(color)) {
+            log.warn(`Invalid sidebar logo color specified: "${color}"`);
+            return;
+        }
+        this._sidebarLogoColor = color;
+        document.documentElement.setAttribute('data-sidebar-logo-color', color);
+        if (save) {
+            storage.setItem('litefin:sidebarLogoColor', color);
+        }
+        log.info(`Sidebar logo color updated: ${color}`);
+        eventBus.emit('sidebarLogoColor:changed', { color });
+    }
+
     getOsdButtonStyle() {
         return this._osdButtonStyle;
     }
@@ -1052,29 +1096,93 @@ class LayoutManager {
     }
 
     /**
-     * Enable or disable Simple Loader
+     * Enable or disable Simple Loader (Legacy compatibility wrapper).
+     * Maps boolean state to loader visual style ('ring' vs 'dots').
+     *
      * @param {boolean} enabled
      * @param {boolean} [save=true]
      */
     setSimpleLoader(enabled, save = true) {
-        this._simpleLoader = enabled;
+        // Delegate directly to setLoaderStyle to preserve single source of truth
+        this.setLoaderStyle(enabled ? 'ring' : 'dots', save);
+    }
 
-        if (enabled) {
+    /**
+     * Retrieve simple loader boolean status for legacy consumers.
+     * @returns {boolean}
+     */
+    getSimpleLoader() {
+        return this._loaderStyle === 'ring';
+    }
+
+    /**
+     * Set loading indicator visual presentation style.
+     *
+     * @param {string} style - The identifier of the loader style ('dots' | 'ring')
+     * @param {boolean} [save=true] - Whether to persist choice to storage
+     */
+    setLoaderStyle(style, save = true) {
+        // Validate input against supported styles list with safe fallback to 'dots'
+        // Supported styles:
+        // - 'dots': Original dual pulsing dots
+        // - 'ring': Minimal rotating circular track
+        // - 'dual-ring': Concentric ring with accent outer arc
+        // - 'orbit': Translucent ring with traveling accent satellite bead
+        // - 'satellite': Inner accent ring with orbiting secondary ring
+        // - 'triple-ring': Multi-tiered concentric counter-rotating ring arcs
+        // - 'dotted-ring': Dual-tone alternating dashed/dotted spinning ring
+        // - 'eclipse-sweep': Inset crescent shadow sweep animation
+        // - 'sonar-ring': Rotating framed disc with opposing aperture arcs
+        // - 'push-pulse': Concentric dual-phase pulsing spheres
+        // - 'horizontal-dots': Trio of fading inline dots with wave progression
+        // - 'pulsing-grid': Dynamic 4-point rotating and morphing quadrant grid
+        const validStyle = [
+            'dots',
+            'ring',
+            'dual-ring',
+            'orbit',
+            'satellite',
+            'triple-ring',
+            'dotted-ring',
+            'eclipse-sweep',
+            'sonar-ring',
+            'push-pulse',
+            'horizontal-dots',
+            'pulsing-grid'
+        ].includes(style) ? style : 'dots';
+        this._loaderStyle = validStyle;
+
+        // Stamp active loader style attribute onto root element for scoped CSS targeting
+        document.documentElement.setAttribute('data-loader-style', validStyle);
+
+        // Keep backwards compatibility with legacy simpleLoader attribute & internal state
+        const isLegacyRing = validStyle === 'ring';
+        this._simpleLoader = isLegacyRing;
+        if (isLegacyRing) {
             document.documentElement.setAttribute('data-simple-loader', 'true');
         } else {
             document.documentElement.removeAttribute('data-simple-loader');
         }
 
+        // Persist preferences if save is requested
         if (save) {
-            storage.setItem('litefin:simpleLoader', enabled ? 'true' : 'false');
+            storage.setItem('litefin:loaderStyle', validStyle);
+            storage.setItem('litefin:simpleLoader', isLegacyRing ? 'true' : 'false');
         }
 
-        log.info(`Simple Loader set to: ${enabled}`);
-        eventBus.emit('simpleLoader:changed', { enabled });
+        log.info(`Loading indicator style set to: ${validStyle}`);
+
+        // Broadcast change events to subscribers
+        eventBus.emit('loaderStyle:changed', { style: validStyle });
+        eventBus.emit('simpleLoader:changed', { enabled: isLegacyRing });
     }
 
-    getSimpleLoader() {
-        return this._simpleLoader;
+    /**
+     * Retrieve the current loading indicator visual style.
+     * @returns {string}
+     */
+    getLoaderStyle() {
+        return this._loaderStyle;
     }
 
     /**
@@ -1203,7 +1311,7 @@ class LayoutManager {
      */
     _applyHeroVignetteVariables() {
         /*
-         * Default alpha values for level 70 (balanced Apple HIG contrast)
+         * Default alpha values for level 70 
          * Produces a clean ~0.72 start alpha and 0.40 mid-curve.
          */
         let startAlpha = 0.72;

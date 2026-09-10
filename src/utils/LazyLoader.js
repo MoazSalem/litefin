@@ -513,7 +513,7 @@ class LazyLoader {
         //   columns forward — covers the row below for Down navigation.
         // ----------------------------------------------------------------
         const grid = currentCard.closest('#library-grid');
-        const columns = parseInt(grid?.dataset.gridColumns, 10) || 5;
+        const columns = parseInt(grid?.dataset.gridColumns, 10) || 7;
 
         // Phase 1: current row forward + 1 backward (immediate)
         let nextCard = currentCard.nextElementSibling;

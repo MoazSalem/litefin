@@ -234,11 +234,14 @@ const iconStyles = {
                 filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M5 2h14a1 1 0 0 1 1 1v19.143a.5.5 0 0 1-.766.424L12 18.03l-7.234 4.536A.5.5 0 0 1 4 22.143V3a1 1 0 0 1 1-1"/></svg>`,
             },
             cancel: {
-                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="m12 13.4l-4.9 4.9q-.275.275-.7.275t-.7-.275t-.275-.7t.275-.7l4.9-4.9l-4.9-4.9q-.275-.275-.275-.7t.275-.7t.7-.275t.7.275l4.9 4.9l4.9-4.9q.275-.275.7-.275t.7.275t.275.7t-.275.7L13.4 12l4.9 4.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275z"/></svg>`,
+                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-2a8 8 0 1 0 0-16a8 8 0 0 0 0 16m0-9.414l2.828-2.829l1.415 1.415L13.414 12l2.829 2.828l-1.415 1.415L12 13.414l-2.828 2.829l-1.415-1.415L10.586 12L7.757 9.172l1.415-1.415z"/></svg>`,
+                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-11.414L9.172 7.757L7.757 9.172L10.586 12l-2.829 2.828l1.415 1.415L12 13.414l2.828 2.829l1.415-1.415L13.414 12l2.829-2.828l-1.415-1.415z"/></svg>`
             },
             add: {
-                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Material Symbols by Google - https://github.com/google/material-design-icons/blob/master/LICENSE --><path fill="currentColor" d="M11.288 20.713Q11 20.425 11 20v-7H4q-.425 0-.712-.288T3 12t.288-.712T4 11h7V4q0-.425.288-.712T12 3t.713.288T13 4v7h7q.425 0 .713.288T21 12t-.288.713T20 13h-7v7q0 .425-.288.713T12 21t-.712-.288"/></svg>`,
+                outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M11 11V7h2v4h4v2h-4v4h-2v-4H7v-2zm1 11C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-2a8 8 0 1 0 0-16a8 8 0 0 0 0 16"/></svg>`,
+                filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Remix Icon by Remix Design - https://github.com/cyberalien/RemixIcon/blob/master/License --><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m-1-11H7v2h4v4h2v-4h4v-2h-4V7h-2z"/></svg>`
             },
+            jellyfinDetails: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Simple Icons by Simple Icons Collaborators - https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md --><path fill="currentColor" d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0S15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189c.518 1.04 7.348 1.027 7.86 0c.511-1.027-2.874-7.19-3.93-7.19z"/></svg>`,
             rottenTomatoesFresh: `<svg viewBox="0 0 560 560" class="seerr-rating-icon"><path fill="#FA320A" d="M478.29 296.98c-3.99-63.966-36.52-111.82-85.468-138.58.278 1.56-1.109 3.508-2.688 2.818-32.016-14.006-86.328 31.32-124.28 7.584.285 8.519-1.378 50.072-59.914 52.483-1.382.056-2.142-1.355-1.268-2.354 7.828-8.929 15.732-31.535 4.367-43.586-24.338 21.81-38.472 30.017-85.138 19.186-29.878 31.241-46.809 74-43.485 127.26 6.78 108.74 108.63 170.89 211.19 164.49 102.56-6.395 193.47-80.572 186.68-189.31"></path><path fill="#00912D" d="M291.375 132.293c21.075-5.023 81.693-.49 101.114 25.274 1.166 1.545-.475 4.468-2.355 3.648-32.016-14.006-86.328 31.32-124.282 7.584.285 8.519-1.378 50.072-59.914 52.483-1.382.056-2.142-1.355-1.268-2.354 7.828-8.929 15.73-31.535 4.367-43.586-26.512 23.758-40.884 31.392-98.426 15.838-1.883-.508-1.241-3.535.762-4.298 10.876-4.157 35.515-22.361 58.824-30.385 4.438-1.526 8.862-2.71 13.18-3.4-25.665-2.293-37.235-5.862-53.559-3.4-1.789.27-3.004-1.813-1.895-3.241 21.995-28.332 62.513-36.888 87.512-21.837-15.41-19.094-27.48-34.321-27.48-34.321l28.601-16.246s11.817 26.4 20.414 45.614c21.275-31.435 60.86-34.336 77.585-12.033.992 1.326-.045 3.21-1.702 3.171-13.612-.331-21.107 12.05-21.675 21.466z"></path></svg>`,
             rottenTomatoesAudience: `<svg viewBox="0 0 560 560" class="seerr-rating-icon"><path fill="#fff" d="m370.57 474.214 23.466-237.956c14.93-4.796 29.498-11.15 40.23-20.262L404.16 446.278c-6.748 10.248-19.863 20.86-33.59 27.936m-78.197 21.631 2.947-244.528c20.894-.599 47.933-3.43 70.97-8.346l-19.07 241.17c-22.724 7.518-35.934 9.848-54.847 11.704m-99.694-252.874c23.038 4.916 50.077 7.747 70.971 8.346l2.948 244.528c-18.914-1.856-32.123-4.186-54.847-11.705zm-67.974-26.975c10.732 9.112 25.3 15.466 40.23 20.262l23.464 237.956c-13.726-7.075-26.84-17.688-33.59-27.936z"></path><path fill="gold" d="M118.905 157.445c1.357 28.827 72.771 51.677 160.578 51.176 76.687-.438 140.659-18.546 156.329-42.336a22.98 22.98 0 0 0-14.058-7.426c.06-.7.098-1.406.095-2.122-.065-11.4-8.429-20.788-19.327-22.54.287-1.474.438-2.999.43-4.559-.072-12.696-10.426-22.928-23.124-22.856-.287.001-.568.036-.853.049a22.9 22.9 0 0 0 1.254-7.56c-.074-12.697-10.425-22.93-23.123-22.858a22.9 22.9 0 0 0-8.247 1.6c-3.632-6.835-10.606-11.6-18.737-12.149-1.416-11.4-11.157-20.195-22.93-20.129-7.41.042-13.963 3.6-18.136 9.065-4.233-4.605-10.3-7.494-17.047-7.456-12.698.072-22.932 10.424-22.86 23.118a23 23 0 0 0 1.115 6.946 22.92 22.92 0 0 0-13.07 7.459c-2.644-9.847-11.637-17.084-22.314-17.024-9.975.057-18.406 6.47-21.537 15.366-8.474 3.426-14.439 11.738-14.383 21.433.012 2.154.342 4.227.907 6.202a22.9 22.9 0 0 0-9.328-1.932c-10.012.058-18.47 6.516-21.574 15.465a22.8 22.8 0 0 0-9.788-2.149c-12.698.072-22.934 10.422-22.86 23.118a22.83 22.83 0 0 0 3.159 11.463c-.202.203-.379.426-.571.636"></path><path fill="#FA320A" d="M404.161 446.278c-6.749 10.248-19.864 20.86-33.59 27.936l23.465-237.956c14.93-4.796 29.498-11.15 40.23-20.262zM347.22 484.14c-22.723 7.519-35.934 9.85-54.847 11.705l2.947-244.528c20.894-.599 47.933-3.43 70.973-8.346zm-135.47 0-19.07-241.17c23.037 4.917 50.076 7.748 70.97 8.347l2.948 244.528c-18.914-1.856-32.123-4.186-54.847-11.705zm-56.94-37.862-30.105-230.282c10.732 9.112 25.3 15.466 40.23 20.262l23.464 237.956c-13.726-7.075-26.84-17.688-33.588-27.936zm247.668-321.143c.298 1.453.465 2.955.473 4.498a23 23 0 0 1-.43 4.56c10.9 1.749 19.263 11.137 19.328 22.54a24 24 0 0 1-.095 2.12 22.98 22.98 0 0 1 14.058 7.425c-15.669 23.792-79.642 41.9-156.327 42.34-87.807.502-159.221-22.346-160.58-51.175.192-.208.37-.433.57-.634-1.355-2.311-2.29-4.887-2.773-7.62-8.408 7.979-13.495 14.412-12.6 23.78.085 1.251 37.196 266.911 37.196 266.911 4.282 42.075 65.391 75.703 138.187 76.12 72.796-.417 133.907-34.045 138.187-76.12 0 0 37.11-265.66 37.197-266.912 1.777-18.736-20.15-35.745-52.39-47.833z"></path></svg>`,
             imdbRating: `<svg viewBox="0 0 575 289.83" class="seerr-rating-icon"><path fill="#f6c700" d="M575 24.91C573.44 12.15 563.97 1.98 551.91 0H23.32C10.11 2.17 0 14.16 0 28.61v232.25c0 16 12.37 28.97 27.64 28.97h519.95c14.06 0 25.67-11.01 27.41-25.26z"></path><path stroke="#000" d="M69.35 58.24h45.63v175.65H69.35zM201.2 139.15c-3.92-26.77-6.1-41.65-6.53-44.62-1.91-14.33-3.73-26.8-5.47-37.44h-59.16v175.65h39.97l.14-115.98 16.82 115.98h28.47l15.95-118.56.15 118.56h39.84V57.09h-59.61zM346.71 93.63c.5 2.24.76 7.32.76 15.26v68.1c0 11.69-.76 18.85-2.27 21.49-1.52 2.64-5.56 3.95-12.11 3.95V87.13c4.97 0 8.36.53 10.16 1.57 1.8 1.05 2.96 2.69 3.46 4.93zm20.61 137.32c5.43-1.19 9.99-3.29 13.69-6.28 3.69-3 6.28-7.15 7.76-12.46 1.49-5.3 2.37-15.83 2.37-31.58v-61.68c0-16.62-.65-27.76-1.66-33.42-1.02-5.67-3.55-10.82-7.6-15.44q-6.09-6.93-17.76-9.96c-7.79-2.02-20.49-3.04-42.58-3.04H287.5v175.65h55.28c12.74-.4 20.92-.99 24.54-1.79zM464.76 204.7c-.84 2.23-4.52 3.36-7.3 3.36-2.72 0-4.53-1.08-5.45-3.25-.92-2.16-1.37-7.09-1.37-14.81v-46.42c0-8 .4-12.99 1.21-14.98.8-1.97 2.56-2.97 5.28-2.97 2.78 0 6.51 1.13 7.47 3.4.95 2.27 1.43 7.12 1.43 14.55v45.01c-.29 9.25-.71 14.62-1.27 16.11zm-58.08 26.51h41.08c1.71-6.71 2.65-10.44 2.84-11.19 3.72 4.5 7.81 7.88 12.3 10.12 4.47 2.25 11.16 3.37 16.34 3.37 7.21 0 13.43-1.89 18.68-5.68 5.24-3.78 8.58-8.26 10-13.41 1.42-5.16 2.13-13 2.13-23.54V141.6c0-10.6-.24-17.52-.71-20.77s-1.87-6.56-4.2-9.95-5.72-6.02-10.16-7.9-9.68-2.82-15.72-2.82c-5.25 0-11.97 1.05-16.45 3.12-4.47 2.07-8.53 5.21-12.17 9.42V55.56h-43.96z"></path></svg>`,
@@ -839,6 +842,21 @@ function _getLayoutQuirks() {
 }
 
 /**
+ * Read the layout tier from the document element.
+ * Set during LayoutManager.init() as data-layout-tier attribute on <html>.
+ * Returns 'ultra-legacy' / 'legacy' / 'modern' (or null before DOM is ready).
+ * Wrapped in try/catch for safety if called before DOM is ready.
+ * @returns {string|null}
+ */
+function _getLayoutTier() {
+    try {
+        return document.documentElement.getAttribute('data-layout-tier');
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * Resolves the final SVG markup based on the user's icon variant preferences.
  * Supports object-based definitions with separate outlined/filled templates.
  * Also keeps full backward compatibility with legacy raw HTML string templates.
@@ -870,11 +888,17 @@ function resolveIcon(iconEntry) {
         } else {
             // dynamic: return both, adding the required class to each SVG independently.
             //
-            // On ancient WebKit (data-layout-quirks="c26"), the CSS outline↔filled
-            // swap on focus breaks — the `.icon-outline` gets display:none but the
-            // `.icon-filled` never shows, leaving the button blank.  Fall back to
-            // outlined-only to prevent the swap from running.
-            if (_getLayoutQuirks() === 'c26') {
+            // On ancient WebKit engines the CSS outline↔filled display swap on focus
+            // is unreliable — `.icon-outline` gets display:none but `.icon-filled`
+            // never becomes visible, leaving the button completely blank.
+            //
+            // This affects two tiers:
+            //   • data-layout-quirks="c26"  — Chrome < 32  (Tizen 2.x / WebOS 1.x pure WebKit)
+            //   • data-layout-tier="ultra-legacy" — Chrome 32–46 (Tizen 2.x / older WebOS)
+            //
+            // Both receive outlined-only so the swap never runs and icons stay visible.
+            const isAncientEngine = _getLayoutQuirks() === 'c26' || _getLayoutTier() === 'ultra-legacy';
+            if (isAncientEngine) {
                 return iconEntry.outlined;
             }
             const outlineSvg = addClassToSvg(iconEntry.outlined, 'icon-outline');
