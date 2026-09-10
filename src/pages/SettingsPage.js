@@ -3543,6 +3543,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="RemuxMkvToMp4">${i18n.t('RemuxMkvToMp4') || 'Remux MKV to MP4'}</span>
+                        <span class="setting-description" data-i18n="RemuxMkvToMp4Description">${i18n.t('RemuxMkvToMp4Description') || 'Always remux MKV containers to MP4. Streams are copied losslessly — no re-encoding. Off by default.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('remuxMkvToMp4') ? 'active' : ''}" 
+                                id="toggle-remux-mkv-to-mp4" 
+                                data-setting="remuxMkvToMp4"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ForceDirectPlay">${i18n.t('ForceDirectPlay') || 'Force Direct Play'}</span>
                         <span class="setting-description" data-i18n="ForceDirectPlayDescription">${i18n.t('ForceDirectPlayDescription') || 'Forces direct play for all media formats. May cause playback failure if the device does not support the format natively.'}</span>
                     </div>

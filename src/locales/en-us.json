@@ -705,6 +705,8 @@
     "ForceStateEnable": "Force Enable",
     "ForceTranscode": "Force Transcode",
     "ForceTranscodeDescription": "Emergency fallback — forces ALL content to transcode via HLS",
+    "RemuxMkvToMp4": "Remux MKV to MP4",
+    "RemuxMkvToMp4Description": "Always remux MKV containers to MP4. Streams are copied losslessly — no re-encoding. Off by default.",
     "Framerate": "Framerate",
     "fromJellyfin": "from Jellyfin",
     "FullScreen": "Full Screen",

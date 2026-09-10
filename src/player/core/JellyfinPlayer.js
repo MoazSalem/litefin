@@ -2684,6 +2684,38 @@ export class JellyfinPlayer extends EventEmitter {
                 break;
         }
 
+        // -------------------------------------------------------------------------
+        // MKV → MP4 Remux Enforcement
+        // -------------------------------------------------------------------------
+        // If the user enabled "Remux MKV to MP4", we surgically remove 'mkv' from
+        // every DirectPlayProfile entry in the cloned device profile.  The server
+        // then cannot DirectPlay MKV files and falls back to DirectStream, which
+        // remuxes the container into MP4 (lossless stream copy — not a transcode).
+        //
+        // We skip this patch when we're already in a mode that rebuilt the profile
+        // from scratch (directPlay / transcode / remux), since those modes already
+        // override the profile wholesale and have their own container logic.
+        const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
+        const modeLockedProfiles = currentMode === 'directPlay' || currentMode === 'transcode' || currentMode === 'remux';
+        if (remuxMkvToMp4Setting && !modeLockedProfiles) {
+            const profiles = requestBody.DeviceProfile.DirectPlayProfiles;
+            if (Array.isArray(profiles)) {
+                for (const profile of profiles) {
+                    if (typeof profile.Container === 'string') {
+                        // Split the comma-separated container list, filter out 'mkv', rejoin
+                        const containers = profile.Container.split(',').filter(c => c.trim() !== 'mkv');
+                        profile.Container = containers.join(',');
+                    }
+                }
+                // Remove any entries that became empty after stripping mkv
+                requestBody.DeviceProfile.DirectPlayProfiles = profiles.filter(
+                    p => typeof p.Container !== 'string' || p.Container.length > 0
+                );
+            }
+            log.info('[RemuxMkvToMp4] MKV stripped from DirectPlayProfiles — server will remux MKV containers to MP4.');
+        }
+
+
         // IMPORTANT: For Live TV channels, do NOT pass MediaSourceId in the PlaybackInfo request.
         // The server dynamically generates a MediaSourceId when it opens the tuner; passing the
         // channel's ItemId as MediaSourceId causes the server's source-matching logic to fail
