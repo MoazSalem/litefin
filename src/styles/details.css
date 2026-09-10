@@ -289,6 +289,59 @@
     opacity: 1;
 }
 
+/* 
+ * ============================================================================
+ * Hero Poster Fallback Styling
+ * ============================================================================
+ * Ensures gradient covers fill the entire poster container with calibrated
+ * typography and gamepad icon scale for 420px poster containers.
+ * ============================================================================
+ */
+.hero-poster .media-fallback {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: var(--jf-border-radius);
+    -webkit-border-radius: var(--jf-border-radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.hero-poster .media-fallback-initials {
+    font-size: 5.5rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+}
+
+.hero-poster .media-fallback-name {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.hero-poster .media-fallback.game-fallback .media-fallback-game-icon {
+    margin-bottom: 16px;
+}
+
+.hero-poster .media-fallback.game-fallback .media-fallback-game-icon svg {
+    width: 84px;
+    height: 84px;
+}
+
 .details-info-col {
     flex: 1;
     /* --------------------------------------------------------------------- */
@@ -1868,8 +1921,6 @@ html[data-layout-quirks="c26"] .episode-row-overview {
     width: 100vw;
     height: 100vh;
     background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(28px);
-    -webkit-backdrop-filter: blur(28px);
     display: flex;
     align-items: center;
     justify-content: center;

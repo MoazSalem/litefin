@@ -976,9 +976,24 @@ class Sidebar extends Component {
                 // can match this button against the saved config (id: 'lib-{Id}')
                 btn.dataset.path = buttonPath;
                 btn.dataset.layoutId = `lib-${lib.Id}`;
+
+                // Detect if this library represents gaming / JellyEmu ROMs
+                // Jellyfin imports JellyEmu games under 'books', 'games', or generic collections
+                // with keywords like "Game", "ROM", "Emulator", or "JellyEmu" in the name.
+                let iconCollectionType = lib.CollectionType;
+                const libNameLower = (lib.Name || '').toLowerCase();
+                const isGameLibrary =
+                    lib.CollectionType === 'games' ||
+                    lib.CollectionType === 'books' ||
+                    /game|rom|emulator|emulation|jellyemu/i.test(libNameLower);
+
+                if (isGameLibrary) {
+                    iconCollectionType = 'games';
+                }
+
                 btn.innerHTML = `
                     <div class="item-icon">
-                        ${getLibraryIcon(lib.CollectionType)}
+                        ${getLibraryIcon(iconCollectionType)}
                     </div>
                     <span class="item-text">${lib.Name}</span>
                 `;

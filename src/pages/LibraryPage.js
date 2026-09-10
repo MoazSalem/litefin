@@ -905,7 +905,21 @@ class LibraryPage extends Page {
                     item.CollectionType = 'musicvideos';
                 } else if (['Movie', 'BoxSet', 'Video'].includes(item.Type)) {
                     item.CollectionType = 'movies';
+                } else if (item.Type === 'Book') {
+                    item.CollectionType = 'books';
                 }
+            }
+
+            // Detect Game libraries (JellyEmu collections or libraries named after games/roms)
+            const libNameLower = (item.Name || '').toLowerCase();
+            if (
+                item.CollectionType === 'books' ||
+                item.CollectionType === 'games' ||
+                /game|rom|emulator|emulation|jellyemu/i.test(libNameLower)
+            ) {
+                this.state.isGameLibrary = true;
+            } else {
+                this.state.isGameLibrary = false;
             }
 
             // Flag this as a folder-based library if it matches 'folders' type
@@ -1119,7 +1133,7 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount',
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
             };
@@ -1166,8 +1180,11 @@ class LibraryPage extends Page {
             const isTv =
                 info?.CollectionType === 'tvshows' ||
                 ['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(info?.Type);
+            const isGame = this.state.isGameLibrary || info?.CollectionType === 'books' || info?.CollectionType === 'games';
 
-            if (isMusic) {
+            if (isGame) {
+                subViewItemTypes = 'Book';
+            } else if (isMusic) {
                 subViewItemTypes = 'MusicAlbum,Audio';
             } else if (isTv) {
                 subViewItemTypes = 'Series';
@@ -1271,8 +1288,9 @@ class LibraryPage extends Page {
                 });
             } else if (viewType === 'Items' || viewType === 'Movies' || viewType === 'Shows') {
                 // Standard Item Fetch
-                // For TV Shows library, 'Shows' -> IncludeItemTypes: 'Series'
-                if (this.state.libraryInfo?.CollectionType === 'tvshows') {
+                if (this.state.isGameLibrary || this.state.libraryInfo?.CollectionType === 'books' || this.state.libraryInfo?.CollectionType === 'games') {
+                    params.IncludeItemTypes = 'Book';
+                } else if (this.state.libraryInfo?.CollectionType === 'tvshows') {
                     params.IncludeItemTypes = 'Series';
                 } else if (this.state.libraryInfo?.CollectionType === 'movies') {
                     params.IncludeItemTypes = 'Movie';
@@ -2115,7 +2133,13 @@ class LibraryPage extends Page {
         // Define tabs based on collection type
         let tabs = [];
 
-        if (collectionType === 'tvshows') {
+        if (this.state.isGameLibrary || collectionType === 'games' || collectionType === 'books') {
+            tabs = [
+                { id: 'Items', label: 'Games' },
+                { id: 'Suggestions', label: 'Suggestions' },
+                { id: 'Genres', label: 'Genres' }
+            ];
+        } else if (collectionType === 'tvshows') {
             tabs = [
                 { id: 'Items', label: 'TypeOptionPluralSeries' },
                 { id: 'Suggestions', label: 'Suggestions' },

@@ -13,7 +13,7 @@ import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
-import { detailsIcons } from './Icons.js';
+import { detailsIcons, getStaticIcon } from './Icons.js';
 import { platformInfo } from './PlatformInfo.js';
 
 class CardRenderer {
@@ -34,6 +34,45 @@ class CardRenderer {
     static clearCache() {
         this._htmlCache.clear();
         this._htmlCacheKey = null;
+    }
+
+    /**
+     * Determines whether the given item represents a JellyEmu game ROM.
+     * @param {Object} item
+     * @returns {boolean}
+     */
+    static isGame(item) {
+        if (!item) return false;
+        if (Array.isArray(item.Tags) && item.Tags.includes('JellyEmu')) return true;
+        return false;
+    }
+
+    /**
+     * Extracts the primary console/platform tag for a JellyEmu game.
+     * @param {Object} item
+     * @returns {string} Platform name (e.g. 'SNES', 'GBA', 'PSX')
+     */
+    static getGamePlatformTag(item) {
+        if (!item || !Array.isArray(item.Tags)) return '';
+        const skipTags = new Set(['JellyEmu', 'Game', 'MultiDisc', 'Unknown', 'Unsupported']);
+        return item.Tags.find((t) => !skipTags.has(t)) || '';
+    }
+
+    /**
+     * Generate Game Platform Badge HTML if item is a game ROM.
+     * Rendered as an Apple HIG frosted-glass pill badge.
+     * @param {Object} item
+     * @returns {string} HTML string
+     */
+    static getGameBadgeHtml(item) {
+        if (!CardRenderer.isGame(item)) return '';
+        const platform = CardRenderer.getGamePlatformTag(item);
+        if (!platform) return '';
+        return `
+            <div class="game-card-badge" title="${escapeHtml(platform)}">
+                <span class="game-badge-text">${escapeHtml(platform)}</span>
+            </div>
+        `;
     }
 
     /**
@@ -65,6 +104,8 @@ class CardRenderer {
      */
     static getQualityBadgeHtml(item) {
         if (!item) return '';
+        // Game ROMs do not have video resolution/HDR streams
+        if (CardRenderer.isGame(item)) return '';
         const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
         if (!showQualityBadges) return '';
 
@@ -626,7 +667,7 @@ class CardRenderer {
         const hideProgressBar = storage.getItem('pref:hideProgressBar') === 'true';
 
         // Only construct and mount the progress element if playback progress exists and user hasn't hidden it
-        if (!hideProgressBar && item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
+        if (!hideProgressBar && !CardRenderer.isGame(item) && item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
             // Calculate playback percentage completed
             const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
             progressHtml = `
@@ -1033,12 +1074,15 @@ class CardRenderer {
         const showOutside = renderOutside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
         const expansionClass = canExpand ? ' has-expansion' : '';
 
+        const gameBadgeHtml = CardRenderer.getGameBadgeHtml(item);
+
         const badgeContainer = `
             ${badgeHtml}
             ${playedBadgeHtml}
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
             ${qualityBadgeHtml}
+            ${gameBadgeHtml}
             ${seerrTypeBadgeHtml}
             ${seerrBadgeHtml}
         `;
@@ -1129,9 +1173,12 @@ class CardRenderer {
         const data = CardRenderer.getFallbackData(item.Name);
         const hideInitials = options.hideInitials || false;
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+        const isGameItem = CardRenderer.isGame(item);
+        const gameIconSvg = isGameItem ? getStaticIcon('detailsIcons', 'gamepad', 'outlined') : '';
 
         return `
-            <div class="media-fallback grad-${data.gradNum}">
+            <div class="media-fallback grad-${data.gradNum} ${isGameItem ? 'game-fallback' : ''}">
+                ${isGameItem ? `<div class="media-fallback-game-icon">${gameIconSvg}</div>` : ''}
                 ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(data.initials)}</div>` : ''}
                 ${!isModern ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
             </div>

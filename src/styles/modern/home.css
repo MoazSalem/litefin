@@ -477,7 +477,8 @@ html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-v
 html[data-layout-media-rows="modern"] .count-badge,
 html[data-layout-media-rows="modern"] .played-badge,
 html[data-layout-media-rows="modern"] .episode-badge,
-html[data-layout-media-rows="modern"] .quality-badge {
+html[data-layout-media-rows="modern"] .quality-badge,
+html[data-layout-media-rows="modern"] .game-card-badge {
     position: absolute;
     top: 22px;
     z-index: 5;
@@ -490,10 +491,12 @@ html[data-layout-media-rows="modern"] .media-card:focus .count-badge,
 html[data-layout-media-rows="modern"] .media-card:focus .played-badge,
 html[data-layout-media-rows="modern"] .media-card:focus .episode-badge,
 html[data-layout-media-rows="modern"] .media-card:focus .quality-badge,
+html[data-layout-media-rows="modern"] .media-card:focus .game-card-badge,
 html[data-layout-media-rows="modern"] .media-card.focused .count-badge,
 html[data-layout-media-rows="modern"] .media-card.focused .played-badge,
 html[data-layout-media-rows="modern"] .media-card.focused .episode-badge,
-html[data-layout-media-rows="modern"] .media-card.focused .quality-badge {
+html[data-layout-media-rows="modern"] .media-card.focused .quality-badge,
+html[data-layout-media-rows="modern"] .media-card.focused .game-card-badge {
     transform: scale(1.05);
 }
 
@@ -516,16 +519,19 @@ html[data-layout-media-rows="modern"] .episode-badge {
     letter-spacing: 0.5px;
 }
 
-html[data-layout-media-rows="modern"] .quality-badge {
+html[data-layout-media-rows="modern"] .quality-badge,
+html[data-layout-media-rows="modern"] .game-card-badge {
     right: 22px;
-    padding: 5px 12px;
+    padding: 5px 14px;
     border-radius: 10px;
     font-size: 1.2rem;
     letter-spacing: 0.5px;
 }
 
 html[data-layout-media-rows="modern"] .played-badge ~ .quality-badge,
-html[data-layout-media-rows="modern"] .count-badge ~ .quality-badge {
+html[data-layout-media-rows="modern"] .count-badge ~ .quality-badge,
+html[data-layout-media-rows="modern"] .played-badge ~ .game-card-badge,
+html[data-layout-media-rows="modern"] .count-badge ~ .game-card-badge {
     right: 74px;
 }
 /* =========================================================================
