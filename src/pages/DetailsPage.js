@@ -654,8 +654,10 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
 
-            // Trigger prewarm for playable media items, passing the restored version ID if available
-            if (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer') {
+            // Trigger prewarm for playable media items, passing the restored version ID if available.
+            // JellyEmu game items are ROMs running inside EmulatorJS and do not have video streams to prewarm.
+            const isGameItem = this._isGame(item);
+            if (!isGameItem && (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer')) {
                 prewarmManager.prewarm(item, {
                     mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id
                 });
@@ -2351,7 +2353,22 @@ class DetailsPage extends Page {
         const criticRating =
             item.CriticRating && shouldShowScore(item) ? `${detailsIcons.rottenTomatoesFresh}${criticScore}` : '';
 
+        const isGameItem = this._isGame(item);
+        const gamePlatform = isGameItem ? this._getGamePlatformTag(item) : '';
+        const ttbRaw = isGameItem && item.ProviderIds ? item.ProviderIds.IgdbTTB : null;
+        let ttbLabel = '';
+        if (ttbRaw) {
+            const parts = ttbRaw.split(',');
+            const map = {};
+            parts.forEach((p) => { if (p.length > 1) map[p[0]] = p.substring(1); });
+            if (map.M) ttbLabel = `Main: ${map.M}h`;
+            else if (map.H) ttbLabel = `Main+Extras: ${map.H}h`;
+            else if (map.C) ttbLabel = `Completionist: ${map.C}h`;
+        }
+
         let metaHtml = '';
+        if (gamePlatform) metaHtml += `<span class="meta-item meta-badge game-platform-pill">${escapeHtml(gamePlatform)}</span>`;
+        if (ttbLabel) metaHtml += `<span class="meta-item meta-badge game-ttb-pill">${escapeHtml(ttbLabel)}</span>`;
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
         if (runtimeText) metaHtml += `<span class="meta-item">${runtimeText}</span>`;
         if (rating) metaHtml += `<span class="meta-item meta-badge">${rating}</span>`;
@@ -2650,6 +2667,31 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * Determines whether the given item represents a JellyEmu game.
+     * ROM items imported through the JellyEmu plugin are resolved as Books with 'JellyEmu' tag.
+     * @param {Object} item
+     * @returns {boolean}
+     * @private
+     */
+    _isGame(item = this._item) {
+        if (!item || !item.Tags) return false;
+        return Array.isArray(item.Tags) && item.Tags.includes('JellyEmu');
+    }
+
+    /**
+     * Resolves the primary gaming platform tag for display badges.
+     * @param {Object} item
+     * @returns {string} Platform name (e.g. 'SNES', 'GBA', 'PlayStation')
+     * @private
+     */
+    _getGamePlatformTag(item = this._item) {
+        if (!item || !Array.isArray(item.Tags)) return '';
+        // Skip generic markers, return first specific console platform tag
+        const skipTags = new Set(['JellyEmu', 'Game', 'MultiDisc', 'Unknown', 'Unsupported']);
+        return item.Tags.find(t => !skipTags.has(t)) || '';
+    }
+
     _updateButtons() {
         const item = this._item;
         const userData = item.UserData || {};
@@ -2908,6 +2950,52 @@ class DetailsPage extends Page {
             if (subtitleBtn) {
                 subtitleBtn.classList.add('hidden');
                 subtitleBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        // ── JellyEmu Game Overrides ──────────────────────────────────────────────
+        // If this item is a JellyEmu game ROM, present it cleanly as a console game:
+        // - Replace Play icon with Gamepad icon and label "Play Game"
+        // - Hide irrelevant media buttons (audio, subtitle, ghost mode, reset progress, trailers)
+        if (this._isGame(item)) {
+            if (playBtn) {
+                const gameIcon = detailsIcons.gamepad || detailsIcons.play;
+                const gameLabel = i18n.t('PlayGame') || 'Play Game';
+                playBtn.innerHTML = `${gameIcon} <span data-i18n="PlayGame">${gameLabel}</span>`;
+                playBtn.setAttribute('data-tooltip', gameLabel);
+                playBtn.classList.remove('hidden');
+                playBtn.setAttribute('tabindex', '0');
+            }
+            if (resumeBtn) {
+                resumeBtn.classList.add('hidden');
+                resumeBtn.setAttribute('tabindex', '-1');
+            }
+            const resetBtn = this.$('.reset-btn');
+            if (resetBtn) {
+                resetBtn.classList.add('hidden');
+                resetBtn.setAttribute('tabindex', '-1');
+            }
+            if (ghostBtn) {
+                ghostBtn.classList.add('hidden');
+                ghostBtn.setAttribute('tabindex', '-1');
+            }
+            if (audioBtn) {
+                audioBtn.classList.add('hidden');
+                audioBtn.setAttribute('tabindex', '-1');
+            }
+            if (subtitleBtn) {
+                subtitleBtn.classList.add('hidden');
+                subtitleBtn.setAttribute('tabindex', '-1');
+            }
+            const trailerBtn = this.$('.trailer-btn');
+            if (trailerBtn) {
+                trailerBtn.classList.add('hidden');
+                trailerBtn.setAttribute('tabindex', '-1');
+            }
+            const shuffleBtn = this.$('.shuffle-btn');
+            if (shuffleBtn) {
+                shuffleBtn.classList.add('hidden');
+                shuffleBtn.setAttribute('tabindex', '-1');
             }
         }
 
@@ -4019,6 +4107,14 @@ class DetailsPage extends Page {
          * selected from the Additional Parts section on the details page).
          */
         let itemToPlay = targetItem || this._item;
+
+        // If this item is a JellyEmu game ROM, bypass video player completely
+        // and navigate directly to the dedicated EmulatorPage host.
+        if (this._isGame(this._item)) {
+            log.info('JellyEmu Game detected. Navigating to EmulatorPage for item ID:', this._item.Id);
+            router.navigate(`/emulator/${this._item.Id}`);
+            return;
+        }
 
         // If it's a Live TV Program, play the parent Channel instead
         if (this._item.Type === 'Program' && this._item.ChannelId) {
