@@ -254,12 +254,12 @@ async function createWgt(buildDir, outputName, includeServices = true) {
 
         archive.pipe(output);
 
-        // Tizen packages should not include LG WebOS's appinfo.json, webOS SDK scripts, or large launcher icons.
-        // We use glob with an ignore rule instead of deleting the file from disk,
-        // because WebOS packaging tasks are running in parallel against the exact same buildDir.
+        // Exclude WebOS-only launcher assets and app metadata from Tizen packages.
+        // icon-130.png is now included in Tizen builds (referenced by config.xml),
+        // so it is no longer in the ignore list.
         archive.glob('**/*', {
             cwd: buildDir,
-            ignore: ['appinfo.json', 'js/webOSTV.js', 'assets/icon-130.png']
+            ignore: ['appinfo.json', 'js/webOSTV.js']
         });
 
         // Only include the background-service directory when the build target
