@@ -2506,6 +2506,11 @@ class LibraryPage extends Page {
             columns = this._getDefaultColumnsForMode(effectiveMode);
         }
 
+        // In List view, there is strictly 1 card per row regardless of gridColumns settings
+        if (this.state.viewMode === 'list') {
+            columns = 1;
+        }
+
         // Store rendering context + column count on state so _appendGridChunk
         // and _prependGridChunk can access them without re-deriving
         this.state._gridRenderContext = {
@@ -2832,14 +2837,23 @@ class LibraryPage extends Page {
         // -----------------------------------------------------------------------
         // CHUNK SIZE
         // -----------------------------------------------------------------------
-        // First render: 5 rows — fills ~1.5 TV screens immediately.
-        // Incremental: 3 rows — small enough not to spike layout, large enough
-        // that the user can scroll a full screen before triggering another append.
+        // In list view (single column, row height ~132px), cards are much taller
+        // and vertically compact in count. With columns === 1, a 5-row initial chunk
+        // is only 5 items (~660px, less than 1 1080p screen), and a 2-row buffer
+        // evicts items almost immediately on scroll.
+        // For list view:
+        //   - INITIAL_ROWS = 20 (~2.5 screens)
+        //   - INCREMENTAL_ROWS = 10 (~1.2 screens)
+        //   - MAX_WINDOW_ROWS = 35 (~4.5 screens)
+        // For standard multi-column grids:
+        //   - INITIAL_ROWS = 5 (columns * 5 = 25-35 items, ~1.5 - 2 screens)
+        //   - INCREMENTAL_ROWS = 3 (columns * 3 = 15-21 items)
+        //   - MAX_WINDOW_ROWS = 8
         // -----------------------------------------------------------------------
-        const INITIAL_ROWS = 5;
-        const INCREMENTAL_ROWS = 3;
-        // Maximum rows to keep in the DOM at once (8 rows = comfortable window)
-        const MAX_WINDOW_ROWS = 8;
+        const isListView = this.state.viewMode === 'list';
+        const INITIAL_ROWS = isListView ? 20 : 5;
+        const INCREMENTAL_ROWS = isListView ? 10 : 3;
+        const MAX_WINDOW_ROWS = isListView ? 35 : 8;
 
         const isFirstChunk = windowEnd === 0;
         const chunkSize = isFirstChunk ? columns * INITIAL_ROWS : columns * INCREMENTAL_ROWS;
@@ -2891,8 +2905,9 @@ class LibraryPage extends Page {
         // Nothing above the current window — already at the very top
         if (windowStart <= 0) return false;
 
-        const INCREMENTAL_ROWS = 3;
-        const MAX_WINDOW_ROWS = 8;
+        const isListView = this.state.viewMode === 'list';
+        const INCREMENTAL_ROWS = isListView ? 10 : 3;
+        const MAX_WINDOW_ROWS = isListView ? 35 : 8;
 
         const chunkSize = Math.min(columns * INCREMENTAL_ROWS, windowStart);
         const newStart = windowStart - chunkSize;
@@ -3085,12 +3100,15 @@ class LibraryPage extends Page {
                 this._lastFocusItemIndex = itemIndex;
 
                 if (movingDown) {
-                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
+                    // For list view (columns=1), look ahead 6 items instead of 2 items
+                    const lookAheadItems = currentColumns === 1 ? 6 : currentColumns * 2;
+                    const appendThreshold = this.state.gridWindowEnd - lookAheadItems;
                     if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
                         this._appendGridChunk(grid, this.state.items, currentColumns);
                     }
                 } else {
-                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
+                    const lookBehindItems = currentColumns === 1 ? 6 : currentColumns * 2;
+                    const prependThreshold = this.state.gridWindowStart + lookBehindItems;
                     if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
                         this._prependGridChunk(grid, this.state.items, currentColumns);
                     }
@@ -3133,16 +3151,19 @@ class LibraryPage extends Page {
         // -----------------------------------------------------------------------
         // WINDOW CONSTANTS
         // -----------------------------------------------------------------------
-        // ROWS_ABOVE: rows to keep rendered above the current row.
-        //   2 rows = ~2 screen-heights of backward buffer. When the user is on
-        //   row N, rows 0..(N-3) are off-screen and safe to evict.
-        //
-        // ROWS_BELOW: rows to keep rendered below the current row.
-        //   5 rows = ~1.5 screen-heights of forward buffer before the next
-        //   _appendGridChunk fires.
+        // In list view (single column), each row is only ~132px high.
+        // A ROWS_ABOVE of 2 is only ~264px (less than 1/4th of a 1080p screen!),
+        // which causes top items to be aggressively evicted while still near or on-screen.
+        // For list view:
+        //   ROWS_ABOVE: 12 rows (~1.5 screens above)
+        //   ROWS_BELOW: 15 rows (~1.8 screens below)
+        // For multi-column grids (each card ~300-400px high):
+        //   ROWS_ABOVE: 2 rows (~2 screen-heights of backward buffer)
+        //   ROWS_BELOW: 5 rows (~1.5 screen-heights of forward buffer)
         // -----------------------------------------------------------------------
-        const ROWS_ABOVE = 2;
-        const ROWS_BELOW = 5;
+        const isListView = this.state.viewMode === 'list';
+        const ROWS_ABOVE = isListView ? 12 : 2;
+        const ROWS_BELOW = isListView ? 15 : 5;
 
         // Ideal first/last item index in the window
         const idealStart = Math.max(0, (currentRow - ROWS_ABOVE) * columns);
