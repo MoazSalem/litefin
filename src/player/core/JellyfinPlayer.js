@@ -2602,8 +2602,6 @@ export class JellyfinPlayer extends EventEmitter {
         // Deep clone the device profile so we can mutilate it to trick the server without affecting future calls
         const clonedProfile = JSON.parse(JSON.stringify(deviceProfile || buildJellyfinProfile(maxBitrate)));
 
-
-
         const requestBody = {
             DeviceProfile: clonedProfile,
             UserId: options.userId,
@@ -2623,6 +2621,7 @@ export class JellyfinPlayer extends EventEmitter {
         let currentMode = this._playbackMode;
         if (forceTranscodeSetting) currentMode = 'transcode';
         else if (forceDirectPlaySetting) currentMode = 'directPlay';
+
         switch (currentMode) {
             case 'directPlay':
                 requestBody.EnableDirectPlay = true;
@@ -2688,16 +2687,19 @@ export class JellyfinPlayer extends EventEmitter {
         // MKV → MP4 Remux Enforcement
         // -------------------------------------------------------------------------
         // If the user enabled "Remux MKV to MP4", we surgically remove 'mkv' from
-        // every DirectPlayProfile entry in the cloned device profile.  The server
-        // then cannot DirectPlay MKV files and falls back to DirectStream, which
-        // remuxes the container into MP4 (lossless stream copy — not a transcode).
+        // every DirectPlayProfile entry in the cloned device profile — but ONLY when
+        // the item being played is actually an MKV container. The server then cannot
+        // DirectPlay that MKV file and falls back to DirectStream, which remuxes the
+        // container into MP4 (lossless stream copy — no re-encoding).
         //
-        // We skip this patch when we're already in a mode that rebuilt the profile
-        // from scratch (directPlay / transcode / remux), since those modes already
-        // override the profile wholesale and have their own container logic.
+        // We also skip when already in a locked override mode (directPlay / transcode /
+        // remux) since those modes rebuild the profile wholesale themselves.
         const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
         const modeLockedProfiles = currentMode === 'directPlay' || currentMode === 'transcode' || currentMode === 'remux';
-        if (remuxMkvToMp4Setting && !modeLockedProfiles) {
+        // Treat both 'mkv' and 'matroska' as Matroska containers
+        const itemContainer = (options.item?.Container || '').toLowerCase();
+        const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
+        if (remuxMkvToMp4Setting && !modeLockedProfiles && isMkvItem) {
             const profiles = requestBody.DeviceProfile.DirectPlayProfiles;
             if (Array.isArray(profiles)) {
                 for (const profile of profiles) {
@@ -2712,7 +2714,10 @@ export class JellyfinPlayer extends EventEmitter {
                     p => typeof p.Container !== 'string' || p.Container.length > 0
                 );
             }
-            log.info('[RemuxMkvToMp4] MKV stripped from DirectPlayProfiles — server will remux MKV containers to MP4.');
+            log.info('[RemuxMkvToMp4] Item container is MKV — stripping from DirectPlayProfiles so server remuxes to MP4.');
+        } else if (remuxMkvToMp4Setting && !isMkvItem) {
+            // Item is not MKV — leave the profile untouched, let the server DirectPlay normally
+            log.debug(`[RemuxMkvToMp4] Setting enabled but item container "${itemContainer}" is not MKV — skipping.`);
         }
 
 

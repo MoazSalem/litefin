@@ -1245,6 +1245,16 @@ export class HtmlVideoPlayer {
 
         const audioTracks = video.audioTracks;
         if (!audioTracks || audioTracks.length === 0) {
+            if (listIndex === 0) {
+                // listIndex 0 = the default/first track, which is already playing.
+                // No need to restart — the stream is serving the right track regardless
+                // of whether the browser exposes audioTracks (it often doesn't for
+                // direct-play progressive files on HTML5 / WebOS / Tizen).
+                log.info('HtmlVideoPlayer: audioTracks empty but listIndex=0 (default track) — no restart needed.');
+                return;
+            }
+            // listIndex > 0: user wants a non-default track the player can't switch to
+            // natively. Escalate to JellyfinPlayer so it can restart with remux/DirectStream.
             log.warn('HtmlVideoPlayer: video.audioTracks is empty for direct-play — firing audiotrackswitchfailed to trigger restart');
             this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
             return;

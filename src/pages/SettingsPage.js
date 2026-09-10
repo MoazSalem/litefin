@@ -7572,6 +7572,9 @@ class SettingsPage extends Page {
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
             'toggle-force-transcode',
+            // Always remux MKV containers to MP4 — strips MKV from DirectPlayProfiles
+            // so the server falls back to lossless DirectStream into MP4
+            'toggle-remux-mkv-to-mp4',
             'toggle-force-direct-play',
             'toggle-background-service',
             // Interlaced content fallback — auto-switch to HTML5 when AVPlay
