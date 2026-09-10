@@ -1464,6 +1464,23 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
     margin-right: 5%;
 }
 
+/* ==========================================================================
+   Player Media Info Modal (In-Player OSD)
+   ========================================================================== */
+
+.player-media-info-overlay {
+    z-index: 10001;
+}
+
+.player-media-info-modal {
+    width: 820px;
+    max-width: 90vw;
+}
+
+.player-media-info-modal .media-info-scrollable:focus {
+    outline: none;
+}
+
 .media-info-row {
     display: flex;
     justify-content: space-between;

@@ -1456,11 +1456,20 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     outline-offset: 2px;
 }
 
-/* 9 items per row on Seerr Person Grids */
+/* ============================================================================
+ * Seerr Person Page Grids (7 items per row)
+ * ============================================================================
+ * Precision 7-column layout adhering to Apple HIG proportional spacing.
+ * Width is calculated as 100% / 7 with 8px horizontal gutters (16px total).
+ * Fixed 350px image height preserves standard 2:3 theatrical poster ratio on 1080p.
+ * ============================================================================ */
 .person-grid.seerr-person-grid .media-card {
-    width: calc(11.111% - 16px) !important; /* 100% / 9 items per row */
+    /* Set 7 items per row (100% / 7 = 14.2857%) minus lateral margin gutters */
+    width: calc(14.2857% - 16px) !important;
+    /* Apple-style balanced 8px horizontal separation */
     margin-right: 8px !important;
     margin-left: 8px !important;
+    /* Generous vertical breathing room between grid rows */
     margin-bottom: 24px !important;
     flex: none !important;
     max-width: unset !important;
@@ -1468,8 +1477,10 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 }
 
 .person-grid.seerr-person-grid .card-image {
+    /* Full width card container fill */
     width: 100%;
-    height: 270px; /* Scaled proportionally for 9 items per row (2:3 aspect ratio) */
+    /* Height scaled to 350px for 7 items per row maintaining authentic 2:3 poster ratio */
+    height: 350px;
 }
 
 /* ============================================================================

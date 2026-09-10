@@ -72,7 +72,9 @@ export default class SettingsMenu extends BaseMenu {
         }
 
         // Settings items configuration containing titles, icons, and event names.
+        // Media Info is placed first as requested by the user.
         const options = [
+            { id: 'mediaInfo', label: i18n.t('MoreMediaInfo') || 'Media Info', key: 'MoreMediaInfo', icon: osdIcons.info },
             { id: 'aspectRatio', label: i18n.t('AspectRatio'), key: 'AspectRatio', icon: osdIcons.aspectRatio },
             { id: 'playbackSpeed', label: i18n.t('PlaybackRate'), key: 'PlaybackRate', icon: osdIcons.speed },
             { id: 'quality', label: i18n.t('Quality'), key: 'Quality', icon: osdIcons.quality },
@@ -166,6 +168,9 @@ export default class SettingsMenu extends BaseMenu {
         this.osd.closeMenu();
 
         switch (actionId) {
+            case 'mediaInfo':
+                this.osd.toggleMediaInfoModal(true);
+                break;
             case 'aspectRatio':
                 this.osd.toggleAspectRatioMenu(true);
                 break;
