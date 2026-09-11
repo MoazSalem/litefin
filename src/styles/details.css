@@ -1459,7 +1459,7 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 /* ============================================================================
  * Seerr Person Page Grids (7 items per row)
  * ============================================================================
- * Precision 7-column layout adhering to Apple HIG proportional spacing.
+ * Precision 7-column layout.
  * Width is calculated as 100% / 7 with 8px horizontal gutters (16px total).
  * Fixed 350px image height preserves standard 2:3 theatrical poster ratio on 1080p.
  * ============================================================================ */
@@ -1486,7 +1486,7 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 /* ============================================================================
  * Person Page Appearances Grid (7 items per row)
  * ============================================================================
- * Precision 7-column layout adhering to Apple HIG proportional spacing.
+ * Precision 7-column layout.
  * Width is calculated as 100% / 7 with 8px horizontal gutters (16px total).
  * Fixed 350px image height preserves standard 2:3 theatrical poster ratio on 1080p.
  * ============================================================================ */

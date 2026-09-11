@@ -117,7 +117,7 @@ html[data-button-style="monochrome-wb"] {
     --jf-btn-primary-color: #ffffff;
     --jf-btn-primary-border: #000000;
 
-    --jf-btn-primary-focus-bg: #1c1c1e; /* HIG dark gray secondary surface background */
+    --jf-btn-primary-focus-bg: #1c1c1e; /* dark gray secondary surface background */
     --jf-btn-primary-focus-color: #ffffff;
     --jf-btn-primary-focus-border: #ffffff;
     --jf-btn-primary-focus-color-rgb: 255, 255, 255;
@@ -141,7 +141,7 @@ html[data-button-style="black-accent"] {
     --jf-btn-primary-color: var(--jf-accent);
     --jf-btn-primary-border: #000000;
 
-    --jf-btn-primary-focus-bg: #1c1c1e; /* HIG dark gray secondary surface background */
+    --jf-btn-primary-focus-bg: #1c1c1e; /* dark gray secondary surface background */
     --jf-btn-primary-focus-color: var(--jf-accent);
     --jf-btn-primary-focus-border: var(--jf-accent);
     --jf-btn-primary-focus-color-rgb: var(--jf-accent-rgb, 0, 164, 220);

@@ -6966,7 +6966,7 @@ class SettingsPage extends Page {
                 const isHidden = storage.getItem('pref:hideSimilarSection') === 'true';
                 const newValue = !isHidden;
 
-                // Save setting locally and toggle the active HIG switch class
+                // Save setting locally and toggle the active switch class
                 storage.setItem('pref:hideSimilarSection', newValue.toString());
                 hideSimilarBtn.classList.toggle('active', newValue);
                 log.info(`Hide Similar Recommendations set to: ${newValue}`);
@@ -8511,7 +8511,7 @@ class SettingsPage extends Page {
             </div>
         `;
 
-        // Reveal modal overlay with smooth HIG backdrop transition
+        // Reveal modal overlay with smooth backdrop transition
         overlay.classList.add('visible');
         overlay.setAttribute('aria-hidden', 'false');
 

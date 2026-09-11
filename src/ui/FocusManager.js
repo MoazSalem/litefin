@@ -40,12 +40,16 @@ const KEY_DEBOUNCE_MS = 40;
 // Prevents infinite loops if section linking is misconfigured.
 const MAX_SECTION_SKIP_DEPTH = 20;
 
-// Rapid navigation (instant scroll) threshold.
-// If consecutive keypresses are faster than this, we snap to avoid scroll queueing.
-const RAPID_MOVE_THRESHOLD_MS = 120;
+// Rapid navigation (instant scroll) threshold in milliseconds.
+// On physical TV remotes (Tizen/WebOS) and keyboards, held keys generate repeat
+// events at ~60-100ms intervals. Setting this threshold to 130ms guarantees that
+// deliberate human presses (>150ms) never falsely engage instant snapping,
+// while sustained held navigation smoothly enters rapid snap mode.
+const RAPID_MOVE_THRESHOLD_MS = 130;
 
-// Minimum number of consecutive rapid moves before instant scroll kicks in.
-// Ensures a single fast double-tap doesn't cause a snap.
+// Minimum consecutive rapid moves in the SAME direction required to engage instant scroll.
+// A streak requirement of 2 means the user must trigger at least 3 consecutive rapid
+// presses (initial press + 2 hardware repeats).
 const RAPID_MOVE_STREAK_REQUIRED = 2;
 
 class FocusManager {
@@ -711,11 +715,12 @@ class FocusManager {
         // 2. If we found a target, move to it
         if (nextElement) {
             // ----------------------------------------------------------------
-            // RAPID NAVIGATION MODE
-            // If the user is holding a key (streak of keypresses < 150ms
-            // apart), disable the smooth scroll animation and snap instantly.
-            // This prevents the scroll queue from building up behind held keys,
-            // which causes the page to keep scrolling after the user stops.
+            // RAPID NAVIGATION MODE (FAST SCROLL)
+            // ----------------------------------------------------------------
+            // If the user is holding a key (streak >= 2 consecutive rapid keypresses
+            // < 130ms apart in the same direction), disable the smooth animation and
+            // snap instantly to prevent scroll queue build-up.
+            // Deliberate discrete presses and double-taps remain silky smooth.
             // ----------------------------------------------------------------
             const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
 
@@ -758,6 +763,21 @@ class FocusManager {
         let nextSection = config[key];
 
         log.debug(`_leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}`);
+
+        // ── Function callback support ─────────────────────────────────────────
+        // leaveDown (and other leave* directions) can be set to a function
+        // instead of a section-name string. When this happens, call it and treat
+        // a falsy return value as "navigation was fully handled by the callback"
+        // (return false convention). A truthy return value is treated as a
+        // section name to navigate to.  This powers the deferred row loader on
+        // the homepage — pressing ↓ past the last rendered row triggers the next
+        // lazy batch instead of freezing navigation.
+        if (typeof nextSection === 'function') {
+            const result = nextSection();
+            if (!result) return; // Handler took full control (returned false / undefined)
+            // If the handler returned a string, treat it as a section to navigate to
+            nextSection = result;
+        }
 
         // Keep searching if target section exists but has no focusable elements
         // This handles empty rows in library grids/lists
@@ -817,18 +837,15 @@ class FocusManager {
                 }
             }
 
-            // Detect rapid navigation: use the SAME streak-based check as _move() so
-            // that single deliberate D-pad presses always get the smooth 200ms animation.
+            // ----------------------------------------------------------------
+            // Detect rapid navigation: use the SAME streak-based check as _move()
+            // so that deliberate D-pad presses always get the smooth 200ms animation.
             //
-            // The old check (gap < 200ms between last 2 presses) fired on virtually every
-            // cross-section transition, because a horizontal nav press followed by a
-            // vertical exit press is naturally within 200ms — making rows always snap
-            // instead of slide, regardless of intent.
-            //
-            // The streak check requires RAPID_MOVE_STREAK_REQUIRED (2) consecutive fast
-            // presses before enabling instant scroll, which only triggers when the user
-            // is genuinely holding the key — producing the correct snapping behaviour
-            // for held keys and smooth animation for single taps.
+            // Requiring RAPID_MOVE_STREAK_REQUIRED (2) consecutive fast presses ensures
+            // instant scroll only kicks in when the user is genuinely holding the key,
+            // producing smooth fluid sliding for normal browsing and rapid snappy
+            // navigation for held keys without jarring oscillations.
+            // ----------------------------------------------------------------
             const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
 
             // Pass originElement to allow selecting closest target in new section

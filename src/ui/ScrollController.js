@@ -100,6 +100,10 @@ class ScrollController {
         // ====================================================================
         this._nativeScrollActive = false;
         this._nativeScrollTimeout = null;
+        // Track the current target coordinate of any active native smooth scroll.
+        // Prevents re-invoking container.scrollTo({ behavior: 'smooth' }) with the
+        // same target coordinate mid-scroll, which would retrigger the animation.
+        this._nativeTargetScroll = null;
 
         // PERFORMANCE: offsetTop cache to prevent DOM reflows on every keypress.
         //
@@ -121,7 +125,7 @@ class ScrollController {
     }
 
     /**
-     * Check if there are active scroll animations in progress
+     * Check if there are active scroll animations in progress across all axes.
      * @returns {boolean}
      */
     get isAnimating() {
@@ -130,6 +134,16 @@ class ScrollController {
             this._horizontalScrollAnimationId !== null ||
             this._nativeScrollActive === true
         );
+    }
+
+    /**
+     * Check specifically if a vertical scroll animation is in flight (RAF or native).
+     * Used by FocusManager to detect rapid keypresses arriving before the previous
+     * vertical animation has settled, enabling instant snap without animation queuing.
+     * @returns {boolean}
+     */
+    get isVerticalAnimating() {
+        return this._verticalScrollAnimationId !== null || this._nativeScrollActive === true;
     }
 
     /**
@@ -330,13 +344,32 @@ class ScrollController {
         // Already at target or instant scroll requested — snap and bail.
         // CRITICAL: Cancel any running animation in this axis BEFORE snapping.
         if (durationToUse <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
+            // Cancel running RAF animation if active
             if (this[animIdKey]) {
                 cancelAnimationFrame(this[animIdKey]);
                 this[animIdKey] = null;
                 this[stateKey] = null;
             }
             if (isVertical) {
-                if (scrollMode === 'gpu' && track) {
+                // Clear any active native scroll silence timer and reset tracking
+                if (this._nativeScrollTimeout) {
+                    clearTimeout(this._nativeScrollTimeout);
+                    this._nativeScrollTimeout = null;
+                }
+                this._nativeScrollActive = false;
+                this._nativeTargetScroll = null;
+
+                // When native smooth scroll is active, direct scrollTop assignment does NOT
+                // abort the browser's native smooth scroll engine per CSSOM View specs.
+                // Invoking scrollTo with behavior: 'auto' cleanly terminates ongoing smooth
+                // animations, eliminating compositor hitches and fighting layout locks.
+                if (scrollMode === 'native' && typeof container.scrollTo === 'function') {
+                    try {
+                        container.scrollTo({ top: targetScroll, behavior: 'auto' });
+                    } catch (_) {
+                        container.scrollTop = targetScroll;
+                    }
+                } else if (scrollMode === 'gpu' && track) {
                     // Update transform coordinates on GPU compositor track.
                     track.style.transform = `translate3d(0px, -0px, 0px)`;
                     track.style.webkitTransform = `translate3d(0px, -0px, 0px)`;
@@ -370,6 +403,18 @@ class ScrollController {
         // keep navigation completely functional.
         // ====================================================================
         if (isVertical && scrollMode === 'native' && typeof container.scrollTo === 'function') {
+            // Guard against re-invoking native scrollTo for the exact same target position.
+            // When an animation is already in flight towards targetScroll, calling scrollTo
+            // again cancels the browser animation and re-calculates easing from the current
+            // mid-flight position, resulting in visual jumping / retriggering.
+            if (
+                this._nativeScrollActive &&
+                this._nativeTargetScroll !== null &&
+                Math.abs(this._nativeTargetScroll - targetScroll) < SCROLL_SNAP_THRESHOLD
+            ) {
+                return;
+            }
+
             if (this[animIdKey]) {
                 cancelAnimationFrame(this[animIdKey]);
                 this[animIdKey] = null;
@@ -380,15 +425,17 @@ class ScrollController {
                 // ============================================================
                 // NATIVE SCROLL ACTIVE STATE MANAGEMENT
                 // ============================================================
-                // Mark native vertical scroll active so isAnimating getter returns true.
+                // Mark native vertical scroll active and record target coordinate.
                 // Reset any existing native scroll timeout so rapid keypresses keep
                 // isAnimating true throughout the continuous scrolling gesture.
                 // ============================================================
                 this._nativeScrollActive = true;
+                this._nativeTargetScroll = targetScroll;
                 if (this._nativeScrollTimeout) {
                     clearTimeout(this._nativeScrollTimeout);
                 }
 
+                // Dispatch native smooth scroll to container
                 container.scrollTo({
                     top: targetScroll,
                     behavior: 'smooth'
@@ -398,6 +445,7 @@ class ScrollController {
                 // Once native scroll settles, clear active state and emit scroll:finished.
                 this._nativeScrollTimeout = setTimeout(() => {
                     this._nativeScrollActive = false;
+                    this._nativeTargetScroll = null;
                     this._nativeScrollTimeout = null;
                     this._checkScrollFinished();
                 }, 250);
@@ -411,6 +459,7 @@ class ScrollController {
             } catch (nativeError) {
                 // Clear active native scroll state on failure to avoid stale locks
                 this._nativeScrollActive = false;
+                this._nativeTargetScroll = null;
                 if (this._nativeScrollTimeout) {
                     clearTimeout(this._nativeScrollTimeout);
                     this._nativeScrollTimeout = null;
@@ -560,6 +609,7 @@ class ScrollController {
                 this._nativeScrollTimeout = null;
             }
             this._nativeScrollActive = false;
+            this._nativeTargetScroll = null;
         } else {
             if (this._horizontalScrollAnimationId) {
                 cancelAnimationFrame(this._horizontalScrollAnimationId);
@@ -712,7 +762,16 @@ class ScrollController {
 
             const targetScroll = Math.max(0, cardTop - 180);
 
-            if (Math.abs(targetScroll - currentScroll) > 5) {
+            // Active in-flight target awareness: compare against destination target
+            // so mid-flight keypresses targeting the same alignment don't re-trigger
+            const activeTarget =
+                this._nativeScrollActive && this._nativeTargetScroll !== null
+                    ? this._nativeTargetScroll
+                    : this._verticalScrollState
+                        ? this._verticalScrollState.target
+                        : currentScroll;
+
+            if (Math.abs(targetScroll - activeTarget) > 5) {
                 this.smoothScrollTo(
                     pageContent,
                     targetScroll,
@@ -737,12 +796,10 @@ class ScrollController {
             if (isHero) {
                 // ============================================================
                 // Force scroll to absolute top for hero/title split sections.
-                // We call smoothScrollTo(0) directly without checking if scroll is
-                // already > 0. This ensures that any active scroll animation in
-                // progress (e.g. from pressing down to rows below) gets cancelled/
-                // retargeted back to 0 immediately upon focus returning up.
+                // Forward instantScroll so rapid navigation up to hero snaps
+                // cleanly without forcing full 200ms smooth animation.
                 // ============================================================
-                this.smoothScrollTo(pageContent, 0);
+                this.smoothScrollTo(pageContent, 0, options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL);
                 // Disable further row-based alignment logic and generic vertical scroll
                 useRowScroll = false;
                 activePageContent = null;
@@ -809,7 +866,28 @@ class ScrollController {
             // This prevents micro-jitter on horizontal nav within the same row,
             // and avoids unnecessary scrolls between tightly packed items
             // (e.g. genre header → genre grid within the same .media-row).
-            const scrollDelta = Math.abs(targetScroll - currentScroll);
+            //
+            // ================================================================
+            // RETARGETING & IN-FLIGHT ANIMATION AWARENESS
+            // ================================================================
+            // When an animation is actively in flight (native or JS RAF), comparing
+            // targetScroll against the volatile mid-flight currentScroll produces false
+            // deltas that retrigger the animation from the mid-flight position with
+            // zero starting velocity, causing visual jumping and stutter.
+            //
+            // By comparing against the active in-flight destination target if present,
+            // subsequent keypresses to items on the same row or within the same target
+            // boundary allow the existing smooth transition to complete uninterrupted.
+            // New targets across rows cleanly retarget without hitching.
+            // ================================================================
+            const activeTarget =
+                this._nativeScrollActive && this._nativeTargetScroll !== null
+                    ? this._nativeTargetScroll
+                    : this._verticalScrollState
+                        ? this._verticalScrollState.target
+                        : currentScroll;
+
+            const scrollDelta = Math.abs(targetScroll - activeTarget);
             if (scrollDelta > SCROLL_ALIGN_THRESHOLD) {
                 // PERFORMANCE: For scroll distances exceeding ~45% of the viewport
                 // (e.g. hero carousel ↔ first content row), snap instantly. The
