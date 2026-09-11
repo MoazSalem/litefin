@@ -297,6 +297,10 @@ class LibraryPage extends Page {
         const isVirtualLibrary = this.state.libraryId === 'all';
         const isSeerrLibrary = this.state.libraryId === 'seerr';
 
+        if (this.params.char) {
+            this.state.nameStartsWith = decodeURIComponent(this.params.char);
+        }
+
         if (this.params.page) {
             const pageNum = parseInt(this.params.page, 10);
             if (!isNaN(pageNum) && pageNum > 0) {
@@ -788,6 +792,7 @@ class LibraryPage extends Page {
         if (this.params.year) parts.push(`year:${this.params.year}`);
         if (this.params.personId) parts.push(`person:${this.params.personId}`);
         if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
+        if (this.params.char) parts.push(`char:${this.params.char}`);
         if (this.params.page) parts.push(`page:${this.params.page}`);
         return parts.join(':');
     }
@@ -3674,7 +3679,7 @@ class LibraryPage extends Page {
         const char = btn.dataset.char;
 
         if (this.state.nameStartsWith === char) {
-            // Toggle off? Maybe not standard behavior, but useful
+            // Toggle off
             this.state.nameStartsWith = null;
         } else {
             this.state.nameStartsWith = char; // Store literal char ('#', 'A', etc.)
@@ -3682,20 +3687,28 @@ class LibraryPage extends Page {
 
         this.state.startIndex = 0;
 
+        // Keep URL parameters in sync so pagination and state preserve the selected letter
+        if (this.params.page) {
+            delete this.params.page;
+        }
+        if (this.state.nameStartsWith) {
+            this.params.char = this.state.nameStartsWith;
+        } else {
+            delete this.params.char;
+        }
+
         // Update UI
         this._renderAlphaPicker();
 
         // Restore focus to the selected char
-        // We need to wait for render, then find the button for 'char'
         const newBtn = this.$(`.alpha-btn[data-char="${char}"]`);
         if (newBtn) {
-            // Use FocusManager to properly set active element
             focusManager.focusElement(newBtn);
         }
 
         await this._loadItems();
 
-        // Scroll to top of content (important when changing filters)
+        // Scroll to top of content
         const scrollContainer = this.$('#library-scroll-container');
         if (scrollContainer) scrollContainer.scrollTop = 0;
     }
@@ -3794,6 +3807,8 @@ class LibraryPage extends Page {
         if (this.params.personId) currentParams.set('personId', this.params.personId);
         if (this.params.tagName) currentParams.set('tagName', this.params.tagName);
         if (this.params.name) currentParams.set('name', this.params.name);
+        const selectedChar = this.state.nameStartsWith || this.params.char;
+        if (selectedChar) currentParams.set('char', selectedChar);
         currentParams.set('page', targetPage);
 
         router.navigate(`/library/${this.state.libraryId}?${currentParams.toString()}`);
