@@ -467,15 +467,6 @@ body.lyrics-active .audio-player-center {
 }
 
 /* ==========================================================================
-   Tizen-Specific Styles
-   ========================================================================== */
-
-/* Hide cursor on TV platforms during playback */
-html:not([data-platform="web"]) .player-page * {
-    cursor: none;
-}
-
-/* ==========================================================================
    Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x / WebOS 1-2.x)
    ==========================================================================
    Chrome 38 has two major bugs relevant to the player:
