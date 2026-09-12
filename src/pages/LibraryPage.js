@@ -2667,15 +2667,26 @@ class LibraryPage extends Page {
 
         const scrollContainer = this.$('#library-scroll-container') || this.el.querySelector('.page-content');
         if (scrollContainer) {
+            // Clean up any previously attached scroll/wheel handlers
             if (this._onGridScroll) {
                 scrollContainer.removeEventListener('scroll', this._onGridScroll);
+                window.removeEventListener('scroll', this._onGridScroll);
+                scrollContainer.removeEventListener('wheel', this._onGridWheel);
             }
             this._lastGridScrollTop = 0;
             this._onGridScroll = () => {
-                this._gridScrollTop = scrollContainer.scrollTop;
+                // Determine current scroll position from container or window (for TV webOS pointer/wheel scrolling)
+                this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
+                this._scheduleGridEval();
+            };
+            this._onGridWheel = () => {
+                // In some TV environments (webOS magic remote wheel), wheel events may fire before or independently of scroll
+                this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
                 this._scheduleGridEval();
             };
             scrollContainer.addEventListener('scroll', this._onGridScroll, { passive: true });
+            window.addEventListener('scroll', this._onGridScroll, { passive: true });
+            scrollContainer.addEventListener('wheel', this._onGridWheel, { passive: true });
         }
 
         // Register pagination footer — the grid's leaveDown points here.
@@ -3018,23 +3029,27 @@ class LibraryPage extends Page {
             const scrollHeight = scrollContainer.scrollHeight;
             const rowHeight = this.state.gridCardRowHeight;
 
-            const scrollingDown = scrollTop > (this._lastGridScrollTop || 0);
+            // Direction tracking
+            const isScrollingDown = scrollTop > (this._lastGridScrollTop || 0);
+            const isScrollingUp = scrollTop < (this._lastGridScrollTop || 0);
             this._lastGridScrollTop = scrollTop;
 
-            if (scrollingDown) {
-                const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
-                if (distanceFromBottom <= containerHeight * 1.5) {
-                    if (this.state.gridWindowEnd < this.state.items.length) {
-                        this._appendGridChunk(grid, this.state.items, currentColumns);
-                    }
+            // Distance calculations
+            const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
+            const spacer = grid.querySelector('#grid-top-spacer');
+            const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+            const distanceFromRenderedTop = scrollTop - spacerHeight;
+
+            // Check append: if user is scrolling down OR near the bottom boundary of rendered items
+            if ((isScrollingDown || distanceFromBottom <= containerHeight) && distanceFromBottom <= containerHeight * 1.5) {
+                if (this.state.gridWindowEnd < this.state.items.length) {
+                    this._appendGridChunk(grid, this.state.items, currentColumns);
                 }
-            } else {
-                const spacer = grid.querySelector('#grid-top-spacer');
-                const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
-                const distanceFromRenderedTop = scrollTop - spacerHeight;
-                if (this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
-                    this._prependGridChunk(grid, this.state.items, currentColumns);
-                }
+            }
+
+            // Check prepend: if user is scrolling up OR near the top boundary of rendered items
+            if ((isScrollingUp || distanceFromRenderedTop <= containerHeight) && this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
+                this._prependGridChunk(grid, this.state.items, currentColumns);
             }
 
             if (rowHeight) {
