@@ -885,6 +885,10 @@ class PlayerPage extends Page {
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
         this._player.on('seek', (data) => {
             if (data && data.positionTicks !== undefined) {
+                // Synchronize seek target directly to resume position
+                if (typeof data.positionTicks === 'number') {
+                    this._resumePosition = data.positionTicks;
+                }
                 this._onTimeUpdate(data.positionTicks);
             } else {
                 this._reportPlaybackProgress('timeupdate');
@@ -2198,6 +2202,20 @@ class PlayerPage extends Page {
             return;
         }
 
+        // =====================================================================
+        // Preserve Playback Position During Error Handover
+        // =====================================================================
+        // Attempt to capture the exact position from the active player backend
+        // before any teardown or re-initialization occurs. This guarantees that
+        // when the user triggers 'Retry' or 'Use HTML5 Player', playback resumes
+        // seamlessly from this position rather than reverting to 0.
+        // =====================================================================
+        const currentTicks = this._player?.getCurrentPositionTicks?.();
+        if (typeof currentTicks === 'number' && currentTicks > 0) {
+            this._resumePosition = currentTicks;
+            log.info(`Captured current position for retry: ${this._resumePosition} ticks`);
+        }
+
         log.error('Player error:', error);
         this._isSwitching = false; // Reset lock on error
         this._showError(error.message || 'Playback error');
@@ -2206,6 +2224,17 @@ class PlayerPage extends Page {
     _onTimeUpdate(positionTicks) {
         // Ensure we have a valid number for ticks
         const ticks = typeof positionTicks === 'number' ? positionTicks : 0;
+
+        // =====================================================================
+        // Continuously Track Progress for Playback Recovery
+        // =====================================================================
+        // Keep _resumePosition synchronized with ongoing playback progress.
+        // Should an unexpected playback stall or network disconnect arise,
+        // the player retains the exact second where playback stopped.
+        // =====================================================================
+        if (ticks > 0) {
+            this._resumePosition = ticks;
+        }
 
         // 1. Check primary subtitle sync — clear if cue end time has passed
         if (this._subtitleEndTime !== null && ticks >= this._subtitleEndTime) {
@@ -2707,6 +2736,12 @@ class PlayerPage extends Page {
         window.__forcePlayerError = (msg = 'Simulated playback error for UI testing') => this._showError(msg);
         window.__hidePlayerError = () => this._hideError();
 
+        // Capture current playback position if available so retry can restore from here
+        const currentTicks = this._player?.getCurrentPositionTicks?.();
+        if (typeof currentTicks === 'number' && currentTicks > 0) {
+            this._resumePosition = currentTicks;
+        }
+
         this._showLoading(false);
 
         // Ensure focus manager is resumed so we can interact with error buttons
@@ -2837,12 +2872,28 @@ class PlayerPage extends Page {
         try {
             this._showLoading(true);
 
+            // =================================================================
+            // Preserve Resume Position on Retry
+            // =================================================================
+            // Double check if the current player instance holds a more recent
+            // position ticks before we begin re-initialization.
+            // =================================================================
+            const currentTicks = this._player?.getCurrentPositionTicks?.();
+            if (typeof currentTicks === 'number' && currentTicks > 0) {
+                this._resumePosition = currentTicks;
+            }
+
+            // Reset start report guard for the new playback session
+            this._hasReportedStart = false;
+
             // Re-initialize if player instance was lost or in bad state
             if (!this._player || this._player.isDestroyed) {
                 await this._initPlayer();
             }
 
-            // Restart playback using whatever mode is currently set on the player
+            // Restart playback using whatever mode is currently set on the player,
+            // with _resumePosition cleanly preserved so the stream restores from where it failed.
+            log.info(`Retrying playback from preserved resume position: ${this._resumePosition} ticks`);
             await this._startPlayback();
 
             this._showLoading(false);
@@ -2882,6 +2933,20 @@ class PlayerPage extends Page {
         try {
             this._showLoading(true);
 
+            // =================================================================
+            // Preserve Resume Position Across Backend Switch
+            // =================================================================
+            // Capture the current position ticks before destroying the existing
+            // player instance so switching backends doesn't reset progress to 0.
+            // =================================================================
+            const currentTicks = this._player?.getCurrentPositionTicks?.();
+            if (typeof currentTicks === 'number' && currentTicks > 0) {
+                this._resumePosition = currentTicks;
+            }
+
+            // Reset start report guard for the new playback session
+            this._hasReportedStart = false;
+
             // Destroy existing player instance cleanly if active
             if (this._player) {
                 try {
@@ -2896,7 +2961,8 @@ class PlayerPage extends Page {
             // Note: _initPlayer creates JellyfinPlayer and binds all event listeners properly
             await this._initPlayer('html5');
 
-            // Restart playback
+            // Restart playback from preserved resume position
+            log.info(`Retrying with HTML5 player from preserved position: ${this._resumePosition} ticks`);
             await this._startPlayback();
 
             this._showLoading(false);
