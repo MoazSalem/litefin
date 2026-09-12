@@ -32,24 +32,21 @@ const FOCUSABLE_SELECTOR = `
 // Constants
 // ============================================================================
 
-// Minimum time (ms) between key events to prevent event flooding.
-// Keypresses faster than this interval are dropped.
-const KEY_DEBOUNCE_MS = 40;
+// Minimum time (ms) between directional key events to rate-limit navigation.
+// Caps held key repeat rate to ~8 moves per second (every 125ms) so the layout,
+// progressive DOM insertion, and smooth scroll animations have ample time to
+// breathe and render without being overwhelmed or letting focus run off-screen.
+// Deliberate user keypresses (>150ms) experience 0ms added latency.
+const KEY_DEBOUNCE_MS = 125;
 
 // Maximum number of empty sections to skip through when leaving a section.
 // Prevents infinite loops if section linking is misconfigured.
 const MAX_SECTION_SKIP_DEPTH = 20;
 
-// Rapid navigation (instant scroll) threshold in milliseconds.
-// On physical TV remotes (Tizen/WebOS) and keyboards, held keys generate repeat
-// events at ~60-100ms intervals. Setting this threshold to 130ms guarantees that
-// deliberate human presses (>150ms) never falsely engage instant snapping,
-// while sustained held navigation smoothly enters rapid snap mode.
+// Rapid navigation threshold in milliseconds for streak tracking.
 const RAPID_MOVE_THRESHOLD_MS = 130;
 
-// Minimum consecutive rapid moves in the SAME direction required to engage instant scroll.
-// A streak requirement of 2 means the user must trigger at least 3 consecutive rapid
-// presses (initial press + 2 hardware repeats).
+// Minimum consecutive rapid moves in the SAME direction required for streak tracking.
 const RAPID_MOVE_STREAK_REQUIRED = 2;
 
 class FocusManager {
@@ -715,16 +712,14 @@ class FocusManager {
         // 2. If we found a target, move to it
         if (nextElement) {
             // ----------------------------------------------------------------
-            // RAPID NAVIGATION MODE (FAST SCROLL)
+            // SMOOTH DIRECTIONAL NAVIGATION
             // ----------------------------------------------------------------
-            // If the user is holding a key (streak >= 2 consecutive rapid keypresses
-            // < 130ms apart in the same direction), disable the smooth animation and
-            // snap instantly to prevent scroll queue build-up.
-            // Deliberate discrete presses and double-taps remain silky smooth.
+            // Directional D-pad moves remain silky smooth across all sections.
+            // Instant scroll is disabled for standard navigation so the camera
+            // gracefully tracks focus transitions without jarring visual snapping.
+            // Rate-limiting at the key level ensures input never floods the queue.
             // ----------------------------------------------------------------
-            const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
-
-            const moveOpts = { instantScroll: isRapidNav, sectionName: this._activeSection };
+            const moveOpts = { instantScroll: false, sectionName: this._activeSection };
             if (nextIndex >= 0) moveOpts.focusIndex = nextIndex;
             // Horizontal moves in a grid stay on the same row — skip vertical scroll recalculation
             if (config.orientation === 'grid' && config.columns && (direction === 'left' || direction === 'right')) {
@@ -838,18 +833,13 @@ class FocusManager {
             }
 
             // ----------------------------------------------------------------
-            // Detect rapid navigation: use the SAME streak-based check as _move()
-            // so that deliberate D-pad presses always get the smooth 200ms animation.
-            //
-            // Requiring RAPID_MOVE_STREAK_REQUIRED (2) consecutive fast presses ensures
-            // instant scroll only kicks in when the user is genuinely holding the key,
-            // producing smooth fluid sliding for normal browsing and rapid snappy
-            // navigation for held keys without jarring oscillations.
+            // SMOOTH SECTION EXIT
             // ----------------------------------------------------------------
-            const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
-
+            // Use smooth animation when transitioning between sections vertically
+            // so cross-section navigation feels fluid, cohesive, and intentional.
+            // ----------------------------------------------------------------
             // Pass originElement to allow selecting closest target in new section
-            this.setActiveSection(nextSection, true, originElement, { direction, instantScroll: isRapidNav });
+            this.setActiveSection(nextSection, true, originElement, { direction, instantScroll: false });
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback

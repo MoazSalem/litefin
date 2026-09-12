@@ -727,7 +727,15 @@ class ScrollController {
             }
 
             if (current === relativeTo) {
-                this._offsetCache.set(el, { container: relativeTo, value: top });
+                // PERFORMANCE: Only cache positions of static full-width .media-row elements.
+                // Media rows never shift dynamically within .page-content.
+                // Dynamic grid cards, list items, or elements preceded by dynamic
+                // spacers (such as #grid-top-spacer in LibraryPage) change their effective
+                // offset when rows are prepended or evicted; caching them leads to
+                // stale scroll targets that throw the focused element off-screen.
+                if (el.classList.contains('media-row')) {
+                    this._offsetCache.set(el, { container: relativeTo, value: top });
+                }
             } else {
                 // Fallback: the chain broke early (e.g. CSS transform on an ancestor
                 // or a fixed-position portal). Use getBoundingClientRect as a last resort.
@@ -1085,6 +1093,24 @@ class ScrollController {
                 const viewHeight = activePageContent.clientHeight;
                 const currentScroll = this.getVerticalScroll(activePageContent);
 
+                // ================================================================
+                // RETARGETING & IN-FLIGHT ANIMATION AWARENESS
+                // ================================================================
+                // When an animation is actively in flight (native or JS RAF), comparing
+                // target coordinates against the volatile mid-flight currentScroll produces
+                // false deltas that retrigger animations from mid-flight with zero velocity,
+                // causing visual stutter and leaving the focused element off-screen.
+                //
+                // By evaluating visibility against the active destination target, subsequent
+                // keypresses smoothly extend or update the scroll path without hitching.
+                // ================================================================
+                const activeTarget =
+                    this._nativeScrollActive && this._nativeTargetScroll !== null
+                        ? this._nativeTargetScroll
+                        : this._verticalScrollState
+                            ? this._verticalScrollState.target
+                            : currentScroll;
+
                 // ============================================================
                 // PERF: CACHE ELEMENT HEIGHT PER SECTION
                 // ============================================================
@@ -1110,7 +1136,7 @@ class ScrollController {
                 const topMargin = GENERIC_SCROLL_MARGIN;
                 let bottomMargin = GENERIC_SCROLL_MARGIN;
 
-                let finalScrollTop = currentScroll;
+                let finalScrollTop = activeTarget;
 
                 // Apply custom scroll offset from section config
                 const customOffset = config?.scrollOffsetTop || 0;
@@ -1126,22 +1152,17 @@ class ScrollController {
                     bottomMargin = Math.min(bottomMargin, availableSpace / 2);
                 }
 
-                // Element cut off at top
-                if (elementTop < currentScroll + effectiveTopMargin) {
+                // Element cut off at top relative to destination scroll target
+                if (elementTop < activeTarget + effectiveTopMargin) {
                     finalScrollTop = Math.max(0, elementTop - effectiveTopMargin);
                 }
-                // Element cut off at bottom
-                else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
-                    // Small elements: center them nicely. Extremely huge elements: align to bottom edge.
-                    if (elementHeight < viewHeight * SMALL_ELEMENT_FRACTION) {
-                        finalScrollTop = elementTop - viewHeight / 2 + elementHeight / 2;
-                    } else {
-                        finalScrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
-                    }
+                // Element cut off at bottom relative to destination scroll target
+                else if (elementTop + elementHeight > activeTarget + viewHeight - bottomMargin) {
+                    finalScrollTop = Math.max(0, elementTop + elementHeight - viewHeight + bottomMargin);
                 }
 
                 // Apply vertical scroll with smooth easing
-                const scrollDelta = Math.abs(finalScrollTop - currentScroll);
+                const scrollDelta = Math.abs(finalScrollTop - activeTarget);
                 if (scrollDelta > SCROLL_SNAP_THRESHOLD) {
                     // PERFORMANCE: Large vertical jumps (e.g. returning to the hero
                     // carousel from a scrolled position) snap instantly to avoid
