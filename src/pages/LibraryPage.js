@@ -877,6 +877,8 @@ class LibraryPage extends Page {
         this._gridEvalPending = false;
         this._gridFocusElement = null;
         this._gridScrollTop = null;
+        this._pendingFocusEval = false;
+        this._pendingScrollEval = false;
     }
 
     // ========================================================================
@@ -2615,30 +2617,64 @@ class LibraryPage extends Page {
             // in the DOM. The result: no accidental focus jumps to tabs/controls
             // while holding UP through a windowed grid.
             // =================================================================
+            // =================================================================
+            // VIRTUAL GRID EDGE GUARDS (Up & Down)
+            // =================================================================
+            // When the user navigates across window boundaries, FocusManager
+            // may not find the adjacent card because it was either evicted
+            // or hasn't yet been appended to the DOM.
+            //
+            // We intercept the directional move here BEFORE FocusManager queries
+            // focusables:
+            //   - For UP moves on the first row: prepend evicted rows.
+            //   - For DOWN moves on the last row: append the next chunk.
+            //
+            // Prepending/appending invalidates the FocusManager cache synchronously.
+            // Returning false lets FocusManager proceed with its move, re-querying
+            // the fresh DOM and landing on the new card naturally without sticking
+            // or jumping out of section.
+            // =================================================================
             onMove: (direction, focusedElement) => {
-                if (direction !== 'up') return false;
-                if (this.state.gridWindowStart <= 0) return false;
                 if (!focusedElement) return false;
 
-                // Are we on the FIRST rendered row?
-                const allCards = grid.querySelectorAll('.media-card');
-                let domIndex = -1;
-                for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === focusedElement) {
-                        domIndex = i;
-                        break;
+                // Guard for UP navigation on the first rendered row
+                if (direction === 'up') {
+                    if (this.state.gridWindowStart <= 0) return false;
+
+                    const allCards = grid.querySelectorAll('.media-card');
+                    let domIndex = -1;
+                    for (let i = 0; i < allCards.length; i++) {
+                        if (allCards[i] === focusedElement) {
+                            domIndex = i;
+                            break;
+                        }
                     }
+                    // domIndex < currentColumns means the card is in the first row
+                    if (domIndex < 0 || domIndex >= currentColumns) return false;
+
+                    this._prependGridChunk(grid, this.state.items, currentColumns);
+                    return false;
                 }
-                // domIndex < currentColumns means the card is in the first row
-                if (domIndex < 0 || domIndex >= currentColumns) return false;
 
-                // Prepend the evicted rows synchronously. _hookGridCards inside
-                // _prependGridChunk calls focusManager.invalidateCache() so
-                // FocusManager will re-query after we return false.
-                this._prependGridChunk(grid, this.state.items, currentColumns);
+                // Guard for DOWN navigation on the last rendered row
+                if (direction === 'down') {
+                    if (this.state.gridWindowEnd >= this.state.items.length) return false;
 
-                // Return false — FocusManager proceeds with its UP move,
-                // re-queries the grid, and lands on the card above correctly.
+                    const allCards = grid.querySelectorAll('.media-card');
+                    let domIndex = -1;
+                    for (let i = 0; i < allCards.length; i++) {
+                        if (allCards[i] === focusedElement) {
+                            domIndex = i;
+                            break;
+                        }
+                    }
+                    // If domIndex + currentColumns >= allCards.length, focus is on the last rendered row
+                    if (domIndex >= 0 && domIndex + currentColumns >= allCards.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                    return false;
+                }
+
                 return false;
             }
         });
@@ -2662,6 +2698,8 @@ class LibraryPage extends Page {
         this._gridEvalFrameId = null;
         this._gridFocusElement = null;
         this._gridScrollTop = null;
+        this._pendingFocusEval = false;
+        this._pendingScrollEval = false;
 
         if (this._onGridFocusChanged) {
             eventBus.off('focus:changed', this._onGridFocusChanged);
@@ -2670,6 +2708,7 @@ class LibraryPage extends Page {
             if (!element || !grid.contains(element)) return;
             if (!element.classList.contains('media-card')) return;
             this._gridFocusElement = element;
+            this._pendingFocusEval = true;
             this._scheduleGridEval();
         };
         eventBus.on('focus:changed', this._onGridFocusChanged);
@@ -2686,11 +2725,13 @@ class LibraryPage extends Page {
             this._onGridScroll = () => {
                 // Determine current scroll position from container or window (for TV webOS pointer/wheel scrolling)
                 this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
+                this._pendingScrollEval = true;
                 this._scheduleGridEval();
             };
             this._onGridWheel = () => {
                 // In some TV environments (webOS magic remote wheel), wheel events may fire before or independently of scroll
                 this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
+                this._pendingScrollEval = true;
                 this._scheduleGridEval();
             };
             scrollContainer.addEventListener('scroll', this._onGridScroll, { passive: true });
@@ -2824,14 +2865,6 @@ class LibraryPage extends Page {
 
         // Tell FocusManager about the new focusable nodes
         focusManager.invalidateCache('library-grid');
-
-        // Prewarm ScrollController offset cache in the next idle frame
-        requestAnimationFrame(() => {
-            const pageContent = document.querySelector('.page-content');
-            if (pageContent) {
-                scrollController.prewarmOffsetCache(newCards, pageContent);
-            }
-        });
     }
 
     /**
@@ -3025,14 +3058,77 @@ class LibraryPage extends Page {
         const focusedElement = this._gridFocusElement;
 
         // ------------------------------------------------------------------
-        // PRIORITY 1: Scroll-based evaluation (pending scroll event)
+        // PRIORITY 1: Focus-based evaluation (D-pad navigation)
         // ------------------------------------------------------------------
-        // Runs whenever a scroll event is pending, regardless of focus state.
-        // This is essential for mouse-wheel / magic-remote scrolling where
-        // focus does not move and focus:changed never fires.
+        // When navigation is driven by D-pad, the user's active focus element
+        // is the single source of truth for viewport positioning.
+        // Intermediate scroll events fired by smooth scrolling during D-pad
+        // moves represent mid-flight animations, NOT the user's intended position.
+        // Deriving grid boundaries from mid-flight scrollTop during smooth scroll
+        // would evict the very rows the user is scrolling towards!
+        // ------------------------------------------------------------------
+        if (this._pendingFocusEval && focusedElement && grid.contains(focusedElement)) {
+            this._pendingFocusEval = false;
+            this._gridScrollTop = null; // Consume scroll input so mid-flight animation doesn't desync window
+            this._pendingScrollEval = false;
+
+            const allCards = grid.querySelectorAll('.media-card');
+            let domIndex = -1;
+            for (let i = 0; i < allCards.length; i++) {
+                if (allCards[i] === focusedElement) {
+                    domIndex = i;
+                    break;
+                }
+            }
+            if (domIndex >= 0) {
+                const itemIndex = this.state.gridWindowStart + domIndex;
+
+                // Direction isolation: only append when moving down,
+                // only prepend when moving up (prevents oscillation)
+                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
+                this._lastFocusItemIndex = itemIndex;
+
+                if (movingDown) {
+                    // For list view (columns=1), look ahead 6 items instead of 2 items
+                    const lookAheadItems = currentColumns === 1 ? 6 : currentColumns * 2;
+                    const appendThreshold = this.state.gridWindowEnd - lookAheadItems;
+                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                } else {
+                    const lookBehindItems = currentColumns === 1 ? 6 : currentColumns * 2;
+                    const prependThreshold = this.state.gridWindowStart + lookBehindItems;
+                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    }
+                }
+
+                const currentRow = Math.floor(itemIndex / currentColumns);
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+                return;
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // PRIORITY 2: Scroll-based evaluation (mouse wheel / magic remote / touch)
+        // ------------------------------------------------------------------
+        // Runs when scrolling without changing D-pad focus (webOS magic remote,
+        // mouse wheel, or touch fling). Focus:changed does not fire during wheel
+        // scrolling, so scroll position determines grid window bounds and chunk loading.
+        // ------------------------------------------------------------------
         if (scrollContainer && this._gridScrollTop !== null) {
+            // Guard: If a programmatic vertical scroll animation is still actively in flight
+            // from a previous D-pad move, ignore intermediate scroll events so we don't
+            // evict cards based on transient in-flight coordinates.
+            if (scrollController.isVerticalAnimating && focusedElement && grid.contains(focusedElement)) {
+                this._gridScrollTop = null;
+                this._pendingScrollEval = false;
+                return;
+            }
+
             const scrollTop = this._gridScrollTop;
             this._gridScrollTop = null; // Consume the scroll input
+            this._pendingScrollEval = false;
 
             const containerHeight = scrollContainer.clientHeight;
             const scrollHeight = scrollContainer.scrollHeight;
@@ -3093,9 +3189,8 @@ class LibraryPage extends Page {
                 }
             }
 
-            // Keep the focus-based direction cursor in sync so the next
-            // D-pad move compares against the current position rather than
-            // a stale value from before the scroll.
+            // Keep the focus-based direction cursor in sync so subsequent D-pad moves
+            // compare against the actual position after wheel scrolling
             if (focusedElement && grid.contains(focusedElement)) {
                 const allCards = grid.querySelectorAll('.media-card');
                 for (let i = 0; i < allCards.length; i++) {
@@ -3104,47 +3199,6 @@ class LibraryPage extends Page {
                         break;
                     }
                 }
-            }
-            return;
-        }
-
-        // ------------------------------------------------------------------
-        // PRIORITY 2: Focus-based evaluation (D-pad navigation)
-        // ------------------------------------------------------------------
-        if (focusedElement && grid.contains(focusedElement)) {
-            const allCards = grid.querySelectorAll('.media-card');
-            let domIndex = -1;
-            for (let i = 0; i < allCards.length; i++) {
-                if (allCards[i] === focusedElement) {
-                    domIndex = i;
-                    break;
-                }
-            }
-            if (domIndex >= 0) {
-                const itemIndex = this.state.gridWindowStart + domIndex;
-
-                // Direction isolation: only append when moving down,
-                // only prepend when moving up (prevents oscillation)
-                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
-                this._lastFocusItemIndex = itemIndex;
-
-                if (movingDown) {
-                    // For list view (columns=1), look ahead 6 items instead of 2 items
-                    const lookAheadItems = currentColumns === 1 ? 6 : currentColumns * 2;
-                    const appendThreshold = this.state.gridWindowEnd - lookAheadItems;
-                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
-                        this._appendGridChunk(grid, this.state.items, currentColumns);
-                    }
-                } else {
-                    const lookBehindItems = currentColumns === 1 ? 6 : currentColumns * 2;
-                    const prependThreshold = this.state.gridWindowStart + lookBehindItems;
-                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
-                        this._prependGridChunk(grid, this.state.items, currentColumns);
-                    }
-                }
-
-                const currentRow = Math.floor(itemIndex / currentColumns);
-                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
             }
         }
     }
@@ -3223,6 +3277,7 @@ class LibraryPage extends Page {
                 if (spacer) {
                     spacer.style.height = `${Math.floor(this.state.gridWindowStart / columns) * rowHeight}px`;
                 }
+                focusManager.invalidateCache('library-grid');
             }
         }
 
@@ -3242,6 +3297,7 @@ class LibraryPage extends Page {
                 allCards[i].remove();
             }
             this.state.gridWindowEnd -= count;
+            focusManager.invalidateCache('library-grid');
         }
     }
 

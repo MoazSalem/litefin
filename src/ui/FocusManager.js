@@ -43,11 +43,17 @@ const KEY_DEBOUNCE_MS = 125;
 // Prevents infinite loops if section linking is misconfigured.
 const MAX_SECTION_SKIP_DEPTH = 20;
 
-// Rapid navigation threshold in milliseconds for streak tracking.
-const RAPID_MOVE_THRESHOLD_MS = 130;
+// Rapid navigation threshold (ms) for streak tracking.
+// Remote hardware key repeats fire at ~100-130ms intervals. Setting this to 145ms
+// cleanly captures continuous hardware holds while ensuring deliberate manual
+// double/triple taps (>150ms) reset the streak, keeping manual browsing silky smooth.
+const RAPID_MOVE_THRESHOLD_MS = 145;
 
-// Minimum consecutive rapid moves in the SAME direction required for streak tracking.
-const RAPID_MOVE_STREAK_REQUIRED = 2;
+// Minimum consecutive rapid moves in the SAME direction required to engage fast scroll.
+// Increased from 2 to 5 so deliberate brisk tapping (2-4 items) never triggers fast
+// scroll prematurely. The user must continuously hold the D-pad through 5 items
+// (~625ms of sustained holding) before the camera switches into fast navigation.
+const RAPID_MOVE_STREAK_REQUIRED = 5;
 
 class FocusManager {
     constructor() {
@@ -712,14 +718,16 @@ class FocusManager {
         // 2. If we found a target, move to it
         if (nextElement) {
             // ----------------------------------------------------------------
-            // SMOOTH DIRECTIONAL NAVIGATION
+            // ADAPTIVE INTERACTION PHYSICS (Apple HIG Momentum Standard)
             // ----------------------------------------------------------------
-            // Directional D-pad moves remain silky smooth across all sections.
-            // Instant scroll is disabled for standard navigation so the camera
-            // gracefully tracks focus transitions without jarring visual snapping.
-            // Rate-limiting at the key level ensures input never floods the queue.
+            // Normal browsing and deliberate fast taps (<5 items) stay silky smooth,
+            // tracking focus transitions with continuous ease-out deceleration.
+            // Fast snapping scroll only engages when the user deliberately holds
+            // the D-pad through RAPID_MOVE_STREAK_REQUIRED (5) consecutive items in
+            // the same direction (~625ms of sustained holding).
             // ----------------------------------------------------------------
-            const moveOpts = { instantScroll: false, sectionName: this._activeSection };
+            const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
+            const moveOpts = { instantScroll: isRapidNav, sectionName: this._activeSection };
             if (nextIndex >= 0) moveOpts.focusIndex = nextIndex;
             // Horizontal moves in a grid stay on the same row — skip vertical scroll recalculation
             if (config.orientation === 'grid' && config.columns && (direction === 'left' || direction === 'right')) {
@@ -833,13 +841,15 @@ class FocusManager {
             }
 
             // ----------------------------------------------------------------
-            // SMOOTH SECTION EXIT
+            // ADAPTIVE SECTION TRANSITION
             // ----------------------------------------------------------------
-            // Use smooth animation when transitioning between sections vertically
-            // so cross-section navigation feels fluid, cohesive, and intentional.
+            // Seamlessly glide between sections vertically. Fast snap navigation is
+            // only engaged if a sustained held streak is currently active across rows.
             // ----------------------------------------------------------------
+            const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
+
             // Pass originElement to allow selecting closest target in new section
-            this.setActiveSection(nextSection, true, originElement, { direction, instantScroll: false });
+            this.setActiveSection(nextSection, true, originElement, { direction, instantScroll: isRapidNav });
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback

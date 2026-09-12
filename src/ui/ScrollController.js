@@ -194,6 +194,16 @@ class ScrollController {
         for (let i = 0; i < elements.length; i++) {
             const el = elements[i];
 
+            // -----------------------------------------------------------------
+            // ROW ISOLATION GUARD: Static media rows only
+            // -----------------------------------------------------------------
+            // Dynamic grid cards, list items, or elements preceded by dynamic
+            // spacers (such as #grid-top-spacer in LibraryPage) change their effective
+            // offset when rows are prepended or evicted. Caching volatile cards
+            // poisons the offset map with stale values that corrupt scroll targeting.
+            // -----------------------------------------------------------------
+            if (!el.classList.contains('media-row')) continue;
+
             // Skip if already cached (can happen on append/pagination)
             if (this._offsetCache.has(el)) continue;
 
@@ -388,86 +398,32 @@ class ScrollController {
             return;
         }
 
-        // ====================================================================
-        // NATIVE SMOOTH SCROLL ROUTINE (Let TV Handle It)
-        // ====================================================================
-        // Offloads standard vertical scrolling animations fully to the native
-        // rendering thread.
-        //
-        // COMPATIBILITY FALLBACK:
-        // Older LG WebOS models (WebOS 3.x/4.x running Chrome < 61) do not
-        // support `Element.prototype.scrollTo` on container elements.
-        //
-        // If the method is undefined or throws an error, we gracefully fall
-        // through to the custom JS RAF time-based animation loop below to
-        // keep navigation completely functional.
-        // ====================================================================
-        if (isVertical && scrollMode === 'native' && typeof container.scrollTo === 'function') {
-            // Guard against re-invoking native scrollTo for the exact same target position.
-            // When an animation is already in flight towards targetScroll, calling scrollTo
-            // again cancels the browser animation and re-calculates easing from the current
-            // mid-flight position, resulting in visual jumping / retriggering.
-            if (
-                this._nativeScrollActive &&
-                this._nativeTargetScroll !== null &&
-                Math.abs(this._nativeTargetScroll - targetScroll) < SCROLL_SNAP_THRESHOLD
-            ) {
-                return;
-            }
-
-            if (this[animIdKey]) {
-                cancelAnimationFrame(this[animIdKey]);
-                this[animIdKey] = null;
-                this[stateKey] = null;
-            }
-
-            try {
-                // ============================================================
-                // NATIVE SCROLL ACTIVE STATE MANAGEMENT
-                // ============================================================
-                // Mark native vertical scroll active and record target coordinate.
-                // Reset any existing native scroll timeout so rapid keypresses keep
-                // isAnimating true throughout the continuous scrolling gesture.
-                // ============================================================
-                this._nativeScrollActive = true;
-                this._nativeTargetScroll = targetScroll;
-                if (this._nativeScrollTimeout) {
-                    clearTimeout(this._nativeScrollTimeout);
-                }
-
-                // Dispatch native smooth scroll to container
-                container.scrollTo({
-                    top: targetScroll,
-                    behavior: 'smooth'
-                });
-
-                // Set a 250ms silence timer after invoking native scrollTo.
-                // Once native scroll settles, clear active state and emit scroll:finished.
-                this._nativeScrollTimeout = setTimeout(() => {
-                    this._nativeScrollActive = false;
-                    this._nativeTargetScroll = null;
-                    this._nativeScrollTimeout = null;
-                    this._checkScrollFinished();
-                }, 250);
-
-                // Prevent horizontal shifts on layout boundaries.
-                if (container.scrollLeft !== 0) {
-                    container.scrollLeft = 0;
-                }
-
-                return;
-            } catch (nativeError) {
-                // Clear active native scroll state on failure to avoid stale locks
-                this._nativeScrollActive = false;
-                this._nativeTargetScroll = null;
-                if (this._nativeScrollTimeout) {
-                    clearTimeout(this._nativeScrollTimeout);
-                    this._nativeScrollTimeout = null;
-                }
-                // Log warning and fall through to standard JS RAF smooth scroll fallback.
-                console.warn('[ScrollController] Native smooth scrollTo failed, falling back to JS RAF:', nativeError);
-            }
-        }
+        /* ====================================================================
+         * 🎬 UNIFIED SMOOTH SCROLL ANIMATION ENGINE (JS RAF + RETARGETING)
+         * ====================================================================
+         * Web browsers (Chromium on Samsung Tizen & LG webOS, WebKit, and Gecko)
+         * implement Element.prototype.scrollTo({ behavior: 'smooth' }) with a
+         * hardcoded cubic-bezier ease-in curve that ALWAYS initializes with zero
+         * velocity. Crucially, per the W3C CSSOM View specification:
+         *
+         *   "If element has an ongoing smooth scroll, abort that smooth scroll."
+         *
+         * When a user holds UP or DOWN on a TV remote, key repeats fire every
+         * 125ms. Calling container.scrollTo({ behavior: 'smooth' }) every 125ms
+         * aborts the active scroll mid-flight after only 10-20px of travel, and
+         * restarts a brand-new ease-in curve with v0 = 0.
+         *
+         * This traps the viewport in an endless ease-in stutter loop on the exact
+         * same item, while D-pad focus advances far down the page.
+         *
+         * Both 'current' and 'native' modes therefore leverage Litefin's unified,
+         * hardware-accelerated JS RAF animation loop below. Using an easeOutQuad
+         * curve (maximum velocity at t=0, smoothly decelerating) with dynamic
+         * retargeting and duration scaling guarantees:
+         *   1. Velocity is preserved across continuous held moves (no dead stops).
+         *   2. The camera effortlessly glides with the moving focus at full speed.
+         *   3. Apple HIG-compliant momentum and fluid organic deceleration.
+         * ==================================================================== */
 
         // ----------------------------------------------------------------
         // RETARGETING LOGIC (The "Zeno's Paradox" Fix)
@@ -480,15 +436,28 @@ class ScrollController {
                 return;
             } else {
                 // The target HAS changed (e.g. the user pressed Down while mid-scroll).
-                // Scale the duration proportionally to the *remaining* distance.
+                // Scale duration proportionally to remaining distance, while enforcing
+                // a fluid minimum duration floor to prevent premature fast-scroll rush.
                 const remainingDistance = Math.abs(targetScroll - currentScroll);
                 const originalDistance = Math.abs(targetScroll - this[stateKey].startScroll) || 1;
                 const scaledDuration = Math.round(duration * Math.min(remainingDistance / originalDistance, 1));
 
+                // ------------------------------------------------------------
+                // MOMENTUM CONTINUITY FLOOR (Apple HIG Fluidity Standard)
+                // ------------------------------------------------------------
+                // When pressing keys briskly during normal navigation, retargeting
+                // must NOT abruptly collapse duration down to 50ms (which feels
+                // like an uncontrollable fast-scroll hair-trigger).
+                // Clamping the minimum retarget duration to 75% of base duration
+                // (~150ms for 200ms vertical scrolls) guarantees that deliberate
+                // brisk presses maintain silky, predictable Apple-level easing.
+                // ------------------------------------------------------------
+                const minDurationFloor = Math.round(duration * 0.75);
+
                 this[stateKey].startScroll = currentScroll;
                 this[stateKey].target = targetScroll;
                 this[stateKey].startTime = null; // Will reset on next RAF
-                this[stateKey].duration = Math.max(50, scaledDuration); // Enforce 50ms minimum
+                this[stateKey].duration = Math.max(minDurationFloor, scaledDuration);
                 return;
             }
         }
@@ -712,10 +681,17 @@ class ScrollController {
         const getCumulativeOffsetTop = (el, relativeTo) => {
             if (!el || !relativeTo) return 0;
 
-            // Check cache first — avoid reflow if already computed for this element
-            const cached = this._offsetCache.get(el);
-            if (cached !== undefined && cached.container === relativeTo) {
-                return cached.value;
+            // -------------------------------------------------------------
+            // CACHE READ GUARD: Check cache ONLY for stable .media-row nodes
+            // -------------------------------------------------------------
+            // Dynamic cards in grids/lists must never read from the cache because
+            // their offsets are dependent on virtual spacers and layout shifting.
+            // -------------------------------------------------------------
+            if (el.classList.contains('media-row')) {
+                const cached = this._offsetCache.get(el);
+                if (cached !== undefined && cached.container === relativeTo) {
+                    return cached.value;
+                }
             }
 
             let top = 0;
