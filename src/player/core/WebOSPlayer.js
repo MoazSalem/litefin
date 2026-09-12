@@ -708,51 +708,49 @@ export class WebOSPlayer {
                 // setAudioStreamIndex() via JellyfinPlayer and will correctly
                 // fire audiotrackswitchfailed → restart if tracks are empty.
                 // ─────────────────────────────────────────────────────────────
+                // ─────────────────────────────────────────────────────────────
+                // Progressive DirectPlay track selection
+                // ─────────────────────────────────────────────────────────────
+                // Retrieve the actual default audio track index from the container streams.
+                // This is necessary because options.mediaSource.DefaultAudioStreamIndex holds
+                // the server-resolved preference track, but for progressive DirectPlay,
+                // the TV natively plays whatever track is designated default in the file.
+                const defaultIndex = this._getContainerDefaultAudioIndex(options.mediaSource);
+
+                // Track stream index requested by the player UI
+                const requestedIndex = options.audioStreamIndex;
+
+                // Compare requested index against container default index
+                const isDefaultTrack = (defaultIndex !== undefined && Number(requestedIndex) === Number(defaultIndex)) ||
+                                       (defaultIndex === undefined && resolvedIndex === 0);
+
+                // If the requested track is already the container's default track,
+                // the WebOS native media engine is ALREADY demuxing and playing it natively
+                // (including TrueHD Atmos or DTS-HD MA passed through via eARC).
+                // Attempting to invoke setAudioStreamIndex() here would cause
+                // _resolveNativeAudioIndex() to return -1 (since Chromium's HTML5 audioTracks
+                // collection hides TrueHD/DTS passthrough tracks), which would trigger a
+                // spurious audiotrackswitchfailed event, abort in-flight play() promises,
+                // and force an unnecessary, broken remux restart.
+                if (isDefaultTrack) {
+                    log.info('WebOSPlayer: _applyInitialTracks — requested track', requestedIndex,
+                        'is container default. Already playing natively in hardware, skipping track switch.');
+                    return;
+                }
+
+                // If audioTracks collection is absent or empty, we cannot switch tracks in the browser
                 if (!nativeTracks || nativeTracks.length === 0) {
-                    // ── Direct-play MKV/MP4: AudioStreamIndex is ignored by the server ──
-                    //
-                    // When Jellyfin serves a file with Static=true (DirectPlay), it just
-                    // pipes raw container bytes. The AudioStreamIndex query parameter is
-                    // silently ignored — the server never demuxes or selects a track.
-                    // WebOS then picks whatever track the container flags as default.
-                    //
-                    // Strategy:
-                    //   • Requested track = container default → nothing to do, correct
-                    //     track is already playing. Skip silently.
-                    //
-                    //   • Requested track ≠ container default → the wrong track is playing.
-                    //     We fire audiotrackswitchfailed to schedule a deferred remux
-                    //     restart AFTER play() finishes resolving (so we don't cause
-                    //     "play() interrupted by new load request").
-                    //     The restart uses 'remux' mode so the server runs ffmpeg and
-                    //     actually selects the correct audio track.
-                    // ─────────────────────────────────────────────────────────────────
-                    // Retrieve the actual default audio track index from the container streams.
-                    // This is necessary because options.mediaSource.DefaultAudioStreamIndex holds
-                    // the server-resolved preference track, but for progressive DirectPlay,
-                    // the TV natively plays whatever track is designated default in the file.
-                    const defaultIndex = this._getContainerDefaultAudioIndex(options.mediaSource);
-
-                    // Track stream index requested by the player UI
-                    const requestedIndex = options.audioStreamIndex;
-
-                    // Compare requested index against container default index
-                    const isDefaultTrack = (defaultIndex !== undefined && Number(requestedIndex) === Number(defaultIndex));
-
-                    if (isDefaultTrack) {
-                        log.debug('WebOSPlayer: _applyInitialTracks — audioTracks empty (direct-play), requested track is the container default. No action needed.');
-                    } else {
-                        log.warn('WebOSPlayer: _applyInitialTracks — audioTracks empty, requested index', requestedIndex,
-                            '≠ container default', defaultIndex, '. Scheduling deferred remux restart.');
-                        // Use setTimeout (macrotask) rather than Promise.resolve() (microtask)
-                        // to guarantee the restart fires AFTER play() has fully resolved.
-                        // A microtask still races with video.play()'s own promise within the
-                        // same event loop tick and can trigger "AbortError: play() was interrupted".
-                        setTimeout(() => {
-                            this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex: resolvedIndex } });
-                        }, 0);
-                    }
+                    log.warn('WebOSPlayer: _applyInitialTracks — audioTracks empty, requested index', requestedIndex,
+                        '≠ container default', defaultIndex, '. Scheduling deferred remux restart.');
+                    // Use setTimeout (macrotask) rather than Promise.resolve() (microtask)
+                    // to guarantee the restart fires AFTER play() has fully resolved.
+                    // A microtask still races with video.play()'s own promise within the
+                    // same event loop tick and can trigger "AbortError: play() was interrupted".
+                    setTimeout(() => {
+                        this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex: resolvedIndex } });
+                    }, 0);
                 } else {
+                    // Non-default track requested and nativeTracks is populated: switch via HTML5 audioTracks
                     const outputIndex = nativeTracks.length <= 1 ? 0 : resolvedIndex;
                     this.setAudioStreamIndex(outputIndex);
                 }
@@ -1319,16 +1317,13 @@ export class WebOSPlayer {
         // the wrong track — we log clearly and signal to the caller instead.
         if (!audioTracks || audioTracks.length === 0) {
             // ── Direct-play MKV/MP4: audioTracks is not populated by WebOS ───────
-            //
-            // WebOS does not expose the HTML5 audioTracks API for progressive
-            // container downloads (MKV, MP4). The collection stays empty for
-            // the entire playback session, so any .enabled toggle is a no-op.
-            //
-            // Signal a restart to JellyfinPlayer so it can re-open the stream
-            // with AudioStreamIndex in the server URL, which causes the server
-            // (or the container parser) to serve the correct audio track from
-            // the start. This is the same path used for Transcode audio switches.
-            // ─────────────────────────────────────────────────────────────────
+            // If listIndex is 0 (first/default track), the container default track is
+            // already active and playing natively. There is no reason to restart.
+            if (listIndex === 0) {
+                log.info('WebOSPlayer: video.audioTracks is empty for direct-play, but listIndex is 0 (default track already playing). Skipping restart.');
+                return;
+            }
+
             log.warn('WebOSPlayer: video.audioTracks is empty for direct-play — firing audiotrackswitchfailed to trigger restart');
             this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
             return;
@@ -1356,6 +1351,20 @@ export class WebOSPlayer {
 
         // Guard against out-of-bounds index resolution
         if (nativeIndex < 0 || nativeIndex >= audioTracks.length) {
+            // Check if this stream is the container default track (e.g. TrueHD or DTS).
+            // Passthrough formats are omitted from Chromium's audioTracks collection,
+            // returning nativeIndex -1. But since it is the default track, the TV hardware
+            // is already bitstreaming it over eARC natively — do NOT abort DirectPlay.
+            const targetStream = this._currentPlayOptions?.mediaSource?.MediaStreams?.find(
+                s => s.Type === 'Audio' && s.Index === this._currentPlayOptions?.audioStreamIndex
+            );
+            const isDefault = targetStream ? targetStream.IsDefault : (listIndex === 0);
+
+            if (isDefault) {
+                log.info('WebOSPlayer: _resolveNativeAudioIndex returned out-of-range index for default track (passthrough codec like TrueHD/DTS playing natively). Skipping restart.');
+                return;
+            }
+
             log.warn('WebOSPlayer: _resolveNativeAudioIndex returned out-of-range index', nativeIndex, 'for listIndex', listIndex, '— firing audiotrackswitchfailed');
             this.onEvent({ type: 'audiotrackswitchfailed', data: { listIndex } });
             return;
