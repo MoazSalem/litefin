@@ -1675,6 +1675,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideProgressBar">${i18n.t('HideProgressBar') || 'Hide Progress Bar'}</span>
+                        <span class="setting-description" data-i18n="HideProgressBarDescription">${i18n.t('HideProgressBarDescription') || 'Hide playback progress indicators on media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideProgressBar') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-progress-bar" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowMediaSourceCounts">${i18n.t('ShowMediaSourceCounts') || 'Show Version Counts'}</span>
                         <span class="setting-description" data-i18n="ShowMediaSourceCountsDescription">${i18n.t('ShowMediaSourceCountsDescription') || 'Display a badge showing the number of available video versions on media cards.'}</span>
                     </div>
@@ -6591,6 +6604,32 @@ class SettingsPage extends Page {
 
                 // Log settings adjustment for user session diagnostics.
                 log.info(`Hide Episode Counts set to: ${newValue}`);
+            });
+        }
+
+        // ==========================================
+        // TOGGLE HIDE PROGRESS BAR
+        // ==========================================
+        //
+        // Controls visibility of media card playback progress indicators.
+        // Toggles the user preference in local storage and manages the Apple-style toggle animation state.
+        const hideProgressBarBtn = this.$('#toggle-hide-progress-bar');
+
+        // Verify button exists in the active view before attaching handler
+        if (hideProgressBarBtn) {
+            hideProgressBarBtn.addEventListener('click', () => {
+                // Retrieve current setting (defaults to false / visible)
+                const isHidden = storage.getItem('pref:hideProgressBar') === 'true';
+                const newValue = !isHidden;
+
+                // Persist new setting for CardRenderer to consult
+                storage.setItem('pref:hideProgressBar', newValue);
+
+                // Update active class for sleek Apple switch animation
+                hideProgressBarBtn.classList.toggle('active', newValue);
+
+                // Log state transition
+                log.info(`Hide Progress Bar set to: ${newValue}`);
             });
         }
 

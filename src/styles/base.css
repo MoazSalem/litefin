@@ -1290,6 +1290,14 @@ html[data-low-vram="true"] .grid-card {
     will-change: auto !important;
 }
 
+/* Ensure card progress bar remains visible in Low VRAM mode without requiring CSS fade-in animations */
+html[data-low-vram="true"] .card-progress-container {
+    opacity: 1 !important;
+    -webkit-animation: none !important;
+    animation: none !important;
+    will-change: auto !important;
+}
+
 /* Maintain skeleton shimmer fallback (solid color instead of animation) */
 html[data-low-vram="true"] .skeleton-shimmer::after {
     display: none !important;

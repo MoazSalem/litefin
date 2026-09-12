@@ -618,9 +618,16 @@ class CardRenderer {
 
         // --- 2. Overlays (Progress & Badges) ---
 
-        // Resume Progress Bar
+        // --- Resume Progress Bar ---
+        //
+        // Renders the playback progress indicator along the bottom of the card artwork.
+        // Controlled by user preference 'pref:hideProgressBar' (defaults to shown/false).
         let progressHtml = '';
-        if (item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
+        const hideProgressBar = storage.getItem('pref:hideProgressBar') === 'true';
+
+        // Only construct and mount the progress element if playback progress exists and user hasn't hidden it
+        if (!hideProgressBar && item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
+            // Calculate playback percentage completed
             const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
             progressHtml = `
                 <div class="card-progress-container">
