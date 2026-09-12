@@ -98,8 +98,12 @@ class I18nManager {
         const protocol = window.location.protocol;
 
         if (protocol === 'file:') {
-            // file:// packaged app — origin is null/useless, extract base from raw href
-            base = href.substring(0, href.lastIndexOf('/') + 1);
+            // file:// packaged app — origin is null/useless, extract base from raw href.
+            // Strip hash/search FIRST: hash-router routes (#/player/<id>/resume)
+            // contain slashes, which would corrupt the base path and 404 the
+            // locale fetch whenever the app boots into a deep link.
+            const pathOnly = href.split('#')[0].split('?')[0];
+            base = pathOnly.substring(0, pathOnly.lastIndexOf('/') + 1);
         } else {
             // http:// or https:// — use origin+pathname to avoid hash-router fragments
             const pageUrl = window.location.origin + window.location.pathname;
