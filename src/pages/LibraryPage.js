@@ -1102,6 +1102,14 @@ class LibraryPage extends Page {
             this.state.limit = Math.ceil(this.state.limit / alignCols) * alignCols;
         }
 
+        // Keep startIndex aligned with the effective limit if a specific page was requested
+        if (this.params.page) {
+            const pageNum = parseInt(this.params.page, 10);
+            if (!isNaN(pageNum) && pageNum > 0) {
+                this.state.startIndex = (pageNum - 1) * this.state.limit;
+            }
+        }
+
         try {
             const params = {
                 SortBy: this.state.sortBy,
@@ -1812,8 +1820,9 @@ class LibraryPage extends Page {
 
     _updatePaginationUI() {
         const { startIndex, limit, totalRecordCount } = this.state;
-        const currentPage = Math.floor(startIndex / limit) + 1;
-        const totalPages = Math.ceil(totalRecordCount / limit);
+        const pageParam = this.params.page ? parseInt(this.params.page, 10) : null;
+        const currentPage = (!isNaN(pageParam) && pageParam > 0) ? pageParam : (Math.floor(startIndex / (limit || 1)) + 1);
+        const totalPages = Math.ceil(totalRecordCount / (limit || 1));
 
         this.$('#pagination-info').textContent = i18n.t('PageNumberXOfY', [currentPage, totalPages || 1]);
 
@@ -3792,13 +3801,23 @@ class LibraryPage extends Page {
     }
 
     async _handlePageChange(direction) {
-        const newIndex = this.state.startIndex + direction * this.state.limit;
+        // ====================================================================
+        // RELIABLE PAGE-BASED PAGINATION
+        // ====================================================================
+        // Derive targetPage directly from the current page number rather than
+        // raw byte/item offsets, which eliminates rounding mismatches caused by
+        // dynamic column limit alignment (e.g., 100 aligned to 105).
+        // ====================================================================
+        const isSeerr = this.state.libraryId === 'seerr';
+        const pageLimit = isSeerr ? 100 : (this.state.limit || 100);
+        const currentPage = Math.floor(this.state.startIndex / pageLimit) + 1;
+        const totalPages = Math.ceil(this.state.totalRecordCount / pageLimit) || 1;
+        const targetPage = currentPage + direction;
 
-        // Bounds check
-        if (newIndex < 0 || newIndex >= this.state.totalRecordCount) return;
+        // Bounds check: ensure target page stays within valid [1, totalPages] range
+        if (targetPage < 1 || targetPage > totalPages) return;
 
-        if (this.state.libraryId === 'seerr') {
-            const targetPage = Math.floor(newIndex / 100) + 1;
+        if (isSeerr) {
             const currentParams = new URLSearchParams();
             if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
             if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
@@ -3813,7 +3832,6 @@ class LibraryPage extends Page {
             return;
         }
 
-        const targetPage = Math.floor(newIndex / this.state.limit) + 1;
         const currentParams = new URLSearchParams();
         if (this.params.genreId) currentParams.set('genreId', this.params.genreId);
         if (this.params.studioId) currentParams.set('studioId', this.params.studioId);
