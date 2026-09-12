@@ -292,7 +292,13 @@ body.lyrics-active .audio-player-center {
     -webkit-justify-content: center;
     justify-content: center;
     box-sizing: border-box;
-    transition: all 0.2s ease;
+    /* Apple tvOS inspired spring physics for interactive focus transitions */
+    -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.error-actions .btn.span-2 {
+    grid-column: span 2;
 }
 
 .error-actions .btn-primary {
@@ -305,6 +311,7 @@ body.lyrics-active .audio-player-center {
 .error-actions .btn-primary.focused {
     background: var(--jf-accent);
     color: #fff;
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
     box-shadow: var(--jf-shadow-md);
 }
@@ -318,8 +325,26 @@ body.lyrics-active .audio-player-center {
 .error-actions .btn-secondary.focused {
     background: rgba(255, 255, 255, 0.25);
     border: 3px solid var(--jf-button-border-focus, #fff);
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
     box-shadow: var(--jf-shadow-md);
+}
+
+/* Responsive adjustments across mobile, tablet, and TV layouts */
+@media (max-width: 640px) {
+    .error-panel {
+        width: 92vw;
+        padding: 32px 24px;
+        border-radius: 28px;
+    }
+
+    .error-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .error-actions .btn.span-2 {
+        grid-column: span 1;
+    }
 }
 
 /* ==========================================================================

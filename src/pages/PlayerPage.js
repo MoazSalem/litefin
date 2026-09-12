@@ -157,9 +157,10 @@ class PlayerPage extends Page {
                         </div>
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
+                            <button class="btn btn-secondary focusable" id="error-dismiss-btn" tabindex="0">Dismiss</button>
                             <button class="btn btn-secondary focusable" id="error-playback-mode-btn" tabindex="0">Playback Mode</button>
                             <button class="btn btn-secondary focusable" id="error-html5-backend-btn" tabindex="0">Use HTML5 Player</button>
-                            <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
+                            <button class="btn btn-secondary focusable span-2" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
                 </div>
@@ -2704,6 +2705,7 @@ class PlayerPage extends Page {
     _showError(message) {
         // Expose debug helper on window so the user or developer can trigger the dialog anytime
         window.__forcePlayerError = (msg = 'Simulated playback error for UI testing') => this._showError(msg);
+        window.__hidePlayerError = () => this._hideError();
 
         this._showLoading(false);
 
@@ -2732,12 +2734,19 @@ class PlayerPage extends Page {
 
             // Bind buttons
             const retryBtn = this.$('#error-retry-btn');
+            const dismissBtn = this.$('#error-dismiss-btn');
             const playbackModeBtn = this.$('#error-playback-mode-btn');
             const html5BackendBtn = this.$('#error-html5-backend-btn');
             const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
                 retryBtn.onclick = () => this._retryPlayback();
+            }
+
+            if (dismissBtn) {
+                // Allow dismissing the error modal when transient network glitches occur
+                // while the underlying stream or player buffer is still rendering smoothly
+                dismissBtn.onclick = () => this._hideError();
             }
 
             if (playbackModeBtn) {
@@ -2754,7 +2763,7 @@ class PlayerPage extends Page {
                 backBtn.onclick = () => router.back();
             }
 
-            // Register Focus Section as a 2x2 Grid
+            // Register Focus Section as a 2-column Grid
             focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
                 orientation: 'grid',
                 columns: 2,
@@ -2765,6 +2774,36 @@ class PlayerPage extends Page {
             focusManager.setActiveSection('player-error');
             focusManager.focusElement(retryBtn || backBtn);
         }
+    }
+
+    /**
+     * =========================================================================
+     * Dismiss and Hide Playback Error Dialog
+     * =========================================================================
+     * Conceals the error overlay, unregisters its focus section, and releases
+     * UI control back to normal video playback and the OSD.
+     *
+     * In transient network dropouts or recoverable buffering hiccups, the media
+     * pipeline frequently keeps decoding video/audio successfully despite error
+     * events firing. This allows the user to dismiss the intrusive modal and
+     * continue viewing undisturbed.
+     * =========================================================================
+     */
+    _hideError() {
+        log.info('User dismissed playback error modal; hiding overlay to resume playback');
+
+        // Locate error modal element
+        const errorEl = this.$('#player-error');
+        if (errorEl) {
+            // Apply hidden class to trigger Apple-style fade-out transition
+            errorEl.classList.add('hidden');
+
+            // Unregister error modal from focus spatial navigation
+            focusManager.unregister('player-error');
+        }
+
+        // Cleanly clear button focus state so no active highlights remain on hidden elements
+        focusManager.clearFocus();
     }
 
     /**
@@ -2909,7 +2948,8 @@ class PlayerPage extends Page {
                 if (errorEl) {
                     errorEl.classList.remove('hidden');
                     focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
-                        orientation: 'horizontal',
+                        orientation: 'grid',
+                        columns: 2,
                         enterTo: 'last-focused'
                     });
                     const retryBtn = errorEl.querySelector('#error-retry-btn');
