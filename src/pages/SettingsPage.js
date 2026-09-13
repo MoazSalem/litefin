@@ -6625,7 +6625,7 @@ class SettingsPage extends Page {
                 // Persist new setting for CardRenderer to consult
                 storage.setItem('pref:hideProgressBar', newValue);
 
-                // Update active class for sleek Apple switch animation
+                // Update active class for sleek switch animation
                 hideProgressBarBtn.classList.toggle('active', newValue);
 
                 // Log state transition

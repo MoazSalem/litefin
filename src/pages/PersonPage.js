@@ -491,14 +491,14 @@ class PersonPage extends Page {
                 try {
                     const born = new Date(p.PremiereDate).getFullYear();
                     parts.push(i18n.t('BirthDateValue', [born]));
-                } catch (e) {}
+                } catch (e) { }
             }
 
             if (p.EndDate) {
                 try {
                     const died = new Date(p.EndDate).getFullYear();
                     parts.push(i18n.t('DeathDateValue', [died]));
-                } catch (e) {}
+                } catch (e) { }
             }
 
             if (p.ProductionLocations && p.ProductionLocations.length > 0) {
@@ -676,7 +676,6 @@ class PersonPage extends Page {
 
     /**
      * Binds click and remote activation handlers to the Tab Switcher buttons (All / Movies / Series).
-     * Follows Apple Human Interface Guidelines for responsive, tactile segmented controls.
      */
     _bindSwitcherEvents() {
         const switcher = this.$('#person-tab-switcher');

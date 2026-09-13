@@ -132,7 +132,7 @@ class HeroCarousel {
                 quality: logoParams.quality,
                 tag: logoTag
             });
-            const logoSrc = isActive ? `src="${logoUrl}"` : `data-src="${logoUrl}"`;
+            const logoSrc = `src="${logoUrl}"`;
             logoHtml = `<div class="hero-logo-container"><img ${logoSrc} alt="" class="hero-logo"></div>`;
         } else {
             logoHtml = `<h1 class="hero-item-title">${escapeHtml(i18n.ensureBiDi(item.Name))}</h1>`;
@@ -180,7 +180,7 @@ class HeroCarousel {
 
         return `
             <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}"${!isActive ? ' style="visibility:hidden"' : ''}>
-                <div class="hero-backdrop" data-backdrop="${backdropUrl}"${isActive ? ` style="background-image: url('${backdropUrl}')"` : ''}>
+                <div class="hero-backdrop" data-backdrop="${backdropUrl}" style="background-image: url('${backdropUrl}')">
                     ${blurHash ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
                 </div>
                 <div class="hero-content">
@@ -362,17 +362,10 @@ class HeroCarousel {
             if (!hash) return;
 
             // Resolve the backdrop background-image URL
-            const parentHeroItem = canvas.closest('.hero-item');
-            const heroBackdrop = parentHeroItem.querySelector('.hero-backdrop');
-
             const style = heroBackdrop.style.backgroundImage;
             const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
-            const url = match && match[1];
+            const url = (match && match[1]) || heroBackdrop.dataset.backdrop;
             if (!url) return;
-
-            // Determine slide index for selective preloading
-            const index = parentHeroItem ? parseInt(parentHeroItem.dataset.index, 10) : -1;
-            const isFirstSlide = index === 0;
 
             // Decode blurhash at low resolution asynchronously
             import('../utils/BlurHashDecoder.js')
@@ -389,11 +382,7 @@ class HeroCarousel {
                 })
                 .catch((err) => log.error('Failed to decode hero blurhash', err));
 
-            // Only preload backdrop image for the first (active) slide
-            // Other slides load lazily via _preloadSlide on navigation
-            if (!isFirstSlide) return;
-
-            // Listen for backdrop image to finish preloading
+            // Track image load to cleanly fade out the blurhash canvas placeholder
             const img = new Image();
             img.onload = () => {
                 requestAnimationFrame(() => {
@@ -403,12 +392,16 @@ class HeroCarousel {
                     }, 500);
                 });
             };
+            img.onerror = () => {
+                // If loading fails, remove canvas so it doesn't block underlying display
+                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+            };
             img.src = url;
         });
 
-        // Preload the adjacent slide for smoother initial navigation
-        if (this._items.length > 1) {
-            this._preloadSlide(1);
+        // Preload all remaining slides so that every item in the carousel is ready
+        for (let i = 1; i < this._items.length; i++) {
+            this._preloadSlide(i);
         }
     }
 
@@ -652,9 +645,8 @@ class HeroCarousel {
             const prevContent = prevItem.querySelector('.hero-content');
             if (prevContent) prevContent.style.willChange = 'auto';
             const prevBackdrop = prevItem.querySelector('.hero-backdrop');
-            if (prevBackdrop) prevBackdrop.style.willChange = 'auto';
-            // Free the backdrop GPU texture
-            if (prevBackdrop) prevBackdrop.style.backgroundImage = '';
+            // Keep the loaded backdrop image in memory; visibility: hidden already
+            // releases GPU layer compositing overhead cleanly.
             this._hideTimeoutId = null;
         }, 1050); // Just after the 1000ms opacity transition
 

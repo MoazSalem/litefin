@@ -351,6 +351,28 @@ class ScrollController {
         // Resolve current coordinates through our unified scroll reader.
         const currentScroll = isVertical ? this.getVerticalScroll(container) : container.scrollLeft;
 
+        // ----------------------------------------------------------------
+        // DYNAMIC VELOCITY ADAPTATION 
+        // ----------------------------------------------------------------
+        // Standard row-to-row transitions (~250px) utilize the base 200ms duration.
+        // For large vertical transitions (e.g. hero carousel ↔ first content row
+        // at 500-750px), scale duration proportionally (up to 280ms). This
+        // keeps velocity under ~2500px/s, allowing the camera to glide with
+        // organic, spring-like weight without violent frame jumps.
+        // ----------------------------------------------------------------
+        if (isVertical && durationToUse > 0) {
+            const distance = Math.abs(targetScroll - currentScroll);
+            if (distance > 400) {
+                durationToUse = Math.min(280, Math.round(durationToUse * (1 + (distance - 400) / 750)));
+            }
+        }
+
+        // STABILIZATION: Cleanly reset horizontal drift once at initialization
+        // rather than reading layout on every animation frame.
+        if (isVertical && container.scrollLeft !== 0) {
+            container.scrollLeft = 0;
+        }
+
         // Already at target or instant scroll requested — snap and bail.
         // CRITICAL: Cancel any running animation in this axis BEFORE snapping.
         if (durationToUse <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
@@ -422,7 +444,6 @@ class ScrollController {
          * retargeting and duration scaling guarantees:
          *   1. Velocity is preserved across continuous held moves (no dead stops).
          *   2. The camera effortlessly glides with the moving focus at full speed.
-         *   3. Apple HIG-compliant momentum and fluid organic deceleration.
          * ==================================================================== */
 
         // ----------------------------------------------------------------
@@ -443,7 +464,7 @@ class ScrollController {
                 const scaledDuration = Math.round(duration * Math.min(remainingDistance / originalDistance, 1));
 
                 // ------------------------------------------------------------
-                // MOMENTUM CONTINUITY FLOOR (Apple HIG Fluidity Standard)
+                // MOMENTUM CONTINUITY FLOOR
                 // ------------------------------------------------------------
                 // When pressing keys briskly during normal navigation, retargeting
                 // must NOT abruptly collapse duration down to 50ms (which feels
@@ -465,6 +486,7 @@ class ScrollController {
         // Create new animation state
         this[stateKey] = {
             container,
+            track,
             startScroll: currentScroll,
             target: targetScroll,
             startTime: null, // Initialized in first RAF frame
@@ -509,35 +531,37 @@ class ScrollController {
             const distance = state.target - state.startScroll;
             const newScroll = state.startScroll + distance * eased;
 
-            // Apply scroll position (Layout-triggering, but unavoidable without transform scroll)
+            // Apply scroll position
             if (isVertical) {
                 if (scrollMode === 'gpu') {
-                    // Update GPU transform coordinates
-                    const currentTrack = container.querySelector('.vertical-scroll-track');
+                    // Update GPU transform coordinates using pre-cached track element
+                    const currentTrack = state.track;
                     if (currentTrack) {
                         currentTrack.style.transform = `translate3d(0px, -${newScroll}px, 0px)`;
                         currentTrack.style.webkitTransform = `translate3d(0px, -${newScroll}px, 0px)`;
                     }
                     container.scrollTop = 0;
                 } else {
+                    // Write vertical scroll position directly to container.
+                    // CRITICAL PERFORMANCE RULE: Do NOT read scrollLeft or other layout
+                    // metrics here! Setting scrollTop dirties the layout tree. Reading
+                    // scrollLeft immediately afterwards forces a full synchronous reflow
+                    // on every 16ms animation frame, reducing complex pages like HomePage
+                    // (with 1500+ DOM nodes) down to a laggy 3 FPS.
                     state.container.scrollTop = newScroll;
-                }
-                // STABILIZATION: Prevent horizontal drift on vertical containers.
-                if (state.container.scrollLeft !== 0) {
-                    state.container.scrollLeft = 0;
                 }
             } else {
                 state.container.scrollLeft = newScroll;
             }
 
             if (progress < 1) {
-                // Continue animation
+                // Continue animation loop on the next frame
                 this[animIdKey] = requestAnimationFrame(animate);
             } else {
-                // Snap to exact target and clean up
+                // Snap to exact target and clean up animation state
                 if (isVertical) {
                     if (scrollMode === 'gpu') {
-                        const currentTrack = container.querySelector('.vertical-scroll-track');
+                        const currentTrack = state.track;
                         if (currentTrack) {
                             currentTrack.style.transform = `translate3d(0px, -${state.target}px, 0px)`;
                             currentTrack.style.webkitTransform = `translate3d(0px, -${state.target}px, 0px)`;
@@ -545,6 +569,11 @@ class ScrollController {
                         container.scrollTop = 0;
                     } else {
                         state.container.scrollTop = state.target;
+                    }
+                    // STABILIZATION: Settle any horizontal drift once at animation completion,
+                    // avoiding per-frame layout recalculations during motion.
+                    if (state.container.scrollLeft !== 0) {
+                        state.container.scrollLeft = 0;
                     }
                 } else {
                     state.container.scrollLeft = state.target;
@@ -656,7 +685,20 @@ class ScrollController {
         // ----------------------------------------------------------------
         if (element.id === 'hero-carousel-container' || element.closest('#hero-carousel-container')) {
             if (pageContent) {
-                this.smoothScrollTo(pageContent, 0, options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL);
+                // ============================================================
+                // HERO FAST PATH SNAP CHECK
+                // ============================================================
+                // When moving up from rows to the hero carousel across large
+                // distances, honor pref:snapLargeScrolls if enabled so users
+                // who prefer instant jumps don't wait for animations.
+                // ============================================================
+                const currentScroll = this.getVerticalScroll(pageContent);
+                const viewHeight = pageContent.clientHeight;
+                const scrollDelta = Math.abs(currentScroll);
+                const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
+                const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
+
+                this.smoothScrollTo(pageContent, 0, options.instantScroll || forceInstant ? 0 : SCROLL_DURATION_VERTICAL);
             }
             return;
         }
@@ -780,10 +822,16 @@ class ScrollController {
             if (isHero) {
                 // ============================================================
                 // Force scroll to absolute top for hero/title split sections.
-                // Forward instantScroll so rapid navigation up to hero snaps
-                // cleanly without forcing full 200ms smooth animation.
+                // Forward instantScroll and honor pref:snapLargeScrolls so rapid
+                // navigation up to hero snaps cleanly without forcing animation.
                 // ============================================================
-                this.smoothScrollTo(pageContent, 0, options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL);
+                const currentScroll = this.getVerticalScroll(pageContent);
+                const viewHeight = pageContent.clientHeight;
+                const scrollDelta = Math.abs(currentScroll);
+                const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
+                const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
+
+                this.smoothScrollTo(pageContent, 0, options.instantScroll || forceInstant ? 0 : SCROLL_DURATION_VERTICAL);
                 // Disable further row-based alignment logic and generic vertical scroll
                 useRowScroll = false;
                 activePageContent = null;

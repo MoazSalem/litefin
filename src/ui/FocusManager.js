@@ -718,7 +718,7 @@ class FocusManager {
         // 2. If we found a target, move to it
         if (nextElement) {
             // ----------------------------------------------------------------
-            // ADAPTIVE INTERACTION PHYSICS (Apple HIG Momentum Standard)
+            // ADAPTIVE INTERACTION PHYSICS 
             // ----------------------------------------------------------------
             // Normal browsing and deliberate fast taps (<5 items) stay silky smooth,
             // tracking focus transitions with continuous ease-out deceleration.
