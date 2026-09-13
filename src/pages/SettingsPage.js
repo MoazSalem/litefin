@@ -9313,12 +9313,12 @@ class SettingsPage extends Page {
                                 focusManager.invalidateCache('settings-content');
                             }
 
-                            // FONT LOADING: Trigger download if needed
+                            // FONT LOADING: Trigger download if needed (forcing reload for explicit user change)
                             if (
                                 (settingConfig.key === 'subtitleFont' || settingConfig.key === 'subtitleFontAss') &&
                                 newValue
                             ) {
-                                FontLoader.loadFont(newValue).then((loaded) => {
+                                FontLoader.loadFont(newValue, true).then((loaded) => {
                                     if (loaded) {
                                         log.debug(`Font loaded: ${newValue}`);
                                     } else {

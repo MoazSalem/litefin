@@ -2352,12 +2352,14 @@ class PlayerPage extends Page {
             if (span) {
                 SubtitleStyles.applyStyles(span, styles);
 
-                // Ensure the selected font is loaded, then re-apply if needed
+                // Ensure the selected font is loaded if not already ready/failed, then re-apply if needed
                 const fontId = SubtitleStyles.getCurrentFontId();
-                if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
+                if (fontId && !FontLoader.isFontLoaded(fontId) && !FontLoader.hasFontFailed(fontId)) {
+                    FontLoader.loadFont(fontId).then((loaded) => {
                         // Re-apply styles after font is loaded to trigger repaint
-                        SubtitleStyles.applyStyles(span, styles);
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
@@ -2433,12 +2435,14 @@ class PlayerPage extends Page {
             if (span) {
                 SubtitleStyles.applyStyles(span, styles);
 
-                // Ensure font is loaded (same font as primary — likely already cached)
+                // Ensure font is loaded if not already ready/failed (same font as primary — likely already cached)
                 const fontId = SubtitleStyles.getCurrentFontId();
-                if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
+                if (fontId && !FontLoader.isFontLoaded(fontId) && !FontLoader.hasFontFailed(fontId)) {
+                    FontLoader.loadFont(fontId).then((loaded) => {
                         // Re-apply after font loads to trigger repaint
-                        SubtitleStyles.applyStyles(span, styles);
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
@@ -2539,11 +2543,13 @@ class PlayerPage extends Page {
                 const windowStyles = SubtitleStyles.getWindowStyles();
                 SubtitleStyles.applyStyles(overlay, windowStyles);
 
-                // Handle font loading if changed
+                // Handle font loading if changed by user settings
                 const fontId = SubtitleStyles.getCurrentFontId();
                 if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
-                        SubtitleStyles.applyStyles(span, styles);
+                    FontLoader.loadFont(fontId, true).then((loaded) => {
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
@@ -2565,8 +2571,10 @@ class PlayerPage extends Page {
 
                 const fontId = SubtitleStyles.getCurrentFontId();
                 if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
-                        SubtitleStyles.applyStyles(span, styles);
+                    FontLoader.loadFont(fontId, true).then((loaded) => {
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
