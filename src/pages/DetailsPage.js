@@ -3740,8 +3740,8 @@ class DetailsPage extends Page {
         // -------------------------------------------------------------
         const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
 
-        // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
-        const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
+        // Filter out current episode if preference is disabled, and slice limits to 100 for the row.
+        const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 100);
 
         if (siblings.length > 0) {
             // Find index of the current active episode in the siblings list

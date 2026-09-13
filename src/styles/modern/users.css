@@ -51,7 +51,7 @@ html[data-layout-login="modern"] .users-grid::-webkit-scrollbar-thumb:hover {
 }
 
 html[data-layout-login="modern"] .user-item {
-    width: 240px;
+    width: 215px;
     margin: 20px;
     display: flex;
     flex-direction: column;
@@ -60,8 +60,8 @@ html[data-layout-login="modern"] .user-item {
 
 html[data-layout-login="modern"] .login-user-card {
     position: relative;
-    width: 220px;
-    height: 220px;
+    width: 208px;
+    height: 208px;
     background: var(--jf-surface, #151515);
     border-radius: 50%;
     overflow: hidden;
