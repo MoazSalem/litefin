@@ -748,10 +748,19 @@ class LoginPage extends Page {
             orientation: 'auto' // Allow spatial navigation (Left/Right for button, Down for servers)
         });
 
-        // Register users section - grid allows 2D navigation
-        this.registerFocusSection('login-users', this.$('[data-section="users"]'), {
+        // Register users grid section - dedicated to user cards inside #users-grid
+        // Retain focus on Up (no leaveUp to hidden server section)
+        // Handover Down to action buttons only when leaving grid
+        this.registerFocusSection('login-users', this.$('#users-grid'), {
             orientation: 'grid',
-            leaveUp: 'login-server'
+            leaveDown: 'login-user-actions'
+        });
+
+        // Register user screen action buttons (Quick Connect, Manual Login, Log out)
+        // Up navigates back up to the users grid
+        this.registerFocusSection('login-user-actions', this.$('[data-section="users"] .login-actions'), {
+            orientation: 'horizontal',
+            leaveUp: 'login-users'
         });
 
         // Register password section - use grid for spatial navigation
@@ -1076,6 +1085,7 @@ class LoginPage extends Page {
 
         // Invalidate focus cache so new items are found
         focusManager.invalidateCache('login-users');
+        focusManager.invalidateCache('login-user-actions');
 
         // Click handling is delegated on _usersGrid container in _bindEvents()
         // No per-card listeners needed — delegation survives innerHTML rebuilds

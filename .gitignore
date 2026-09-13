@@ -44,3 +44,5 @@ npm-debug.log*
 knowledge.md
 /.agents
 *.ipk
+/graphify-out
+.codegraph/
