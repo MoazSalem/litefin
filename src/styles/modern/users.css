@@ -20,27 +20,34 @@ html[data-layout-login="modern"] .users-grid {
     box-sizing: border-box;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    /* Explicitly restore scrollbar display for Firefox/modern browsers */
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(255, 255, 255, 0.4) rgba(255, 255, 255, 0.05) !important;
 }
 
+/* Explicitly override base.css global `::-webkit-scrollbar { display: none; width: 0; }` on Tizen/WebKit */
 html[data-layout-login="modern"] .users-grid::-webkit-scrollbar {
-    width: 6px;
+    display: block !important;
+    width: 8px !important;
+    background: transparent !important;
 }
 
 html[data-layout-login="modern"] .users-grid::-webkit-scrollbar-track {
-    background: transparent;
+    display: block !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 9999px !important;
 }
 
 html[data-layout-login="modern"] .users-grid::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.22);
-    border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: background-color 0.2s ease;
+    display: block !important;
+    background: rgba(255, 255, 255, 0.4) !important;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    min-height: 40px !important;
 }
 
 html[data-layout-login="modern"] .users-grid::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.6) !important;
 }
 
 html[data-layout-login="modern"] .user-item {

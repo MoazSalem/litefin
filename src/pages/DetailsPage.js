@@ -3014,7 +3014,7 @@ class DetailsPage extends Page {
                             ? `${ep.IndexNumber}. `
                             : '';
 
-                const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
                 let runtimeText = '';
                 if (ep.RunTimeTicks) {
                     const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -3039,7 +3039,7 @@ class DetailsPage extends Page {
                             <div class="episode-row-info">
                                 <div class="episode-row-title">${episodePrefix}${episodeTitle}</div>
                                 <div class="episode-row-meta">
-                                    ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                    ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                     ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                     ${endsAtText ? `<span>${endsAtText}</span>` : ''}
                                 </div>
@@ -3212,8 +3212,7 @@ class DetailsPage extends Page {
                     );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
-                    const rating =
-                        ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
                     let runtimeText = '';
                     if (ep.RunTimeTicks) {
                         const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -3238,7 +3237,7 @@ class DetailsPage extends Page {
                                 <div class="episode-row-info">
                                     <div class="episode-row-title">${ep.IndexNumber || 0}. ${episodeTitle}</div>
                                     <div class="episode-row-meta">
-                                        ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                        ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                         ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                         ${endsAtText ? `<span>${endsAtText}</span>` : ''}
                                     </div>
