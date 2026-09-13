@@ -1839,6 +1839,19 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {number} index - Audio stream index (Jellyfin ID)
      */
     async setAudioStreamIndex(index) {
+        // ====================================================================
+        // Prewarm Cache Invalidation
+        // ====================================================================
+        // When the user changes the audio track inside the player, any prewarmed
+        // cache in PrewarmManager holds stale metadata reflecting previous or
+        // default audio tracks. Invalidate the cache immediately so that subsequent
+        // launches re-query fresh metadata and correctly remember the updated track.
+        // ====================================================================
+        if (this._currentAudioStreamIndex !== index) {
+            log.info(`[Prewarm] Invalidating prewarm cache due to audio stream change (${this._currentAudioStreamIndex} -> ${index})`);
+            prewarmManager.invalidateCache();
+        }
+
         this._currentAudioStreamIndex = index;
 
         // Determine if target track codec is natively supported by current hardware backend
@@ -1982,6 +1995,20 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {number} index - Subtitle stream index (-1 to disable)
      */
     async setSubtitleStreamIndex(index) {
+        // =====================================================================
+        // Prewarm Cache Invalidation
+        // =====================================================================
+        // If the user changes the subtitle track during active playback (and
+        // this is not the initial playback setup phase where tracks are first applied),
+        // invalidate the PrewarmManager cache. This ensures subsequent launches
+        // fetch fresh item metadata from Jellyfin rather than reusing stale
+        // prewarmed metadata with the previous default subtitle track.
+        // =====================================================================
+        if (!this._playSetupInProgress && this._currentSubtitleStreamIndex !== index) {
+            log.info(`[Prewarm] Invalidating prewarm cache due to subtitle stream change (${this._currentSubtitleStreamIndex} -> ${index})`);
+            prewarmManager.invalidateCache();
+        }
+
         this._currentSubtitleStreamIndex = index;
 
         // =====================================================================

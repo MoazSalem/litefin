@@ -266,6 +266,22 @@ export class PrewarmManager {
     }
 
     /**
+     * Invalidate and clear all cached prewarm data and in-flight requests.
+     *
+     * Semantic alias for clear() used when playback configuration (such as
+     * audio or subtitle tracks) changes during playback. This guarantees that
+     * stale prewarmed metadata holding old track defaults will not be consumed
+     * on subsequent launches of the media item.
+     */
+    invalidateCache() {
+        // Log cache invalidation event for playback diagnostics
+        log.info('[Prewarm] Invalidate cache requested — clearing prewarm manager memory and aborting requests');
+
+        // Flush all cached data and abort any ongoing network pre-fetches
+        this.clear();
+    }
+
+    /**
      * Abort any ongoing network operations and clear memory references.
      */
     clear() {
