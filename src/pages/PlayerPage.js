@@ -1093,7 +1093,56 @@ class PlayerPage extends Page {
         let savedSubtitleIndex =
             preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
 
-        // If no explicit selection from DetailsPage, try to restore from session memory (if enabled)
+        // =========================================================================
+        // 2.1 Restore Item-Specific Track Memory
+        // =========================================================================
+        // If the user previously selected an audio or subtitle track specifically for
+        // this media item (such as an audio commentary track or specific language),
+        // we prioritize restoring it directly when resuming or continuing playback.
+        // =========================================================================
+        if (savedAudioIndex === undefined && item?.Id) {
+            const savedItemAudio = storage.getItem(`track:audio:${item.Id}`);
+            if (savedItemAudio !== null && savedItemAudio !== undefined) {
+                const parsedIndex = Number(savedItemAudio);
+                const streamMatch = mediaSource?.MediaStreams?.find(
+                    (s) => s.Type === 'Audio' && s.Index === parsedIndex
+                );
+                if (streamMatch) {
+                    savedAudioIndex = parsedIndex;
+                    log.info(
+                        `[Track Memory] Restored item-specific audio track: Index ${savedAudioIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                    );
+                }
+            }
+        }
+
+        if (savedSubtitleIndex === undefined && item?.Id) {
+            const savedItemSubtitle = storage.getItem(`track:subtitle:${item.Id}`);
+            if (savedItemSubtitle !== null && savedItemSubtitle !== undefined) {
+                const parsedSubIndex = Number(savedItemSubtitle);
+                if (parsedSubIndex === -1) {
+                    savedSubtitleIndex = -1;
+                    log.info(`[Track Memory] Restored item-specific subtitle track: Off (-1)`);
+                } else {
+                    const streamMatch = mediaSource?.MediaStreams?.find(
+                        (s) => s.Type === 'Subtitle' && s.Index === parsedSubIndex
+                    );
+                    if (streamMatch) {
+                        savedSubtitleIndex = parsedSubIndex;
+                        log.info(
+                            `[Track Memory] Restored item-specific subtitle track: Index ${savedSubtitleIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                        );
+                    }
+                }
+            }
+        }
+
+        // =========================================================================
+        // 2.2 Restore Session-Scoped Track Memory (Cross-Episode Carryover)
+        // =========================================================================
+        // If no explicit selection from DetailsPage or item memory exists, try to
+        // carry over track preferences from the active session (if enabled in settings).
+        // =========================================================================
         if (PlayerSettings.get('rememberTracksForSession') !== false) {
             if (savedAudioIndex === undefined) {
                 const sessionAudioLang = storage.getItem('session:lastAudioLang');
@@ -2042,11 +2091,12 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Capture the currently active audio and subtitle tracks so they can be
-     * carried forward to the next episode if 'rememberTracksForSession' is on.
+     * Capture the currently active audio and subtitle tracks.
+     * Persists them per-item so resuming this specific item restores the exact tracks,
+     * and updates session-scoped memory to carry them forward to the next episode if
+     * 'rememberTracksForSession' is enabled.
      */
     _captureActiveTrackSelection() {
-        if (PlayerSettings.get('rememberTracksForSession') === false) return;
         if (!this._player || !this._item) return;
 
         const mediaSource = this._player.getCurrentMediaSource?.() || this._item.MediaSources?.[0];
@@ -2055,18 +2105,26 @@ class PlayerPage extends Page {
         // 1. Audio Track Capture
         const activeAudioIndex = this._player._currentAudioStreamIndex;
         if (activeAudioIndex !== undefined && activeAudioIndex !== -1) {
-            const activeAudioTrack = mediaSource.MediaStreams.find(
-                (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
-            );
-            if (activeAudioTrack) {
-                // Save undetermined ('und') instead of 'none' if language is missing
-                // to distinguish undefined languages from disabled tracks.
-                storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'und');
-                storage.setItem(
-                    'session:lastAudioTitle',
-                    activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
+            // Persist per-item selection so resuming this specific item restores the exact track
+            if (this._item.Id) {
+                storage.setItem(`track:audio:${this._item.Id}`, String(activeAudioIndex));
+                log.info(`[Track Memory] Saved item audio index: ${this._item.Id} -> ${activeAudioIndex}`);
+            }
+
+            if (PlayerSettings.get('rememberTracksForSession') !== false) {
+                const activeAudioTrack = mediaSource.MediaStreams.find(
+                    (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
                 );
-                log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
+                if (activeAudioTrack) {
+                    // Save undetermined ('und') instead of 'none' if language is missing
+                    // to distinguish undefined languages from disabled tracks.
+                    storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'und');
+                    storage.setItem(
+                        'session:lastAudioTitle',
+                        activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
+                    );
+                    log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
+                }
             }
         }
 
@@ -2081,27 +2139,35 @@ class PlayerPage extends Page {
         if (hasSubtitles) {
             const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
             if (activeSubtitleIndex !== undefined) {
-                // An index of -1 represents the user explicitly turning subtitles off
-                if (activeSubtitleIndex === -1) {
-                    storage.setItem('session:lastSubtitleLang', 'none');
-                    storage.setItem('session:lastSubtitleTitle', 'none');
-                    log.info(`[Track Memory] Saved Subtitle: none`);
-                } else {
-                    // Search for the stream details using the active stream index
-                    const activeSubtitleTrack = mediaSource.MediaStreams.find(
-                        (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                    );
-                    if (activeSubtitleTrack) {
-                        // Use undetermined ('und') for tracks with empty/undefined language
-                        // to prevent them from matching the 'none' check (which disables subtitles).
-                        storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
-                        storage.setItem(
-                            'session:lastSubtitleTitle',
-                            activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                // Persist per-item selection so resuming this specific item restores the exact track
+                if (this._item.Id) {
+                    storage.setItem(`track:subtitle:${this._item.Id}`, String(activeSubtitleIndex));
+                    log.info(`[Track Memory] Saved item subtitle index: ${this._item.Id} -> ${activeSubtitleIndex}`);
+                }
+
+                if (PlayerSettings.get('rememberTracksForSession') !== false) {
+                    // An index of -1 represents the user explicitly turning subtitles off
+                    if (activeSubtitleIndex === -1) {
+                        storage.setItem('session:lastSubtitleLang', 'none');
+                        storage.setItem('session:lastSubtitleTitle', 'none');
+                        log.info(`[Track Memory] Saved Subtitle: none`);
+                    } else {
+                        // Search for the stream details using the active stream index
+                        const activeSubtitleTrack = mediaSource.MediaStreams.find(
+                            (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
                         );
-                        log.info(
-                            `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
-                        );
+                        if (activeSubtitleTrack) {
+                            // Use undetermined ('und') for tracks with empty/undefined language
+                            // to prevent them from matching the 'none' check (which disables subtitles).
+                            storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
+                            storage.setItem(
+                                'session:lastSubtitleTitle',
+                                activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                            );
+                            log.info(
+                                `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
+                            );
+                        }
                     }
                 }
             }
@@ -2486,6 +2552,16 @@ class PlayerPage extends Page {
 
     _onMediaStreamsChange(data) {
         if (!this._item || !this._player) return;
+
+        // =====================================================================
+        // Immediate Track Selection Persistence
+        // =====================================================================
+        // Whenever the user changes the audio or subtitle track inside the player
+        // (via OSD TrackMenu or remote shortcuts), immediately persist the selection
+        // both per-item and in session memory. This guarantees the track is remembered
+        // even if playback is stopped abruptly or early in playback.
+        // =====================================================================
+        this._captureActiveTrackSelection();
 
         // Skip reporting during initial setup (first 2 seconds of play time) to avoid CPU contention.
         // Tizen hardware is under heavy load during ABR jumps at startup, and building the
@@ -3472,6 +3548,15 @@ class PlayerPage extends Page {
             return;
         }
         this._isExiting = true;
+
+        // =====================================================================
+        // Persist Track Selections Before Teardown
+        // =====================================================================
+        // Capture active tracks before calling player.stop(). Calling stop() clears
+        // the player's internal currentItem and mediaSource pointers, which would
+        // prevent active track preferences from being captured afterwards.
+        // =====================================================================
+        this._captureActiveTrackSelection();
 
         // Capture session info BEFORE stopping (stop clears internal state)
         const mediaSource = this._player?.getCurrentMediaSource?.();

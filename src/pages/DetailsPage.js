@@ -652,13 +652,52 @@ class DetailsPage extends Page {
                 this._selectedMediaSourceId = null;
             }
 
-            this._selectedAudioIndex = undefined;
-            this._selectedSubtitleIndex = undefined;
+            // =========================================================================
+            // Restore Persisted Track Selections for this Media Item
+            // =========================================================================
+            // When resuming or navigating to an item where the user previously selected
+            // an audio commentary or subtitle track, restore that selection from storage
+            // if it is still valid within the active MediaSource stream inventory.
+            // =========================================================================
+            const activeSource =
+                this._item.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+                this._item.MediaSources?.[0];
 
-            // Trigger prewarm for playable media items, passing the restored version ID if available
+            const savedAudioTrack = storage.getItem(`track:audio:${this._itemId}`);
+            if (savedAudioTrack !== null && savedAudioTrack !== undefined) {
+                const parsedAudio = Number(savedAudioTrack);
+                if (activeSource?.MediaStreams?.some((s) => s.Type === 'Audio' && s.Index === parsedAudio)) {
+                    this._selectedAudioIndex = parsedAudio;
+                    log.info(`[DetailsPage] Restored saved audio track for ${this._itemId}: ${parsedAudio}`);
+                } else {
+                    this._selectedAudioIndex = undefined;
+                }
+            } else {
+                this._selectedAudioIndex = undefined;
+            }
+
+            const savedSubtitleTrack = storage.getItem(`track:subtitle:${this._itemId}`);
+            if (savedSubtitleTrack !== null && savedSubtitleTrack !== undefined) {
+                const parsedSubtitle = Number(savedSubtitleTrack);
+                if (
+                    parsedSubtitle === -1 ||
+                    activeSource?.MediaStreams?.some((s) => s.Type === 'Subtitle' && s.Index === parsedSubtitle)
+                ) {
+                    this._selectedSubtitleIndex = parsedSubtitle;
+                    log.info(`[DetailsPage] Restored saved subtitle track for ${this._itemId}: ${parsedSubtitle}`);
+                } else {
+                    this._selectedSubtitleIndex = undefined;
+                }
+            } else {
+                this._selectedSubtitleIndex = undefined;
+            }
+
+            // Trigger prewarm for playable media items, passing the restored version ID and restored tracks
             if (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer') {
                 prewarmManager.prewarm(item, {
-                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id
+                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: this._selectedAudioIndex,
+                    subtitleStreamIndex: this._selectedSubtitleIndex
                 });
             }
 
@@ -849,9 +888,11 @@ class DetailsPage extends Page {
             // Persist the selection so it survives back-navigation and re-visits
             storage.setItem(`mediaSource:${this._itemId}`, id);
 
-            // Reset track selections when version changes as they are source-specific
+            // Reset track selections when version changes as stream indices are source-specific
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
+            storage.removeItem(`track:audio:${this._itemId}`);
+            storage.removeItem(`track:subtitle:${this._itemId}`);
 
             // Re-render hero header and technical details to reflect the selected version
             this._renderHeroText();
@@ -4305,6 +4346,9 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
 
+            // Persist track selection per-item so it survives navigation, exits, and app restarts
+            storage.setItem(`track:audio:${this._itemId}`, String(index));
+
             // Re-render hero header to update the audio specifications pill
             this._renderHeroText();
             // Re-trigger zero-latency prewarm with updated audio track selection
@@ -4374,6 +4418,9 @@ class DetailsPage extends Page {
             // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
+
+            // Persist track selection per-item so it survives navigation, exits, and app restarts
+            storage.setItem(`track:subtitle:${this._itemId}`, String(index));
 
             // Re-trigger zero-latency prewarm with updated subtitle track selection
             if (

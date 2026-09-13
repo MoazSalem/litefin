@@ -226,34 +226,42 @@ export class PrewarmManager {
                 }
             }
 
-            // 3. Validate AudioStreamIndex: If a specific audio track was chosen and differs from prewarm
-            if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
-                if (
-                    this._prewarmParams?.audioStreamIndex !== null &&
-                    this._prewarmParams?.audioStreamIndex !== undefined &&
-                    options.audioStreamIndex !== this._prewarmParams.audioStreamIndex
-                ) {
-                    log.info(
-                        `[Prewarm] Audio stream mismatch (prewarmed: ${this._prewarmParams.audioStreamIndex}, requested: ${options.audioStreamIndex}). Discarding prewarm.`
-                    );
-                    this.clear();
-                    return null;
-                }
+            // =================================================================
+            // 3. Validate AudioStreamIndex Parity
+            // =================================================================
+            // When prewarming occurs, the server-side PlaybackInfo endpoint generates
+            // direct-stream or transcoding URLs specifically prepared for the chosen
+            // audio track index. If playback is requested with an audio index that
+            // differs from what was prewarmed (e.g. prewarmed default vs commentary),
+            // consuming the prewarmed data would route playback to the wrong audio stream.
+            // Discard the prewarm cache immediately so a clean PlaybackInfo is resolved.
+            // =================================================================
+            const prewarmedAudio = this._prewarmParams?.audioStreamIndex ?? null;
+            const requestedAudio = options.audioStreamIndex ?? null;
+            if (prewarmedAudio !== requestedAudio) {
+                log.info(
+                    `[Prewarm] Audio stream mismatch (prewarmed: ${prewarmedAudio}, requested: ${requestedAudio}). Discarding prewarm.`
+                );
+                this.clear();
+                return null;
             }
 
-            // 4. Validate SubtitleStreamIndex: If a specific subtitle track was chosen and differs from prewarm
-            if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
-                if (
-                    this._prewarmParams?.subtitleStreamIndex !== null &&
-                    this._prewarmParams?.subtitleStreamIndex !== undefined &&
-                    options.subtitleStreamIndex !== this._prewarmParams.subtitleStreamIndex
-                ) {
-                    log.info(
-                        `[Prewarm] Subtitle stream mismatch (prewarmed: ${this._prewarmParams.subtitleStreamIndex}, requested: ${options.subtitleStreamIndex}). Discarding prewarm.`
-                    );
-                    this.clear();
-                    return null;
-                }
+            // =================================================================
+            // 4. Validate SubtitleStreamIndex Parity
+            // =================================================================
+            // Mirroring the audio track guard above, verify that the requested subtitle
+            // track matches the prewarmed parameters. If the user selected an alternative
+            // subtitle or explicitly toggled subtitles Off (-1), discard the cached prewarm
+            // to avoid rendering mismatched or unwanted subtitle streams.
+            // =================================================================
+            const prewarmedSubtitle = this._prewarmParams?.subtitleStreamIndex ?? null;
+            const requestedSubtitle = options.subtitleStreamIndex ?? null;
+            if (prewarmedSubtitle !== requestedSubtitle) {
+                log.info(
+                    `[Prewarm] Subtitle stream mismatch (prewarmed: ${prewarmedSubtitle}, requested: ${requestedSubtitle}). Discarding prewarm.`
+                );
+                this.clear();
+                return null;
             }
 
             log.info(`[Prewarm] Zero-Latency Cache Hit! Consuming prewarmed PlaybackInfo for: ${itemId}`);
