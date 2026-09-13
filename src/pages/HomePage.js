@@ -1334,6 +1334,18 @@ class HomePage extends Page {
                 }
                 log.debug(`Row "${descriptor.id}" has no items, removed placeholder.`);
                 this._checkFocusRestoration(descriptor.id, false);
+
+                // Relink remaining rows so the new top row connects to home-hero
+                const container = this.$('#home-rows');
+                if (container) {
+                    const firstRow =
+                        container.querySelector('section[data-row-id]:not(.media-row--skeleton)') ||
+                        container.querySelector('section[data-row-id]');
+                    if (firstRow) {
+                        const firstRowId = firstRow.getAttribute('data-row-id');
+                        this._relinkAdjacentSections(container, firstRow, firstRowId);
+                    }
+                }
                 return;
             }
 
@@ -2147,21 +2159,65 @@ class HomePage extends Page {
             if (nextConfig) nextConfig.leaveUp = `home-row-${rowId}`;
         }
 
-        // Special Case: If this is now the first row, link its leaveUp to the hero carousel.
-        // Uses focusManager section existence rather than this._hero so the link is
-        // established even during the skeleton phase (before hero data loads).
-        if (idx === 0 && focusManager.getSectionConfig('home-hero')) {
-            const firstRowConfig = focusManager.getSectionConfig(`home-row-${rowId}`);
-            if (firstRowConfig) {
-                firstRowConfig.leaveUp = 'home-hero';
+        // =====================================================================
+        // Bidirectional Section Linking: Top Content Row ↔ Hero Carousel
+        // =====================================================================
+        // In adherence to Apple HIG fluidity standards, vertical transitions
+        // between the hero carousel and content rows must never be severed.
+        // Even if the row just rendered is not at idx 0 (e.g. out-of-order network
+        // completion or prior row removal), we inspect liveSections[0] to guarantee
+        // that the true topmost content row's leaveUp and the hero's leaveDown
+        // always reference each other correctly.
+        // =====================================================================
+        const topRow = liveSections[0];
+        if (topRow) {
+            const topRowId = topRow.getAttribute('data-row-id');
+            const topRowConfig = focusManager.getSectionConfig(`home-row-${topRowId}`);
+            const hasHero = storage.getItem('pref:heroCarousel') !== 'false' && focusManager.getSectionConfig('home-hero');
 
-                // Also link hero leaveDown to this row
+            // Wire the topmost row to navigate Up into the hero section
+            if (topRowConfig) {
+                topRowConfig.leaveUp = hasHero ? 'home-hero' : null;
+            }
+
+            // Wire the hero carousel to navigate Down into this topmost row
+            if (hasHero) {
                 const heroConfig = focusManager.getSectionConfig('home-hero');
                 if (heroConfig) {
-                    heroConfig.leaveDown = `home-row-${rowId}`;
+                    heroConfig.leaveDown = `home-row-${topRowId}`;
                 }
             }
         }
+    }
+
+    /**
+     * Resolves the FocusManager section name for the topmost live content row.
+     * Dynamic fallback used for home-hero leaveDown and bidirectional navigation.
+     * @private
+     * @returns {string|null}
+     */
+    _getFirstLiveRowSectionName() {
+        // Container element holding all progressive homepage rows
+        const container = this.$('#home-rows') || document.getElementById('home-rows');
+        if (!container) return null;
+
+        // Prioritize the first live, non-skeleton content row
+        const firstLive = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+        if (firstLive) {
+            const rowId = firstLive.getAttribute('data-row-id');
+            const sName = `home-row-${rowId}`;
+            if (focusManager.getSectionConfig(sName)) return sName;
+        }
+
+        // Fallback: search all section elements with data-row-id in DOM order
+        const allSections = container.querySelectorAll('section[data-row-id]');
+        for (let i = 0; i < allSections.length; i++) {
+            const rowId = allSections[i].getAttribute('data-row-id');
+            const sName = `home-row-${rowId}`;
+            if (focusManager.getSectionConfig(sName)) return sName;
+        }
+
+        return null;
     }
 
     /**
@@ -2217,7 +2273,7 @@ class HomePage extends Page {
 
         focusManager.register('home-hero', placeholder, {
             orientation: 'horizontal',
-            leaveDown: null,
+            leaveDown: () => this._getFirstLiveRowSectionName(),
             leaveLeft: 'sidebar'
         });
     }
@@ -2356,7 +2412,9 @@ class HomePage extends Page {
                 // Relink the first rendered row and the hero carousel now that the hero has initialized
                 const container = this.$('#home-rows');
                 if (container) {
-                    const firstRow = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+                    const firstRow =
+                        container.querySelector('section[data-row-id]:not(.media-row--skeleton)') ||
+                        container.querySelector('section[data-row-id]');
                     if (firstRow) {
                         const firstRowId = firstRow.getAttribute('data-row-id');
                         this._relinkAdjacentSections(container, firstRow, firstRowId);
@@ -2989,6 +3047,18 @@ class HomePage extends Page {
                 // Inject the carousel markup and wire up its event listeners
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
+
+                // Relink the first rendered row and the hero carousel after cache restoration
+                const container = this.$('#home-rows');
+                if (container) {
+                    const firstRow =
+                        container.querySelector('section[data-row-id]:not(.media-row--skeleton)') ||
+                        container.querySelector('section[data-row-id]');
+                    if (firstRow) {
+                        const firstRowId = firstRow.getAttribute('data-row-id');
+                        this._relinkAdjacentSections(container, firstRow, firstRowId);
+                    }
+                }
 
                 log.info('Hero carousel restored from cache.');
             }

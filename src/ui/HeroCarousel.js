@@ -290,11 +290,56 @@ class HeroCarousel {
         };
         eventBus.on('focus:changed', this._onFocusChanged);
 
-        // Register with focus manager.
+        // =========================================================================
+        // Dynamic D-Pad Down Section Linker
+        // =========================================================================
+        // When focused on the hero carousel, pressing D-pad Down leaves the hero
+        // section and enters the content rows below. In asynchronous and cached
+        // environments, rows may finish rendering before, during, or after hero
+        // initialization. Hardcoding leaveDown to null or a static ID causes focus
+        // traps if the target is overwritten or unrendered.
+        // This dynamic resolver evaluates the first live content row in real-time
+        // when the down move is initiated, guaranteeing seamless bidirectional flow.
+        // =========================================================================
+        const dynamicLeaveDown = () => {
+            // Respect any explicitly configured target if it is valid and registered
+            const currentConfig = focusManager.getSectionConfig('home-hero');
+            const explicit = currentConfig?.leaveDown;
+            if (typeof explicit === 'string' && focusManager.getSectionConfig(explicit)) {
+                return explicit;
+            }
+            if (typeof explicit === 'function' && explicit !== dynamicLeaveDown) {
+                const result = explicit();
+                if (result) return result;
+            }
+
+            const container = document.getElementById('home-rows');
+            if (!container) return null;
+
+            // Prioritize the topmost fully rendered (non-skeleton) content row
+            const firstLive = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+            if (firstLive) {
+                const rowId = firstLive.getAttribute('data-row-id');
+                const sName = `home-row-${rowId}`;
+                if (focusManager.getSectionConfig(sName)) return sName;
+            }
+
+            // Fallback: search all section elements with data-row-id in DOM order
+            const allSections = container.querySelectorAll('section[data-row-id]');
+            for (let i = 0; i < allSections.length; i++) {
+                const rowId = allSections[i].getAttribute('data-row-id');
+                const sName = `home-row-${rowId}`;
+                if (focusManager.getSectionConfig(sName)) return sName;
+            }
+
+            return null;
+        };
+
+        // Register with focus manager with dynamic leaveDown resolution
         focusManager.register('home-hero', this._container.parentElement, {
             orientation: 'horizontal',
             onMove: (direction) => this._onMove(direction),
-            leaveDown: null, // Linked dynamically by HomePage
+            leaveDown: dynamicLeaveDown,
             leaveLeft: 'sidebar'
         });
 
@@ -360,6 +405,10 @@ class HeroCarousel {
         canvases.forEach((canvas) => {
             const hash = canvas.dataset.blurhash;
             if (!hash) return;
+
+            // Resolve the parent backdrop element
+            const heroBackdrop = canvas.closest('.hero-backdrop');
+            if (!heroBackdrop) return;
 
             // Resolve the backdrop background-image URL
             const style = heroBackdrop.style.backgroundImage;
@@ -644,7 +693,6 @@ class HeroCarousel {
             prevItem.style.willChange = 'auto';
             const prevContent = prevItem.querySelector('.hero-content');
             if (prevContent) prevContent.style.willChange = 'auto';
-            const prevBackdrop = prevItem.querySelector('.hero-backdrop');
             // Keep the loaded backdrop image in memory; visibility: hidden already
             // releases GPU layer compositing overhead cleanly.
             this._hideTimeoutId = null;
