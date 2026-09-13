@@ -88,11 +88,15 @@ html[data-layout-media-rows="modern"] .media-card.has-expansion:hover ~ .media-c
    When the mouse hovers over the row container, we disable the D-Pad expansion
    on the focused card (unless it is the card currently under the mouse pointer)
    to ensure the UI follows the user's immediate visual attention.
+   
+   SPECIFICITY FIX: We append the exact same exclusion pseudo-classes
+   (:not(.grid-card):not(.episode-row-card):not(.episode-card)) and !important
+   so hover width overrides the base card 225px rule without being shadowed.
    ========================================================================= */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused,
-html[data-layout-media-rows="modern"] .media-card.has-expansion:hover {
-    width: var(--card-expanded-width, 600px);
+html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
+html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
+html[data-layout-media-rows="modern"] .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):hover {
+    width: var(--card-expanded-width, 600px) !important;
     height: var(--card-height, 337.5px) !important; /* Lockdown physical dimensions to avoid layout jumps */
     z-index: 100; /* Stack on top of surrounding collapsed assets */
 }
@@ -112,9 +116,10 @@ html[data-layout-media-rows="modern"] .media-card.has-expansion .card-info.insid
     transition: opacity 0.2s ease 0.2s;
 }
 
-/* Inside Label reveal during D-pad navigation */
+/* Inside Label reveal during D-pad navigation or mouse hover */
 html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside {
+html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside,
+html[data-layout-media-rows="modern"] .media-card.has-expansion:hover .card-info.inside {
     opacity: 1; /* Match the active visual expansion */
 }
 
@@ -143,7 +148,8 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
 
 /* Exclude grid cards and episode cards from modern focus transformations to prevent interference with classic scaling */
 html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image {
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image {
     /* Focus ring is handled by ::after; outer shadows removed */
     box-shadow: none;
     transform: translateY(-8px);
@@ -152,7 +158,8 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
 
 /* The Focus Ring Overlay: Using ::after ensures it sits on top of the image and tint */
 html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after {
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after {
     content: '';
     position: absolute;
     top: 0;
@@ -303,12 +310,14 @@ html[data-layout-media-rows="modern"] .card-subtitle {
 }
 
 html[data-layout-media-rows="modern"] .media-card:focus .card-title,
-html[data-layout-media-rows="modern"] .media-card.focused .card-title {
+html[data-layout-media-rows="modern"] .media-card.focused .card-title,
+html[data-layout-media-rows="modern"] .media-card:hover .card-title {
     color: #fff;
 }
 
 html[data-layout-media-rows="modern"] .media-card:focus .card-subtitle,
-html[data-layout-media-rows="modern"] .media-card.focused .card-subtitle {
+html[data-layout-media-rows="modern"] .media-card.focused .card-subtitle,
+html[data-layout-media-rows="modern"] .media-card:hover .card-subtitle {
     color: rgba(255, 255, 255, 0.7);
 }
 
@@ -436,7 +445,8 @@ html[data-layout-media-rows="modern"] .media-card[data-item-type="CollectionFold
 }
 
 html[data-layout-media-rows="modern"] .media-card:focus .card-overlay-label,
-html[data-layout-media-rows="modern"] .media-card.focused .card-overlay-label {
+html[data-layout-media-rows="modern"] .media-card.focused .card-overlay-label,
+html[data-layout-media-rows="modern"] .media-card:hover .card-overlay-label {
     transform: translateY(-4px) translateX(10px) scale(1.02);
 }
 
@@ -493,7 +503,11 @@ html[data-layout-media-rows="modern"] .media-card:focus .quality-badge,
 html[data-layout-media-rows="modern"] .media-card.focused .count-badge,
 html[data-layout-media-rows="modern"] .media-card.focused .played-badge,
 html[data-layout-media-rows="modern"] .media-card.focused .episode-badge,
-html[data-layout-media-rows="modern"] .media-card.focused .quality-badge {
+html[data-layout-media-rows="modern"] .media-card.focused .quality-badge,
+html[data-layout-media-rows="modern"] .media-card:hover .count-badge,
+html[data-layout-media-rows="modern"] .media-card:hover .played-badge,
+html[data-layout-media-rows="modern"] .media-card:hover .episode-badge,
+html[data-layout-media-rows="modern"] .media-card:hover .quality-badge {
     transform: scale(1.05);
 }
 

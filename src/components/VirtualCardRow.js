@@ -110,23 +110,31 @@ export class VirtualCardRow {
                 const thumb = card.querySelector('.thumb-layer');
                 const thumbSrc = thumb ? thumb.getAttribute('data-thumb-src') : null;
 
-                // If a valid image element and source exists, and we haven't fetched it yet:
-                if (thumb && !thumb.getAttribute('src') && thumbSrc) {
-                    // Set src to kick off the browser's asynchronous download.
-                    thumb.setAttribute('src', thumbSrc);
+                // If a valid image element and source exists:
+                if (thumb && thumbSrc) {
+                    if (!thumb.getAttribute('src')) {
+                        // Set src to kick off the browser's asynchronous download.
+                        thumb.setAttribute('src', thumbSrc);
 
-                    // On successful download, mark the card and image layers as ready.
-                    // This triggers the CSS-driven transitions (e.g. thumb fades in).
-                    thumb.onload = () => {
+                        // On successful download, mark the card and image layers as ready.
+                        // This triggers the CSS-driven transitions (e.g. thumb fades in).
+                        thumb.onload = () => {
+                            thumb.classList.add('loaded');
+                            card.classList.add('expansion-ready');
+                        };
+
+                        // Graceful degradation in case of network drops or bad URLs.
+                        thumb.onerror = () => {
+                            thumb.classList.add('load-failed');
+                            card.classList.remove('expansion-ready');
+                        };
+                    }
+
+                    // If the browser already resolved or cached the asset synchronously:
+                    if (thumb.complete && thumb.naturalWidth > 0) {
                         thumb.classList.add('loaded');
                         card.classList.add('expansion-ready');
-                    };
-
-                    // Graceful degradation in case of network drops or bad URLs.
-                    thumb.onerror = () => {
-                        thumb.classList.add('load-failed');
-                        card.classList.remove('expansion-ready');
-                    };
+                    }
                 } else if (!thumb) {
                     // ---------------------------------------------------------
                     // GRADIENT FALLBACK EXPANSION DISPATCHER
