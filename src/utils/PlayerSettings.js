@@ -37,6 +37,20 @@ const DEFAULTS = {
     // Enable TrueHD passthrough (requires hardware support)
     enableTrueHd: 'auto',
 
+    // =========================================================================
+    // PREFER DIRECT PLAY AUDIO TRACK (AUTO-SELECTION)
+    // =========================================================================
+    // When enabled (default: true), Litefin will inspect the media source audio
+    // tracks prior to playback. If the default audio track specified by the
+    // container or server requires transcoding (for example, TrueHD 7.1 or DTS
+    // on a TV or soundbar that lacks native decoding or passthrough), Litefin
+    // automatically selects the highest-fidelity natively playable track
+    // (e.g. AC3, E-AC3, or AAC in the matching language) as the default track.
+    // This eliminates unnecessary server CPU/GPU transcoding and preserves
+    // DirectPlay across all backends (Tizen AVPlay, WebOS, and HTML5).
+    // =========================================================================
+    preferDirectPlayAudio: true,
+
     // -------------------------------------------------------------------------
     // EAC3 (E-AC3 / Dolby Digital Plus) FORCE STATE
     // -------------------------------------------------------------------------

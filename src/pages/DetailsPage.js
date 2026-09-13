@@ -29,6 +29,7 @@ import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { prewarmManager } from '../player/core/PrewarmManager.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -2193,7 +2194,9 @@ class DetailsPage extends Page {
             activeAudio = audioStreams.find((s) => s.Index === this._selectedAudioIndex);
         }
         if (!activeAudio) {
-            activeAudio =
+            // Check if preferDirectPlayAudio auto-resolves a playable track (e.g. AC3/EAC3 over TrueHD/DTS)
+            const bestAudioTrack = resolveBestAudioStream(source);
+            activeAudio = bestAudioTrack ||
                 audioStreams.find((s) => s.Index === source.DefaultAudioStreamIndex) ||
                 audioStreams.find((s) => s.IsDefault) ||
                 audioStreams[0];
@@ -4288,8 +4291,13 @@ class DetailsPage extends Page {
         // Find current selection (or default)
         let currentIndex = this._selectedAudioIndex;
         if (currentIndex === undefined) {
-            const defaultStream = tracks.find((s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex);
-            currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
+            const bestStream = resolveBestAudioStream(mediaSource);
+            if (bestStream) {
+                currentIndex = bestStream.Index;
+            } else {
+                const defaultStream = tracks.find((s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex);
+                currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
+            }
         }
 
         this._renderTrackSelectionMenu(i18n.t('Audio'), tracks, currentIndex, (index) => {

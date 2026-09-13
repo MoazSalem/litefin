@@ -1149,6 +1149,8 @@
     "Portuguese": "Portuguese",
     "PreferEpisodeImages": "Prefer Episode Images",
     "PreferEpisodeImagesDescription": "Use episode thumbnails instead of series images for Next Up and Continue Watching rows.",
+    "PreferDirectPlayAudio": "Prefer Direct Play Audio",
+    "PreferDirectPlayAudioDescription": "Automatically select an audio track that plays directly without transcoding when the default track (e.g. TrueHD or DTS) is unsupported by hardware.",
     "PreferExternalSubtitles": "Prefer External Subtitles",
     "PreferExternalSubtitlesDescription": "When subtitles 'Always' mode is enabled, prefer external subtitle tracks (SRT/VTT) over embedded ones even if the language is undetermined.",
     "PreferredAudioLanguage": "Preferred Audio Language",

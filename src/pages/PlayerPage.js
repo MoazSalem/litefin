@@ -21,7 +21,7 @@ import { state } from '../core/StateManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { focusManager } from '../ui/FocusManager.js';
 import OSDController from '../player/osd/OSDController.js';
-import { JellyfinPlayer } from '../player/core/JellyfinPlayer.js';
+import { JellyfinPlayer, resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -1139,18 +1139,16 @@ class PlayerPage extends Page {
         // DEFAULT AUDIO STREAM RESOLUTION (Disposition "default")
         // =========================================================================
         // When preSelectedAudio is null or undefined (and session track memory
-        // yielded no match), we resolve the default audio track.
-        // Priority order:
-        //   1. Audio stream with disposition "default" (s.Type === 'Audio' && s.IsDefault)
-        //   2. MediaSource DefaultAudioStreamIndex property
-        //   3. First available audio stream in container (audioStreams[0])
+        // yielded no match), we resolve the optimal default audio track.
+        // If preferDirectPlayAudio is enabled (default), this selects a track
+        // that does not trigger server transcoding (e.g. TrueHD/DTS fallback).
         // =========================================================================
         if (savedAudioIndex === undefined || savedAudioIndex === null) {
             // Filter candidate streams to Audio type
             const audioStreams = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
 
-            // Attempt match by disposition default (IsDefault), then DefaultAudioStreamIndex, then first track
-            const defaultAudioStream =
+            // Attempt best direct play match first, falling back to disposition default
+            const resolvedAudioStream = resolveBestAudioStream(mediaSource) ||
                 audioStreams.find((s) => s.IsDefault) ||
                 (mediaSource?.DefaultAudioStreamIndex !== undefined && mediaSource?.DefaultAudioStreamIndex !== null
                     ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
@@ -1158,10 +1156,10 @@ class PlayerPage extends Page {
                 audioStreams[0];
 
             // Assign resolved index
-            if (defaultAudioStream) {
-                savedAudioIndex = defaultAudioStream.Index;
+            if (resolvedAudioStream) {
+                savedAudioIndex = resolvedAudioStream.Index;
                 log.info(
-                    `[Track Resolution] Resolved default audio track (disposition default): Index ${savedAudioIndex} (${defaultAudioStream.Language || 'und'})`
+                    `[Track Resolution] Resolved audio track: Index ${savedAudioIndex} (${resolvedAudioStream.Codec}, ${resolvedAudioStream.Channels || 2}ch, ${resolvedAudioStream.Language || 'und'})`
                 );
             }
         }

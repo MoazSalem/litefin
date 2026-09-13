@@ -2904,6 +2904,26 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- ============================================================
+                     PREFER DIRECT PLAY AUDIO TRACK (AUTO-SELECTION)
+                     Automatically pick an audio track that does not require
+                     transcoding if the container's default track (e.g. TrueHD or DTS)
+                     is unsupported by hardware.
+                     ============================================================ -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferDirectPlayAudio">${i18n.t('PreferDirectPlayAudio') || 'Prefer Direct Play Audio'}</span>
+                        <span class="setting-description" data-i18n="PreferDirectPlayAudioDescription">${i18n.t('PreferDirectPlayAudioDescription') || 'Automatically select an audio track that plays directly without transcoding when the default track (e.g. TrueHD or DTS) is unsupported by hardware.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('preferDirectPlayAudio') ? 'active' : ''}" 
+                                id="toggle-prefer-direct-play-audio" 
+                                data-setting="preferDirectPlayAudio"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 ${platformInfo.isTizen
                 ? `
                 <!-- Interlaced content backend fallback toggle.
@@ -7607,6 +7627,7 @@ class SettingsPage extends Page {
         // Generic handler for all toggle-switch buttons with data-setting attribute
         // Each toggle reads/writes to PlayerSettings and invalidates the cached profile
         const profileToggles = [
+            'toggle-prefer-direct-play-audio',
             'toggle-enable-flac-in-video',
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',

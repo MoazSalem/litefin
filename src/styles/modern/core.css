@@ -83,7 +83,7 @@ html[data-layout-login="modern"] .login-section {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 80px 150px;
+    padding: 40px 80px;
     max-width: none;
     margin: 0;
     background: var(--jf-background);
