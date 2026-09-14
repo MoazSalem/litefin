@@ -61,7 +61,7 @@ class FavoritesPage extends Page {
             if (!userId) throw new Error('User not authenticated');
 
             // Parallel fetch of all favorite types, including music and live tv, plus user library views
-            const [movies, shows, seasons, episodes, channels, people, artists, albums, songs, viewsResponse] =
+            const [movies, shows, seasons, episodes, channels, people, artists, albums, songs, books, viewsResponse] =
                 await Promise.all([
                     api.getItems({
                         Filters: 'IsFavorite',
@@ -131,6 +131,15 @@ class FavoritesPage extends Page {
                         Limit: 50,
                         Fields: 'ProductionYear,AlbumArtist,Artists,RunTimeTicks'
                     }),
+                    // --- Books / Games --- (Games ingested via JellyEmu are typed as Book items with Tags)
+                    api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'Book',
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        Limit: 50,
+                        Fields: 'DateCreated,ProductionYear,Tags,Overview'
+                    }),
                     api.getUserViews()
                 ]);
 
@@ -146,6 +155,11 @@ class FavoritesPage extends Page {
             for (const view of views) {
                 if (view.CollectionType && !libraryMap[view.CollectionType]) {
                     libraryMap[view.CollectionType] = view.Id;
+                }
+                // Detect game or rom libraries mapped by name if CollectionType is generic or 'books'
+                const isGameName = /game|rom|emulator/i.test(view.Name || '');
+                if (isGameName && !libraryMap['games']) {
+                    libraryMap['games'] = view.Id;
                 }
             }
             this._libraryMap = libraryMap;
@@ -181,6 +195,12 @@ class FavoritesPage extends Page {
                     items: episodes.Items,
                     type: 'episode'
                 });
+            // --- Books / Games section --- (Games ingested via JellyEmu are typed as Book items with Tags; positioned under episodes)
+            if (books && books.TotalRecordCount > 0) {
+                const hasGames = books.Items.some((item) => CardRenderer.isGame(item));
+                const title = hasGames ? (i18n.t('Games') || 'Games') : (i18n.t('Books') || 'Books');
+                sectionsData.push({ id: 'fav-book', title, items: books.Items, type: 'poster' });
+            }
             if (channels.TotalRecordCount > 0)
                 sectionsData.push({
                     id: 'fav-channel',
@@ -371,6 +391,9 @@ class FavoritesPage extends Page {
                     targetPath = `/library/${map['music'] || 'all'}?includeItemTypes=MusicAlbum`;
                 } else if (sectionId === 'fav-song') {
                     targetPath = `/library/${map['music'] || 'all'}?includeItemTypes=Audio`;
+                } else if (sectionId === 'fav-book') {
+                    const libId = map['games'] || map['books'] || 'all';
+                    targetPath = `/library/${libId}?includeItemTypes=Book`;
                 }
 
                 // Build destination URL with IsFavorite query filter parameter

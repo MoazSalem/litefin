@@ -38,24 +38,75 @@ class CardRenderer {
 
     /**
      * Determines whether the given item represents a JellyEmu game ROM.
+     * Checks Tags, Type, MediaType, and Path extension semantics.
+     *
+     * Following Apple Human Interface Guidelines: ensure consistent visual categorization
+     * across all surfaces (library grids, continue watching, recently added).
+     *
      * @param {Object} item
      * @returns {boolean}
      */
     static isGame(item) {
         if (!item) return false;
+
+        // 1. Tag check (primary marker set by JellyEmu)
         if (Array.isArray(item.Tags) && item.Tags.includes('JellyEmu')) return true;
+
+        // 2. Type or MediaType check
+        if (item.Type === 'Game' || item.MediaType === 'Game') return true;
+
+        // 3. Fallback: Check if container or Path has known ROM extensions or Book type with game-like tags
+        if (item.Type === 'Book') {
+            if (Array.isArray(item.Tags) && item.Tags.some((t) => /^(NES|SNES|GBA|GBC|GB|N64|PSX|Genesis|MegaDrive|GameGear|MAME|Arcade|Atari|NeoGeo|JellyEmu)$/i.test(t))) {
+                return true;
+            }
+            if (item.Path && /\.(nes|sfc|smc|gba|gbc|gb|z64|n64|v64|iso|bin|cue|chd|md|gen|gg|zip|7z)$/i.test(item.Path)) {
+                return true;
+            }
+        }
+
         return false;
     }
 
     /**
      * Extracts the primary console/platform tag for a JellyEmu game.
+     *
      * @param {Object} item
      * @returns {string} Platform name (e.g. 'SNES', 'GBA', 'PSX')
      */
     static getGamePlatformTag(item) {
-        if (!item || !Array.isArray(item.Tags)) return '';
-        const skipTags = new Set(['JellyEmu', 'Game', 'MultiDisc', 'Unknown', 'Unsupported']);
-        return item.Tags.find((t) => !skipTags.has(t)) || '';
+        if (!item) return '';
+
+        // Known console names / abbreviations to detect
+        const knownPlatforms = [
+            'NES', 'SNES', 'GBA', 'GBC', 'GB', 'N64', 'NDS', '3DS',
+            'PSX', 'PS1', 'PS2', 'PSP', 'Genesis', 'MegaDrive',
+            'MasterSystem', 'GameGear', 'Dreamcast', 'Saturn',
+            'Arcade', 'MAME', 'NeoGeo', 'Atari2600', 'Atari7800', 'Wonderswan'
+        ];
+
+        if (Array.isArray(item.Tags)) {
+            // First check for known platform abbreviations
+            for (const platform of knownPlatforms) {
+                const found = item.Tags.find((t) => t.toLowerCase() === platform.toLowerCase());
+                if (found) return found.toUpperCase();
+            }
+
+            // Otherwise extract any tag that isn't a generic internal tag
+            const skipTags = new Set(['JellyEmu', 'Game', 'MultiDisc', 'Unknown', 'Unsupported', 'Rom', 'Roms']);
+            const candidate = item.Tags.find((t) => !skipTags.has(t));
+            if (candidate) return candidate;
+        }
+
+        // Fallback: Check item.Path or item.Name for console markers
+        if (item.Path) {
+            for (const platform of knownPlatforms) {
+                const regex = new RegExp(`[/\\\\](Nintendo - )?${platform}[/\\\\]`, 'i');
+                if (regex.test(item.Path)) return platform.toUpperCase();
+            }
+        }
+
+        return '';
     }
 
     /**

@@ -944,16 +944,29 @@ class LibraryPage extends Page {
                 this.state.isGameLibrary = false;
             }
 
-            // Flag this as a folder-based library if it matches 'folders' type
-            // or is a generic collection without a specific media type.
-            this.state.isFolderLibrary =
-                item.CollectionType === 'folders' ||
-                (!item.CollectionType &&
-                    (item.Type === 'CollectionFolder' || item.Type === 'UserView' || item.Type === 'Folder'));
-
             // If the item fetched is a Folder, we are in a sub-folder view.
             this.state.isSubFolder =
                 item.Type === 'Folder' || (item.Type === 'CollectionFolder' && !item.CollectionType && item.ParentId);
+
+            // Inherit isGameLibrary if item is a console folder inside a games library
+            // or if the folder name or tags indicate a gaming console.
+            if (!this.state.isGameLibrary && this.state.isSubFolder) {
+                const isConsoleName = /^(nintendo|sega|sony|atari|game boy|gameboy|gba|gbc|snes|nes|n64|playstation|psx|ps1|ps2|genesis|megadrive|game gear|dreamcast|mame|arcade|neogeo)/i.test(libNameLower);
+                if (isConsoleName || (item.ParentId && item.Type === 'Folder')) {
+                    this.state.isGameLibrary = true;
+                }
+            }
+
+            // Flag this as a folder-based library if it matches 'folders' type,
+            // or is a generic collection without a specific media type.
+            // For game libraries: ONLY the root library is treated as folders (to list console folders).
+            // Once inside a console folder, isFolderLibrary is false so all games are loaded directly/recursively.
+            this.state.isFolderLibrary =
+                (this.state.isGameLibrary && !this.state.isSubFolder) ||
+                (!this.state.isGameLibrary &&
+                    (item.CollectionType === 'folders' ||
+                        (!item.CollectionType &&
+                            (item.Type === 'CollectionFolder' || item.Type === 'UserView' || item.Type === 'Folder'))));
 
             this.state.libraryInfo = item;
             let title = item.Name;
@@ -1180,8 +1193,11 @@ class LibraryPage extends Page {
 
             // If it's a folder-based library (generic/Home Videos) or we are explicitly
             // in a "Folders" tab, disable recursion so we can browse the hierarchy.
+            // When inside a Game console subfolder, ensure Recursive is true so all games within are loaded.
             if (this.state.isFolderLibrary || this.state.viewType === 'Folders') {
                 params.Recursive = false;
+            } else if (this.state.isGameLibrary && this.state.isSubFolder) {
+                params.Recursive = true;
             }
 
             // Apply Filters
@@ -1311,7 +1327,15 @@ class LibraryPage extends Page {
             } else if (viewType === 'Items' || viewType === 'Movies' || viewType === 'Shows') {
                 // Standard Item Fetch
                 if (this.state.isGameLibrary || this.state.libraryInfo?.CollectionType === 'books' || this.state.libraryInfo?.CollectionType === 'games') {
-                    params.IncludeItemTypes = 'Book';
+                    // When browsing a Game library at root as folders, do not restrict to 'Book'
+                    // so that Jellyfin returns top-level console Folders.
+                    // Inside subfolders, query 'Book' items (game ROMs).
+                    if (this.state.isSubFolder) {
+                        params.IncludeItemTypes = 'Book';
+                    } else {
+                        // At root folder level: leave IncludeItemTypes empty to return console Folders
+                        params.IncludeItemTypes = '';
+                    }
                 } else if (this.state.libraryInfo?.CollectionType === 'tvshows') {
                     params.IncludeItemTypes = 'Series';
                 } else if (this.state.libraryInfo?.CollectionType === 'movies') {
