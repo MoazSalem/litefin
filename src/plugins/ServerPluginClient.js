@@ -33,19 +33,25 @@ const log = logger.create('ServerPluginClient');
 //
 // To add support for a new server plugin, just add an entry here.
 const KNOWN_PROBES = {
-    // Intro Skipper: https://github.com/ConfusedPolarBear/intro-skipper
-    // Probe requires a real episode ID — we probe lazily on first playback.
+    // Intro Skipper: https://github.com/intro-skipper/intro-skipper
+    // In modern Jellyfin (10.10+ / 12.0+) and Intro-Skipper v2, segments mirror
+    // directly into Jellyfin's native /MediaSegments API.
+    // On legacy servers (<= 10.9), fallback endpoints (/Episode/{id}/Timestamps or
+    // /Episode/{id}/IntroTimestamps) are probed if /MediaSegments returns 404.
     'intro-skipper': {
-        // The endpoint that only exists when intro-skipper is installed.
-        // Correct path confirmed from SkipIntroController.cs: [HttpGet("Episode/{Id}/Timestamps")]
         probeEndpoint: (item) => {
-            // Intro Skipper only works for episodes. If this is a movie or a pre-roll intro,
-            // we cannot probe the endpoint. Return null to defer.
-            if (!item || item.Type !== 'Episode') return null;
-            return `/Episode/${item.Id}/Timestamps`;
+            // Support both episodes and movies
+            if (!item || (item.Type !== 'Episode' && item.Type !== 'Movie')) return null;
+            return `/MediaSegments/${item.Id}`;
         },
-        // Same endpoint used for actual data fetch
-        dataEndpoint: (itemId) => `/Episode/${itemId}/Timestamps`
+        fallbackProbeEndpoints: (item) => {
+            if (!item || item.Type !== 'Episode') return [];
+            return [
+                `/Episode/${item.Id}/Timestamps`,
+                `/Episode/${item.Id}/IntroTimestamps`
+            ];
+        },
+        dataEndpoint: (itemId) => `/MediaSegments/${itemId}`
     },
 
     // Open Subtitles server plugin (subtitle download support)
@@ -314,10 +320,29 @@ class ServerPluginClient {
             log.debug(`Probing endpoint for '${pluginId}': ${endpoint}`);
             const data = await this._api.get(endpoint);
 
-            // 200 response — plugin is installed and accessible
+            // 200 response — plugin or media segment provider is installed and accessible
             log.info(`Plugin '${pluginId}' is AVAILABLE (probe succeeded)`);
             return { available: true, data };
         } catch (err) {
+            // Check if fallback probe endpoints exist for this plugin (e.g. legacy intro-skipper)
+            if (err.status === 404 && typeof probe.fallbackProbeEndpoints === 'function') {
+                const fallbacks = probe.fallbackProbeEndpoints(item) || [];
+                for (const fallbackEndpoint of fallbacks) {
+                    try {
+                        log.debug(`Probing fallback endpoint for '${pluginId}': ${fallbackEndpoint}`);
+                        const fbData = await this._api.get(fallbackEndpoint);
+                        log.info(`Plugin '${pluginId}' is AVAILABLE via fallback probe (${fallbackEndpoint})`);
+                        return { available: true, data: fbData };
+                    } catch (fbErr) {
+                        // 403/401 means route exists on server, just requires auth/permission
+                        if (fbErr.status === 403 || fbErr.status === 401) {
+                            log.info(`Plugin '${pluginId}' is AVAILABLE but access is restricted (${fbErr.status})`);
+                            return { available: true, data: null };
+                        }
+                    }
+                }
+            }
+
             if (err.status === 404) {
                 // Endpoint doesn't exist — plugin not installed
                 log.info(`Plugin '${pluginId}' is NOT AVAILABLE (404 — not installed)`);
