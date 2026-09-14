@@ -286,7 +286,7 @@ export class ApiClient {
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
                 const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
-                
+
                 if (storage.getItem('pref:showQualityBadges') === 'true') {
                     ['Width', 'Height', 'VideoRange', 'VideoRangeType', 'MediaSources'].forEach((f) => {
                         if (!fieldsList.includes(f)) {
@@ -1144,6 +1144,7 @@ export class ApiClient {
             Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,MediaStreams,Width,Height,UserData',
             IsVirtualUnaired: false,
             IsMissing: false,
+            Limit: 100,
             ...params
         });
     }
@@ -2094,14 +2095,14 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         let abortTimer = setTimeout(() => {
             try {
                 xhr.abort();
-            } catch (_) {}
+            } catch (_) { }
             done(null);
         }, timeout);
 
         // Native timeout setting (supported natively in Chromium 29+)
         try {
             xhr.timeout = timeout;
-        } catch (_) {}
+        } catch (_) { }
 
         // If the parent discovery scan was cancelled, abort this probe too
         const onParentAbort = () => {
@@ -2313,7 +2314,7 @@ async function _discoverViaLunaService(onServerFound) {
                                 settled = true;
                                 try {
                                     request && request.cancel();
-                                } catch (_) {}
+                                } catch (_) { }
                                 resolve(foundServers);
                             }
                         }, DISCOVERY_WINDOW_MS);
@@ -2430,7 +2431,7 @@ export async function sendWakeOnLan(macAddress) {
                 const pkgId = appId.split('.')[0];
                 log.info(`Platform Tizen: Pre-launching ytresolver background service: ${pkgId}.ytresolver`);
                 tizen.application.launch(pkgId + '.ytresolver');
-                
+
                 // Allow a brief 500ms delay for the service to bind port and start listening
                 await new Promise((resolve) => setTimeout(resolve, 500));
             } catch (preLaunchErr) {

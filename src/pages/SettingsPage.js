@@ -2904,6 +2904,26 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- ============================================================
+                     PREFER DIRECT PLAY AUDIO TRACK (AUTO-SELECTION)
+                     Automatically pick an audio track that does not require
+                     transcoding if the container's default track (e.g. TrueHD or DTS)
+                     is unsupported by hardware.
+                     ============================================================ -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferDirectPlayAudio">${i18n.t('PreferDirectPlayAudio') || 'Prefer Direct Play Audio'}</span>
+                        <span class="setting-description" data-i18n="PreferDirectPlayAudioDescription">${i18n.t('PreferDirectPlayAudioDescription') || 'Automatically select an audio track that plays directly without transcoding when the default track (e.g. TrueHD or DTS) is unsupported by hardware.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('preferDirectPlayAudio') ? 'active' : ''}" 
+                                id="toggle-prefer-direct-play-audio" 
+                                data-setting="preferDirectPlayAudio"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 ${platformInfo.isTizen
                 ? `
                 <!-- Interlaced content backend fallback toggle.
@@ -4708,6 +4728,19 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="toggle-switch ${layoutManager.getOnlyBlurHashBackdrop() ? 'active' : ''}" 
                                 id="toggle-only-blurhash-backdrop" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLightMusicPlayer">${i18n.t('LabelLightMusicPlayer') || 'Light Music Player'}</span>
+                        <span class="setting-description" data-i18n="LightMusicPlayerDescription">${i18n.t('LightMusicPlayerDescription') || 'Removes background blur and drop shadows from the music player to significantly improve performance on older TVs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getLightMusicPlayer() ? 'active' : ''}" 
+                                id="toggle-light-music-player" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -6612,7 +6645,6 @@ class SettingsPage extends Page {
         // ==========================================
         //
         // Controls visibility of media card playback progress indicators.
-        // Toggles the user preference in local storage and manages the Apple-style toggle animation state.
         const hideProgressBarBtn = this.$('#toggle-hide-progress-bar');
 
         // Verify button exists in the active view before attaching handler
@@ -6958,6 +6990,16 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getOnlyBlurHashBackdrop();
                 layoutManager.setOnlyBlurHashBackdrop(newValue);
                 onlyBlurhashBackdropBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Light Music Player
+        const lightMusicPlayerBtn = this.$('#toggle-light-music-player');
+        if (lightMusicPlayerBtn) {
+            lightMusicPlayerBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getLightMusicPlayer();
+                layoutManager.setLightMusicPlayer(newValue);
+                lightMusicPlayerBtn.classList.toggle('active', newValue);
             });
         }
 
@@ -7607,6 +7649,7 @@ class SettingsPage extends Page {
         // Generic handler for all toggle-switch buttons with data-setting attribute
         // Each toggle reads/writes to PlayerSettings and invalidates the cached profile
         const profileToggles = [
+            'toggle-prefer-direct-play-audio',
             'toggle-enable-flac-in-video',
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
@@ -9292,12 +9335,12 @@ class SettingsPage extends Page {
                                 focusManager.invalidateCache('settings-content');
                             }
 
-                            // FONT LOADING: Trigger download if needed
+                            // FONT LOADING: Trigger download if needed (forcing reload for explicit user change)
                             if (
                                 (settingConfig.key === 'subtitleFont' || settingConfig.key === 'subtitleFontAss') &&
                                 newValue
                             ) {
-                                FontLoader.loadFont(newValue).then((loaded) => {
+                                FontLoader.loadFont(newValue, true).then((loaded) => {
                                     if (loaded) {
                                         log.debug(`Font loaded: ${newValue}`);
                                     } else {

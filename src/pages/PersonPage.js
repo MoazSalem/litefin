@@ -1045,7 +1045,6 @@ class PersonPage extends Page {
 
     /**
      * Registers vertical spatial navigation sections connecting the header action bar,
-     * the Apple-style segmented Tab Switcher, and the filmography works grids.
      */
     _registerWorkSections() {
         const sectionOrder = ['appearances', 'episodes'];

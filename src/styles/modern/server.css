@@ -183,7 +183,7 @@ html[data-layout-login="modern"] .server-list {
 }
 
 html[data-layout-login="modern"] .server-item {
-    width: 388px;
+    width: 460px;
     background: var(--jf-card-bg, #0d0d0d);
     border: 4px solid transparent;
     padding: 21px;

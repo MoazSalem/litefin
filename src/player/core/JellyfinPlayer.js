@@ -35,7 +35,7 @@ const log = logger.create('JellyfinPlayer');
 // if the current TV hardware actually advertises native decoding capability
 // for DTS and TrueHD.
 // ────────────────────────────────────────────────────────────────────────────
-const isTrueHdSupported = () => {
+export const isTrueHdSupported = () => {
     const setting = PlayerSettings.get('enableTrueHd');
     if (setting === 'enable') return true;
     if (setting === 'disable') return false;
@@ -47,7 +47,7 @@ const isTrueHdSupported = () => {
     }
 };
 
-const isDtsSupported = () => {
+export const isDtsSupported = () => {
     const setting = PlayerSettings.get('enableDts');
     if (setting === 'enable') return true;
     if (setting === 'disable') return false;
@@ -58,6 +58,206 @@ const isDtsSupported = () => {
         return false;
     }
 };
+
+/**
+ * Check whether an audio track is natively playable by the current device
+ * and player settings without forcing a server transcode.
+ *
+ * @param {Object} track - Jellyfin MediaStream object for an audio track
+ * @returns {boolean} true if the track direct plays natively; false if it requires transcoding
+ */
+export function isAudioTrackNativelyPlayable(track) {
+    if (!track || !track.Codec) return true;
+    const codec = track.Codec.toLowerCase();
+
+    // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
+    if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+        return false;
+    }
+
+    // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
+    if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
+        return false;
+    }
+
+    // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled
+    if (codec === 'truehd' && !isTrueHdSupported()) {
+        return false;
+    }
+
+    // E-AC3 (Dolby Digital Plus) support check
+    if (codec === 'eac3') {
+        const setting = PlayerSettings.get('enableEac3');
+        if (setting === 'enable') return true;
+        if (setting === 'disable') return false;
+        try {
+            const caps = getDeviceCapabilities();
+            return caps?.eac3 !== false;
+        } catch (e) {
+            return true;
+        }
+    }
+
+    // AC3 (Dolby Digital) support check
+    if (codec === 'ac3') {
+        try {
+            const caps = getDeviceCapabilities();
+            return caps?.ac3 !== false;
+        } catch (e) {
+            return true;
+        }
+    }
+
+    // MP2 / MP1L2 support check
+    if (codec === 'mp2' || codec === 'mp1l2') {
+        const setting = PlayerSettings.get('enableMp2');
+        if (setting === 'enable') return true;
+        if (setting === 'disable') return false;
+        try {
+            const caps = getDeviceCapabilities();
+            return !!caps?.mp2;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Automatically resolve the best audio track for a given media source.
+ *
+ * If the user has 'preferDirectPlayAudio' enabled (default: true) and the default track
+ * would require transcoding (e.g. TrueHD or DTS on unsupported hardware),
+ * this scans available audio streams to pick the best natively playable track
+ * matching the user's preferred language (or default language), prioritizing
+ * surround sound channel counts, audio codec fidelity, and non-commentary tracks.
+ *
+ * @param {Object} mediaSource - Jellyfin MediaSource object containing MediaStreams
+ * @param {string} [targetLang] - Optional language ISO code override
+ * @returns {Object|null} The resolved best audio MediaStream object, or null
+ */
+export function resolveBestAudioStream(mediaSource, targetLang) {
+    if (!mediaSource || !Array.isArray(mediaSource.MediaStreams)) {
+        return null;
+    }
+
+    // Filter candidate streams to Audio type
+    const audioStreams = mediaSource.MediaStreams.filter((s) => s.Type === 'Audio');
+    if (audioStreams.length === 0) {
+        return null;
+    }
+
+    // Identify standard default track from container or Jellyfin metadata
+    const standardDefaultTrack =
+        audioStreams.find((s) => s.IsDefault) ||
+        (mediaSource.DefaultAudioStreamIndex !== undefined && mediaSource.DefaultAudioStreamIndex !== null
+            ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
+            : null) ||
+        audioStreams[0];
+
+    // Check if the auto-select DirectPlay audio track setting is enabled
+    const preferDirectPlay = PlayerSettings.get('preferDirectPlayAudio') !== false;
+    if (!preferDirectPlay) {
+        return standardDefaultTrack;
+    }
+
+    // If the standard default track is already natively playable without transcode, keep it!
+    if (standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack)) {
+        return standardDefaultTrack;
+    }
+
+    // Filter candidate streams that can be played natively on the current device
+    const playableTracks = audioStreams.filter((t) => isAudioTrackNativelyPlayable(t));
+
+    // If no tracks can be played natively without transcoding, we must keep the standard default
+    if (playableTracks.length === 0) {
+        return standardDefaultTrack;
+    }
+
+    // Determine target language: prefer explicit parameter, then user pref, then standard default language
+    const userPrefLang = storage.getItem('pref:audioLang');
+    const effectiveLang = (targetLang && targetLang !== 'Default' && targetLang !== 'none')
+        ? targetLang
+        : (userPrefLang && userPrefLang !== 'Default' && userPrefLang !== 'none')
+            ? userPrefLang
+            : (standardDefaultTrack?.Language || 'und');
+
+    // Attempt to isolate candidate playable tracks matching the target language
+    let candidates = playableTracks;
+    if (effectiveLang && effectiveLang !== 'und') {
+        const sameLangPlayable = playableTracks.filter(
+            (t) => (t.Language || '').toLowerCase() === effectiveLang.toLowerCase()
+        );
+        if (sameLangPlayable.length > 0) {
+            candidates = sameLangPlayable;
+        }
+    }
+
+    // Codec fidelity tier scoring (higher is preferred for direct play)
+    const getCodecScore = (codec) => {
+        const c = (codec || '').toLowerCase();
+        if (c === 'eac3') return 50; // High quality Dolby Digital Plus
+        if (c === 'ac3') return 40;  // Standard Dolby Digital
+        if (c === 'opus') return 35; // Efficient modern format
+        if (c === 'aac') return 30;  // Universal standard
+        if (c === 'mp3') return 20;  // Legacy MP3
+        return 10;                  // Other
+    };
+
+    // Calculate score for each candidate to find the best track
+    const scoredCandidates = candidates.map((track) => {
+        let score = 0;
+
+        const title = (track.Title || '').toLowerCase();
+        const displayTitle = (track.DisplayTitle || '').toLowerCase();
+
+        // Severely penalize commentary or descriptive audio tracks
+        const isCommentary =
+            title.includes('commentary') ||
+            displayTitle.includes('commentary') ||
+            track.DeliveryMethod === 'Commentary';
+        const isDescriptive =
+            title.includes('description') ||
+            title.includes('visual') ||
+            displayTitle.includes('descriptive') ||
+            displayTitle.includes('visually impaired');
+
+        if (!isCommentary && !isDescriptive) {
+            score += 1000; // Major boost for main feature audio
+        }
+
+        // Favor higher channel count (e.g. 5.1 / 6ch or 7.1 / 8ch over 2.0 / 2ch stereo)
+        const channels = Number(track.Channels) || 2;
+        score += channels * 20;
+
+        // Reward codec fidelity tier
+        score += getCodecScore(track.Codec);
+
+        // Small bonus if the candidate is marked as default in its language group
+        if (track.IsDefault) {
+            score += 5;
+        }
+
+        // Bitrate tie-breaker (convert bps to kbps weight)
+        const bitrate = Number(track.BitRate) || 0;
+        score += Math.min(bitrate / 100000, 10);
+
+        return { track, score };
+    });
+
+    // Sort candidates descending by score
+    scoredCandidates.sort((a, b) => b.score - a.score);
+
+    const bestTrack = scoredCandidates[0]?.track || standardDefaultTrack;
+    log.info(
+        `[AudioTrackSelector] Selected best DirectPlay audio track: Index ${bestTrack.Index} ` +
+        `(${bestTrack.Codec}, ${bestTrack.Channels || 2}ch, ${bestTrack.Language || 'und'}) ` +
+        `replacing transcode-inducing default track: Index ${standardDefaultTrack?.Index} (${standardDefaultTrack?.Codec})`
+    );
+
+    return bestTrack;
+}
 
 
 // ============================================================================
@@ -694,6 +894,19 @@ export class JellyfinPlayer extends EventEmitter {
             const isHtml5Backend = !(this._backend instanceof TizenAVPlayer);
             const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
             
+            // Auto-resolve best DirectPlay audio track if not explicitly requested
+            if ((options.audioStreamIndex === undefined || options.audioStreamIndex === null) && options.item && options.item.MediaSources) {
+                const fallbackSource = options.item.MediaSources[0];
+                const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
+                if (ms) {
+                    const bestAudioStream = resolveBestAudioStream(ms);
+                    if (bestAudioStream) {
+                        options.audioStreamIndex = bestAudioStream.Index;
+                        log.info(`[AudioSelection] Auto-resolved DirectPlay audio stream index: ${options.audioStreamIndex} (${bestAudioStream.Codec})`);
+                    }
+                }
+            }
+
             let isCustomAudioTrack = false;
             let isFirstAudioTrack = true;
             if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
@@ -1212,12 +1425,17 @@ export class JellyfinPlayer extends EventEmitter {
             this._currentAudioStreamIndex = options.audioStreamIndex;
             this._currentSubtitleStreamIndex = options.subtitleStreamIndex;
 
-            // If not provided, try to find default from MediaSource
+            // If not provided, resolve best DirectPlay audio track from MediaSource
             if (this._currentAudioStreamIndex === undefined && mediaSource.MediaStreams) {
-                const audioStream =
-                    mediaSource.MediaStreams.find((s) => s.Type === 'Audio' && s.IsDefault) ||
-                    mediaSource.MediaStreams.find((s) => s.Type === 'Audio');
-                if (audioStream) this._currentAudioStreamIndex = audioStream.Index;
+                const bestStream = resolveBestAudioStream(mediaSource);
+                if (bestStream) {
+                    this._currentAudioStreamIndex = bestStream.Index;
+                } else {
+                    const audioStream =
+                        mediaSource.MediaStreams.find((s) => s.Type === 'Audio' && s.IsDefault) ||
+                        mediaSource.MediaStreams.find((s) => s.Type === 'Audio');
+                    if (audioStream) this._currentAudioStreamIndex = audioStream.Index;
+                }
             }
 
             // If not provided (and not resolved pre-flight), subtitles default to off
@@ -1447,6 +1665,29 @@ export class JellyfinPlayer extends EventEmitter {
                     .catch(err => log.warn('[Play-Flow] Secondary subtitle re-application failed:', err));
             }
         } catch (error) {
+            // =================================================================
+            // Suppress False-Positive Interruption Errors During Session Restart
+            // =================================================================
+            // When an internal playback restart is triggered (e.g. quality switch,
+            // remux track fallback, or backend reload), the previous in-flight
+            // play() promise on the HTML5 video element is aborted by Chromium
+            // with 'The play() request was interrupted by a new load request'.
+            // Because a fresh play session is already in progress, emitting
+            // PlayerEvent.ERROR causes PlayerPage to display an intrusive error modal
+            // over a successfully starting stream. Suppress this transient abort.
+            // =================================================================
+            const isInterrupted =
+                error?.message?.includes('interrupted by a new load request') ||
+                error?.name === 'AbortError';
+
+            if (this._isRestarting || this._audioRestartInProgress || (isInterrupted && this._backend)) {
+                log.warn(
+                    'Playback play() promise interrupted during restart/reload — suppressing error modal:',
+                    error?.message || error
+                );
+                return;
+            }
+
             log.error('Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
             throw error;
@@ -1621,6 +1862,19 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {number} index - Audio stream index (Jellyfin ID)
      */
     async setAudioStreamIndex(index) {
+        // ====================================================================
+        // Prewarm Cache Invalidation
+        // ====================================================================
+        // When the user changes the audio track inside the player, any prewarmed
+        // cache in PrewarmManager holds stale metadata reflecting previous or
+        // default audio tracks. Invalidate the cache immediately so that subsequent
+        // launches re-query fresh metadata and correctly remember the updated track.
+        // ====================================================================
+        if (this._currentAudioStreamIndex !== index) {
+            log.info(`[Prewarm] Invalidating prewarm cache due to audio stream change (${this._currentAudioStreamIndex} -> ${index})`);
+            prewarmManager.invalidateCache();
+        }
+
         this._currentAudioStreamIndex = index;
 
         // Determine if target track codec is natively supported by current hardware backend
@@ -1629,19 +1883,8 @@ export class JellyfinPlayer extends EventEmitter {
             const AudioTracks = this.getAudioTracks();
             const targetTrack = AudioTracks.find(t => t.Index === index);
 
-            if (targetTrack && targetTrack.Codec) {
-                const targetCodec = targetTrack.Codec.toLowerCase();
-
-                // Check FLAC and ALAC audio streams when embedded in video containers
-                if ((targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
-                    isTargetCodecSupported = false;
-                } else if (targetCodec.includes('dts') && !isDtsSupported()) {
-                    // Check DTS / DTS-HD / DCA passthrough support
-                    isTargetCodecSupported = false;
-                } else if (targetCodec === 'truehd' && !isTrueHdSupported()) {
-                    // Check Dolby TrueHD passthrough support
-                    isTargetCodecSupported = false;
-                }
+            if (targetTrack) {
+                isTargetCodecSupported = isAudioTrackNativelyPlayable(targetTrack);
             }
         }
 
@@ -1775,6 +2018,20 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {number} index - Subtitle stream index (-1 to disable)
      */
     async setSubtitleStreamIndex(index) {
+        // =====================================================================
+        // Prewarm Cache Invalidation
+        // =====================================================================
+        // If the user changes the subtitle track during active playback (and
+        // this is not the initial playback setup phase where tracks are first applied),
+        // invalidate the PrewarmManager cache. This ensures subsequent launches
+        // fetch fresh item metadata from Jellyfin rather than reusing stale
+        // prewarmed metadata with the previous default subtitle track.
+        // =====================================================================
+        if (!this._playSetupInProgress && this._currentSubtitleStreamIndex !== index) {
+            log.info(`[Prewarm] Invalidating prewarm cache due to subtitle stream change (${this._currentSubtitleStreamIndex} -> ${index})`);
+            prewarmManager.invalidateCache();
+        }
+
         this._currentSubtitleStreamIndex = index;
 
         // =====================================================================
@@ -2231,25 +2488,17 @@ export class JellyfinPlayer extends EventEmitter {
      *                    selecting it would require a transcode restart
      */
     isAudioTrackNativelyPlayable(track) {
-        if (!track || !track.Codec) return true;
-        const codec = track.Codec.toLowerCase();
+        return isAudioTrackNativelyPlayable(track);
+    }
 
-        // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
-        if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
-            return false;
-        }
-
-        // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
-        if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
-            return false;
-        }
-
-        // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled
-        if (codec === 'truehd' && !isTrueHdSupported()) {
-            return false;
-        }
-
-        return true;
+    /**
+     * Resolve the best audio track for DirectPlay without transcoding
+     * @param {Object} mediaSource
+     * @param {string} [targetLang]
+     * @returns {Object|null}
+     */
+    resolveBestAudioStream(mediaSource, targetLang) {
+        return resolveBestAudioStream(mediaSource, targetLang);
     }
 
     /**
@@ -2572,7 +2821,29 @@ export class JellyfinPlayer extends EventEmitter {
             try {
                 const prewarmedData = await prewarmedPromise;
                 if (prewarmedData && prewarmedData.MediaSources?.length) {
-                    return prewarmedData;
+                    const firstSource = prewarmedData.MediaSources[0];
+
+                    // =================================================================
+                    // Safeguard Against Audio-Transcode Induced Prewarm Corruption
+                    // =================================================================
+                    // If the prewarmed PlaybackInfo forced transcoding specifically because
+                    // of 'AudioCodecNotSupported', but the active session resolved a playable
+                    // audio track in DirectPlay or Auto mode, the prewarmed data was generated
+                    // against an unsupported default stream (e.g. TrueHD 7.1). Consuming it
+                    // would force server HLS transcoding and break Dolby Vision dynamic metadata.
+                    // Discard this prewarmed data immediately and fall back to a fresh request.
+                    // =================================================================
+                    const isAudioCodecError =
+                        firstSource.TranscodingUrl &&
+                        firstSource.TranscodingUrl.includes('TranscodeReasons=AudioCodecNotSupported');
+
+                    if (isAudioCodecError && (this._playbackMode === 'auto' || this._playbackMode === 'directPlay')) {
+                        log.warn(
+                            '[Prewarm] Prewarmed PlaybackInfo forced transcode for AudioCodecNotSupported. Discarding in favor of fresh direct-play request.'
+                        );
+                    } else {
+                        return prewarmedData;
+                    }
                 }
             } catch (err) {
                 log.warn('[Prewarm] Prewarmed PlaybackInfo failed, falling back to fresh request:', err);

@@ -154,6 +154,27 @@ body.lyrics-active .audio-player-center {
 }
 
 /* ==========================================================================
+   Light Music Player Mode (Performance Optimization for Older TVs)
+   ========================================================================== */
+
+html[data-light-music-player="true"] .audio-backdrop {
+    /* Completely eliminate GPU blur filter calculation and hide backdrop layer */
+    display: none !important;
+    filter: none !important;
+}
+
+html[data-light-music-player="true"] .audio-album-art {
+    /* Eliminate box shadow to prevent layer repaints */
+    box-shadow: none !important;
+}
+
+html[data-light-music-player="true"] .audio-title,
+html[data-light-music-player="true"] .audio-subtitle {
+    /* Eliminate text shadows for lighter font rasterization */
+    text-shadow: none !important;
+}
+
+/* ==========================================================================
    Loading State
    ========================================================================== */
 

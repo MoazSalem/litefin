@@ -471,7 +471,6 @@ class ScrollController {
                 // like an uncontrollable fast-scroll hair-trigger).
                 // Clamping the minimum retarget duration to 75% of base duration
                 // (~150ms for 200ms vertical scrolls) guarantees that deliberate
-                // brisk presses maintain silky, predictable Apple-level easing.
                 // ------------------------------------------------------------
                 const minDurationFloor = Math.round(duration * 0.75);
 
@@ -629,9 +628,9 @@ class ScrollController {
     getScrollContainer(element) {
         if (!element) return null;
 
-        // Check for specific scrollable containers used in modals/filters
+        // Check for specific scrollable containers used in modals/filters/login grid
         const container = element.closest(
-            '.modal-options, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper'
+            '.users-grid, .modal-options, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper'
         );
 
         return container;

@@ -20,8 +20,9 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 import OSDController from '../player/osd/OSDController.js';
-import { JellyfinPlayer } from '../player/core/JellyfinPlayer.js';
+import { JellyfinPlayer, resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -1093,7 +1094,56 @@ class PlayerPage extends Page {
         let savedSubtitleIndex =
             preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
 
-        // If no explicit selection from DetailsPage, try to restore from session memory (if enabled)
+        // =========================================================================
+        // 2.1 Restore Item-Specific Track Memory
+        // =========================================================================
+        // If the user previously selected an audio or subtitle track specifically for
+        // this media item (such as an audio commentary track or specific language),
+        // we prioritize restoring it directly when resuming or continuing playback.
+        // =========================================================================
+        if (savedAudioIndex === undefined && item?.Id) {
+            const savedItemAudio = storage.getItem(`track:audio:${item.Id}`);
+            if (savedItemAudio !== null && savedItemAudio !== undefined) {
+                const parsedIndex = Number(savedItemAudio);
+                const streamMatch = mediaSource?.MediaStreams?.find(
+                    (s) => s.Type === 'Audio' && s.Index === parsedIndex
+                );
+                if (streamMatch) {
+                    savedAudioIndex = parsedIndex;
+                    log.info(
+                        `[Track Memory] Restored item-specific audio track: Index ${savedAudioIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                    );
+                }
+            }
+        }
+
+        if (savedSubtitleIndex === undefined && item?.Id) {
+            const savedItemSubtitle = storage.getItem(`track:subtitle:${item.Id}`);
+            if (savedItemSubtitle !== null && savedItemSubtitle !== undefined) {
+                const parsedSubIndex = Number(savedItemSubtitle);
+                if (parsedSubIndex === -1) {
+                    savedSubtitleIndex = -1;
+                    log.info(`[Track Memory] Restored item-specific subtitle track: Off (-1)`);
+                } else {
+                    const streamMatch = mediaSource?.MediaStreams?.find(
+                        (s) => s.Type === 'Subtitle' && s.Index === parsedSubIndex
+                    );
+                    if (streamMatch) {
+                        savedSubtitleIndex = parsedSubIndex;
+                        log.info(
+                            `[Track Memory] Restored item-specific subtitle track: Index ${savedSubtitleIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                        );
+                    }
+                }
+            }
+        }
+
+        // =========================================================================
+        // 2.2 Restore Session-Scoped Track Memory (Cross-Episode Carryover)
+        // =========================================================================
+        // If no explicit selection from DetailsPage or item memory exists, try to
+        // carry over track preferences from the active session (if enabled in settings).
+        // =========================================================================
         if (PlayerSettings.get('rememberTracksForSession') !== false) {
             if (savedAudioIndex === undefined) {
                 const sessionAudioLang = storage.getItem('session:lastAudioLang');
@@ -1139,18 +1189,16 @@ class PlayerPage extends Page {
         // DEFAULT AUDIO STREAM RESOLUTION (Disposition "default")
         // =========================================================================
         // When preSelectedAudio is null or undefined (and session track memory
-        // yielded no match), we resolve the default audio track.
-        // Priority order:
-        //   1. Audio stream with disposition "default" (s.Type === 'Audio' && s.IsDefault)
-        //   2. MediaSource DefaultAudioStreamIndex property
-        //   3. First available audio stream in container (audioStreams[0])
+        // yielded no match), we resolve the optimal default audio track.
+        // If preferDirectPlayAudio is enabled (default), this selects a track
+        // that does not trigger server transcoding (e.g. TrueHD/DTS fallback).
         // =========================================================================
         if (savedAudioIndex === undefined || savedAudioIndex === null) {
             // Filter candidate streams to Audio type
             const audioStreams = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
 
-            // Attempt match by disposition default (IsDefault), then DefaultAudioStreamIndex, then first track
-            const defaultAudioStream =
+            // Attempt best direct play match first, falling back to disposition default
+            const resolvedAudioStream = resolveBestAudioStream(mediaSource) ||
                 audioStreams.find((s) => s.IsDefault) ||
                 (mediaSource?.DefaultAudioStreamIndex !== undefined && mediaSource?.DefaultAudioStreamIndex !== null
                     ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
@@ -1158,10 +1206,10 @@ class PlayerPage extends Page {
                 audioStreams[0];
 
             // Assign resolved index
-            if (defaultAudioStream) {
-                savedAudioIndex = defaultAudioStream.Index;
+            if (resolvedAudioStream) {
+                savedAudioIndex = resolvedAudioStream.Index;
                 log.info(
-                    `[Track Resolution] Resolved default audio track (disposition default): Index ${savedAudioIndex} (${defaultAudioStream.Language || 'und'})`
+                    `[Track Resolution] Resolved audio track: Index ${savedAudioIndex} (${resolvedAudioStream.Codec}, ${resolvedAudioStream.Channels || 2}ch, ${resolvedAudioStream.Language || 'und'})`
                 );
             }
         }
@@ -1425,21 +1473,27 @@ class PlayerPage extends Page {
         }
 
         // 2. Fetch Backdrop (Blurred Background)
-        // Try Backdrop, then fallback to the same Album Art we just found
+        // If Light Music Player is enabled, skip fetching and creating the backdrop texture completely
+        // to minimize network traffic and eliminate GPU load on low-spec TVs.
+        const isLightMusicPlayer = layoutManager.getLightMusicPlayer();
         let backdropUrl = null;
-        if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
-            backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
-        } else if (
-            this._item.ParentBackdropImageTags &&
-            this._item.ParentBackdropImageTags.length > 0 &&
-            this._item.ParentBackdropItemId
-        ) {
-            backdropUrl = api.getImageUrl(this._item.ParentBackdropItemId, 'Backdrop', {
-                maxWidth: screenWidth,
-                quality: 80
-            });
-        } else {
-            backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily
+
+        if (!isLightMusicPlayer) {
+            // Try Backdrop, then fallback to the same Album Art we just found
+            if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
+                backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
+            } else if (
+                this._item.ParentBackdropImageTags &&
+                this._item.ParentBackdropImageTags.length > 0 &&
+                this._item.ParentBackdropItemId
+            ) {
+                backdropUrl = api.getImageUrl(this._item.ParentBackdropItemId, 'Backdrop', {
+                    maxWidth: screenWidth,
+                    quality: 80
+                });
+            } else {
+                backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily
+            }
         }
 
         if (backdropEl) {
@@ -1448,6 +1502,7 @@ class PlayerPage extends Page {
                 backdropEl.style.display = 'block';
             } else {
                 backdropEl.style.display = 'none';
+                backdropEl.style.backgroundImage = '';
             }
         }
     }
@@ -2044,11 +2099,12 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Capture the currently active audio and subtitle tracks so they can be
-     * carried forward to the next episode if 'rememberTracksForSession' is on.
+     * Capture the currently active audio and subtitle tracks.
+     * Persists them per-item so resuming this specific item restores the exact tracks,
+     * and updates session-scoped memory to carry them forward to the next episode if
+     * 'rememberTracksForSession' is enabled.
      */
     _captureActiveTrackSelection() {
-        if (PlayerSettings.get('rememberTracksForSession') === false) return;
         if (!this._player || !this._item) return;
 
         const mediaSource = this._player.getCurrentMediaSource?.() || this._item.MediaSources?.[0];
@@ -2057,18 +2113,26 @@ class PlayerPage extends Page {
         // 1. Audio Track Capture
         const activeAudioIndex = this._player._currentAudioStreamIndex;
         if (activeAudioIndex !== undefined && activeAudioIndex !== -1) {
-            const activeAudioTrack = mediaSource.MediaStreams.find(
-                (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
-            );
-            if (activeAudioTrack) {
-                // Save undetermined ('und') instead of 'none' if language is missing
-                // to distinguish undefined languages from disabled tracks.
-                storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'und');
-                storage.setItem(
-                    'session:lastAudioTitle',
-                    activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
+            // Persist per-item selection so resuming this specific item restores the exact track
+            if (this._item.Id) {
+                storage.setItem(`track:audio:${this._item.Id}`, String(activeAudioIndex));
+                log.info(`[Track Memory] Saved item audio index: ${this._item.Id} -> ${activeAudioIndex}`);
+            }
+
+            if (PlayerSettings.get('rememberTracksForSession') !== false) {
+                const activeAudioTrack = mediaSource.MediaStreams.find(
+                    (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
                 );
-                log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
+                if (activeAudioTrack) {
+                    // Save undetermined ('und') instead of 'none' if language is missing
+                    // to distinguish undefined languages from disabled tracks.
+                    storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'und');
+                    storage.setItem(
+                        'session:lastAudioTitle',
+                        activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
+                    );
+                    log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
+                }
             }
         }
 
@@ -2083,27 +2147,35 @@ class PlayerPage extends Page {
         if (hasSubtitles) {
             const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
             if (activeSubtitleIndex !== undefined) {
-                // An index of -1 represents the user explicitly turning subtitles off
-                if (activeSubtitleIndex === -1) {
-                    storage.setItem('session:lastSubtitleLang', 'none');
-                    storage.setItem('session:lastSubtitleTitle', 'none');
-                    log.info(`[Track Memory] Saved Subtitle: none`);
-                } else {
-                    // Search for the stream details using the active stream index
-                    const activeSubtitleTrack = mediaSource.MediaStreams.find(
-                        (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                    );
-                    if (activeSubtitleTrack) {
-                        // Use undetermined ('und') for tracks with empty/undefined language
-                        // to prevent them from matching the 'none' check (which disables subtitles).
-                        storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
-                        storage.setItem(
-                            'session:lastSubtitleTitle',
-                            activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                // Persist per-item selection so resuming this specific item restores the exact track
+                if (this._item.Id) {
+                    storage.setItem(`track:subtitle:${this._item.Id}`, String(activeSubtitleIndex));
+                    log.info(`[Track Memory] Saved item subtitle index: ${this._item.Id} -> ${activeSubtitleIndex}`);
+                }
+
+                if (PlayerSettings.get('rememberTracksForSession') !== false) {
+                    // An index of -1 represents the user explicitly turning subtitles off
+                    if (activeSubtitleIndex === -1) {
+                        storage.setItem('session:lastSubtitleLang', 'none');
+                        storage.setItem('session:lastSubtitleTitle', 'none');
+                        log.info(`[Track Memory] Saved Subtitle: none`);
+                    } else {
+                        // Search for the stream details using the active stream index
+                        const activeSubtitleTrack = mediaSource.MediaStreams.find(
+                            (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
                         );
-                        log.info(
-                            `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
-                        );
+                        if (activeSubtitleTrack) {
+                            // Use undetermined ('und') for tracks with empty/undefined language
+                            // to prevent them from matching the 'none' check (which disables subtitles).
+                            storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
+                            storage.setItem(
+                                'session:lastSubtitleTitle',
+                                activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                            );
+                            log.info(
+                                `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
+                            );
+                        }
                     }
                 }
             }
@@ -2354,12 +2426,14 @@ class PlayerPage extends Page {
             if (span) {
                 SubtitleStyles.applyStyles(span, styles);
 
-                // Ensure the selected font is loaded, then re-apply if needed
+                // Ensure the selected font is loaded if not already ready/failed, then re-apply if needed
                 const fontId = SubtitleStyles.getCurrentFontId();
-                if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
+                if (fontId && !FontLoader.isFontLoaded(fontId) && !FontLoader.hasFontFailed(fontId)) {
+                    FontLoader.loadFont(fontId).then((loaded) => {
                         // Re-apply styles after font is loaded to trigger repaint
-                        SubtitleStyles.applyStyles(span, styles);
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
@@ -2435,12 +2509,14 @@ class PlayerPage extends Page {
             if (span) {
                 SubtitleStyles.applyStyles(span, styles);
 
-                // Ensure font is loaded (same font as primary — likely already cached)
+                // Ensure font is loaded if not already ready/failed (same font as primary — likely already cached)
                 const fontId = SubtitleStyles.getCurrentFontId();
-                if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
+                if (fontId && !FontLoader.isFontLoaded(fontId) && !FontLoader.hasFontFailed(fontId)) {
+                    FontLoader.loadFont(fontId).then((loaded) => {
                         // Re-apply after font loads to trigger repaint
-                        SubtitleStyles.applyStyles(span, styles);
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
@@ -2484,6 +2560,16 @@ class PlayerPage extends Page {
 
     _onMediaStreamsChange(data) {
         if (!this._item || !this._player) return;
+
+        // =====================================================================
+        // Immediate Track Selection Persistence
+        // =====================================================================
+        // Whenever the user changes the audio or subtitle track inside the player
+        // (via OSD TrackMenu or remote shortcuts), immediately persist the selection
+        // both per-item and in session memory. This guarantees the track is remembered
+        // even if playback is stopped abruptly or early in playback.
+        // =====================================================================
+        this._captureActiveTrackSelection();
 
         // Skip reporting during initial setup (first 2 seconds of play time) to avoid CPU contention.
         // Tizen hardware is under heavy load during ABR jumps at startup, and building the
@@ -2541,11 +2627,13 @@ class PlayerPage extends Page {
                 const windowStyles = SubtitleStyles.getWindowStyles();
                 SubtitleStyles.applyStyles(overlay, windowStyles);
 
-                // Handle font loading if changed
+                // Handle font loading if changed by user settings
                 const fontId = SubtitleStyles.getCurrentFontId();
                 if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
-                        SubtitleStyles.applyStyles(span, styles);
+                    FontLoader.loadFont(fontId, true).then((loaded) => {
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
@@ -2567,8 +2655,10 @@ class PlayerPage extends Page {
 
                 const fontId = SubtitleStyles.getCurrentFontId();
                 if (fontId) {
-                    FontLoader.loadFont(fontId).then(() => {
-                        SubtitleStyles.applyStyles(span, styles);
+                    FontLoader.loadFont(fontId, true).then((loaded) => {
+                        if (loaded) {
+                            SubtitleStyles.applyStyles(span, styles);
+                        }
                     });
                 }
             }
@@ -2752,7 +2842,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) {}
+                } catch (e) { }
                 this._osd.activeMenu = null;
             }
             this._osd.hide?.();
@@ -2830,7 +2920,6 @@ class PlayerPage extends Page {
         // Locate error modal element
         const errorEl = this.$('#player-error');
         if (errorEl) {
-            // Apply hidden class to trigger Apple-style fade-out transition
             errorEl.classList.add('hidden');
 
             // Unregister error modal from focus spatial navigation
@@ -2863,7 +2952,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) {}
+                } catch (e) { }
                 this._osd.activeMenu = null;
             }
             this._osd.hide();
@@ -2910,7 +2999,7 @@ class PlayerPage extends Page {
      */
     async _retryWithHtml5Backend() {
         log.info('Retrying playback with explicit HTML5 player backend override...');
-        
+
         // Hide error overlay and unregister focus section
         const errorEl = this.$('#player-error');
         if (errorEl) {
@@ -2924,7 +3013,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) {}
+                } catch (e) { }
                 this._osd.activeMenu = null;
             }
             this._osd.hide();
@@ -3167,9 +3256,9 @@ class PlayerPage extends Page {
             if (_isNearComplete) {
                 log.info(
                     `Overriding positionTicks with durationTicks (${durationTicks})` +
-                        (this._isPlaybackEnded
-                            ? ' due to natural end of playback'
-                            : ' due to near-complete playback position')
+                    (this._isPlaybackEnded
+                        ? ' due to natural end of playback'
+                        : ' due to near-complete playback position')
                 );
                 rawPosition = durationTicks;
             }
@@ -3466,6 +3555,15 @@ class PlayerPage extends Page {
             return;
         }
         this._isExiting = true;
+
+        // =====================================================================
+        // Persist Track Selections Before Teardown
+        // =====================================================================
+        // Capture active tracks before calling player.stop(). Calling stop() clears
+        // the player's internal currentItem and mediaSource pointers, which would
+        // prevent active track preferences from being captured afterwards.
+        // =====================================================================
+        this._captureActiveTrackSelection();
 
         // Capture session info BEFORE stopping (stop clears internal state)
         const mediaSource = this._player?.getCurrentMediaSource?.();

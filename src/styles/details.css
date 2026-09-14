@@ -1519,7 +1519,7 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .person-grid.seerr-person-grid .media-card {
     /* Set 7 items per row (100% / 7 = 14.2857%) minus lateral margin gutters */
     width: calc(14.2857% - 16px) !important;
-    /* Apple-style balanced 8px horizontal separation */
+    /* balanced 8px horizontal separation */
     margin-right: 8px !important;
     margin-left: 8px !important;
     /* Generous vertical breathing room between grid rows */

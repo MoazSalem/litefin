@@ -333,45 +333,45 @@ const skipIntroPlugin = {
     // ========================================================================
 
     /**
-     * Fetch and cache intro/outro/recap/preview segment timestamps for an
-     * episode. Uses the intro-skipper v1 API endpoint.
+     * Loads segments for the provided media item based on user configuration.
      *
-     * Endpoint:  GET /Episode/{id}/Timestamps
-     * Response:  { Introduction, Credits, Recap, Preview }
-     *            where each field has { Start, End } in SECONDS (doubles).
-     *            A segment with End === 0 is "empty" (not detected).
+     * Data Retrieval Strategy:
+     * 1. Check in-memory session cache keyed by item ID and source preference.
+     * 2. When server segments are enabled ('both' or 'server'):
+     *    - Modern Jellyfin (10.10+ / 12.0+): Query /MediaSegments/{itemId}.
+     *      Intro-Skipper v2 and server providers store segments directly in
+     *      the core MediaSegments database in ticks.
+     *    - Legacy Fallback A (Jellyfin <= 10.9 with intro-skipper v1):
+     *      Query /Episode/{itemId}/Timestamps (seconds format).
+     *    - Legacy Fallback B (original ConfusedPolarBear plugin):
+     *      Query /Episode/{itemId}/IntroTimestamps (IntroStart/IntroEnd).
+     * 3. When chapter segments are enabled ('both' or 'chapters'):
+     *    - Parse video chapter markers for Intro, Credits, and Recap tags.
+     * 4. When 'both' is selected:
+     *    - Merge server segments and chapter segments, eliminating overlaps.
      *
-     * @param {string} itemId - Jellyfin episode item ID
-     * @param {import('../../PluginAPI.js').default} api
-     * @private
-     */
-    /**
-     * Fetch and cache segment timestamps.
-     * Checks if the intro-skipper plugin is available on the server:
-     * - If available: Fetches from the /Episode/{id}/Timestamps endpoint.
-     * - If unavailable: Falls back to parsing chapter markers on the item.
-     *
-     * @param {Object} item - Jellyfin episode item object
+     * @param {Object} item - Jellyfin media item object (Episode or Movie)
      * @param {import('../../PluginAPI.js').default} api
      * @private
      */
     async _loadSegments(item, api) {
         const itemId = item.Id;
+        const sourcePref = PlayerSettings.get('skipSegmentSource') || 'both';
 
         // --------------------------------------------------------------------
-        // Cache Check: Avoid hit to network if already loaded for this item.
+        // Cache Check: Avoid hit to network if already loaded for this item
+        // with the currently active source preference.
         // --------------------------------------------------------------------
-        if (this._cache.has(itemId)) {
-            const cached = this._cache.get(itemId);
+        const cacheKey = `${itemId}:${sourcePref}`;
+        if (this._cache.has(cacheKey)) {
+            const cached = this._cache.get(cacheKey);
             this._introSegment = cached.intro;
             this._outroSegment = cached.outro;
             this._recapSegment = cached.recap;
             this._previewSegment = cached.preview;
-            api.log.debug(`Skip Intro: segments for ${itemId} loaded from cache`);
+            api.log.debug(`Skip Intro: segments for ${cacheKey} loaded from cache`);
             return;
         }
-
-        const sourcePref = PlayerSettings.get('skipSegmentSource') || 'both';
 
         // Initialize state arrays for this load run
         this._introSegment = [];
@@ -380,29 +380,104 @@ const skipIntroPlugin = {
         this._previewSegment = [];
 
         // --------------------------------------------------------------------
-        // Check Plugin Presence dynamically and fetch server timestamps
+        // Step 1: Server Segments Retrieval
+        // --------------------------------------------------------------------
+        // When source is 'server' or 'both', attempt to fetch server-reported
+        // segments. We first try Jellyfin's standard /MediaSegments endpoint
+        // (supported natively in 10.10+ and used by Intro-Skipper v2), then
+        // fall back to legacy endpoints if running against an older server.
         // --------------------------------------------------------------------
         if (sourcePref !== 'chapters') {
-            let introSkipperAvailable = false;
+            let serverLoaded = false;
+
+            // 1. Primary path: Modern Jellyfin MediaSegments API (Jellyfin 10.10+ / 12.0+)
+            // Intro-Skipper v2 removed custom playback endpoints and mirrors all
+            // analyzer results directly into Jellyfin's core MediaSegments table.
             try {
-                api.log.debug(`Skip Intro: probing intro-skipper plugin availability`);
-                const check = await api.serverPlugins.isPluginAvailable('intro-skipper', item);
-                introSkipperAvailable = !!check.available;
+                api.log.debug(`Skip Intro: querying /MediaSegments/${itemId}`);
+                const segResult = await api.serverPlugins.call(`/MediaSegments/${itemId}`);
+                const items = segResult?.Items || (Array.isArray(segResult) ? segResult : []);
+
+                if (Array.isArray(items) && items.length > 0) {
+                    const serverIntros = [];
+                    const serverOutros = [];
+                    const serverRecaps = [];
+                    const serverPreviews = [];
+
+                    items.forEach((seg) => {
+                        const typeStr = typeof seg.Type === 'string' ? seg.Type.toLowerCase() : '';
+                        const typeNum = typeof seg.Type === 'number' ? seg.Type : -1;
+                        const start = Number(seg.StartTicks);
+                        const end = Number(seg.EndTicks);
+
+                        // Basic range validation: end must be strictly greater than start
+                        if (isNaN(start) || isNaN(end) || end <= start) return;
+
+                        const segmentObj = { start, end };
+
+                        // Match against Jellyfin's MediaSegmentType enum values:
+                        // Intro = 5, Outro = 4, Recap = 3, Preview = 2
+                        if (typeStr === 'intro' || typeNum === 5) {
+                            serverIntros.push(segmentObj);
+                        } else if (typeStr === 'outro' || typeNum === 4) {
+                            serverOutros.push(segmentObj);
+                        } else if (typeStr === 'recap' || typeNum === 3) {
+                            serverRecaps.push(segmentObj);
+                        } else if (typeStr === 'preview' || typeNum === 2) {
+                            serverPreviews.push(segmentObj);
+                        }
+                    });
+
+                    // Sort each segment category chronologically
+                    this._introSegment = serverIntros.sort((a, b) => a.start - b.start);
+                    this._outroSegment = serverOutros.sort((a, b) => a.start - b.start);
+                    this._recapSegment = serverRecaps.sort((a, b) => a.start - b.start);
+                    this._previewSegment = serverPreviews.sort((a, b) => a.start - b.start);
+
+                    serverLoaded = (
+                        this._introSegment.length > 0 ||
+                        this._outroSegment.length > 0 ||
+                        this._recapSegment.length > 0 ||
+                        this._previewSegment.length > 0
+                    );
+
+                    if (serverLoaded) {
+                        api.log.info(
+                            `Skip Intro: loaded MediaSegments from server —`,
+                            `intro=${this._introSegment.length}`,
+                            `outro=${this._outroSegment.length}`,
+                            `recap=${this._recapSegment.length}`,
+                            `preview=${this._previewSegment.length}`
+                        );
+                    } else {
+                        api.log.debug(`Skip Intro: /MediaSegments/${itemId} returned 0 relevant segments`);
+                    }
+                } else {
+                    api.log.debug(`Skip Intro: /MediaSegments/${itemId} returned empty list`);
+                }
             } catch (err) {
-                api.log.warn(`Skip Intro: failed to probe intro-skipper availability:`, err.message);
+                // HTTP 404 indicates the MediaSegments controller is not present (Jellyfin <= 10.9)
+                api.log.debug(`Skip Intro: /MediaSegments/${itemId} unavailable or failed:`, err.message);
             }
 
-            if (introSkipperAvailable) {
+            // 2. Fallback Path A: Intro-Skipper v1 /Episode/{itemId}/Timestamps
+            // Supported on Jellyfin <= 10.9 servers running early Intro-Skipper v1 forks.
+            const hasServerData = this._introSegment.length > 0 ||
+                this._outroSegment.length > 0 ||
+                this._recapSegment.length > 0 ||
+                this._previewSegment.length > 0;
+
+            if (!hasServerData) {
                 try {
-                    api.log.info(`Skip Intro: fetching timestamps from intro-skipper for item ${itemId}`);
+                    api.log.debug(`Skip Intro: checking legacy endpoint /Episode/${itemId}/Timestamps`);
                     const data = await api.serverPlugins.call(`/Episode/${itemId}/Timestamps`);
 
-                    // Helper to safely transform raw values into ticks as an array
+                    // Helper to convert legacy float seconds into 64-bit Jellyfin ticks
                     const toSegment = (raw) => {
                         if (!raw || !(raw.End > 0)) return [];
                         return [{
-                            start: raw.Start * TICKS_PER_SECOND,
-                            end: raw.End * TICKS_PER_SECOND
+                            start: Math.round(raw.Start * TICKS_PER_SECOND),
+                            end: Math.round(raw.End * TICKS_PER_SECOND)
                         }];
                     };
 
@@ -411,25 +486,50 @@ const skipIntroPlugin = {
                     this._recapSegment = toSegment(data?.Recap);
                     this._previewSegment = toSegment(data?.Preview);
 
-                    api.log.info(
-                        `Skip Intro: loaded timestamps from server —`,
-                        `intro=${this._introSegment.length > 0 ? 'yes' : 'no'}`,
-                        `outro=${this._outroSegment.length > 0 ? 'yes' : 'no'}`,
-                        `recap=${this._recapSegment.length > 0 ? 'yes' : 'no'}`,
-                        `preview=${this._previewSegment.length > 0 ? 'yes' : 'no'}`
-                    );
+                    if (this._introSegment.length > 0 || this._outroSegment.length > 0 || this._recapSegment.length > 0 || this._previewSegment.length > 0) {
+                        api.log.info(
+                            `Skip Intro: loaded legacy timestamps from /Episode/${itemId}/Timestamps —`,
+                            `intro=${this._introSegment.length > 0 ? 'yes' : 'no'}`,
+                            `outro=${this._outroSegment.length > 0 ? 'yes' : 'no'}`,
+                            `recap=${this._recapSegment.length > 0 ? 'yes' : 'no'}`,
+                            `preview=${this._previewSegment.length > 0 ? 'yes' : 'no'}`
+                        );
+                    }
                 } catch (err) {
                     if (err.status === 404) {
-                        api.log.debug(`Skip Intro: no intro-skipper timestamps found for ${itemId}`);
+                        api.log.debug(`Skip Intro: /Episode/${itemId}/Timestamps not found (404)`);
                     } else {
-                        api.log.warn(`Skip Intro: intro-skipper API call failed:`, err.message);
+                        api.log.warn(`Skip Intro: legacy Timestamps API call failed:`, err.message);
                     }
+                }
+            }
+
+            // 3. Fallback Path B: Original ConfusedPolarBear /Episode/{itemId}/IntroTimestamps
+            // Early versions of intro-skipper only reported the intro sequence.
+            if (this._introSegment.length === 0) {
+                try {
+                    api.log.debug(`Skip Intro: checking legacy endpoint /Episode/${itemId}/IntroTimestamps`);
+                    const legacyData = await api.serverPlugins.call(`/Episode/${itemId}/IntroTimestamps`);
+                    if (legacyData?.Valid && legacyData.IntroEnd > 0) {
+                        this._introSegment = [{
+                            start: Math.round(legacyData.IntroStart * TICKS_PER_SECOND),
+                            end: Math.round(legacyData.IntroEnd * TICKS_PER_SECOND)
+                        }];
+                        api.log.info(
+                            `Skip Intro: loaded legacy IntroTimestamps (${legacyData.IntroStart}s - ${legacyData.IntroEnd}s)`
+                        );
+                    }
+                } catch (err) {
+                    api.log.debug(`Skip Intro: /Episode/${itemId}/IntroTimestamps not found or failed`);
                 }
             }
         }
 
         // --------------------------------------------------------------------
-        // Retrieve chapters and merge/set results if enabled
+        // Step 2: Chapter Markers Extraction
+        // --------------------------------------------------------------------
+        // When source preference is 'both' or 'chapters', parse video chapters.
+        // When source preference is 'server', this step is skipped entirely.
         // --------------------------------------------------------------------
         if (sourcePref !== 'server') {
             let chapters = item.Chapters;
@@ -449,7 +549,7 @@ const skipIntroPlugin = {
             }
 
             if (chapters && chapters.length > 0) {
-                // Sort chapters by start position for reliable sequential boundaries
+                // Sort chapters sequentially by start position
                 const sortedChapters = [...chapters].sort((a, b) => a.StartPositionTicks - b.StartPositionTicks);
 
                 const chapterIntros = [];
@@ -503,7 +603,7 @@ const skipIntroPlugin = {
                 });
 
                 if (sourcePref === 'both') {
-                    // Local helper to merge segments without duplicates or overlaps
+                    // Local helper to merge segments without duplicate or overlapping time ranges
                     const mergeSegments = (serverSegs, chapterSegs) => {
                         const merged = [...serverSegs];
                         chapterSegs.forEach(c => {
@@ -532,8 +632,8 @@ const skipIntroPlugin = {
             }
         }
 
-        // Cache whatever results we gathered (even if null) to prevent redundant queries
-        this._cache.set(itemId, {
+        // Cache whatever results were gathered for this item and source preference
+        this._cache.set(cacheKey, {
             intro: this._introSegment,
             outro: this._outroSegment,
             recap: this._recapSegment,

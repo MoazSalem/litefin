@@ -29,6 +29,7 @@ import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { prewarmManager } from '../player/core/PrewarmManager.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -651,15 +652,75 @@ class DetailsPage extends Page {
                 this._selectedMediaSourceId = null;
             }
 
-            this._selectedAudioIndex = undefined;
-            this._selectedSubtitleIndex = undefined;
+            // =========================================================================
+            // Restore Persisted Track Selections for this Media Item
+            // =========================================================================
+            // When resuming or navigating to an item where the user previously selected
+            // an audio commentary or subtitle track, restore that selection from storage
+            // if it is still valid within the active MediaSource stream inventory.
+            // =========================================================================
+            const activeSource =
+                this._item.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+                this._item.MediaSources?.[0];
 
-            // Trigger prewarm for playable media items, passing the restored version ID if available.
-            // JellyEmu game items are ROMs running inside EmulatorJS and do not have video streams to prewarm.
+            const savedAudioTrack = storage.getItem(`track:audio:${this._itemId}`);
+            if (savedAudioTrack !== null && savedAudioTrack !== undefined) {
+                const parsedAudio = Number(savedAudioTrack);
+                if (activeSource?.MediaStreams?.some((s) => s.Type === 'Audio' && s.Index === parsedAudio)) {
+                    this._selectedAudioIndex = parsedAudio;
+                    log.info(`[DetailsPage] Restored saved audio track for ${this._itemId}: ${parsedAudio}`);
+                } else {
+                    this._selectedAudioIndex = undefined;
+                }
+            } else {
+                this._selectedAudioIndex = undefined;
+            }
+
+            // =====================================================================
+            // Auto-Resolve Optimal DirectPlay Audio Track for Prewarm
+            // =====================================================================
+            // If the item has not been played previously (no track persisted in
+            // localStorage), resolve the optimal audio track before triggering prewarm.
+            // On media with TrueHD default tracks (e.g. 4K Dolby Vision releases),
+            // this selects the compatible AC3/EAC3 backup track instead of allowing
+            // the server to evaluate the unsupported TrueHD default. This ensures the
+            // background PlaybackInfo prewarm requests the exact direct-playable stream,
+            // preventing transcode degradation and whitewashed video on first play.
+            // =====================================================================
+            if (this._selectedAudioIndex === undefined && activeSource) {
+                const bestStream = resolveBestAudioStream(activeSource);
+                if (bestStream) {
+                    this._selectedAudioIndex = bestStream.Index;
+                    log.info(
+                        `[DetailsPage] Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                    );
+                }
+            }
+
+            const savedSubtitleTrack = storage.getItem(`track:subtitle:${this._itemId}`);
+            if (savedSubtitleTrack !== null && savedSubtitleTrack !== undefined) {
+                const parsedSubtitle = Number(savedSubtitleTrack);
+                if (
+                    parsedSubtitle === -1 ||
+                    activeSource?.MediaStreams?.some((s) => s.Type === 'Subtitle' && s.Index === parsedSubtitle)
+                ) {
+                    this._selectedSubtitleIndex = parsedSubtitle;
+                    log.info(`[DetailsPage] Restored saved subtitle track for ${this._itemId}: ${parsedSubtitle}`);
+                } else {
+                    this._selectedSubtitleIndex = undefined;
+                }
+            } else {
+                this._selectedSubtitleIndex = undefined;
+            }
+
+            // Trigger prewarm for playable media items, passing the restored version ID and restored tracks
             const isGameItem = this._isGame(item);
+
             if (!isGameItem && (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer')) {
                 prewarmManager.prewarm(item, {
-                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id
+                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id,
+                    audioStreamIndex: this._selectedAudioIndex,
+                    subtitleStreamIndex: this._selectedSubtitleIndex
                 });
             }
 
@@ -850,9 +911,29 @@ class DetailsPage extends Page {
             // Persist the selection so it survives back-navigation and re-visits
             storage.setItem(`mediaSource:${this._itemId}`, id);
 
-            // Reset track selections when version changes as they are source-specific
+            // Reset track selections when version changes as stream indices are source-specific
             this._selectedAudioIndex = undefined;
             this._selectedSubtitleIndex = undefined;
+            storage.removeItem(`track:audio:${this._itemId}`);
+            storage.removeItem(`track:subtitle:${this._itemId}`);
+
+            // =================================================================
+            // Auto-Resolve DirectPlay Audio Track for New Version
+            // =================================================================
+            // When switching to an alternative media source (e.g. 4K vs 1080p),
+            // auto-select the best audio track for the new source so background
+            // prewarming immediately generates a valid DirectPlay stream profile.
+            // =================================================================
+            const newSource = this._item.MediaSources?.find((m) => m.Id === id);
+            if (newSource) {
+                const bestStream = resolveBestAudioStream(newSource);
+                if (bestStream) {
+                    this._selectedAudioIndex = bestStream.Index;
+                    log.info(
+                        `[DetailsPage] Auto-selected DirectPlay audio track for version ${id}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                    );
+                }
+            }
 
             // Re-render hero header and technical details to reflect the selected version
             this._renderHeroText();
@@ -865,7 +946,9 @@ class DetailsPage extends Page {
                     this._item.Type === 'Trailer')
             ) {
                 prewarmManager.prewarm(this._item, {
-                    mediaSourceId: id
+                    mediaSourceId: id,
+                    audioStreamIndex: this._selectedAudioIndex,
+                    subtitleStreamIndex: this._selectedSubtitleIndex
                 });
             }
         });
@@ -2195,7 +2278,9 @@ class DetailsPage extends Page {
             activeAudio = audioStreams.find((s) => s.Index === this._selectedAudioIndex);
         }
         if (!activeAudio) {
-            activeAudio =
+            // Check if preferDirectPlayAudio auto-resolves a playable track (e.g. AC3/EAC3 over TrueHD/DTS)
+            const bestAudioTrack = resolveBestAudioStream(source);
+            activeAudio = bestAudioTrack ||
                 audioStreams.find((s) => s.Index === source.DefaultAudioStreamIndex) ||
                 audioStreams.find((s) => s.IsDefault) ||
                 audioStreams[0];
@@ -3099,7 +3184,7 @@ class DetailsPage extends Page {
                             ? `${ep.IndexNumber}. `
                             : '';
 
-                const rating = ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
                 let runtimeText = '';
                 if (ep.RunTimeTicks) {
                     const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -3124,7 +3209,7 @@ class DetailsPage extends Page {
                             <div class="episode-row-info">
                                 <div class="episode-row-title">${episodePrefix}${episodeTitle}</div>
                                 <div class="episode-row-meta">
-                                    ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                    ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                     ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                     ${endsAtText ? `<span>${endsAtText}</span>` : ''}
                                 </div>
@@ -3297,8 +3382,7 @@ class DetailsPage extends Page {
                     );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
-                    const rating =
-                        ep.CommunityRating && shouldShowScore(ep) ? `⭐ ${ep.CommunityRating.toFixed(1)}` : '';
+                    const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
                     let runtimeText = '';
                     if (ep.RunTimeTicks) {
                         const mins = Math.round(ep.RunTimeTicks / 600000000);
@@ -3323,7 +3407,7 @@ class DetailsPage extends Page {
                                 <div class="episode-row-info">
                                     <div class="episode-row-title">${ep.IndexNumber || 0}. ${episodeTitle}</div>
                                     <div class="episode-row-meta">
-                                        ${rating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
+                                        ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                         ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                         ${endsAtText ? `<span>${endsAtText}</span>` : ''}
                                     </div>
@@ -3826,8 +3910,8 @@ class DetailsPage extends Page {
         // -------------------------------------------------------------
         const includeCurrent = storage.getItem('pref:includeCurrentEpisodeInMoreFromSeason') === 'true';
 
-        // Filter out current episode if preference is disabled, and slice limits to 24 for the row.
-        const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 24);
+        // Filter out current episode if preference is disabled, and slice limits to 100 for the row.
+        const siblings = allItems.filter((ep) => includeCurrent || ep.Id !== this._itemId).slice(0, 100);
 
         if (siblings.length > 0) {
             // Find index of the current active episode in the siblings list
@@ -4384,8 +4468,13 @@ class DetailsPage extends Page {
         // Find current selection (or default)
         let currentIndex = this._selectedAudioIndex;
         if (currentIndex === undefined) {
-            const defaultStream = tracks.find((s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex);
-            currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
+            const bestStream = resolveBestAudioStream(mediaSource);
+            if (bestStream) {
+                currentIndex = bestStream.Index;
+            } else {
+                const defaultStream = tracks.find((s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex);
+                currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
+            }
         }
 
         this._renderTrackSelectionMenu(i18n.t('Audio'), tracks, currentIndex, (index) => {
@@ -4393,6 +4482,9 @@ class DetailsPage extends Page {
 
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
+
+            // Persist track selection per-item so it survives navigation, exits, and app restarts
+            storage.setItem(`track:audio:${this._itemId}`, String(index));
 
             // Re-render hero header to update the audio specifications pill
             this._renderHeroText();
@@ -4463,6 +4555,9 @@ class DetailsPage extends Page {
             // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
+
+            // Persist track selection per-item so it survives navigation, exits, and app restarts
+            storage.setItem(`track:subtitle:${this._itemId}`, String(index));
 
             // Re-trigger zero-latency prewarm with updated subtitle track selection
             if (
