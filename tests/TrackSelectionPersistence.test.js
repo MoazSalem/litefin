@@ -362,3 +362,17 @@ test('WebOSPlayer _getContainerDefaultAudioIndex respects mediaSource.DefaultAud
     const resolvedDefault = mockGetContainerDefaultAudioIndex(mediaSource);
     assert.strictEqual(resolvedDefault, 5, 'Should resolve DefaultAudioStreamIndex: 5 instead of defaulting to first track');
 });
+
+test('ResponseProfiles contains only valid DLNA schema without non-standard condition properties', () => {
+    // Read WebOSProfile source and verify it does not contain the invalid 'VideoCodec' Property condition
+    const webOsProfileSource = readFileSync(
+        new URL('../src/api/profiles/WebOSProfile.js', import.meta.url),
+        'utf8'
+    );
+
+    // Assert that the rejected ResponseProfile condition is absent
+    assert.ok(
+        !webOsProfileSource.includes("Property: 'VideoCodec'"),
+        "WebOSProfile must not declare Property: 'VideoCodec' in ResponseProfiles as it violates Jellyfin ProfileConditionValue enum"
+    );
+});

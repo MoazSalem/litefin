@@ -1205,22 +1205,15 @@ export function buildJellyfinProfile(options = {}) {
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
         SubtitleProfiles: BaseProfile.getSubtitleProfiles(),
-        ResponseProfiles: [
-            {
-                Container: 'mkv',
-                Type: 'Video',
-                Conditions: [
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoCodec',
-                        Value: 'h264'
-                    }
-                ],
-                Action: 'Remux',
-                ContainerOverride: 'mp4'
-            },
-            ...BaseProfile.getResponseProfiles()
-        ]
+        // =====================================================================
+        // Response Profiles (MIME Type and Container Mapping)
+        // =====================================================================
+        // Use standardized base response profiles. Custom response profiles with
+        // non-standard condition properties (such as 'VideoCodec') fail JSON
+        // deserialization in Jellyfin's ProfileConditionValue enum, resulting
+        // in HTTP 400 Bad Request on PlaybackInfo endpoints.
+        // =====================================================================
+        ResponseProfiles: BaseProfile.getResponseProfiles()
     };
 }
 
