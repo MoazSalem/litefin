@@ -616,6 +616,23 @@ class LibraryPage extends Page {
                 const title = i18n.t('SearchResultsFor', [query]);
                 this.$('#library-title').textContent = title;
                 this.title = title;
+            } else if (this.params.parentId && this.state.libraryId === 'all') {
+                try {
+                    // Resolve parent item title (e.g. Season 1 or Album) for deep-linked virtual library views
+                    const parentItem = await api.getItem(this.params.parentId);
+                    if (parentItem && parentItem.Name) {
+                        const fullTitle = parentItem.SeriesName
+                            ? `${parentItem.SeriesName} - ${parentItem.Name}`
+                            : parentItem.Name;
+                        this.$('#library-title').textContent = fullTitle;
+                        this.title = fullTitle;
+                        if (this.state.libraryInfo) {
+                            this.state.libraryInfo.Name = fullTitle;
+                        }
+                    }
+                } catch (e) {
+                    log.warn('Failed to fetch parent info for virtual library title', e);
+                }
             }
         })();
 
@@ -786,12 +803,17 @@ class LibraryPage extends Page {
 
     _getCacheKey() {
         const parts = [`library:state:${this.params.id}`];
+        if (this.params.parentId) parts.push(`parent:${this.params.parentId}`);
+        if (this.params.includeItemTypes) parts.push(`types:${this.params.includeItemTypes}`);
         if (this.params.genreId) parts.push(`genre:${this.params.genreId}`);
         if (this.params.studioId) parts.push(`studio:${this.params.studioId}`);
         if (this.params.networkId) parts.push(`network:${this.params.networkId}`);
         if (this.params.year) parts.push(`year:${this.params.year}`);
         if (this.params.personId) parts.push(`person:${this.params.personId}`);
         if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
+        if (this.params.searchTerm) parts.push(`search:${this.params.searchTerm}`);
+        if (this.params.viewModeIndex !== undefined) parts.push(`vmIdx:${this.params.viewModeIndex}`);
+        if (this.params.viewMode) parts.push(`vm:${this.params.viewMode}`);
         if (this.params.char) parts.push(`char:${this.params.char}`);
         if (this.params.page) parts.push(`page:${this.params.page}`);
         return parts.join(':');
@@ -2301,7 +2323,8 @@ class LibraryPage extends Page {
             this.state.viewType === 'Upcoming' ||
             this.state.viewType === 'Networks' ||
             this.state.libraryInfo?.CollectionType === 'musicvideos' ||
-            this.state.libraryInfo?.CollectionType === 'homevideos';
+            this.state.libraryInfo?.CollectionType === 'homevideos' ||
+            (this.params.includeItemTypes && this.params.includeItemTypes.includes('Episode'));
 
         // --------------------------------------------------------------------
         // Apply the view mode CSS modifier class to the grid container.
@@ -3888,16 +3911,33 @@ class LibraryPage extends Page {
             return;
         }
 
+        // ====================================================================
+        // PRESERVE ROUTE QUERY PARAMETERS ACROSS PAGE CHANGES
+        // ====================================================================
+        // Start from existing route parameters so deep links (e.g. season details
+        // "See More" with parentId, includeItemTypes, viewModeIndex), custom search,
+        // or favorite subsets don't lose their context when the user navigates pages.
+        // ====================================================================
         const currentParams = new URLSearchParams();
-        if (this.params.genreId) currentParams.set('genreId', this.params.genreId);
-        if (this.params.studioId) currentParams.set('studioId', this.params.studioId);
-        if (this.params.networkId) currentParams.set('networkId', this.params.networkId);
-        if (this.params.year) currentParams.set('year', this.params.year);
-        if (this.params.personId) currentParams.set('personId', this.params.personId);
-        if (this.params.tagName) currentParams.set('tagName', this.params.tagName);
-        if (this.params.name) currentParams.set('name', this.params.name);
+
+        // Copy over all existing parameters from this.params except route path 'id' and 'page'
+        if (this.params && typeof this.params === 'object') {
+            for (const [key, value] of Object.entries(this.params)) {
+                if (key !== 'id' && key !== 'page' && value !== undefined && value !== null && value !== '') {
+                    currentParams.set(key, value);
+                }
+            }
+        }
+
+        // Active alphabet picker / character filter override
         const selectedChar = this.state.nameStartsWith || this.params.char;
-        if (selectedChar) currentParams.set('char', selectedChar);
+        if (selectedChar) {
+            currentParams.set('char', selectedChar);
+        } else {
+            currentParams.delete('char');
+        }
+
+        // Apply updated target page
         currentParams.set('page', targetPage);
 
         router.navigate(`/library/${this.state.libraryId}?${currentParams.toString()}`);
