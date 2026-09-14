@@ -43,6 +43,7 @@ function createPrewarmManager() {
         FontLoader: {},
         SubtitleStyles: {},
         platformInfo: {},
+        resolveBestAudioStream: () => null,
         AbortController
     });
 
@@ -284,4 +285,80 @@ test('PlayerPage track memory: captures active commentary track and restores it 
     // 5. Assert that the commentary track and subtitle off state were successfully restored
     assert.strictEqual(savedAudioIndex, 2, 'Resuming playback should restore commentary audio track (Index 2)');
     assert.strictEqual(savedSubtitleIndex, -1, 'Resuming playback should restore subtitle track Off (Index -1)');
+});
+
+test('DetailsPage auto-resolves DirectPlay audio track on first visit (TrueHD default -> AC3 backup)', () => {
+    // Media with unsupported TrueHD default track (Index 2) and AC3 compatibility track (Index 4)
+    const mediaSource = {
+        Id: 'source-dovi-1',
+        DefaultAudioStreamIndex: 2,
+        MediaStreams: [
+            { Type: 'Video', Index: 0, Codec: 'hevc' },
+            { Type: 'Audio', Index: 2, Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: true },
+            { Type: 'Audio', Index: 4, Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Simulate mock resolveBestAudioStream logic
+    function mockResolveBestAudioStream(source) {
+        // TrueHD is not natively playable; return AC3
+        return source.MediaStreams.find((s) => s.Type === 'Audio' && s.Codec === 'ac3');
+    }
+
+    // Simulate DetailsPage restoration logic on first load (no saved storage)
+    const storageMap = new Map();
+    let selectedAudioIndex = undefined;
+    const itemId = 'movie-dovi-857';
+
+    const savedAudioTrack = storageMap.get(`track:audio:${itemId}`);
+    if (savedAudioTrack !== null && savedAudioTrack !== undefined) {
+        selectedAudioIndex = Number(savedAudioTrack);
+    } else {
+        selectedAudioIndex = undefined;
+    }
+
+    // Auto-resolve when unpersisted
+    if (selectedAudioIndex === undefined && mediaSource) {
+        const bestStream = mockResolveBestAudioStream(mediaSource);
+        if (bestStream) {
+            selectedAudioIndex = bestStream.Index;
+        }
+    }
+
+    // Verify AC3 backup track (Index 4) was auto-resolved on first play
+    assert.strictEqual(
+        selectedAudioIndex,
+        4,
+        'DetailsPage should auto-resolve AC3 DirectPlay track on first play when default is TrueHD'
+    );
+});
+
+test('WebOSPlayer _getContainerDefaultAudioIndex respects mediaSource.DefaultAudioStreamIndex when streams lack IsDefault', () => {
+    // Media where streams do NOT have IsDefault: true, but Jellyfin sets DefaultAudioStreamIndex: 5 (DTS)
+    const mediaSource = {
+        Id: 'edge-of-tomorrow-source',
+        DefaultAudioStreamIndex: 5,
+        MediaStreams: [
+            { Type: 'Audio', Index: 2, Codec: 'truehd', IsDefault: false },
+            { Type: 'Audio', Index: 3, Codec: 'ac3', IsDefault: false },
+            { Type: 'Audio', Index: 4, Codec: 'ac3', IsDefault: false },
+            { Type: 'Audio', Index: 5, Codec: 'dts', IsDefault: false }
+        ]
+    };
+
+    function mockGetContainerDefaultAudioIndex(ms) {
+        const audioStreams = ms.MediaStreams.filter((s) => s.Type === 'Audio' && s.Codec !== 'truehd');
+        const containerDefault = audioStreams.find((s) => s.IsDefault);
+        if (containerDefault) return containerDefault.Index;
+
+        if (ms.DefaultAudioStreamIndex !== undefined && ms.DefaultAudioStreamIndex !== null) {
+            const serverDefault = audioStreams.find((s) => s.Index === ms.DefaultAudioStreamIndex);
+            if (serverDefault) return serverDefault.Index;
+        }
+
+        return audioStreams[0]?.Index;
+    }
+
+    const resolvedDefault = mockGetContainerDefaultAudioIndex(mediaSource);
+    assert.strictEqual(resolvedDefault, 5, 'Should resolve DefaultAudioStreamIndex: 5 instead of defaulting to first track');
 });

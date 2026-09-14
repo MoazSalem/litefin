@@ -16,6 +16,7 @@ import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
 import FontLoader from '../../utils/FontLoader.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
+import { resolveBestAudioStream } from './JellyfinPlayer.js';
 
 const log = logger.create('PrewarmManager');
 
@@ -59,8 +60,23 @@ export class PrewarmManager {
 
         // Resolve target media source ID (specified override or first available source)
         const targetMediaSourceId = prewarmOptions.mediaSourceId || item.MediaSources?.[0]?.Id || null;
-        // Resolve target audio track (specified override or null/default)
-        const targetAudioIndex = prewarmOptions.audioStreamIndex ?? null;
+
+        // Resolve target audio track (specified override or auto-resolved DirectPlay track)
+        let targetAudioIndex = prewarmOptions.audioStreamIndex ?? null;
+        if (targetAudioIndex === null && item.MediaSources && typeof resolveBestAudioStream === 'function') {
+            const fallbackSource = item.MediaSources[0];
+            const ms = item.MediaSources.find((m) => m.Id === targetMediaSourceId) || fallbackSource;
+            if (ms) {
+                const bestStream = resolveBestAudioStream(ms);
+                if (bestStream) {
+                    targetAudioIndex = bestStream.Index;
+                    log.info(
+                        `[Prewarm] Auto-resolved DirectPlay audio track for "${item.Name}": Index ${targetAudioIndex} (${bestStream.Codec})`
+                    );
+                }
+            }
+        }
+
         // Resolve target subtitle track (specified override or null/default)
         const targetSubtitleIndex = prewarmOptions.subtitleStreamIndex ?? null;
 
@@ -236,8 +252,15 @@ export class PrewarmManager {
             // consuming the prewarmed data would route playback to the wrong audio stream.
             // Discard the prewarm cache immediately so a clean PlaybackInfo is resolved.
             // =================================================================
-            const prewarmedAudio = this._prewarmParams?.audioStreamIndex ?? null;
-            const requestedAudio = options.audioStreamIndex ?? null;
+            // Compare prewarmed audio index with requested index using type-safe Number coercion
+            const prewarmedAudio =
+                this._prewarmParams?.audioStreamIndex !== null && this._prewarmParams?.audioStreamIndex !== undefined
+                    ? Number(this._prewarmParams.audioStreamIndex)
+                    : null;
+            const requestedAudio =
+                options.audioStreamIndex !== null && options.audioStreamIndex !== undefined
+                    ? Number(options.audioStreamIndex)
+                    : null;
             if (prewarmedAudio !== requestedAudio) {
                 log.info(
                     `[Prewarm] Audio stream mismatch (prewarmed: ${prewarmedAudio}, requested: ${requestedAudio}). Discarding prewarm.`
@@ -254,8 +277,14 @@ export class PrewarmManager {
             // subtitle or explicitly toggled subtitles Off (-1), discard the cached prewarm
             // to avoid rendering mismatched or unwanted subtitle streams.
             // =================================================================
-            const prewarmedSubtitle = this._prewarmParams?.subtitleStreamIndex ?? null;
-            const requestedSubtitle = options.subtitleStreamIndex ?? null;
+            const prewarmedSubtitle =
+                this._prewarmParams?.subtitleStreamIndex !== null && this._prewarmParams?.subtitleStreamIndex !== undefined
+                    ? Number(this._prewarmParams.subtitleStreamIndex)
+                    : null;
+            const requestedSubtitle =
+                options.subtitleStreamIndex !== null && options.subtitleStreamIndex !== undefined
+                    ? Number(options.subtitleStreamIndex)
+                    : null;
             if (prewarmedSubtitle !== requestedSubtitle) {
                 log.info(
                     `[Prewarm] Subtitle stream mismatch (prewarmed: ${prewarmedSubtitle}, requested: ${requestedSubtitle}). Discarding prewarm.`

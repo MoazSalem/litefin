@@ -676,6 +676,27 @@ class DetailsPage extends Page {
                 this._selectedAudioIndex = undefined;
             }
 
+            // =====================================================================
+            // Auto-Resolve Optimal DirectPlay Audio Track for Prewarm
+            // =====================================================================
+            // If the item has not been played previously (no track persisted in
+            // localStorage), resolve the optimal audio track before triggering prewarm.
+            // On media with TrueHD default tracks (e.g. 4K Dolby Vision releases),
+            // this selects the compatible AC3/EAC3 backup track instead of allowing
+            // the server to evaluate the unsupported TrueHD default. This ensures the
+            // background PlaybackInfo prewarm requests the exact direct-playable stream,
+            // preventing transcode degradation and whitewashed video on first play.
+            // =====================================================================
+            if (this._selectedAudioIndex === undefined && activeSource) {
+                const bestStream = resolveBestAudioStream(activeSource);
+                if (bestStream) {
+                    this._selectedAudioIndex = bestStream.Index;
+                    log.info(
+                        `[DetailsPage] Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                    );
+                }
+            }
+
             const savedSubtitleTrack = storage.getItem(`track:subtitle:${this._itemId}`);
             if (savedSubtitleTrack !== null && savedSubtitleTrack !== undefined) {
                 const parsedSubtitle = Number(savedSubtitleTrack);
@@ -894,6 +915,24 @@ class DetailsPage extends Page {
             storage.removeItem(`track:audio:${this._itemId}`);
             storage.removeItem(`track:subtitle:${this._itemId}`);
 
+            // =================================================================
+            // Auto-Resolve DirectPlay Audio Track for New Version
+            // =================================================================
+            // When switching to an alternative media source (e.g. 4K vs 1080p),
+            // auto-select the best audio track for the new source so background
+            // prewarming immediately generates a valid DirectPlay stream profile.
+            // =================================================================
+            const newSource = this._item.MediaSources?.find((m) => m.Id === id);
+            if (newSource) {
+                const bestStream = resolveBestAudioStream(newSource);
+                if (bestStream) {
+                    this._selectedAudioIndex = bestStream.Index;
+                    log.info(
+                        `[DetailsPage] Auto-selected DirectPlay audio track for version ${id}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                    );
+                }
+            }
+
             // Re-render hero header and technical details to reflect the selected version
             this._renderHeroText();
             // Re-trigger zero-latency prewarm for the newly selected version
@@ -905,7 +944,9 @@ class DetailsPage extends Page {
                     this._item.Type === 'Trailer')
             ) {
                 prewarmManager.prewarm(this._item, {
-                    mediaSourceId: id
+                    mediaSourceId: id,
+                    audioStreamIndex: this._selectedAudioIndex,
+                    subtitleStreamIndex: this._selectedSubtitleIndex
                 });
             }
         });

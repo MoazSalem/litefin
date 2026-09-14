@@ -1665,6 +1665,29 @@ export class JellyfinPlayer extends EventEmitter {
                     .catch(err => log.warn('[Play-Flow] Secondary subtitle re-application failed:', err));
             }
         } catch (error) {
+            // =================================================================
+            // Suppress False-Positive Interruption Errors During Session Restart
+            // =================================================================
+            // When an internal playback restart is triggered (e.g. quality switch,
+            // remux track fallback, or backend reload), the previous in-flight
+            // play() promise on the HTML5 video element is aborted by Chromium
+            // with 'The play() request was interrupted by a new load request'.
+            // Because a fresh play session is already in progress, emitting
+            // PlayerEvent.ERROR causes PlayerPage to display an intrusive error modal
+            // over a successfully starting stream. Suppress this transient abort.
+            // =================================================================
+            const isInterrupted =
+                error?.message?.includes('interrupted by a new load request') ||
+                error?.name === 'AbortError';
+
+            if (this._isRestarting || this._audioRestartInProgress || (isInterrupted && this._backend)) {
+                log.warn(
+                    'Playback play() promise interrupted during restart/reload — suppressing error modal:',
+                    error?.message || error
+                );
+                return;
+            }
+
             log.error('Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
             throw error;
@@ -2798,7 +2821,29 @@ export class JellyfinPlayer extends EventEmitter {
             try {
                 const prewarmedData = await prewarmedPromise;
                 if (prewarmedData && prewarmedData.MediaSources?.length) {
-                    return prewarmedData;
+                    const firstSource = prewarmedData.MediaSources[0];
+
+                    // =================================================================
+                    // Safeguard Against Audio-Transcode Induced Prewarm Corruption
+                    // =================================================================
+                    // If the prewarmed PlaybackInfo forced transcoding specifically because
+                    // of 'AudioCodecNotSupported', but the active session resolved a playable
+                    // audio track in DirectPlay or Auto mode, the prewarmed data was generated
+                    // against an unsupported default stream (e.g. TrueHD 7.1). Consuming it
+                    // would force server HLS transcoding and break Dolby Vision dynamic metadata.
+                    // Discard this prewarmed data immediately and fall back to a fresh request.
+                    // =================================================================
+                    const isAudioCodecError =
+                        firstSource.TranscodingUrl &&
+                        firstSource.TranscodingUrl.includes('TranscodeReasons=AudioCodecNotSupported');
+
+                    if (isAudioCodecError && (this._playbackMode === 'auto' || this._playbackMode === 'directPlay')) {
+                        log.warn(
+                            '[Prewarm] Prewarmed PlaybackInfo forced transcode for AudioCodecNotSupported. Discarding in favor of fresh direct-play request.'
+                        );
+                    } else {
+                        return prewarmedData;
+                    }
                 }
             } catch (err) {
                 log.warn('[Prewarm] Prewarmed PlaybackInfo failed, falling back to fresh request:', err);
