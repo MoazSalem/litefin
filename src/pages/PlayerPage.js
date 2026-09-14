@@ -20,6 +20,7 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 import OSDController from '../player/osd/OSDController.js';
 import { JellyfinPlayer, resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
@@ -1472,21 +1473,27 @@ class PlayerPage extends Page {
         }
 
         // 2. Fetch Backdrop (Blurred Background)
-        // Try Backdrop, then fallback to the same Album Art we just found
+        // If Light Music Player is enabled, skip fetching and creating the backdrop texture completely
+        // to minimize network traffic and eliminate GPU load on low-spec TVs.
+        const isLightMusicPlayer = layoutManager.getLightMusicPlayer();
         let backdropUrl = null;
-        if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
-            backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
-        } else if (
-            this._item.ParentBackdropImageTags &&
-            this._item.ParentBackdropImageTags.length > 0 &&
-            this._item.ParentBackdropItemId
-        ) {
-            backdropUrl = api.getImageUrl(this._item.ParentBackdropItemId, 'Backdrop', {
-                maxWidth: screenWidth,
-                quality: 80
-            });
-        } else {
-            backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily
+
+        if (!isLightMusicPlayer) {
+            // Try Backdrop, then fallback to the same Album Art we just found
+            if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
+                backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
+            } else if (
+                this._item.ParentBackdropImageTags &&
+                this._item.ParentBackdropImageTags.length > 0 &&
+                this._item.ParentBackdropItemId
+            ) {
+                backdropUrl = api.getImageUrl(this._item.ParentBackdropItemId, 'Backdrop', {
+                    maxWidth: screenWidth,
+                    quality: 80
+                });
+            } else {
+                backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily
+            }
         }
 
         if (backdropEl) {
@@ -1495,6 +1502,7 @@ class PlayerPage extends Page {
                 backdropEl.style.display = 'block';
             } else {
                 backdropEl.style.display = 'none';
+                backdropEl.style.backgroundImage = '';
             }
         }
     }
@@ -2834,7 +2842,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) {}
+                } catch (e) { }
                 this._osd.activeMenu = null;
             }
             this._osd.hide?.();
@@ -2912,7 +2920,6 @@ class PlayerPage extends Page {
         // Locate error modal element
         const errorEl = this.$('#player-error');
         if (errorEl) {
-            // Apply hidden class to trigger Apple-style fade-out transition
             errorEl.classList.add('hidden');
 
             // Unregister error modal from focus spatial navigation
@@ -2945,7 +2952,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) {}
+                } catch (e) { }
                 this._osd.activeMenu = null;
             }
             this._osd.hide();
@@ -2992,7 +2999,7 @@ class PlayerPage extends Page {
      */
     async _retryWithHtml5Backend() {
         log.info('Retrying playback with explicit HTML5 player backend override...');
-        
+
         // Hide error overlay and unregister focus section
         const errorEl = this.$('#player-error');
         if (errorEl) {
@@ -3006,7 +3013,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) {}
+                } catch (e) { }
                 this._osd.activeMenu = null;
             }
             this._osd.hide();
@@ -3249,9 +3256,9 @@ class PlayerPage extends Page {
             if (_isNearComplete) {
                 log.info(
                     `Overriding positionTicks with durationTicks (${durationTicks})` +
-                        (this._isPlaybackEnded
-                            ? ' due to natural end of playback'
-                            : ' due to near-complete playback position')
+                    (this._isPlaybackEnded
+                        ? ' due to natural end of playback'
+                        : ' due to near-complete playback position')
                 );
                 rawPosition = durationTicks;
             }

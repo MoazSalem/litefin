@@ -4735,6 +4735,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLightMusicPlayer">${i18n.t('LabelLightMusicPlayer') || 'Light Music Player'}</span>
+                        <span class="setting-description" data-i18n="LightMusicPlayerDescription">${i18n.t('LightMusicPlayerDescription') || 'Removes background blur and drop shadows from the music player to significantly improve performance on older TVs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getLightMusicPlayer() ? 'active' : ''}" 
+                                id="toggle-light-music-player" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelLowVramMode">${i18n.t('LabelLowVramMode') || 'Low VRAM Mode'}</span>
                         <span class="setting-description" data-i18n="LowVramModeDescription">${i18n.t('LowVramModeDescription') || 'Disable GPU-intensive animations and transitions to prevent rendering glitches on older hardware.'}</span>
                     </div>
@@ -6632,7 +6645,6 @@ class SettingsPage extends Page {
         // ==========================================
         //
         // Controls visibility of media card playback progress indicators.
-        // Toggles the user preference in local storage and manages the Apple-style toggle animation state.
         const hideProgressBarBtn = this.$('#toggle-hide-progress-bar');
 
         // Verify button exists in the active view before attaching handler
@@ -6978,6 +6990,16 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getOnlyBlurHashBackdrop();
                 layoutManager.setOnlyBlurHashBackdrop(newValue);
                 onlyBlurhashBackdropBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Light Music Player
+        const lightMusicPlayerBtn = this.$('#toggle-light-music-player');
+        if (lightMusicPlayerBtn) {
+            lightMusicPlayerBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getLightMusicPlayer();
+                layoutManager.setLightMusicPlayer(newValue);
+                lightMusicPlayerBtn.classList.toggle('active', newValue);
             });
         }
 

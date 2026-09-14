@@ -471,7 +471,6 @@ class ScrollController {
                 // like an uncontrollable fast-scroll hair-trigger).
                 // Clamping the minimum retarget duration to 75% of base duration
                 // (~150ms for 200ms vertical scrolls) guarantees that deliberate
-                // brisk presses maintain silky, predictable Apple-level easing.
                 // ------------------------------------------------------------
                 const minDurationFloor = Math.round(duration * 0.75);
 

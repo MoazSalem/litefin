@@ -829,14 +829,14 @@ class HomePage extends Page {
                     lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
                         ? 'landscape'
                         : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
-                        ? 'square'
-                        : 'portrait',
+                            ? 'square'
+                            : 'portrait',
                 cardType:
                     lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
                         ? 'thumb'
                         : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
-                        ? 'square'
-                        : 'poster',
+                            ? 'square'
+                            : 'poster',
                 contextType: 'latest',
                 fetchFn: async function () {
                     if (this._preFetchedItems) {
@@ -1436,9 +1436,9 @@ class HomePage extends Page {
         this._isDeferredLoading = true;
 
         // Slice out the next batch from the deferred descriptor queue
-        const startIdx  = this._nextDeferredDescIndex;
-        const endIdx    = Math.min(startIdx + DEFERRED_BATCH_SIZE, this._deferredDescriptors.length);
-        const batch     = this._deferredDescriptors.slice(startIdx, endIdx);
+        const startIdx = this._nextDeferredDescIndex;
+        const endIdx = Math.min(startIdx + DEFERRED_BATCH_SIZE, this._deferredDescriptors.length);
+        const batch = this._deferredDescriptors.slice(startIdx, endIdx);
         this._nextDeferredDescIndex = endIdx;
 
         log.debug(`Loading deferred batch [${startIdx}–${endIdx - 1}] (${batch.length} rows)`);
@@ -2115,8 +2115,7 @@ class HomePage extends Page {
         // =====================================================================
         // Bidirectional Section Linking: Top Content Row ↔ Hero Carousel
         // =====================================================================
-        // In adherence to Apple HIG fluidity standards, vertical transitions
-        // between the hero carousel and content rows must never be severed.
+        // vertical transitions between the hero carousel and content rows must never be severed.
         // Even if the row just rendered is not at idx 0 (e.g. out-of-order network
         // completion or prior row removal), we inspect liveSections[0] to guarantee
         // that the true topmost content row's leaveUp and the hero's leaveDown
