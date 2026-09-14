@@ -69,14 +69,14 @@ const IMAGE_PREWARM_PER_ROW = 10;
 const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /**
- * Number of Priority-2 ("Latest from Library") rows to load eagerly on first render
- * before deferring the rest to scroll/idle. 2 covers the first visible section below
- * the fold on a typical 1080p TV without over-fetching.
+ * Number of initial rows to load eagerly on first render before deferring the rest
+ * to scroll/idle. Sliced directly from descriptors in the user's custom layout order.
+ * 3 rows covers the immediately visible viewport on a 1080p/4K TV without over-fetching.
  */
-const INITIAL_DEFERRED_COUNT = 2;
+const EAGER_ROW_COUNT = 3;
 
 /**
- * Number of P2 rows to fetch per lazy-load batch (scroll or D-pad trigger).
+ * Number of deferred rows to fetch per lazy-load batch (scroll or D-pad trigger).
  * Matches DiscoverPage's BATCH_ROW_COUNT for consistency.
  */
 const DEFERRED_BATCH_SIZE = 3;
@@ -162,8 +162,8 @@ class HomePage extends Page {
         this._hero = null;
 
         /**
-         * Flat ordered array of Priority-2 RowDescriptors waiting to be loaded on demand.
-         * Populated in _startRenderPipeline() after P0/P1 rows are kicked off.
+         * Flat ordered array of deferred RowDescriptors waiting to be loaded on demand.
+         * Populated in _startRenderPipeline() in exact user-configured layout sequence.
          * @type {RowDescriptor[]}
          */
         this._deferredDescriptors = [];
@@ -1016,88 +1016,61 @@ class HomePage extends Page {
                 return;
             }
 
-            // ─── Step 4: Group descriptors by priority ────────────────────────
-            // Rows within the same priority group run in parallel.
-            // Priority 0 (My Media) and 1 (Continue Watching / Next Up) are core.
-            const priorityGroups = this._groupByPriority(descriptors);
-            const priorities = Array.from(priorityGroups.keys()).sort((a, b) => a - b);
-
-            // ─── Step 4.5: Batch pre-fetch latest library rows via plugin ────
-            // Pre-loads all latest rows across libraries in one round-trip
+            // ─── Step 4: Batch pre-fetch latest library rows via plugin ──────────
+            // Pre-loads all latest rows across libraries in one round-trip.
+            // Executed early so network latency overlaps with initial setup.
             await this._preFetchLatestRows(descriptors);
 
-            // Find target focus row if restoring back-navigation state
+            // ─── Step 5: Partition eager vs deferred rows in natural user order ─
+            // The `descriptors` array is already ordered by homeLayoutManager.applyLayout()
+            // according to the user's custom configuration.
+            //
+            // To ensure the visual row order in the DOM strictly mirrors the user's
+            // preference (e.g. moving "My Media" or any library to the very bottom),
+            // we partition rows strictly along their sequence in `descriptors` rather than
+            // segregating by static priority numbers.
             const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
             const savedFocusObj =
                 storage.getItem('pref:disableFocusRestore') !== 'true' ? state.get('home:lastFocusedItem') : null;
             const targetRowId = savedFocusObj ? savedFocusObj.rowId : null;
-            const targetDescriptor = targetRowId ? descriptors.find((d) => d.id === targetRowId) : null;
+            const targetIndex = targetRowId ? descriptors.findIndex((d) => d.id === targetRowId) : -1;
 
-            // ─── Step 5: Partition eager vs deferred rows ─────────────────────
-            // Collect all Priority 2+ (library) descriptors in natural sequence.
-            const remainingPriorities = priorities.filter((p) => p !== 0 && p !== 1);
-            const allDeferredDescs = [];
-            for (const p of remainingPriorities) {
-                const group = priorityGroups.get(p);
-                if (group) allDeferredDescs.push(...group);
-            }
-
-            // Determine how many P2 rows need to be loaded eagerly.
-            // If restoring focus to a P2 row, we MUST eagerly load all rows up to
-            // and including the target row in natural sequence so that:
-            //   1. The DOM order is strictly preserved.
-            //   2. The target row is ready before focus restoration runs.
-            //   3. No duplicate skeleton or out-of-order insertion occurs.
-            let eagerP2Count = Math.min(INITIAL_DEFERRED_COUNT, allDeferredDescs.length);
-            let mustAwaitP2 = false;
-            if (targetDescriptor && targetDescriptor.priority >= 2) {
-                const targetIdx = allDeferredDescs.findIndex((d) => d.id === targetDescriptor.id);
-                if (targetIdx !== -1) {
-                    // Extend the eager slice to encompass the focus target and preceding rows
-                    eagerP2Count = Math.max(eagerP2Count, targetIdx + 1);
-                    mustAwaitP2 = true; // Block splash dismiss until target is rendered
+            // Determine how many rows to mount eagerly at page startup.
+            // EAGER_ROW_COUNT covers the top visible viewport (e.g. 3 rows).
+            // If restoring focus to a row beyond the initial count, we extend the eager
+            // slice up to and including that target row so its DOM position and focus
+            // target are fully prepared before the splash overlay is dismissed.
+            let eagerCount = Math.min(EAGER_ROW_COUNT, descriptors.length);
+            let mustAwaitTarget = false;
+            if (targetIndex !== -1) {
+                if (targetIndex >= eagerCount) {
+                    eagerCount = targetIndex + 1;
                 }
+                mustAwaitTarget = true; // Wait for target row to finish rendering before splash dismissal
             }
 
-            // Slice out the eager P2 batch and track remaining deferred descriptors
-            const eagerDeferred = allDeferredDescs.slice(0, eagerP2Count);
-            this._deferredDescriptors = allDeferredDescs;
-            this._nextDeferredDescIndex = eagerDeferred.length;
+            // Slice out the eager descriptors and queue the remaining for deferred loading
+            const eagerDescriptors = descriptors.slice(0, eagerCount);
+            this._deferredDescriptors = descriptors.slice(eagerCount);
+            this._nextDeferredDescIndex = 0;
 
             // ─── Step 5.5: Insert skeletons in exact natural order ───────────
-            // Skeletons for P0, P1, and any eager P2 rows are inserted in one go
-            // so the DOM hierarchy accurately mirrors the final layout structure.
-            const earlyDescriptors = descriptors.filter((d) => d.priority < 2);
-            const initialSkeletons = [...earlyDescriptors];
-            if (mustAwaitP2) {
-                // If focus target is in P2, mount eager P2 skeletons immediately in order
-                initialSkeletons.push(...eagerDeferred);
-            }
-            this._insertSkeletonRows(initialSkeletons);
+            // Skeletons for all eager rows are inserted in exact sequence into #home-rows.
+            // Because each row replaces its own placeholder via data-row-id, DOM ordering
+            // remains 100% stable regardless of which network request finishes first.
+            this._insertSkeletonRows(eagerDescriptors);
 
-            // ─── Step 6: Render priority 0 + 1 + hero (+ target row if in P2) ──
-            // My Media (P0), Continue Watching/Next Up (P1), Hero Carousel, and
-            // target focus row are rendered and awaited BEFORE revealing the page
-            // so focus restoration succeeds without flashes or skeleton resets.
-            const earlyPriorities = [0, 1];
-            const earlyPromises = [];
-            for (const p of earlyPriorities) {
-                const group = priorityGroups.get(p);
-                if (group) {
-                    earlyPromises.push(...group.map((d) => this._loadAndRenderRow(d)));
-                }
-            }
-            if (mustAwaitP2) {
-                // Target is in P2: await eager P2 rows so focus target is ready in DOM
-                earlyPromises.push(...eagerDeferred.map((d) => this._loadAndRenderRow(d)));
-            }
+            // ─── Step 6: Render eager rows + hero carousel in parallel ───────
+            // All eager rows (and hero carousel) are kicked off and awaited BEFORE
+            // revealing the page so the initial screen paints cleanly without flash.
+            const eagerPromises = eagerDescriptors.map((d) => this._loadAndRenderRow(d));
             if (heroPromise) {
-                earlyPromises.push(heroPromise);
+                eagerPromises.push(heroPromise);
             }
             if (enrichPromise) {
-                earlyPromises.push(enrichPromise);
+                eagerPromises.push(enrichPromise);
             }
-            await Promise.all(earlyPromises);
+            await Promise.all(eagerPromises);
             if (!this._isMounted) return;
 
             // Dismiss the loading spinner now that critical content is rendered.
@@ -1108,14 +1081,14 @@ class HomePage extends Page {
             }
 
             // ─── Step 7: Hide splash early + restore focus ───────────────────
-            // At this point My Media + content rows are visible. Reveal the page
+            // At this point the eager rows are visible. Reveal the page
             // so the user can start interacting while remaining rows load.
             requestAnimationFrame(() => {
                 if (!this._isMounted) return;
 
                 try {
-                    // Safety net: if no row triggered _tryInitializeFocus during P0/P1
-                    // (e.g. focus target is a background row), initialize on first row.
+                    // Safety net: if no row triggered _tryInitializeFocus during eager render,
+                    // initialize on first available row.
                     if (!this._focusInitialized) {
                         this._tryInitializeFocus(this.$('#home-rows'));
                     }
@@ -1137,34 +1110,14 @@ class HomePage extends Page {
                 this._hideSplash();
             });
 
-            // ─── Step 9: Lazy-load remaining Priority-2 (library) rows ──────
-            // If P2 rows were not awaited in Step 6 (normal flow), start their
-            // eager batch in the background now. If they were already awaited
-            // (focus target was in P2), attach the scroll observer and idle prefetch
-            // for the remaining descriptors right away.
-            if (allDeferredDescs.length > 0) {
-                if (!mustAwaitP2 && eagerDeferred.length > 0) {
-                    // Insert skeleton placeholders for the eager batch immediately
-                    // so the page doesn't jump when they render
-                    this._insertSkeletonRows(eagerDeferred);
-
-                    // Fire and forget — these rows render progressively as data arrives
-                    Promise.all(eagerDeferred.map((d) => this._loadAndRenderRow(d)))
-                        .then(() => {
-                            if (!this._isMounted) return;
-                            // After the eager batch is done, start the scroll observer and
-                            // schedule the idle prefetch for whatever's left
-                            this._setupHomeScrollObserver();
-                            this._scheduleHomeIdlePrefetch();
-                        })
-                        .catch((err) => log.error('Eager deferred rows failed', err));
-                } else {
-                    // Eager rows were already mounted in Step 6 — attach observers immediately
-                    this._setupHomeScrollObserver();
-                    this._scheduleHomeIdlePrefetch();
-                }
+            // ─── Step 9: Setup lazy-loading for remaining deferred rows ──────
+            // If deferred descriptors remain, attach the IntersectionObserver and idle
+            // prefetcher to progressively mount them as the user scrolls down.
+            if (this._deferredDescriptors.length > 0) {
+                this._setupHomeScrollObserver();
+                this._scheduleHomeIdlePrefetch();
             } else {
-                // No P2 rows at all (rare: no libraries configured)
+                // All rows were rendered eagerly (short page or target near bottom)
                 this._prewarmScrollCache();
                 this.restoreScrollFocusWhenReady();
                 this.markReady();
@@ -1488,7 +1441,7 @@ class HomePage extends Page {
         const batch     = this._deferredDescriptors.slice(startIdx, endIdx);
         this._nextDeferredDescIndex = endIdx;
 
-        log.debug(`Loading deferred P2 batch [${startIdx}–${endIdx - 1}] (${batch.length} rows)`);
+        log.debug(`Loading deferred batch [${startIdx}–${endIdx - 1}] (${batch.length} rows)`);
 
         // Insert skeleton placeholders for all batch rows up-front so
         // layout doesn't jump when each row resolves independently
