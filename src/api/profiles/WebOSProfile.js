@@ -483,22 +483,24 @@ export function buildJellyfinProfile(options = {}) {
     // =========================================================================
     // Direct Play Profiles Configuration
     // =========================================================================
-    // We only declare standard web-compatible containers (MP4, MKV, WebM, HLS)
-    // for Direct Play on webOS.
+    // Standard web-compatible containers (MP4, MKV, WebM) are declared for all
+    // backends. When using the native WebOSPlayer backend (hardware decode pipeline),
+    // we also declare MPEG-TS (ts, mpegts) and Blu-ray M2TS (m2ts) containers.
     //
-    // CRITICAL DETAIL:
-    // We previously had an override block here that allowed TS, M2TS, AVI, WMV,
-    // and MPG containers to direct play when using the native WebOSPlayer backend.
-    // However, while the webOS hardware can play these containers locally (e.g.
-    // via USB), the browser engine's HTML5 <video> tag does NOT support progressive
-    // HTTP playback of these formats. Trying to Direct Play a static .ts file
-    // results in a DEMUXER_ERROR_COULD_NOT_OPEN crash.
+    // EXTENDED TS / M2TS CONTAINER DIRECT PLAY:
+    // LG WebOS Smart TVs feature dedicated hardware demuxers for MPEG-TS and M2TS
+    // transport streams in their native media engine (MediaPipeline / NDL).
+    // Progressive 4K TS and M2TS media — specifically 4K HEVC Dolby Vision Profile 8.1
+    // and Profile 7 Blu-ray rips — direct play flawlessly via _playNativeDirect(),
+    // passing the raw bitstream to the hardware decoder alongside the dvh1 hint.
     //
-    // By removing them from Direct Play, we force the Jellyfin server to remux
-    // them (Direct Stream) into standard HLS streams. Since webOS natively
-    // supports HLS streaming, these files will play flawlessly and without quality
-    // loss, as the server just repackages the container on-the-fly without
-    // transcoding the actual audio/video streams.
+    // When omitted from DirectPlayProfiles, the Jellyfin server is forced to remux
+    // these high-bitrate (60-90+ Mbps) 4K streams into HLS chunks on-the-fly.
+    // That remux pipeline leads to severe buffer exhaustion, continuous stuttering,
+    // and intermittent loss of Dolby Vision RPU metadata (causing washed-out colors).
+    //
+    // Note: To preserve Live TV stability, interlaced TS streams (e.g. ATSC / DVB)
+    // are explicitly blocked from DirectPlay in CodecProfiles below via IsInterlaced: false.
     // =========================================================================
     const directPlayProfiles = [];
 
@@ -525,6 +527,41 @@ export function buildJellyfinProfile(options = {}) {
                 Type: 'Video',
                 VideoCodec: webmVideoCodecs.join(','),
                 AudioCodec: 'vorbis,opus'
+            });
+        }
+
+        /*
+         * Native WebOS DirectPlay for TS and M2TS containers:
+         *
+         * Only the native WebOS backend (WebOSPlayer) direct-plays progressive TS/M2TS
+         * streams natively over HTTP. The fallback HTML5 backend (Hls.js) lacks progressive
+         * TS demuxing in standard browsers and continues to rely on HLS.
+         */
+        if (!isHtml5) {
+            // Build supported video codecs list for MPEG-TS container
+            const tsVideoCodecs = ['h264', 'vc1'];
+            if (enableHEVC) tsVideoCodecs.push('hevc');
+            if (caps.mpeg2video) tsVideoCodecs.push('mpeg2video');
+
+            // Build supported video codecs list for M2TS container (Blu-ray rips)
+            const m2tsVideoCodecs = ['h264', 'vc1'];
+            if (enableHEVC) m2tsVideoCodecs.push('hevc');
+            if (caps.mpeg2video) m2tsVideoCodecs.push('mpeg2video');
+
+            // MPEG-TS DirectPlay profile
+            directPlayProfiles.push({
+                Container: 'ts,mpegts',
+                Type: 'Video',
+                VideoCodec: tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+
+            // M2TS DirectPlay profile
+            directPlayProfiles.push({
+                Container: 'm2ts',
+                Type: 'Video',
+                VideoCodec: m2tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
             });
         }
 
@@ -888,6 +925,32 @@ export function buildJellyfinProfile(options = {}) {
                     IsRequired: false
                 }
             ]
+        },
+        // -----------------------------------------------------------------------
+        // Block interlaced TS / MPEGTS / M2TS streams from DirectPlay.
+        //
+        // Broadcast television feeds (e.g. HDHomeRun ATSC 1.0 or DVB) typically
+        // deliver interlaced 1080i or 480i video in MPEG-2 or H.264 within TS containers.
+        // Progressive playback of interlaced streams directly in the browser pipeline
+        // causes deinterlacing failures and FFmpeg crashes on tuner capture sessions.
+        //
+        // Requiring IsInterlaced: false instructs the Jellyfin server to drop
+        // DirectPlay for interlaced content and smoothly route it through an
+        // HLS transcode pipeline with yadif deinterlacing applied.
+        // Progressive 4K UHD movies (including Dolby Vision) evaluate IsInterlaced=false
+        // and continue to DirectPlay with maximum quality and performance.
+        // -----------------------------------------------------------------------
+        {
+            Type: 'Video',
+            Container: 'ts,mpegts,m2ts',
+            Conditions: [
+                {
+                    Condition: 'Equals',
+                    Property: 'IsInterlaced',
+                    Value: 'false',
+                    IsRequired: false
+                }
+            ]
         }
     ];
 
@@ -916,40 +979,12 @@ export function buildJellyfinProfile(options = {}) {
                     Property: 'VideoBitDepth',
                     Value: enableHDR ? '10' : '8',
                     IsRequired: false
-                },
-                // ---------------------------------------------------------------
-                // HDR10 codec tag gate — prevents VAAPI from stripping HDR metadata
-                // ---------------------------------------------------------------
-                // PROBLEM (confirmed via server FFmpeg logs):
-                //   When Jellyfin's server decides to re-encode HEVC HDR10 content
-                //   via VAAPI (hevc_vaapi), it uses:
-                //       -profile:v:0 main          ← forces 8-bit output
-                //       -vf "setparams=color_primaries=bt709:color_trc=bt709:..."
-                //   This explicitly converts the stream to SDR bt709. The hardware
-                //   encoder doesn't support Main 10 / HDR reliably in VAAPI, so
-                //   Jellyfin silently downgrades to SDR. WebOS receives an SDR stream
-                //   and naturally shows no HDR signal — by design.
-                //
-                // FIX:
-                //   Require VideoCodecTag = 'hvc1' for HDR HEVC. The hvc1 tag is
-                //   only present when the HEVC stream is COPIED verbatim (remux path).
-                //   When the server would re-encode (transcode path), it produces a
-                //   different / no codec tag, failing this condition. Jellyfin then
-                //   falls back to the copy path — preserving all HDR10 SEI metadata
-                //   (mastering display, MaxCLL/MaxFALL, HDR10+) in the output TS segments.
-                //
-                // NOTE: This only applies when HDR is enabled. SDR content is freely
-                //   re-encodable since there is no HDR metadata to preserve.
-                ...(enableHDR
-                    ? [
-                          {
-                              Condition: 'EqualsAny',
-                              Property: 'VideoCodecTag',
-                              Value: 'hvc1|dvh1|hev1',
-                              IsRequired: false
-                          }
-                      ]
-                    : [])
+                }
+                // Note: VideoCodecTag condition is intentionally omitted from the
+                // general HEVC profile. MPEG-TS and Blu-ray M2TS transport streams do not
+                // use ISOBMFF fourcc codec tags (like hvc1/hev1/dvh1). Adding a VideoCodecTag
+                // requirement here causes the Jellyfin server to reject DirectPlay for all
+                // TS and M2TS files with TranscodeReasons=VideoCodecTagNotSupported.
             ]
         });
 
@@ -1170,22 +1205,15 @@ export function buildJellyfinProfile(options = {}) {
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
         SubtitleProfiles: BaseProfile.getSubtitleProfiles(),
-        ResponseProfiles: [
-            {
-                Container: 'mkv',
-                Type: 'Video',
-                Conditions: [
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoCodec',
-                        Value: 'h264'
-                    }
-                ],
-                Action: 'Remux',
-                ContainerOverride: 'mp4'
-            },
-            ...BaseProfile.getResponseProfiles()
-        ]
+        // =====================================================================
+        // Response Profiles (MIME Type and Container Mapping)
+        // =====================================================================
+        // Use standardized base response profiles. Custom response profiles with
+        // non-standard condition properties (such as 'VideoCodec') fail JSON
+        // deserialization in Jellyfin's ProfileConditionValue enum, resulting
+        // in HTTP 400 Bad Request on PlaybackInfo endpoints.
+        // =====================================================================
+        ResponseProfiles: BaseProfile.getResponseProfiles()
     };
 }
 

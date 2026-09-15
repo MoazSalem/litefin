@@ -69,14 +69,14 @@ const IMAGE_PREWARM_PER_ROW = 10;
 const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /**
- * Number of Priority-2 ("Latest from Library") rows to load eagerly on first render
- * before deferring the rest to scroll/idle. 2 covers the first visible section below
- * the fold on a typical 1080p TV without over-fetching.
+ * Number of initial rows to load eagerly on first render before deferring the rest
+ * to scroll/idle. Sliced directly from descriptors in the user's custom layout order.
+ * 3 rows covers the immediately visible viewport on a 1080p/4K TV without over-fetching.
  */
-const INITIAL_DEFERRED_COUNT = 2;
+const EAGER_ROW_COUNT = 3;
 
 /**
- * Number of P2 rows to fetch per lazy-load batch (scroll or D-pad trigger).
+ * Number of deferred rows to fetch per lazy-load batch (scroll or D-pad trigger).
  * Matches DiscoverPage's BATCH_ROW_COUNT for consistency.
  */
 const DEFERRED_BATCH_SIZE = 3;
@@ -162,8 +162,8 @@ class HomePage extends Page {
         this._hero = null;
 
         /**
-         * Flat ordered array of Priority-2 RowDescriptors waiting to be loaded on demand.
-         * Populated in _startRenderPipeline() after P0/P1 rows are kicked off.
+         * Flat ordered array of deferred RowDescriptors waiting to be loaded on demand.
+         * Populated in _startRenderPipeline() in exact user-configured layout sequence.
          * @type {RowDescriptor[]}
          */
         this._deferredDescriptors = [];
@@ -207,6 +207,31 @@ class HomePage extends Page {
 
         // Mark as async page for Navigation State so scroll/focus restoration is deferred
         this._isAsyncPage = true;
+
+        /**
+         * Listen for modal focus trap dismissals (e.g. ExitDialog closed).
+         * If homepage focus restoration was deferred because ExitDialog was visible,
+         * run the deferred restoration once the modal is dismissed.
+         * @type {Function|null}
+         */
+        this._onTrapPopped = () => {
+            if (!this._isMounted) return;
+
+            // First priority: run deferred focus restoration if it was blocked during page load
+            if (typeof this._pendingFocusRestore === 'function') {
+                log.info('Focus trap popped - executing deferred homepage focus restoration');
+                this._pendingFocusRestore();
+                this._pendingFocusRestore = null;
+            } else {
+                // Safety net: check if focus was stranded or lost when the modal was popped
+                const currentFocused = focusManager.getFocused();
+                if (!currentFocused || !document.contains(currentFocused)) {
+                    log.warn('Focus lost after modal dismissal, executing homepage focus fallback');
+                    this._restoreHomepageFocusFallback();
+                }
+            }
+        };
+        eventBus.on('focus:trapPopped', this._onTrapPopped);
     }
 
     render() {
@@ -274,6 +299,12 @@ class HomePage extends Page {
         if (this._homeIdlePrefetchTimer) {
             clearTimeout(this._homeIdlePrefetchTimer);
             this._homeIdlePrefetchTimer = null;
+        }
+
+        // Clean up modal trap popped listener
+        if (this._onTrapPopped) {
+            eventBus.off('focus:trapPopped', this._onTrapPopped);
+            this._onTrapPopped = null;
         }
     }
 
@@ -829,14 +860,14 @@ class HomePage extends Page {
                     lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
                         ? 'landscape'
                         : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
-                        ? 'square'
-                        : 'portrait',
+                            ? 'square'
+                            : 'portrait',
                 cardType:
                     lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
                         ? 'thumb'
                         : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
-                        ? 'square'
-                        : 'poster',
+                            ? 'square'
+                            : 'poster',
                 contextType: 'latest',
                 fetchFn: async function () {
                     if (this._preFetchedItems) {
@@ -1016,88 +1047,61 @@ class HomePage extends Page {
                 return;
             }
 
-            // ─── Step 4: Group descriptors by priority ────────────────────────
-            // Rows within the same priority group run in parallel.
-            // Priority 0 (My Media) and 1 (Continue Watching / Next Up) are core.
-            const priorityGroups = this._groupByPriority(descriptors);
-            const priorities = Array.from(priorityGroups.keys()).sort((a, b) => a - b);
-
-            // ─── Step 4.5: Batch pre-fetch latest library rows via plugin ────
-            // Pre-loads all latest rows across libraries in one round-trip
+            // ─── Step 4: Batch pre-fetch latest library rows via plugin ──────────
+            // Pre-loads all latest rows across libraries in one round-trip.
+            // Executed early so network latency overlaps with initial setup.
             await this._preFetchLatestRows(descriptors);
 
-            // Find target focus row if restoring back-navigation state
+            // ─── Step 5: Partition eager vs deferred rows in natural user order ─
+            // The `descriptors` array is already ordered by homeLayoutManager.applyLayout()
+            // according to the user's custom configuration.
+            //
+            // To ensure the visual row order in the DOM strictly mirrors the user's
+            // preference (e.g. moving "My Media" or any library to the very bottom),
+            // we partition rows strictly along their sequence in `descriptors` rather than
+            // segregating by static priority numbers.
             const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
             const savedFocusObj =
                 storage.getItem('pref:disableFocusRestore') !== 'true' ? state.get('home:lastFocusedItem') : null;
             const targetRowId = savedFocusObj ? savedFocusObj.rowId : null;
-            const targetDescriptor = targetRowId ? descriptors.find((d) => d.id === targetRowId) : null;
+            const targetIndex = targetRowId ? descriptors.findIndex((d) => d.id === targetRowId) : -1;
 
-            // ─── Step 5: Partition eager vs deferred rows ─────────────────────
-            // Collect all Priority 2+ (library) descriptors in natural sequence.
-            const remainingPriorities = priorities.filter((p) => p !== 0 && p !== 1);
-            const allDeferredDescs = [];
-            for (const p of remainingPriorities) {
-                const group = priorityGroups.get(p);
-                if (group) allDeferredDescs.push(...group);
-            }
-
-            // Determine how many P2 rows need to be loaded eagerly.
-            // If restoring focus to a P2 row, we MUST eagerly load all rows up to
-            // and including the target row in natural sequence so that:
-            //   1. The DOM order is strictly preserved.
-            //   2. The target row is ready before focus restoration runs.
-            //   3. No duplicate skeleton or out-of-order insertion occurs.
-            let eagerP2Count = Math.min(INITIAL_DEFERRED_COUNT, allDeferredDescs.length);
-            let mustAwaitP2 = false;
-            if (targetDescriptor && targetDescriptor.priority >= 2) {
-                const targetIdx = allDeferredDescs.findIndex((d) => d.id === targetDescriptor.id);
-                if (targetIdx !== -1) {
-                    // Extend the eager slice to encompass the focus target and preceding rows
-                    eagerP2Count = Math.max(eagerP2Count, targetIdx + 1);
-                    mustAwaitP2 = true; // Block splash dismiss until target is rendered
+            // Determine how many rows to mount eagerly at page startup.
+            // EAGER_ROW_COUNT covers the top visible viewport (e.g. 3 rows).
+            // If restoring focus to a row beyond the initial count, we extend the eager
+            // slice up to and including that target row so its DOM position and focus
+            // target are fully prepared before the splash overlay is dismissed.
+            let eagerCount = Math.min(EAGER_ROW_COUNT, descriptors.length);
+            let mustAwaitTarget = false;
+            if (targetIndex !== -1) {
+                if (targetIndex >= eagerCount) {
+                    eagerCount = targetIndex + 1;
                 }
+                mustAwaitTarget = true; // Wait for target row to finish rendering before splash dismissal
             }
 
-            // Slice out the eager P2 batch and track remaining deferred descriptors
-            const eagerDeferred = allDeferredDescs.slice(0, eagerP2Count);
-            this._deferredDescriptors = allDeferredDescs;
-            this._nextDeferredDescIndex = eagerDeferred.length;
+            // Slice out the eager descriptors and queue the remaining for deferred loading
+            const eagerDescriptors = descriptors.slice(0, eagerCount);
+            this._deferredDescriptors = descriptors.slice(eagerCount);
+            this._nextDeferredDescIndex = 0;
 
             // ─── Step 5.5: Insert skeletons in exact natural order ───────────
-            // Skeletons for P0, P1, and any eager P2 rows are inserted in one go
-            // so the DOM hierarchy accurately mirrors the final layout structure.
-            const earlyDescriptors = descriptors.filter((d) => d.priority < 2);
-            const initialSkeletons = [...earlyDescriptors];
-            if (mustAwaitP2) {
-                // If focus target is in P2, mount eager P2 skeletons immediately in order
-                initialSkeletons.push(...eagerDeferred);
-            }
-            this._insertSkeletonRows(initialSkeletons);
+            // Skeletons for all eager rows are inserted in exact sequence into #home-rows.
+            // Because each row replaces its own placeholder via data-row-id, DOM ordering
+            // remains 100% stable regardless of which network request finishes first.
+            this._insertSkeletonRows(eagerDescriptors);
 
-            // ─── Step 6: Render priority 0 + 1 + hero (+ target row if in P2) ──
-            // My Media (P0), Continue Watching/Next Up (P1), Hero Carousel, and
-            // target focus row are rendered and awaited BEFORE revealing the page
-            // so focus restoration succeeds without flashes or skeleton resets.
-            const earlyPriorities = [0, 1];
-            const earlyPromises = [];
-            for (const p of earlyPriorities) {
-                const group = priorityGroups.get(p);
-                if (group) {
-                    earlyPromises.push(...group.map((d) => this._loadAndRenderRow(d)));
-                }
-            }
-            if (mustAwaitP2) {
-                // Target is in P2: await eager P2 rows so focus target is ready in DOM
-                earlyPromises.push(...eagerDeferred.map((d) => this._loadAndRenderRow(d)));
-            }
+            // ─── Step 6: Render eager rows + hero carousel in parallel ───────
+            // All eager rows (and hero carousel) are kicked off and awaited BEFORE
+            // revealing the page so the initial screen paints cleanly without flash.
+            const eagerPromises = eagerDescriptors.map((d) => this._loadAndRenderRow(d));
             if (heroPromise) {
-                earlyPromises.push(heroPromise);
+                eagerPromises.push(heroPromise);
             }
             if (enrichPromise) {
-                earlyPromises.push(enrichPromise);
+                eagerPromises.push(enrichPromise);
             }
-            await Promise.all(earlyPromises);
+            await Promise.all(eagerPromises);
             if (!this._isMounted) return;
 
             // Dismiss the loading spinner now that critical content is rendered.
@@ -1108,27 +1112,40 @@ class HomePage extends Page {
             }
 
             // ─── Step 7: Hide splash early + restore focus ───────────────────
-            // At this point My Media + content rows are visible. Reveal the page
+            // At this point the eager rows are visible. Reveal the page
             // so the user can start interacting while remaining rows load.
             requestAnimationFrame(() => {
                 if (!this._isMounted) return;
 
                 try {
-                    // Safety net: if no row triggered _tryInitializeFocus during P0/P1
-                    // (e.g. focus target is a background row), initialize on first row.
+                    // Safety net: if no row triggered _tryInitializeFocus during eager render,
+                    // initialize on first available row.
                     if (!this._focusInitialized) {
                         this._tryInitializeFocus(this.$('#home-rows'));
                     }
 
-                    // Execute any pending focus restoration callback
-                    if (typeof this._pendingFocusRestore === 'function') {
-                        this._pendingFocusRestore();
-                        this._pendingFocusRestore = null;
-                    }
+                    // ============================================================
+                    // Focus Trap Awareness
+                    // ============================================================
+                    // If a modal or focus trap (such as the ExitDialog) is currently
+                    // active on screen because the user rapidly pressed Back upon
+                    // returning to HomePage, do NOT steal focus or change sections.
+                    // Keep _pendingFocusRestore intact so that it executes cleanly
+                    // if/when the user dismisses the dialog via 'focus:trapPopped'.
+                    // ============================================================
+                    if (!focusManager.isTrapped()) {
+                        // Execute any pending focus restoration callback
+                        if (typeof this._pendingFocusRestore === 'function') {
+                            this._pendingFocusRestore();
+                            this._pendingFocusRestore = null;
+                        }
 
-                    // Final fallback: if nothing focused yet, go to sidebar
-                    if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
-                        this.setActiveSection('sidebar');
+                        // Final fallback: if nothing focused yet, go to sidebar
+                        if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+                            this.setActiveSection('sidebar');
+                        }
+                    } else {
+                        log.info('Modal trap active during Step 7 - deferring homepage focus restoration');
                     }
                 } catch (err) {
                     log.error('Focus restoration failed, hiding splash anyway', err);
@@ -1137,34 +1154,14 @@ class HomePage extends Page {
                 this._hideSplash();
             });
 
-            // ─── Step 9: Lazy-load remaining Priority-2 (library) rows ──────
-            // If P2 rows were not awaited in Step 6 (normal flow), start their
-            // eager batch in the background now. If they were already awaited
-            // (focus target was in P2), attach the scroll observer and idle prefetch
-            // for the remaining descriptors right away.
-            if (allDeferredDescs.length > 0) {
-                if (!mustAwaitP2 && eagerDeferred.length > 0) {
-                    // Insert skeleton placeholders for the eager batch immediately
-                    // so the page doesn't jump when they render
-                    this._insertSkeletonRows(eagerDeferred);
-
-                    // Fire and forget — these rows render progressively as data arrives
-                    Promise.all(eagerDeferred.map((d) => this._loadAndRenderRow(d)))
-                        .then(() => {
-                            if (!this._isMounted) return;
-                            // After the eager batch is done, start the scroll observer and
-                            // schedule the idle prefetch for whatever's left
-                            this._setupHomeScrollObserver();
-                            this._scheduleHomeIdlePrefetch();
-                        })
-                        .catch((err) => log.error('Eager deferred rows failed', err));
-                } else {
-                    // Eager rows were already mounted in Step 6 — attach observers immediately
-                    this._setupHomeScrollObserver();
-                    this._scheduleHomeIdlePrefetch();
-                }
+            // ─── Step 9: Setup lazy-loading for remaining deferred rows ──────
+            // If deferred descriptors remain, attach the IntersectionObserver and idle
+            // prefetcher to progressively mount them as the user scrolls down.
+            if (this._deferredDescriptors.length > 0) {
+                this._setupHomeScrollObserver();
+                this._scheduleHomeIdlePrefetch();
             } else {
-                // No P2 rows at all (rare: no libraries configured)
+                // All rows were rendered eagerly (short page or target near bottom)
                 this._prewarmScrollCache();
                 this.restoreScrollFocusWhenReady();
                 this.markReady();
@@ -1334,6 +1331,18 @@ class HomePage extends Page {
                 }
                 log.debug(`Row "${descriptor.id}" has no items, removed placeholder.`);
                 this._checkFocusRestoration(descriptor.id, false);
+
+                // Relink remaining rows so the new top row connects to home-hero
+                const container = this.$('#home-rows');
+                if (container) {
+                    const firstRow =
+                        container.querySelector('section[data-row-id]:not(.media-row--skeleton)') ||
+                        container.querySelector('section[data-row-id]');
+                    if (firstRow) {
+                        const firstRowId = firstRow.getAttribute('data-row-id');
+                        this._relinkAdjacentSections(container, firstRow, firstRowId);
+                    }
+                }
                 return;
             }
 
@@ -1389,6 +1398,7 @@ class HomePage extends Page {
         try {
             const batchMap = await api.getBatchLatest(libraryIds, {
                 limit: homeRowLimit,
+                fields: 'BackdropImageTags,ParentBackdropImageTags,Tags',
                 ...(hidePlayed ? { isPlayed: false } : {})
             });
 
@@ -1471,12 +1481,12 @@ class HomePage extends Page {
         this._isDeferredLoading = true;
 
         // Slice out the next batch from the deferred descriptor queue
-        const startIdx  = this._nextDeferredDescIndex;
-        const endIdx    = Math.min(startIdx + DEFERRED_BATCH_SIZE, this._deferredDescriptors.length);
-        const batch     = this._deferredDescriptors.slice(startIdx, endIdx);
+        const startIdx = this._nextDeferredDescIndex;
+        const endIdx = Math.min(startIdx + DEFERRED_BATCH_SIZE, this._deferredDescriptors.length);
+        const batch = this._deferredDescriptors.slice(startIdx, endIdx);
         this._nextDeferredDescIndex = endIdx;
 
-        log.debug(`Loading deferred P2 batch [${startIdx}–${endIdx - 1}] (${batch.length} rows)`);
+        log.debug(`Loading deferred batch [${startIdx}–${endIdx - 1}] (${batch.length} rows)`);
 
         // Insert skeleton placeholders for all batch rows up-front so
         // layout doesn't jump when each row resolves independently
@@ -1511,7 +1521,8 @@ class HomePage extends Page {
         }
 
         // Optionally move D-pad focus to the first newly rendered row
-        if (autoFocus && firstRenderedDescId) {
+        // Do NOT autofocus if a modal focus trap (e.g. ExitDialog) is open
+        if (autoFocus && firstRenderedDescId && !focusManager.isTrapped()) {
             const entry = this._rowRegistry.get(firstRenderedDescId);
             if (entry && entry.sectionEl) {
                 const rowId = firstRenderedDescId;
@@ -1935,16 +1946,19 @@ class HomePage extends Page {
                     const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
                     if (firstSection) {
                         const rowId = firstSection.getAttribute('data-row-id');
-                        this.setActiveSection(`home-row-${rowId}`, false);
+                        const firstCard = firstSection.querySelector('.media-card');
 
-                        if (!focusManager.getFocused()) {
-                            const firstCard = firstSection.querySelector('.media-card');
-                            if (firstCard) {
-                                focusManager.focusElement(firstCard, { instantScroll: true });
-                            } else {
-                                this.setActiveSection('sidebar');
-                            }
+                        // Always ensure activeSection and focusedElement point to the same row item.
+                        // Previously, if focus was set to the sidebar as a trap fallback, this check
+                        // was bypassed, leaving activeSection and focusedElement out of sync.
+                        if (firstCard) {
+                            this.setActiveSection(`home-row-${rowId}`, false);
+                            focusManager.focusElement(firstCard, { instantScroll: true });
+                        } else {
+                            this.setActiveSection('sidebar');
                         }
+                    } else {
+                        this.setActiveSection('sidebar');
                     }
                 }
             }
@@ -2147,21 +2161,64 @@ class HomePage extends Page {
             if (nextConfig) nextConfig.leaveUp = `home-row-${rowId}`;
         }
 
-        // Special Case: If this is now the first row, link its leaveUp to the hero carousel.
-        // Uses focusManager section existence rather than this._hero so the link is
-        // established even during the skeleton phase (before hero data loads).
-        if (idx === 0 && focusManager.getSectionConfig('home-hero')) {
-            const firstRowConfig = focusManager.getSectionConfig(`home-row-${rowId}`);
-            if (firstRowConfig) {
-                firstRowConfig.leaveUp = 'home-hero';
+        // =====================================================================
+        // Bidirectional Section Linking: Top Content Row ↔ Hero Carousel
+        // =====================================================================
+        // vertical transitions between the hero carousel and content rows must never be severed.
+        // Even if the row just rendered is not at idx 0 (e.g. out-of-order network
+        // completion or prior row removal), we inspect liveSections[0] to guarantee
+        // that the true topmost content row's leaveUp and the hero's leaveDown
+        // always reference each other correctly.
+        // =====================================================================
+        const topRow = liveSections[0];
+        if (topRow) {
+            const topRowId = topRow.getAttribute('data-row-id');
+            const topRowConfig = focusManager.getSectionConfig(`home-row-${topRowId}`);
+            const hasHero = storage.getItem('pref:heroCarousel') !== 'false' && focusManager.getSectionConfig('home-hero');
 
-                // Also link hero leaveDown to this row
+            // Wire the topmost row to navigate Up into the hero section
+            if (topRowConfig) {
+                topRowConfig.leaveUp = hasHero ? 'home-hero' : null;
+            }
+
+            // Wire the hero carousel to navigate Down into this topmost row
+            if (hasHero) {
                 const heroConfig = focusManager.getSectionConfig('home-hero');
                 if (heroConfig) {
-                    heroConfig.leaveDown = `home-row-${rowId}`;
+                    heroConfig.leaveDown = `home-row-${topRowId}`;
                 }
             }
         }
+    }
+
+    /**
+     * Resolves the FocusManager section name for the topmost live content row.
+     * Dynamic fallback used for home-hero leaveDown and bidirectional navigation.
+     * @private
+     * @returns {string|null}
+     */
+    _getFirstLiveRowSectionName() {
+        // Container element holding all progressive homepage rows
+        const container = this.$('#home-rows') || document.getElementById('home-rows');
+        if (!container) return null;
+
+        // Prioritize the first live, non-skeleton content row
+        const firstLive = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+        if (firstLive) {
+            const rowId = firstLive.getAttribute('data-row-id');
+            const sName = `home-row-${rowId}`;
+            if (focusManager.getSectionConfig(sName)) return sName;
+        }
+
+        // Fallback: search all section elements with data-row-id in DOM order
+        const allSections = container.querySelectorAll('section[data-row-id]');
+        for (let i = 0; i < allSections.length; i++) {
+            const rowId = allSections[i].getAttribute('data-row-id');
+            const sName = `home-row-${rowId}`;
+            if (focusManager.getSectionConfig(sName)) return sName;
+        }
+
+        return null;
     }
 
     /**
@@ -2217,7 +2274,7 @@ class HomePage extends Page {
 
         focusManager.register('home-hero', placeholder, {
             orientation: 'horizontal',
-            leaveDown: null,
+            leaveDown: () => this._getFirstLiveRowSectionName(),
             leaveLeft: 'sidebar'
         });
     }
@@ -2356,7 +2413,9 @@ class HomePage extends Page {
                 // Relink the first rendered row and the hero carousel now that the hero has initialized
                 const container = this.$('#home-rows');
                 if (container) {
-                    const firstRow = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+                    const firstRow =
+                        container.querySelector('section[data-row-id]:not(.media-row--skeleton)') ||
+                        container.querySelector('section[data-row-id]');
                     if (firstRow) {
                         const firstRowId = firstRow.getAttribute('data-row-id');
                         this._relinkAdjacentSections(container, firstRow, firstRowId);
@@ -2990,6 +3049,18 @@ class HomePage extends Page {
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
 
+                // Relink the first rendered row and the hero carousel after cache restoration
+                const container = this.$('#home-rows');
+                if (container) {
+                    const firstRow =
+                        container.querySelector('section[data-row-id]:not(.media-row--skeleton)') ||
+                        container.querySelector('section[data-row-id]');
+                    if (firstRow) {
+                        const firstRowId = firstRow.getAttribute('data-row-id');
+                        this._relinkAdjacentSections(container, firstRow, firstRowId);
+                    }
+                }
+
                 log.info('Hero carousel restored from cache.');
             }
         } catch (e) {
@@ -3057,11 +3128,51 @@ class HomePage extends Page {
     }
 
     // =========================================================================
-    // Back Button
+    // Focus Recovery & Back Button
     // =========================================================================
 
+    /**
+     * Fallback to recover homepage focus if a modal dialog was closed and left
+     * the homepage with no valid or attached focused element.
+     * @private
+     */
+    _restoreHomepageFocusFallback() {
+        if (!this._isMounted) return;
+
+        // 1. Try restoring to the hero carousel if present
+        if (focusManager.getSectionConfig('home-hero') && this.$('#hero-carousel-container')) {
+            this.setActiveSection('home-hero', false);
+            focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
+            return;
+        }
+
+        // 2. Try the first rendered row that contains media cards
+        const container = this.$('#home-rows');
+        if (container) {
+            const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+            if (firstSection) {
+                const rowId = firstSection.getAttribute('data-row-id');
+                const firstCard = firstSection.querySelector('.media-card');
+                if (firstCard) {
+                    this.setActiveSection(`home-row-${rowId}`, false);
+                    focusManager.focusElement(firstCard, { instantScroll: true });
+                    return;
+                }
+            }
+        }
+
+        // 3. Fall back to the navigation sidebar
+        this.setActiveSection('sidebar');
+    }
+
     onBack() {
+        // Emit exit request to display the ExitDialog (or exit immediately if confirmation is disabled)
         eventBus.emit('app:exitRequested');
+
+        // CRUCIAL: Return true to indicate to App.js that the back button was fully handled.
+        // Returning undefined or false causes App.js to execute router.back(), which either pops
+        // history incorrectly or emits a duplicate app:exitRequested event.
+        return true;
     }
 }
 

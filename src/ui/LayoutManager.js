@@ -103,6 +103,9 @@ class LayoutManager {
         // Only BlurHash Backdrop: Uses only decoded blurhash for details backdrop background without loading image
         this._onlyBlurHashBackdrop = false;
 
+        // Light Music Player: Removes blur and shadows from the music player for older TV performance
+        this._lightMusicPlayer = false;
+
         // Badge style: 'auto', 'tinted', 'dark'
         this._badgeStyle = 'auto';
 
@@ -216,6 +219,7 @@ class LayoutManager {
         const savedLoaderStyle = storage.getItem('litefin:loaderStyle') || (savedSimpleLoader ? 'ring' : 'ring');
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
+        const savedLightMusicPlayer = storage.getItem('pref:lightMusicPlayer') === 'true';
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
         const savedCardLabelScale = parseFloat(storage.getItem('pref:cardLabelScale') || '1.0');
 
@@ -253,6 +257,7 @@ class LayoutManager {
         this.setLoaderStyle(savedLoaderStyle, false);
         this.setDisableBlurhash(savedDisableBlurhash, false);
         this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
+        this.setLightMusicPlayer(savedLightMusicPlayer, false);
         this.setBadgeStyle(savedBadgeStyle, false);
 
         // Initial setup for the button styling scheme
@@ -1257,6 +1262,43 @@ class LayoutManager {
      */
     getOnlyBlurHashBackdrop() {
         return this._onlyBlurHashBackdrop;
+    }
+
+    /**
+     * Set lightMusicPlayer setting.
+     * When enabled, disables blur and shadows in the music player for enhanced performance on older TVs.
+     *
+     * @param {boolean} enabled - True to disable blur and shadows in music player; false for full visuals.
+     * @param {boolean} [save=true] - Persist the preference locally.
+     * @public
+     */
+    setLightMusicPlayer(enabled, save = true) {
+        this._lightMusicPlayer = !!enabled;
+
+        // Apply attribute on root html element for instant global CSS styling
+        if (this._lightMusicPlayer) {
+            document.documentElement.setAttribute('data-light-music-player', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-light-music-player');
+        }
+
+        // Persist preference in storage
+        if (save) {
+            storage.setItem('pref:lightMusicPlayer', this._lightMusicPlayer ? 'true' : 'false');
+        }
+
+        log.info(`Light Music Player set to: ${this._lightMusicPlayer}`);
+        eventBus.emit('lightMusicPlayer:changed', { enabled: this._lightMusicPlayer });
+    }
+
+    /**
+     * Get lightMusicPlayer setting value
+     *
+     * @returns {boolean}
+     * @public
+     */
+    getLightMusicPlayer() {
+        return this._lightMusicPlayer;
     }
 
     /**

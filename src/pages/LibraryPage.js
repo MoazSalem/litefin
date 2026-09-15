@@ -297,6 +297,10 @@ class LibraryPage extends Page {
         const isVirtualLibrary = this.state.libraryId === 'all';
         const isSeerrLibrary = this.state.libraryId === 'seerr';
 
+        if (this.params.char) {
+            this.state.nameStartsWith = decodeURIComponent(this.params.char);
+        }
+
         if (this.params.page) {
             const pageNum = parseInt(this.params.page, 10);
             if (!isNaN(pageNum) && pageNum > 0) {
@@ -612,6 +616,23 @@ class LibraryPage extends Page {
                 const title = i18n.t('SearchResultsFor', [query]);
                 this.$('#library-title').textContent = title;
                 this.title = title;
+            } else if (this.params.parentId && this.state.libraryId === 'all') {
+                try {
+                    // Resolve parent item title (e.g. Season 1 or Album) for deep-linked virtual library views
+                    const parentItem = await api.getItem(this.params.parentId);
+                    if (parentItem && parentItem.Name) {
+                        const fullTitle = parentItem.SeriesName
+                            ? `${parentItem.SeriesName} - ${parentItem.Name}`
+                            : parentItem.Name;
+                        this.$('#library-title').textContent = fullTitle;
+                        this.title = fullTitle;
+                        if (this.state.libraryInfo) {
+                            this.state.libraryInfo.Name = fullTitle;
+                        }
+                    }
+                } catch (e) {
+                    log.warn('Failed to fetch parent info for virtual library title', e);
+                }
             }
         })();
 
@@ -782,12 +803,18 @@ class LibraryPage extends Page {
 
     _getCacheKey() {
         const parts = [`library:state:${this.params.id}`];
+        if (this.params.parentId) parts.push(`parent:${this.params.parentId}`);
+        if (this.params.includeItemTypes) parts.push(`types:${this.params.includeItemTypes}`);
         if (this.params.genreId) parts.push(`genre:${this.params.genreId}`);
         if (this.params.studioId) parts.push(`studio:${this.params.studioId}`);
         if (this.params.networkId) parts.push(`network:${this.params.networkId}`);
         if (this.params.year) parts.push(`year:${this.params.year}`);
         if (this.params.personId) parts.push(`person:${this.params.personId}`);
         if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
+        if (this.params.searchTerm) parts.push(`search:${this.params.searchTerm}`);
+        if (this.params.viewModeIndex !== undefined) parts.push(`vmIdx:${this.params.viewModeIndex}`);
+        if (this.params.viewMode) parts.push(`vm:${this.params.viewMode}`);
+        if (this.params.char) parts.push(`char:${this.params.char}`);
         if (this.params.page) parts.push(`page:${this.params.page}`);
         return parts.join(':');
     }
@@ -872,6 +899,8 @@ class LibraryPage extends Page {
         this._gridEvalPending = false;
         this._gridFocusElement = null;
         this._gridScrollTop = null;
+        this._pendingFocusEval = false;
+        this._pendingScrollEval = false;
     }
 
     // ========================================================================
@@ -898,19 +927,46 @@ class LibraryPage extends Page {
                     item.CollectionType = 'musicvideos';
                 } else if (['Movie', 'BoxSet', 'Video'].includes(item.Type)) {
                     item.CollectionType = 'movies';
+                } else if (item.Type === 'Book') {
+                    item.CollectionType = 'books';
                 }
             }
 
-            // Flag this as a folder-based library if it matches 'folders' type
-            // or is a generic collection without a specific media type.
-            this.state.isFolderLibrary =
-                item.CollectionType === 'folders' ||
-                (!item.CollectionType &&
-                    (item.Type === 'CollectionFolder' || item.Type === 'UserView' || item.Type === 'Folder'));
+            // Detect Game libraries (JellyEmu collections or libraries named after games/roms)
+            const libNameLower = (item.Name || '').toLowerCase();
+            if (
+                item.CollectionType === 'books' ||
+                item.CollectionType === 'games' ||
+                /game|rom|emulator|emulation|jellyemu/i.test(libNameLower)
+            ) {
+                this.state.isGameLibrary = true;
+            } else {
+                this.state.isGameLibrary = false;
+            }
 
             // If the item fetched is a Folder, we are in a sub-folder view.
             this.state.isSubFolder =
                 item.Type === 'Folder' || (item.Type === 'CollectionFolder' && !item.CollectionType && item.ParentId);
+
+            // Inherit isGameLibrary if item is a console folder inside a games library
+            // or if the folder name or tags indicate a gaming console.
+            if (!this.state.isGameLibrary && this.state.isSubFolder) {
+                const isConsoleName = /^(nintendo|sega|sony|atari|game boy|gameboy|gba|gbc|snes|nes|n64|playstation|psx|ps1|ps2|genesis|megadrive|game gear|dreamcast|mame|arcade|neogeo)/i.test(libNameLower);
+                if (isConsoleName || (item.ParentId && item.Type === 'Folder')) {
+                    this.state.isGameLibrary = true;
+                }
+            }
+
+            // Flag this as a folder-based library if it matches 'folders' type,
+            // or is a generic collection without a specific media type.
+            // For game libraries: ONLY the root library is treated as folders (to list console folders).
+            // Once inside a console folder, isFolderLibrary is false so all games are loaded directly/recursively.
+            this.state.isFolderLibrary =
+                (this.state.isGameLibrary && !this.state.isSubFolder) ||
+                (!this.state.isGameLibrary &&
+                    (item.CollectionType === 'folders' ||
+                        (!item.CollectionType &&
+                            (item.Type === 'CollectionFolder' || item.Type === 'UserView' || item.Type === 'Folder'))));
 
             this.state.libraryInfo = item;
             let title = item.Name;
@@ -1097,6 +1153,14 @@ class LibraryPage extends Page {
             this.state.limit = Math.ceil(this.state.limit / alignCols) * alignCols;
         }
 
+        // Keep startIndex aligned with the effective limit if a specific page was requested
+        if (this.params.page) {
+            const pageNum = parseInt(this.params.page, 10);
+            if (!isNaN(pageNum) && pageNum > 0) {
+                this.state.startIndex = (pageNum - 1) * this.state.limit;
+            }
+        }
+
         try {
             const params = {
                 SortBy: this.state.sortBy,
@@ -1104,7 +1168,7 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount',
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
             };
@@ -1129,8 +1193,11 @@ class LibraryPage extends Page {
 
             // If it's a folder-based library (generic/Home Videos) or we are explicitly
             // in a "Folders" tab, disable recursion so we can browse the hierarchy.
+            // When inside a Game console subfolder, ensure Recursive is true so all games within are loaded.
             if (this.state.isFolderLibrary || this.state.viewType === 'Folders') {
                 params.Recursive = false;
+            } else if (this.state.isGameLibrary && this.state.isSubFolder) {
+                params.Recursive = true;
             }
 
             // Apply Filters
@@ -1151,8 +1218,11 @@ class LibraryPage extends Page {
             const isTv =
                 info?.CollectionType === 'tvshows' ||
                 ['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(info?.Type);
+            const isGame = this.state.isGameLibrary || info?.CollectionType === 'books' || info?.CollectionType === 'games';
 
-            if (isMusic) {
+            if (isGame) {
+                subViewItemTypes = 'Book';
+            } else if (isMusic) {
                 subViewItemTypes = 'MusicAlbum,Audio';
             } else if (isTv) {
                 subViewItemTypes = 'Series';
@@ -1256,8 +1326,17 @@ class LibraryPage extends Page {
                 });
             } else if (viewType === 'Items' || viewType === 'Movies' || viewType === 'Shows') {
                 // Standard Item Fetch
-                // For TV Shows library, 'Shows' -> IncludeItemTypes: 'Series'
-                if (this.state.libraryInfo?.CollectionType === 'tvshows') {
+                if (this.state.isGameLibrary || this.state.libraryInfo?.CollectionType === 'books' || this.state.libraryInfo?.CollectionType === 'games') {
+                    // When browsing a Game library at root as folders, do not restrict to 'Book'
+                    // so that Jellyfin returns top-level console Folders.
+                    // Inside subfolders, query 'Book' items (game ROMs).
+                    if (this.state.isSubFolder) {
+                        params.IncludeItemTypes = 'Book';
+                    } else {
+                        // At root folder level: leave IncludeItemTypes empty to return console Folders
+                        params.IncludeItemTypes = '';
+                    }
+                } else if (this.state.libraryInfo?.CollectionType === 'tvshows') {
                     params.IncludeItemTypes = 'Series';
                 } else if (this.state.libraryInfo?.CollectionType === 'movies') {
                     params.IncludeItemTypes = 'Movie';
@@ -1807,8 +1886,9 @@ class LibraryPage extends Page {
 
     _updatePaginationUI() {
         const { startIndex, limit, totalRecordCount } = this.state;
-        const currentPage = Math.floor(startIndex / limit) + 1;
-        const totalPages = Math.ceil(totalRecordCount / limit);
+        const pageParam = this.params.page ? parseInt(this.params.page, 10) : null;
+        const currentPage = (!isNaN(pageParam) && pageParam > 0) ? pageParam : (Math.floor(startIndex / (limit || 1)) + 1);
+        const totalPages = Math.ceil(totalRecordCount / (limit || 1));
 
         this.$('#pagination-info').textContent = i18n.t('PageNumberXOfY', [currentPage, totalPages || 1]);
 
@@ -2099,7 +2179,13 @@ class LibraryPage extends Page {
         // Define tabs based on collection type
         let tabs = [];
 
-        if (collectionType === 'tvshows') {
+        if (this.state.isGameLibrary || collectionType === 'games' || collectionType === 'books') {
+            tabs = [
+                { id: 'Items', label: 'Games' },
+                { id: 'Suggestions', label: 'Suggestions' },
+                { id: 'Genres', label: 'Genres' }
+            ];
+        } else if (collectionType === 'tvshows') {
             tabs = [
                 { id: 'Items', label: 'TypeOptionPluralSeries' },
                 { id: 'Suggestions', label: 'Suggestions' },
@@ -2285,7 +2371,8 @@ class LibraryPage extends Page {
             this.state.viewType === 'Upcoming' ||
             this.state.viewType === 'Networks' ||
             this.state.libraryInfo?.CollectionType === 'musicvideos' ||
-            this.state.libraryInfo?.CollectionType === 'homevideos';
+            this.state.libraryInfo?.CollectionType === 'homevideos' ||
+            (this.params.includeItemTypes && this.params.includeItemTypes.includes('Episode'));
 
         // --------------------------------------------------------------------
         // Apply the view mode CSS modifier class to the grid container.
@@ -2506,6 +2593,11 @@ class LibraryPage extends Page {
             columns = this._getDefaultColumnsForMode(effectiveMode);
         }
 
+        // In List view, there is strictly 1 card per row regardless of gridColumns settings
+        if (this.state.viewMode === 'list') {
+            columns = 1;
+        }
+
         // Store rendering context + column count on state so _appendGridChunk
         // and _prependGridChunk can access them without re-deriving
         this.state._gridRenderContext = {
@@ -2596,30 +2688,64 @@ class LibraryPage extends Page {
             // in the DOM. The result: no accidental focus jumps to tabs/controls
             // while holding UP through a windowed grid.
             // =================================================================
+            // =================================================================
+            // VIRTUAL GRID EDGE GUARDS (Up & Down)
+            // =================================================================
+            // When the user navigates across window boundaries, FocusManager
+            // may not find the adjacent card because it was either evicted
+            // or hasn't yet been appended to the DOM.
+            //
+            // We intercept the directional move here BEFORE FocusManager queries
+            // focusables:
+            //   - For UP moves on the first row: prepend evicted rows.
+            //   - For DOWN moves on the last row: append the next chunk.
+            //
+            // Prepending/appending invalidates the FocusManager cache synchronously.
+            // Returning false lets FocusManager proceed with its move, re-querying
+            // the fresh DOM and landing on the new card naturally without sticking
+            // or jumping out of section.
+            // =================================================================
             onMove: (direction, focusedElement) => {
-                if (direction !== 'up') return false;
-                if (this.state.gridWindowStart <= 0) return false;
                 if (!focusedElement) return false;
 
-                // Are we on the FIRST rendered row?
-                const allCards = grid.querySelectorAll('.media-card');
-                let domIndex = -1;
-                for (let i = 0; i < allCards.length; i++) {
-                    if (allCards[i] === focusedElement) {
-                        domIndex = i;
-                        break;
+                // Guard for UP navigation on the first rendered row
+                if (direction === 'up') {
+                    if (this.state.gridWindowStart <= 0) return false;
+
+                    const allCards = grid.querySelectorAll('.media-card');
+                    let domIndex = -1;
+                    for (let i = 0; i < allCards.length; i++) {
+                        if (allCards[i] === focusedElement) {
+                            domIndex = i;
+                            break;
+                        }
                     }
+                    // domIndex < currentColumns means the card is in the first row
+                    if (domIndex < 0 || domIndex >= currentColumns) return false;
+
+                    this._prependGridChunk(grid, this.state.items, currentColumns);
+                    return false;
                 }
-                // domIndex < currentColumns means the card is in the first row
-                if (domIndex < 0 || domIndex >= currentColumns) return false;
 
-                // Prepend the evicted rows synchronously. _hookGridCards inside
-                // _prependGridChunk calls focusManager.invalidateCache() so
-                // FocusManager will re-query after we return false.
-                this._prependGridChunk(grid, this.state.items, currentColumns);
+                // Guard for DOWN navigation on the last rendered row
+                if (direction === 'down') {
+                    if (this.state.gridWindowEnd >= this.state.items.length) return false;
 
-                // Return false — FocusManager proceeds with its UP move,
-                // re-queries the grid, and lands on the card above correctly.
+                    const allCards = grid.querySelectorAll('.media-card');
+                    let domIndex = -1;
+                    for (let i = 0; i < allCards.length; i++) {
+                        if (allCards[i] === focusedElement) {
+                            domIndex = i;
+                            break;
+                        }
+                    }
+                    // If domIndex + currentColumns >= allCards.length, focus is on the last rendered row
+                    if (domIndex >= 0 && domIndex + currentColumns >= allCards.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                    return false;
+                }
+
                 return false;
             }
         });
@@ -2643,6 +2769,8 @@ class LibraryPage extends Page {
         this._gridEvalFrameId = null;
         this._gridFocusElement = null;
         this._gridScrollTop = null;
+        this._pendingFocusEval = false;
+        this._pendingScrollEval = false;
 
         if (this._onGridFocusChanged) {
             eventBus.off('focus:changed', this._onGridFocusChanged);
@@ -2651,21 +2779,35 @@ class LibraryPage extends Page {
             if (!element || !grid.contains(element)) return;
             if (!element.classList.contains('media-card')) return;
             this._gridFocusElement = element;
+            this._pendingFocusEval = true;
             this._scheduleGridEval();
         };
         eventBus.on('focus:changed', this._onGridFocusChanged);
 
         const scrollContainer = this.$('#library-scroll-container') || this.el.querySelector('.page-content');
         if (scrollContainer) {
+            // Clean up any previously attached scroll/wheel handlers
             if (this._onGridScroll) {
                 scrollContainer.removeEventListener('scroll', this._onGridScroll);
+                window.removeEventListener('scroll', this._onGridScroll);
+                scrollContainer.removeEventListener('wheel', this._onGridWheel);
             }
             this._lastGridScrollTop = 0;
             this._onGridScroll = () => {
-                this._gridScrollTop = scrollContainer.scrollTop;
+                // Determine current scroll position from container or window (for TV webOS pointer/wheel scrolling)
+                this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
+                this._pendingScrollEval = true;
+                this._scheduleGridEval();
+            };
+            this._onGridWheel = () => {
+                // In some TV environments (webOS magic remote wheel), wheel events may fire before or independently of scroll
+                this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
+                this._pendingScrollEval = true;
                 this._scheduleGridEval();
             };
             scrollContainer.addEventListener('scroll', this._onGridScroll, { passive: true });
+            window.addEventListener('scroll', this._onGridScroll, { passive: true });
+            scrollContainer.addEventListener('wheel', this._onGridWheel, { passive: true });
         }
 
         // Register pagination footer — the grid's leaveDown points here.
@@ -2794,14 +2936,6 @@ class LibraryPage extends Page {
 
         // Tell FocusManager about the new focusable nodes
         focusManager.invalidateCache('library-grid');
-
-        // Prewarm ScrollController offset cache in the next idle frame
-        requestAnimationFrame(() => {
-            const pageContent = document.querySelector('.page-content');
-            if (pageContent) {
-                scrollController.prewarmOffsetCache(newCards, pageContent);
-            }
-        });
     }
 
     /**
@@ -2832,14 +2966,23 @@ class LibraryPage extends Page {
         // -----------------------------------------------------------------------
         // CHUNK SIZE
         // -----------------------------------------------------------------------
-        // First render: 5 rows — fills ~1.5 TV screens immediately.
-        // Incremental: 3 rows — small enough not to spike layout, large enough
-        // that the user can scroll a full screen before triggering another append.
+        // In list view (single column, row height ~132px), cards are much taller
+        // and vertically compact in count. With columns === 1, a 5-row initial chunk
+        // is only 5 items (~660px, less than 1 1080p screen), and a 2-row buffer
+        // evicts items almost immediately on scroll.
+        // For list view:
+        //   - INITIAL_ROWS = 20 (~2.5 screens)
+        //   - INCREMENTAL_ROWS = 10 (~1.2 screens)
+        //   - MAX_WINDOW_ROWS = 35 (~4.5 screens)
+        // For standard multi-column grids:
+        //   - INITIAL_ROWS = 5 (columns * 5 = 25-35 items, ~1.5 - 2 screens)
+        //   - INCREMENTAL_ROWS = 3 (columns * 3 = 15-21 items)
+        //   - MAX_WINDOW_ROWS = 8
         // -----------------------------------------------------------------------
-        const INITIAL_ROWS = 5;
-        const INCREMENTAL_ROWS = 3;
-        // Maximum rows to keep in the DOM at once (8 rows = comfortable window)
-        const MAX_WINDOW_ROWS = 8;
+        const isListView = this.state.viewMode === 'list';
+        const INITIAL_ROWS = isListView ? 20 : 5;
+        const INCREMENTAL_ROWS = isListView ? 10 : 3;
+        const MAX_WINDOW_ROWS = isListView ? 35 : 8;
 
         const isFirstChunk = windowEnd === 0;
         const chunkSize = isFirstChunk ? columns * INITIAL_ROWS : columns * INCREMENTAL_ROWS;
@@ -2891,8 +3034,9 @@ class LibraryPage extends Page {
         // Nothing above the current window — already at the very top
         if (windowStart <= 0) return false;
 
-        const INCREMENTAL_ROWS = 3;
-        const MAX_WINDOW_ROWS = 8;
+        const isListView = this.state.viewMode === 'list';
+        const INCREMENTAL_ROWS = isListView ? 10 : 3;
+        const MAX_WINDOW_ROWS = isListView ? 35 : 8;
 
         const chunkSize = Math.min(columns * INCREMENTAL_ROWS, windowStart);
         const newStart = windowStart - chunkSize;
@@ -2985,36 +3129,103 @@ class LibraryPage extends Page {
         const focusedElement = this._gridFocusElement;
 
         // ------------------------------------------------------------------
-        // PRIORITY 1: Scroll-based evaluation (pending scroll event)
+        // PRIORITY 1: Focus-based evaluation (D-pad navigation)
         // ------------------------------------------------------------------
-        // Runs whenever a scroll event is pending, regardless of focus state.
-        // This is essential for mouse-wheel / magic-remote scrolling where
-        // focus does not move and focus:changed never fires.
+        // When navigation is driven by D-pad, the user's active focus element
+        // is the single source of truth for viewport positioning.
+        // Intermediate scroll events fired by smooth scrolling during D-pad
+        // moves represent mid-flight animations, NOT the user's intended position.
+        // Deriving grid boundaries from mid-flight scrollTop during smooth scroll
+        // would evict the very rows the user is scrolling towards!
+        // ------------------------------------------------------------------
+        if (this._pendingFocusEval && focusedElement && grid.contains(focusedElement)) {
+            this._pendingFocusEval = false;
+            this._gridScrollTop = null; // Consume scroll input so mid-flight animation doesn't desync window
+            this._pendingScrollEval = false;
+
+            const allCards = grid.querySelectorAll('.media-card');
+            let domIndex = -1;
+            for (let i = 0; i < allCards.length; i++) {
+                if (allCards[i] === focusedElement) {
+                    domIndex = i;
+                    break;
+                }
+            }
+            if (domIndex >= 0) {
+                const itemIndex = this.state.gridWindowStart + domIndex;
+
+                // Direction isolation: only append when moving down,
+                // only prepend when moving up (prevents oscillation)
+                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
+                this._lastFocusItemIndex = itemIndex;
+
+                if (movingDown) {
+                    // For list view (columns=1), look ahead 6 items instead of 2 items
+                    const lookAheadItems = currentColumns === 1 ? 6 : currentColumns * 2;
+                    const appendThreshold = this.state.gridWindowEnd - lookAheadItems;
+                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
+                        this._appendGridChunk(grid, this.state.items, currentColumns);
+                    }
+                } else {
+                    const lookBehindItems = currentColumns === 1 ? 6 : currentColumns * 2;
+                    const prependThreshold = this.state.gridWindowStart + lookBehindItems;
+                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
+                        this._prependGridChunk(grid, this.state.items, currentColumns);
+                    }
+                }
+
+                const currentRow = Math.floor(itemIndex / currentColumns);
+                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
+                return;
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // PRIORITY 2: Scroll-based evaluation (mouse wheel / magic remote / touch)
+        // ------------------------------------------------------------------
+        // Runs when scrolling without changing D-pad focus (webOS magic remote,
+        // mouse wheel, or touch fling). Focus:changed does not fire during wheel
+        // scrolling, so scroll position determines grid window bounds and chunk loading.
+        // ------------------------------------------------------------------
         if (scrollContainer && this._gridScrollTop !== null) {
+            // Guard: If a programmatic vertical scroll animation is still actively in flight
+            // from a previous D-pad move, ignore intermediate scroll events so we don't
+            // evict cards based on transient in-flight coordinates.
+            if (scrollController.isVerticalAnimating && focusedElement && grid.contains(focusedElement)) {
+                this._gridScrollTop = null;
+                this._pendingScrollEval = false;
+                return;
+            }
+
             const scrollTop = this._gridScrollTop;
             this._gridScrollTop = null; // Consume the scroll input
+            this._pendingScrollEval = false;
 
             const containerHeight = scrollContainer.clientHeight;
             const scrollHeight = scrollContainer.scrollHeight;
             const rowHeight = this.state.gridCardRowHeight;
 
-            const scrollingDown = scrollTop > (this._lastGridScrollTop || 0);
+            // Direction tracking
+            const isScrollingDown = scrollTop > (this._lastGridScrollTop || 0);
+            const isScrollingUp = scrollTop < (this._lastGridScrollTop || 0);
             this._lastGridScrollTop = scrollTop;
 
-            if (scrollingDown) {
-                const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
-                if (distanceFromBottom <= containerHeight * 1.5) {
-                    if (this.state.gridWindowEnd < this.state.items.length) {
-                        this._appendGridChunk(grid, this.state.items, currentColumns);
-                    }
+            // Distance calculations
+            const distanceFromBottom = scrollHeight - (scrollTop + containerHeight);
+            const spacer = grid.querySelector('#grid-top-spacer');
+            const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
+            const distanceFromRenderedTop = scrollTop - spacerHeight;
+
+            // Check append: if user is scrolling down OR near the bottom boundary of rendered items
+            if ((isScrollingDown || distanceFromBottom <= containerHeight) && distanceFromBottom <= containerHeight * 1.5) {
+                if (this.state.gridWindowEnd < this.state.items.length) {
+                    this._appendGridChunk(grid, this.state.items, currentColumns);
                 }
-            } else {
-                const spacer = grid.querySelector('#grid-top-spacer');
-                const spacerHeight = spacer ? parseFloat(spacer.style.height || 0) : 0;
-                const distanceFromRenderedTop = scrollTop - spacerHeight;
-                if (this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
-                    this._prependGridChunk(grid, this.state.items, currentColumns);
-                }
+            }
+
+            // Check prepend: if user is scrolling up OR near the top boundary of rendered items
+            if ((isScrollingUp || distanceFromRenderedTop <= containerHeight) && this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
+                this._prependGridChunk(grid, this.state.items, currentColumns);
             }
 
             if (rowHeight) {
@@ -3049,9 +3260,8 @@ class LibraryPage extends Page {
                 }
             }
 
-            // Keep the focus-based direction cursor in sync so the next
-            // D-pad move compares against the current position rather than
-            // a stale value from before the scroll.
+            // Keep the focus-based direction cursor in sync so subsequent D-pad moves
+            // compare against the actual position after wheel scrolling
             if (focusedElement && grid.contains(focusedElement)) {
                 const allCards = grid.querySelectorAll('.media-card');
                 for (let i = 0; i < allCards.length; i++) {
@@ -3060,44 +3270,6 @@ class LibraryPage extends Page {
                         break;
                     }
                 }
-            }
-            return;
-        }
-
-        // ------------------------------------------------------------------
-        // PRIORITY 2: Focus-based evaluation (D-pad navigation)
-        // ------------------------------------------------------------------
-        if (focusedElement && grid.contains(focusedElement)) {
-            const allCards = grid.querySelectorAll('.media-card');
-            let domIndex = -1;
-            for (let i = 0; i < allCards.length; i++) {
-                if (allCards[i] === focusedElement) {
-                    domIndex = i;
-                    break;
-                }
-            }
-            if (domIndex >= 0) {
-                const itemIndex = this.state.gridWindowStart + domIndex;
-
-                // Direction isolation: only append when moving down,
-                // only prepend when moving up (prevents oscillation)
-                const movingDown = itemIndex > (this._lastFocusItemIndex || 0);
-                this._lastFocusItemIndex = itemIndex;
-
-                if (movingDown) {
-                    const appendThreshold = this.state.gridWindowEnd - currentColumns * 2;
-                    if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
-                        this._appendGridChunk(grid, this.state.items, currentColumns);
-                    }
-                } else {
-                    const prependThreshold = this.state.gridWindowStart + currentColumns * 2;
-                    if (itemIndex <= prependThreshold && this.state.gridWindowStart > 0) {
-                        this._prependGridChunk(grid, this.state.items, currentColumns);
-                    }
-                }
-
-                const currentRow = Math.floor(itemIndex / currentColumns);
-                this._syncGridWindow(grid, this.state.items, currentColumns, currentRow);
             }
         }
     }
@@ -3133,16 +3305,19 @@ class LibraryPage extends Page {
         // -----------------------------------------------------------------------
         // WINDOW CONSTANTS
         // -----------------------------------------------------------------------
-        // ROWS_ABOVE: rows to keep rendered above the current row.
-        //   2 rows = ~2 screen-heights of backward buffer. When the user is on
-        //   row N, rows 0..(N-3) are off-screen and safe to evict.
-        //
-        // ROWS_BELOW: rows to keep rendered below the current row.
-        //   5 rows = ~1.5 screen-heights of forward buffer before the next
-        //   _appendGridChunk fires.
+        // In list view (single column), each row is only ~132px high.
+        // A ROWS_ABOVE of 2 is only ~264px (less than 1/4th of a 1080p screen!),
+        // which causes top items to be aggressively evicted while still near or on-screen.
+        // For list view:
+        //   ROWS_ABOVE: 12 rows (~1.5 screens above)
+        //   ROWS_BELOW: 15 rows (~1.8 screens below)
+        // For multi-column grids (each card ~300-400px high):
+        //   ROWS_ABOVE: 2 rows (~2 screen-heights of backward buffer)
+        //   ROWS_BELOW: 5 rows (~1.5 screen-heights of forward buffer)
         // -----------------------------------------------------------------------
-        const ROWS_ABOVE = 2;
-        const ROWS_BELOW = 5;
+        const isListView = this.state.viewMode === 'list';
+        const ROWS_ABOVE = isListView ? 12 : 2;
+        const ROWS_BELOW = isListView ? 15 : 5;
 
         // Ideal first/last item index in the window
         const idealStart = Math.max(0, (currentRow - ROWS_ABOVE) * columns);
@@ -3173,6 +3348,7 @@ class LibraryPage extends Page {
                 if (spacer) {
                     spacer.style.height = `${Math.floor(this.state.gridWindowStart / columns) * rowHeight}px`;
                 }
+                focusManager.invalidateCache('library-grid');
             }
         }
 
@@ -3192,6 +3368,7 @@ class LibraryPage extends Page {
                 allCards[i].remove();
             }
             this.state.gridWindowEnd -= count;
+            focusManager.invalidateCache('library-grid');
         }
     }
 
@@ -3653,7 +3830,7 @@ class LibraryPage extends Page {
         const char = btn.dataset.char;
 
         if (this.state.nameStartsWith === char) {
-            // Toggle off? Maybe not standard behavior, but useful
+            // Toggle off
             this.state.nameStartsWith = null;
         } else {
             this.state.nameStartsWith = char; // Store literal char ('#', 'A', etc.)
@@ -3661,20 +3838,28 @@ class LibraryPage extends Page {
 
         this.state.startIndex = 0;
 
+        // Keep URL parameters in sync so pagination and state preserve the selected letter
+        if (this.params.page) {
+            delete this.params.page;
+        }
+        if (this.state.nameStartsWith) {
+            this.params.char = this.state.nameStartsWith;
+        } else {
+            delete this.params.char;
+        }
+
         // Update UI
         this._renderAlphaPicker();
 
         // Restore focus to the selected char
-        // We need to wait for render, then find the button for 'char'
         const newBtn = this.$(`.alpha-btn[data-char="${char}"]`);
         if (newBtn) {
-            // Use FocusManager to properly set active element
             focusManager.focusElement(newBtn);
         }
 
         await this._loadItems();
 
-        // Scroll to top of content (important when changing filters)
+        // Scroll to top of content
         const scrollContainer = this.$('#library-scroll-container');
         if (scrollContainer) scrollContainer.scrollTop = 0;
     }
@@ -3743,13 +3928,23 @@ class LibraryPage extends Page {
     }
 
     async _handlePageChange(direction) {
-        const newIndex = this.state.startIndex + direction * this.state.limit;
+        // ====================================================================
+        // RELIABLE PAGE-BASED PAGINATION
+        // ====================================================================
+        // Derive targetPage directly from the current page number rather than
+        // raw byte/item offsets, which eliminates rounding mismatches caused by
+        // dynamic column limit alignment (e.g., 100 aligned to 105).
+        // ====================================================================
+        const isSeerr = this.state.libraryId === 'seerr';
+        const pageLimit = isSeerr ? 100 : (this.state.limit || 100);
+        const currentPage = Math.floor(this.state.startIndex / pageLimit) + 1;
+        const totalPages = Math.ceil(this.state.totalRecordCount / pageLimit) || 1;
+        const targetPage = currentPage + direction;
 
-        // Bounds check
-        if (newIndex < 0 || newIndex >= this.state.totalRecordCount) return;
+        // Bounds check: ensure target page stays within valid [1, totalPages] range
+        if (targetPage < 1 || targetPage > totalPages) return;
 
-        if (this.state.libraryId === 'seerr') {
-            const targetPage = Math.floor(newIndex / 100) + 1;
+        if (isSeerr) {
             const currentParams = new URLSearchParams();
             if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
             if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
@@ -3764,15 +3959,33 @@ class LibraryPage extends Page {
             return;
         }
 
-        const targetPage = Math.floor(newIndex / this.state.limit) + 1;
+        // ====================================================================
+        // PRESERVE ROUTE QUERY PARAMETERS ACROSS PAGE CHANGES
+        // ====================================================================
+        // Start from existing route parameters so deep links (e.g. season details
+        // "See More" with parentId, includeItemTypes, viewModeIndex), custom search,
+        // or favorite subsets don't lose their context when the user navigates pages.
+        // ====================================================================
         const currentParams = new URLSearchParams();
-        if (this.params.genreId) currentParams.set('genreId', this.params.genreId);
-        if (this.params.studioId) currentParams.set('studioId', this.params.studioId);
-        if (this.params.networkId) currentParams.set('networkId', this.params.networkId);
-        if (this.params.year) currentParams.set('year', this.params.year);
-        if (this.params.personId) currentParams.set('personId', this.params.personId);
-        if (this.params.tagName) currentParams.set('tagName', this.params.tagName);
-        if (this.params.name) currentParams.set('name', this.params.name);
+
+        // Copy over all existing parameters from this.params except route path 'id' and 'page'
+        if (this.params && typeof this.params === 'object') {
+            for (const [key, value] of Object.entries(this.params)) {
+                if (key !== 'id' && key !== 'page' && value !== undefined && value !== null && value !== '') {
+                    currentParams.set(key, value);
+                }
+            }
+        }
+
+        // Active alphabet picker / character filter override
+        const selectedChar = this.state.nameStartsWith || this.params.char;
+        if (selectedChar) {
+            currentParams.set('char', selectedChar);
+        } else {
+            currentParams.delete('char');
+        }
+
+        // Apply updated target page
         currentParams.set('page', targetPage);
 
         router.navigate(`/library/${this.state.libraryId}?${currentParams.toString()}`);

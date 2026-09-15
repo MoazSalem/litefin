@@ -55,7 +55,7 @@ export default class PlayerMediaInfoModal extends BaseMenu {
     }
 
     /**
-     * Render the initial modal shell following Apple HIG sleek aesthetics.
+     * Render the initial modal shell.
      */
     render() {
         if (this.$el) {

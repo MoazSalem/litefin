@@ -100,6 +100,10 @@ class ScrollController {
         // ====================================================================
         this._nativeScrollActive = false;
         this._nativeScrollTimeout = null;
+        // Track the current target coordinate of any active native smooth scroll.
+        // Prevents re-invoking container.scrollTo({ behavior: 'smooth' }) with the
+        // same target coordinate mid-scroll, which would retrigger the animation.
+        this._nativeTargetScroll = null;
 
         // PERFORMANCE: offsetTop cache to prevent DOM reflows on every keypress.
         //
@@ -121,7 +125,7 @@ class ScrollController {
     }
 
     /**
-     * Check if there are active scroll animations in progress
+     * Check if there are active scroll animations in progress across all axes.
      * @returns {boolean}
      */
     get isAnimating() {
@@ -130,6 +134,16 @@ class ScrollController {
             this._horizontalScrollAnimationId !== null ||
             this._nativeScrollActive === true
         );
+    }
+
+    /**
+     * Check specifically if a vertical scroll animation is in flight (RAF or native).
+     * Used by FocusManager to detect rapid keypresses arriving before the previous
+     * vertical animation has settled, enabling instant snap without animation queuing.
+     * @returns {boolean}
+     */
+    get isVerticalAnimating() {
+        return this._verticalScrollAnimationId !== null || this._nativeScrollActive === true;
     }
 
     /**
@@ -179,6 +193,16 @@ class ScrollController {
         // one layout pass to satisfy all the offsetTop queries.
         for (let i = 0; i < elements.length; i++) {
             const el = elements[i];
+
+            // -----------------------------------------------------------------
+            // ROW ISOLATION GUARD: Static media rows only
+            // -----------------------------------------------------------------
+            // Dynamic grid cards, list items, or elements preceded by dynamic
+            // spacers (such as #grid-top-spacer in LibraryPage) change their effective
+            // offset when rows are prepended or evicted. Caching volatile cards
+            // poisons the offset map with stale values that corrupt scroll targeting.
+            // -----------------------------------------------------------------
+            if (!el.classList.contains('media-row')) continue;
 
             // Skip if already cached (can happen on append/pagination)
             if (this._offsetCache.has(el)) continue;
@@ -327,16 +351,57 @@ class ScrollController {
         // Resolve current coordinates through our unified scroll reader.
         const currentScroll = isVertical ? this.getVerticalScroll(container) : container.scrollLeft;
 
+        // ----------------------------------------------------------------
+        // DYNAMIC VELOCITY ADAPTATION 
+        // ----------------------------------------------------------------
+        // Standard row-to-row transitions (~250px) utilize the base 200ms duration.
+        // For large vertical transitions (e.g. hero carousel ↔ first content row
+        // at 500-750px), scale duration proportionally (up to 280ms). This
+        // keeps velocity under ~2500px/s, allowing the camera to glide with
+        // organic, spring-like weight without violent frame jumps.
+        // ----------------------------------------------------------------
+        if (isVertical && durationToUse > 0) {
+            const distance = Math.abs(targetScroll - currentScroll);
+            if (distance > 400) {
+                durationToUse = Math.min(280, Math.round(durationToUse * (1 + (distance - 400) / 750)));
+            }
+        }
+
+        // STABILIZATION: Cleanly reset horizontal drift once at initialization
+        // rather than reading layout on every animation frame.
+        if (isVertical && container.scrollLeft !== 0) {
+            container.scrollLeft = 0;
+        }
+
         // Already at target or instant scroll requested — snap and bail.
         // CRITICAL: Cancel any running animation in this axis BEFORE snapping.
         if (durationToUse <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
+            // Cancel running RAF animation if active
             if (this[animIdKey]) {
                 cancelAnimationFrame(this[animIdKey]);
                 this[animIdKey] = null;
                 this[stateKey] = null;
             }
             if (isVertical) {
-                if (scrollMode === 'gpu' && track) {
+                // Clear any active native scroll silence timer and reset tracking
+                if (this._nativeScrollTimeout) {
+                    clearTimeout(this._nativeScrollTimeout);
+                    this._nativeScrollTimeout = null;
+                }
+                this._nativeScrollActive = false;
+                this._nativeTargetScroll = null;
+
+                // When native smooth scroll is active, direct scrollTop assignment does NOT
+                // abort the browser's native smooth scroll engine per CSSOM View specs.
+                // Invoking scrollTo with behavior: 'auto' cleanly terminates ongoing smooth
+                // animations, eliminating compositor hitches and fighting layout locks.
+                if (scrollMode === 'native' && typeof container.scrollTo === 'function') {
+                    try {
+                        container.scrollTo({ top: targetScroll, behavior: 'auto' });
+                    } catch (_) {
+                        container.scrollTop = targetScroll;
+                    }
+                } else if (scrollMode === 'gpu' && track) {
                     // Update transform coordinates on GPU compositor track.
                     track.style.transform = `translate3d(0px, -0px, 0px)`;
                     track.style.webkitTransform = `translate3d(0px, -0px, 0px)`;
@@ -355,70 +420,31 @@ class ScrollController {
             return;
         }
 
-        // ====================================================================
-        // NATIVE SMOOTH SCROLL ROUTINE (Let TV Handle It)
-        // ====================================================================
-        // Offloads standard vertical scrolling animations fully to the native
-        // rendering thread.
-        //
-        // COMPATIBILITY FALLBACK:
-        // Older LG WebOS models (WebOS 3.x/4.x running Chrome < 61) do not
-        // support `Element.prototype.scrollTo` on container elements.
-        //
-        // If the method is undefined or throws an error, we gracefully fall
-        // through to the custom JS RAF time-based animation loop below to
-        // keep navigation completely functional.
-        // ====================================================================
-        if (isVertical && scrollMode === 'native' && typeof container.scrollTo === 'function') {
-            if (this[animIdKey]) {
-                cancelAnimationFrame(this[animIdKey]);
-                this[animIdKey] = null;
-                this[stateKey] = null;
-            }
-
-            try {
-                // ============================================================
-                // NATIVE SCROLL ACTIVE STATE MANAGEMENT
-                // ============================================================
-                // Mark native vertical scroll active so isAnimating getter returns true.
-                // Reset any existing native scroll timeout so rapid keypresses keep
-                // isAnimating true throughout the continuous scrolling gesture.
-                // ============================================================
-                this._nativeScrollActive = true;
-                if (this._nativeScrollTimeout) {
-                    clearTimeout(this._nativeScrollTimeout);
-                }
-
-                container.scrollTo({
-                    top: targetScroll,
-                    behavior: 'smooth'
-                });
-
-                // Set a 250ms silence timer after invoking native scrollTo.
-                // Once native scroll settles, clear active state and emit scroll:finished.
-                this._nativeScrollTimeout = setTimeout(() => {
-                    this._nativeScrollActive = false;
-                    this._nativeScrollTimeout = null;
-                    this._checkScrollFinished();
-                }, 250);
-
-                // Prevent horizontal shifts on layout boundaries.
-                if (container.scrollLeft !== 0) {
-                    container.scrollLeft = 0;
-                }
-
-                return;
-            } catch (nativeError) {
-                // Clear active native scroll state on failure to avoid stale locks
-                this._nativeScrollActive = false;
-                if (this._nativeScrollTimeout) {
-                    clearTimeout(this._nativeScrollTimeout);
-                    this._nativeScrollTimeout = null;
-                }
-                // Log warning and fall through to standard JS RAF smooth scroll fallback.
-                console.warn('[ScrollController] Native smooth scrollTo failed, falling back to JS RAF:', nativeError);
-            }
-        }
+        /* ====================================================================
+         * 🎬 UNIFIED SMOOTH SCROLL ANIMATION ENGINE (JS RAF + RETARGETING)
+         * ====================================================================
+         * Web browsers (Chromium on Samsung Tizen & LG webOS, WebKit, and Gecko)
+         * implement Element.prototype.scrollTo({ behavior: 'smooth' }) with a
+         * hardcoded cubic-bezier ease-in curve that ALWAYS initializes with zero
+         * velocity. Crucially, per the W3C CSSOM View specification:
+         *
+         *   "If element has an ongoing smooth scroll, abort that smooth scroll."
+         *
+         * When a user holds UP or DOWN on a TV remote, key repeats fire every
+         * 125ms. Calling container.scrollTo({ behavior: 'smooth' }) every 125ms
+         * aborts the active scroll mid-flight after only 10-20px of travel, and
+         * restarts a brand-new ease-in curve with v0 = 0.
+         *
+         * This traps the viewport in an endless ease-in stutter loop on the exact
+         * same item, while D-pad focus advances far down the page.
+         *
+         * Both 'current' and 'native' modes therefore leverage Litefin's unified,
+         * hardware-accelerated JS RAF animation loop below. Using an easeOutQuad
+         * curve (maximum velocity at t=0, smoothly decelerating) with dynamic
+         * retargeting and duration scaling guarantees:
+         *   1. Velocity is preserved across continuous held moves (no dead stops).
+         *   2. The camera effortlessly glides with the moving focus at full speed.
+         * ==================================================================== */
 
         // ----------------------------------------------------------------
         // RETARGETING LOGIC (The "Zeno's Paradox" Fix)
@@ -431,15 +457,27 @@ class ScrollController {
                 return;
             } else {
                 // The target HAS changed (e.g. the user pressed Down while mid-scroll).
-                // Scale the duration proportionally to the *remaining* distance.
+                // Scale duration proportionally to remaining distance, while enforcing
+                // a fluid minimum duration floor to prevent premature fast-scroll rush.
                 const remainingDistance = Math.abs(targetScroll - currentScroll);
                 const originalDistance = Math.abs(targetScroll - this[stateKey].startScroll) || 1;
                 const scaledDuration = Math.round(duration * Math.min(remainingDistance / originalDistance, 1));
 
+                // ------------------------------------------------------------
+                // MOMENTUM CONTINUITY FLOOR
+                // ------------------------------------------------------------
+                // When pressing keys briskly during normal navigation, retargeting
+                // must NOT abruptly collapse duration down to 50ms (which feels
+                // like an uncontrollable fast-scroll hair-trigger).
+                // Clamping the minimum retarget duration to 75% of base duration
+                // (~150ms for 200ms vertical scrolls) guarantees that deliberate
+                // ------------------------------------------------------------
+                const minDurationFloor = Math.round(duration * 0.75);
+
                 this[stateKey].startScroll = currentScroll;
                 this[stateKey].target = targetScroll;
                 this[stateKey].startTime = null; // Will reset on next RAF
-                this[stateKey].duration = Math.max(50, scaledDuration); // Enforce 50ms minimum
+                this[stateKey].duration = Math.max(minDurationFloor, scaledDuration);
                 return;
             }
         }
@@ -447,6 +485,7 @@ class ScrollController {
         // Create new animation state
         this[stateKey] = {
             container,
+            track,
             startScroll: currentScroll,
             target: targetScroll,
             startTime: null, // Initialized in first RAF frame
@@ -491,35 +530,37 @@ class ScrollController {
             const distance = state.target - state.startScroll;
             const newScroll = state.startScroll + distance * eased;
 
-            // Apply scroll position (Layout-triggering, but unavoidable without transform scroll)
+            // Apply scroll position
             if (isVertical) {
                 if (scrollMode === 'gpu') {
-                    // Update GPU transform coordinates
-                    const currentTrack = container.querySelector('.vertical-scroll-track');
+                    // Update GPU transform coordinates using pre-cached track element
+                    const currentTrack = state.track;
                     if (currentTrack) {
                         currentTrack.style.transform = `translate3d(0px, -${newScroll}px, 0px)`;
                         currentTrack.style.webkitTransform = `translate3d(0px, -${newScroll}px, 0px)`;
                     }
                     container.scrollTop = 0;
                 } else {
+                    // Write vertical scroll position directly to container.
+                    // CRITICAL PERFORMANCE RULE: Do NOT read scrollLeft or other layout
+                    // metrics here! Setting scrollTop dirties the layout tree. Reading
+                    // scrollLeft immediately afterwards forces a full synchronous reflow
+                    // on every 16ms animation frame, reducing complex pages like HomePage
+                    // (with 1500+ DOM nodes) down to a laggy 3 FPS.
                     state.container.scrollTop = newScroll;
-                }
-                // STABILIZATION: Prevent horizontal drift on vertical containers.
-                if (state.container.scrollLeft !== 0) {
-                    state.container.scrollLeft = 0;
                 }
             } else {
                 state.container.scrollLeft = newScroll;
             }
 
             if (progress < 1) {
-                // Continue animation
+                // Continue animation loop on the next frame
                 this[animIdKey] = requestAnimationFrame(animate);
             } else {
-                // Snap to exact target and clean up
+                // Snap to exact target and clean up animation state
                 if (isVertical) {
                     if (scrollMode === 'gpu') {
-                        const currentTrack = container.querySelector('.vertical-scroll-track');
+                        const currentTrack = state.track;
                         if (currentTrack) {
                             currentTrack.style.transform = `translate3d(0px, -${state.target}px, 0px)`;
                             currentTrack.style.webkitTransform = `translate3d(0px, -${state.target}px, 0px)`;
@@ -527,6 +568,11 @@ class ScrollController {
                         container.scrollTop = 0;
                     } else {
                         state.container.scrollTop = state.target;
+                    }
+                    // STABILIZATION: Settle any horizontal drift once at animation completion,
+                    // avoiding per-frame layout recalculations during motion.
+                    if (state.container.scrollLeft !== 0) {
+                        state.container.scrollLeft = 0;
                     }
                 } else {
                     state.container.scrollLeft = state.target;
@@ -560,6 +606,7 @@ class ScrollController {
                 this._nativeScrollTimeout = null;
             }
             this._nativeScrollActive = false;
+            this._nativeTargetScroll = null;
         } else {
             if (this._horizontalScrollAnimationId) {
                 cancelAnimationFrame(this._horizontalScrollAnimationId);
@@ -581,9 +628,9 @@ class ScrollController {
     getScrollContainer(element) {
         if (!element) return null;
 
-        // Check for specific scrollable containers used in modals/filters
+        // Check for specific scrollable containers used in modals/filters/login grid
         const container = element.closest(
-            '.modal-options, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper'
+            '.users-grid, .modal-options, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper'
         );
 
         return container;
@@ -637,7 +684,20 @@ class ScrollController {
         // ----------------------------------------------------------------
         if (element.id === 'hero-carousel-container' || element.closest('#hero-carousel-container')) {
             if (pageContent) {
-                this.smoothScrollTo(pageContent, 0, options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL);
+                // ============================================================
+                // HERO FAST PATH SNAP CHECK
+                // ============================================================
+                // When moving up from rows to the hero carousel across large
+                // distances, honor pref:snapLargeScrolls if enabled so users
+                // who prefer instant jumps don't wait for animations.
+                // ============================================================
+                const currentScroll = this.getVerticalScroll(pageContent);
+                const viewHeight = pageContent.clientHeight;
+                const scrollDelta = Math.abs(currentScroll);
+                const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
+                const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
+
+                this.smoothScrollTo(pageContent, 0, options.instantScroll || forceInstant ? 0 : SCROLL_DURATION_VERTICAL);
             }
             return;
         }
@@ -662,10 +722,17 @@ class ScrollController {
         const getCumulativeOffsetTop = (el, relativeTo) => {
             if (!el || !relativeTo) return 0;
 
-            // Check cache first — avoid reflow if already computed for this element
-            const cached = this._offsetCache.get(el);
-            if (cached !== undefined && cached.container === relativeTo) {
-                return cached.value;
+            // -------------------------------------------------------------
+            // CACHE READ GUARD: Check cache ONLY for stable .media-row nodes
+            // -------------------------------------------------------------
+            // Dynamic cards in grids/lists must never read from the cache because
+            // their offsets are dependent on virtual spacers and layout shifting.
+            // -------------------------------------------------------------
+            if (el.classList.contains('media-row')) {
+                const cached = this._offsetCache.get(el);
+                if (cached !== undefined && cached.container === relativeTo) {
+                    return cached.value;
+                }
             }
 
             let top = 0;
@@ -677,7 +744,15 @@ class ScrollController {
             }
 
             if (current === relativeTo) {
-                this._offsetCache.set(el, { container: relativeTo, value: top });
+                // PERFORMANCE: Only cache positions of static full-width .media-row elements.
+                // Media rows never shift dynamically within .page-content.
+                // Dynamic grid cards, list items, or elements preceded by dynamic
+                // spacers (such as #grid-top-spacer in LibraryPage) change their effective
+                // offset when rows are prepended or evicted; caching them leads to
+                // stale scroll targets that throw the focused element off-screen.
+                if (el.classList.contains('media-row')) {
+                    this._offsetCache.set(el, { container: relativeTo, value: top });
+                }
             } else {
                 // Fallback: the chain broke early (e.g. CSS transform on an ancestor
                 // or a fixed-position portal). Use getBoundingClientRect as a last resort.
@@ -712,7 +787,16 @@ class ScrollController {
 
             const targetScroll = Math.max(0, cardTop - 180);
 
-            if (Math.abs(targetScroll - currentScroll) > 5) {
+            // Active in-flight target awareness: compare against destination target
+            // so mid-flight keypresses targeting the same alignment don't re-trigger
+            const activeTarget =
+                this._nativeScrollActive && this._nativeTargetScroll !== null
+                    ? this._nativeTargetScroll
+                    : this._verticalScrollState
+                        ? this._verticalScrollState.target
+                        : currentScroll;
+
+            if (Math.abs(targetScroll - activeTarget) > 5) {
                 this.smoothScrollTo(
                     pageContent,
                     targetScroll,
@@ -737,12 +821,16 @@ class ScrollController {
             if (isHero) {
                 // ============================================================
                 // Force scroll to absolute top for hero/title split sections.
-                // We call smoothScrollTo(0) directly without checking if scroll is
-                // already > 0. This ensures that any active scroll animation in
-                // progress (e.g. from pressing down to rows below) gets cancelled/
-                // retargeted back to 0 immediately upon focus returning up.
+                // Forward instantScroll and honor pref:snapLargeScrolls so rapid
+                // navigation up to hero snaps cleanly without forcing animation.
                 // ============================================================
-                this.smoothScrollTo(pageContent, 0);
+                const currentScroll = this.getVerticalScroll(pageContent);
+                const viewHeight = pageContent.clientHeight;
+                const scrollDelta = Math.abs(currentScroll);
+                const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
+                const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
+
+                this.smoothScrollTo(pageContent, 0, options.instantScroll || forceInstant ? 0 : SCROLL_DURATION_VERTICAL);
                 // Disable further row-based alignment logic and generic vertical scroll
                 useRowScroll = false;
                 activePageContent = null;
@@ -809,7 +897,28 @@ class ScrollController {
             // This prevents micro-jitter on horizontal nav within the same row,
             // and avoids unnecessary scrolls between tightly packed items
             // (e.g. genre header → genre grid within the same .media-row).
-            const scrollDelta = Math.abs(targetScroll - currentScroll);
+            //
+            // ================================================================
+            // RETARGETING & IN-FLIGHT ANIMATION AWARENESS
+            // ================================================================
+            // When an animation is actively in flight (native or JS RAF), comparing
+            // targetScroll against the volatile mid-flight currentScroll produces false
+            // deltas that retrigger the animation from the mid-flight position with
+            // zero starting velocity, causing visual jumping and stutter.
+            //
+            // By comparing against the active in-flight destination target if present,
+            // subsequent keypresses to items on the same row or within the same target
+            // boundary allow the existing smooth transition to complete uninterrupted.
+            // New targets across rows cleanly retarget without hitching.
+            // ================================================================
+            const activeTarget =
+                this._nativeScrollActive && this._nativeTargetScroll !== null
+                    ? this._nativeTargetScroll
+                    : this._verticalScrollState
+                        ? this._verticalScrollState.target
+                        : currentScroll;
+
+            const scrollDelta = Math.abs(targetScroll - activeTarget);
             if (scrollDelta > SCROLL_ALIGN_THRESHOLD) {
                 // PERFORMANCE: For scroll distances exceeding ~45% of the viewport
                 // (e.g. hero carousel ↔ first content row), snap instantly. The
@@ -1007,6 +1116,24 @@ class ScrollController {
                 const viewHeight = activePageContent.clientHeight;
                 const currentScroll = this.getVerticalScroll(activePageContent);
 
+                // ================================================================
+                // RETARGETING & IN-FLIGHT ANIMATION AWARENESS
+                // ================================================================
+                // When an animation is actively in flight (native or JS RAF), comparing
+                // target coordinates against the volatile mid-flight currentScroll produces
+                // false deltas that retrigger animations from mid-flight with zero velocity,
+                // causing visual stutter and leaving the focused element off-screen.
+                //
+                // By evaluating visibility against the active destination target, subsequent
+                // keypresses smoothly extend or update the scroll path without hitching.
+                // ================================================================
+                const activeTarget =
+                    this._nativeScrollActive && this._nativeTargetScroll !== null
+                        ? this._nativeTargetScroll
+                        : this._verticalScrollState
+                            ? this._verticalScrollState.target
+                            : currentScroll;
+
                 // ============================================================
                 // PERF: CACHE ELEMENT HEIGHT PER SECTION
                 // ============================================================
@@ -1032,7 +1159,7 @@ class ScrollController {
                 const topMargin = GENERIC_SCROLL_MARGIN;
                 let bottomMargin = GENERIC_SCROLL_MARGIN;
 
-                let finalScrollTop = currentScroll;
+                let finalScrollTop = activeTarget;
 
                 // Apply custom scroll offset from section config
                 const customOffset = config?.scrollOffsetTop || 0;
@@ -1048,22 +1175,17 @@ class ScrollController {
                     bottomMargin = Math.min(bottomMargin, availableSpace / 2);
                 }
 
-                // Element cut off at top
-                if (elementTop < currentScroll + effectiveTopMargin) {
+                // Element cut off at top relative to destination scroll target
+                if (elementTop < activeTarget + effectiveTopMargin) {
                     finalScrollTop = Math.max(0, elementTop - effectiveTopMargin);
                 }
-                // Element cut off at bottom
-                else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
-                    // Small elements: center them nicely. Extremely huge elements: align to bottom edge.
-                    if (elementHeight < viewHeight * SMALL_ELEMENT_FRACTION) {
-                        finalScrollTop = elementTop - viewHeight / 2 + elementHeight / 2;
-                    } else {
-                        finalScrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
-                    }
+                // Element cut off at bottom relative to destination scroll target
+                else if (elementTop + elementHeight > activeTarget + viewHeight - bottomMargin) {
+                    finalScrollTop = Math.max(0, elementTop + elementHeight - viewHeight + bottomMargin);
                 }
 
                 // Apply vertical scroll with smooth easing
-                const scrollDelta = Math.abs(finalScrollTop - currentScroll);
+                const scrollDelta = Math.abs(finalScrollTop - activeTarget);
                 if (scrollDelta > SCROLL_SNAP_THRESHOLD) {
                     // PERFORMANCE: Large vertical jumps (e.g. returning to the hero
                     // carousel from a scrolled position) snap instantly to avoid

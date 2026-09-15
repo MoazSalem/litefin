@@ -1675,6 +1675,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideProgressBar">${i18n.t('HideProgressBar') || 'Hide Progress Bar'}</span>
+                        <span class="setting-description" data-i18n="HideProgressBarDescription">${i18n.t('HideProgressBarDescription') || 'Hide playback progress indicators on media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideProgressBar') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-progress-bar" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowMediaSourceCounts">${i18n.t('ShowMediaSourceCounts') || 'Show Version Counts'}</span>
                         <span class="setting-description" data-i18n="ShowMediaSourceCountsDescription">${i18n.t('ShowMediaSourceCountsDescription') || 'Display a badge showing the number of available video versions on media cards.'}</span>
                     </div>
@@ -2886,6 +2899,26 @@ class SettingsPage extends Page {
                         <button class="toggle-switch ${PlayerSettings.get('awaitTracksBeforePlayback') ? 'active' : ''}" 
                                 id="toggle-await-tracks-before-playback" 
                                 data-setting="awaitTracksBeforePlayback"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     PREFER DIRECT PLAY AUDIO TRACK (AUTO-SELECTION)
+                     Automatically pick an audio track that does not require
+                     transcoding if the container's default track (e.g. TrueHD or DTS)
+                     is unsupported by hardware.
+                     ============================================================ -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferDirectPlayAudio">${i18n.t('PreferDirectPlayAudio') || 'Prefer Direct Play Audio'}</span>
+                        <span class="setting-description" data-i18n="PreferDirectPlayAudioDescription">${i18n.t('PreferDirectPlayAudioDescription') || 'Automatically select an audio track that plays directly without transcoding when the default track (e.g. TrueHD or DTS) is unsupported by hardware.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('preferDirectPlayAudio') ? 'active' : ''}" 
+                                id="toggle-prefer-direct-play-audio" 
+                                data-setting="preferDirectPlayAudio"
                                 tabindex="0">
                         </button>
                     </div>
@@ -4695,6 +4728,19 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="toggle-switch ${layoutManager.getOnlyBlurHashBackdrop() ? 'active' : ''}" 
                                 id="toggle-only-blurhash-backdrop" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLightMusicPlayer">${i18n.t('LabelLightMusicPlayer') || 'Light Music Player'}</span>
+                        <span class="setting-description" data-i18n="LightMusicPlayerDescription">${i18n.t('LightMusicPlayerDescription') || 'Removes background blur and drop shadows from the music player to significantly improve performance on older TVs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getLightMusicPlayer() ? 'active' : ''}" 
+                                id="toggle-light-music-player" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -6594,6 +6640,31 @@ class SettingsPage extends Page {
             });
         }
 
+        // ==========================================
+        // TOGGLE HIDE PROGRESS BAR
+        // ==========================================
+        //
+        // Controls visibility of media card playback progress indicators.
+        const hideProgressBarBtn = this.$('#toggle-hide-progress-bar');
+
+        // Verify button exists in the active view before attaching handler
+        if (hideProgressBarBtn) {
+            hideProgressBarBtn.addEventListener('click', () => {
+                // Retrieve current setting (defaults to false / visible)
+                const isHidden = storage.getItem('pref:hideProgressBar') === 'true';
+                const newValue = !isHidden;
+
+                // Persist new setting for CardRenderer to consult
+                storage.setItem('pref:hideProgressBar', newValue);
+
+                // Update active class for sleek switch animation
+                hideProgressBarBtn.classList.toggle('active', newValue);
+
+                // Log state transition
+                log.info(`Hide Progress Bar set to: ${newValue}`);
+            });
+        }
+
         // Toggle Show Media Source Counts (Versions)
         const showMediaSourceCountsBtn = this.$('#toggle-show-media-source-counts');
         if (showMediaSourceCountsBtn) {
@@ -6922,6 +6993,16 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Light Music Player
+        const lightMusicPlayerBtn = this.$('#toggle-light-music-player');
+        if (lightMusicPlayerBtn) {
+            lightMusicPlayerBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getLightMusicPlayer();
+                layoutManager.setLightMusicPlayer(newValue);
+                lightMusicPlayerBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Disable Focus Restoration
         const focusRestoreBtn = this.$('#toggle-disable-focus-restore');
         if (focusRestoreBtn) {
@@ -6966,7 +7047,7 @@ class SettingsPage extends Page {
                 const isHidden = storage.getItem('pref:hideSimilarSection') === 'true';
                 const newValue = !isHidden;
 
-                // Save setting locally and toggle the active HIG switch class
+                // Save setting locally and toggle the active switch class
                 storage.setItem('pref:hideSimilarSection', newValue.toString());
                 hideSimilarBtn.classList.toggle('active', newValue);
                 log.info(`Hide Similar Recommendations set to: ${newValue}`);
@@ -7568,6 +7649,7 @@ class SettingsPage extends Page {
         // Generic handler for all toggle-switch buttons with data-setting attribute
         // Each toggle reads/writes to PlayerSettings and invalidates the cached profile
         const profileToggles = [
+            'toggle-prefer-direct-play-audio',
             'toggle-enable-flac-in-video',
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
@@ -8511,7 +8593,7 @@ class SettingsPage extends Page {
             </div>
         `;
 
-        // Reveal modal overlay with smooth HIG backdrop transition
+        // Reveal modal overlay with smooth backdrop transition
         overlay.classList.add('visible');
         overlay.setAttribute('aria-hidden', 'false');
 
@@ -9253,12 +9335,12 @@ class SettingsPage extends Page {
                                 focusManager.invalidateCache('settings-content');
                             }
 
-                            // FONT LOADING: Trigger download if needed
+                            // FONT LOADING: Trigger download if needed (forcing reload for explicit user change)
                             if (
                                 (settingConfig.key === 'subtitleFont' || settingConfig.key === 'subtitleFontAss') &&
                                 newValue
                             ) {
-                                FontLoader.loadFont(newValue).then((loaded) => {
+                                FontLoader.loadFont(newValue, true).then((loaded) => {
                                     if (loaded) {
                                         log.debug(`Font loaded: ${newValue}`);
                                     } else {
