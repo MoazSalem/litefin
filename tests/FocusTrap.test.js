@@ -356,4 +356,24 @@ test('HomePage onBack returns true and emits app:exitRequested', () => {
     );
 });
 
+test('pushTrap respects defaultFocusSelector to focus Exit button by default', () => {
+    const { fm, document } = setupTestEnvironment();
+
+    const modalContainer = createMockElement('div', 'exit-dialog-actions');
+    const btnCancel = createMockElement('button', 'exit-dialog-no');
+    const btnYes = createMockElement('button', 'exit-dialog-yes');
+    modalContainer.appendChild(btnCancel);
+    modalContainer.appendChild(btnYes);
+    document.body.appendChild(modalContainer);
+
+    fm.pushTrap(modalContainer, {
+        orientation: 'horizontal',
+        defaultFocusSelector: '#exit-dialog-yes'
+    });
+
+    assert.strictEqual(fm.isTrapped(), true);
+    assert.strictEqual(fm.getFocused(), btnYes, 'Initial focus should land on Exit/Yes button');
+});
+
+
 

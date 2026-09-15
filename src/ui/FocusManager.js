@@ -1246,7 +1246,10 @@ class FocusManager {
         // Ensure an element inside the trap receives focus immediately
         const trapFocusables = this._getFocusables('__trap__', true);
         if (trapFocusables.length > 0 && (!this._focusedElement || !container.contains(this._focusedElement))) {
-            this.focusElement(trapFocusables[0]);
+            const defaultEl = options.defaultFocusSelector
+                ? trapFocusables.find((el) => typeof el.matches === 'function' && el.matches(options.defaultFocusSelector))
+                : null;
+            this.focusElement(defaultEl || trapFocusables[0]);
         }
     }
 
