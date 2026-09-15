@@ -549,7 +549,12 @@ class FocusManager {
 
         // Return cached if available and not forcing refresh
         if (!forceRefresh && this._focusablesCache.has(sectionName)) {
-            return this._focusablesCache.get(sectionName);
+            const cached = this._focusablesCache.get(sectionName);
+            // Verify cached elements are still connected to the DOM tree; discard if stale
+            if (cached.length === 0 || (cached[0] && document.contains(cached[0]))) {
+                return cached;
+            }
+            this._focusablesCache.delete(sectionName);
         }
 
         // Query focusables and filter out hidden elements.
@@ -561,6 +566,9 @@ class FocusManager {
         const focusables = [];
         for (let i = 0; i < allElements.length; i++) {
             const el = allElements[i];
+
+            // Ensure the element is actually connected to the active DOM tree
+            if (!document.contains(el)) continue;
 
             // Fast, non-reflowing checks to determine visibility.
             // NOTE: We assume elements are visible rather than invisible natively,
@@ -608,7 +616,21 @@ class FocusManager {
      * @param {string} direction
      */
     _move(direction) {
-        if (!this._activeSection) return;
+        // Self-healing: if activeSection is missing or unregistered, attempt to recover
+        // by finding the first registered section with valid focusable elements.
+        if (!this._activeSection || !this._sections.has(this._activeSection)) {
+            const candidateSections = Array.from(this._sections.keys()).filter(
+                (s) => s !== '__trap__' && !s.startsWith('__')
+            );
+            for (const candidate of candidateSections) {
+                const available = this._getFocusables(candidate, true);
+                if (available.length > 0) {
+                    this.setActiveSection(candidate, true);
+                    return;
+                }
+            }
+            return;
+        }
 
         // log.debug(`_move(${direction}) Active: ${this._activeSection}`); // DEBUG LOG
 
@@ -630,8 +652,8 @@ class FocusManager {
             return;
         }
 
-        // If nothing focused, focus first available
-        if (!this._focusedElement || !config.container.contains(this._focusedElement)) {
+        // If nothing focused, element is detached, or element is outside container, focus first available
+        if (!this._focusedElement || !document.contains(this._focusedElement) || !config.container.contains(this._focusedElement)) {
             this.focusElement(focusables[0]);
             return;
         }
@@ -1039,10 +1061,21 @@ class FocusManager {
             return;
         }
 
-        const focusables = this._getFocusables(sectionName);
+        let focusables = this._getFocusables(sectionName);
         const memory = this._focusMemory.get(sectionName);
 
         if (!focusables.length) {
+            // Virtualized row support: if no DOM nodes are currently rendered in this section,
+            // check if the section provides onRestoreIndex to mount and focus the primary item.
+            if (typeof config.onRestoreIndex === 'function') {
+                const targetIndex = memory && memory.virtualIndex !== undefined ? memory.virtualIndex : 0;
+                const node = config.onRestoreIndex(targetIndex);
+                if (node && document.contains(node)) {
+                    this.focusElement(node, { instantScroll: !!options.instantScroll });
+                    return;
+                }
+            }
+
             if (options.direction) {
                 // If we entered this empty section via a directional move, continue propagating
                 this._leaveSection(options.direction);
@@ -1236,17 +1269,30 @@ class FocusManager {
         }
 
         // Fallback: If no element is focused after releasing the trap (e.g. if the trap was entered
-        // while the page was still loading and had no focused element yet), restore focus
-        // to the active section or the first available registered section on the page.
-        if (!this._focusedElement) {
+        // while the page was still loading, or prev.element was recycled or unmounted), restore focus.
+        if (!this._focusedElement || !document.contains(this._focusedElement)) {
+            let restored = false;
+
+            // 1. Try restoring focus to the active section if valid
             if (this._activeSection && this._sections.has(this._activeSection)) {
                 this._restoreFocus(this._activeSection);
-            } else {
-                const fallbackSection = Array.from(this._sections.keys()).find(
+                if (this._focusedElement && document.contains(this._focusedElement)) {
+                    restored = true;
+                }
+            }
+
+            // 2. If active section had no focusables or failed, search registered sections for one with items
+            if (!restored) {
+                const registeredSections = Array.from(this._sections.keys()).filter(
                     (s) => s !== '__trap__' && !s.startsWith('__')
                 );
-                if (fallbackSection) {
-                    this.setActiveSection(fallbackSection, true);
+                for (const sec of registeredSections) {
+                    const focusables = this._getFocusables(sec, true);
+                    if (focusables.length > 0) {
+                        this.setActiveSection(sec, true);
+                        restored = true;
+                        break;
+                    }
                 }
             }
         }

@@ -80,12 +80,36 @@ class ExitDialog {
         if (!this.isVisible) return;
         this.isVisible = false;
 
-        this.overlay.classList.remove('visible');
+        // Immediately disarm and blur all modal action buttons.
+        // During the 300ms CSS fadeout, the overlay remains in the DOM;
+        // if buttons retain tabindex="0", native browser focus or synthetic
+        // focusin events can latch onto them right before DOM removal,
+        // which would leave FocusManager stranded on a detached element.
+        if (this.overlay) {
+            this.overlay.classList.remove('visible');
+            this.overlay.style.pointerEvents = 'none';
+            this.overlay.setAttribute('aria-hidden', 'true');
+
+            // Find all buttons or focusables inside the modal
+            const actionButtons = this.overlay.querySelectorAll('button, [tabindex]');
+            actionButtons.forEach((btn) => {
+                btn.setAttribute('tabindex', '-1');
+                btn.setAttribute('disabled', 'true');
+                if (typeof btn.blur === 'function') {
+                    btn.blur();
+                }
+            });
+        }
+
+        // Clean up DOM node after transition finishes
+        const closingOverlay = this.overlay;
         setTimeout(() => {
-            if (this.overlay && this.overlay.parentNode) {
-                this.overlay.parentNode.removeChild(this.overlay);
+            if (closingOverlay && closingOverlay.parentNode) {
+                closingOverlay.parentNode.removeChild(closingOverlay);
             }
-            this.overlay = null;
+            if (this.overlay === closingOverlay) {
+                this.overlay = null;
+            }
         }, 300);
 
         /*

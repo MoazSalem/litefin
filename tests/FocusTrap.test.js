@@ -56,6 +56,12 @@ function createMockElement(tag = 'div', id = '', classes = []) {
             child.parentNode = el;
             return child;
         },
+        removeChild: (child) => {
+            const idx = children.indexOf(child);
+            if (idx !== -1) children.splice(idx, 1);
+            child.parentNode = null;
+            return child;
+        },
         contains: (target) => {
             if (target === el) return true;
             return children.some((child) => child === target || (child.contains && child.contains(target)));
@@ -110,9 +116,11 @@ function setupTestEnvironment() {
         }
     };
 
+    const mockBody = createMockElement('body');
     const mockDoc = {
         dir: 'ltr',
-        contains: () => true,
+        body: mockBody,
+        contains: (target) => (target ? mockBody.contains(target) : false),
         addEventListener: () => {},
         removeEventListener: () => {},
         documentElement: { dir: 'ltr' }
@@ -158,11 +166,11 @@ function setupTestEnvironment() {
     `;
 
     const fm = vm.runInContext(script, context);
-    return { fm, emittedEvents };
+    return { fm, emittedEvents, document: mockDoc };
 }
 
 test('Focus trap blocks external setActiveSection and focusElement calls', () => {
-    const { fm, emittedEvents } = setupTestEnvironment();
+    const { fm, emittedEvents, document } = setupTestEnvironment();
 
     // 1. Setup normal background page section (e.g. HomePage row)
     const homeRowContainer = createMockElement('div', 'home-row-0-items');
@@ -170,6 +178,7 @@ test('Focus trap blocks external setActiveSection and focusElement calls', () =>
     const homeCard2 = createMockElement('div', 'card-2', ['media-card']);
     homeRowContainer.appendChild(homeCard1);
     homeRowContainer.appendChild(homeCard2);
+    document.body.appendChild(homeRowContainer);
 
     fm.register('home-row-0', homeRowContainer, {
         selector: '.media-card',
@@ -190,6 +199,7 @@ test('Focus trap blocks external setActiveSection and focusElement calls', () =>
     const btnYes = createMockElement('button', 'exit-dialog-yes');
     modalContainer.appendChild(btnCancel);
     modalContainer.appendChild(btnYes);
+    document.body.appendChild(modalContainer);
 
     fm.pushTrap(modalContainer, {
         orientation: 'horizontal',
@@ -238,3 +248,112 @@ test('Focus trap blocks external setActiveSection and focusElement calls', () =>
     fm.focusElement(homeCard2);
     assert.strictEqual(fm.getFocused(), homeCard2, 'After popTrap, external elements can be focused');
 });
+
+test('popTrap falls back cleanly when previous element is detached or recycled', () => {
+    const { fm, document } = setupTestEnvironment();
+
+    const sidebarContainer = createMockElement('div', 'sidebar');
+    const sidebarHome = createMockElement('button', 'sidebar-home');
+    sidebarContainer.appendChild(sidebarHome);
+    document.body.appendChild(sidebarContainer);
+    fm.register('sidebar', sidebarContainer, { orientation: 'vertical' });
+
+    const rowContainer = createMockElement('div', 'home-row-0');
+    const card1 = createMockElement('div', 'card-1', ['media-card']);
+    const card2 = createMockElement('div', 'card-2', ['media-card']);
+    rowContainer.appendChild(card1);
+    rowContainer.appendChild(card2);
+    document.body.appendChild(rowContainer);
+    fm.register('home-row-0', rowContainer, { orientation: 'horizontal' });
+
+    // Focus card1
+    fm.setActiveSection('home-row-0');
+    fm.focusElement(card1);
+    assert.strictEqual(fm.getFocused(), card1);
+
+    // Push trap
+    const modalContainer = createMockElement('div', 'exit-dialog');
+    const btnCancel = createMockElement('button', 'btn-cancel');
+    modalContainer.appendChild(btnCancel);
+    document.body.appendChild(modalContainer);
+
+    fm.pushTrap(modalContainer);
+    assert.strictEqual(fm.isTrapped(), true);
+    assert.strictEqual(fm.getFocused(), btnCancel);
+
+    // Simulate card1 being detached / recycled by virtualization while dialog was visible
+    rowContainer.removeChild(card1);
+
+    // Pop trap
+    fm.popTrap();
+
+    // Verify trap was popped and focus was safely restored (did not throw or stay on detached element)
+    assert.strictEqual(fm.isTrapped(), false);
+    assert.ok(fm.getFocused() !== null, 'An element must be focused after popping trap');
+    assert.strictEqual(document.contains(fm.getFocused()), true, 'Focused element must be in the document');
+});
+
+test('popTrap falls back to another registered section if active section has no items', () => {
+    const { fm, document } = setupTestEnvironment();
+
+    const sidebarContainer = createMockElement('div', 'sidebar');
+    const sidebarHome = createMockElement('button', 'sidebar-home');
+    sidebarContainer.appendChild(sidebarHome);
+    document.body.appendChild(sidebarContainer);
+    fm.register('sidebar', sidebarContainer, { orientation: 'vertical' });
+
+    // Register an empty row
+    const emptyRowContainer = createMockElement('div', 'empty-row');
+    document.body.appendChild(emptyRowContainer);
+    fm.register('empty-row', emptyRowContainer, { orientation: 'horizontal' });
+
+    fm.setActiveSection('empty-row', false);
+
+    // Push trap
+    const modalContainer = createMockElement('div', 'exit-dialog');
+    const btnCancel = createMockElement('button', 'btn-cancel');
+    modalContainer.appendChild(btnCancel);
+    document.body.appendChild(modalContainer);
+
+    fm.pushTrap(modalContainer);
+    assert.strictEqual(fm.isTrapped(), true);
+
+    // Pop trap -> empty-row has no items, should fallback to sidebar
+    fm.popTrap();
+
+    assert.strictEqual(fm.isTrapped(), false);
+    assert.strictEqual(fm.getActiveSection(), 'sidebar');
+    assert.strictEqual(fm.getFocused(), sidebarHome);
+});
+
+test('_move self-heals when activeSection is missing or invalid', () => {
+    const { fm, document } = setupTestEnvironment();
+
+    const sidebarContainer = createMockElement('div', 'sidebar');
+    const sidebarHome = createMockElement('button', 'sidebar-home');
+    sidebarContainer.appendChild(sidebarHome);
+    document.body.appendChild(sidebarContainer);
+    fm.register('sidebar', sidebarContainer, { orientation: 'vertical' });
+
+    // Forcibly clear activeSection and focusedElement to simulate corrupted state
+    fm._activeSection = null;
+    fm._focusedElement = null;
+
+    // Trigger directional move
+    fm._move('down');
+
+    // Should self-heal by finding sidebar and focusing sidebarHome
+    assert.strictEqual(fm.getActiveSection(), 'sidebar');
+    assert.strictEqual(fm.getFocused(), sidebarHome);
+});
+
+test('HomePage onBack returns true and emits app:exitRequested', () => {
+    const homePageSource = readFileSync(new URL('../src/pages/HomePage.js', import.meta.url), 'utf8');
+    assert.match(
+        homePageSource,
+        /onBack\(\)\s*\{[^}]*eventBus\.emit\(['"]app:exitRequested['"]\)[^}]*return true;/,
+        'HomePage.onBack() must emit app:exitRequested and return true to prevent App.js router.back fallback'
+    );
+});
+
+

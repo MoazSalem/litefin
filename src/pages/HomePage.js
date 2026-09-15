@@ -216,10 +216,19 @@ class HomePage extends Page {
          */
         this._onTrapPopped = () => {
             if (!this._isMounted) return;
+
+            // First priority: run deferred focus restoration if it was blocked during page load
             if (typeof this._pendingFocusRestore === 'function') {
                 log.info('Focus trap popped - executing deferred homepage focus restoration');
                 this._pendingFocusRestore();
                 this._pendingFocusRestore = null;
+            } else {
+                // Safety net: check if focus was stranded or lost when the modal was popped
+                const currentFocused = focusManager.getFocused();
+                if (!currentFocused || !document.contains(currentFocused)) {
+                    log.warn('Focus lost after modal dismissal, executing homepage focus fallback');
+                    this._restoreHomepageFocusFallback();
+                }
             }
         };
         eventBus.on('focus:trapPopped', this._onTrapPopped);
@@ -1937,16 +1946,19 @@ class HomePage extends Page {
                     const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
                     if (firstSection) {
                         const rowId = firstSection.getAttribute('data-row-id');
-                        this.setActiveSection(`home-row-${rowId}`, false);
+                        const firstCard = firstSection.querySelector('.media-card');
 
-                        if (!focusManager.getFocused()) {
-                            const firstCard = firstSection.querySelector('.media-card');
-                            if (firstCard) {
-                                focusManager.focusElement(firstCard, { instantScroll: true });
-                            } else {
-                                this.setActiveSection('sidebar');
-                            }
+                        // Always ensure activeSection and focusedElement point to the same row item.
+                        // Previously, if focus was set to the sidebar as a trap fallback, this check
+                        // was bypassed, leaving activeSection and focusedElement out of sync.
+                        if (firstCard) {
+                            this.setActiveSection(`home-row-${rowId}`, false);
+                            focusManager.focusElement(firstCard, { instantScroll: true });
+                        } else {
+                            this.setActiveSection('sidebar');
                         }
+                    } else {
+                        this.setActiveSection('sidebar');
                     }
                 }
             }
@@ -3116,11 +3128,51 @@ class HomePage extends Page {
     }
 
     // =========================================================================
-    // Back Button
+    // Focus Recovery & Back Button
     // =========================================================================
 
+    /**
+     * Fallback to recover homepage focus if a modal dialog was closed and left
+     * the homepage with no valid or attached focused element.
+     * @private
+     */
+    _restoreHomepageFocusFallback() {
+        if (!this._isMounted) return;
+
+        // 1. Try restoring to the hero carousel if present
+        if (focusManager.getSectionConfig('home-hero') && this.$('#hero-carousel-container')) {
+            this.setActiveSection('home-hero', false);
+            focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
+            return;
+        }
+
+        // 2. Try the first rendered row that contains media cards
+        const container = this.$('#home-rows');
+        if (container) {
+            const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+            if (firstSection) {
+                const rowId = firstSection.getAttribute('data-row-id');
+                const firstCard = firstSection.querySelector('.media-card');
+                if (firstCard) {
+                    this.setActiveSection(`home-row-${rowId}`, false);
+                    focusManager.focusElement(firstCard, { instantScroll: true });
+                    return;
+                }
+            }
+        }
+
+        // 3. Fall back to the navigation sidebar
+        this.setActiveSection('sidebar');
+    }
+
     onBack() {
+        // Emit exit request to display the ExitDialog (or exit immediately if confirmation is disabled)
         eventBus.emit('app:exitRequested');
+
+        // CRUCIAL: Return true to indicate to App.js that the back button was fully handled.
+        // Returning undefined or false causes App.js to execute router.back(), which either pops
+        // history incorrectly or emits a duplicate app:exitRequested event.
+        return true;
     }
 }
 
