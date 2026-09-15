@@ -1981,3 +1981,152 @@ html[data-layout-quirks="c26"] .loader-style-modal-split {
     display: -webkit-box !important;
     -webkit-box-orient: horizontal !important;
 }
+
+/* ==========================================================================
+   Admin Libraries Management Tab (Standard Settings Button & Focus Styling)
+   ========================================================================== */
+
+/* Overall container for the libraries tab content */
+.libraries-tab-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+/* Button styling for admin libraries tab matching settings controls */
+.btn-scan-all-libraries,
+.btn-library-refresh-options {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px;
+    width: auto !important;
+    min-width: 140px;
+    margin: 0 !important;
+    padding: 12px 24px;
+    font-size: 1.1rem;
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
+    border: 2px solid var(--jf-action-btn-border) !important;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
+    overflow: hidden;
+    background-clip: padding-box;
+    text-align: center;
+    color: var(--jf-text-primary, rgb(229, 231, 235));
+    cursor: pointer;
+    outline: none;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.btn-scan-all-libraries .btn-icon-svg,
+.btn-library-refresh-options .btn-icon-svg {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    vertical-align: middle;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* Focused and hover state matching standard settings button focus */
+.btn-scan-all-libraries:focus,
+.btn-scan-all-libraries.focused,
+.btn-library-refresh-options:focus,
+.btn-library-refresh-options.focused {
+    background: var(--jf-btn-primary-focus-bg) !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
+    transform: scale(1.05);
+    outline: none !important;
+    box-shadow: none !important;
+    will-change: transform;
+}
+
+.btn-scan-all-libraries:hover,
+.btn-library-refresh-options:hover {
+    border: 2px solid var(--jf-btn-primary-hover-border) !important;
+    transform: scale(1.05);
+    will-change: transform;
+}
+
+/* Section Header for individual libraries */
+.library-list-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+    padding: 0 4px;
+}
+
+.library-list-section-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--jf-text-primary, rgba(255, 255, 255, 0.9));
+    letter-spacing: -0.01em;
+}
+
+.library-list-count-badge {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+
+.library-admin-type {
+    text-transform: capitalize;
+}
+
+/* Outline / Filled Dynamic Icon Visibility:
+   Button icons remain outlined by default, and seamlessly switch to filled when focused, active, or hovered */
+.btn-scan-all-libraries .icon-filled,
+.btn-library-refresh-options .icon-filled {
+    display: none !important;
+}
+
+.btn-scan-all-libraries .icon-outline,
+.btn-library-refresh-options .icon-outline {
+    display: inline-block !important;
+}
+
+/* Switch to filled variant when button is focused, active, or hovered */
+.btn-scan-all-libraries:focus .icon-outline,
+.btn-scan-all-libraries.focused .icon-outline,
+.btn-scan-all-libraries:hover .icon-outline,
+.btn-scan-all-libraries:active .icon-outline,
+.btn-library-refresh-options:focus .icon-outline,
+.btn-library-refresh-options.focused .icon-outline,
+.btn-library-refresh-options:hover .icon-outline,
+.btn-library-refresh-options:active .icon-outline {
+    display: none !important;
+}
+
+.btn-scan-all-libraries:focus .icon-filled,
+.btn-scan-all-libraries.focused .icon-filled,
+.btn-scan-all-libraries:hover .icon-filled,
+.btn-scan-all-libraries:active .icon-filled,
+.btn-library-refresh-options:focus .icon-filled,
+.btn-library-refresh-options.focused .icon-filled,
+.btn-library-refresh-options:hover .icon-filled,
+.btn-library-refresh-options:active .icon-filled {
+    display: inline-block !important;
+}
+
+/* Empty or Loading State placeholder */
+.library-admin-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.95rem;
+}
+
+

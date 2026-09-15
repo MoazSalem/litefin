@@ -29,7 +29,8 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
-import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
+import { settingsIcons, setIconStyle, getSupportedStyles, getLibraryIcon } from '../utils/Icons.js';
+import { toast } from '../ui/Toast.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
 import { seerr } from '../api/seerrClient.js';
@@ -149,6 +150,27 @@ class SettingsPage extends Page {
             }
         ];
 
+        /*
+         * Admin Feature: Add Libraries management tab for server administrators.
+         * Allows admins to trigger global library scans and individual metadata refreshes.
+         */
+        const user = auth.getCurrentUser();
+        const isAdmin = Boolean(user?.Policy?.IsAdministrator);
+        if (isAdmin) {
+            // Position the Libraries management tab before backup
+            const backupIndex = tabs.findIndex((t) => t.id === 'backup');
+            const libraryTab = {
+                id: 'libraries',
+                label: i18n.t('Libraries') || 'Libraries',
+                icon: settingsIcons.libraries
+            };
+            if (backupIndex !== -1) {
+                tabs.splice(backupIndex, 0, libraryTab);
+            } else {
+                tabs.push(libraryTab);
+            }
+        }
+
         return `
             <div class="page settings-page">
 
@@ -205,6 +227,8 @@ class SettingsPage extends Page {
                 return this._renderControlsTab();
             case 'plugins':
                 return this._renderPluginsTab();
+            case 'libraries':
+                return this._renderLibrariesTab();
             case 'account':
                 return this._renderAccountTab();
             case 'backup':
@@ -216,6 +240,69 @@ class SettingsPage extends Page {
             default:
                 return this._renderAppearanceTab();
         }
+    }
+
+    /**
+     * Render the admin-only Libraries management tab.
+     * Includes a global library scan button and a live list of server libraries
+     * with individual metadata refresh options.
+     * Follows Apple HIG minimal design with zero blur and zero shadows.
+     * @returns {string} HTML markup for the tab
+     */
+    _renderLibrariesTab() {
+        // Enforce admin permission guard directly in template
+        const user = auth.getCurrentUser();
+        if (!user?.Policy?.IsAdministrator) {
+            return `
+                <div class="settings-tab-content">
+                    <h2 class="content-title" data-i18n="AccessDenied">${i18n.t('AccessDenied') || 'Access Denied'}</h2>
+                    <p class="content-subtitle" data-i18n="AdminOnlyFeature">
+                        ${i18n.t('AdminOnlyFeature') || 'This section requires administrator privileges.'}
+                    </p>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title" data-i18n="Libraries">${i18n.t('Libraries') || 'Libraries'}</h2>
+                <p class="content-subtitle" data-i18n="LibrariesAdminDescription">
+                    ${i18n.t('LibrariesAdminDescription') || 'Manage server media libraries, trigger global library scans, and refresh metadata.'}
+                </p>
+
+                <div class="libraries-tab-container">
+                    <!-- Global Actions Row (Scan All Libraries) using standard setting-item layout -->
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span class="setting-name" data-i18n="ScanAllLibraries">${i18n.t('ScanAllLibraries') || 'Scan All Libraries'}</span>
+                            <span class="setting-description" data-i18n="ScanAllLibrariesDescription">
+                                ${i18n.t('ScanAllLibrariesDescription') || 'Trigger a comprehensive scan across all media libraries to discover newly added files.'}
+                            </span>
+                        </div>
+                        <div class="setting-control">
+                            <button class="btn btn-option btn-scan-all-libraries" id="btn-scan-all-libraries" tabindex="0" data-focusable="true">
+                                <svg class="icon-outline btn-icon-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6c0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6c0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4l-4-4v3z"/></svg>
+                                <svg class="icon-filled btn-icon-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6c0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6c0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4l-4-4v3z"/></svg>
+                                <span class="btn-label" data-i18n="ScanAll">${i18n.t('ScanAll') || 'Scan All'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Individual Libraries Section Header -->
+                    <div class="library-list-section-header">
+                        <span class="library-list-section-title" data-i18n="MediaLibraries">${i18n.t('MediaLibraries') || 'Media Libraries'}</span>
+                        <span class="library-list-count-badge" id="libraries-count-badge">...</span>
+                    </div>
+
+                    <!-- Dynamic Library Items List Container -->
+                    <div class="library-items-list" id="libraries-admin-list">
+                        <div class="library-admin-loading" data-i18n="LoadingLibraries">
+                            ${i18n.t('LoadingLibraries') || 'Loading libraries...'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     _renderPluginsTab() {
@@ -10098,6 +10185,8 @@ class SettingsPage extends Page {
                 this._setupHomeLayoutUI();
             } else if (tabId === 'sidebar') {
                 this._setupSidebarLayoutUI();
+            } else if (tabId === 'libraries') {
+                this._setupLibrariesTabUI();
             } else if (tabId === 'backup') {
                 this._updateBackupStatusDisplay();
             } else if (tabId === 'plugins') {
@@ -10308,6 +10397,212 @@ class SettingsPage extends Page {
         } catch (e) {
             log.error('Failed to load sidebar layouts', e);
             topContainer.innerHTML = `<span class="setting-description">Error loading layouts.</span>`;
+        }
+    }
+
+    /**
+     * Initialize and bind events for the admin Libraries tab.
+     * Fetches media library views, renders library cards with their icons,
+     * wires global scan triggers, and handles metadata refresh option modals.
+     */
+    async _setupLibrariesTabUI() {
+        // Ensure user is an administrator before executing server queries
+        const user = auth.getCurrentUser();
+        if (!user?.Policy?.IsAdministrator) return;
+
+        const listContainer = this.$('#libraries-admin-list');
+        const countBadge = this.$('#libraries-count-badge');
+        const scanAllBtn = this.$('#btn-scan-all-libraries');
+
+        // ====================================================================
+        // Global Scan All Libraries Handler
+        // ====================================================================
+        if (scanAllBtn) {
+            scanAllBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    // Temporarily visually disable button to avoid duplicate clicks
+                    scanAllBtn.disabled = true;
+                    scanAllBtn.style.opacity = '0.6';
+
+                    // Trigger server-wide library scan: POST /Library/Refresh
+                    await api.refreshAllLibraries();
+
+                    // Display success feedback toast to the administrator
+                    toast.show(
+                        i18n.t('LibraryScanQueued') || 'Library scan queued for all libraries.',
+                        3500,
+                        { type: 'info' }
+                    );
+                } catch (err) {
+                    log.error('Failed to trigger scan of all libraries:', err);
+                    toast.show(
+                        i18n.t('LibraryScanFailed') || 'Failed to trigger library scan.',
+                        4000,
+                        { type: 'error' }
+                    );
+                } finally {
+                    // Restore button state after short debounce
+                    setTimeout(() => {
+                        if (scanAllBtn) {
+                            scanAllBtn.disabled = false;
+                            scanAllBtn.style.opacity = '1';
+                        }
+                    }, 1200);
+                }
+            });
+        }
+
+        if (!listContainer) return;
+
+        // ====================================================================
+        // Load & Render Media Libraries
+        // ====================================================================
+        try {
+            // Fetch live user library views from Jellyfin API
+            const viewsResponse = await api.getUserViews();
+            const libraries = viewsResponse.Items || [];
+
+            // Update header count badge with total libraries count
+            if (countBadge) {
+                const countText = libraries.length === 1
+                    ? (i18n.t('Library') || 'Library')
+                    : (i18n.t('Libraries') || 'Libraries');
+                countBadge.textContent = `${libraries.length} ${countText}`;
+            }
+
+            // Handle empty library state
+            if (libraries.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="library-admin-loading" data-i18n="NoLibrariesFound">
+                        ${i18n.t('NoLibrariesFound') || 'No media libraries found.'}
+                    </div>
+                `;
+                return;
+            }
+
+            // Build HTML cards for each library
+            listContainer.innerHTML = libraries.map((lib) => {
+                const colTypeLabel = lib.CollectionType || 'library';
+
+                return `
+                    <div class="setting-item library-setting-row" data-id="${lib.Id}">
+                        <div class="setting-label">
+                            <span class="setting-name">${escapeHtml(lib.Name)}</span>
+                            <span class="setting-description library-admin-type">${escapeHtml(colTypeLabel)}</span>
+                        </div>
+                        <div class="setting-control">
+                            <button class="btn btn-option btn-library-refresh-options" 
+                                    id="btn-refresh-${lib.Id}"
+                                    data-id="${lib.Id}" 
+                                    data-name="${escapeHtml(lib.Name)}" 
+                                    tabindex="0" 
+                                    data-focusable="true">
+                                <svg class="icon-outline btn-icon-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6c0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6c0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4l-4-4v3z"/></svg>
+                                <svg class="icon-filled btn-icon-svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6c0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6c0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4l-4-4v3z"/></svg>
+                                <span class="btn-label">${i18n.t('Refresh') || 'Refresh...'}</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // ================================================================
+            // Bind Individual Library Refresh Modal Triggers
+            // ================================================================
+            listContainer.querySelectorAll('.btn-library-refresh-options').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const libId = btn.dataset.id;
+                    const libName = btn.dataset.name || i18n.t('Library') || 'Library';
+
+                    // 3 metadata refresh options matching Jellyfin refresh modes
+                    const options = [
+                        {
+                            value: 'ValidationOnly',
+                            label: i18n.t('ScanNewUpdatedFiles') || 'Scan for new and updated files'
+                        },
+                        {
+                            value: 'Default',
+                            label: i18n.t('SearchMissingMetadata') || 'Search for missing metadata'
+                        },
+                        {
+                            value: 'FullRefresh',
+                            label: i18n.t('ReplaceAllMetadata') || 'Replace all metadata'
+                        }
+                    ];
+
+                    // Open the selection modal dialog
+                    this._renderSelectionModal(
+                        `${libName} — ${i18n.t('RefreshMode') || 'Refresh mode'}`,
+                        options,
+                        'ValidationOnly',
+                        async (selectedMode) => {
+                            try {
+                                let refreshParams = {};
+
+                                // Map selected mode to appropriate Jellyfin API refresh options
+                                if (selectedMode === 'ValidationOnly') {
+                                    // Scan for new and updated files without replacing existing data
+                                    refreshParams = {
+                                        MetadataRefreshMode: 'ValidationOnly',
+                                        ImageRefreshMode: 'ValidationOnly',
+                                        ReplaceAllMetadata: false,
+                                        ReplaceAllImages: false,
+                                        Recursive: true
+                                    };
+                                } else if (selectedMode === 'FullRefresh') {
+                                    // Full refresh: replace all metadata and images from providers
+                                    refreshParams = {
+                                        MetadataRefreshMode: 'FullRefresh',
+                                        ImageRefreshMode: 'FullRefresh',
+                                        ReplaceAllMetadata: true,
+                                        ReplaceAllImages: true,
+                                        Recursive: true
+                                    };
+                                } else {
+                                    // Search for missing metadata & missing images only
+                                    refreshParams = {
+                                        MetadataRefreshMode: 'Default',
+                                        ImageRefreshMode: 'Default',
+                                        ReplaceAllMetadata: false,
+                                        ReplaceAllImages: false,
+                                        Recursive: true
+                                    };
+                                }
+
+                                // Send POST /Items/{libId}/Refresh request
+                                await api.refreshItem(libId, refreshParams);
+
+                                // Display success toast notification
+                                toast.show(
+                                    `${i18n.t('RefreshQueued') || 'Refresh queued for'} ${libName}`,
+                                    3500,
+                                    { type: 'info' }
+                                );
+                            } catch (refreshErr) {
+                                log.error(`Failed to refresh metadata for library ${libName} (${libId}):`, refreshErr);
+                                toast.show(
+                                    `${i18n.t('RefreshFailed') || 'Refresh failed for'} ${libName}`,
+                                    4000,
+                                    { type: 'error' }
+                                );
+                            }
+                        }
+                    );
+                });
+            });
+
+            // Re-invalidate and register focus sections for TV remote navigation
+            focusManager.invalidateCache('settings-content');
+            this._setupFocus();
+        } catch (err) {
+            log.error('Failed to load libraries in admin tab:', err);
+            listContainer.innerHTML = `
+                <div class="library-admin-loading" data-i18n="ErrorLoadingLibraries">
+                    ${i18n.t('ErrorLoadingLibraries') || 'Error loading media libraries.'}
+                </div>
+            `;
         }
     }
 

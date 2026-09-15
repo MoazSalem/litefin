@@ -181,6 +181,7 @@ class EmulatorPage extends Page {
 
         // Set source and transfer focus to iframe
         if (this._iframe) {
+            this._applyViewportResolutionScaling();
             this._iframe.src = fullPlayUrl;
             this._iframe.onload = () => {
                 log.info('Emulator session loaded in iframe.');
@@ -191,6 +192,33 @@ class EmulatorPage extends Page {
 
         // Hide splash if ready
         setTimeout(() => this.markReady(), 200);
+    }
+
+    /**
+     * Optimizes internal rendering resolution for TV SoCs.
+     * Rendering at native 1080p or 4K forces WebAssembly to software-rasterize
+     * massive framebuffers. By locking the internal frame to 960x540 (or 640x360)
+     * and scaling up via GPU transform, we cut the pixel fill rate by 75%,
+     * allowing the emulator core to hit much higher frame rates.
+     * @private
+     */
+    _applyViewportResolutionScaling() {
+        if (!this._iframe) return;
+
+        const screenW = window.innerWidth || 1920;
+        const screenH = window.innerHeight || 1080;
+
+        // Target 960x540 (quarter of 1080p) or 640x360 for extreme speed
+        const targetInternalW = 960;
+        const targetInternalH = 540;
+
+        const scaleX = screenW / targetInternalW;
+        const scaleY = screenH / targetInternalH;
+
+        this._iframe.style.width = `${targetInternalW}px`;
+        this._iframe.style.height = `${targetInternalH}px`;
+        this._iframe.style.transform = `scale(${scaleX}, ${scaleY})`;
+        this._iframe.style.transformOrigin = 'center center';
     }
 
     /**

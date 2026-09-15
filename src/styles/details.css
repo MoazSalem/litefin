@@ -1902,15 +1902,32 @@ html[data-layout-quirks="c26"] .episode-row-overview {
     background: #000;
     overflow: hidden;
     z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
+/*
+ * Internal Rendering Resolution Downscaler:
+ * TV SoCs crawl when rendering WebAssembly canvas buffers at 1080p/4K.
+ * By sizing the iframe at 960x540 (or 640x480) and GPU-upscaling it with
+ * transform: scale() and pixelated image-rendering, the WebAssembly core
+ * only renders 1/4th of the pixels while the TV's hardware display processor
+ * handles the fullscreen upscale at 60 FPS.
+ */
 .emulator-iframe {
-    width: 100%;
-    height: 100%;
+    width: 960px;
+    height: 540px;
     border: none;
     outline: none;
     display: block;
     background: #000;
+    transform-origin: center center;
+    transform: scale(2);
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    will-change: transform;
 }
 
 /* Apple TV Style Translucent Frosted Glass Pause Overlay */

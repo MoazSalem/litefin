@@ -730,6 +730,17 @@ export class ApiClient {
     // ========================================================================
 
     /**
+     * Trigger a scan / refresh of all media libraries on the server.
+     * Accessible by server administrators.
+     * POST /Library/Refresh
+     * @returns {Promise<any>}
+     */
+    async refreshAllLibraries() {
+        // Send POST request directly to server library refresh endpoint
+        return this.post('/Library/Refresh');
+    }
+
+    /**
      * Get items from library
      */
     async getItems(params = {}) {
