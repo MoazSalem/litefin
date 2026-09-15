@@ -242,7 +242,12 @@ export function buildJellyfinProfile(options = {}) {
 
     // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
     const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
-    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels;
+    // When DTS or TrueHD passthrough is enabled, TV/eARC soundbar setups support full 7.1 (8-channel)
+    // audio bitstreams. Defaulting to 6 channels causes Jellyfin server's CodecProfiles condition
+    // (AudioChannels <= 6) to reject DirectPlay for 7.1 tracks with AudioChannelsNotSupported,
+    // forcing unnecessary server transcoding to a 5.1 AC3 compatibility track.
+    const defaultMaxChannels = (enableDts || enableTrueHd) ? 8 : caps.maxAudioChannels;
+    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : defaultMaxChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
@@ -281,7 +286,7 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.ac4) baseAudioCodecs.push('ac4');
     if (caps.mpegh) baseAudioCodecs.push('mpegh');
     if (caps.wma) baseAudioCodecs.push('wma');
-    if (enableDts) baseAudioCodecs.push('dts', 'dca');
+    if (enableDts) baseAudioCodecs.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     if (enableTrueHd) baseAudioCodecs.push('truehd');
 
     // Video audio: conditionally includes FLAC based on setting
@@ -490,14 +495,14 @@ export function buildJellyfinProfile(options = {}) {
         transAudioCodecsArr.push('aac');
     }
 
-    if (enableDts) transAudioCodecsArr.push('dts', 'dca');
+    if (enableDts) transAudioCodecsArr.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     if (enableTrueHd) transAudioCodecsArr.push('truehd');
 
     const directAudioCodecsArr = [];
     if (caps.eac3) directAudioCodecsArr.push('eac3');
     if (caps.ac3) directAudioCodecsArr.push('ac3');
     directAudioCodecsArr.push('aac', 'mp3');
-    if (enableDts) directAudioCodecsArr.push('dts', 'dca');
+    if (enableDts) directAudioCodecsArr.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     // truehd intentionally excluded — it cannot be remuxed into MP4 (DirectStream
     // container), so listing it here makes the server fall back to full transcode.
     // HDMI passthrough for TrueHD is still handled via DirectPlay (baseAudioCodecs).

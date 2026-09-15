@@ -156,15 +156,57 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
             : null) ||
         audioStreams[0];
 
+    // Codec fidelity tier scoring (higher is preferred for direct play)
+    // Lossless and premium discrete surround passthrough formats are ranked
+    // at the highest tiers when the hardware and user settings permit native decoding.
+    const getCodecScore = (codec) => {
+        const c = (codec || '').toLowerCase();
+        // Lossless / High-definition master audio formats (when hardware/settings support them)
+        if (c === 'truehd') return 95;
+        if (c.includes('dts-hd') || c.includes('dtshd') || c.includes('dts-ma') || c.includes('dts-x') || c.includes('dtsx')) return 90;
+        if (c === 'flac' || c === 'alac') return 80;
+        // Discrete surround core formats
+        if (c.includes('dts') || c === 'dca') return 70;
+        // High quality Dolby Digital Plus (enhanced AC3)
+        if (c === 'eac3') return 50;
+        // Standard Dolby Digital (legacy AC3)
+        if (c === 'ac3') return 40;
+        // Modern efficient opus format
+        if (c === 'opus') return 35;
+        // Universal AAC stereo / surround standard
+        if (c === 'aac') return 30;
+        // Legacy MP3 format
+        if (c === 'mp3') return 20;
+        return 10;                  // Other
+    };
+
     // Check if the auto-select DirectPlay audio track setting is enabled
     const preferDirectPlay = PlayerSettings.get('preferDirectPlayAudio') !== false;
     if (!preferDirectPlay) {
         return standardDefaultTrack;
     }
 
-    // If the standard default track is already natively playable without transcode, keep it!
-    if (standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack)) {
-        return standardDefaultTrack;
+    // Check whether the standard default track is natively playable on current device
+    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack);
+
+    // If the default track is natively playable, verify whether it is a low-tier compatibility track
+    // (such as AC3, AAC, or MP3) while a superior high-fidelity track (such as DTS, DTS-HD MA, or TrueHD)
+    // is also natively playable in the same language. If a premium passthrough track is supported,
+    // we must not blindly lock onto the lossy compatibility track.
+    if (isDefaultPlayable) {
+        const defaultScore = getCodecScore(standardDefaultTrack.Codec);
+        const hasPremiumAlternative = audioStreams.some((t) => {
+            if (t.Index === standardDefaultTrack.Index) return false;
+            if (!isAudioTrackNativelyPlayable(t)) return false;
+            const tLang = (t.Language || 'und').toLowerCase();
+            const defLang = (standardDefaultTrack.Language || 'und').toLowerCase();
+            if (tLang !== defLang && defLang !== 'und' && tLang !== 'und') return false;
+            return getCodecScore(t.Codec) >= 70 && getCodecScore(t.Codec) > defaultScore;
+        });
+
+        if (!hasPremiumAlternative) {
+            return standardDefaultTrack;
+        }
     }
 
     // Filter candidate streams that can be played natively on the current device
@@ -193,17 +235,6 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
             candidates = sameLangPlayable;
         }
     }
-
-    // Codec fidelity tier scoring (higher is preferred for direct play)
-    const getCodecScore = (codec) => {
-        const c = (codec || '').toLowerCase();
-        if (c === 'eac3') return 50; // High quality Dolby Digital Plus
-        if (c === 'ac3') return 40;  // Standard Dolby Digital
-        if (c === 'opus') return 35; // Efficient modern format
-        if (c === 'aac') return 30;  // Universal standard
-        if (c === 'mp3') return 20;  // Legacy MP3
-        return 10;                  // Other
-    };
 
     // Calculate score for each candidate to find the best track
     const scoredCandidates = candidates.map((track) => {

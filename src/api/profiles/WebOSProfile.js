@@ -397,7 +397,12 @@ export function buildJellyfinProfile(options = {}) {
 
     // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
     const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
-    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels;
+    // When DTS or TrueHD passthrough is enabled, TV/eARC soundbar systems support full 7.1 (8-channel)
+    // audio bitstreams. Defaulting to 6 channels causes Jellyfin server's CodecProfiles condition
+    // (AudioChannels <= 6) to reject DirectPlay for 7.1 tracks with AudioChannelsNotSupported,
+    // forcing unnecessary server transcoding to a 5.1 AC3 compatibility track.
+    const defaultMaxChannels = (enableDts || enableTrueHd) ? 8 : caps.maxAudioChannels;
+    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : defaultMaxChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
@@ -461,7 +466,7 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.webosVersion >= 4) {
         audioCodecs.push('opus');
     }
-    if (enableDts) audioCodecs.push('dts', 'dca');
+    if (enableDts) audioCodecs.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     if (enableTrueHd) audioCodecs.push('truehd');
 
     const audioCodecString = audioCodecs.join(',');
@@ -659,7 +664,7 @@ export function buildJellyfinProfile(options = {}) {
     // to eARC exactly like the native LG media player does for local files.
     // ---------------------------------------------------------------------------
     const directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3', 'flac'];
-    if (enableDts) directAudioCodecsArr.push('dts', 'dca');
+    if (enableDts) directAudioCodecsArr.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     if (enableTrueHd) directAudioCodecsArr.push('truehd');
     const directAudioCodecs = directAudioCodecsArr.join(',');
 

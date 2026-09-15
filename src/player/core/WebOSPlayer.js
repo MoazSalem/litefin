@@ -1357,16 +1357,24 @@ export class WebOSPlayer {
             // Passthrough formats are omitted from Chromium's audioTracks collection,
             // returning nativeIndex -1. But since it is the default track, the TV hardware
             // is already bitstreaming it over eARC natively — do NOT abort DirectPlay.
-            const mediaSource = this._currentPlayOptions?.mediaSource;
-            const targetStream = mediaSource?.MediaStreams?.find(
-                s => s.Type === 'Audio' && s.Index === this._currentPlayOptions?.audioStreamIndex
-            );
+            // ================================================================
+            // Verify Container Default Stream or Primary Passthrough Stream
+            // ================================================================
+            // Passthrough codecs (such as DTS-HD MA and TrueHD) are not mapped
+            // inside Chromium's audioTracks collection, yielding nativeIndex -1.
+            // When listIndex is 0 (the primary audio track) or when the track matches
+            // the container/server default, the WebOS hardware media engine is
+            // already bitstreaming this track over HDMI eARC natively.
+            // Suppress the restart to maintain seamless DirectPlay.
+            // ================================================================
             const isDefault = targetStream
-                ? (targetStream.IsDefault || (mediaSource?.DefaultAudioStreamIndex !== undefined && targetStream.Index === mediaSource.DefaultAudioStreamIndex))
+                ? (targetStream.IsDefault ||
+                   (mediaSource?.DefaultAudioStreamIndex !== undefined && targetStream.Index === mediaSource.DefaultAudioStreamIndex) ||
+                   listIndex === 0)
                 : (listIndex === 0);
 
             if (isDefault) {
-                log.info('WebOSPlayer: _resolveNativeAudioIndex returned out-of-range index for default track (passthrough codec like TrueHD/DTS playing natively). Skipping restart.');
+                log.info('WebOSPlayer: _resolveNativeAudioIndex returned out-of-range index for default/primary track (passthrough codec like TrueHD/DTS playing natively). Skipping restart.');
                 return;
             }
 

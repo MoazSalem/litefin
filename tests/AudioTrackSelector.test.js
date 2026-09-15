@@ -155,3 +155,67 @@ test('resolveBestAudioStream respects preferDirectPlayAudio=false', () => {
     const best = resolveBestAudioStream(mediaSource);
     assert.strictEqual(best.Index, 0, 'Should return default TrueHD track when setting is disabled');
 });
+
+test('resolveBestAudioStream selects DTS-HD MA over AC3 backup when TrueHD default is disabled and DTS is enabled', () => {
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        enableTrueHd: 'disable',
+        enableDts: 'enable'
+    });
+
+    const mediaSource = {
+        Id: 'ms-truehd-dts-ac3',
+        DefaultAudioStreamIndex: 0,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 1, Type: 'Audio', Codec: 'dts-hd ma', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 2, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 1, 'Should select DTS-HD MA (Index 1) instead of AC3 backup (Index 2)');
+    assert.strictEqual(best.Codec, 'dts-hd ma');
+});
+
+test('resolveBestAudioStream upgrades from AC3 compatibility track to DTS-HD MA in same language when DTS is enabled', () => {
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        enableDts: 'enable'
+    });
+
+    const mediaSource = {
+        Id: 'ms-dts-ac3-default',
+        DefaultAudioStreamIndex: 1,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'dts-hd ma', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: true } // Compatibility track flagged default by encoder
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 0, 'Should upgrade to DTS-HD MA (Index 0) instead of settling for default AC3 (Index 1)');
+});
+
+test('resolveBestAudioStream falls back to AC3 when DTS is disabled and default is DTS', () => {
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        enableDts: 'disable'
+    });
+
+    const mediaSource = {
+        Id: 'ms-dts-disabled',
+        DefaultAudioStreamIndex: 0,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: true },
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 1, 'Should fall back to AC3 (Index 1) when DTS is disabled');
+});
+

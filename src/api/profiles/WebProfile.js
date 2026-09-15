@@ -275,9 +275,6 @@ export function buildJellyfinProfile(options = {}) {
             (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
     }
 
-    // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
-    const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
-    const maxAudioChannels = String((userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels);
 
     const dtsSetting = PlayerSettings.get('enableDts');
     const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
@@ -288,6 +285,11 @@ export function buildJellyfinProfile(options = {}) {
     const mp2Setting = PlayerSettings.get('enableMp2') || 'auto';
     const enableMp2 = mp2Setting === 'enable' ? true : mp2Setting === 'disable' ? false : caps.mp2;
 
+    const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
+    // When DTS or TrueHD passthrough is enabled, systems support full 7.1 (8-channel) audio.
+    const defaultMaxChannels = (enableDts || enableTrueHd) ? 8 : caps.maxAudioChannels;
+    const maxAudioChannels = String((userMaxChannels && userMaxChannels > 0) ? userMaxChannels : defaultMaxChannels);
+
     // Standard web audio. Place EAC3 and AC3 first so they are preferred
     // over AAC in the DirectPlay lists when supported or force-enabled.
     const audioCodecs = [];
@@ -296,7 +298,7 @@ export function buildJellyfinProfile(options = {}) {
     audioCodecs.push('aac', 'mp3');
     if (enableMp2) audioCodecs.push('mp2');
     audioCodecs.push('flac', 'opus', 'vorbis', 'pcm', 'wav');
-    if (enableDts) audioCodecs.push('dts', 'dca');
+    if (enableDts) audioCodecs.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     if (enableTrueHd) audioCodecs.push('truehd');
 
     const audioCodecString = audioCodecs.join(',');
