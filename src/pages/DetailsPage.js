@@ -67,6 +67,10 @@ class DetailsPage extends Page {
         // Mark as async page for Navigation State
         this._isAsyncPage = true;
 
+        // Adjacent episode navigation targets
+        this._prevEpisode = null;
+        this._nextEpisode = null;
+
         // Deferred loading flag: when set, the loading overlay stays visible
         // until focus restoration completes, preventing a visible "focus jump"
         // on back-navigation where the page content appears and then focus
@@ -187,6 +191,13 @@ class DetailsPage extends Page {
                                 </button>
                                 <button class="btn btn-secondary resume-btn hidden" tabindex="-1" data-tooltip="${i18n.t('ResumePlayback') || 'Resume Playback'}">
                                     <span data-i18n="ResumePlayback">Resume Playback</span>
+                                </button>
+                                <!-- Adjacent Episode Navigation (Visible on Episode Details pages) -->
+                                <button class="btn btn-icon prev-episode-btn hidden" tabindex="-1" aria-label="${i18n.t('PreviousEpisode') || 'Previous Episode'}" data-tooltip="${i18n.t('PreviousEpisode') || 'Previous Episode'}">
+                                    ${detailsIcons.previousEpisode}
+                                </button>
+                                <button class="btn btn-icon next-episode-btn hidden" tabindex="-1" aria-label="${i18n.t('NextEpisode') || 'Next Episode'}" data-tooltip="${i18n.t('NextEpisode') || 'Next Episode'}">
+                                    ${detailsIcons.nextEpisode}
                                 </button>
                                 <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}" data-tooltip="${i18n.t('ResetProgress')}">
                                     ${detailsIcons.reset}
@@ -473,6 +484,28 @@ class DetailsPage extends Page {
             resumeBtn.addEventListener('click', (e) => handleActivate(e, () => this._play({ resume: true })));
         }
 
+        // Previous Episode button
+        const prevEpBtn = this.$('.prev-episode-btn');
+        if (prevEpBtn) {
+            prevEpBtn.addEventListener('mousedown', (e) =>
+                handleActivate(e, () => this._navigateToAdjacentEpisode(this._prevEpisode))
+            );
+            prevEpBtn.addEventListener('click', (e) =>
+                handleActivate(e, () => this._navigateToAdjacentEpisode(this._prevEpisode))
+            );
+        }
+
+        // Next Episode button
+        const nextEpBtn = this.$('.next-episode-btn');
+        if (nextEpBtn) {
+            nextEpBtn.addEventListener('mousedown', (e) =>
+                handleActivate(e, () => this._navigateToAdjacentEpisode(this._nextEpisode))
+            );
+            nextEpBtn.addEventListener('click', (e) =>
+                handleActivate(e, () => this._navigateToAdjacentEpisode(this._nextEpisode))
+            );
+        }
+
         // Watched button
         const watchedBtn = this.$('.watched-btn');
         if (watchedBtn) {
@@ -703,6 +736,13 @@ class DetailsPage extends Page {
             this._setupFavoriteButton();
             this._renderRichMetadata();
             this._updateTrailerButton();
+
+            // Load adjacent episode navigation buttons if the active media item is an Episode
+            if (item.Type === 'Episode') {
+                this._loadAdjacentEpisodes();
+            } else {
+                this._updateAdjacentEpisodeButtons();
+            }
 
             // Restore persisted version selection
             const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
@@ -5610,6 +5650,118 @@ class DetailsPage extends Page {
                 `Trailer button visible — local: ${this._hasLocalTrailers}, remote: ${this._hasRemoteTrailers} (Fallback: ${this._isProxyFallback})`
             );
         }
+    }
+
+    /**
+     * Fetches or retrieves cached season episodes to identify adjacent previous and next episodes.
+     * Updates action bar buttons to allow instant remote navigation between episodes.
+     */
+    async _loadAdjacentEpisodes() {
+        // Only valid for Episode items with associated Series and Season IDs
+        if (!this._item || this._item.Type !== 'Episode' || !this._item.SeriesId || !this._item.SeasonId) {
+            this._prevEpisode = null;
+            this._nextEpisode = null;
+            this._updateAdjacentEpisodeButtons();
+            return;
+        }
+
+        const cacheKey = `details:episodes:${this._item.SeriesId}:${this._item.SeasonId}`;
+        let allEpisodes = state.get(cacheKey);
+
+        if (!allEpisodes) {
+            try {
+                // Fetch all episodes belonging to this season
+                const response = await api.getEpisodes(this._item.SeriesId, {
+                    SeasonId: this._item.SeasonId
+                });
+                allEpisodes = response?.Items || [];
+                // Cache for fast subsequent lookups
+                state.set(cacheKey, allEpisodes);
+            } catch (err) {
+                log.warn('Failed to load season episodes for navigation:', err);
+                allEpisodes = [];
+            }
+        }
+
+        // Find current episode index in the season list
+        const currentIndex = allEpisodes.findIndex((ep) => ep.Id === this._itemId);
+        if (currentIndex !== -1) {
+            this._prevEpisode = currentIndex > 0 ? allEpisodes[currentIndex - 1] : null;
+            this._nextEpisode = currentIndex < allEpisodes.length - 1 ? allEpisodes[currentIndex + 1] : null;
+        } else {
+            this._prevEpisode = null;
+            this._nextEpisode = null;
+        }
+
+        // Update button DOM states and tooltips
+        this._updateAdjacentEpisodeButtons();
+    }
+
+    /**
+     * Synchronizes the visibility, focusability, and tooltip descriptions
+     * of previous and next episode buttons in the details action bar.
+     */
+    _updateAdjacentEpisodeButtons() {
+        const prevBtn = this.$('.prev-episode-btn');
+        const nextBtn = this.$('.next-episode-btn');
+
+        if (prevBtn) {
+            if (this._prevEpisode) {
+                // Reveal previous episode button
+                prevBtn.classList.remove('hidden');
+                prevBtn.setAttribute('tabindex', '0');
+
+                // Build rich tooltip label conforming to Apple HIG concise style
+                const seasonNum = (this._prevEpisode.ParentIndexNumber || 0).toString().padStart(2, '0');
+                const epNum = (this._prevEpisode.IndexNumber || 0).toString().padStart(2, '0');
+                const epLabel = this._prevEpisode.IndexNumber !== undefined
+                    ? `S${seasonNum}E${epNum}`
+                    : this._prevEpisode.Name;
+                const tooltipText = `${i18n.t('PreviousEpisode') || 'Previous Episode'}: ${epLabel}`;
+                prevBtn.setAttribute('data-tooltip', tooltipText);
+                prevBtn.setAttribute('aria-label', tooltipText);
+            } else {
+                // Hide and disable focus
+                prevBtn.classList.add('hidden');
+                prevBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        if (nextBtn) {
+            if (this._nextEpisode) {
+                // Reveal next episode button
+                nextBtn.classList.remove('hidden');
+                nextBtn.setAttribute('tabindex', '0');
+
+                // Build rich tooltip label
+                const seasonNum = (this._nextEpisode.ParentIndexNumber || 0).toString().padStart(2, '0');
+                const epNum = (this._nextEpisode.IndexNumber || 0).toString().padStart(2, '0');
+                const epLabel = this._nextEpisode.IndexNumber !== undefined
+                    ? `S${seasonNum}E${epNum}`
+                    : this._nextEpisode.Name;
+                const tooltipText = `${i18n.t('NextEpisode') || 'Next Episode'}: ${epLabel}`;
+                nextBtn.setAttribute('data-tooltip', tooltipText);
+                nextBtn.setAttribute('aria-label', tooltipText);
+            } else {
+                // Hide and disable focus
+                nextBtn.classList.add('hidden');
+                nextBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        // Invalidate spatial navigation cache so focus immediately recognizes available buttons
+        focusManager.invalidateCache('details-actions');
+    }
+
+    /**
+     * Navigates directly to an adjacent episode details page.
+     * 
+     * @param {Object|null} targetEpisode - The destination episode object
+     */
+    _navigateToAdjacentEpisode(targetEpisode) {
+        if (!targetEpisode?.Id) return;
+        log.info(`[DetailsPage] Navigating to adjacent episode: ${targetEpisode.Id} (${targetEpisode.Name})`);
+        router.navigate(`/details/${targetEpisode.Id}`);
     }
 
     /**
