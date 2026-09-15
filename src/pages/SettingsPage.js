@@ -1373,10 +1373,11 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Details Page Layout (Movies & Series) -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelDetailsLayout">${i18n.t('LabelDetailsLayout') || 'Details Page Layout'}</span>
-                        <span class="setting-description" data-i18n="DetailsLayoutDescription">${i18n.t('DetailsLayoutDescription') || 'Choose the layout mode for the item details page.'}</span>
+                        <span class="setting-name" data-i18n="LabelDetailsLayout">${i18n.t('LabelDetailsLayout') || 'Movies & Series Details Layout'}</span>
+                        <span class="setting-description" data-i18n="MovieDetailsLayoutDescription">${i18n.t('MovieDetailsLayoutDescription') || 'Choose the layout mode for movies and series details pages.'}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
@@ -1402,6 +1403,40 @@ class SettingsPage extends Page {
                 }
             ],
             storage.getItem('pref:detailsLayout') || 'posterLeft'
+        )}
+                    </div>
+                </div>
+
+                <!-- Details Page Layout (Seasons & Episodes) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSeasonEpisodeDetailsLayout">${i18n.t('LabelSeasonEpisodeDetailsLayout') || 'Seasons & Episodes Details Layout'}</span>
+                        <span class="setting-description" data-i18n="SeasonEpisodeDetailsLayoutDescription">${i18n.t('SeasonEpisodeDetailsLayoutDescription') || 'Choose the layout mode for season and episode details pages.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'season-episode-details-layout-select',
+            [
+                {
+                    value: 'posterLeft',
+                    label: i18n.t('OptionDetailsLayoutPosterLeft') || 'Poster Left Aligned (Default)'
+                },
+                {
+                    value: 'posterRight',
+                    label: i18n.t('OptionDetailsLayoutPosterRight') || 'Poster Right Aligned'
+                },
+                {
+                    value: 'backdropMinimal',
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropMinimal') || 'Cinematic Backdrop (Centered)'
+                },
+                {
+                    value: 'backdropLeft',
+                    label:
+                        i18n.t('OptionDetailsLayoutBackdropLeft') || 'Cinematic Backdrop (Left Aligned)'
+                }
+            ],
+            storage.getItem('pref:seasonEpisodeDetailsLayout') || storage.getItem('pref:detailsLayout') || 'posterLeft'
         )}
                     </div>
                 </div>
@@ -1778,7 +1813,15 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:detailsLayout') === 'backdropMinimal' || storage.getItem('pref:detailsLayout') === 'backdropLeft' ? 'hidden' : ''}" id="details-title-style-container">
+                ${(() => {
+                    // Check if both media types are using cinematic backdrops; hide title style dropdown only if both are
+                    const movieLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+                    const seasonLayout = storage.getItem('pref:seasonEpisodeDetailsLayout') || movieLayout;
+                    const isMovieBackdrop = movieLayout === 'backdropMinimal' || movieLayout === 'backdropLeft';
+                    const isSeasonBackdrop = seasonLayout === 'backdropMinimal' || seasonLayout === 'backdropLeft';
+                    const hideTitleStyle = isMovieBackdrop && isSeasonBackdrop;
+                    return `
+                <div class="setting-item ${hideTitleStyle ? 'hidden' : ''}" id="details-title-style-container">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
                         <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
@@ -1803,7 +1846,8 @@ class SettingsPage extends Page {
                 storage.getItem('pref:detailsTitleStyle') || 'both'
             )}
                     </div>
-                </div>
+                </div>`;
+                })()}
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -6249,15 +6293,23 @@ class SettingsPage extends Page {
             this._updateBackupStatusDisplay();
         }
 
-        // Initial visibility check for Details Page Title Style setting based on current layout setting
-        const currentDetailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
-        this._updateDetailsTitleStyleVisibility(currentDetailsLayout);
+        // Initial visibility check for Details Page Title Style setting based on current layout settings
+        this._updateDetailsTitleStyleVisibility();
     }
 
-    _updateDetailsTitleStyleVisibility(layout) {
+    _updateDetailsTitleStyleVisibility() {
         const container = this.$('#details-title-style-container');
         if (container) {
-            if (layout === 'backdropMinimal' || layout === 'backdropLeft') {
+            // Retrieve both movie and season/episode layout preferences
+            const movieLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+            const seasonLayout = storage.getItem('pref:seasonEpisodeDetailsLayout') || movieLayout;
+
+            // Check if both media types use full backdrop cinematic layouts
+            const isMovieBackdrop = movieLayout === 'backdropMinimal' || movieLayout === 'backdropLeft';
+            const isSeasonBackdrop = seasonLayout === 'backdropMinimal' || seasonLayout === 'backdropLeft';
+
+            // Title style (logo/text selection) is only hidden if ALL details pages use cinematic backdrops
+            if (isMovieBackdrop && isSeasonBackdrop) {
                 container.classList.add('hidden');
             } else {
                 container.classList.remove('hidden');
@@ -8944,6 +8996,7 @@ class SettingsPage extends Page {
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
             'details-layout-select': { key: 'pref:detailsLayout', type: 'local' },
+            'season-episode-details-layout-select': { key: 'pref:seasonEpisodeDetailsLayout', type: 'local' },
             'episode-layout-select': { key: 'pref:episodeLayout', type: 'local' },
             'show-dates-select': { key: 'pref:showDates', type: 'local' },
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
@@ -9179,8 +9232,8 @@ class SettingsPage extends Page {
                                 state.delete('home:pageCache');
                             }
 
-                            if (settingConfig.key === 'pref:detailsLayout') {
-                                this._updateDetailsTitleStyleVisibility(newValue);
+                            if (settingConfig.key === 'pref:detailsLayout' || settingConfig.key === 'pref:seasonEpisodeDetailsLayout') {
+                                this._updateDetailsTitleStyleVisibility();
                             }
 
                             if (settingConfig.triggerEvent) {

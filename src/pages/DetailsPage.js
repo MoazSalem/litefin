@@ -85,8 +85,65 @@ class DetailsPage extends Page {
         return super._renderMediaCard(item, isLandscape, type, options);
     }
 
+    /**
+     * Resolves the active layout mode based on the media item type.
+     * Seasons and Episodes can have an independent layout mode configured.
+     * 
+     * @param {Object} [item] - The media item if available
+     * @returns {string} Layout mode identifier ('posterLeft', 'posterRight', 'backdropMinimal', 'backdropLeft')
+     */
+    _getDetailsLayout(item = this._item) {
+        // Differentiate between Season/Episode items and Movies/Series
+        const isSeasonOrEpisode = item && (item.Type === 'Season' || item.Type === 'Episode');
+        if (isSeasonOrEpisode) {
+            // Check for dedicated Season/Episode layout preference with fallback to general details layout
+            return (
+                storage.getItem('pref:seasonEpisodeDetailsLayout') ||
+                storage.getItem('pref:detailsLayout') ||
+                'posterLeft'
+            );
+        }
+        // General layout preference used for Movies, Series, BoxSets, etc.
+        return storage.getItem('pref:detailsLayout') || 'posterLeft';
+    }
+
+    /**
+     * Updates the page container classes to reflect the layout mode
+     * configured for the current media item type.
+     */
+    _updateLayoutClasses() {
+        // Locate page container element
+        const pageEl = this.el || this.$('.details-page');
+        if (!pageEl) return;
+
+        // Determine layout based on current item
+        const detailsLayout = this._getDetailsLayout(this._item);
+
+        // Remove all layout variant classes
+        pageEl.classList.remove(
+            'layout-poster-left',
+            'layout-poster-right',
+            'layout-backdrop-minimal',
+            'layout-backdrop-left'
+        );
+
+        // Map layout identifier to CSS class
+        let layoutClass = 'layout-poster-left';
+        if (detailsLayout === 'posterRight') {
+            layoutClass = 'layout-poster-right';
+        } else if (detailsLayout === 'backdropMinimal') {
+            layoutClass = 'layout-backdrop-minimal';
+        } else if (detailsLayout === 'backdropLeft') {
+            layoutClass = 'layout-backdrop-left';
+        }
+
+        // Apply updated layout class
+        pageEl.classList.add(layoutClass);
+    }
+
     render() {
-        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        // Resolve initial layout class based on default / item layout
+        const detailsLayout = this._getDetailsLayout();
         let layoutClass = 'layout-poster-left';
         if (detailsLayout === 'posterRight') {
             layoutClass = 'layout-poster-right';
@@ -633,6 +690,9 @@ class DetailsPage extends Page {
             });
             this._item = item;
 
+            // Synchronize container layout class once item type is determined
+            this._updateLayoutClasses();
+
             // Cache Series item for reuse across child Season/Episode detail pages
             if (item.Type === 'Series') {
                 state.set(`details:series:${item.Id}`, item);
@@ -736,7 +796,7 @@ class DetailsPage extends Page {
             // 3. Load logo — await for backdrop layouts (where logo is the primary
             //    title), fire-and-forget for poster layouts (text title is sufficient)
             // ────────────────────────────────────────────────────────────────────────
-            const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+            const detailsLayout = this._getDetailsLayout(this._item);
             const isBackdropLayout = detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft';
             if (isBackdropLayout) {
                 await this._loadLogoAsync();
@@ -1999,7 +2059,7 @@ class DetailsPage extends Page {
 
         const params = imageService.getParams('details-logo');
         let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
-        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        const detailsLayout = this._getDetailsLayout(item);
         if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
             titleStyle = 'logo-only';
         }
@@ -2510,7 +2570,7 @@ class DetailsPage extends Page {
             metaHtml += `<span class="meta-item meta-item-dates">${datesFormattedString}</span>`;
         }
         let titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
-        const detailsLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+        const detailsLayout = this._getDetailsLayout(item);
         if (detailsLayout === 'backdropMinimal' || detailsLayout === 'backdropLeft') {
             titleStyle = 'logo-only';
         }
