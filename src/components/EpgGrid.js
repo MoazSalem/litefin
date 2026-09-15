@@ -683,10 +683,19 @@ class EpgGrid {
             }
         } else {
             const nextRowIndex = direction === 'down' ? rowIndex + 1 : rowIndex - 1;
-            if (nextRowIndex >= 0 && nextRowIndex < this.channels.length) {
+
+            if (nextRowIndex < 0) {
+                // Leaving top row upwards -> focus tabs if configured
+                if (this.options.leaveUp) {
+                    focusManager.setActiveSection(this.options.leaveUp);
+                }
+                return null;
+            }
+
+            if (nextRowIndex < this.channels.length) {
                 const nextChannel = this.channels[nextRowIndex];
 
-                this._scrollChannelIntoView(nextRowIndex);
+                // Ensure row DOM element exists
                 if (!this.domNodes.has(nextChannel.Id)) {
                     this._renderRow(nextRowIndex, nextChannel);
                 }
@@ -696,17 +705,39 @@ class EpgGrid {
                     new Date(program.StartDate).getTime() +
                     (new Date(program.EndDate).getTime() - new Date(program.StartDate).getTime()) / 2;
 
-                const overlapping = nextRowPrograms.find((p) => {
+                // 1. Find program overlapping the midpoint of the current program
+                let targetProgram = nextRowPrograms.find((p) => {
                     const start = new Date(p.StartDate).getTime();
                     const end = new Date(p.EndDate).getTime();
                     return midTime >= start && midTime < end;
                 });
 
-                if (overlapping) {
-                    nextEl = this._findProgramEl(nextChannel.Id, overlapping.Id);
-                } else if (nextRowPrograms.length === 0) {
+                // 2. If no exact midpoint overlap, find any program overlapping the time range
+                if (!targetProgram) {
+                    const curStart = new Date(program.StartDate).getTime();
+                    const curEnd = new Date(program.EndDate).getTime();
+                    targetProgram = nextRowPrograms.find((p) => {
+                        const start = new Date(p.StartDate).getTime();
+                        const end = new Date(p.EndDate).getTime();
+                        return (start >= curStart && start < curEnd) || (end > curStart && end <= curEnd);
+                    });
+                }
+
+                // 3. If still not found, pick the closest program in time
+                if (!targetProgram && nextRowPrograms.length > 0) {
+                    targetProgram = nextRowPrograms.reduce((prev, curr) => {
+                        const prevDiff = Math.abs(new Date(prev.StartDate).getTime() - midTime);
+                        const currDiff = Math.abs(new Date(curr.StartDate).getTime() - midTime);
+                        return currDiff < prevDiff ? curr : prev;
+                    });
+                }
+
+                if (targetProgram) {
+                    nextEl = this._findProgramEl(nextChannel.Id, targetProgram.Id);
+                } else {
                     const data = this.domNodes.get(nextChannel.Id);
                     if (data && data.channelEl) {
+                        this._scrollChannelIntoView(nextRowIndex);
                         return data.channelEl;
                     }
                 }
