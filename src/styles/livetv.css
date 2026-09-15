@@ -388,6 +388,13 @@
     background: var(--jf-accent);
     z-index: 100;
     box-shadow: 0 0 10px var(--jf-accent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.epg-indicator.visible {
+    opacity: 1;
 }
 
 .epg-indicator::after {

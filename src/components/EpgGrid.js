@@ -69,6 +69,9 @@ class EpgGrid {
         // Track internal focus element pointer for spatial D-pad routing
         this._focusedEl = null;
 
+        // Visibility flag for current time indicator: only reveal when navigated into EPG programs
+        this._showIndicator = false;
+
         // Component lifecycle flags
         this._isMounted = false;
         this._isDestroyed = false;
@@ -653,10 +656,20 @@ class EpgGrid {
             const programs = this.programsMap.get(channelId) || [];
             const idx = programs.findIndex((p) => p.Id === program.Id);
             if (idx > 0) {
+                // Navigate to the preceding program block
                 nextEl = this._findProgramEl(channelId, programs[idx - 1].Id);
             } else {
+                // Return focus to the channel header cell
                 const data = this.domNodes.get(channelId);
                 if (data && data.channelEl) {
+                    // Reset time indicator visibility when moving back to channel side column
+                    this._showIndicator = false;
+                    this._updateIndicator();
+
+                    // Reset timeline horizontal scroll position flush with current time
+                    this._scrollToNow();
+                    this.requestRender();
+
                     this._scrollChannelIntoView(rowIndex);
                     return data.channelEl;
                 }
@@ -665,6 +678,7 @@ class EpgGrid {
             const programs = this.programsMap.get(channelId) || [];
             const idx = programs.findIndex((p) => p.Id === program.Id);
             if (idx >= 0 && idx + 1 < programs.length) {
+                // Navigate to the next program block
                 nextEl = this._findProgramEl(channelId, programs[idx + 1].Id);
             }
         } else {
@@ -708,33 +722,91 @@ class EpgGrid {
     }
 
     /**
-     * Finds the DOM element for a given channel and program ID.
+     * Finds or dynamically creates the DOM element for a given channel and program ID.
+     * Prevents navigation lockups when navigating to off-screen virtualized programs.
      * @private
      */
     _findProgramEl(channelId, programId) {
         const data = this.domNodes.get(channelId);
-        if (data) {
-            return data.rowEl.querySelector(`[data-program-id="${programId}"]`);
-        }
-        return null;
+        if (!data) return null;
+
+        // Check if element is already present in DOM
+        let el = data.rowEl.querySelector(`[data-program-id="${programId}"]`);
+        if (el) return el;
+
+        // If off-screen, dynamically mount the program DOM element into the row
+        const programs = this.programsMap.get(channelId) || [];
+        const program = programs.find((p) => p.Id === programId);
+        if (!program) return null;
+
+        const rowIndex = parseInt(data.channelEl.dataset.rowIndex, 10);
+        const left = this._getTimeOffset(new Date(program.StartDate));
+        const width = this._getTimeDuration(new Date(program.StartDate), new Date(program.EndDate));
+
+        const progEl = document.createElement('div');
+        progEl.className = 'epg-program';
+        progEl.tabIndex = 0;
+        progEl.style.left = `${left}px`;
+        progEl.style.width = `${width}px`;
+        progEl.dataset.programId = program.Id;
+        progEl.dataset.channelId = channelId;
+        progEl.dataset.rowIndex = rowIndex;
+
+        progEl.__programData = program;
+        progEl._epgLeft = left;
+        progEl._epgWidth = width;
+
+        progEl.innerHTML = `
+            <div class="epg-program-content">
+                <div class="epg-program-title">
+                    <span class="epg-program-prefix hidden">‹</span>
+                    <span class="title-text">${escapeHtml(program.Name)}</span>
+                </div>
+                <div class="epg-program-time">${this._formatProgramTime(program)}</div>
+            </div>
+        `;
+
+        progEl._contentNode = progEl.querySelector('.epg-program-content');
+        progEl._prefixNode = progEl.querySelector('.epg-program-prefix');
+
+        progEl.onclick = () => this._handleProgramClick(program);
+        progEl.onfocus = () => this._handleProgramFocus(progEl);
+
+        data.rowEl.appendChild(progEl);
+        return progEl;
     }
 
     /**
      * Handles program focus event.
+     * Reveals the current time indicator once the user enters EPG program items.
      * @private
      */
     _handleProgramFocus(el) {
         this._focusedEl = el;
+        // User has moved into the EPG program items — activate time indicator visibility
+        this._showIndicator = true;
+        this._updateIndicator();
+
         const program = el.__programData;
         eventBus.emit('epg:programFocused', program);
     }
 
     /**
      * Handles channel cell focus event.
+     * Resets timeline horizontal scroll position to current time slot and hides time indicator.
      * @private
      */
     _handleChannelFocus(el) {
         this._focusedEl = el;
+
+        // Reset time indicator visibility when leaving the program grid
+        this._showIndicator = false;
+        this._updateIndicator();
+
+        // Reset timeline horizontal scroll position flush with current time
+        this._scrollToNow();
+        this.requestRender();
+
         const channelIndex = parseInt(el.dataset.rowIndex, 10);
         const channel = this.channels[channelIndex];
         if (channel) {
@@ -799,31 +871,15 @@ class EpgGrid {
     }
 
     /**
-     * Sets initial focus onto the currently airing program or channel cell.
+     * Sets initial focus onto the left channel cell or current program aligned left.
      * @private
      */
     _focusNow() {
-        const now = new Date();
         const startRow = Math.floor(this.scrollY / this.ROW_HEIGHT);
         const channel = this.channels[startRow] || this.channels[0];
         if (!channel) return;
 
-        const programs = this.programsMap.get(channel.Id) || [];
-        const current = programs.find((p) => {
-            const start = new Date(p.StartDate).getTime();
-            const end = new Date(p.EndDate).getTime();
-            return now.getTime() >= start && now.getTime() < end;
-        });
-
-        if (current) {
-            const el = this._findProgramEl(channel.Id, current.Id);
-            if (el) {
-                this._focusedEl = el;
-                focusManager.focusElement(el, { skipScroll: true });
-                return;
-            }
-        }
-
+        // Focus the channel row cell on the left
         const data = this.domNodes.get(channel.Id);
         if (data && data.channelEl) {
             this._focusedEl = data.channelEl;
@@ -885,7 +941,8 @@ class EpgGrid {
     // =========================================================================
 
     /**
-     * Computes rounded start time for timeline headers.
+     * Computes rounded start time for timeline headers (with a 2-hour lookback window).
+     * Includes past programs so the user can scroll left to see earlier programs on the same day.
      * @private
      */
     _getRoundStartTime() {
@@ -893,25 +950,39 @@ class EpgGrid {
         now.setMinutes(now.getMinutes() >= 30 ? 30 : 0);
         now.setSeconds(0);
         now.setMilliseconds(0);
-        return new Date(now.getTime() - 2 * 60 * 60 * 1000); // 2 hours back
+        // Include 2 hours of past programs for full backwards timeline scrolling
+        return new Date(now.getTime() - 2 * 60 * 60 * 1000);
     }
 
     /**
-     * Centers horizontal view offset around current time.
+     * Aligns horizontal view offset to the current time slot flush left on initial load.
      * @private
      */
     _scrollToNow() {
         const now = new Date();
-        const offset = this._getTimeOffset(now);
-        this.scrollX = Math.max(0, offset - 300);
+        const roundedNow = new Date(now);
+        roundedNow.setMinutes(roundedNow.getMinutes() >= 30 ? 30 : 0);
+        roundedNow.setSeconds(0);
+        roundedNow.setMilliseconds(0);
+
+        // Align the current half-hour slot cleanly to the left edge (scrollX offset)
+        this.scrollX = Math.max(0, this._getTimeOffset(roundedNow));
     }
 
     /**
-     * Updates indicator position for current time line.
+     * Updates indicator position for current time line and manages its visibility.
      * @private
      */
     _updateIndicator() {
         if (!this.nowIndicator) return;
+
+        // Toggle visibility class based on user navigation into EPG program items
+        if (this._showIndicator) {
+            this.nowIndicator.classList.add('visible');
+        } else {
+            this.nowIndicator.classList.remove('visible');
+        }
+
         const now = new Date();
         const offset = this._getTimeOffset(now);
         this.nowIndicator.style.left = `${offset}px`;
