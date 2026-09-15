@@ -28,7 +28,7 @@ class LiveTvPage extends Page {
     constructor(options = {}) {
         super(options);
         this.title = i18n.t('LiveTV');
-        this._currentTab = 'suggestions';
+        this._currentTab = storage.getItem('pref:defaultLiveTvTab') || 'suggestions';
         this._tabData = new Map(); // Cache data for tabs
         this._virtualRows = [];
         this._mediaGrids = [];
@@ -82,7 +82,7 @@ class LiveTvPage extends Page {
     setNavigationState(savedState) {
         if (!savedState) return;
 
-        this._currentTab = savedState.currentTab || 'suggestions';
+        this._currentTab = savedState.currentTab || storage.getItem('pref:defaultLiveTvTab') || 'suggestions';
         this._startIndex = savedState.startIndex || 0;
         this._limit = savedState.limit || Number(storage.getItem('pref:libraryPageSize')) || 100;
 
@@ -95,6 +95,7 @@ class LiveTvPage extends Page {
     }
 
     render() {
+        const curTab = this._currentTab;
         return `
             <div class="livetv-page page">
                 <main class="page-content" id="livetv-scroll-container">
@@ -102,10 +103,10 @@ class LiveTvPage extends Page {
                         <h1 data-i18n="LiveTV">${i18n.t('LiveTV')}</h1>
                         <div class="ltv-tab-header" id="livetv-tabs">
                             <div class="ltv-tab-indicator" id="ltv-tab-indicator"></div>
-                            <button class="ltv-tab-btn active" data-tab="suggestions" tabindex="0">${i18n.t('Suggestions')}</button>
-                            <button class="ltv-tab-btn" data-tab="guide" tabindex="0">${i18n.t('Guide')}</button>
-                            <button class="ltv-tab-btn" data-tab="channels" tabindex="0">${i18n.t('Channels')}</button>
-                            <button class="ltv-tab-btn" data-tab="recordings" tabindex="0">${i18n.t('Recordings')}</button>
+                            <button class="ltv-tab-btn ${curTab === 'suggestions' ? 'active' : ''}" data-tab="suggestions" tabindex="${curTab === 'suggestions' ? '0' : '-1'}">${i18n.t('Suggestions')}</button>
+                            <button class="ltv-tab-btn ${curTab === 'guide' ? 'active' : ''}" data-tab="guide" tabindex="${curTab === 'guide' ? '0' : '-1'}">${i18n.t('Guide')}</button>
+                            <button class="ltv-tab-btn ${curTab === 'channels' ? 'active' : ''}" data-tab="channels" tabindex="${curTab === 'channels' ? '0' : '-1'}">${i18n.t('Channels')}</button>
+                            <button class="ltv-tab-btn ${curTab === 'recordings' ? 'active' : ''}" data-tab="recordings" tabindex="${curTab === 'recordings' ? '0' : '-1'}">${i18n.t('Recordings')}</button>
                         </div>
                     </div>
                     <div class="tab-content" id="livetv-content">

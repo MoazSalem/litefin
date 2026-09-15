@@ -2257,6 +2257,29 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Default Live TV Tab Setting -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="DefaultLiveTvTab">${i18n.t('DefaultLiveTvTab') || 'Default Live TV Tab'}</span>
+                        <span class="setting-description" data-i18n="DefaultLiveTvTabDescription">${i18n.t('DefaultLiveTvTabDescription') || 'Choose which tab is selected by default when opening the Live TV page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'default-livetv-tab-select',
+                [
+                    {
+                        value: 'suggestions',
+                        label: (i18n.t('Suggestions') || 'Suggestions') + ` (${i18n.t('Default') || 'Default'})`
+                    },
+                    { value: 'guide', label: i18n.t('Guide') || 'Guide' },
+                    { value: 'channels', label: i18n.t('Channels') || 'Channels' },
+                    { value: 'recordings', label: i18n.t('Recordings') || 'Recordings' }
+                ],
+                storage.getItem('pref:defaultLiveTvTab') || 'suggestions'
+            )}
+                    </div>
+                </div>
+
 
                 <!-- Hero Carousel Section -->
                 <h3 class="setting-section-title" data-i18n="HeroCarousel" style="margin-top: 40px;">${i18n.t('HeroCarousel') || 'Hero Carousel'}</h3>
@@ -8949,7 +8972,8 @@ class SettingsPage extends Page {
             'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true },
             'sidebar-items-align-select': { key: 'pref:sidebarItemsAlign', type: 'local', triggerEvent: true },
             'trending-movies-collection-select': { key: 'pref:trendingMoviesCollection', type: 'local', triggerEvent: true },
-            'trending-series-collection-select': { key: 'pref:trendingSeriesCollection', type: 'local', triggerEvent: true }
+            'trending-series-collection-select': { key: 'pref:trendingSeriesCollection', type: 'local', triggerEvent: true },
+            'default-livetv-tab-select': { key: 'pref:defaultLiveTvTab', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
