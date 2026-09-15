@@ -447,8 +447,15 @@ class FocusManager {
     /**
      * Explicitly remove focus from the current element.
      * Use this when a page is being destroyed or a section is removed.
+     * @param {boolean} [force=false] - Force clearing focus even if a trap is active
      */
-    clearFocus() {
+    clearFocus(force = false) {
+        // If a focus trap is active, prevent clearing focus unless forced by trap exit
+        if (this._trapStack.length > 0 && !force) {
+            log.warn('clearFocus: Blocked attempt to clear focus while modal focus trap is active');
+            return;
+        }
+
         if (this._focusedElement) {
             this._focusedElement.classList.remove('focused');
 
@@ -481,6 +488,19 @@ class FocusManager {
     setActiveSection(name, restoreFocus = true, fromElement = null, options = {}) {
         if (!this._sections.has(name)) {
             log.warn(`Unknown section "${name}"`);
+            return;
+        }
+
+        // ====================================================================
+        // MODAL FOCUS TRAP ENFORCEMENT
+        // ====================================================================
+        // When a focus trap is active (e.g. ExitDialog, SeerrRequestModal, SyncPlay),
+        // all navigation and section switching MUST remain locked inside '__trap__'.
+        // Any attempt by background pages, asynchronous pipelines, or timers
+        // to switch the active section away from the trap is rejected here.
+        // ====================================================================
+        if (this._trapStack.length > 0 && name !== '__trap__') {
+            log.warn(`setActiveSection: Blocked attempt to change section to "${name}" while focus is trapped in modal`);
             return;
         }
 
@@ -876,6 +896,23 @@ class FocusManager {
     focusElement(element, options = {}) {
         if (!element) return;
 
+        // ====================================================================
+        // MODAL FOCUS TRAP ENFORCEMENT
+        // ====================================================================
+        // When a focus trap is active, only elements strictly contained within
+        // the active trap container are eligible to receive focus.
+        // If an asynchronous page loader (e.g. HomePage rendering media cards in
+        // the background while ExitDialog is shown) attempts to focus an element
+        // outside the modal, reject the request immediately to prevent stealing focus.
+        // ====================================================================
+        if (this._trapStack.length > 0) {
+            const trapConfig = this._sections.get('__trap__');
+            if (trapConfig && trapConfig.container && !trapConfig.container.contains(element)) {
+                log.warn('focusElement: Blocked attempt to focus element outside active modal trap', element);
+                return;
+            }
+        }
+
         const defaults = { scroll: true, skipScroll: false, instantScroll: false };
         options = { ...defaults, ...options };
 
@@ -980,6 +1017,17 @@ class FocusManager {
     }
 
     _restoreFocus(sectionName, fromElement = null, options = {}) {
+        // ====================================================================
+        // MODAL FOCUS TRAP ENFORCEMENT
+        // ====================================================================
+        // If focus is currently trapped within a modal, reject any external
+        // section focus restoration attempts triggered by background updates.
+        // ====================================================================
+        if (this._trapStack.length > 0 && sectionName !== '__trap__') {
+            log.warn(`_restoreFocus: Blocked attempt to restore focus for "${sectionName}" while focus is trapped`);
+            return;
+        }
+
         const config = this._sections.get(sectionName);
         if (!config) return;
 
@@ -1123,32 +1171,88 @@ class FocusManager {
         log.info('Key processing resumed');
     }
 
+    /**
+     * Check if a modal focus trap is currently active.
+     * Useful for background tasks / page renderers to avoid stealing focus from modals.
+     * @returns {boolean} True if navigation is trapped within a modal
+     */
+    isTrapped() {
+        return this._trapStack.length > 0;
+    }
+
+    /**
+     * Trap all directional navigation inside a specified container (e.g. for modal dialogs).
+     * Saves the currently focused element and section so they can be restored upon popTrap().
+     *
+     * @param {HTMLElement} container - DOM container element confining focus
+     * @param {Object} [options] - Configuration options (orientation, selector, enterTo, etc.)
+     */
     pushTrap(container, options = {}) {
+        // Capture previous active section and focused element so we can restore them on close
         this._trapStack.push({
             section: this._activeSection,
             element: this._focusedElement
         });
+
+        // Register the modal container as the isolated '__trap__' section
         this.register('__trap__', container, {
             orientation: options.orientation || 'grid',
             selector: options.selector || undefined,
-            // Explicitly block all leaving directions
+            enterTo: options.enterTo || 'first',
+            defaultFocusSelector: options.defaultFocusSelector || null,
+            // Explicitly block all directional escapes out of the container
             leaveUp: null,
             leaveDown: null,
             leaveLeft: null,
             leaveRight: null
         });
-        this.setActiveSection('__trap__');
+
+        // Switch to the trap section and focus the primary entry element
+        this.setActiveSection('__trap__', true, null, options);
+
+        // Ensure an element inside the trap receives focus immediately
+        const trapFocusables = this._getFocusables('__trap__', true);
+        if (trapFocusables.length > 0 && (!this._focusedElement || !container.contains(this._focusedElement))) {
+            this.focusElement(trapFocusables[0]);
+        }
     }
 
+    /**
+     * Release the active modal focus trap and restore focus/section to their previous states.
+     */
     popTrap() {
+        // Pop previous state BEFORE unregistering so that trap checks in setActiveSection pass
         const prev = this._trapStack.pop();
         this.unregister('__trap__');
+
+        // Restore previous section and element if available and still in document
         if (prev) {
-            this.setActiveSection(prev.section, false);
+            if (prev.section && this._sections.has(prev.section)) {
+                this.setActiveSection(prev.section, false);
+            }
             if (prev.element && document.contains(prev.element)) {
                 this.focusElement(prev.element);
             }
         }
+
+        // Fallback: If no element is focused after releasing the trap (e.g. if the trap was entered
+        // while the page was still loading and had no focused element yet), restore focus
+        // to the active section or the first available registered section on the page.
+        if (!this._focusedElement) {
+            if (this._activeSection && this._sections.has(this._activeSection)) {
+                this._restoreFocus(this._activeSection);
+            } else {
+                const fallbackSection = Array.from(this._sections.keys()).find(
+                    (s) => s !== '__trap__' && !s.startsWith('__')
+                );
+                if (fallbackSection) {
+                    this.setActiveSection(fallbackSection, true);
+                }
+            }
+        }
+
+        // Notify components (e.g. HomePage) that the focus trap has been released
+        eventBus.emit('focus:trapPopped');
     }
 
     getActiveSection() {

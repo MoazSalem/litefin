@@ -158,6 +158,17 @@ class NavigationState {
     _doRestoreScrollFocus(pageInstance, state) {
         if (storage.getItem('pref:disableFocusRestore') === 'true') return;
 
+        // ====================================================================
+        // MODAL FOCUS TRAP ENFORCEMENT
+        // ====================================================================
+        // If a focus trap is currently active (e.g. ExitDialog or a modal menu),
+        // abort restoring scroll position or stealing focus away from the modal.
+        // ====================================================================
+        if (focusManager.isTrapped()) {
+            log.debug('Skipping NavigationState restoreScrollFocus because focus is trapped in modal');
+            return;
+        }
+
         if (this._debug) {
             log.debug('Executing scroll/focus restoration');
         }

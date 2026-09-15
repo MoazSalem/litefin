@@ -207,6 +207,22 @@ class HomePage extends Page {
 
         // Mark as async page for Navigation State so scroll/focus restoration is deferred
         this._isAsyncPage = true;
+
+        /**
+         * Listen for modal focus trap dismissals (e.g. ExitDialog closed).
+         * If homepage focus restoration was deferred because ExitDialog was visible,
+         * run the deferred restoration once the modal is dismissed.
+         * @type {Function|null}
+         */
+        this._onTrapPopped = () => {
+            if (!this._isMounted) return;
+            if (typeof this._pendingFocusRestore === 'function') {
+                log.info('Focus trap popped - executing deferred homepage focus restoration');
+                this._pendingFocusRestore();
+                this._pendingFocusRestore = null;
+            }
+        };
+        eventBus.on('focus:trapPopped', this._onTrapPopped);
     }
 
     render() {
@@ -274,6 +290,12 @@ class HomePage extends Page {
         if (this._homeIdlePrefetchTimer) {
             clearTimeout(this._homeIdlePrefetchTimer);
             this._homeIdlePrefetchTimer = null;
+        }
+
+        // Clean up modal trap popped listener
+        if (this._onTrapPopped) {
+            eventBus.off('focus:trapPopped', this._onTrapPopped);
+            this._onTrapPopped = null;
         }
     }
 
@@ -1093,15 +1115,28 @@ class HomePage extends Page {
                         this._tryInitializeFocus(this.$('#home-rows'));
                     }
 
-                    // Execute any pending focus restoration callback
-                    if (typeof this._pendingFocusRestore === 'function') {
-                        this._pendingFocusRestore();
-                        this._pendingFocusRestore = null;
-                    }
+                    // ============================================================
+                    // Focus Trap Awareness
+                    // ============================================================
+                    // If a modal or focus trap (such as the ExitDialog) is currently
+                    // active on screen because the user rapidly pressed Back upon
+                    // returning to HomePage, do NOT steal focus or change sections.
+                    // Keep _pendingFocusRestore intact so that it executes cleanly
+                    // if/when the user dismisses the dialog via 'focus:trapPopped'.
+                    // ============================================================
+                    if (!focusManager.isTrapped()) {
+                        // Execute any pending focus restoration callback
+                        if (typeof this._pendingFocusRestore === 'function') {
+                            this._pendingFocusRestore();
+                            this._pendingFocusRestore = null;
+                        }
 
-                    // Final fallback: if nothing focused yet, go to sidebar
-                    if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
-                        this.setActiveSection('sidebar');
+                        // Final fallback: if nothing focused yet, go to sidebar
+                        if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+                            this.setActiveSection('sidebar');
+                        }
+                    } else {
+                        log.info('Modal trap active during Step 7 - deferring homepage focus restoration');
                     }
                 } catch (err) {
                     log.error('Focus restoration failed, hiding splash anyway', err);
@@ -1477,7 +1512,8 @@ class HomePage extends Page {
         }
 
         // Optionally move D-pad focus to the first newly rendered row
-        if (autoFocus && firstRenderedDescId) {
+        // Do NOT autofocus if a modal focus trap (e.g. ExitDialog) is open
+        if (autoFocus && firstRenderedDescId && !focusManager.isTrapped()) {
             const entry = this._rowRegistry.get(firstRenderedDescId);
             if (entry && entry.sectionEl) {
                 const rowId = firstRenderedDescId;
