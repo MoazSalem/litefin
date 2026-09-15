@@ -134,7 +134,15 @@ class Router {
             // Replace current hash without adding to browser history
             window.location.replace(`#${path}`);
         } else {
-            window.location.hash = path;
+            // Check if we are already sitting on this path
+            if (this.getCurrentPath() === path) {
+                // If already at target path, setting window.location.hash is a no-op in browsers.
+                // Trigger hash change listener directly to force route reload / instantiation.
+                this._onHashChange();
+            } else {
+                // Standard push navigation by updating URL hash
+                window.location.hash = path;
+            }
         }
     }
 
@@ -314,6 +322,51 @@ class Router {
         // No matching route - handle 404
         log.warn(`No route found for "${path}"`);
         eventBus.emit('router:notFound', { path });
+    }
+
+    /**
+     * Get a shallow copy of the current navigation history stack.
+     * Each entry contains the route path and optional captured state.
+     *
+     * @returns {Array<{path: string, state: any}>} Array of history entries
+     */
+    getHistory() {
+        // Return a shallow copy of the internal history array
+        return [...this._history];
+    }
+
+    /**
+     * Set or seed the navigation history stack with predetermined routes.
+     *
+     * Essential for deep-link scenarios (such as Samsung Smart Hub preview tiles)
+     * where launching directly into a detail or playback page requires preceding
+     * breadcrumbs (e.g., ['/home', '/details/seriesId']) in the back stack.
+     * This guarantees that pressing the Return / Back key walks back up the app's
+     * logical hierarchy to the homepage rather than abruptly exiting the app.
+     *
+     * @param {Array<string|{path: string, state?: any}>} entries - Ordered history entries (oldest first)
+     */
+    setHistory(entries) {
+        // Guard against non-array input
+        if (!Array.isArray(entries)) {
+            log.warn('setHistory called with non-array argument:', entries);
+            return;
+        }
+
+        // Normalize string paths into standard history entry objects
+        this._history = entries.map((entry) => {
+            if (typeof entry === 'string') {
+                return { path: entry, state: null };
+            }
+            return { path: entry.path, state: entry.state || null };
+        });
+
+        // Enforce maximum history capacity boundary
+        if (this._history.length > this._maxHistory) {
+            this._history = this._history.slice(-this._maxHistory);
+        }
+
+        log.info('Navigation history seeded:', this._history.map((e) => e.path));
     }
 
     /**
