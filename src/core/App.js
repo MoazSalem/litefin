@@ -40,6 +40,7 @@ import PlayerPage from '../pages/PlayerPage.js';
 import ProfilesPage from '../pages/ProfilesPage.js';
 import LiveTvPage from '../pages/LiveTvPage.js';
 import SlideshowPage from '../pages/SlideshowPage.js';
+import EmulatorPage from '../pages/EmulatorPage.js';
 import Sidebar from '../components/Sidebar.js';
 
 import { logger } from '../utils/Logger.js';
@@ -342,7 +343,7 @@ class App {
         // showing the sidebar (which contains the active user's name) would be inconsistent.
         const fullScreenRoutes = ['/login', '/offline', '/profiles'];
         const isFullScreen =
-            fullScreenRoutes.includes(path) || path.startsWith('/player') || path.startsWith('/slideshow');
+            fullScreenRoutes.includes(path) || path.startsWith('/player') || path.startsWith('/slideshow') || path.startsWith('/emulator');
 
         if (isFullScreen) {
             document.body.classList.add('no-sidebar');
@@ -890,6 +891,7 @@ class App {
         router.register('/offline', OfflinePage);
         router.register('/slideshow/:photoId', SlideshowPage);
         router.register('/player/:id/:resume', PlayerPage); // Video player page
+        router.register('/emulator/:id', EmulatorPage); // JellyEmu game player page
 
         // Season redirect (for backward compatibility or deep links)
         router.register('/series/:id/season/:seasonId', {

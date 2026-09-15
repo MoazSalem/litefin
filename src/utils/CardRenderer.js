@@ -13,7 +13,7 @@ import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
-import { detailsIcons } from './Icons.js';
+import { detailsIcons, getStaticIcon } from './Icons.js';
 import { platformInfo } from './PlatformInfo.js';
 
 class CardRenderer {
@@ -34,6 +34,96 @@ class CardRenderer {
     static clearCache() {
         this._htmlCache.clear();
         this._htmlCacheKey = null;
+    }
+
+    /**
+     * Determines whether the given item represents a JellyEmu game ROM.
+     * Checks Tags, Type, MediaType, and Path extension semantics.
+     *
+     * Following Apple Human Interface Guidelines: ensure consistent visual categorization
+     * across all surfaces (library grids, continue watching, recently added).
+     *
+     * @param {Object} item
+     * @returns {boolean}
+     */
+    static isGame(item) {
+        if (!item) return false;
+
+        // 1. Tag check (primary marker set by JellyEmu)
+        if (Array.isArray(item.Tags) && item.Tags.includes('JellyEmu')) return true;
+
+        // 2. Type or MediaType check
+        if (item.Type === 'Game' || item.MediaType === 'Game') return true;
+
+        // 3. Fallback: Check if container or Path has known ROM extensions or Book type with game-like tags
+        if (item.Type === 'Book') {
+            if (Array.isArray(item.Tags) && item.Tags.some((t) => /^(NES|SNES|GBA|GBC|GB|N64|PSX|Genesis|MegaDrive|GameGear|MAME|Arcade|Atari|NeoGeo|JellyEmu)$/i.test(t))) {
+                return true;
+            }
+            if (item.Path && /\.(nes|sfc|smc|gba|gbc|gb|z64|n64|v64|iso|bin|cue|chd|md|gen|gg|zip|7z)$/i.test(item.Path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Extracts the primary console/platform tag for a JellyEmu game.
+     *
+     * @param {Object} item
+     * @returns {string} Platform name (e.g. 'SNES', 'GBA', 'PSX')
+     */
+    static getGamePlatformTag(item) {
+        if (!item) return '';
+
+        // Known console names / abbreviations to detect
+        const knownPlatforms = [
+            'NES', 'SNES', 'GBA', 'GBC', 'GB', 'N64', 'NDS', '3DS',
+            'PSX', 'PS1', 'PS2', 'PSP', 'Genesis', 'MegaDrive',
+            'MasterSystem', 'GameGear', 'Dreamcast', 'Saturn',
+            'Arcade', 'MAME', 'NeoGeo', 'Atari2600', 'Atari7800', 'Wonderswan'
+        ];
+
+        if (Array.isArray(item.Tags)) {
+            // First check for known platform abbreviations
+            for (const platform of knownPlatforms) {
+                const found = item.Tags.find((t) => t.toLowerCase() === platform.toLowerCase());
+                if (found) return found.toUpperCase();
+            }
+
+            // Otherwise extract any tag that isn't a generic internal tag
+            const skipTags = new Set(['JellyEmu', 'Game', 'MultiDisc', 'Unknown', 'Unsupported', 'Rom', 'Roms']);
+            const candidate = item.Tags.find((t) => !skipTags.has(t));
+            if (candidate) return candidate;
+        }
+
+        // Fallback: Check item.Path or item.Name for console markers
+        if (item.Path) {
+            for (const platform of knownPlatforms) {
+                const regex = new RegExp(`[/\\\\](Nintendo - )?${platform}[/\\\\]`, 'i');
+                if (regex.test(item.Path)) return platform.toUpperCase();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Generate Game Platform Badge HTML if item is a game ROM.
+     * Rendered as an Apple HIG frosted-glass pill badge.
+     * @param {Object} item
+     * @returns {string} HTML string
+     */
+    static getGameBadgeHtml(item) {
+        if (!CardRenderer.isGame(item)) return '';
+        const platform = CardRenderer.getGamePlatformTag(item);
+        if (!platform) return '';
+        return `
+            <div class="game-card-badge" title="${escapeHtml(platform)}">
+                <span class="game-badge-text">${escapeHtml(platform)}</span>
+            </div>
+        `;
     }
 
     /**
@@ -65,6 +155,8 @@ class CardRenderer {
      */
     static getQualityBadgeHtml(item) {
         if (!item) return '';
+        // Game ROMs do not have video resolution/HDR streams
+        if (CardRenderer.isGame(item)) return '';
         const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
         if (!showQualityBadges) return '';
 
@@ -626,7 +718,7 @@ class CardRenderer {
         const hideProgressBar = storage.getItem('pref:hideProgressBar') === 'true';
 
         // Only construct and mount the progress element if playback progress exists and user hasn't hidden it
-        if (!hideProgressBar && item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
+        if (!hideProgressBar && !CardRenderer.isGame(item) && item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
             // Calculate playback percentage completed
             const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
             progressHtml = `
@@ -1033,12 +1125,15 @@ class CardRenderer {
         const showOutside = renderOutside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
         const expansionClass = canExpand ? ' has-expansion' : '';
 
+        const gameBadgeHtml = CardRenderer.getGameBadgeHtml(item);
+
         const badgeContainer = `
             ${badgeHtml}
             ${playedBadgeHtml}
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
             ${qualityBadgeHtml}
+            ${gameBadgeHtml}
             ${seerrTypeBadgeHtml}
             ${seerrBadgeHtml}
         `;
@@ -1129,9 +1224,12 @@ class CardRenderer {
         const data = CardRenderer.getFallbackData(item.Name);
         const hideInitials = options.hideInitials || false;
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+        const isGameItem = CardRenderer.isGame(item);
+        const gameIconSvg = isGameItem ? getStaticIcon('detailsIcons', 'gamepad', 'outlined') : '';
 
         return `
-            <div class="media-fallback grad-${data.gradNum}">
+            <div class="media-fallback grad-${data.gradNum} ${isGameItem ? 'game-fallback' : ''}">
+                ${isGameItem ? `<div class="media-fallback-game-icon">${gameIconSvg}</div>` : ''}
                 ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(data.initials)}</div>` : ''}
                 ${!isModern ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
             </div>

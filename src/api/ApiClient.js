@@ -773,7 +773,7 @@ export class ApiClient {
         const defaults = {
             // Default item count per library row configured via user settings
             Limit: defaultLimit,
-            Fields: 'BackdropImageTags,ParentBackdropImageTags',
+            Fields: 'BackdropImageTags,ParentBackdropImageTags,Tags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ParentId: parentId
@@ -794,7 +794,8 @@ export class ApiClient {
             // Fetch items up to the user-selected row item limit
             Limit: defaultLimit,
             Recursive: true,
-            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+            // Include Tags so game ROM items can be identified with platform badges and progress bar suppression
+            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,

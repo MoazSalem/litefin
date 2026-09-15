@@ -1354,6 +1354,7 @@ class HomePage extends Page {
         try {
             const batchMap = await api.getBatchLatest(libraryIds, {
                 limit: homeRowLimit,
+                fields: 'BackdropImageTags,ParentBackdropImageTags,Tags',
                 ...(hidePlayed ? { isPlayed: false } : {})
             });
 

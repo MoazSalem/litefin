@@ -1184,11 +1184,77 @@ body {
 }
 
 
+.game-card-badge {
+    height: 40px;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 0 12px;
+    border-radius: var(--jf-border-radius);
+    -webkit-border-radius: var(--jf-border-radius);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    z-index: 8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(0, 164, 220, 0.22);
+    color: #4dc2f8;
+    border: 1px solid rgba(77, 194, 248, 0.5);
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.count-badge ~ .game-card-badge {
+    right: 60px;
+}
+
+.game-card-badge .game-badge-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+.game-card-badge .icon-filled,
+.media-fallback-game-icon .icon-filled {
+    display: none !important;
+}
+
+.game-card-badge .icon-outline,
+.media-fallback-game-icon .icon-outline {
+    display: block !important;
+}
+
+/* Game fallback cover with central gamepad icon */
+.media-fallback.game-fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.media-fallback-game-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 8px;
+}
+
+.media-fallback-game-icon svg {
+    width: 52px;
+    height: 52px;
+}
+
 /* Badge Skins: Tinted vs Translucent Dark */
 html[data-badge-style="tinted"] .count-badge,
 html[data-badge-style="tinted"] .played-badge,
 html[data-badge-style="tinted"] .episode-badge,
-html[data-badge-style="tinted"] .quality-badge {
+html[data-badge-style="tinted"] .quality-badge,
+html[data-badge-style="tinted"] .game-card-badge {
     background-color: var(--jf-accent);
     color: var(--jf-accent-content-color);
     border: none;
@@ -1197,7 +1263,8 @@ html[data-badge-style="tinted"] .quality-badge {
 html[data-badge-style="dark"] .count-badge,
 html[data-badge-style="dark"] .played-badge,
 html[data-badge-style="dark"] .episode-badge,
-html[data-badge-style="dark"] .quality-badge {
+html[data-badge-style="dark"] .quality-badge,
+html[data-badge-style="dark"] .game-card-badge {
     background-color: rgba(0, 0, 0, 0.65);
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.15);
