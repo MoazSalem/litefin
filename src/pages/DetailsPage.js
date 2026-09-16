@@ -15,10 +15,13 @@ import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
+import { imageCache } from '../utils/ImageCache.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import { seerr } from '../api/seerrClient.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
+import { IdentifyModal } from '../components/IdentifyModal.js';
+import { ImageEditorModal } from '../components/ImageEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
@@ -623,7 +626,7 @@ class DetailsPage extends Page {
         if (actionsContainer) {
             actionsContainer.addEventListener('mouseover', (e) => {
                 const btn = e.target.closest('.btn, button');
-                if (btn) this._onFocusChangedForTooltip(btn);
+                if (btn) this._onFocusChangedForTooltip?.(btn);
             });
 
             actionsContainer.addEventListener('mouseout', (e) => {
@@ -631,32 +634,131 @@ class DetailsPage extends Page {
                 if (!related || !actionsContainer.contains(related)) {
                     const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
                     if (activeInActions) {
-                        this._onFocusChangedForTooltip(document.activeElement);
+                        this._onFocusChangedForTooltip?.(document.activeElement);
                     } else {
                         tooltipBar.classList.remove('visible');
                     }
                 } else {
                     const newBtn = related.closest('.btn, button');
                     if (newBtn) {
-                        this._onFocusChangedForTooltip(newBtn);
+                        this._onFocusChangedForTooltip?.(newBtn);
                     }
                 }
             });
         }
 
         // Run initial evaluation so tooltip displays immediately for initial focused button
+        this._tooltipTimers = [];
         const updateInitial = () => {
+            if (typeof this._onFocusChangedForTooltip !== 'function') return;
             const targetEl = (document.activeElement && document.activeElement.closest('#actions'))
                 ? document.activeElement
                 : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
             if (targetEl) {
-                this._onFocusChangedForTooltip(targetEl);
+                this._onFocusChangedForTooltip?.(targetEl);
             }
         };
         updateInitial();
         requestAnimationFrame(updateInitial);
-        setTimeout(updateInitial, 150);
-        setTimeout(updateInitial, 400);
+        this._tooltipTimers.push(setTimeout(updateInitial, 150));
+        this._tooltipTimers.push(setTimeout(updateInitial, 400));
+    }
+
+    /**
+     * Re-fetch the current item metadata from the server and refresh
+     * all on-screen media images (poster, backdrop, logo) and hero details
+     * after an admin metadata or image update.
+     * @returns {Promise<void>}
+     */
+    async _refreshItem() {
+        if (!this._itemId) return;
+
+        try {
+            log.info(`[DetailsPage] Re-fetching item metadata and visual assets for ${this._itemId}`);
+
+            // 1. Build metadata fields query
+            const richMetadataStyle =
+                storage.getItem('pref:richMetadataStyle') ||
+                (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+            const hideRich = richMetadataStyle === 'none';
+            const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+
+            const requestedFields = [
+                'MediaStreams',
+                'MediaSources',
+                'Overview',
+                'LibraryId',
+                'CanDelete',
+                'Width',
+                'Height',
+                'CameraMake',
+                'CameraModel',
+                'ExposureTime',
+                'FocalLength',
+                'Aperture',
+                'Altitude',
+                'DateCreated',
+                'PremiereDate',
+                'ProviderIds',
+                'SeriesTmdbId'
+            ];
+
+            if (!hideRich) {
+                requestedFields.push('Genres', 'GenreItems');
+                if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
+                    requestedFields.push('Studios');
+                }
+                if (richMetadataStyle === 'all') {
+                    requestedFields.push('Tags');
+                }
+                if (
+                    richMetadataStyle === 'all' ||
+                    richMetadataStyle === 'genres-studios-writers' ||
+                    richMetadataStyle === 'genres-writers'
+                ) {
+                    requestedFields.push('People');
+                }
+            }
+
+            if (!hideCast && !requestedFields.includes('People')) {
+                requestedFields.push('People');
+            }
+
+            // 2. Query fresh item details directly from server
+            const item = await api.getItem(this._itemId, {
+                Fields: requestedFields.join(',')
+            });
+
+            if (!item) return;
+
+            // 3. Update active item reference in memory
+            this._item = item;
+
+            // 4. Update series cache if applicable
+            if (item.Type === 'Series') {
+                state.set(`details:series:${item.Id}`, item);
+            }
+
+            // 5. Update layout classes and text info
+            this._updateLayoutClasses();
+            this._renderHeroText();
+            this._renderRichMetadata();
+            this._updateTrailerButton();
+
+            // 6. Immediately re-fetch and render visual artwork (poster & backdrop)
+            this._loadImages();
+
+            // 7. Re-fetch or clear logo
+            const logoContainer = this.$('#details-logo');
+            const hasLogo = !!(item.ImageTags?.Logo || item.ParentLogoImageTag);
+            if (hasLogo) {
+                await this._loadLogoAsync();
+            } else if (logoContainer) {
+                logoContainer.innerHTML = '';
+            }
+        } catch (err) {
+            log.error('[DetailsPage] Failed to refresh item data:', err.message || err);
+        }
     }
 
     async _loadDetails() {
@@ -733,7 +835,6 @@ class DetailsPage extends Page {
 
             // Render all text content immediately — only needs this._item
             this._renderHeroText();
-            this._setupFavoriteButton();
             this._renderRichMetadata();
             this._updateTrailerButton();
 
@@ -862,11 +963,11 @@ class DetailsPage extends Page {
                 // now — before secondary content (cast, similar, collections) below has
                 // even started loading. Force focus onto Resume immediately rather than
                 // waiting for the deferred block further down, which only runs once all
-                // of that secondary content finishes. Otherwise there's a multi-second
-                // window where the page looks ready but focus is still on the default
-                // Play button, and a fast OK press starts playback from scratch instead
-                // of resuming.
-                this._resumeFocusForced = this._focusResumeButton();
+                // of that secondary content finishes. Only do this if no modal is active.
+                const modalOpen = document.querySelector('.modal-overlay.visible');
+                if (!modalOpen) {
+                    this._resumeFocusForced = this._focusResumeButton();
+                }
             }
 
             // ────────────────────────────────────────────────────────────────────────
@@ -1082,7 +1183,8 @@ class DetailsPage extends Page {
             const params = imageService.getParams('details-poster');
             const posterUrl = api.getImageUrl(item.Id, 'Primary', {
                 maxWidth: params.maxWidth,
-                quality: params.quality
+                quality: params.quality,
+                tag: item.ImageTags.Primary
             });
 
             // Resolve Poster BlurHash
@@ -1163,6 +1265,8 @@ class DetailsPage extends Page {
 
         if (backdropUrl) {
             BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl, backdropBlurHash);
+        } else {
+            BackdropManager.clearBackdrop(this.$('#backdrop'));
         }
     }
 
@@ -1937,6 +2041,11 @@ class DetailsPage extends Page {
 
         container = this.$('#rich-meta');
         if (container) {
+            // Auto-deactivate trap mode if rich metadata was previously active to avoid orphaned traps
+            if (this._isRichMetaActive) {
+                this._deactivateRichMeta();
+            }
+
             container.innerHTML = htmlParts.join('');
 
             // Make container focusable as a single unit
@@ -4836,12 +4945,32 @@ class DetailsPage extends Page {
         };
     }
 
-    async _showMoreOptionsModal(itemId) {
-        const oldOnBack = this.onBack;
-        // Store focus context for restoration (only if not already stored by a previous modal layer)
-        if (!this._prevFocus) {
-            this._prevFocus = focusManager.getFocused();
-            this._prevSection = focusManager.getActiveSection();
+    async _showMoreOptionsModal(itemId, transitionContext = null) {
+        const oldOnBack = transitionContext?.oldOnBack || this.onBack;
+
+        // Auto-deactivate rich metadata trap if it was active to avoid trap stack conflicts
+        if (this._isRichMetaActive) {
+            this._deactivateRichMeta();
+        }
+
+        // Store focus context for restoration (prioritize transitionContext if provided)
+        if (transitionContext?.prevFocus && document.contains(transitionContext.prevFocus)) {
+            this._prevFocus = transitionContext.prevFocus;
+            this._prevSection = transitionContext.prevSection || 'details-actions';
+        } else if (!this._prevFocus || !document.contains(this._prevFocus)) {
+            const currentFocused = focusManager.getFocused();
+            if (currentFocused && document.contains(currentFocused)) {
+                this._prevFocus = currentFocused;
+                this._prevSection = focusManager.getActiveSection() || 'details-actions';
+            } else {
+                this._prevFocus = this.$('.more-btn') || this.$('.resume-btn') || this.$('.play-btn') || this.$('#actions button');
+                this._prevSection = 'details-actions';
+            }
+        }
+
+        // Record any pending artwork / metadata modifications from child modals
+        if (transitionContext?.hasModified) {
+            this._hasModifiedArtwork = true;
         }
 
         // Use standard track menu style modal (list of options)
@@ -4901,8 +5030,8 @@ class DetailsPage extends Page {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
         }
 
-        // ── Refresh Metadata Permission Check ────────────────────────────────
-        // Following jellyfin-web logic: only administrators can refresh metadata
+        // ── Admin Permissions Check (Refresh, Identify, Edit Images) ─────────
+        // Following jellyfin-web logic: only administrators can manage metadata & images
         if (this._currentUser?.Policy?.IsAdministrator) {
             const i = this._item;
             const invalidRefreshTypes = ['Timer', 'SeriesTimer', 'Program', 'TvChannel'];
@@ -4910,7 +5039,16 @@ class DetailsPage extends Page {
             const isIncompleteRecording = i.Type === 'Recording' && i.Status !== 'Completed';
 
             if (!invalidRefreshTypes.includes(i.Type) && !isLiveTv && !isIncompleteRecording) {
-                options.push({ id: 'refresh', label: i18n.t('RefreshMetadata') });
+                options.push({ id: 'refresh', label: i18n.t('RefreshMetadata') || 'Refresh metadata' });
+
+                // Identify Remote Metadata (supported on Movies, Series, BoxSets, MusicAlbums, Persons, etc.)
+                const invalidIdentifyTypes = ['Folder', 'UserRootFolder', 'CollectionFolder', 'UserView', 'TvChannel', 'Program', 'Timer', 'SeriesTimer'];
+                if (!invalidIdentifyTypes.includes(i.Type)) {
+                    options.push({ id: 'identify', label: i18n.t('Identify') || 'Identify' });
+                }
+
+                // Edit Images (supported on all standard media items)
+                options.push({ id: 'edit-images', label: i18n.t('EditImages') || 'Edit Images' });
             }
         }
 
@@ -5031,20 +5169,36 @@ class DetailsPage extends Page {
                 if (!this._isMoreMenuOpen) overlay.remove();
             }, 300);
 
-            // Restore focus to previous element
-            if (this._prevSection) {
-                focusManager.setActiveSection(this._prevSection, false);
-            }
-            if (this._prevFocus) {
+            // Restore focus to previous element with reliable fallback chain
+            const targetSection = this._prevSection || 'details-actions';
+            focusManager.setActiveSection(targetSection, false);
+
+            if (this._prevFocus && document.contains(this._prevFocus)) {
                 focusManager.focusElement(this._prevFocus);
             } else {
-                focusManager.setActiveSection('details-actions');
+                const fallbackEl = this.$('.more-btn') ||
+                                   this.$('.resume-btn') ||
+                                   this.$('.play-btn') ||
+                                   this.$('#actions button');
+                if (fallbackEl) {
+                    focusManager.focusElement(fallbackEl);
+                } else {
+                    focusManager.setActiveSection(targetSection, true);
+                }
             }
 
             // Restore state
             this._prevFocus = null;
             this._prevSection = null;
             this.onBack = oldOnBack;
+
+            // If artwork or metadata was modified during the modal flow, refresh details page now that focus is safely restored
+            if (this._hasModifiedArtwork) {
+                this._hasModifiedArtwork = false;
+                if (typeof this._refreshItem === 'function') {
+                    this._refreshItem();
+                }
+            }
         };
 
         this.onBack = () => {
@@ -5138,6 +5292,32 @@ class DetailsPage extends Page {
                     setTimeout(() => overlay.remove(), 300);
 
                     this._showRefreshMetadataModal(itemId, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                } else if (id === 'identify') {
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister('details-more-menu');
+                    focusManager.unregister('details-more-menu-actions');
+                    setTimeout(() => overlay.remove(), 300);
+
+                    IdentifyModal.show(itemId, this, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                } else if (id === 'edit-images') {
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister('details-more-menu');
+                    focusManager.unregister('details-more-menu-actions');
+                    setTimeout(() => overlay.remove(), 300);
+
+                    ImageEditorModal.show(itemId, this, {
                         prevFocus: this._prevFocus,
                         prevSection: this._prevSection,
                         fromMoreOptions: true,
@@ -6174,6 +6354,11 @@ class DetailsPage extends Page {
             themeSongPlayer.stopDeferred(2000);
         } else {
             themeSongPlayer.stop();
+        }
+
+        if (this._tooltipTimers) {
+            this._tooltipTimers.forEach((t) => clearTimeout(t));
+            this._tooltipTimers = null;
         }
 
         if (this._onFocusChangedForTooltip) {

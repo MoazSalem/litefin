@@ -31,11 +31,29 @@ class BackdropManager {
         if (!options) {
             const params = imageService.getParams('backdrop');
             options = { maxWidth: params.maxWidth, quality: params.quality };
+        } else {
+            // Clone options object so we do not mutate the caller's parameter
+            options = { ...options };
         }
 
+        // Extract primary backdrop tag for cache busting on image updates
+        const backdropTag =
+            item.BackdropImageTags && item.BackdropImageTags.length > 0
+                ? item.BackdropImageTags[0]
+                : item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0
+                    ? item.ParentBackdropImageTags[0]
+                    : null;
+
+        // Assign tag parameter if not explicitly specified by caller
+        if (backdropTag && !options.tag) {
+            options.tag = backdropTag;
+        }
+
+        // Resolve item ID holding the backdrop image (self or parent)
         const backdropId =
             item.BackdropImageTags && item.BackdropImageTags.length > 0 ? item.Id : item.ParentBackdropItemId;
 
+        // Construct and return final image URL via API client
         if (backdropId) {
             return api.getImageUrl(backdropId, 'Backdrop', options);
         }
@@ -57,9 +75,16 @@ class BackdropManager {
         if (!options) {
             const params = imageService.getParams('backdrop');
             options = { maxWidth: params.maxWidth, quality: params.quality };
+        } else {
+            // Clone options object to prevent external mutation
+            options = { ...options };
         }
+
         // 1. Try Person's own backdrop
         if (person.BackdropImageTags && person.BackdropImageTags.length > 0) {
+            if (!options.tag) {
+                options.tag = person.BackdropImageTags[0];
+            }
             return api.getImageUrl(person.Id, 'Backdrop', options);
         }
 
@@ -70,7 +95,11 @@ class BackdropManager {
                     (i.Type === 'Movie' || i.Type === 'Series') && i.BackdropImageTags && i.BackdropImageTags.length > 0
             );
 
+            // Return work backdrop with tag query parameter
             if (bestWork) {
+                if (!options.tag) {
+                    options.tag = bestWork.BackdropImageTags[0];
+                }
                 return api.getImageUrl(bestWork.Id, 'Backdrop', options);
             }
         }

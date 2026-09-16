@@ -244,9 +244,9 @@ class FocusManager {
      */
     _handleFocusChange(target) {
         // If trap is active, check if focus is escaping
-        if (this._trapStack.length > 0) {
+        if (this.isTrapped()) {
             const trapConfig = this._sections.get('__trap__');
-            if (trapConfig && !trapConfig.container.contains(target)) {
+            if (trapConfig && trapConfig.container && !trapConfig.container.contains(target)) {
                 // Focus escaped the trap! Force it back
                 log.warn('Focus escaped trap, forcing back');
                 const focusables = this._getFocusables('__trap__', true);
@@ -451,7 +451,7 @@ class FocusManager {
      */
     clearFocus(force = false) {
         // If a focus trap is active, prevent clearing focus unless forced by trap exit
-        if (this._trapStack.length > 0 && !force) {
+        if (this.isTrapped() && !force) {
             log.warn('clearFocus: Blocked attempt to clear focus while modal focus trap is active');
             return;
         }
@@ -498,8 +498,9 @@ class FocusManager {
         // all navigation and section switching MUST remain locked inside '__trap__'.
         // Any attempt by background pages, asynchronous pipelines, or timers
         // to switch the active section away from the trap is rejected here.
+        // Self-healing isTrapped() auto-purges orphaned traps if container is gone or modal closed.
         // ====================================================================
-        if (this._trapStack.length > 0 && name !== '__trap__') {
+        if (name !== '__trap__' && this.isTrapped()) {
             log.warn(`setActiveSection: Blocked attempt to change section to "${name}" while focus is trapped in modal`);
             return;
         }
@@ -917,7 +918,8 @@ class FocusManager {
      * Coordinates cleanup, section switching, scroll delegation, and focus.
      */
     focusElement(element, options = {}) {
-        if (!element) return;
+        // Abort if element is invalid or no longer connected to the active DOM tree
+        if (!element || !document.contains(element)) return;
 
         // ====================================================================
         // MODAL FOCUS TRAP ENFORCEMENT
@@ -928,7 +930,7 @@ class FocusManager {
         // the background while ExitDialog is shown) attempts to focus an element
         // outside the modal, reject the request immediately to prevent stealing focus.
         // ====================================================================
-        if (this._trapStack.length > 0) {
+        if (this.isTrapped()) {
             const trapConfig = this._sections.get('__trap__');
             if (trapConfig && trapConfig.container && !trapConfig.container.contains(element)) {
                 log.warn('focusElement: Blocked attempt to focus element outside active modal trap', element);
@@ -1046,7 +1048,7 @@ class FocusManager {
         // If focus is currently trapped within a modal, reject any external
         // section focus restoration attempts triggered by background updates.
         // ====================================================================
-        if (this._trapStack.length > 0 && sectionName !== '__trap__') {
+        if (sectionName !== '__trap__' && this.isTrapped()) {
             log.warn(`_restoreFocus: Blocked attempt to restore focus for "${sectionName}" while focus is trapped`);
             return;
         }
@@ -1207,11 +1209,54 @@ class FocusManager {
 
     /**
      * Check if a modal focus trap is currently active.
-     * Useful for background tasks / page renderers to avoid stealing focus from modals.
-     * @returns {boolean} True if navigation is trapped within a modal
+     * Evaluates whether the trap stack has entries AND whether the trap container is
+     * still attached to the active DOM tree, visible, and actively trapping navigation.
+     * Auto-purges orphaned or detached traps left behind by ungraceful modal exits.
+     *
+     * @returns {boolean} True if navigation is actively trapped within a modal
      */
     isTrapped() {
-        return this._trapStack.length > 0;
+        // If the trap stack is empty, no trap is active
+        if (this._trapStack.length === 0) return false;
+
+        const trapConfig = this._sections.get('__trap__');
+        // If __trap__ section configuration is missing or container is detached from DOM tree,
+        // the trap was orphaned without a corresponding popTrap() call. Purge it immediately.
+        if (!trapConfig || !trapConfig.container || !document.contains(trapConfig.container)) {
+            log.warn('isTrapped: Purging orphaned focus trap whose container is detached from DOM');
+            this._trapStack = [];
+            this._sections.delete('__trap__');
+            return false;
+        }
+
+        // If the trap container belongs to a modal overlay that is no longer visible, auto-purge
+        const modalOverlay = trapConfig.container.closest('.modal-overlay');
+        if (modalOverlay && (!modalOverlay.classList.contains('visible') || modalOverlay.style.display === 'none')) {
+            log.warn('isTrapped: Purging orphaned focus trap inside non-visible modal overlay');
+            this._trapStack = [];
+            this._sections.delete('__trap__');
+            return false;
+        }
+
+        // If the trap container itself is styled as display: none or hidden, auto-purge
+        if (trapConfig.container.style.display === 'none' || trapConfig.container.classList.contains('hidden')) {
+            log.warn('isTrapped: Purging orphaned focus trap whose container is hidden');
+            this._trapStack = [];
+            this._sections.delete('__trap__');
+            return false;
+        }
+
+        // If active section is not '__trap__' AND active focus is outside the trap container,
+        // the application has already navigated or switched away from the trap.
+        // Keeping the trap alive would lock navigation permanently. Auto-purge it.
+        if (this._activeSection !== '__trap__' && (!this._focusedElement || !trapConfig.container.contains(this._focusedElement))) {
+            log.warn('isTrapped: Purging orphaned focus trap because active focus has left the trap container');
+            this._trapStack = [];
+            this._sections.delete('__trap__');
+            return false;
+        }
+
+        return true;
     }
 
     /**

@@ -363,10 +363,6 @@ export class ApiClient {
             }
         }
 
-        if (!options.body || !(options.body instanceof FormData)) {
-            headers['Content-Type'] = 'application/json';
-        }
-
         // Build fetch options
         const fetchOptions = {
             method,
@@ -375,12 +371,13 @@ export class ApiClient {
         };
 
         // Add body for POST/PUT requests
-        if (options.body) {
+        if (options.body !== undefined && options.body !== null) {
             if (options.body instanceof FormData) {
                 fetchOptions.body = options.body;
                 // Let browser set Content-Type for FormData
                 delete headers['Content-Type'];
             } else if (typeof options.body === 'object') {
+                headers['Content-Type'] = 'application/json';
                 fetchOptions.body = JSON.stringify(options.body);
             } else {
                 fetchOptions.body = options.body;
@@ -2048,6 +2045,170 @@ export class ApiClient {
      */
     get isWebSocketConnected() {
         return this._webSocket && this._webSocket.readyState === WebSocket.OPEN;
+    }
+
+    // ========================================================================
+    // Remote Metadata & Identify Endpoints (Admin)
+    // ========================================================================
+
+    /**
+     * Search remote metadata providers for matching item candidates (e.g. TMDB, TVDB, IMDb).
+     * POST /Items/RemoteSearch/{ItemType}
+     *
+     * @param {string} itemType - Item type (e.g. 'Movie', 'Series', 'BoxSet', 'Person', 'MusicAlbum', 'MusicArtist', 'Book')
+     * @param {Object} searchInfo - Search info object { Name, Year, ProviderIds: { Tmdb, Imdb, Tvdb, ... } }
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {boolean} [includeDisabledProviders=false] - Whether to include disabled providers
+     * @returns {Promise<Array<Object>>} List of RemoteSearchResult objects
+     */
+    async getRemoteSearchResults(itemType, searchInfo, itemId, includeDisabledProviders = false) {
+        // Construct standard Jellyfin RemoteSearchQuery payload
+        const payload = {
+            SearchInfo: searchInfo || {},
+            ItemId: itemId,
+            IncludeDisabledProviders: !!includeDisabledProviders
+        };
+
+        // Normalize item type for endpoint path
+        const typeSegment = encodeURIComponent(itemType);
+        return this.post(`/Items/RemoteSearch/${typeSegment}`, payload);
+    }
+
+    /**
+     * Apply remote search result metadata and images to an item.
+     * POST /Items/RemoteSearch/Apply/{ItemId}?replaceAllImages={bool}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {Object} searchResult - The RemoteSearchResult object returned from getRemoteSearchResults
+     * @param {boolean} [replaceAllImages=true] - Replace all existing images with provider images
+     * @returns {Promise<any>}
+     */
+    async applyRemoteSearchResult(itemId, searchResult, replaceAllImages = true) {
+        // Invalidate cached ETag entries since item metadata is being updated on server
+        this.clearEtagCache();
+
+        // Clear details page cached data to ensure immediate UI update
+        state.clearByPrefix(`details:${itemId}`);
+
+        const url = `/Items/RemoteSearch/Apply/${encodeURIComponent(itemId)}?replaceAllImages=${replaceAllImages ? 'true' : 'false'}`;
+        return this.post(url, searchResult);
+    }
+
+    // ========================================================================
+    // Item Images Endpoints (Admin & Management)
+    // ========================================================================
+
+    /**
+     * Get item image metadata for all currently existing images on the item.
+     * GET /Items/{ItemId}/Images
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @returns {Promise<Array<Object>>} Array of image info objects (ImageType, ImageIndex, ImageTag, Width, Height, Size, etc.)
+     */
+    async getItemImages(itemId) {
+        return this.get(`/Items/${encodeURIComponent(itemId)}/Images`);
+    }
+
+    /**
+     * Get available remote provider images for an item (e.g. from TMDB, Fanart.tv, TVDB).
+     * GET /Items/{ItemId}/RemoteImages
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {Object} [options={}] - Query options
+     * @param {string} [options.type] - Optional ImageType filter (e.g. 'Primary', 'Backdrop', 'Logo', 'Thumb', 'Art', 'Banner', 'Disc')
+     * @param {boolean} [options.includeAllLanguages=true] - Whether to include images in all languages
+     * @returns {Promise<Object>} { Images: Array, TotalRecordCount: number, Providers: Array }
+     */
+    async getItemRemoteImages(itemId, options = {}) {
+        const params = {};
+        if (options.type) {
+            params.type = options.type;
+        }
+        if (options.includeAllLanguages !== undefined) {
+            params.includeAllLanguages = options.includeAllLanguages;
+        } else {
+            params.includeAllLanguages = true;
+        }
+
+        return this.get(`/Items/${encodeURIComponent(itemId)}/RemoteImages`, params);
+    }
+
+    /**
+     * Download and set a remote provider image on the item.
+     * POST /Items/RemoteImages/Download?Type={Type}&ImageUrl={ImageUrl}&ProviderName={ProviderName}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {string} type - ImageType (e.g. 'Primary', 'Backdrop', 'Logo', 'Thumb', 'Art', 'Banner', 'Disc')
+     * @param {string} imageUrl - Full URL of the remote image
+     * @param {string} [providerName=''] - Provider name (e.g. 'TheMovieDb', 'FanArt')
+     * @returns {Promise<any>}
+     */
+    async downloadRemoteImage(itemId, type, imageUrl, providerName = '') {
+        // Clear cached responses so refreshed image tags are fetched
+        this.clearEtagCache();
+        state.clearByPrefix(`details:${itemId}`);
+
+        const params = {
+            Type: type,
+            ImageUrl: imageUrl
+        };
+        if (providerName) {
+            params.ProviderName = providerName;
+        }
+
+        return this.post(`/Items/${encodeURIComponent(itemId)}/RemoteImages/Download`, null, { params });
+    }
+
+    /**
+     * Delete an existing image from an item.
+     * DELETE /Items/{ItemId}/Images/{ImageType} or DELETE /Items/{ItemId}/Images/{ImageType}/{Index}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {string} imageType - ImageType (e.g. 'Primary', 'Backdrop', 'Logo', 'Thumb', 'Art', 'Banner', 'Disc')
+     * @param {number|null} [imageIndex=null] - Optional image index (for multi-image types like Backdrop)
+     * @returns {Promise<any>}
+     */
+    async deleteItemImage(itemId, imageType, imageIndex = null) {
+        // Clear cached responses
+        this.clearEtagCache();
+        state.clearByPrefix(`details:${itemId}`);
+
+        let endpoint = `/Items/${encodeURIComponent(itemId)}/Images/${encodeURIComponent(imageType)}`;
+        if (imageIndex !== null && imageIndex !== undefined) {
+            endpoint += `/${encodeURIComponent(imageIndex)}`;
+        }
+
+        return this.delete(endpoint);
+    }
+
+    /**
+     * Update the display order / priority index of an existing image on an item.
+     * Reorders multi-image collections (such as backdrops, thumbnails, or art)
+     * so that index 0 is used as the primary display asset across the server.
+     *
+     * POST /Items/{ItemId}/Images/{ImageType}/{Index}/Index?newIndex={newIndex}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {string} imageType - ImageType (e.g. 'Backdrop', 'Thumb', 'Art', 'Banner')
+     * @param {number} imageIndex - Current 0-based image position index
+     * @param {number} newIndex - Desired 0-based target position index
+     * @returns {Promise<any>} Server acknowledgement
+     */
+    async updateItemImageIndex(itemId, imageType, imageIndex, newIndex) {
+        // Invalidate caching layers so updated image tag mappings resolve immediately
+        this.clearEtagCache();
+        state.clearByPrefix(`details:${itemId}`);
+
+        // Construct parameterized endpoint path targeting the selected image index
+        const safeItemId = encodeURIComponent(itemId);
+        const safeType = encodeURIComponent(imageType);
+        const safeIndex = encodeURIComponent(imageIndex);
+        const endpoint = `/Items/${safeItemId}/Images/${safeType}/${safeIndex}/Index`;
+
+        // Dispatch POST request carrying the newIndex query parameter
+        return this.post(endpoint, null, {
+            params: { newIndex }
+        });
     }
 
     // ========================================================================

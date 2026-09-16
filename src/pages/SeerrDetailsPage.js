@@ -1147,7 +1147,7 @@ class SeerrDetailsPage extends Page {
         if (actionsContainer) {
             actionsContainer.addEventListener('mouseover', (e) => {
                 const btn = e.target.closest('.btn, button');
-                if (btn) this._onFocusChangedForTooltip(btn);
+                if (btn) this._onFocusChangedForTooltip?.(btn);
             });
 
             actionsContainer.addEventListener('mouseout', (e) => {
@@ -1155,32 +1155,34 @@ class SeerrDetailsPage extends Page {
                 if (!related || !actionsContainer.contains(related)) {
                     const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
                     if (activeInActions) {
-                        this._onFocusChangedForTooltip(document.activeElement);
+                        this._onFocusChangedForTooltip?.(document.activeElement);
                     } else {
                         tooltipBar.classList.remove('visible');
                     }
                 } else {
                     const newBtn = related.closest('.btn, button');
                     if (newBtn) {
-                        this._onFocusChangedForTooltip(newBtn);
+                        this._onFocusChangedForTooltip?.(newBtn);
                     }
                 }
             });
         }
 
+        this._tooltipTimers = [];
         const updateInitial = () => {
+            if (typeof this._onFocusChangedForTooltip !== 'function') return;
             const actionsContainer = this.$('#actions');
             const targetEl = (document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement))
                 ? document.activeElement
                 : this.$('#actions .btn-action:not(.hidden)');
             if (targetEl) {
-                this._onFocusChangedForTooltip(targetEl);
+                this._onFocusChangedForTooltip?.(targetEl);
             }
         };
         updateInitial();
         requestAnimationFrame(updateInitial);
-        setTimeout(updateInitial, 150);
-        setTimeout(updateInitial, 400);
+        this._tooltipTimers.push(setTimeout(updateInitial, 150));
+        this._tooltipTimers.push(setTimeout(updateInitial, 400));
     }
 
     _renderStatus() {
@@ -1256,6 +1258,11 @@ class SeerrDetailsPage extends Page {
     }
 
     destroy() {
+        if (this._tooltipTimers) {
+            this._tooltipTimers.forEach((t) => clearTimeout(t));
+            this._tooltipTimers = null;
+        }
+
         if (this._onFocusChangedForTooltip) {
             eventBus.off('focus:changed', this._onFocusChangedForTooltip);
             this._onFocusChangedForTooltip = null;

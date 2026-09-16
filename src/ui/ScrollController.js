@@ -630,7 +630,7 @@ class ScrollController {
 
         // Check for specific scrollable containers used in modals/filters/login grid
         const container = element.closest(
-            '.users-grid, .modal-options, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper'
+            '.users-grid, .modal-options, .modal-body, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper, .media-info-scrollable, .identify-results-list'
         );
 
         return container;

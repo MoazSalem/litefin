@@ -1,0 +1,564 @@
+/**
+ * ============================================================================
+ * Litefin TV - Admin Modals Styles (Identify & Image Editor)
+ * ============================================================================
+ * Dedicated styles for Identify and Image Editor modal dialogs.
+ * Optimized specifically for 10-foot TV navigation and Tizen/webOS performance.
+ * NOTE: Uses crisp solid borders and transforms; avoids box-shadow and blur.
+ * ============================================================================
+ */
+
+/* ── Modal Sizing & Layout Overrides ─────────────────────────────────────── */
+.admin-tv-modal {
+    width: 900px;
+    max-width: 94vw;
+    max-height: 88vh;
+    height: auto;
+    background: var(--jf-background-alt, #151515);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--jf-border-radius-lg, 12px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.admin-tv-modal .modal-header {
+    padding: 16px 28px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.admin-tv-modal .modal-header h2 {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+}
+
+.admin-tv-modal .modal-header .item-subtitle {
+    font-size: 0.95rem;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
+    font-weight: 400;
+    margin-left: 14px;
+}
+
+.admin-tv-modal .modal-body {
+    padding: 20px 28px 32px 28px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: calc(88vh - 75px);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ── Identify Form Styles ─────────────────────────────────────────────────── */
+.identify-form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.identify-input-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.identify-input-row label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.75));
+    letter-spacing: 0.3px;
+}
+
+.identify-input {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 1.1rem;
+    color: var(--jf-text-primary, #ffffff);
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.identify-input:focus,
+.identify-input.focused {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: var(--jf-btn-primary-focus-border, #6b6ede);
+    transform: scale(1.01);
+}
+
+.identify-row-group {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+}
+
+.identify-row-group .identify-input-row {
+    flex: 1;
+}
+
+.identify-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 14px 18px;
+    color: var(--jf-text-primary, #ffffff);
+    cursor: pointer;
+    font-size: 1.05rem;
+    font-weight: 500;
+    transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.identify-toggle-btn:focus,
+.identify-toggle-btn.focused {
+    background: var(--jf-btn-primary-focus-bg, #6b6ede);
+    border-color: var(--jf-btn-primary-focus-border, #ffffff);
+    color: var(--jf-btn-primary-focus-color, #ffffff);
+    transform: scale(1.01);
+    outline: none;
+}
+
+.identify-toggle-indicator {
+    padding: 3px 10px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.identify-toggle-btn.active .identify-toggle-indicator {
+    background: #2ecc71;
+    color: #ffffff;
+    border-color: #27ae60;
+}
+
+/* ── Identify Search Results Grid ────────────────────────────────────────── */
+.identify-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    overflow-y: auto;
+    max-height: 480px;
+    padding: 4px;
+}
+
+.identify-result-card {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--jf-text-primary, #ffffff);
+    box-sizing: border-box;
+    transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), background-color 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.identify-result-card:focus,
+.identify-result-card.focused {
+    background: var(--jf-btn-primary-focus-bg, #6b6ede);
+    border-color: var(--jf-btn-primary-focus-border, #ffffff);
+    color: var(--jf-btn-primary-focus-color, #ffffff);
+    transform: scale(1.015);
+    outline: none;
+}
+
+.identify-result-poster {
+    width: 54px;
+    height: 80px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.identify-result-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.identify-result-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.identify-result-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.identify-result-card:focus .identify-result-meta,
+.identify-result-card.focused .identify-result-meta {
+    color: var(--jf-btn-primary-focus-color, #ffffff);
+}
+
+.identify-result-overview {
+    font-size: 0.85rem;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6));
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.35;
+}
+
+/* ── Image Editor Type Tabs ──────────────────────────────────────────────── */
+.image-type-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 2px 10px 2px;
+    flex-shrink: 0;
+    scrollbar-width: none;
+}
+
+.image-type-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.image-tab-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid transparent;
+    border-radius: 20px;
+    padding: 8px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.75));
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.image-tab-btn.active {
+    background: rgba(var(--jf-accent-rgb, 107, 110, 222), 0.25);
+    border-color: var(--jf-accent, #6b6ede);
+    color: var(--jf-text-primary, #ffffff);
+}
+
+.image-tab-btn:focus,
+.image-tab-btn.focused {
+    background: var(--jf-btn-primary-focus-bg, #6b6ede);
+    border-color: var(--jf-btn-primary-focus-border, #ffffff);
+    color: var(--jf-btn-primary-focus-color, #ffffff);
+    transform: scale(1.05);
+    outline: none;
+}
+
+/* ── Image Editor Sections & Count Badge ─────────────────────────────────── */
+.image-section-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.75));
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Sleek, minimal numeric count badge */
+.admin-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 8px;
+    min-width: 20px;
+    height: 18px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.75));
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+/* ── Image Cards Grid & Container Layout ─────────────────────────────────── */
+.image-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+    width: 100%;
+}
+
+.image-cards-grid.backdrop-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.image-card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+    transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.image-card:focus-within,
+.image-card.focused {
+    border: 2px solid var(--jf-btn-primary-focus-border, #ffffff);
+    background: rgba(255, 255, 255, 0.08);
+    transform: scale(1.02);
+    outline: none;
+    z-index: 5;
+}
+
+.image-card-thumb-wrap {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    background: #0d0d0d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.image-card.type-backdrop .image-card-thumb-wrap,
+.image-card.type-banner .image-card-thumb-wrap,
+.image-card.type-thumb .image-card-thumb-wrap {
+    aspect-ratio: 16 / 9;
+}
+
+.image-card.type-logo .image-card-thumb-wrap,
+.image-card.type-art .image-card-thumb-wrap {
+    aspect-ratio: 16 / 9;
+    background: #050505;
+}
+
+.image-card.type-disc .image-card-thumb-wrap {
+    aspect-ratio: 1 / 1;
+}
+
+.image-card-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.image-card-thumb.cover {
+    object-fit: cover;
+}
+
+.image-card-meta {
+    padding: 8px 10px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ── Image Card Tag Badges ───────────────────────────────────────────────── */
+.image-card-tags {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    width: 100%;
+}
+
+.image-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.8));
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+
+.image-tag.tag-provider {
+    background: rgba(46, 204, 113, 0.15);
+    border-color: rgba(46, 204, 113, 0.35);
+    color: #2ecc71;
+    font-weight: 700;
+    max-width: 86px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.image-tag.tag-dim {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.75);
+    font-variant-numeric: tabular-nums;
+}
+
+.image-tag.tag-lang {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.image-tag.tag-primary {
+    background: #f1c40f;
+    border-color: #f1c40f;
+    color: #000000;
+    font-weight: 700;
+}
+
+/* ── Image Card Action Buttons ───────────────────────────────────────────── */
+.image-card-action-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+    transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.image-card-action-btn.delete-btn {
+    background: rgba(231, 76, 60, 0.15);
+    border-color: rgba(231, 76, 60, 0.4);
+    color: #e74c3c;
+}
+
+.image-card-action-btn.delete-btn:focus,
+.image-card-action-btn.delete-btn.focused {
+    background: #e74c3c;
+    border: 2px solid #ffffff;
+    color: #ffffff;
+    transform: scale(1.02);
+    outline: none;
+}
+
+.image-card-action-btn.prioritize-btn {
+    background: rgba(241, 196, 15, 0.15);
+    border-color: rgba(241, 196, 15, 0.4);
+    color: #f1c40f;
+}
+
+.image-card-action-btn.prioritize-btn:focus,
+.image-card-action-btn.prioritize-btn.focused {
+    background: #f1c40f;
+    border: 2px solid #ffffff;
+    color: #000000;
+    transform: scale(1.02);
+    outline: none;
+}
+
+.image-card-action-btn.move-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--jf-text-primary, #ffffff);
+    padding: 6px 8px;
+    font-size: 0.8rem;
+}
+
+.image-card-action-btn.move-btn:focus,
+.image-card-action-btn.move-btn.focused {
+    background: var(--jf-btn-primary-focus-bg, #6b6ede);
+    border: 2px solid #ffffff;
+    color: #ffffff;
+    transform: scale(1.02);
+    outline: none;
+}
+
+.image-card-actions-row {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+
+.image-card-actions-row .image-card-action-btn {
+    flex: 1;
+    margin-top: 0;
+}
+
+.image-card-action-btn.download-btn {
+    background: rgba(107, 110, 222, 0.2);
+    border-color: rgba(107, 110, 222, 0.5);
+    color: #ffffff;
+}
+
+.image-card-action-btn.download-btn:focus,
+.image-card-action-btn.download-btn.focused {
+    background: var(--jf-btn-primary-focus-bg, #6b6ede);
+    border: 2px solid #ffffff;
+    color: #ffffff;
+    transform: scale(1.02);
+    outline: none;
+}
+
+/* ── Empty State & Loading State ─────────────────────────────────────────── */
+.admin-modal-empty {
+    padding: 30px 20px;
+    text-align: center;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6));
+    font-size: 1.05rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-modal-loading {
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.8));
+    font-size: 1.1rem;
+}
