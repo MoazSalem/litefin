@@ -1,0 +1,172 @@
+# ==============================================================================
+# Litefin Pre-Release Workflow
+# ==============================================================================
+# This workflow automates building and publishing pre-release packages
+# (Tizen .wgt, webOS .ipk, and Homebrew manifest.json) to GitHub Releases.
+#
+# Characteristics:
+# - Triggered ONLY when pushing pre-release tags (e.g. v1.8.43-beta.1, v1.8.43-rc.1, etc.).
+# - Releases are marked as Pre-release in GitHub.
+# - Releases are NOT marked as 'Latest'.
+# - Verifies that the tagged commit originates from or belongs to the development branch.
+# ==============================================================================
+
+name: Pre-Release
+
+on:
+  push:
+    tags:
+      # Match standard semantic pre-release tag patterns
+      - 'v*-dev*'
+      - 'v*-beta*'
+      - 'v*-rc*'
+      - 'v*-alpha*'
+      - 'v*-preview*'
+      - 'v*-pre*'
+
+jobs:
+  build-and-prerelease:
+    name: Build and Publish Pre-Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # ------------------------------------------------------------------------
+      # Step 1: Check out the repository source code
+      # ------------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history and tags so we can generate accurate changelogs
+          fetch-depth: 0
+
+      # ------------------------------------------------------------------------
+      # Step 2: Validate branch ancestry (ensures tag belongs to development)
+      # ------------------------------------------------------------------------
+      - name: Verify commit belongs to development branch
+        run: |
+          # Fetch remote development branch for ancestor check
+          git fetch origin development
+
+          # Check whether current HEAD commit is an ancestor of origin/development
+          if ! git merge-base --is-ancestor HEAD origin/development; then
+            echo "::error::Tagged commit does not belong to the development branch history!"
+            exit 1
+          fi
+          echo "Commit verified as part of the development branch hierarchy."
+
+      # ------------------------------------------------------------------------
+      # Step 3: Setup Node.js runtime environment
+      # ------------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ------------------------------------------------------------------------
+      # Step 4: Install npm dependencies
+      # ------------------------------------------------------------------------
+      - name: Install dependencies
+        run: npm install
+
+      # ------------------------------------------------------------------------
+      # Step 5: Prepare dummy signature directory for build pipeline
+      # ------------------------------------------------------------------------
+      - name: Create empty sign directory
+        run: mkdir -p .sign
+
+      # ------------------------------------------------------------------------
+      # Step 6: Build all package variants (Tizen and webOS)
+      # ------------------------------------------------------------------------
+      - name: Build all packages
+        run: npm run package
+
+      # ------------------------------------------------------------------------
+      # Step 7: Generate Homebrew App Manifest with SHA256 checksum
+      # ------------------------------------------------------------------------
+      - name: Generate Homebrew Manifest
+        id: manifest
+        run: |
+          # Extract version from package.json
+          VERSION=$(node -p "require('./package.json').version")
+          IPK_FILE="Litefin-${VERSION}-webOS-Legacy.ipk"
+          SHA256=$(sha256sum "$IPK_FILE" | cut -d ' ' -f 1)
+          
+          cat <<EOF > manifest.json
+          {
+            "id": "org.litefin.app",
+            "version": "$VERSION",
+            "type": "web",
+            "title": "Litefin (Pre-release)",
+            "appDescription": "Native Jellyfin client for WebOS (Pre-release build)",
+            "iconUri": "https://raw.githubusercontent.com/MoazSalem/litefin/development/assets/icon-130.png",
+            "sourceUrl": "https://github.com/MoazSalem/litefin",
+            "rootRequired": false,
+            "ipkUrl": "$IPK_FILE",
+            "ipkHash": {
+              "sha256": "$SHA256"
+            }
+          }
+          EOF
+
+      # ------------------------------------------------------------------------
+      # Step 8: Generate dynamic changelog from conventional commits
+      # ------------------------------------------------------------------------
+      - name: Generate Release Body
+        id: release_body
+        run: |
+          # Find the previous tag before this one
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          
+          # Extract features and fixes from git commit history
+          FEATURES=$(git log ${PREV_TAG}..HEAD --pretty=format:"%s" | grep -E '^feat' || true)
+          BUGS=$(git log ${PREV_TAG}..HEAD --pretty=format:"%s" | grep -E '^fix' || true)
+          
+          CHANGELOG="# 🧪 Pre-Release Changes\n"
+          
+          if [ -n "$FEATURES" ]; then
+            CHANGELOG="${CHANGELOG}## New Features:\n"
+            while IFS= read -r line; do
+              clean_line=$(echo "$line" | sed -E 's/^feat\(([^)]+)\): /- /' | sed -E 's/^feat: /- /')
+              CHANGELOG="${CHANGELOG}${clean_line}\n"
+            done <<< "$FEATURES"
+            CHANGELOG="${CHANGELOG}\n"
+          fi
+          
+          if [ -n "$BUGS" ]; then
+            CHANGELOG="${CHANGELOG}## Bug fixes:\n"
+            while IFS= read -r line; do
+               clean_line=$(echo "$line" | sed -E 's/^fix\(([^)]+)\): /- \1: /' | sed -E 's/^fix: /- /')
+               CHANGELOG="${CHANGELOG}${clean_line}\n"
+            done <<< "$BUGS"
+            CHANGELOG="${CHANGELOG}\n"
+          fi
+          
+          # Append hardware variant guide footer
+          FOOTER=$(cat .github/RELEASE_NOTES_FOOTER.md)
+          
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "$FOOTER" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # ------------------------------------------------------------------------
+      # Step 9: Publish Pre-Release assets to GitHub
+      # ------------------------------------------------------------------------
+      - name: Create GitHub Pre-Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Explicitly flag as pre-release and prevent updating 'latest' release tag
+          prerelease: true
+          make_latest: false
+          body: |
+            ${{ steps.release_body.outputs.content }}
+          generate_release_notes: true
+          files: |
+            *.wgt
+            *.ipk
+            manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

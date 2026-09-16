@@ -1,9 +1,18 @@
+# ==============================================================================
+# Litefin Production Release Workflow
+# ==============================================================================
+# Triggers only on stable release tags (ignores pre-releases with hyphens like vX.Y.Z-beta)
+# ==============================================================================
+
 name: Release
 
 on:
   push:
     tags:
       - 'v*'
+    tags-ignore:
+      # Ignore any pre-release tags containing hyphens (e.g. v1.8.43-beta.1)
+      - 'v*-*'
 
 jobs:
   build-and-release:
@@ -94,6 +103,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: false
+          make_latest: true
           body: |
             ${{ steps.release_body.outputs.content }}
           generate_release_notes: true
