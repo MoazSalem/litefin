@@ -67,10 +67,9 @@ function createMockElement(tag = 'div', id = '', classes = []) {
             return children.some((child) => child === target || (child.contains && child.contains(target)));
         },
         closest: (selector) => {
-            if (selector === '[data-fm-section]') {
-                if (el.dataset.fmSection) return el;
-                if (el.parentNode && el.parentNode.closest) return el.parentNode.closest(selector);
-            }
+            if (typeof el.matches === 'function' && el.matches(selector)) return el;
+            if (selector === '[data-fm-section]' && el.dataset.fmSection) return el;
+            if (el.parentNode && typeof el.parentNode.closest === 'function') return el.parentNode.closest(selector);
             return null;
         },
         querySelectorAll: (selector) => {
@@ -374,6 +373,35 @@ test('pushTrap respects defaultFocusSelector to focus Exit button by default', (
     assert.strictEqual(fm.isTrapped(), true);
     assert.strictEqual(fm.getFocused(), btnYes, 'Initial focus should land on Exit/Yes button');
 });
+
+test('_getFocusables does not lock empty array in cache when section becomes visible', () => {
+    const { fm, document } = setupTestEnvironment();
+
+    const sidebarContainer = createMockElement('div', 'sidebar');
+    const sidebarHome = createMockElement('button', 'sidebar-home', ['sidebar-item']);
+    sidebarContainer.appendChild(sidebarHome);
+    document.body.appendChild(sidebarContainer);
+    fm.register('sidebar', sidebarContainer, {
+        orientation: 'vertical',
+        selector: '.sidebar-item'
+    });
+
+    // 1. Simulate sidebar being hidden (e.g. while in player)
+    sidebarContainer.classList.add('hidden');
+
+    // Query focusables while hidden -> should return empty
+    const hiddenItems = fm._getFocusables('sidebar', false);
+    assert.strictEqual(hiddenItems.length, 0, 'Hidden sidebar should return 0 focusables');
+
+    // 2. Unhide sidebar (e.g. player exited)
+    sidebarContainer.classList.remove('hidden');
+
+    // Query focusables again with forceRefresh = false -> must NOT return stale empty cache []
+    const visibleItems = fm._getFocusables('sidebar', false);
+    assert.strictEqual(visibleItems.length, 1, 'Unhidden sidebar must return available focusables without stale cache lock');
+    assert.strictEqual(visibleItems[0], sidebarHome);
+});
+
 
 
 

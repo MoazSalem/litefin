@@ -367,6 +367,9 @@ class App {
 
             this.sidebar.setMode('visible');
         }
+
+        // Invalidate sidebar cache so FocusManager recognizes newly revealed/hidden items
+        focusManager.invalidateCache('sidebar');
     }
 
     /**

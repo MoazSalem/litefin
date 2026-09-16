@@ -550,8 +550,9 @@ class FocusManager {
         // Return cached if available and not forcing refresh
         if (!forceRefresh && this._focusablesCache.has(sectionName)) {
             const cached = this._focusablesCache.get(sectionName);
-            // Verify cached elements are still connected to the DOM tree; discard if stale
-            if (cached.length === 0 || (cached[0] && document.contains(cached[0]))) {
+            // Verify cached elements are non-empty and still connected to the DOM tree; discard if stale or empty
+            // This prevents sections temporarily hidden (e.g. sidebar during playback) from caching [] permanently.
+            if (cached && cached.length > 0 && document.contains(cached[0])) {
                 return cached;
             }
             this._focusablesCache.delete(sectionName);

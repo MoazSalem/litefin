@@ -4024,6 +4024,10 @@ class PlayerPage extends Page {
         // Restore global clock visibility when leaving playback
         globalClock.setVisibility(true);
 
+        // Defensive: ensure FocusManager key handling is fully resumed and sidebar cache is fresh
+        focusManager.resume();
+        focusManager.invalidateCache('sidebar');
+
         log.info('destroy() complete');
         super.destroy();
     }

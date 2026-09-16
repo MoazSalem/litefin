@@ -479,6 +479,8 @@ class Sidebar extends Component {
      */
     setMode(mode) {
         this.el.classList.toggle('hidden', mode === 'hidden');
+        // Invalidate FocusManager cache so switching to visible allows entering the sidebar
+        focusManager.invalidateCache('sidebar');
         // Re-evaluate alignment once visibility changes (resolving clientHeight 0 state)
         setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
