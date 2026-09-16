@@ -156,8 +156,19 @@ class FavoritesPage extends Page {
                 if (view.CollectionType && !libraryMap[view.CollectionType]) {
                     libraryMap[view.CollectionType] = view.Id;
                 }
-                // Detect game or rom libraries mapped by name if CollectionType is generic or 'books'
-                const isGameName = /game|rom|emulator/i.test(view.Name || '');
+
+                const isMediaCol =
+                    view.CollectionType === 'homevideos' ||
+                    view.CollectionType === 'photos' ||
+                    view.CollectionType === 'movies' ||
+                    view.CollectionType === 'tvshows' ||
+                    view.CollectionType === 'music' ||
+                    view.CollectionType === 'musicvideos';
+
+                // Detect game or rom libraries mapped by name if CollectionType is generic or 'games'
+                const isGameName =
+                    !isMediaCol &&
+                    /\b(games?|roms?|emulators?|emulation|jellyemu|retroarch|retrogames?)\b/i.test(view.Name || '');
                 if (isGameName && !libraryMap['games']) {
                     libraryMap['games'] = view.Id;
                 }

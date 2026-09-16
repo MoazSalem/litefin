@@ -980,14 +980,22 @@ class Sidebar extends Component {
                 btn.dataset.layoutId = `lib-${lib.Id}`;
 
                 // Detect if this library represents gaming / JellyEmu ROMs
-                // Jellyfin imports JellyEmu games under 'books', 'games', or generic collections
+                // Jellyfin imports JellyEmu games under 'games', or generic collections
                 // with keywords like "Game", "ROM", "Emulator", or "JellyEmu" in the name.
                 let iconCollectionType = lib.CollectionType;
                 const libNameLower = (lib.Name || '').toLowerCase();
+                const isMediaCol =
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'photos' ||
+                    lib.CollectionType === 'movies' ||
+                    lib.CollectionType === 'tvshows' ||
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'musicvideos';
+
                 const isGameLibrary =
-                    lib.CollectionType === 'games' ||
-                    lib.CollectionType === 'books' ||
-                    /game|rom|emulator|emulation|jellyemu/i.test(libNameLower);
+                    !isMediaCol &&
+                    (lib.CollectionType === 'games' ||
+                        /\b(games?|roms?|emulators?|emulation|jellyemu|retroarch|retrogames?)\b/i.test(libNameLower));
 
                 if (isGameLibrary) {
                     iconCollectionType = 'games';

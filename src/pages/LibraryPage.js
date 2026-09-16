@@ -918,8 +918,10 @@ class LibraryPage extends Page {
             // If the libraryId is a deep link to an Album/Artist/Series, it won't have a CollectionType.
             // Fake it so the LibraryPage behaves like it's inside that specific library type.
             if (!item.CollectionType) {
-                // Expanded list of types that imply a specific collection context
-                if (['MusicAlbum', 'MusicArtist', 'Audio', 'MusicGenre', 'Artist'].includes(item.Type)) {
+                // Inherit parent collectionType from route parameter if available
+                if (this.params.collectionType) {
+                    item.CollectionType = this.params.collectionType;
+                } else if (['MusicAlbum', 'MusicArtist', 'Audio', 'MusicGenre', 'Artist'].includes(item.Type)) {
                     item.CollectionType = 'music';
                 } else if (['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(item.Type)) {
                     item.CollectionType = 'tvshows';
@@ -927,18 +929,29 @@ class LibraryPage extends Page {
                     item.CollectionType = 'musicvideos';
                 } else if (['Movie', 'BoxSet', 'Video'].includes(item.Type)) {
                     item.CollectionType = 'movies';
+                } else if (['Photo', 'PhotoAlbum'].includes(item.Type)) {
+                    item.CollectionType = 'photos';
                 } else if (item.Type === 'Book') {
                     item.CollectionType = 'books';
                 }
             }
 
-            // Detect Game libraries (JellyEmu collections or libraries named after games/roms)
+            // Identify media collections that must NEVER be misidentified as game libraries
+            const isMediaCol =
+                item.CollectionType === 'homevideos' ||
+                item.CollectionType === 'photos' ||
+                item.CollectionType === 'movies' ||
+                item.CollectionType === 'tvshows' ||
+                item.CollectionType === 'music' ||
+                item.CollectionType === 'musicvideos' ||
+                item.CollectionType === 'playlists' ||
+                item.CollectionType === 'boxsets';
+
+            // Detect Game libraries (JellyEmu collections or libraries specifically named after games/roms using word boundaries)
             const libNameLower = (item.Name || '').toLowerCase();
-            if (
-                item.CollectionType === 'books' ||
-                item.CollectionType === 'games' ||
-                /game|rom|emulator|emulation|jellyemu/i.test(libNameLower)
-            ) {
+            const isGameKeyword = /\b(games?|roms?|emulators?|emulation|jellyemu|retroarch|retrogames?)\b/i.test(libNameLower);
+
+            if (!isMediaCol && (item.CollectionType === 'games' || (isGameKeyword && item.CollectionType !== 'books') || this.params.isGame === 'true')) {
                 this.state.isGameLibrary = true;
             } else {
                 this.state.isGameLibrary = false;
@@ -948,11 +961,11 @@ class LibraryPage extends Page {
             this.state.isSubFolder =
                 item.Type === 'Folder' || (item.Type === 'CollectionFolder' && !item.CollectionType && item.ParentId);
 
-            // Inherit isGameLibrary if item is a console folder inside a games library
-            // or if the folder name or tags indicate a gaming console.
-            if (!this.state.isGameLibrary && this.state.isSubFolder) {
-                const isConsoleName = /^(nintendo|sega|sony|atari|game boy|gameboy|gba|gbc|snes|nes|n64|playstation|psx|ps1|ps2|genesis|megadrive|game gear|dreamcast|mame|arcade|neogeo)/i.test(libNameLower);
-                if (isConsoleName || (item.ParentId && item.Type === 'Folder')) {
+            // Inherit isGameLibrary if we are inside a verified games library
+            // or if the console folder explicitly matches a gaming console name under an existing game context.
+            if (!isMediaCol && !this.state.isGameLibrary && this.state.isSubFolder && this.params.isGame === 'true') {
+                const isConsoleName = /\b(nintendo|sega|sony|atari|game boy|gameboy|gba|gbc|snes|nes|n64|playstation|psx|ps1|ps2|genesis|megadrive|game gear|dreamcast|mame|arcade|neogeo)\b/i.test(libNameLower);
+                if (isConsoleName) {
                     this.state.isGameLibrary = true;
                 }
             }
@@ -965,6 +978,8 @@ class LibraryPage extends Page {
                 (this.state.isGameLibrary && !this.state.isSubFolder) ||
                 (!this.state.isGameLibrary &&
                     (item.CollectionType === 'folders' ||
+                        item.CollectionType === 'homevideos' ||
+                        item.CollectionType === 'photos' ||
                         (!item.CollectionType &&
                             (item.Type === 'CollectionFolder' || item.Type === 'UserView' || item.Type === 'Folder'))));
 
@@ -1218,9 +1233,9 @@ class LibraryPage extends Page {
             const isTv =
                 info?.CollectionType === 'tvshows' ||
                 ['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(info?.Type);
-            const isGame = this.state.isGameLibrary || info?.CollectionType === 'books' || info?.CollectionType === 'games';
+            const isGame = this.state.isGameLibrary || (info?.CollectionType === 'games' && info?.CollectionType !== 'homevideos' && info?.CollectionType !== 'photos');
 
-            if (isGame) {
+            if (isGame || info?.CollectionType === 'books') {
                 subViewItemTypes = 'Book';
             } else if (isMusic) {
                 subViewItemTypes = 'MusicAlbum,Audio';
@@ -1308,11 +1323,11 @@ class LibraryPage extends Page {
                 if (f.Is3D) params.Is3D = true;
 
                 // Multi-value params
-                if (f.Genres) params.Genres = f.Genres.replace(/,/g, '|');
-                if (f.OfficialRatings) params.OfficialRatings = f.OfficialRatings.replace(/,/g, '|');
-                if (f.Tags) params.Tags = f.Tags.replace(/,/g, '|');
+                if (f.Genres) params.GenreIds = f.Genres;
                 if (f.Years) params.Years = f.Years;
-                if (f.VideoTypes) params.VideoTypes = f.VideoTypes;
+                if (f.OfficialRatings) params.OfficialRatings = f.OfficialRatings;
+                if (f.Tags) params.Tags = f.Tags;
+                if (f.Studios) params.StudioIds = f.Studios;
             }
 
             // Handle View Types
@@ -1326,7 +1341,7 @@ class LibraryPage extends Page {
                 });
             } else if (viewType === 'Items' || viewType === 'Movies' || viewType === 'Shows') {
                 // Standard Item Fetch
-                if (this.state.isGameLibrary || this.state.libraryInfo?.CollectionType === 'books' || this.state.libraryInfo?.CollectionType === 'games') {
+                if (this.state.isGameLibrary || this.state.libraryInfo?.CollectionType === 'games') {
                     // When browsing a Game library at root as folders, do not restrict to 'Book'
                     // so that Jellyfin returns top-level console Folders.
                     // Inside subfolders, query 'Book' items (game ROMs).
@@ -1336,6 +1351,8 @@ class LibraryPage extends Page {
                         // At root folder level: leave IncludeItemTypes empty to return console Folders
                         params.IncludeItemTypes = '';
                     }
+                } else if (this.state.libraryInfo?.CollectionType === 'books') {
+                    params.IncludeItemTypes = 'Book';
                 } else if (this.state.libraryInfo?.CollectionType === 'tvshows') {
                     params.IncludeItemTypes = 'Series';
                 } else if (this.state.libraryInfo?.CollectionType === 'movies') {
@@ -2179,9 +2196,15 @@ class LibraryPage extends Page {
         // Define tabs based on collection type
         let tabs = [];
 
-        if (this.state.isGameLibrary || collectionType === 'games' || collectionType === 'books') {
+        if (this.state.isGameLibrary || collectionType === 'games') {
             tabs = [
                 { id: 'Items', label: 'Games' },
+                { id: 'Suggestions', label: 'Suggestions' },
+                { id: 'Genres', label: 'Genres' }
+            ];
+        } else if (collectionType === 'books') {
+            tabs = [
+                { id: 'Items', label: 'Books' },
                 { id: 'Suggestions', label: 'Suggestions' },
                 { id: 'Genres', label: 'Genres' }
             ];
@@ -2212,7 +2235,7 @@ class LibraryPage extends Page {
                 { id: 'Songs', label: 'Songs' },
                 { id: 'MusicGenres', label: 'Genres' }
             ];
-        } else if (collectionType === 'homevideos') {
+        } else if (collectionType === 'homevideos' || collectionType === 'photos') {
             tabs = [
                 { id: 'Folders', label: 'Folders' },
                 { id: 'Photos', label: 'Photos' },
@@ -3899,14 +3922,20 @@ class LibraryPage extends Page {
         // Special handling for PhotoAlbums: navigate to standard LibraryPage
         if (card.dataset.type === 'PhotoAlbum') {
             log.info('Navigating into PhotoAlbum:', itemId);
-            router.navigate(`/library/${itemId}`);
+            router.navigate(`/library/${itemId}?collectionType=photos`);
             return;
         }
 
         // Special handling for Folders: navigate to sub-library
         if (card.dataset.type === 'Folder' || card.dataset.type === 'CollectionFolder') {
             log.info('Navigating into folder:', itemId);
-            router.navigate(`/library/${itemId}`);
+            const parentColType = this.state.libraryInfo?.CollectionType || this.params.collectionType || '';
+            const isGame = this.state.isGameLibrary;
+            const q = new URLSearchParams();
+            if (parentColType) q.set('collectionType', parentColType);
+            if (isGame) q.set('isGame', 'true');
+            const qStr = q.toString();
+            router.navigate(`/library/${itemId}${qStr ? `?${qStr}` : ''}`);
             return;
         }
 
