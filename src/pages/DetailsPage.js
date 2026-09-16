@@ -742,6 +742,7 @@ class DetailsPage extends Page {
             // 5. Update layout classes and text info
             this._updateLayoutClasses();
             this._renderHeroText();
+            this._setupFavoriteButton();
             this._renderRichMetadata();
             this._updateTrailerButton();
 
@@ -835,6 +836,7 @@ class DetailsPage extends Page {
 
             // Render all text content immediately — only needs this._item
             this._renderHeroText();
+            this._setupFavoriteButton();
             this._renderRichMetadata();
             this._updateTrailerButton();
 
@@ -2989,6 +2991,9 @@ class DetailsPage extends Page {
     _updateButtons() {
         const item = this._item;
         const userData = item.UserData || {};
+
+        // Mount and position FavoriteButton component in the action bar
+        this._setupFavoriteButton();
 
         const playBtn = this.$('.play-btn');
         const resumeBtn = this.$('.resume-btn');
@@ -6179,38 +6184,47 @@ class DetailsPage extends Page {
 
     _setupFavoriteButton() {
         const actionsContainer = this.$('#actions');
-        if (actionsContainer) {
-            if (this._favBtn) this._favBtn.destroy();
+        if (!actionsContainer || !this._item) return;
 
-            this._favBtn = new FavoriteButton({
-                itemId: this._item.Id,
-                initialState: this._item.UserData?.IsFavorite,
-                className: 'btn btn-icon favorite-btn',
-                onChange: (isFav) => {
-                    if (!this._item.UserData) this._item.UserData = {};
-                    this._item.UserData.IsFavorite = isFav;
-                }
-            });
-
-            // Remove any existing Favorite Button (if re-rendering)
-            const old = actionsContainer.querySelector('.favorite-btn');
-            if (old) old.remove();
-
-            this._favBtn.mount(actionsContainer);
-
-            if (this._favBtn.el) {
-                this._favBtn.el.setAttribute('data-tooltip', i18n.t('Favorite') || 'Favorite');
-            }
-
-            // Move Favorite Button BEFORE Audio/Subtitle buttons if they exist
-            const audioBtn = actionsContainer.querySelector('.audio-btn');
-            if (audioBtn && this._favBtn.el) {
-                actionsContainer.insertBefore(this._favBtn.el, audioBtn);
-            }
-
-            // Refresh focus cache so FocusManager sees the new button
-            focusManager.invalidateCache('details-actions');
+        // Clean up previous FavoriteButton instance if present
+        if (this._favBtn) {
+            this._favBtn.destroy();
+            this._favBtn = null;
         }
+
+        // Initialize fresh FavoriteButton component
+        this._favBtn = new FavoriteButton({
+            itemId: this._item.Id,
+            initialState: this._item.UserData?.IsFavorite,
+            className: 'btn btn-icon favorite-btn',
+            onChange: (isFav) => {
+                if (!this._item.UserData) this._item.UserData = {};
+                this._item.UserData.IsFavorite = isFav;
+            }
+        });
+
+        // Remove any orphaned static or duplicate Favorite buttons from DOM
+        const old = actionsContainer.querySelector('.favorite-btn');
+        if (old) old.remove();
+
+        // Mount the Favorite Button component into the action bar
+        this._favBtn.mount(actionsContainer);
+
+        if (this._favBtn.el) {
+            this._favBtn.el.setAttribute('data-tooltip', i18n.t('Favorite') || 'Favorite');
+            this._favBtn.el.setAttribute('tabindex', '0');
+        }
+
+        // Move Favorite Button BEFORE Audio, Subtitle, or More buttons if present
+        const anchorBtn = actionsContainer.querySelector('.audio-btn') ||
+                          actionsContainer.querySelector('.subtitle-btn') ||
+                          actionsContainer.querySelector('.more-btn');
+        if (anchorBtn && this._favBtn.el) {
+            actionsContainer.insertBefore(this._favBtn.el, anchorBtn);
+        }
+
+        // Refresh focus cache so FocusManager sees the newly mounted button
+        focusManager.invalidateCache('details-actions');
     }
 
     async _toggleWatched() {

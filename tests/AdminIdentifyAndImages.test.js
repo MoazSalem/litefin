@@ -193,4 +193,8 @@ test('ImageEditorModal and DetailsPage preserve focus transition context and dec
     // Ensure rich metadata is deactivated if active
     assert.ok(detailsSource.includes('if (this._isRichMetaActive)'));
     assert.ok(detailsSource.includes('this._deactivateRichMeta()'));
+
+    // Ensure _setupFavoriteButton is invoked in lifecycle methods
+    assert.ok(detailsSource.includes('this._setupFavoriteButton();'));
+    assert.ok(detailsSource.includes('_setupFavoriteButton()'));
 });
