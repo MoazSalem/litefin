@@ -255,10 +255,18 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             ? result.productionCompanies.map((c) => (typeof c === 'object' && c ? { Id: c.id || c.Id || '', Name: c.name || c.Name || '' } : { Id: '', Name: String(c) })).filter((c) => c && Boolean(c.Name))
             : [],
         ProductionTeam: (() => {
-            const rawCrew = (result.credits && result.credits.crew) || result.crew || [];
-            if (!Array.isArray(rawCrew)) return [];
+            // Combine creators (for TV series) and crew members into a unified candidate pool
+            const rawCreators = (result.createdBy || result.created_by || []).map((c) => ({
+                id: c.id || c.Id,
+                name: c.name || c.Name,
+                job: 'Creator'
+            }));
+            const rawCrew = [...rawCreators, ...((result.credits && result.credits.crew) || result.crew || [])];
+            if (!Array.isArray(rawCrew) || rawCrew.length === 0) return [];
             
+            // Limit the maximum number of people per key production role
             const jobLimits = {
+                'creator': 2,
                 'director': 2,
                 'writer': 2,
                 'screenplay': 2,
@@ -267,12 +275,12 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
                 'co-producer': 1
             };
             const counts = {};
-            const names = [];
+            const team = [];
             const seen = new Set();
 
             for (const member of rawCrew) {
                 const job = (member.job || '').trim().toLowerCase();
-                const name = typeof member === 'string' ? member : (member && member.name);
+                const name = typeof member === 'string' ? member : (member && (member.name || member.Name));
                 if (!name) continue;
                 
                 const limit = jobLimits[job];
@@ -282,13 +290,18 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
                         const key = name.trim().toLowerCase();
                         if (!seen.has(key)) {
                             seen.add(key);
-                            names.push(name.trim());
+                            // Preserve TMDB person ID alongside name and job title
+                            team.push({
+                                Id: member.id || member.Id || '',
+                                Name: name.trim(),
+                                Job: member.job || ''
+                            });
                         }
                         counts[job]++;
                     }
                 }
             }
-            return names;
+            return team;
         })(),
         Cast: (() => {
             const rawCast = (result.credits && result.credits.cast) || result.cast || [];

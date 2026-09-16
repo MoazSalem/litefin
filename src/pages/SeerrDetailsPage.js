@@ -363,6 +363,41 @@ class SeerrDetailsPage extends Page {
                     if (id) {
                         router.navigate(`/library/seerr?seerrType=network&networkId=${id}&name=${encodeURIComponent(name)}`);
                     }
+                } else if (
+                    type === 'productionteam' ||
+                    type === 'production_team' ||
+                    type === 'directors' ||
+                    type === 'director' ||
+                    type === 'writers' ||
+                    type === 'writer' ||
+                    type === 'crew' ||
+                    type === 'person'
+                ) {
+                    // Navigate directly to the Seerr person details page for the selected crew/team member
+                    let personId = id;
+
+                    // Fallback: If person ID was missing on the chip element, look it up in normalized crew data
+                    if (!personId && this._item) {
+                        const rawCrew =
+                            this._item.ProductionTeam ||
+                            (this._item.credits && this._item.credits.crew) ||
+                            this._item.crew ||
+                            [];
+
+                        const found = rawCrew.find((m) => {
+                            const memberName = typeof m === 'string' ? m : (m && (m.Name || m.name));
+                            return memberName && memberName.trim().toLowerCase() === (name || '').trim().toLowerCase();
+                        });
+
+                        if (found && (found.Id || found.id)) {
+                            personId = found.Id || found.id;
+                        }
+                    }
+
+                    if (personId) {
+                        log.info(`Navigating to Seerr person details page for crew member: personId=${personId}, name=${name}`);
+                        router.navigate(`/seerr/person/${personId}`);
+                    }
                 }
             }
         });
