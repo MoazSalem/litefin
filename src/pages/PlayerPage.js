@@ -1472,14 +1472,22 @@ class PlayerPage extends Page {
             }
         }
 
-        // 2. Fetch Backdrop (Blurred Background)
-        // If Light Music Player is enabled, skip fetching and creating the backdrop texture completely
-        // to minimize network traffic and eliminate GPU load on low-spec TVs.
+        // 2. Backdrop & Ambient Background (Standard Heavy Blur vs. Ultra-Light BlurHash Mode)
+        // Check if the user has opted into the performance-friendly Light Music Player mode
         const isLightMusicPlayer = layoutManager.getLightMusicPlayer();
+        const isBlurHashDisabled = layoutManager.getDisableBlurhash();
         let backdropUrl = null;
 
+        // Manage dynamic BlurHash canvas for Light Music Player mode
+        let blurhashCanvas = overlay.querySelector('.audio-blurhash-canvas');
+
         if (!isLightMusicPlayer) {
-            // Try Backdrop, then fallback to the same Album Art we just found
+            // Remove any blurhash canvas if switching back to standard heavy blur player
+            if (blurhashCanvas) {
+                blurhashCanvas.remove();
+            }
+
+            // Standard Mode: Try Backdrop, then fallback to the same Album Art
             if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
                 backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
             } else if (
@@ -1492,7 +1500,66 @@ class PlayerPage extends Page {
                     quality: 80
                 });
             } else {
-                backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily
+                backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily by CSS
+            }
+        } else {
+            // Light Music Player Mode:
+            // Instead of downloading large backdrop assets and applying a continuous 150px CSS GPU blur filter,
+            // we decode the ultra-compact BlurHash at a tiny 64x36 resolution and let the GPU's bilinear interpolation
+            // upscale it naturally into a velvety ambient gradient with zero runtime GPU overhead.
+            let blurHash = null;
+
+            if (!isBlurHashDisabled && this._item?.ImageBlurHashes) {
+                // Priority 1: Check item's direct Backdrop BlurHash
+                if (this._item.ImageBlurHashes.Backdrop) {
+                    const keys = Object.keys(this._item.ImageBlurHashes.Backdrop);
+                    if (keys.length > 0) {
+                        blurHash = this._item.ImageBlurHashes.Backdrop[keys[0]];
+                    }
+                }
+                // Priority 2: Fall back to Primary Image BlurHash (e.g. Album Art)
+                if (!blurHash && this._item.ImageBlurHashes.Primary) {
+                    const keys = Object.keys(this._item.ImageBlurHashes.Primary);
+                    if (keys.length > 0) {
+                        blurHash = this._item.ImageBlurHashes.Primary[keys[0]];
+                    }
+                }
+            }
+
+            if (blurHash) {
+                // Create canvas if it doesn't exist yet
+                if (!blurhashCanvas) {
+                    blurhashCanvas = document.createElement('canvas');
+                    blurhashCanvas.className = 'audio-blurhash-canvas';
+
+                    // Place canvas behind the player center content and text
+                    const centerEl = overlay.querySelector('.audio-player-center');
+                    if (centerEl) {
+                        overlay.insertBefore(blurhashCanvas, centerEl);
+                    } else {
+                        overlay.appendChild(blurhashCanvas);
+                    }
+                }
+
+                // Decode BlurHash asynchronously to avoid blocking the main UI thread
+                import('../utils/BlurHashDecoder.js')
+                    .then(({ default: BlurHashDecoder }) => {
+                        // 64x36 is optimal for smooth bilinear gradient reproduction on 16:9 displays
+                        const pixels = BlurHashDecoder.decode(blurHash, 64, 36);
+                        if (pixels && blurhashCanvas) {
+                            blurhashCanvas.width = 64;
+                            blurhashCanvas.height = 36;
+                            const ctx = blurhashCanvas.getContext('2d');
+                            const imageData = ctx.createImageData(64, 36);
+                            imageData.data.set(pixels);
+                            ctx.putImageData(imageData, 0, 0);
+                            blurhashCanvas.style.opacity = '1';
+                        }
+                    })
+                    .catch((err) => log.error('Failed to decode audio BlurHash background', err));
+            } else if (blurhashCanvas) {
+                // No BlurHash found or BlurHash disabled — remove previous track's canvas
+                blurhashCanvas.remove();
             }
         }
 

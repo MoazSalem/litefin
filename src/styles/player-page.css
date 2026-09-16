@@ -157,6 +157,39 @@ body.lyrics-active .audio-player-center {
    Light Music Player Mode (Performance Optimization for Older TVs)
    ========================================================================== */
 
+/* Hardware-accelerated bilinear-scaled BlurHash ambient canvas */
+.audio-blurhash-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+    opacity: 0;
+    pointer-events: none;
+    -webkit-transition: opacity 0.5s ease-out;
+    transition: opacity 0.5s ease-out;
+}
+
+/* Apple-style deep ambient vignette backdrop when Light Music Player is active */
+html[data-light-music-player="true"] .audio-visual-overlay {
+    background: radial-gradient(circle at 50% 40%, #161822 0%, #0c0d12 60%, #040507 100%);
+}
+
+/* Subtle darkened vignette overlay on top of blurhash canvas to maximize typography and album art contrast */
+html[data-light-music-player="true"] .audio-visual-overlay::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.8) 100%);
+    z-index: 1;
+    pointer-events: none;
+}
+
 html[data-light-music-player="true"] .audio-backdrop {
     /* Completely eliminate GPU blur filter calculation and hide backdrop layer */
     display: none !important;
@@ -164,8 +197,10 @@ html[data-light-music-player="true"] .audio-backdrop {
 }
 
 html[data-light-music-player="true"] .audio-album-art {
-    /* Eliminate box shadow to prevent layer repaints */
+    /* Eliminate heavy drop shadow to prevent continuous layer composite repaints */
     box-shadow: none !important;
+    /* Clean Apple-style hairline border for subtle depth without rendering penalties */
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 html[data-light-music-player="true"] .audio-title,
