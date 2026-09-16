@@ -419,6 +419,122 @@ class SeerrPersonPage extends Page {
     }
 
     /**
+     * Consolidates repeating credit entries for the same movie or series into a single work.
+     * In TMDB/Seerr person credits, an individual may have multiple credit entries for the
+     * same title if they played multiple characters (e.g. voice actors or dual roles) or
+     * held multiple crew jobs (e.g. Director and Writer).
+     *
+     * This helper aggregates unique works by media type and ID, merging distinct character
+     * roles or crew job titles while retaining the highest quality metadata (posters, ratings).
+     *
+     * @param {Array<Object>} items - Array of credit objects to deduplicate
+     * @param {boolean} isCrew - True if aggregating crew credits, false for cast appearances
+     * @returns {Array<Object>} List of deduplicated, merged credit items
+     */
+    _mergeCredits(items, isCrew = false) {
+        if (!Array.isArray(items) || items.length === 0) return [];
+
+        // Track merged items mapped by a composite key `${mediaType}-${tmdbId}`
+        const mergedMap = new Map();
+
+        for (const item of items) {
+            if (!item) continue;
+
+            // Resolve standardized media type ('movie' or 'tv')
+            const itemMediaType =
+                item.mediaType ||
+                item.media_type ||
+                item._mediaType ||
+                (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
+                (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
+
+            // Resolve TMDB item ID
+            const tmdbId = item.id || item._tmdbId || item.Id;
+            if (!tmdbId) continue;
+
+            // Composite key ensures no collision between movies and TV series sharing the same ID
+            const workKey = `${itemMediaType}-${tmdbId}`;
+
+            // Extract the role or job name from the current credit entry
+            const rawRole = isCrew
+                ? (item.job || item.department || item.Role || item._role || '')
+                : (item.character || item.Role || item._role || '');
+
+            // Split compound roles (e.g., "Role A / Role B") and collect distinct segments
+            const roleParts = rawRole
+                ? rawRole
+                    .split('/')
+                    .map((part) => part.trim())
+                    .filter(Boolean)
+                : [];
+
+            if (!mergedMap.has(workKey)) {
+                // First occurrence: clone item and initialize roles collection
+                const initialRoles = [...roleParts];
+                mergedMap.set(workKey, {
+                    ...item,
+                    _mediaType: itemMediaType,
+                    _tmdbId: tmdbId,
+                    _rolesList: initialRoles
+                });
+            } else {
+                // Subsequent occurrence: merge character roles / jobs without duplicates
+                const existing = mergedMap.get(workKey);
+
+                roleParts.forEach((part) => {
+                    if (part && !existing._rolesList.includes(part)) {
+                        existing._rolesList.push(part);
+                    }
+                });
+
+                // Fallback for missing poster image
+                if (!existing.posterPath && !existing.poster_path && !existing.PosterPath && !existing._imageUrl) {
+                    const fallbackPoster = item.posterPath || item.poster_path || item.PosterPath || item._imageUrl;
+                    if (fallbackPoster) {
+                        existing.posterPath = fallbackPoster;
+                    }
+                }
+
+                // Fallback for missing backdrop image
+                if (!existing.backdropPath && !existing.backdrop_path) {
+                    const fallbackBackdrop = item.backdropPath || item.backdrop_path;
+                    if (fallbackBackdrop) {
+                        existing.backdropPath = fallbackBackdrop;
+                    }
+                }
+
+                // Preserve highest community rating score
+                const incomingRating = item.voteAverage || item.vote_average || item.CommunityRating || 0;
+                const currentRating = existing.voteAverage || existing.vote_average || existing.CommunityRating || 0;
+                if (incomingRating > currentRating) {
+                    existing.voteAverage = incomingRating;
+                }
+
+                // Preserve media server availability info if available
+                if (!existing.mediaInfo && item.mediaInfo) {
+                    existing.mediaInfo = item.mediaInfo;
+                }
+            }
+        }
+
+        // Finalize merged items with combined role labels
+        return Array.from(mergedMap.values()).map((mergedItem) => {
+            // Use ' / ' for cast character roles and ', ' for crew job titles
+            const separator = isCrew ? ', ' : ' / ';
+            const combinedRole = mergedItem._rolesList.join(separator);
+
+            // Assign combined role across all standard role properties
+            mergedItem.character = combinedRole;
+            mergedItem.job = combinedRole;
+            mergedItem.Role = combinedRole;
+            mergedItem._role = combinedRole;
+            mergedItem._roleName = combinedRole;
+
+            return mergedItem;
+        });
+    }
+
+    /**
      * Filters cast and crew data based on the active tab and mounts MediaGrid components.
      */
     _renderFilteredGrids() {
@@ -473,93 +589,101 @@ class SeerrPersonPage extends Page {
         // ────────────────────────────────────────────────────────────
         // 1. Process Appearances (Cast)
         // ────────────────────────────────────────────────────────────
-        const filteredCast = this._allCast
+        // Filter by media category, sort chronologically, and merge repeating titles
+        const rawFilteredCast = this._allCast
             .filter(matchesFilter)
-            .sort(sortByDateDesc)
-            .map((item) => {
-                const itemMediaType =
-                    item.mediaType ||
-                    item.media_type ||
-                    item._mediaType ||
-                    (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
-                    (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
+            .sort(sortByDateDesc);
 
-                const releaseDateStr =
-                    item.releaseDate ||
-                    item.release_date ||
-                    item.firstAirDate ||
-                    item.first_air_date ||
-                    item.ReleaseDate ||
-                    '';
-                const releaseYear = releaseDateStr ? releaseDateStr.substring(0, 4) : '';
-                const role = item.character || item.Role || item._role || '';
-                const poster =
-                    item.posterPath ||
-                    item.poster_path ||
-                    item.PosterPath ||
-                    (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^\/]+/, '') : '');
+        const mergedCast = this._mergeCredits(rawFilteredCast, false);
 
-                return {
-                    Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
-                    Name: item.title || item.name || item.Name || '',
-                    Type: itemMediaType === 'tv' ? 'Series' : 'Movie',
-                    ProductionYear: releaseYear || null,
-                    _mediaType: itemMediaType,
-                    _tmdbId: item.id || item._tmdbId || item.Id,
-                    Role: role,
-                    _roleName: role,
-                    _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : (item._imageUrl || ''),
-                    _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : (item._detailImageUrl || ''),
-                    _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
-                    _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
-                };
-            });
+        const filteredCast = mergedCast.map((item) => {
+            const itemMediaType =
+                item._mediaType ||
+                item.mediaType ||
+                item.media_type ||
+                (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
+                (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
+
+            const releaseDateStr =
+                item.releaseDate ||
+                item.release_date ||
+                item.firstAirDate ||
+                item.first_air_date ||
+                item.ReleaseDate ||
+                '';
+            const releaseYear = releaseDateStr ? releaseDateStr.substring(0, 4) : '';
+            const role = item.Role || item._roleName || item.character || '';
+            const poster =
+                item.posterPath ||
+                item.poster_path ||
+                item.PosterPath ||
+                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^\/]+/, '') : '');
+
+            return {
+                Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
+                Name: item.title || item.name || item.Name || '',
+                Type: itemMediaType === 'tv' ? 'Series' : 'Movie',
+                ProductionYear: releaseYear || null,
+                _mediaType: itemMediaType,
+                _tmdbId: item._tmdbId || item.id || item.Id,
+                Role: role,
+                _roleName: role,
+                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : (item._imageUrl || ''),
+                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : (item._detailImageUrl || ''),
+                _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
+                _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
+            };
+        });
 
         // ────────────────────────────────────────────────────────────
         // 2. Process Crew Credits
         // ────────────────────────────────────────────────────────────
-        const filteredCrew = this._allCrew
+        // Filter by media category, sort chronologically, and merge repeating titles
+        const rawFilteredCrew = this._allCrew
             .filter(matchesFilter)
-            .sort(sortByDateDesc)
-            .map((item) => {
-                const itemMediaType =
-                    item.mediaType ||
-                    item.media_type ||
-                    item._mediaType ||
-                    (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
-                    (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
+            .sort(sortByDateDesc);
 
-                const releaseDateStr =
-                    item.releaseDate ||
-                    item.release_date ||
-                    item.firstAirDate ||
-                    item.first_air_date ||
-                    item.ReleaseDate ||
-                    '';
-                const releaseYear = releaseDateStr ? releaseDateStr.substring(0, 4) : '';
-                const job = item.job || item.department || item.Role || item._role || '';
-                const poster =
-                    item.posterPath ||
-                    item.poster_path ||
-                    item.PosterPath ||
-                    (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^\/]+/, '') : '');
+        const mergedCrew = this._mergeCredits(rawFilteredCrew, true);
 
-                return {
-                    Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
-                    Name: item.title || item.name || item.Name || '',
-                    Type: itemMediaType === 'tv' ? 'Series' : 'Movie',
-                    ProductionYear: releaseYear || null,
-                    _mediaType: itemMediaType,
-                    _tmdbId: item.id || item._tmdbId || item.Id,
-                    _isCrew: true,
-                    Role: job,
-                    _roleName: job,
-                    _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : (item._imageUrl || ''),
-                    _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : (item._detailImageUrl || ''),
-                    _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
-                    _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
-                };
-            });
+        const filteredCrew = mergedCrew.map((item) => {
+            const itemMediaType =
+                item._mediaType ||
+                item.mediaType ||
+                item.media_type ||
+                (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
+                (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
+
+            const releaseDateStr =
+                item.releaseDate ||
+                item.release_date ||
+                item.firstAirDate ||
+                item.first_air_date ||
+                item.ReleaseDate ||
+                '';
+            const releaseYear = releaseDateStr ? releaseDateStr.substring(0, 4) : '';
+            const job = item.Role || item._roleName || item.job || item.department || '';
+            const poster =
+                item.posterPath ||
+                item.poster_path ||
+                item.PosterPath ||
+                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^\/]+/, '') : '');
+
+            return {
+                Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
+                Name: item.title || item.name || item.Name || '',
+                Type: itemMediaType === 'tv' ? 'Series' : 'Movie',
+                ProductionYear: releaseYear || null,
+                _mediaType: itemMediaType,
+                _tmdbId: item._tmdbId || item.id || item.Id,
+                _isCrew: true,
+                Role: job,
+                _roleName: job,
+                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : (item._imageUrl || ''),
+                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : (item._detailImageUrl || ''),
+                _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
+                _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
+            };
+        });
 
         // Mount Appearances Grid if items are present
         if (filteredCast.length > 0) {
