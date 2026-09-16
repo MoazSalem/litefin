@@ -333,11 +333,11 @@ test('DetailsPage auto-resolves DirectPlay audio track on first visit (TrueHD de
     );
 });
 
-test('WebOSPlayer _getContainerDefaultAudioIndex respects mediaSource.DefaultAudioStreamIndex when streams lack IsDefault', () => {
-    // Media where streams do NOT have IsDefault: true, but Jellyfin sets DefaultAudioStreamIndex: 5 (DTS)
+test('WebOSPlayer _getContainerDefaultAudioIndex resolves first playable track when streams lack IsDefault', () => {
+    // Media where streams do NOT have IsDefault: true, and TrueHD is unsupported
     const mediaSource = {
         Id: 'edge-of-tomorrow-source',
-        DefaultAudioStreamIndex: 5,
+        DefaultAudioStreamIndex: 5, // Jellyfin echoes client request (Index 5)
         MediaStreams: [
             { Type: 'Audio', Index: 2, Codec: 'truehd', IsDefault: false },
             { Type: 'Audio', Index: 3, Codec: 'ac3', IsDefault: false },
@@ -351,16 +351,11 @@ test('WebOSPlayer _getContainerDefaultAudioIndex respects mediaSource.DefaultAud
         const containerDefault = audioStreams.find((s) => s.IsDefault);
         if (containerDefault) return containerDefault.Index;
 
-        if (ms.DefaultAudioStreamIndex !== undefined && ms.DefaultAudioStreamIndex !== null) {
-            const serverDefault = audioStreams.find((s) => s.Index === ms.DefaultAudioStreamIndex);
-            if (serverDefault) return serverDefault.Index;
-        }
-
         return audioStreams[0]?.Index;
     }
 
     const resolvedDefault = mockGetContainerDefaultAudioIndex(mediaSource);
-    assert.strictEqual(resolvedDefault, 5, 'Should resolve DefaultAudioStreamIndex: 5 instead of defaulting to first track');
+    assert.strictEqual(resolvedDefault, 3, 'Should resolve first playable track Index 3 (AC3) rather than echoing requested Index 5');
 });
 
 test('ResponseProfiles contains only valid DLNA schema without non-standard condition properties', () => {

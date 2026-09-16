@@ -720,10 +720,11 @@ export class WebOSPlayer {
                 // Track stream index requested by the player UI
                 const requestedIndex = options.audioStreamIndex;
 
-                // Compare requested index against container default index or server-analyzed DefaultAudioStreamIndex
-                const mediaSourceDefault = options.mediaSource?.DefaultAudioStreamIndex;
+                // Compare requested index against actual container default index.
+                // NOTE: Do not compare against options.mediaSource.DefaultAudioStreamIndex because
+                // Jellyfin dynamically echoes the requested AudioStreamIndex there, which would
+                // falsely cause every requested track to be treated as container default!
                 const isDefaultTrack = (defaultIndex !== undefined && Number(requestedIndex) === Number(defaultIndex)) ||
-                                       (mediaSourceDefault !== undefined && mediaSourceDefault !== null && Number(requestedIndex) === Number(mediaSourceDefault)) ||
                                        (defaultIndex === undefined && resolvedIndex === 0);
 
                 // If the requested track is already the container's default track,
@@ -1368,9 +1369,7 @@ export class WebOSPlayer {
             // Suppress the restart to maintain seamless DirectPlay.
             // ================================================================
             const isDefault = targetStream
-                ? (targetStream.IsDefault ||
-                   (mediaSource?.DefaultAudioStreamIndex !== undefined && targetStream.Index === mediaSource.DefaultAudioStreamIndex) ||
-                   listIndex === 0)
+                ? (targetStream.IsDefault || listIndex === 0)
                 : (listIndex === 0);
 
             if (isDefault) {
@@ -1453,13 +1452,9 @@ export class WebOSPlayer {
         const containerDefault = audioStreams.find(s => s.IsDefault);
         if (containerDefault) return containerDefault.Index;
 
-        // 2. Check if Jellyfin resolved a DefaultAudioStreamIndex within the supported streams
-        if (mediaSource.DefaultAudioStreamIndex !== undefined && mediaSource.DefaultAudioStreamIndex !== null) {
-            const serverDefault = audioStreams.find(s => s.Index === mediaSource.DefaultAudioStreamIndex);
-            if (serverDefault) return serverDefault.Index;
-        }
-
-        // 3. Default to the first available audio track if none are explicitly marked
+        // 2. Default to the first available audio track if none are explicitly marked.
+        // NOTE: We do not check mediaSource.DefaultAudioStreamIndex because Jellyfin
+        // dynamically overrides it with the client-requested track.
         const defaultStream = audioStreams[0];
         return defaultStream ? defaultStream.Index : undefined;
     }

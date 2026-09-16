@@ -55,7 +55,7 @@ function setup(settings = {}, caps = {}) {
             source.indexOf('// ============================================================================\n// Minimal EventEmitter')
         ).replace(/export /g, '')}
 
-        ({ isTrueHdSupported, isDtsSupported, isAudioTrackNativelyPlayable, resolveBestAudioStream });
+        ({ isTrueHdSupported, isDtsSupported, isAudioTrackNativelyPlayable, resolveBestAudioStream, doesAudioTrackRequireDirectStream });
     `;
 
     return vm.runInContext(code, context);
@@ -218,4 +218,81 @@ test('resolveBestAudioStream falls back to AC3 when DTS is disabled and default 
     assert.ok(best, 'Best audio stream should be resolved');
     assert.strictEqual(best.Index, 1, 'Should fall back to AC3 (Index 1) when DTS is disabled');
 });
+
+test('doesAudioTrackRequireDirectStream: Avatar (DTS default track) plays DirectPlay without remux', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable',
+        enableTrueHd: 'disable'
+    });
+
+    const mediaSource = {
+        Id: 'avatar-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Requested track is Index 2 (DTS), which is container track 0 (physical default)
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos');
+    assert.strictEqual(requiresRemux, false, 'Default DTS track should play DirectPlay natively without remuxing');
+});
+
+test('doesAudioTrackRequireDirectStream: Edge of Tomorrow (non-default DTS track) requires DirectStream remux on WebOS', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable',
+        enableTrueHd: 'disable'
+    });
+
+    const mediaSource = {
+        Id: 'edge-of-tomorrow-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 4, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 5, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Requested track is Index 5 (DTS).
+    // Physical container default is Index 3 (first playable track since TrueHD is disabled).
+    // Because DTS is dropped from Chromium audioTracks, WebOS cannot switch in DirectPlay!
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 5, 'webos');
+    assert.strictEqual(requiresRemux, true, 'Non-default DTS track must require DirectStream remux to prevent AC3 downgrade');
+});
+
+test('doesAudioTrackRequireDirectStream: Multi-audio AC3 tracks do NOT require remux (native audioTracks supported)', () => {
+    const { doesAudioTrackRequireDirectStream } = setup();
+
+    const mediaSource = {
+        Id: 'multi-ac3-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: true },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'spa', IsDefault: false }
+        ]
+    };
+
+    // Requested track is Spanish AC3 (Index 3). AC3 is supported in Chromium audioTracks.
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 3, 'webos');
+    assert.strictEqual(requiresRemux, false, 'Standard AC3 tracks switch natively via HTML5 audioTracks without remuxing');
+});
+
+test('doesAudioTrackRequireDirectStream: Tizen AVPlay does NOT require remux (hardware demuxing)', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable'
+    });
+
+    const mediaSource = {
+        Id: 'tizen-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 5, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 5, 'avplay');
+    assert.strictEqual(requiresRemux, false, 'Tizen AVPlay uses native hardware demuxing and does not need remuxing');
+});
+
 

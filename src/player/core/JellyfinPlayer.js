@@ -290,6 +290,86 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
     return bestTrack;
 }
 
+/**
+ * Determine whether playing a specific audio track requires server DirectStream (remux)
+ * rather than raw DirectPlay (Static=true).
+ *
+ * In progressive DirectPlay (Static=true), Jellyfin serves the raw media container directly
+ * from disk and ignores any AudioStreamIndex parameter in the URL. The TV's hardware demuxer
+ * automatically starts decoding the container's designated default audio track (or the first
+ * decodable stream in the file).
+ *
+ * On WebOS and HTML5, the browser's video.audioTracks API allows switching tracks without remuxing,
+ * BUT Chromium's media demuxer silently drops passthrough / bitstream audio formats (DTS,
+ * DTS-HD MA, TrueHD, FLAC, ALAC) from the audioTracks collection.
+ *
+ * Therefore:
+ * 1. If the requested track IS the container's physical default track, DirectPlay works natively
+ *    in hardware (e.g. Avatar with DTS-HD MA as Track 0).
+ * 2. If the requested track is NOT the container default, and its codec is a passthrough or
+ *    dropped format, DirectPlay will NEVER play that track (it will stay stuck on the container default,
+ *    downgrading the user to a lossy compatibility track like AC3).
+ *    Such tracks MUST be remuxed (DirectStream) so the server isolates the target audio track.
+ *
+ * @param {Object} mediaSource - Jellyfin MediaSource object
+ * @param {number|string} audioStreamIndex - Stream Index to evaluate
+ * @param {string} backendType - Active backend ('webos', 'html5', 'avplay', etc.)
+ * @returns {boolean} True if the track requires DirectStream (remux)
+ */
+export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex, backendType) {
+    // Guard check: Ensure mediaSource and MediaStreams exist
+    if (!mediaSource || !Array.isArray(mediaSource.MediaStreams)) {
+        return false;
+    }
+
+    // Tizen AVPlay uses Samsung's native multimedia engine with hardware track demuxing
+    if (backendType === 'avplay') {
+        return false;
+    }
+
+    // Filter candidate streams to Audio type
+    const audioStreams = mediaSource.MediaStreams.filter((s) => s.Type === 'Audio');
+    if (audioStreams.length <= 1) {
+        return false;
+    }
+
+    // Parse requested audio stream index
+    const reqIndex = Number(audioStreamIndex);
+    const targetStream = audioStreams.find((s) => s.Index === reqIndex);
+    if (!targetStream) {
+        return false;
+    }
+
+    // Determine the container's actual physical default audio track.
+    // NOTE: We deliberately do NOT use mediaSource.DefaultAudioStreamIndex here because
+    // the Jellyfin server dynamically sets that property to whatever AudioStreamIndex
+    // was requested in the PlaybackInfo call, rather than the file's container default.
+    const defaultStream = audioStreams.find((s) => s.IsDefault && isAudioTrackNativelyPlayable(s));
+    const playableStreams = audioStreams.filter((s) => isAudioTrackNativelyPlayable(s));
+    const containerHardwareDefault = defaultStream || playableStreams[0] || audioStreams[0];
+
+    // If the requested track is the physical default track, it plays natively in hardware DirectPlay
+    if (containerHardwareDefault && targetStream.Index === containerHardwareDefault.Index) {
+        return false;
+    }
+
+    // Check if target codec is omitted from Chromium's native video.audioTracks collection
+    const codec = (targetStream.Codec || '').toLowerCase();
+    const isPassthroughOrDropped =
+        codec.includes('dts') ||
+        codec === 'dca' ||
+        codec === 'truehd' ||
+        codec === 'flac' ||
+        codec === 'alac';
+
+    // If omitted from audioTracks, WebOS / HTML5 cannot switch to it in DirectPlay mode
+    if (isPassthroughOrDropped) {
+        return true;
+    }
+
+    return false;
+}
+
 
 // ============================================================================
 // Minimal EventEmitter (inlined from player/src/bridge/EventEmitter.js)
@@ -938,6 +1018,13 @@ export class JellyfinPlayer extends EventEmitter {
                 }
             }
 
+            // Locate active MediaSource for track requirement evaluation
+            let activeMs = null;
+            if (options.item && options.item.MediaSources) {
+                const fallbackSource = options.item.MediaSources[0];
+                activeMs = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
+            }
+
             let isCustomAudioTrack = false;
             let isFirstAudioTrack = true;
             if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
@@ -945,18 +1032,15 @@ export class JellyfinPlayer extends EventEmitter {
                 let defaultIndex = undefined;
                 let firstAudioIndex = undefined;
 
-                if (options.item && options.item.MediaSources) {
-                    const fallbackSource = options.item.MediaSources[0];
-                    const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
-                    if (ms) {
-                        const audioStreams = (ms.MediaStreams || []).filter(s => s.Type === 'Audio');
-                        const defaultAudioStream = audioStreams.find(s => s.IsDefault) ||
-                            (ms.DefaultAudioStreamIndex !== undefined && ms.DefaultAudioStreamIndex !== null ? audioStreams.find(s => s.Index === ms.DefaultAudioStreamIndex) : null) ||
-                            audioStreams[0];
-                        defaultIndex = defaultAudioStream ? defaultAudioStream.Index : ms.DefaultAudioStreamIndex;
-                        if (audioStreams.length > 0) {
-                            firstAudioIndex = audioStreams[0].Index;
-                        }
+                if (activeMs) {
+                    const audioStreams = (activeMs.MediaStreams || []).filter(s => s.Type === 'Audio');
+                    // Find actual container default without using the dynamically echoed DefaultAudioStreamIndex
+                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s)) ||
+                        audioStreams.find(s => isAudioTrackNativelyPlayable(s)) ||
+                        audioStreams[0];
+                    defaultIndex = defaultAudioStream ? defaultAudioStream.Index : undefined;
+                    if (audioStreams.length > 0) {
+                        firstAudioIndex = audioStreams[0].Index;
                     }
                 }
                 
@@ -968,13 +1052,21 @@ export class JellyfinPlayer extends EventEmitter {
                 log.info(`[AudioSelection] Requested: ${reqIndex}, Default: ${defaultIndex}, First: ${firstAudioIndex}, Custom: ${isCustomAudioTrack}, IsFirst: ${isFirstAudioTrack}`);
             }
 
+            // Determine if the requested audio track requires server remuxing (DirectStream)
+            // This catches non-default passthrough tracks (DTS, TrueHD, FLAC) on WebOS/HTML5
+            // that Chromium cannot switch natively in progressive DirectPlay.
+            const trackRequiresDirectStream = activeMs && options.audioStreamIndex !== undefined && options.audioStreamIndex !== null
+                ? doesAudioTrackRequireDirectStream(activeMs, options.audioStreamIndex, this._backendType)
+                : false;
+
             const needsDirectStreamForAudio = options._forceDirectStream ||
+                trackRequiresDirectStream ||
                 (isHtml5Backend && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
             // Determine effective playback mode for profiling
             let profilePlaybackMode = this._playbackMode;
             if (needsDirectStreamForAudio && (profilePlaybackMode === 'auto' || profilePlaybackMode === 'directPlay')) {
-                log.info('HTML5 audio track selection: Upgrading profile mode to "remux" to ensure video Direct Stream.');
+                log.info('Audio track selection requires remux: Upgrading profile mode to "remux" to ensure video Direct Stream.');
                 profilePlaybackMode = 'remux';
             }
 
@@ -2871,6 +2963,10 @@ export class JellyfinPlayer extends EventEmitter {
                     if (isAudioCodecError && (this._playbackMode === 'auto' || this._playbackMode === 'directPlay')) {
                         log.warn(
                             '[Prewarm] Prewarmed PlaybackInfo forced transcode for AudioCodecNotSupported. Discarding in favor of fresh direct-play request.'
+                        );
+                    } else if (deviceProfile?.DirectPlayProfiles?.length === 0 && firstSource.SupportsDirectPlay) {
+                        log.info(
+                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
                         );
                     } else {
                         return prewarmedData;

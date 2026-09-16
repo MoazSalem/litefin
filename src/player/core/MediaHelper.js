@@ -46,7 +46,7 @@ export const MediaHelper = {
         let url;
         let isHls = false;
 
-        if (playMethod === 'DirectPlay' || playMethod === 'DirectStream') {
+        if (playMethod === 'DirectPlay' || playMethod === 'DirectStream' || playMethod === 'Remux') {
             // ================================================================
             // PRIORITY INTERCEPT: Live TV / IPTV loopback guard.
             //
@@ -145,16 +145,26 @@ export const MediaHelper = {
                 url = mediaSource.Path;
                 isHls = url.includes('.m3u8') || mediaSource.Container === 'hls';
 
-            // For DirectStream, always prefer the server-provided TranscodingUrl —
+            // For DirectStream or Remux, always prefer the server-provided TranscodingUrl —
             // it has AudioStreamIndex, SubtitleStreamIndex, and all session params
-            // baked in.  For DirectPlay, build the static URL directly (TranscodingUrl
+            // baked in. For DirectPlay, build the static URL directly (TranscodingUrl
             // may be an HLS manifest the native player can't handle).
-            } else if (playMethod === 'DirectStream' && mediaSource.TranscodingUrl) {
+            } else if ((playMethod === 'DirectStream' || playMethod === 'Remux') && mediaSource.TranscodingUrl) {
                 url = serverUrl + mediaSource.TranscodingUrl;
                 isHls = url.includes('.m3u8');
 
+            } else if (mediaSource.SupportsDirectStream && playMethod === 'DirectPlay') {
+                // Static-serve the container file as-is for DirectPlay only
+                url = `${serverUrl}/Videos/${itemId}/stream.${mediaSource.Container}`;
+                url += `?Static=true`;
+                url += `&mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
+                url += `&${authKey}=${encodeURIComponent(authToken)}`;
+                if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
+                    url += `&AudioStreamIndex=${audioStreamIndex}`;
+                }
+
             } else if (mediaSource.SupportsDirectStream) {
-                // Static-serve the container file as-is
+                // Fallback for static container serving when playMethod is unclassified
                 url = `${serverUrl}/Videos/${itemId}/stream.${mediaSource.Container}`;
                 url += `?Static=true`;
                 url += `&mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
