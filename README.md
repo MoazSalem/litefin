@@ -135,6 +135,13 @@ If Litefin is useful to you, please consider supporting the development:
           <b>h3xler</b>
         </a>
       </td>
+      <td align="center" width="160">
+        <a href="https://github.com/d-stl">
+          <img src="https://github.com/d-stl.png?s=100" width="80" alt="d-stl" />
+          <br />
+          <b>domantas</b>
+        </a>
+      </td>
      </tr>
     
   </table>
