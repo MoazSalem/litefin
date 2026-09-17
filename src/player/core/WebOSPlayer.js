@@ -417,6 +417,8 @@ export class WebOSPlayer {
         // Clear any stale source first
         video.removeAttribute('src');
 
+        // Ensure HLS manifest exists before assigning source
+        await MediaHelper.pollHlsManifest(options.url);
         // ====================================================================
         // MEDIA FRAGMENT RESUME:
         // Append `#t=seconds` to the url for HLS streaming to hint the native HLS demuxer

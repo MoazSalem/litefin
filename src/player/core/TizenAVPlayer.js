@@ -123,6 +123,51 @@ export class TizenAVPlayer {
         // not fire buffering events, leaving the player asleep in a READY state.
         this._seekSafetyTimeoutId = null;
 
+        // Guards against calling play() or other AVPlay APIs while seekTo is in progress.
+        // Per Samsung docs, no other API may be called between seekTo() and its callback.
+        // onbufferingcomplete can fire during seek and would otherwise trigger _checkNativePlay
+        // which calls play() — violating the contract and causing native decoder freezes.
+        this._seekInProgress = false;
+
+        // Tracks whether onbufferingcomplete fired during an active seek.
+        // When seek is in progress, onbufferingcomplete is suppressed (can't call
+        // _checkNativePlay). This flag lets the seek success callback know that
+        // the hardware buffer is already filled and play() can proceed immediately.
+        this._bufferingCompleteDuringSeek = false;
+
+        // Tracks if Tizen AVPlay has actively fired onbufferingstart and is
+        // waiting on onbufferingcomplete to refill the network pipeline.
+        this._isNativeBuffering = false;
+
+        // Queue for operations that arrive during seek. Per Samsung docs, no
+        // AVPlay API calls are permitted between seekTo() and its callback.
+        // When play/pause is requested during seek, the operation is saved here
+        // and applied after the seek completes.
+        this._pendingOpAfterSeek = null;
+        // If a second seek arrives while one is in flight, queue it here and
+        // execute after the current seek finishes.
+        this._queuedSeekPositionMs = null;
+
+        // ── Subtitle API Cooldown ────────────────────────────────────────────
+        // Samsung's hardware decoder needs a settling period after
+        // setSelectTrack('TEXT') / setSilentSubtitle() calls. Issuing seekTo()
+        // during this window causes a permanent native decoder crash that
+        // requires a full TV restart. We track the last subtitle API call time
+        // and defer seeks that arrive within the cooldown period.
+        this._lastSubtitleApiTime = 0;
+        this._deferredSeekTicks = null;
+        this._deferredSeekTimerId = null;
+
+        // Initial buffer gate timeout ID (3s safety fallback)
+        this._initialBufferTimeoutId = null;
+
+        // Post-seek buffer fallback timeout ID. If onbufferingstart fires during
+        // a seek but onbufferingcomplete never arrives (common when the seek was
+        // performed while paused), _bufferingComplete stays false and playback
+        // resume is permanently blocked. This timer mirrors the initial-buffer
+        // fallback and forces the gate open after a short window.
+        this._seekBufferTimeoutId = null;
+
         // ── Buffering Deadlock Detection ─────────────────────────────────────
         //
         // Certain MKV files contain audio tracks with a "delay relative to video"
@@ -2320,7 +2365,7 @@ export class TizenAVPlayer {
             const streamIndex = targetStream.Index;
 
             // Per Samsung docs, setSelectTrack('AUDIO', ...) is only valid in PLAYING state for HLS/DASH.
-            // If AVPlay is not in PLAYING state, or if seek is currently in progress, store the Jellyfin StreamIndex for deferred execution.
+            // If AVPlay is not in PLAYING state or a seek is in progress, store the Jellyfin StreamIndex for deferred execution.
             let avplayState = 'UNKNOWN';
             try { avplayState = this._avplay.getState(); } catch (_) { }
             if (this._seekInProgress || avplayState !== 'PLAYING') {
