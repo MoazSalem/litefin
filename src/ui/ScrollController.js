@@ -997,9 +997,12 @@ class ScrollController {
                             isModern &&
                             !track.__virtualRow.isLandscape &&
                             track.__virtualRow.cardType !== 'square' &&
-                            track.__virtualRow.cardType !== 'artist';
+                            track.__virtualRow.cardType !== 'artist' &&
+                            track.__virtualRow.cardType !== 'person';
 
-                        elementWidth = canExpand ? 600 : track.__virtualRow.itemWidth;
+                        elementWidth = canExpand
+                            ? Math.round(600 * (track.__virtualRow.modernMultiplier || 1.0))
+                            : track.__virtualRow.itemWidth;
                         trackWidth = track.__virtualRow.getTrackWidth();
                     } else {
                         if (isRtl) {

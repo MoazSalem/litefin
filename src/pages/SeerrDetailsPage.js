@@ -683,6 +683,7 @@ class SeerrDetailsPage extends Page {
             listId,
             items,
             isLandscape = false,
+            cardType,
             renderCard,
             focusSectionName,
             onClick
@@ -702,6 +703,7 @@ class SeerrDetailsPage extends Page {
             visibleCount: 10,
             initialWindow: Math.min(20, items.length),
             focusSectionId: focusSectionName,
+            cardType: cardType,
             renderCard: renderCard
         });
 
@@ -776,6 +778,7 @@ class SeerrDetailsPage extends Page {
                 listId: 'seerr-people-row',
                 items: this._item.Cast,
                 isLandscape: false,
+                cardType: 'person',
                 renderCard: (person) => CardRenderer.createCardHtml(person, { type: 'person' }),
                 focusSectionName: 'seerr-details-people',
                 onClick: (card, person) => {

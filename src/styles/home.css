@@ -45,7 +45,8 @@
     padding-left: 72px;
 }
 
-html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
+html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track {
     padding-left: 60px;
 }
 
@@ -54,7 +55,8 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
     padding-right: 72px;
 }
 
-[dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
+[dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
+[dir="rtl"] html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track {
     padding-left: 0;
     padding-right: 60px;
 }
@@ -74,23 +76,26 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 }
 
 /*
- * ── Modern Skeleton Dimensions ───────────────────────────────────────────
- * Modern cards use dynamically calculated variables (--card-width,
+ * ── Modern & Expanded Skeleton Dimensions ────────────────────────────────
+ * Modern & Expanded cards use dynamically calculated variables (--card-width,
  * --card-expanded-width, --card-margin) that scale with user settings.
  * We override classic skeletons with high-specificity modern selectors.
  */
-html[data-layout-media-rows="modern"] .media-row--skeleton .media-card {
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card {
     width: var(--card-width) !important;
     height: var(--card-height) !important;
     margin-right: var(--card-margin) !important;
     margin-left: 0 !important;
 }
 
-html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape {
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.landscape {
     width: var(--card-expanded-width) !important;
 }
 
-html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.square {
     width: var(--card-square-width) !important;
 }
 

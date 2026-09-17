@@ -889,6 +889,7 @@
     "LayoutClassic": "كلاسيكي",
     "LayoutDirection": "اتجاه الواجهة",
     "LayoutDirectionDescription": "فرض اتجاه قراءة النص في التطبيق (يتطلب إعادة تشغيل)",
+    "LayoutExpandedPosters": "بطاقات حديثة",
     "LayoutExpandingPosters": "ملصقات قابلة للتوسيع",
     "LayoutFloatingButtonsSidebar": "أزرار عائمة",
     "LayoutFloatingIslandSidebar": "جزيرة عائمة",
@@ -1541,5 +1542,7 @@
     "YearLabel": "السنة: {0}",
     "YearValue": "{0} سنة",
     "Yes": "نعم",
+    "PreferBackdropsOverThumbs": "استخدام الخلفيات بدلاً من الصور المصغرة",
+    "PreferBackdropsOverThumbsDescription": "تفضيل صور الخلفيات على الصور المصغرة للبطاقات العريضة في التخطيطين المتوسع والموسّع.",
     "Zoom": "تكبير"
 }

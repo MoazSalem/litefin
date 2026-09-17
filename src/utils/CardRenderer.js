@@ -299,6 +299,14 @@ class CardRenderer {
     static createCardHtml(item, options = {}) {
         const { isLandscape = false, type = 'poster', contextType = null, isGrid = false, cardWidth = null } = options;
 
+        const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows') || 'classic';
+        const isModern = mediaLayout === 'modern';
+        const isExpanded = mediaLayout === 'expanded';
+        const isModernOrExpanded = isModern || isExpanded;
+
+        const libraryThumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+        const isDynamicThumb = (type === 'library' && libraryThumbMode !== 'off') || Boolean(item._dynamicThumbUrl);
+
         // ------------------------------------------------------------------
         // HTML OUTPUT CACHE
         // ------------------------------------------------------------------
@@ -307,7 +315,7 @@ class CardRenderer {
         // resolution, BlurHash lookup, quality badge iteration, and string
         // building. Cache key incorporates every option that changes output.
         // ------------------------------------------------------------------
-        const cacheKey = `${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}`;
+        const cacheKey = `${mediaLayout}|${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}|${item._dynamicThumbUrl || ''}|${libraryThumbMode}|${storage.getItem('pref:hideLibraryLabels')}|${storage.getItem('pref:cardLabelStyle')}`;
         if (CardRenderer._htmlCacheKey !== cacheKey) {
             CardRenderer._htmlCache.clear();
             CardRenderer._htmlCacheKey = cacheKey;
@@ -315,8 +323,6 @@ class CardRenderer {
         const itemId = item.Id;
         const cached = CardRenderer._htmlCache.get(itemId);
         if (cached !== undefined) return cached;
-
-        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         let imageUrl = '';
         let imageInnerHtml = '';
@@ -350,8 +356,10 @@ class CardRenderer {
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
             const isArtist = item.Type === 'MusicArtist' || item.Type === 'Artist';
 
+            // In Expanded Posters layout, person/cast/guest star cards use square (1:1) aspect ratio
             if (primaryTag || (itemId && isArtist)) {
-                const params = imageService.getParams('poster', contextType); // People usually have poster-like images
+                // Sizing parameters: fetch square preset when in expanded layout
+                const params = imageService.getParams(isExpanded ? 'square' : 'poster', contextType);
                 imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
@@ -420,6 +428,49 @@ class CardRenderer {
                     tag: item.ImageTags.Primary
                 });
             }
+        } else if (isExpanded && !isGrid && !isLandscape && (type === 'poster' || type === 'movie' || type === 'series' || type === 'season')) {
+            // =================================================================
+            // 💎 Expanded Posters Layout (Ultra-Lightweight Static Widescreen)
+            // =================================================================
+            // Directly resolve widescreen 16:9 backdrop or thumb images.
+            // Unlike 'Expanding Posters' (modern mode), which constructs dual
+            // image layers (poster + lazy thumb) and crossfades them dynamically,
+            // 'Expanded Posters' uses ONE single image tag directly. This cuts
+            // DOM memory, network duplicate requests, and GPU load in half!
+            // =================================================================
+            const params = imageService.getParams('expanded-poster', contextType);
+            if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                imageUrl = _imgUrl(itemId, 'Backdrop', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.BackdropImageTags[0]
+                });
+            } else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
+                imageUrl = _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ParentBackdropImageTags[0]
+                });
+            } else if (item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0) {
+                imageUrl = _imgUrl(item.SeriesId, 'Backdrop', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.SeriesBackdropImageTags[0]
+                });
+            } else if (item.ImageTags && item.ImageTags.Thumb) {
+                imageUrl = _imgUrl(itemId, 'Thumb', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Thumb
+                });
+            } else if (item.ImageTags && item.ImageTags.Primary) {
+                // High-res primary poster fallback (cropped horizontally with object-fit: cover)
+                imageUrl = _imgUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
+            }
         } else if (isLandscape) {
             // Landscape (Thumb/Backdrop) Preference
             //
@@ -478,7 +529,7 @@ class CardRenderer {
                 if (item._dynamicThumbUrl) {
                     imageUrl = item._dynamicThumbUrl;
                 }
-                // Libraries: Primary -> Thumb -> Backdrop
+                // Native Jellyfin Libraries: Primary -> Thumb -> Backdrop
                 else if (item.ImageTags?.Primary) {
                     imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
@@ -498,9 +549,10 @@ class CardRenderer {
                     });
                 }
 
-                // Add modern overlay label directly to the image area
-                // This provides a premium "streaming service" aesthetic
-                if (isModern || item._dynamicThumbUrl) {
+                // Centered overlay label + tint on the card image:
+                // Only for dynamic library thumbs (pre-fetched collage thumbs).
+                // For native Jellyfin artwork in all layouts (including Modern expanding), artwork is kept clean without overlay text and tint.
+                if (isDynamicThumb) {
                     imageInnerHtml = `
                         <div class="card-overlay-tint"></div>
                         <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
@@ -696,15 +748,18 @@ class CardRenderer {
 
         // --- 1.5 Premium Fallbacks & Modern Shadow ---
         if (!imageUrl) {
-            imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
+            imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape, {
+                hideInitials: type === 'library',
+                isLibrary: type === 'library'
+            });
         } else if (item._isGenreCard) {
             imageInnerHtml = `
                 <div class="card-overlay-tint"></div>
                 <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
             `;
-        } else if (isModern && !isGrid) {
+        } else if (isModern && !isGrid && (type !== 'library' || isDynamicThumb)) {
             // Modern horizontal cards get a shadow tint to ensure inside title readability.
-            // We bypass this for grid-based cards to keep their artwork fully bright and clear.
+            // We bypass this for grid-based cards and native library cards to keep their artwork fully bright and clear.
             imageInnerHtml = `<div class="card-image-tint"></div>${imageInnerHtml}`;
         }
 
@@ -941,8 +996,9 @@ class CardRenderer {
         // --- 4. HTML Assembly ---
 
         let cssClass = isLandscape ? 'media-card landscape' : 'media-card';
-        // 'artist' is an alias for the square type — same 1:1 aspect ratio card
-        if (type === 'square' || type === 'artist') cssClass = 'media-card square';
+        // 'artist' is an alias for the square type — same 1:1 aspect ratio card.
+        // In Expanded Posters layout, person cards (cast/crew/guest stars) render as square (1:1) cards.
+        if (type === 'square' || type === 'artist' || (isExpanded && type === 'person')) cssClass = 'media-card square';
 
         // Live TV Channel card classification
         if (item.Type === 'TvChannel') {
@@ -992,7 +1048,7 @@ class CardRenderer {
             isModern &&
             !isLandscape &&
             !isGrid &&
-            (type === 'poster' || type === 'movie' || type === 'series' || type === 'season' || type === 'person');
+            (type === 'poster' || type === 'movie' || type === 'series' || type === 'season');
 
         let thumbPart = '';
         if (canExpand) {
@@ -1071,11 +1127,19 @@ class CardRenderer {
                 : '';
         const imagePart = imageUrl
             ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
-            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${escapeHtml(i18n.ensureBiDi(item.Name))}</div>` : ''}`;
+            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials, isLibrary: type === 'library' })}`;
         const finalContextType = contextType || item.Type;
 
+        const hideLibraryLabelsPref = storage.getItem('pref:hideLibraryLabels') === 'true';
+
+        // Outside label hiding logic for library cards:
+        // - Hide if user enabled 'pref:hideLibraryLabels'
+        // - Hide if dynamic library thumb mode is enabled (which has text centered on the card with a tint)
+        // - Hide if Modern layout (in-artwork inside labels)
+        // For Expanded and Classic layouts when using native Jellyfin thumbs/fallbacks (libraryThumbMode === 'off'),
+        // outside label is shown below card unless hideLibraryLabelsPref is true
         const isHiddenLibraryLabel =
-            type === 'library' && (storage.getItem('pref:hideLibraryLabels') === 'true' || isModern);
+            type === 'library' && (isDynamicThumb || isModern || hideLibraryLabelsPref);
 
         // --- 5. Optional Meta Row (list view) ---
         // showMeta injects an additional row with rating + year + runtime for
@@ -1103,30 +1167,31 @@ class CardRenderer {
         }
 
         // ====================================================================
-        // --- 5. Integrated vs External Labels (Modern vs Classic Layout) ---
+        // --- 5. Integrated vs External Labels (Modern / Expanded vs Classic) ---
         // ====================================================================
-        // The display architecture differs dramatically between our layout engines:
+        // The display architecture differs across layout engines:
         //
-        // 1. In the Modern layout:
-        //    - Landscape and square cards integrate labels INSIDE the card image
-        //      containers as high-end premium overlays.
-        //    - Standard posters render labels OUTSIDE.
-        //    - Expandable posters render BOTH to enable a seamless crossfade and
-        //      CSS scale transition from outside to inside on hover/focus.
+        // 1. In Modern layout ('modern'):
+        //    - Landscape and square cards integrate labels INSIDE.
+        //    - Expandable posters render BOTH to support smooth focus crossfade.
         //
-        // 2. In the Classic layout (isModern is false):
-        //    - ALL cards (posters, landscape, and square) must render their labels
-        //      OUTSIDE (underneath the card structure) to align with standard TV
-        //      interfaces and prevent visual clipping.
+        // 2. In Expanded Posters layout ('expanded'):
+        //    - ALL row cards are statically widescreen with inside overlay labels.
+        //    - Standard outside labels are omitted, keeping DOM footprint minimal.
+        //
+        // 3. In Classic layout ('classic'):
+        //    - Standard outside labels underneath cards.
         // ====================================================================
-        const isSquare = type === 'square' || type === 'artist';
+        const isSquare = type === 'square' || type === 'artist' || (isExpanded && type === 'person');
         // In vertical 2D grids (!isGrid is false), we disable inside integrated labels
         // and force standard outside labels to keep the entire grid uniform and clean.
-        const renderInside = isModern && !isGrid && (isLandscape || isSquare || canExpand);
-        const renderOutside = !isModern || isGrid || (!isLandscape && !isSquare);
+        // In Expanded Posters ('expanded'), titles and subtitles render cleanly outside below cards.
+        const renderInside = isModern && (isLandscape || isSquare || canExpand) && !isGrid;
+        const renderOutside = (!isModern && !isExpanded) || isExpanded || isGrid || (isModern && !isLandscape && !isSquare);
 
-        // Final visibility logic (Classic vs Modern)
-        const showInside = renderInside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
+        // Final visibility logic (Classic vs Modern vs Expanded)
+        // For library cards, inside .card-info is bypassed in favor of clean native artwork or .card-overlay-label on dynamic thumbs
+        const showInside = renderInside && type !== 'library' && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
         const showOutside = renderOutside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
         const expansionClass = canExpand ? ' has-expansion' : '';
 
@@ -1228,15 +1293,21 @@ class CardRenderer {
     static getFallbackHtml(item, isLandscape, options = {}) {
         const data = CardRenderer.getFallbackData(item.Name);
         const hideInitials = options.hideInitials || false;
-        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+        const isLibrary = options.isLibrary || item.Type === 'CollectionFolder' || item.CollectionType !== undefined;
+        const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
+        const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded';
         const isGameItem = CardRenderer.isGame(item);
         const gameIconSvg = isGameItem ? getStaticIcon('detailsIcons', 'gamepad', 'outlined') : '';
+
+        // Media library fallback thumbs must ALWAYS display their text/title inside the card
+        // across all layout modes so the fallback is never rendered as an empty blank box.
+        const showName = isLibrary || hideInitials || !isModernOrExpanded;
 
         return `
             <div class="media-fallback grad-${data.gradNum} ${isGameItem ? 'game-fallback' : ''}">
                 ${isGameItem ? `<div class="media-fallback-game-icon">${gameIconSvg}</div>` : ''}
                 ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(data.initials)}</div>` : ''}
-                ${!isModern ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
+                ${showName ? `<div class="media-fallback-name">${escapeHtml(data.name)}</div>` : ''}
             </div>
         `;
     }
@@ -1275,8 +1346,10 @@ class CardRenderer {
 
         let html = '';
         for (let i = 0; i < count; i++) {
-            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
-            const isSquare = viewMode === 'square' || viewMode === 'artist';
+            const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
+            const isModern = mediaLayout === 'modern';
+            const isExpanded = mediaLayout === 'expanded';
+            const isSquare = viewMode === 'square' || viewMode === 'artist' || (isExpanded && viewMode === 'person');
             const isIntegratedModern =
                 isModern && (isLandscape || viewMode === 'thumb' || viewMode === 'banner' || isSquare);
             const isPortraitModern = isModern && !isLandscape && !isSquare;

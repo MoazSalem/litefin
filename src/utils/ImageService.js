@@ -482,20 +482,35 @@ class ImageService {
             }
         }
 
-        // 1.5 Intercept and map to modern layout card sizes if modern layout is active
-        const isModern =
+        // 1.5 Intercept and map to modern/expanded layout card sizes if active
+        const mediaLayout =
             typeof document !== 'undefined' &&
-            document.documentElement &&
-            document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
-        if (isModern && !type.startsWith('details-') && !type.startsWith('hero-')) {
-            if (type === 'expanded-poster') {
-                type = 'modern-expanded';
-            } else if (type.endsWith('poster')) {
-                type = 'modern-poster';
-            } else if (type.endsWith('thumb') || type === 'card-backdrop') {
-                type = 'modern-thumb';
-            } else if (type.endsWith('square') || type.endsWith('artist') || type.endsWith('small')) {
-                type = 'modern-square';
+            document.documentElement
+                ? document.documentElement.getAttribute('data-layout-media-rows')
+                : 'classic';
+        const isModern = mediaLayout === 'modern';
+        const isExpanded = mediaLayout === 'expanded';
+
+        if ((isModern || isExpanded) && !type.startsWith('details-') && !type.startsWith('hero-')) {
+            if (isExpanded) {
+                // In Expanded Posters layout, all poster rows use widescreen 16:9 images directly
+                if (type === 'expanded-poster' || type.endsWith('poster')) {
+                    type = 'modern-expanded';
+                } else if (type.endsWith('thumb') || type === 'card-backdrop') {
+                    type = 'modern-thumb';
+                } else if (type.endsWith('square') || type.endsWith('artist') || type.endsWith('small')) {
+                    type = 'modern-square';
+                }
+            } else if (isModern) {
+                if (type === 'expanded-poster') {
+                    type = 'modern-expanded';
+                } else if (type.endsWith('poster')) {
+                    type = 'modern-poster';
+                } else if (type.endsWith('thumb') || type === 'card-backdrop') {
+                    type = 'modern-thumb';
+                } else if (type.endsWith('square') || type.endsWith('artist') || type.endsWith('small')) {
+                    type = 'modern-square';
+                }
             }
         }
 
@@ -526,9 +541,9 @@ class ImageService {
                 type !== 'logo' &&
                 type !== 'backdrop';
             if (isRowCard) {
-                const layoutDefaultScale = isModern ? 1.3 : 1.0;
+                const layoutDefaultScale = isExpanded ? 1.1 : isModern ? 1.3 : 1.0;
                 const scale =
-                    parseFloat(storage.getItem(isModern ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale')) ||
+                    parseFloat(storage.getItem(isExpanded ? 'pref:expandedCardSizeScale' : isModern ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale')) ||
                     layoutDefaultScale;
                 if (scale !== layoutDefaultScale) {
                     const scaleMap = {

@@ -35,6 +35,7 @@ import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
 import { seerr } from '../api/seerrClient.js';
 import { escapeHtml } from '../utils/Utils.js';
+import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('SettingsPage');
 
@@ -1456,7 +1457,8 @@ class SettingsPage extends Page {
             'media-rows-layout-select',
             [
                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
-                { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' }
+                { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' },
+                { value: 'expanded', label: i18n.t('LayoutExpandedPosters') || 'Expanded Posters' }
             ],
             layoutManager.getMediaRowsLayout() || 'classic'
         )}
@@ -1643,9 +1645,32 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${(() => {
-                const isModernLayout = layoutManager.getMediaRowsLayout() === 'modern';
-                const cardSizeOptions = isModernLayout
-                    ? [
+                const mediaRowsLayout = layoutManager.getMediaRowsLayout();
+                const isExpanded = mediaRowsLayout === 'expanded';
+                const isModern = mediaRowsLayout === 'modern';
+                
+                let cardSizeOptions;
+                let defaultValue;
+                let storageKey;
+
+                if (isExpanded) {
+                    cardSizeOptions = [
+                        { value: '1', label: '100% (Small)' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110% (Default)' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120%' },
+                        { value: '1.25', label: '125%' },
+                        { value: '1.3', label: '130%' },
+                        { value: '1.35', label: '135%' },
+                        { value: '1.4', label: '140%' },
+                        { value: '1.45', label: '145%' },
+                        { value: '1.5', label: '150%' }
+                    ];
+                    defaultValue = '1.1';
+                    storageKey = 'pref:expandedCardSizeScale';
+                } else if (isModern) {
+                    cardSizeOptions = [
                         { value: '1.2', label: '120%' },
                         { value: '1.25', label: '125%' },
                         { value: '1.3', label: '130% (Default)' },
@@ -1653,8 +1678,11 @@ class SettingsPage extends Page {
                         { value: '1.4', label: '140%' },
                         { value: '1.45', label: '145%' },
                         { value: '1.5', label: '150%' }
-                    ]
-                    : [
+                    ];
+                    defaultValue = '1.3';
+                    storageKey = 'pref:modernCardSizeScale';
+                } else {
+                    cardSizeOptions = [
                         { value: '1', label: '100% (Small / Default)' },
                         { value: '1.05', label: '105%' },
                         { value: '1.1', label: '110%' },
@@ -1667,10 +1695,10 @@ class SettingsPage extends Page {
                         { value: '1.45', label: '145%' },
                         { value: '1.5', label: '150%' }
                     ];
-                const defaultValue = isModernLayout ? '1.3' : '1';
-                const storageKey = isModernLayout
-                    ? 'pref:modernCardSizeScale'
-                    : 'pref:classicCardSizeScale';
+                    defaultValue = '1';
+                    storageKey = 'pref:classicCardSizeScale';
+                }
+
                 return this._renderDropdown(
                     'classic-card-size-scale-select',
                     cardSizeOptions,
@@ -9056,10 +9084,12 @@ class SettingsPage extends Page {
             'login-page-layout-select': { key: 'pref:loginPageLayout', type: 'local', triggerEvent: true },
             'sidebar-layout-select': { key: 'pref:sidebarLayoutMode', type: 'local', triggerEvent: true },
             'classic-card-size-scale-select': {
-                key:
-                    layoutManager.getMediaRowsLayout() === 'modern'
-                        ? 'pref:modernCardSizeScale'
-                        : 'pref:classicCardSizeScale',
+                key: (() => {
+                    const layout = layoutManager.getMediaRowsLayout();
+                    if (layout === 'expanded') return 'pref:expandedCardSizeScale';
+                    if (layout === 'modern') return 'pref:modernCardSizeScale';
+                    return 'pref:classicCardSizeScale';
+                })(),
                 type: 'local',
                 triggerEvent: true
             },
@@ -9454,6 +9484,7 @@ class SettingsPage extends Page {
                                     pageCache.thumbUrls = {};
                                     state.set('home:pageCache', pageCache);
                                 }
+                                CardRenderer.clearCache();
                             }
 
                             if (id === 'screensaver-type-select') {

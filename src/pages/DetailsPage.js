@@ -3780,6 +3780,7 @@ class DetailsPage extends Page {
             listId: 'people-row',
             items: this._people,
             isLandscape: false,
+            cardType: 'person',
             renderCard: (person) => this._renderMediaCard(person, false, 'person'),
             focusSectionName: 'details-people',
             onClick: (card) => {
@@ -4188,6 +4189,7 @@ class DetailsPage extends Page {
             listId: 'guest-stars-row',
             items: people,
             isLandscape: false,
+            cardType: 'person',
             renderCard: (p) => this._renderMediaCard(p, false, 'person'),
             focusSectionName: 'guest-stars-section',
             onClick: (card) => {

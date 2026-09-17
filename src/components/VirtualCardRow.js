@@ -37,13 +37,46 @@ export class VirtualCardRow {
         // Static CSS measurements from home.css
         // Landscape width: 400px, Portrait width: 240px, Margin-right: 24px
         // Modern override: 600px / 260px with 28px margin
-        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+        // Expanded override: 600px fixed width for all poster rows
+        const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
+        const isModern = mediaLayout === 'modern';
+        const isExpanded = mediaLayout === 'expanded';
         this.isModern = isModern;
-        const scale = isModern
-            ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3
-            : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+        this.isExpanded = isExpanded;
+        const scale = isExpanded
+            ? parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.1
+            : isModern
+                ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3
+                : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
 
-        if (isModern) {
+        if (isExpanded) {
+            const modernMultiplier = scale / 1.5;
+            this.modernMultiplier = modernMultiplier;
+
+            // =================================================================
+            // 💎 Expanded Posters: Uniform 16:9 Widescreen Cards
+            // =================================================================
+            // All standard poster and landscape cards are rendered at full 600px
+            // width by default. Square / artist cards remain 338px.
+            // Because cards are pre-expanded, there is no dynamic expansion
+            // buffer and no sibling shift during D-Pad navigation.
+            // =================================================================
+            if (this.cardType === 'square' || this.cardType === 'artist' || (isExpanded && this.cardType === 'person')) {
+                this.itemWidth = Math.round(338 * modernMultiplier);
+            } else {
+                this.itemWidth = Math.round(600 * modernMultiplier);
+            }
+            this.itemMargin = Math.round(40 * modernMultiplier);
+            this.sidePadding = 60;
+
+            // Inject CSS custom properties on the track container
+            this.track.style.setProperty('--card-width', `${Math.round(600 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-margin', `${this.itemMargin}px`);
+            this.track.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-expansion', '0px');
+        } else if (isModern) {
             const modernMultiplier = scale / 1.5;
             this.modernMultiplier = modernMultiplier;
 
@@ -262,7 +295,7 @@ export class VirtualCardRow {
             // Inner wrapper provides the actual pixel context for height calculation
             const dummyContent = document.createElement('div');
             dummyContent.style.width = `${this.itemWidth}px`;
-            const borderWidth = isModern ? '4px' : '3px';
+            const borderWidth = (isModern || isExpanded) ? '4px' : '3px';
             dummyContent.style.border = `${borderWidth} solid transparent`;
             dummyContent.style.display = 'block';
 
@@ -270,9 +303,14 @@ export class VirtualCardRow {
             const imageRatioDiv = document.createElement('div');
             imageRatioDiv.style.width = '100%';
             imageRatioDiv.style.height = '0';
-            let padding = '150%'; // Poster
-            if (this.isLandscape) padding = '56.25%';
-            else if (this.cardType === 'square' || this.cardType === 'artist') padding = '100%';
+            let padding = '150%'; // Classic Portrait Poster (2:3)
+            if (this.cardType === 'square' || this.cardType === 'artist' || (isExpanded && this.cardType === 'person')) {
+                // Square / Artist / Person (Expanded) icon: 1:1 aspect ratio (338px x 338px)
+                padding = '100%';
+            } else if (this.isLandscape || isExpanded) {
+                // Landscape or Expanded Poster: 16:9 widescreen (600px x 337.5px)
+                padding = '56.25%';
+            }
             imageRatioDiv.style.paddingBottom = padding;
             imageRatioDiv.style.border = `${borderWidth} solid transparent`;
             dummyContent.appendChild(imageRatioDiv);
@@ -285,12 +323,12 @@ export class VirtualCardRow {
 
             if (!this.hideLabels && !isIntegratedModern && !isPortraitModern) {
                 const infoDiv = document.createElement('div');
-                const infoPadding = isModern ? '16px 8px 0 8px' : '12px 4px 0 4px';
+                const infoPadding = (isModern || isExpanded) ? '14px 4px 0 4px' : '12px 4px 0 4px';
                 infoDiv.style.padding = infoPadding;
 
-                if (isModern) {
-                    // Modern: 1.6rem title (1.2 line-height) + 4px margin + 1.2rem subtitle
-                    infoDiv.innerHTML = `<div style="height: 1.92rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1.2rem; margin-top: 4px; line-height: normal;">&nbsp;</div>`;
+                if (isModern || isExpanded) {
+                    // Modern / Expanded: 1.4rem title (1.2 line-height) + 4px margin + 1.15rem subtitle
+                    infoDiv.innerHTML = `<div style="height: 1.68rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1.15rem; margin-top: 4px; line-height: normal;">&nbsp;</div>`;
                 } else {
                     // Classic: 1.2rem title + 6px margin + 1rem subtitle
                     infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
@@ -523,7 +561,7 @@ export class VirtualCardRow {
                             cardNode.style.left = `${leftPos}px`;
                         }
                         cardNode.style.top = '0';
-                        if (!this.isModern) {
+                        if (!this.isModern && !this.isExpanded) {
                             cardNode.style.width = `${this.itemWidth}px`;
                         }
                         cardNode.dataset.virtualIndex = i;
@@ -621,7 +659,7 @@ export class VirtualCardRow {
                     }
 
                     cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
-                    if (!this.isModern) {
+                    if (!this.isModern && !this.isExpanded) {
                         cardNode.style.width = `${this.itemWidth}px`;
                     }
 

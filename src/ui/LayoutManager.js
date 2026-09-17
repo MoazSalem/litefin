@@ -20,6 +20,7 @@ import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { themeUtils } from '../utils/ThemeUtils.js';
 
 import { debugOverlay } from './DebugOverlay.js';
+import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('LayoutManager');
 
@@ -356,11 +357,14 @@ class LayoutManager {
         if (save) {
             storage.setItem('pref:mediaRowsLayout', layout);
         }
-        // Update badge style if it is auto
+        // Update badge style dynamically if set to auto
+        // Both 'modern' (expanding) and 'expanded' (static widescreen) media rows utilize
+        // dark translucent card backgrounds and bottom overlay labels, requiring the dark badge style.
         if (this._badgeStyle === 'auto') {
-            const resolvedStyle = layout === 'modern' ? 'dark' : 'tinted';
+            const resolvedStyle = (layout === 'modern' || layout === 'expanded') ? 'dark' : 'tinted';
             document.documentElement.setAttribute('data-badge-style', resolvedStyle);
         }
+        CardRenderer.clearCache();
         eventBus.emit('mediaRowsLayout:changed', { layout });
     }
 
