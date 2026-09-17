@@ -148,13 +148,15 @@ export class TizenAVPlayer {
         // execute after the current seek finishes.
         this._queuedSeekPositionMs = null;
 
-        // ── Subtitle API Cooldown ────────────────────────────────────────────
+        // ── Subtitle Track Change Cooldown ───────────────────────────────────
         // Samsung's hardware decoder needs a settling period after
-        // setSelectTrack('TEXT') / setSilentSubtitle() calls. Issuing seekTo()
+        // setSelectTrack('TEXT') track selection calls. Issuing seekTo()
         // during this window causes a permanent native decoder crash that
-        // requires a full TV restart. We track the last subtitle API call time
+        // requires a full TV restart. We track the last track-change time
         // and defer seeks that arrive within the cooldown period.
-        this._lastSubtitleApiTime = 0;
+        // NOTE: Routine mute/unmute and post-seek track assertions do NOT update
+        // this timestamp, ensuring rapid consecutive seeks remain fast and responsive.
+        this._lastSubtitleTrackChangeTime = 0;
         this._deferredSeekTicks = null;
         this._deferredSeekTimerId = null;
 
@@ -183,51 +185,6 @@ export class TizenAVPlayer {
         // FFmpeg normalizes the audio timing before streaming.
         // ─────────────────────────────────────────────────────────────────────
         this._bufferingDeadlockTimeoutId = null;
-
-        // Guards against calling play() or other AVPlay APIs while seekTo is in progress.
-        // Per Samsung docs, no other API may be called between seekTo() and its callback.
-        // onbufferingcomplete can fire during seek and would otherwise trigger _checkNativePlay
-        // which calls play() — violating the contract and causing native decoder freezes.
-        this._seekInProgress = false;
-
-        // Tracks whether onbufferingcomplete fired during an active seek.
-        // When seek is in progress, onbufferingcomplete is suppressed (can't call
-        // _checkNativePlay). This flag lets the seek success callback know that
-        // the hardware buffer is already filled and play() can proceed immediately.
-        this._bufferingCompleteDuringSeek = false;
-
-        // Tracks if Tizen AVPlay has actively fired onbufferingstart and is
-        // waiting on onbufferingcomplete to refill the network pipeline.
-        this._isNativeBuffering = false;
-
-        // Queue for operations that arrive during seek. Per Samsung docs, no
-        // AVPlay API calls are permitted between seekTo() and its callback.
-        // When play/pause is requested during seek, the operation is saved here
-        // and applied after the seek completes.
-        this._pendingOpAfterSeek = null;
-        // If a second seek arrives while one is in flight, queue it here and
-        // execute after the current seek finishes.
-        this._queuedSeekPositionMs = null;
-
-        // ── Subtitle API Cooldown ────────────────────────────────────────────
-        // Samsung's hardware decoder needs a settling period after
-        // setSelectTrack('TEXT') / setSilentSubtitle() calls. Issuing seekTo()
-        // during this window causes a permanent native decoder crash that
-        // requires a full TV restart. We track the last subtitle API call time
-        // and defer seeks that arrive within the cooldown period.
-        this._lastSubtitleApiTime = 0;
-        this._deferredSeekTicks = null;
-        this._deferredSeekTimerId = null;
-
-        // Initial buffer gate timeout ID (3s safety fallback)
-        this._initialBufferTimeoutId = null;
-
-        // Post-seek buffer fallback timeout ID. If onbufferingstart fires during
-        // a seek but onbufferingcomplete never arrives (common when the seek was
-        // performed while paused), _bufferingComplete stays false and playback
-        // resume is permanently blocked. This timer mirrors the initial-buffer
-        // fallback and forces the gate open after a short window.
-        this._seekBufferTimeoutId = null;
 
         // Check Tizen availability: prioritize webapis (Samsung Hardware API) over tizen (Universal API)
         // On most Samsung TVs, webapis.avplay is the direct hardware interface.
@@ -956,7 +913,18 @@ export class TizenAVPlayer {
                 }
 
                 // This is called periodically with current time in ms
-                // Throttle to ~250ms to reduce main thread load on slow TVs
+                // Throttle to ~250ms to reduce main thread load on slow TVs.
+                // ─────────────────────────────────────────────────────────────
+                // Seek In-Progress Suppression:
+                // While seekTo() is in flight, AVPlay's internal pipeline may
+                // report unflushed pre-seek or transitional timestamps.
+                // Suppress timeupdate emissions here so the UI doesn't rubber-band.
+                // The true position is emitted immediately when seek finishes.
+                // ─────────────────────────────────────────────────────────────
+                if (this._seekInProgress) {
+                    return;
+                }
+
                 const currentTime = this.getCurrentTime();
                 const currentTimeTicks = Math.floor(currentTime * 10000000);
 
@@ -1091,7 +1059,7 @@ export class TizenAVPlayer {
             if (this._pendingSubtitleIndex === -1) {
                 try {
                     this._avplay.setSilentSubtitle(true);
-                    this._lastSubtitleApiTime = Date.now();
+                    this._lastSubtitleTrackChangeTime = Date.now();
                     this._pendingSubtitleIndex = null;
                     this._delayedSubtitleIndex = null;
                     this._activeTizenSubtitleIndex = -1;
@@ -1126,7 +1094,7 @@ export class TizenAVPlayer {
                             this._avplay.setSilentSubtitle(true);
                             this._avplay.setSilentSubtitle(false);
                             log.info(`TEXT track ${tizenSubIndex} applied in ${avplayState} state`);
-                            this._lastSubtitleApiTime = Date.now();
+                            this._lastSubtitleTrackChangeTime = Date.now();
                             this._pendingSubtitleIndex = null; // Clear so we don't spam oncurrentplaytime
                             this._activeTizenSubtitleIndex = tizenSubIndex; // Track active selection
 
@@ -1174,7 +1142,7 @@ export class TizenAVPlayer {
                                     this._avplay.setSelectTrack('TEXT', _confirmedTizenIndex);
                                     this._avplay.setSilentSubtitle(true);
                                     this._avplay.setSilentSubtitle(false);
-                                    this._lastSubtitleApiTime = Date.now();
+                                    this._lastSubtitleTrackChangeTime = Date.now();
                                 } catch (e) {
                                     log.warn('[SubtitleConfirm] Re-apply failed:', e.message || e);
                                 }
@@ -1224,7 +1192,7 @@ export class TizenAVPlayer {
                                                 this._avplay.setSelectTrack('TEXT', seekSubIndex);
                                                 this._avplay.setSilentSubtitle(true);
                                                 this._avplay.setSilentSubtitle(false);
-                                                this._lastSubtitleApiTime = Date.now();
+                                                this._lastSubtitleTrackChangeTime = Date.now();
                                             } catch (e) {
                                                 log.warn('[SubtitleSeek] Post-seek subtitle re-apply failed:', e.message || e);
                                             }
@@ -1265,7 +1233,7 @@ export class TizenAVPlayer {
                             log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex} within Tizen 30-track limit, disabling native subtitles and requesting fallback`);
                             try {
                                 this._avplay.setSilentSubtitle(true);
-                                this._lastSubtitleApiTime = Date.now();
+                                this._lastSubtitleTrackChangeTime = Date.now();
                             } catch (e) { }
                             const failedIndex = this._pendingSubtitleIndex;
                             this._pendingSubtitleIndex = null;
@@ -1418,7 +1386,7 @@ export class TizenAVPlayer {
                             this._avplay.setSilentSubtitle(false);
                             log.debug('Restored silence state (unmuted) for active TEXT track');
                         }
-                        this._lastSubtitleApiTime = Date.now();
+                        this._lastSubtitleTrackChangeTime = Date.now();
                     } else {
                         log.debug('Deferred proactive subtitle silence — state is ' + postPlayState + ' after play()');
                     }
@@ -1529,14 +1497,41 @@ export class TizenAVPlayer {
             return;
         }
 
+        // Capture pre-seek hardware decoder position and timing for telemetry
+        const requestedMs = ms;
+        let beforeMs = 0;
+        try {
+            beforeMs = Math.round(Number(this._avplay.getCurrentTime()) || 0);
+        } catch (_) {
+            beforeMs = 0;
+        }
+        const seekStartTime = Date.now();
+
         try {
             this._avplay.seekTo(
                 ms,
                 () => {
-                    if (onSuccess) onSuccess();
+                    const durationMs = Date.now() - seekStartTime;
+                    let landedMs = 0;
+                    try {
+                        landedMs = Math.round(Number(this._avplay.getCurrentTime()) || 0);
+                    } catch (_) {
+                        landedMs = requestedMs;
+                    }
+                    const deltaMs = landedMs - requestedMs;
+
+                    // Comprehensive hardware seek telemetry:
+                    // Exposes exact landing accuracy vs keyframe boundaries and execution duration.
+                    log.info(`[SeekTelemetry] target=${requestedMs}ms before=${beforeMs}ms landed=${landedMs}ms delta=${deltaMs}ms (took ${durationMs}ms)`);
+
+                    if (onSuccess) onSuccess(landedMs);
                     this._assertActiveSubtitleTrack();
                 },
-                () => { if (onError) onError(new Error('seekTo failed')); }
+                (e) => {
+                    const durationMs = Date.now() - seekStartTime;
+                    log.warn(`[SeekTelemetry] seekTo FAILED after ${durationMs}ms for target=${requestedMs}ms before=${beforeMs}ms:`, e);
+                    if (onError) onError(new Error('seekTo failed'));
+                }
             );
         } catch (e) {
             log.warn('_safeSeekTo threw synchronously:', e);
@@ -1556,7 +1551,13 @@ export class TizenAVPlayer {
         try {
             this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
             this._avplay.setSilentSubtitle(false);
-            this._lastSubtitleApiTime = Date.now();
+            // ─────────────────────────────────────────────────────────────────
+            // NOTE: We deliberately do NOT update this._lastSubtitleTrackChangeTime here!
+            // Re-asserting an already-selected subtitle track after a buffer flush
+            // is routine hardware maintenance, not an intentional track switch.
+            // Resetting track change time here would incorrectly throttle subsequent
+            // seeks with an artificial 2-second cooldown on consecutive skips.
+            // ─────────────────────────────────────────────────────────────────
             log.debug('Post-seek subtitle track re-asserted:', this._activeTizenSubtitleIndex);
         } catch (e) {
             log.warn('Post-seek subtitle re-assertion failed:', e);
@@ -1869,7 +1870,7 @@ export class TizenAVPlayer {
         this._seekInProgress = false;
         this._bufferingCompleteDuringSeek = false;
         this._isNativeBuffering = false;
-        this._lastSubtitleApiTime = 0;
+        this._lastSubtitleTrackChangeTime = 0;
         this._deferredSeekTicks = null;
         this._pendingOpAfterSeek = null;
         this._queuedSeekPositionMs = null;
@@ -1998,17 +1999,17 @@ export class TizenAVPlayer {
                 }
             }
 
-            // ── Subtitle API Cooldown Gate ────────────────────────────────────────
+            // ── Subtitle Track Change Cooldown Gate ───────────────────────────────
             // Samsung's hardware decoder needs a settling period after
-            // setSelectTrack('TEXT') / setSilentSubtitle() calls complete.
+            // setSelectTrack('TEXT') track selection calls complete.
             // If seekTo() is issued during this window the native decoder
-            // enters an unrecoverable state that requires a full TV restart.
-            // We defer the seek and retry automatically once the cooldown expires.
-            const SUBTITLE_API_COOLDOWN_MS = 2000;
-            const timeSinceSubtitleApi = Date.now() - (this._lastSubtitleApiTime || 0);
-            if (timeSinceSubtitleApi < SUBTITLE_API_COOLDOWN_MS) {
-                const remainingMs = SUBTITLE_API_COOLDOWN_MS - timeSinceSubtitleApi;
-                log.debug(`seek(): subtitle API cooldown active (${remainingMs}ms remaining) — deferring seek`);
+            // enters an unrecoverable crash state that requires a full TV restart.
+            // We only gate seeks against true track changes (not routine seek muting).
+            const SUBTITLE_TRACK_CHANGE_COOLDOWN_MS = 2000;
+            const timeSinceTrackChange = Date.now() - (this._lastSubtitleTrackChangeTime || 0);
+            if (timeSinceTrackChange < SUBTITLE_TRACK_CHANGE_COOLDOWN_MS) {
+                const remainingMs = SUBTITLE_TRACK_CHANGE_COOLDOWN_MS - timeSinceTrackChange;
+                log.debug(`seek(): subtitle track change cooldown active (${remainingMs}ms remaining) — deferring seek`);
 
                 // Cancel any previously deferred seek (user may have pressed seek multiple times)
                 if (this._deferredSeekTimerId !== null) {
@@ -2022,7 +2023,7 @@ export class TizenAVPlayer {
                     const pendingTicks = this._deferredSeekTicks;
                     this._deferredSeekTicks = null;
                     if (pendingTicks !== null && this._avplay && this._isPrepared) {
-                        log.info(`seek(): executing deferred seek to ${pendingTicks / 10000}ms after subtitle API cooldown`);
+                        log.info(`seek(): executing deferred seek to ${pendingTicks / 10000}ms after subtitle track change cooldown`);
                         this.seek(pendingTicks, options);
                     }
                 }, remainingMs + 50); // +50ms safety margin
@@ -2034,10 +2035,15 @@ export class TizenAVPlayer {
             // ========================================================================
             const wasPlayingBeforeSeek = this._isTizenPlaying || this._isPlaying;
 
+            // Notify UI that a seek operation has started
             this.onEvent({ type: 'seek' });
 
-            const currentTime = targetTicks / 10000000;
-            this.onEvent({ type: 'timeupdate', data: { time: currentTime } });
+            // ────────────────────────────────────────────────────────────────────────
+            // NOTE: We intentionally DO NOT emit an optimistic timeupdate here.
+            // Emitting timeupdate before the hardware seek completes causes severe UI
+            // rubber-banding when oncurrentplaytime or intermediate decoder positions leak.
+            // The verified landing position will be emitted in the seek success callback below.
+            // ────────────────────────────────────────────────────────────────────────
 
             // ── Invalidate buffer state for the upcoming seek ────────────────────
             // The seek will reposition the decoder, invalidating whatever data was
@@ -2070,7 +2076,7 @@ export class TizenAVPlayer {
                 try {
                     log.debug('seek(): muting native subtitles to prevent ghost cues');
                     this._avplay.setSilentSubtitle(true);
-                    this._lastSubtitleApiTime = Date.now();
+                    // NOTE: Do NOT touch this._lastSubtitleTrackChangeTime here!
                 } catch (e) {
                     log.warn('seek(): failed to mute native subtitles:', e);
                 }
@@ -2086,8 +2092,15 @@ export class TizenAVPlayer {
             // ── Execute seek with callbacks ──────────────────────────────────────
             this._safeSeekTo(
                 positionMs,
-                () => {
+                (landedMs) => {
                     this._seekInProgress = false;
+
+                    // Emit verified timeupdate now that hardware decoder has settled
+                    const actualTimeSec = (typeof landedMs === 'number' && !isNaN(landedMs))
+                        ? landedMs / 1000
+                        : this.getCurrentTime();
+                    this._lastTimeUpdateTicks = Math.floor(actualTimeSec * 10000000);
+                    this.onEvent({ type: 'timeupdate', data: { time: actualTimeSec } });
 
                     // If the seek did not trigger native buffering (e.g. seeking within
                     // cached/buffered range), onbufferingstart was never called.
@@ -2114,13 +2127,14 @@ export class TizenAVPlayer {
                     // Mirror the initial-buffer fallback: force the gate open after a
                     // short window so playback can resume.
                     if (this._isNativeBuffering) {
+                        log.debug('seek(): waiting for native onbufferingcomplete to refill pipeline');
                         if (this._seekBufferTimeoutId !== null) {
                             clearTimeout(this._seekBufferTimeoutId);
                         }
                         this._seekBufferTimeoutId = setTimeout(() => {
                             this._seekBufferTimeoutId = null;
                             if (this._avplay && this._isPrepared && !this._bufferingComplete) {
-                                log.warn('seek(): buffering never completed after seek — forcing buffering complete');
+                                log.warn('seek(): buffering never completed after seek (2500ms timeout) — forcing buffering complete');
                                 this._bufferingComplete = true;
                                 this._isNativeBuffering = false;
                                 this._checkNativePlay();
@@ -2133,7 +2147,7 @@ export class TizenAVPlayer {
                         try {
                             log.debug('seek(): unmuting native subtitles post-seek');
                             this._avplay.setSilentSubtitle(false);
-                            this._lastSubtitleApiTime = Date.now();
+                            // NOTE: Do NOT touch this._lastSubtitleTrackChangeTime here!
                         } catch (e) {
                             log.warn('seek(): failed to unmute native subtitles:', e);
                         }
@@ -2453,7 +2467,7 @@ export class TizenAVPlayer {
             if (index < 0) {
                 // -1 = disable subtitles
                 this._avplay.setSilentSubtitle(true);
-                this._lastSubtitleApiTime = Date.now();
+                this._lastSubtitleTrackChangeTime = Date.now();
                 this._currentSubtitleStreamIndex = index;
                 this._activeTizenSubtitleIndex = -1;
             } else {
@@ -2462,14 +2476,14 @@ export class TizenAVPlayer {
                 if (playability === 'EXTERNAL') {
                     // External subtitles handled via HTML, disable native.
                     this._avplay.setSilentSubtitle(true);
-                    this._lastSubtitleApiTime = Date.now();
+                    this._lastSubtitleTrackChangeTime = Date.now();
                     this._currentSubtitleStreamIndex = index;
                     this._activeTizenSubtitleIndex = -1;
                     return;
                 } else if (playability === 'INTERNAL_BITMAP') {
                     // Unsupported natively. Fast-fail to trigger fallback.
                     this._avplay.setSilentSubtitle(true);
-                    this._lastSubtitleApiTime = Date.now();
+                    this._lastSubtitleTrackChangeTime = Date.now();
                     this._currentSubtitleStreamIndex = index;
                     this._activeTizenSubtitleIndex = -1;
                     this.onEvent({
@@ -2505,7 +2519,7 @@ export class TizenAVPlayer {
                     this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                     this._avplay.setSilentSubtitle(true);
                     this._avplay.setSilentSubtitle(false);
-                    this._lastSubtitleApiTime = Date.now();
+                    this._lastSubtitleTrackChangeTime = Date.now();
                     this._currentSubtitleStreamIndex = index;
                     this._activeTizenSubtitleIndex = tizenSubIndex;
                     this._pendingSubtitleIndex = null;
