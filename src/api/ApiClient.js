@@ -1733,10 +1733,6 @@ export class ApiClient {
         return this.post('/Sessions/Playing/Stopped', info, { keepalive: true });
     }
 
-    async deletePlaybackProgress(itemId) {
-        return this.delete(`/Users/${this._userId}/Items/${itemId}/Resume`);
-    }
-
     // ========================================================================
     // SyncPlay Endpoints
     // ========================================================================

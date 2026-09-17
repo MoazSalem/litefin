@@ -1912,6 +1912,12 @@ class PlayerPage extends Page {
             const nextItem = playQueue.advance();
             log.info('Advancing to next item:', nextItem.Name);
 
+            // When explicitly advancing to the next queue item, the user has finished
+            // with the current episode. Mark playback as ended so that the outgoing
+            // item is reported with full duration ticks, triggering completion on the
+            // server and scrobbling to ani-sync / trakt plugins.
+            this._isPlaybackEnded = true;
+
             // Capture current info before stopping
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
@@ -3311,33 +3317,33 @@ class PlayerPage extends Page {
             // from the player backend or the fallback parameters.
             let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
 
-            // If the video naturally completed (ended event was fired) or the user
-            // watched >= 90% of the content (defensive heuristic for WebOS where
-            // ended may not fire on certain 4K HEVC streams), override the reported
-            // position with the total duration ticks of the media. This prevents
-            // minor timing differences between player backend and server from
-            // leaving the item unmarked as watched and failing scrobble sync.
+            // If the video naturally completed (ended event was fired), advancing to
+            // the next item, or the user watched >= 80% of the content (accommodating
+            // anime ED / credit sequences that begin at 80-85% of total runtime, as well
+            // as defensive heuristics for WebOS/Tizen where ended may not fire), override
+            // the reported position with the total duration ticks of the media. This
+            // guarantees the server marks PlayedToCompletion = true and fires tracker sync
+            // (such as jellyfin-ani-sync or Trakt).
             const durationTicks =
                 this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
-            const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.9);
+            const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
             if (_isNearComplete) {
                 log.info(
                     `Overriding positionTicks with durationTicks (${durationTicks})` +
                     (this._isPlaybackEnded
-                        ? ' due to natural end of playback'
-                        : ' due to near-complete playback position')
+                        ? ' due to natural end of playback / next item transition'
+                        : ' due to near-complete playback position (>= 80%)')
                 );
                 rawPosition = durationTicks;
             }
 
             const positionTicks = Math.round(rawPosition);
 
-            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
-
-            if (!playSessionId) {
-                log.warn('Skipping stopped report - no PlaySessionId');
-                return;
-            }
+            // Capture PlaySessionId if available.
+            // Note: PlaySessionId is optional on the server for stop reporting because the
+            // server resolves the active session via HTTP Authorization / DeviceId if omitted.
+            // We must NOT abort if playSessionId is absent.
+            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId || undefined;
 
             // 2. Build report body
             const data = {
@@ -3427,15 +3433,6 @@ class PlayerPage extends Page {
                 log.info('Reporting playback stopped (async), position:', positionTicks);
                 await api.reportPlaybackStopped(data);
             }
-
-            // 4. Clear server-side resume point if playback completed naturally or
-            // the user watched >= 90% of the content (defensive heuristic).
-            if (_isNearComplete && this._item?.Id && !this._item.isIntro) {
-                log.info('Playback completed — deleting server resume point');
-                api.deletePlaybackProgress(this._item.Id).catch((err) => {
-                    log.warn('Failed to delete playback progress:', err);
-                });
-            }
         } catch (error) {
             log.warn('Failed to report playback stopped:', error);
         }
@@ -3479,8 +3476,7 @@ class PlayerPage extends Page {
         }
 
         // Use centralized reporting which handles LiveStreamId close, full
-        // payload construction, isPlaybackEnded position override, keepalive,
-        // and deletePlaybackProgress for completed items.
+        // payload construction, isPlaybackEnded position override, and keepalive.
         // Use synchronous XHR (isSync=true) for the same reason as _stopAndExit
         // — the app context may be destroyed before an async fetch completes.
         if (this._item) {
