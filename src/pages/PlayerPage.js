@@ -3724,15 +3724,20 @@ class PlayerPage extends Page {
      * resume on return.
      */
     _handleAppHidden() {
-        // Don't pause if we're already in the process of stopping playback
+        // Exit early if page teardown is already underway or background setup has completed
         if (this._isExiting || this._backgroundPrepared) return;
 
         this._backgroundPrepared = true;
-
         log.info('App backgrounded, pausing playback');
-        this._resumePlaybackAfterProfileSelection = this._player?.isPaused
+
+        // Capture true playing state prior to pausing, ensuring we know whether playback
+        // was running or already paused by the viewer when app enters background.
+        const wasPlaying = this._player?.isPaused
             ? !this._player.isPaused()
             : !this._isPaused;
+        this._resumePlaybackAfterProfileSelection = wasPlaying;
+
+        // Determine if profile selection dialog should intercept on foreground resume
         const shouldGateProfileSelection =
             storage.getItem('pref:showProfilesOnResume') === 'true' &&
             state.get('user:sessionCount', 0) > 1;
@@ -3769,11 +3774,13 @@ class PlayerPage extends Page {
             }
         }
 
-        // Suspend the AVPlay decoder to preserve hardware state if supported
+        // Suspend the AVPlay decoder to release hardware resources back to the OS.
+        // We pass the pre-pause wasPlaying flag explicitly so TizenAVPlayer preserves
+        // true playback intent rather than seeing an artificial PAUSED state.
         const backend = this._player?._backend;
         if (typeof backend?.suspend === 'function') {
             try {
-                backend.suspend();
+                backend.suspend(wasPlaying);
             } catch (e) {
                 log.warn('Failed to suspend AVPlay:', e);
             }
@@ -3789,38 +3796,75 @@ class PlayerPage extends Page {
 
     /**
      * Handle app returning to foreground — restore suspended decoder if needed.
-     * Player paused state is preserved; we do NOT auto-resume unless restored.
+     * Restores hardware media plane and resumes playback if stream was active before suspend.
      */
     async _handleAppVisible() {
         if (this._isExiting) return;
 
+        // Reset background preparation guard when profile selection is inactive
         if (!this._resumeProfileSelectionActive) this._backgroundPrepared = false;
 
-        log.info('App foregrounded, player paused state preserved');
+        log.info('App foregrounded, checking decoder restoration state');
 
         const backend = this._player?._backend;
         if (backend && typeof backend.isSuspended === 'function' && backend.isSuspended()) {
             const url = backend.getCurrentUrl?.();
             const mediaSource = this._player?.getCurrentMediaSource?.();
-            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
-            if (url && playSessionId) {
+            // All streams loaded in AVPlay have a playback URL (direct play, HLS, or Live TV).
+            // Do not gate on playSessionId so all stream types can be properly restored.
+            if (url) {
+                log.info('[AVPlay] Attempting decoder restoration from background state');
                 const { success, wasPlaying } = await backend.restore(url, 0);
+
                 if (success) {
-                    log.info('AVPlay restored from suspend');
+                    log.info('[AVPlay] Decoder successfully restored from background');
+
+                    // Resume playback immediately if user was watching before backgrounding
+                    // and profile selection modal is not currently holding the screen.
                     if (wasPlaying && !this._resumeProfileSelectionActive) {
                         try {
-                            backend.unpause?.();
+                            this._isPaused = false;
+                            if (typeof this._player?.unpause === 'function') {
+                                this._player.unpause();
+                            } else if (typeof backend.unpause === 'function') {
+                                backend.unpause();
+                            }
                             this._reportPlaybackProgress('unpause');
+                            if (this._osd) {
+                                this._osd.updatePlayPauseButton();
+                            }
                         } catch (e) {
-                            log.warn('Failed to resume after restore:', e);
+                            log.warn('Failed to resume playback after AVPlay restore:', e);
                         }
                     }
                 } else {
-                    log.warn('AVPlay restore failed, reporting stopped');
-                    const positionTicks = this._player.getCurrentPositionTicks?.() || 0;
-                    this._reportPlaybackStopped(mediaSource, positionTicks, false);
+                    // Watchdog Recovery: If restoreAsync fails (e.g. Tizen OS evicted hardware surface
+                    // due to memory pressure while in background), perform seamless stream reload
+                    log.warn('[AVPlay] Decoder restore failed or surface evicted; triggering recovery watchdog');
+
+                    const savedMs = typeof backend.getSuspendedPositionMs === 'function'
+                        ? backend.getSuspendedPositionMs()
+                        : 0;
+                    const savedTicks = savedMs > 0
+                        ? savedMs * 10000
+                        : (this._player?.getCurrentPositionTicks?.() || 0);
+
+                    log.info(`[RestoreWatchdog] Seamlessly reloading stream from ${(savedTicks / 10000000).toFixed(1)}s`);
+
+                    this._resumePosition = savedTicks;
+                    this._showLoading(true);
+                    try {
+                        await this._startPlayback();
+                    } catch (err) {
+                        log.error('[RestoreWatchdog] Playback recovery failed:', err);
+                        this._reportPlaybackStopped(mediaSource, savedTicks, false);
+                    } finally {
+                        this._showLoading(false);
+                    }
                 }
+            } else {
+                log.warn('[AVPlay] Decoder suspended but URL is missing, cannot restore');
             }
         }
     }

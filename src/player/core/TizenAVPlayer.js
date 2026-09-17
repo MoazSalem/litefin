@@ -2661,88 +2661,139 @@ export class TizenAVPlayer {
 
     /**
      * Suspend AVPlay playback and save decoder state.
-     * Called when the app goes to background. The decoder is preserved in
-     * hardware state and can be restored via restore().
-     * @returns {boolean} True if suspend was successful
+     * Called when the app transitions into the background.
+     * Samsung's hardware media engine preserves stream parameters in memory
+     * so it can be resumed via restore() / restoreAsync().
+     *
+     * @param {boolean} [wasPlaying] - Explicit flag indicating if video was actively playing
+     *                                 before the UI initiated its background pause sequence.
+     * @returns {boolean} True if suspend was accepted by AVPlay
      */
-    suspend() {
+    suspend(wasPlaying) {
         if (!this._avplay || !this._isPrepared) return false;
 
         try {
             const state = this._avplay.getState();
             if (state === 'NONE' || state === 'IDLE') return false;
 
+            // Cache current stream URL and current playback position in milliseconds
             this._suspendedUrl = this._currentSrc;
             this._suspendedPositionMs = Math.floor(this.getCurrentTime() * 1000);
-            this._wasPlayingBeforeSuspend = state === 'PLAYING';
 
+            // If caller provides explicit wasPlaying state, trust it.
+            // This prevents UI pause() calls from clobbering the user's true playback state
+            // right before suspend() is executed.
+            if (typeof wasPlaying === 'boolean') {
+                this._wasPlayingBeforeSuspend = wasPlaying;
+            } else {
+                this._wasPlayingBeforeSuspend = state === 'PLAYING' || this._isPlaying || this._isTizenPlaying;
+            }
+
+            log.info(`[AVPlay] suspend(): state='${state}', pos=${this._suspendedPositionMs}ms, wasPlaying=${this._wasPlayingBeforeSuspend}`);
+
+            // Invoke native hardware suspend
             this._avplay.suspend();
             this._isSuspended = true;
             this._isTizenPlaying = false;
-            log.info('AVPlay suspended at position:', this._suspendedPositionMs);
             return true;
         } catch (e) {
-            log.warn('AVPlay suspend failed:', e.message || e);
+            log.warn('[AVPlay] suspend() failed:', e.message || e);
             this._isSuspended = false;
             return false;
         }
     }
 
     /**
+     * Get saved position in milliseconds from last suspend call
+     * @returns {number}
+     */
+    getSuspendedPositionMs() {
+        return this._suspendedPositionMs || 0;
+    }
+
+    /**
      * Restore AVPlay playback from a suspended state.
-     * Called when the app returns to foreground. Reopens the stream at the
-     * saved position using the hardware decoder state.
-     * @param {string} url - The URL to restore (same as was playing)
-     * @param {number} positionMs - Position in milliseconds to restore to
+     * Called when the app returns to foreground. Re-engages the hardware video
+     * surface and decoder pipeline.
+     *
+     * @param {string} [url] - The URL to restore (defaults to saved _suspendedUrl)
+     * @param {number} [positionMs] - Position in milliseconds to restore to (0 = position before suspend)
      * @returns {Promise<{success: boolean, wasPlaying: boolean}>}
      */
     async restore(url, positionMs) {
         if (!this._avplay) return { success: false, wasPlaying: false };
 
         const wasPlaying = this._wasPlayingBeforeSuspend;
+        const targetUrl = url || this._suspendedUrl || this._currentSrc;
+        const targetPos = (typeof positionMs === 'number' && positionMs > 0)
+            ? positionMs
+            : (this._suspendedPositionMs || 0);
 
         try {
             if (typeof this._avplay.restoreAsync === 'function') {
                 return await new Promise((resolve) => {
                     try {
+                        let beforeState = 'UNKNOWN';
+                        try { beforeState = this._avplay.getState(); } catch (_) {}
+                        log.info(`[AVPlay] restoreAsync(): beforeState='${beforeState}', url='${targetUrl}', pos=${targetPos}ms, wasPlaying=${wasPlaying}`);
+
+                        // ─────────────────────────────────────────────────────────────
+                        // bPrepare parameter: FALSE is CRITICAL here!
+                        // Setting bPrepare = false tells AVPlay to automatically restore
+                        // the previous playback state and immediately re-engage the hardware
+                        // video plane so the decoded picture actually appears on screen.
+                        // Setting bPrepare = true leaves AVPlay in READY state with a black screen!
+                        // ─────────────────────────────────────────────────────────────
                         this._avplay.restoreAsync(
-                            url,
-                            Math.max(0, Math.floor(positionMs || 0)),
-                            true,
+                            targetUrl,
+                            targetPos,
+                            false,
                             () => {
                                 this._isSuspended = false;
                                 this._wasPlayingBeforeSuspend = false;
                                 this._isPrepared = true;
                                 this._bufferingComplete = true;
-                                this._isTizenPlaying = false;
-                                this._currentSrc = url;
-                                log.info('AVPlay restored successfully via restoreAsync');
+                                this._currentSrc = targetUrl;
+
+                                let afterState = 'UNKNOWN';
+                                try { afterState = this._avplay.getState(); } catch (_) {}
+
+                                if (wasPlaying) {
+                                    this._isPlaying = true;
+                                    this._isTizenPlaying = true;
+                                }
+
+                                log.info(`[AVPlay] restoreAsync SUCCESS: state='${afterState}', restored playback`);
                                 resolve({ success: true, wasPlaying });
                             },
-                            () => {
+                            (err) => {
                                 this._isSuspended = false;
                                 this._wasPlayingBeforeSuspend = false;
-                                log.warn('AVPlay restoreAsync failed');
+                                log.warn('[AVPlay] restoreAsync FAILED callback:', err);
                                 resolve({ success: false, wasPlaying: false });
                             }
                         );
                     } catch (e) {
                         this._isSuspended = false;
                         this._wasPlayingBeforeSuspend = false;
-                        log.warn('AVPlay restoreAsync threw:', e.message || e);
+                        log.warn('[AVPlay] restoreAsync threw:', e.message || e);
                         resolve({ success: false, wasPlaying: false });
                     }
                 });
             }
 
-            this._avplay.restore(url, Math.max(0, Math.floor(positionMs || 0)), true);
+            log.info(`[AVPlay] restore() synchronous: url='${targetUrl}', pos=${targetPos}ms, wasPlaying=${wasPlaying}`);
+            this._avplay.restore(targetUrl, targetPos, false);
             this._isSuspended = false;
             this._wasPlayingBeforeSuspend = false;
             this._isPrepared = true;
             this._bufferingComplete = true;
-            this._isTizenPlaying = false;
-            this._currentSrc = url;
-            log.info('AVPlay restored successfully');
+            if (wasPlaying) {
+                this._isPlaying = true;
+                this._isTizenPlaying = true;
+            }
+            this._currentSrc = targetUrl;
+            log.info('[AVPlay] restore() synchronous SUCCESS');
             return { success: true, wasPlaying };
         } catch (e) {
             this._isSuspended = false;
