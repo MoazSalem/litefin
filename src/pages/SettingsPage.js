@@ -1458,15 +1458,29 @@ class SettingsPage extends Page {
             [
                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
                 { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' },
-                { value: 'expanded', label: i18n.t('LayoutExpandedPosters') || 'Expanded Posters' }
+                { value: 'expanded', label: i18n.t('LayoutExpandedPosters') || 'Modern Cards' }
             ],
             layoutManager.getMediaRowsLayout() || 'classic'
         )}
                     </div>
                 </div>
 
+                <!-- Prefer Backdrops Over Thumbs option: hidden unless media rows layout is modern or expanded -->
+                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'modern' || layoutManager.getMediaRowsLayout() === 'expanded' ? '' : 'hidden'}" id="item-prefer-backdrops-over-thumbs">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferBackdropsOverThumbs">${i18n.t('PreferBackdropsOverThumbs') || 'Use Backdrops Instead of Thumbs'}</span>
+                        <span class="setting-description" data-i18n="PreferBackdropsOverThumbsDescription">${i18n.t('PreferBackdropsOverThumbsDescription') || 'Prefer backdrop artwork over thumbnails for wide cards in Expanding and Expanded layouts.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:preferBackdropsOverThumbs') === 'true' ? 'active' : ''}" 
+                                 id="toggle-prefer-backdrops-over-thumbs" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Force Expandable Posters option: hidden unless media rows layout is modern/expanding posters -->
-                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'modern' ? '' : 'hidden'}">
+                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'modern' ? '' : 'hidden'}" id="item-home-force-expandable-posters">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
                         <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
@@ -6884,7 +6898,8 @@ class SettingsPage extends Page {
                 forceExpandablePostersBtn.classList.toggle('active', newValue);
                 log.info(`Force Expandable Posters on Home set to: ${newValue}`);
 
-                // Clear the homepage pageCache so the card layouts refresh instantly on navigation
+                // Clear the homepage pageCache and CardRenderer cache so the card layouts refresh instantly on navigation
+                CardRenderer.clearCache();
                 state.delete('home:pageCache');
             });
         }
@@ -7493,6 +7508,19 @@ class SettingsPage extends Page {
 
                 // Clear the homepage pageCache to refresh randomized hero pool selections
                 state.delete('home:pageCache');
+            });
+        }
+
+        // Toggle Prefer Backdrops Over Thumbs (Wide Cards)
+        const preferBackdropsBtn = this.$('#toggle-prefer-backdrops-over-thumbs');
+        if (preferBackdropsBtn) {
+            preferBackdropsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:preferBackdropsOverThumbs') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:preferBackdropsOverThumbs', newValue.toString());
+                preferBackdropsBtn.classList.toggle('active', newValue);
+                CardRenderer.clearCache();
+                log.info(`Prefer Backdrops Over Thumbs set to: ${newValue}`);
             });
         }
 

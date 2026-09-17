@@ -306,6 +306,7 @@ class CardRenderer {
 
         const libraryThumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
         const isDynamicThumb = (type === 'library' && libraryThumbMode !== 'off') || Boolean(item._dynamicThumbUrl);
+        const preferBackdrops = storage.getItem('pref:preferBackdropsOverThumbs') === 'true';
 
         // ------------------------------------------------------------------
         // HTML OUTPUT CACHE
@@ -315,7 +316,7 @@ class CardRenderer {
         // resolution, BlurHash lookup, quality badge iteration, and string
         // building. Cache key incorporates every option that changes output.
         // ------------------------------------------------------------------
-        const cacheKey = `${mediaLayout}|${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}|${item._dynamicThumbUrl || ''}|${libraryThumbMode}|${storage.getItem('pref:hideLibraryLabels')}|${storage.getItem('pref:cardLabelStyle')}`;
+        const cacheKey = `${mediaLayout}|${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}|${item._dynamicThumbUrl || ''}|${libraryThumbMode}|${storage.getItem('pref:hideLibraryLabels')}|${storage.getItem('pref:cardLabelStyle')}|${preferBackdrops}`;
         if (CardRenderer._htmlCacheKey !== cacheKey) {
             CardRenderer._htmlCache.clear();
             CardRenderer._htmlCacheKey = cacheKey;
@@ -432,38 +433,58 @@ class CardRenderer {
             // =================================================================
             // 💎 Expanded Posters Layout (Ultra-Lightweight Static Widescreen)
             // =================================================================
-            // Directly resolve widescreen 16:9 backdrop or thumb images.
-            // Unlike 'Expanding Posters' (modern mode), which constructs dual
-            // image layers (poster + lazy thumb) and crossfades them dynamically,
-            // 'Expanded Posters' uses ONE single image tag directly. This cuts
-            // DOM memory, network duplicate requests, and GPU load in half!
+            // Directly resolve widescreen 16:9 thumb or backdrop images.
+            // Priority follows user preference:
+            // Default: Thumb -> Backdrop -> Parent/Series Backdrop -> Primary Poster
+            // When 'pref:preferBackdropsOverThumbs' is enabled: Backdrop -> Parent/Series Backdrop -> Thumb -> Primary Poster
             // =================================================================
             const params = imageService.getParams('expanded-poster', contextType);
-            if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                imageUrl = _imgUrl(itemId, 'Backdrop', {
-                    maxWidth: params.maxWidth,
-                    quality: params.quality,
-                    tag: item.BackdropImageTags[0]
-                });
-            } else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
-                imageUrl = _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
-                    maxWidth: params.maxWidth,
-                    quality: params.quality,
-                    tag: item.ParentBackdropImageTags[0]
-                });
-            } else if (item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0) {
-                imageUrl = _imgUrl(item.SeriesId, 'Backdrop', {
-                    maxWidth: params.maxWidth,
-                    quality: params.quality,
-                    tag: item.SeriesBackdropImageTags[0]
-                });
-            } else if (item.ImageTags && item.ImageTags.Thumb) {
-                imageUrl = _imgUrl(itemId, 'Thumb', {
-                    maxWidth: params.maxWidth,
-                    quality: params.quality,
-                    tag: item.ImageTags.Thumb
-                });
-            } else if (item.ImageTags && item.ImageTags.Primary) {
+            const hasThumb = item.ImageTags && item.ImageTags.Thumb;
+            const hasBackdrop = item.BackdropImageTags && item.BackdropImageTags.length > 0;
+            const hasParentBackdrop = item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0;
+            const hasSeriesBackdrop = item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0;
+
+            const resolveThumb = () => {
+                if (hasThumb) {
+                    return _imgUrl(itemId, 'Thumb', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Thumb
+                    });
+                }
+                return '';
+            };
+
+            const resolveBackdrop = () => {
+                if (hasBackdrop) {
+                    return _imgUrl(itemId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.BackdropImageTags[0]
+                    });
+                } else if (hasParentBackdrop) {
+                    return _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ParentBackdropImageTags[0]
+                    });
+                } else if (hasSeriesBackdrop) {
+                    return _imgUrl(item.SeriesId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.SeriesBackdropImageTags[0]
+                    });
+                }
+                return '';
+            };
+
+            if (preferBackdrops) {
+                imageUrl = resolveBackdrop() || resolveThumb();
+            } else {
+                imageUrl = resolveThumb() || resolveBackdrop();
+            }
+
+            if (!imageUrl && item.ImageTags && item.ImageTags.Primary) {
                 // High-res primary poster fallback (cropped horizontally with object-fit: cover)
                 imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
@@ -1054,35 +1075,55 @@ class CardRenderer {
         if (canExpand) {
             // Retrieve resolution boundaries for the modern-expanded card format.
             const thumbParams = imageService.getParams('expanded-poster');
-            let thumbUrl = '';
+            const hasThumb = item.ImageTags && item.ImageTags.Thumb;
+            const hasBackdrop = item.BackdropImageTags && item.BackdropImageTags.length > 0;
+            const hasParentBackdrop = item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0;
+            const hasSeriesBackdrop = item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0;
 
-            // 1. Prioritize native backdrops for the classic theatrical landscape feel.
-            if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                thumbUrl = _imgUrl(itemId, 'Backdrop', {
-                    maxWidth: thumbParams.maxWidth,
-                    quality: thumbParams.quality,
-                    tag: item.BackdropImageTags[0]
-                });
+            const resolveThumb = () => {
+                if (hasThumb) {
+                    return _imgUrl(itemId, 'Thumb', {
+                        maxWidth: thumbParams.maxWidth,
+                        quality: thumbParams.quality,
+                        tag: item.ImageTags.Thumb
+                    });
+                }
+                return '';
+            };
+
+            const resolveBackdrop = () => {
+                if (hasBackdrop) {
+                    return _imgUrl(itemId, 'Backdrop', {
+                        maxWidth: thumbParams.maxWidth,
+                        quality: thumbParams.quality,
+                        tag: item.BackdropImageTags[0]
+                    });
+                } else if (hasParentBackdrop) {
+                    return _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
+                        maxWidth: thumbParams.maxWidth,
+                        quality: thumbParams.quality,
+                        tag: item.ParentBackdropImageTags[0]
+                    });
+                } else if (hasSeriesBackdrop) {
+                    return _imgUrl(item.SeriesId, 'Backdrop', {
+                        maxWidth: thumbParams.maxWidth,
+                        quality: thumbParams.quality,
+                        tag: item.SeriesBackdropImageTags[0]
+                    });
+                }
+                return '';
+            };
+
+            let thumbUrl = '';
+            if (preferBackdrops) {
+                thumbUrl = resolveBackdrop() || resolveThumb();
+            } else {
+                thumbUrl = resolveThumb() || resolveBackdrop();
             }
-            // 2. Fall back to parent-level backdrops (for episodes/seasons where series backdrop applies).
-            else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
-                thumbUrl = _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
-                    maxWidth: thumbParams.maxWidth,
-                    quality: thumbParams.quality,
-                    tag: item.ParentBackdropImageTags[0]
-                });
-            }
-            // 3. Fall back to series-level backdrops.
-            else if (item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0) {
-                thumbUrl = _imgUrl(item.SeriesId, 'Backdrop', {
-                    maxWidth: thumbParams.maxWidth,
-                    quality: thumbParams.quality,
-                    tag: item.SeriesBackdropImageTags[0]
-                });
-            }
-            // 4. Ultimate Fallback: Utilize the high-resolution primary poster image itself.
+
+            // Ultimate Fallback: Utilize the high-resolution primary poster image itself.
             // When expanded, the CSS crops this horizontally using object-fit cover.
-            else {
+            if (!thumbUrl) {
                 const primaryTag = item.ImageTags?.Primary || item.AlbumPrimaryImageTag;
                 let targetId = itemId;
 
