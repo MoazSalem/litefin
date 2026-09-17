@@ -59,6 +59,15 @@ class FontLoader {
         // them on cleanup and avoid memory leaks across media sessions.
         this._blobUrls = new Set();
 
+        // Map each blob: URL → its original server HTTP delivery URL.
+        // Needed because the SubtitlesOctopus Web Worker fetches fonts via
+        // XMLHttpRequest inside the worker thread. On Tizen 5.5 (Chrome 69),
+        // blob: URLs created in the main thread are NOT accessible from a
+        // Worker XHR — they cause a silent fetch failure that crashes the
+        // entire Emscripten WASM worker. By retaining the original HTTP URLs
+        // here, LibassWasmRenderer can pass those to the worker instead.
+        this._serverFontUrls = new Map();
+
         // Dynamically fetched server fallback font URL
         this._fallbackFontUrl = null;
 
@@ -160,6 +169,8 @@ class FontLoader {
             }
         }
         this._blobUrls.clear();
+        // Also clear the blob→server URL mapping so it stays in sync
+        this._serverFontUrls.clear();
         log.debug('Container font blob URLs cleared.');
     }
 
@@ -167,15 +178,41 @@ class FontLoader {
      * =========================================================================
      * getContainerFontUrls
      * =========================================================================
-     * Returns a flat array of all active container-embedded font blob URLs currently
-     * stored in the session cache. This allows the WASM subtitle renderer
-     * (libass-wasm / SubtitlesOctopus) to resolve and draw custom typesetting
-     * files directly.
+     * Returns blob: URLs for all active container-embedded fonts.
+     * Used only for main-thread @font-face registration (FontFace API / CSS).
+     *
+     * DO NOT pass these to SubtitlesOctopus's `fonts` array — the Web Worker
+     * cannot fetch blob: URLs created on the main thread via XHR on Tizen 5.5
+     * (Chrome 69), which causes the worker to crash silently.
+     * Use getContainerFontServerUrls() for worker font loading instead.
      * =========================================================================
-     * @returns {string[]} Array of active blob URLs
+     * @returns {string[]} Array of active blob URLs (main-thread only)
      */
     getContainerFontUrls() {
         return Array.from(this._blobUrls);
+    }
+
+    /**
+     * =========================================================================
+     * getContainerFontServerUrls
+     * =========================================================================
+     * Returns the original server HTTP delivery URLs for all active
+     * container-embedded fonts, suitable for passing to the SubtitlesOctopus
+     * `fonts` array.
+     *
+     * Unlike blob: URLs (see getContainerFontUrls), these HTTP URLs are
+     * fully accessible via XMLHttpRequest inside a Web Worker on all platforms,
+     * including Tizen 5.5 (Chrome 69). The worker fetches each font file from
+     * the Jellyfin server and preloads it into its virtual filesystem.
+     *
+     * If a font was loaded without a server URL (e.g. from a local file), it
+     * is excluded from the result — the worker simply won't have access to it.
+     * =========================================================================
+     * @returns {string[]} Array of HTTP server URLs (worker-safe)
+     */
+    getContainerFontServerUrls() {
+        // Return only the non-null HTTP URLs from the blob→server mapping
+        return Array.from(this._serverFontUrls.values()).filter(Boolean);
     }
 
     /**
@@ -614,7 +651,9 @@ class FontLoader {
                 }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const buffer = await res.arrayBuffer();
-                return { font, buffer, uniqueIndex };
+                // Return url alongside the result so the blob-creation loop
+                // can store it in _serverFontUrls for worker-safe access later
+                return { font, buffer, uniqueIndex, url };
             } catch (fetchErr) {
                 if (fetchErr && fetchErr.name === 'AbortError') {
                     log.warn(`Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`);
@@ -649,7 +688,7 @@ class FontLoader {
 
         for (const result of downloadedResults) {
             if (!result) continue;
-            const { font, buffer, uniqueIndex } = result;
+            const { font, buffer, uniqueIndex, url } = result;
             try {
                 const internalNames = this._extractInternalFontNames(buffer);
                 if (internalNames.length > 0) {
@@ -661,6 +700,17 @@ class FontLoader {
                 const blob = new Blob([buffer], { type: font.MimeType || 'font/ttf' });
                 const blobUrl = URL.createObjectURL(blob);
                 this._blobUrls.add(blobUrl);
+
+                // ----------------------------------------------------------------
+                // Record the original HTTP delivery URL for this font so it can
+                // be retrieved later by getContainerFontServerUrls().
+                // The Web Worker (SubtitlesOctopus) uses XHR to fetch fonts; it
+                // cannot access blob: URLs created on the main thread on Tizen 5.5.
+                // Storing the raw server URL here allows the renderer to pass
+                // worker-safe HTTP URLs instead. The `url` variable is in scope
+                // from the download block above this loop.
+                // ----------------------------------------------------------------
+                this._serverFontUrls.set(blobUrl, url || null);
 
                 const rawName = font.Name || font.FileName || `ContainerFont${uniqueIndex}`;
                 const baseName = rawName.replace(/\.[^/.]+$/, '');

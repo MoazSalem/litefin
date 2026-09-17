@@ -30,5 +30,7 @@ export default class LibassWasmRenderer {
     hide() {}
     clearTrack() {}
     clear() {}
+    play() {}
+    pause() {}
     destroy() {}
 }

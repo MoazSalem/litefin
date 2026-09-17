@@ -124,7 +124,7 @@ jobs:
           FEATURES=$(git log ${PREV_TAG}..HEAD --pretty=format:"%s" | grep -E '^feat' || true)
           BUGS=$(git log ${PREV_TAG}..HEAD --pretty=format:"%s" | grep -E '^fix' || true)
           
-          CHANGELOG="# 🧪 Pre-Release Changes\n"
+          CHANGELOG="# Pre-Release Changes\n"
           
           if [ -n "$FEATURES" ]; then
             CHANGELOG="${CHANGELOG}## New Features:\n"
