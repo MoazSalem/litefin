@@ -25,7 +25,8 @@
 /* Sidebar */
 .settings-sidebar {
     width: 350px;
-    background: var(--jf-background-alt, rgba(0, 0, 0, 0.3));
+    background: var(--sidebar-bg, var(--jf-background-alt, #101010));
+    background-color: var(--sidebar-bg, var(--jf-background-alt, #101010));
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     border-left: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     padding: 40px 0;
