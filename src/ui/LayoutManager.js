@@ -361,7 +361,7 @@ class LayoutManager {
         // Both 'modern' (expanding), 'expanded' (static widescreen), and 'modern-posters' media rows utilize
         // dark translucent card backgrounds and bottom overlay labels, requiring the dark badge style.
         if (this._badgeStyle === 'auto') {
-            const resolvedStyle = (layout === 'modern' || layout === 'expanded' || layout === 'modern-posters') ? 'dark' : 'tinted';
+            const resolvedStyle = (layout === 'modern' || layout === 'expanded' || layout === 'modern-posters' || layout === 'expanding') ? 'dark' : 'tinted';
             document.documentElement.setAttribute('data-badge-style', resolvedStyle);
         }
         CardRenderer.clearCache();

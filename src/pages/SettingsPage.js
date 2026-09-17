@@ -1456,17 +1456,18 @@ class SettingsPage extends Page {
             'media-rows-layout-select',
             [
                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
-                { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' },
+                { value: 'modern', label: i18n.t('LayoutModern') || 'Modern' },
                 { value: 'expanded', label: i18n.t('LayoutExpandedPosters') || 'Modern Cards' },
-                { value: 'modern-posters', label: i18n.t('LayoutModernPosters') || 'Modern Posters' }
+                { value: 'modern-posters', label: i18n.t('LayoutModernPosters') || 'Modern Posters' },
+                { value: 'expanding', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' }
             ],
             layoutManager.getMediaRowsLayout() || 'classic'
         )}
                     </div>
                 </div>
 
-                <!-- Prefer Backdrops Over Thumbs option: hidden unless media rows layout is modern or expanded -->
-                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'modern' || layoutManager.getMediaRowsLayout() === 'expanded' ? '' : 'hidden'}" id="item-prefer-backdrops-over-thumbs">
+                <!-- Prefer Backdrops Over Thumbs option: hidden unless media rows layout is expanding or expanded -->
+                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'expanding' || layoutManager.getMediaRowsLayout() === 'expanded' ? '' : 'hidden'}" id="item-prefer-backdrops-over-thumbs">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="PreferBackdropsOverThumbs">${i18n.t('PreferBackdropsOverThumbs') || 'Use Backdrops Instead of Thumbs'}</span>
                         <span class="setting-description" data-i18n="PreferBackdropsOverThumbsDescription">${i18n.t('PreferBackdropsOverThumbsDescription') || 'Prefer backdrop artwork over thumbnails for wide cards in Expanding and Expanded layouts.'}</span>
@@ -1479,8 +1480,8 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Force Expandable Posters option: hidden unless media rows layout is modern/expanding posters -->
-                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'modern' ? '' : 'hidden'}" id="item-home-force-expandable-posters">
+                <!-- Force Expandable Posters option: hidden unless media rows layout is expanding posters -->
+                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'expanding' ? '' : 'hidden'}" id="item-home-force-expandable-posters">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
                         <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
@@ -1663,6 +1664,7 @@ class SettingsPage extends Page {
                 const isExpanded = mediaRowsLayout === 'expanded';
                 const isModernPosters = mediaRowsLayout === 'modern-posters';
                 const isModern = mediaRowsLayout === 'modern';
+                const isExpanding = mediaRowsLayout === 'expanding';
 
                 let cardSizeOptions;
                 let defaultValue;
@@ -1702,6 +1704,22 @@ class SettingsPage extends Page {
                     storageKey = 'pref:modernPostersCardSizeScale';
                 } else if (isModern) {
                     cardSizeOptions = [
+                        { value: '1', label: '100%' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110%' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120% (Default)' },
+                        { value: '1.25', label: '125%' },
+                        { value: '1.3', label: '130%' },
+                        { value: '1.35', label: '135%' },
+                        { value: '1.4', label: '140%' },
+                        { value: '1.45', label: '145%' },
+                        { value: '1.5', label: '150%' }
+                    ];
+                    defaultValue = '1.2';
+                    storageKey = 'pref:modernCardSizeScale';
+                } else if (isExpanding) {
+                    cardSizeOptions = [
                         { value: '1', label: '100% (Default)' },
                         { value: '1.05', label: '105%' },
                         { value: '1.1', label: '110%' },
@@ -1715,7 +1733,7 @@ class SettingsPage extends Page {
                         { value: '1.5', label: '150%' }
                     ];
                     defaultValue = '1';
-                    storageKey = 'pref:modernCardSizeScale';
+                    storageKey = 'pref:expandingCardSizeScale';
                 } else {
                     cardSizeOptions = [
                         { value: '1', label: '100% (Small / Default)' },
@@ -9138,6 +9156,7 @@ class SettingsPage extends Page {
                     if (layout === 'expanded') return 'pref:expandedCardSizeScale';
                     if (layout === 'modern-posters') return 'pref:modernPostersCardSizeScale';
                     if (layout === 'modern') return 'pref:modernCardSizeScale';
+                    if (layout === 'expanding') return 'pref:expandingCardSizeScale';
                     return 'pref:classicCardSizeScale';
                 })(),
                 type: 'local',
@@ -9420,6 +9439,12 @@ class SettingsPage extends Page {
                                 storage.setItem('pref:expandedCardSizeScale', '1.2');
                             } else if (newValue === 'modern-posters') {
                                 storage.setItem('pref:modernPostersCardSizeScale', '1.2');
+                            } else if (newValue === 'modern') {
+                                storage.setItem('pref:modernCardSizeScale', '1.2');
+                            } else if (newValue === 'expanding') {
+                                storage.setItem('pref:expandingCardSizeScale', '1');
+                            } else if (newValue === 'classic') {
+                                storage.setItem('pref:classicCardSizeScale', '1');
                             }
                             this._triggerHardReload();
                         } else if (id === 'login-page-layout-select') {

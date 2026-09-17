@@ -303,7 +303,8 @@ class CardRenderer {
         const isModern = mediaLayout === 'modern';
         const isExpanded = mediaLayout === 'expanded';
         const isModernPosters = mediaLayout === 'modern-posters';
-        const isModernOrExpanded = isModern || isExpanded || isModernPosters;
+        const isExpanding = mediaLayout === 'expanding';
+        const isModernOrExpanded = isModern || isExpanded || isModernPosters || isExpanding;
 
         const libraryThumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
         const isDynamicThumb = (type === 'library' && libraryThumbMode !== 'off') || Boolean(item._dynamicThumbUrl);
@@ -780,8 +781,8 @@ class CardRenderer {
                 <div class="card-overlay-tint"></div>
                 <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
             `;
-        } else if (isModern && !isGrid && (type !== 'library' || isDynamicThumb)) {
-            // Modern horizontal cards get a shadow tint to ensure inside title readability.
+        } else if (isExpanding && !isGrid && (type !== 'library' || isDynamicThumb)) {
+            // Expanding horizontal cards get a shadow tint to ensure inside title readability.
             // We bypass this for grid-based cards and native library cards to keep their artwork fully bright and clear.
             imageInnerHtml = `<div class="card-image-tint"></div>${imageInnerHtml}`;
         }
@@ -1068,7 +1069,7 @@ class CardRenderer {
         // neighboring cards in the grid column structure, breaking grid alignment.
         // ====================================================================
         const canExpand =
-            isModern &&
+            isExpanding &&
             !isLandscape &&
             !isGrid &&
             (type === 'poster' || type === 'movie' || type === 'series' || type === 'season');
@@ -1154,12 +1155,6 @@ class CardRenderer {
         // If an image URL exists, we construct the image tags with both lazy-loading
         // and expanding-poster support. If no image is available, we construct
         // the premium gradient fallback.
-        //
-        // NOTE ON LIBRARY CARDS: In the Modern layout, library card labels are hidden
-        // by default from the normal card-info sections. Instead, they are overlaid
-        // directly on the card image. If a library has no preview image (falling back
-        // to a gradient), we must explicitly append the overlay label on top of the
-        // gradient block so the card is not rendered completely blank.
         // ====================================================================
         // Check if the user has disabled BlurHash placeholders in Display Settings
         // Fall back to the default dark grey skeletons (no canvas injected) if disabled for raw performance.
@@ -1178,11 +1173,10 @@ class CardRenderer {
         // Outside label hiding logic for library cards:
         // - Hide if user enabled 'pref:hideLibraryLabels'
         // - Hide if dynamic library thumb mode is enabled (which has text centered on the card with a tint)
-        // - Hide if Modern layout (in-artwork inside labels)
-        // For Expanded and Classic layouts when using native Jellyfin thumbs/fallbacks (libraryThumbMode === 'off'),
-        // outside label is shown below card unless hideLibraryLabelsPref is true
+        // - Hide if Expanding layout (in-artwork inside labels)
+        // For Modern, Expanded, Modern Posters, and Classic layouts, outside label is shown below card unless hideLibraryLabelsPref is true
         const isHiddenLibraryLabel =
-            type === 'library' && (isDynamicThumb || isModern || hideLibraryLabelsPref);
+            type === 'library' && (isDynamicThumb || isExpanding || hideLibraryLabelsPref);
 
         // --- 5. Optional Meta Row (list view) ---
         // showMeta injects an additional row with rating + year + runtime for
@@ -1210,17 +1204,17 @@ class CardRenderer {
         }
 
         // ====================================================================
-        // --- 5. Integrated vs External Labels (Modern / Expanded vs Classic) ---
+        // --- 5. Integrated vs External Labels (Expanding vs Modern / Expanded / Classic) ---
         // ====================================================================
         // The display architecture differs across layout engines:
         //
-        // 1. In Modern layout ('modern'):
+        // 1. In Expanding Posters layout ('expanding'):
         //    - Landscape and square cards integrate labels INSIDE.
         //    - Expandable posters render BOTH to support smooth focus crossfade.
         //
-        // 2. In Expanded Posters layout ('expanded'):
-        //    - ALL row cards are statically widescreen with inside overlay labels.
-        //    - Standard outside labels are omitted, keeping DOM footprint minimal.
+        // 2. In Modern ('modern'), Modern Cards ('expanded') & Modern Posters ('modern-posters'):
+        //    - Titles and subtitles render cleanly OUTSIDE below cards (Apple HIG style).
+        //    - Standard outside labels provide maximum legibility without cluttering card artwork.
         //
         // 3. In Classic layout ('classic'):
         //    - Standard outside labels underneath cards.
@@ -1228,9 +1222,10 @@ class CardRenderer {
         const isSquare = type === 'square' || type === 'artist' || ((isExpanded || isModernPosters) && type === 'person');
         // In vertical 2D grids (!isGrid is false), we disable inside integrated labels
         // and force standard outside labels to keep the entire grid uniform and clean.
-        // In Expanded Posters ('expanded') & Modern Posters ('modern-posters'), titles and subtitles render cleanly outside below cards.
-        const renderInside = isModern && (isLandscape || isSquare || canExpand) && !isGrid;
-        const renderOutside = (!isModern && !isExpanded) || isExpanded || isModernPosters || isGrid || (isModern && !isLandscape && !isSquare);
+        // In Modern ('modern'), Modern Cards ('expanded') & Modern Posters ('modern-posters'), titles and subtitles render cleanly outside below cards.
+        // In Expanding Posters ('expanding'), landscape, square, and expanding cards render inside overlay labels.
+        const renderInside = isExpanding && (isLandscape || isSquare || canExpand) && !isGrid;
+        const renderOutside = (!isExpanding && !isExpanded) || isExpanded || isModernPosters || isModern || isGrid || (isExpanding && !isLandscape && !isSquare);
 
         // Final visibility logic (Classic vs Modern vs Expanded)
         // For library cards, inside .card-info is bypassed in favor of clean native artwork or .card-overlay-label on dynamic thumbs
