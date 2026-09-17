@@ -1479,6 +1479,7 @@
     "ThemeMode": "Theme Mode",
     "ThemeModeDescription": "Choose the base visual style of the application.",
     "ThemeTinted": "Tinted",
+    "ThemeTintedLight": "Light Tinted",
     "Time": "Time",
     "TimeAM": "AM",
     "TimeFormat12h": "12-hour",

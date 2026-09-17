@@ -35,6 +35,7 @@ const THEME_MODES = {
     CLASSIC_LIGHT: 'classic-light',
     BLACK: 'black',
     TINTED: 'tinted',
+    TINTED_LIGHT: 'tinted-light',
     AMBIENT: 'ambient'
 };
 
@@ -555,9 +556,21 @@ class LayoutManager {
             --jf-focus-border-color: ${accents.accent};`;
 
         // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
-        // Only inject base text colors if NOT tinted. Tinted mode handles its own
-        // transparent text colors in tinted.css, which we shouldn't override globally.
-        if (this._themeMode !== THEME_MODES.TINTED) {
+        if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
+            /*
+             * Light Tinted mode applies warm cream / champagne typography tailored
+             * to harmonize with the elevated tinted background shade.
+             */
+            const tints = themeUtils.getTintedLightColors(this._themeColor);
+            dynamicCss += `
+            --jf-text-primary: ${tints.textPrimary};
+            --jf-text-secondary: ${tints.textSecondary};
+            --jf-text-tertiary: ${tints.textTertiary};
+            
+            --text-primary: var(--jf-text-primary);
+            --text-secondary: var(--jf-text-secondary);
+            --text-muted: var(--jf-text-secondary);`;
+        } else if (this._themeMode !== THEME_MODES.TINTED) {
             const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
             dynamicCss += `
             --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
@@ -568,7 +581,7 @@ class LayoutManager {
             --text-secondary: var(--jf-text-secondary);
             --text-muted: var(--jf-text-secondary);`;
         } else {
-            // For tinted mode, just pass through the custom aliases
+            // For dark tinted mode, just pass through the custom aliases
             dynamicCss += `
             --text-primary: var(--jf-text-primary);
             --text-secondary: var(--jf-text-secondary);
@@ -576,7 +589,23 @@ class LayoutManager {
         }
 
         // 2. Apply background variables based on theme mode
-        if (this._themeMode === THEME_MODES.TINTED) {
+        if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
+            const tints = themeUtils.getTintedLightColors(this._themeColor);
+            /*
+             * Light Tinted theme provides an elevated, luminous background (~26% lightness)
+             * with crisp card elevation and rich tint characteristics (e.g., mocha/brown).
+             */
+            const bg = this._lighterBackground ? tints.backgroundAlt : tints.background;
+            const bgAlt = this._lighterBackground ? tints.background : tints.backgroundAlt;
+            dynamicCss += `
+            --jf-background: ${bg};
+            --jf-background-alt: ${bgAlt};
+            --jf-surface: ${tints.surface};
+            --jf-card-bg: ${tints.cardBg};
+            --jf-card-bg-hover: ${tints.cardBgHover};
+            --jf-divider: ${tints.divider};
+            --jf-navbar-bg: ${bg};`;
+        } else if (this._themeMode === THEME_MODES.TINTED) {
             const tints = themeUtils.getTintedColors(this._themeColor);
             /*
              * In Tinted mode, swapping background and background-alt provides
@@ -656,7 +685,10 @@ class LayoutManager {
         if (platformInfo.isAncientChrome) {
             // Resolve the exact background color for the current theme mode
             let resolvedBg = '#101010';
-            if (this._themeMode === THEME_MODES.TINTED) {
+            if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
+                const tints = themeUtils.getTintedLightColors(this._themeColor);
+                resolvedBg = this._lighterBackground ? tints.backgroundAlt : tints.background;
+            } else if (this._themeMode === THEME_MODES.TINTED) {
                 const tints = themeUtils.getTintedColors(this._themeColor);
                 resolvedBg = this._lighterBackground ? tints.backgroundAlt : tints.background;
             } else if (this._themeMode === THEME_MODES.AMBIENT) {

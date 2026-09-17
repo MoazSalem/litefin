@@ -151,6 +151,33 @@ export const themeUtils = {
     },
 
     /**
+     * Generate warm, luminous complementary background and surface colors for a Light Tinted theme.
+     * Provides an elevated ~26% background lightness with rich tint saturation, soft cream text,
+     * and crisp card contrast (achieving rich earth tones like mocha/brown when brown is picked).
+     * @param {string} hex
+     * @returns {object}
+     */
+    getTintedLightColors(hex) {
+        const hsl = this.hexToHsl(hex);
+
+        const bgH = hsl.h;
+        // Refined saturation curve: vibrant enough to clearly reveal the color character, yet soft and natural
+        const bgS = Math.max(18, Math.min(hsl.s * 0.55, 40));
+
+        return {
+            background: this.hslToHex(bgH, bgS, 26), // Elevated warm base background (~26% lightness)
+            backgroundAlt: this.hslToHex(bgH, bgS, 20), // Sidebar/Navbar (~20% lightness)
+            surface: this.hslToHex(bgH, bgS, 22), // Surface elements (~22% lightness)
+            cardBg: this.hslToHex(bgH, bgS, 31), // Crisp card materials (~31% lightness)
+            cardBgHover: this.hslToHex(bgH, bgS, 38), // Focused/hovered states (~38% lightness)
+            divider: this.hslToHex(bgH, bgS, 35), // Borders and dividers
+            textPrimary: this.hslToHex(bgH, Math.min(bgS, 20), 93), // Warm champagne / cream text
+            textSecondary: 'rgba(242, 237, 230, 0.75)',
+            textTertiary: 'rgba(242, 237, 230, 0.5)'
+        };
+    },
+
+    /**
      * Determine best contrast color (black or white) for a given background hex
      * @param {string} hex
      * @returns {string} #ffffff or #000000

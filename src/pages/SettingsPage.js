@@ -791,6 +791,9 @@ class SettingsPage extends Page {
                     // Tinted background theme mapping closely with specific selected colors.
                     { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
 
+                    // Light Tinted theme providing a luminous, warm tinted base derived from accent color.
+                    { value: 'tinted-light', label: i18n.t('ThemeTintedLight') || 'Light Tinted' },
+
                     // Black OLED theme for extreme battery saving and deep contrast profiles.
                     { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
 
@@ -834,7 +837,7 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- Lighter Background Mode (Tinted and Classic themes only) -->
-                <div class="setting-item ${!['tinted', 'classic-dark', 'classic-light'].includes(layoutManager.getThemeMode()) ? 'hidden' : ''}" id="lighter-background-item">
+                <div class="setting-item ${!['tinted', 'tinted-light', 'classic-dark', 'classic-light'].includes(layoutManager.getThemeMode()) ? 'hidden' : ''}" id="lighter-background-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LighterBackground">${i18n.t('LighterBackground') || 'Lighter Background'}</span>
                         <span class="setting-description" data-i18n="LighterBackgroundDescription">${i18n.t('LighterBackgroundDescription') || 'Swap the primary background with the alternate background for a lighter shade.'}</span>
@@ -6416,14 +6419,14 @@ class SettingsPage extends Page {
 
     /**
      * Updates visibility of the lighter background toggle based on active theme mode.
-     * Only available for tinted and classic themes (tinted, classic-dark, classic-light).
+     * Only available for tinted and classic themes (tinted, tinted-light, classic-dark, classic-light).
      * @private
      */
     _updateLighterBackgroundVisibility() {
         const item = this.$('#lighter-background-item');
         if (item) {
             const currentMode = layoutManager.getThemeMode();
-            const isSupported = ['tinted', 'classic-dark', 'classic-light'].includes(currentMode);
+            const isSupported = ['tinted', 'tinted-light', 'classic-dark', 'classic-light'].includes(currentMode);
             item.classList.toggle('hidden', !isSupported);
             focusManager.invalidateCache('settings-content');
         }
