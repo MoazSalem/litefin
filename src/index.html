@@ -221,9 +221,16 @@
                 // Fall back to the default theme accent color if the saved one is invalid
                 var accentColor = (savedThemeColor && savedThemeColor.indexOf('#') === 0) ? savedThemeColor : currentTheme.accent;
 
+                // Adjust background for lighter background mode on classic dark
+                var savedLighterBg = localStorage.getItem('litefin:lighterBackground') === 'true';
+                var bg = currentTheme.bg;
+                if (savedLighterBg) {
+                    if (savedTheme === 'classic-dark') bg = '#151515';
+                }
+
                 // Stamp the critical variables directly onto root stylesheet
                 document.documentElement.style.setProperty('--jf-accent', accentColor);
-                document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
+                document.documentElement.style.setProperty('--jf-background', bg);
                 document.documentElement.style.setProperty('--jf-text-primary', currentTheme.text);
                 document.documentElement.style.setProperty('--jf-text-secondary', currentTheme.textSec);
             } catch (e) {

@@ -833,6 +833,20 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Lighter Background Mode (Tinted and Classic themes only) -->
+                <div class="setting-item ${!['tinted', 'classic-dark', 'classic-light'].includes(layoutManager.getThemeMode()) ? 'hidden' : ''}" id="lighter-background-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LighterBackground">${i18n.t('LighterBackground') || 'Lighter Background'}</span>
+                        <span class="setting-description" data-i18n="LighterBackgroundDescription">${i18n.t('LighterBackgroundDescription') || 'Swap the primary background with the alternate background for a lighter shade.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getLighterBackground() ? 'active' : ''}" 
+                                id="toggle-lighter-background" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Loading Indicator Style Selection -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -6395,6 +6409,24 @@ class SettingsPage extends Page {
 
         // Initial visibility check for Details Page Title Style setting based on current layout settings
         this._updateDetailsTitleStyleVisibility();
+
+        // Initial visibility check for Lighter Background setting based on active theme
+        this._updateLighterBackgroundVisibility();
+    }
+
+    /**
+     * Updates visibility of the lighter background toggle based on active theme mode.
+     * Only available for tinted and classic themes (tinted, classic-dark, classic-light).
+     * @private
+     */
+    _updateLighterBackgroundVisibility() {
+        const item = this.$('#lighter-background-item');
+        if (item) {
+            const currentMode = layoutManager.getThemeMode();
+            const isSupported = ['tinted', 'classic-dark', 'classic-light'].includes(currentMode);
+            item.classList.toggle('hidden', !isSupported);
+            focusManager.invalidateCache('settings-content');
+        }
     }
 
     _updateDetailsTitleStyleVisibility() {
@@ -6638,6 +6670,26 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getRoundedCorners();
                 layoutManager.setRoundedCorners(newValue);
                 roundedCornersBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // ==========================================
+        // TOGGLE LIGHTER BACKGROUND (Tinted & Classic themes)
+        // ==========================================
+        // Controls whether the main canvas background is swapped with the
+        // alternate background for a brighter presentation on supported themes.
+        const lighterBgBtn = this.$('#toggle-lighter-background');
+        if (lighterBgBtn) {
+            lighterBgBtn.addEventListener('click', () => {
+                // Invert the current lighter background setting state
+                const newValue = !layoutManager.getLighterBackground();
+
+                // Persist and apply changes via LayoutManager
+                layoutManager.setLighterBackground(newValue);
+
+                // Update tactile switch element visual state
+                lighterBgBtn.classList.toggle('active', newValue);
+                log.info(`Lighter Background set to: ${newValue}`);
             });
         }
 
@@ -9244,6 +9296,7 @@ class SettingsPage extends Page {
                             layoutManager.setOsdSeekBarProgressColor(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
+                            this._updateLighterBackgroundVisibility();
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
                             layoutManager.setUiFont(newValue);
