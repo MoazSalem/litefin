@@ -2644,7 +2644,25 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item" id="hero-carousel-indicator-animation-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                <div class="setting-item" id="hero-carousel-indicator-style-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselIndicatorStyle">${i18n.t('HeroCarouselIndicatorStyle') || 'Indicator Style'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselIndicatorStyleDescription">${i18n.t('HeroCarouselIndicatorStyleDescription') || 'Visual style of the hero carousel position indicators.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'hero-carousel-indicator-style-select',
+                [
+                    { value: 'dots', label: i18n.t('IndicatorStyleDots') || 'Simple Dots' },
+                    { value: 'lines', label: i18n.t('IndicatorStyleLines') || 'Lines' },
+                    { value: 'progress', label: i18n.t('IndicatorStyleProgress') || 'Progress Pill' }
+                ],
+                storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots'
+            )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-indicator-animation-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' && (storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots') === 'progress' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HeroCarouselIndicatorAnimation">${i18n.t('HeroCarouselIndicatorAnimation') || 'Indicator Animation'}</span>
                         <span class="setting-description" data-i18n="HeroCarouselIndicatorAnimationDescription">${i18n.t('HeroCarouselIndicatorAnimationDescription') || 'Enable the progress bar animation for the carousel dots.'}</span>
@@ -7105,11 +7123,15 @@ class SettingsPage extends Page {
                 const styleItem = this.$('#hero-carousel-style-item');
                 const zoomItem = this.$('#hero-carousel-zoom-item');
                 const heroQualityItem = this.$('#hero-image-quality-item');
+                const indicatorStyleItem = this.$('#hero-carousel-indicator-style-item');
                 const indicatorAnimItem = this.$('#hero-carousel-indicator-animation-item');
                 const intervalItem = this.$('#hero-carousel-interval-item');
                 const countItem = this.$('#hero-carousel-count-item');
                 const mdbItem = this.$('#hero-carousel-mdb-item');
                 const ignoreWatchedItem = this.$('#hero-carousel-ignore-watched-item');
+
+                // Read current indicator style to determine if animation toggle is applicable
+                const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
 
                 // Apply transitions/display toggles based on the master toggle value.
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
@@ -7117,7 +7139,8 @@ class SettingsPage extends Page {
                 if (styleItem) styleItem.style.display = newValue ? '' : 'none';
                 if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
                 if (heroQualityItem) heroQualityItem.style.display = newValue ? '' : 'none';
-                if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
+                if (indicatorStyleItem) indicatorStyleItem.style.display = newValue ? '' : 'none';
+                if (indicatorAnimItem) indicatorAnimItem.style.display = newValue && indicatorStyle === 'progress' ? '' : 'none';
                 if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
                 if (countItem) countItem.style.display = newValue ? '' : 'none';
 
@@ -9157,6 +9180,7 @@ class SettingsPage extends Page {
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
+            'hero-carousel-indicator-style-select': { key: 'pref:heroCarouselIndicatorStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
@@ -9378,6 +9402,7 @@ class SettingsPage extends Page {
                                 'pref:homeRowsLimit',
                                 'pref:nextUpMaxDays',
                                 'pref:heroCarouselStyle',
+                                'pref:heroCarouselIndicatorStyle',
                                 'pref:heroCarouselCount',
                                 'pref:heroCarouselInterval'
                             ];
@@ -9386,6 +9411,14 @@ class SettingsPage extends Page {
                                     `Invalidating home page cache due to local setting change: ${settingConfig.key}`
                                 );
                                 state.delete('home:pageCache');
+                            }
+
+                            if (settingConfig.key === 'pref:heroCarouselIndicatorStyle') {
+                                const animToggleItem = this.$('#hero-carousel-indicator-animation-item');
+                                if (animToggleItem) {
+                                    const isCarouselEnabled = storage.getItem('pref:heroCarousel') !== 'false';
+                                    animToggleItem.style.display = isCarouselEnabled && newValue === 'progress' ? '' : 'none';
+                                }
                             }
 
                             if (settingConfig.key === 'pref:detailsLayout' || settingConfig.key === 'pref:seasonEpisodeDetailsLayout') {

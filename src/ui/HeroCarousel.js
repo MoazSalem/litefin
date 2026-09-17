@@ -46,6 +46,11 @@ class HeroCarousel {
 
         // Default carousel style is set to 'immersive' for a premium tvOS-style design.
         const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
+
+        // Read the chosen indicator presentation style ('dots', 'lines', or 'progress')
+        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+
+        // Render slides and indicator elements
         const itemsHtml = this._items.map((item, index) => this._renderItem(item, index, carouselStyle)).join('');
         const dotsHtml = this._items
             .map(
@@ -54,6 +59,7 @@ class HeroCarousel {
             )
             .join('');
 
+        // Query layout configuration flags from persistent storage
         const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
         const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
         const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
@@ -76,9 +82,10 @@ class HeroCarousel {
         // Apply compact to the container to manage external margins (Banner Mode)
         // Use with-zoom to conditionally apply the focus transform
         // Use no-indicator-animation to disable the progress bar fill
+        // Use indicator-${indicatorStyle} to switch between lines, dots, or progress pills
         return `
             <div id="hero-carousel-container" 
-                 class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} ${!isAnimationEnabled ? 'no-indicator-animation' : ''} focusable" 
+                 class="hero-carousel-container ${carouselStyle} indicator-${indicatorStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} ${!isAnimationEnabled ? 'no-indicator-animation' : ''} focusable" 
                  style="--indicator-duration: ${intervalInSeconds}"
                  tabindex="0">
                 <div class="hero-carousel">
@@ -516,9 +523,11 @@ class HeroCarousel {
         if (this._items.length <= 1) return;
 
         // Reset the visual progress bar to stay in sync with the JS timer
-        // if animations are enabled.
+        // ONLY if animations are enabled AND we are using the 'progress' indicator style.
+        // Static indicators ('lines', 'dots') do not require any animation frames or resets.
+        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
         const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
-        if (isAnimationEnabled) {
+        if (indicatorStyle === 'progress' && isAnimationEnabled) {
             this._resetIndicatorAnimation();
         }
 
@@ -552,6 +561,10 @@ class HeroCarousel {
      */
     _resetIndicatorAnimation() {
         if (!this._container) return;
+
+        // Bypassed completely for static indicator styles (Lines and Dots)
+        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        if (indicatorStyle !== 'progress') return;
 
         // Retrieve all dot indicators
         const dots = this._container.querySelectorAll('.hero-dot');
