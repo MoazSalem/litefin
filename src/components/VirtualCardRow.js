@@ -37,67 +37,93 @@ export class VirtualCardRow {
         // Static CSS measurements from home.css
         // Landscape width: 400px, Portrait width: 240px, Margin-right: 24px
         // Modern override: 600px / 260px with 28px margin
-        // Expanded override: 600px fixed width for all poster rows
         const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
         const isModern = mediaLayout === 'modern';
         const isExpanded = mediaLayout === 'expanded';
+        const isModernPosters = mediaLayout === 'modern-posters';
         this.isModern = isModern;
         this.isExpanded = isExpanded;
+        this.isModernPosters = isModernPosters;
         const scale = isExpanded
-            ? parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.1
-            : isModern
-                ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3
-                : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+            ? parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.2
+            : isModernPosters
+                ? parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2
+                : isModern
+                    ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.0
+                    : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
 
         if (isExpanded) {
-            const modernMultiplier = scale / 1.5;
-            this.modernMultiplier = modernMultiplier;
+            this.modernMultiplier = scale;
 
             // =================================================================
-            // 💎 Expanded Posters: Uniform 16:9 Widescreen Cards
-            // =================================================================
-            // All standard poster and landscape cards are rendered at full 600px
-            // width by default. Square / artist cards remain 338px.
-            // Because cards are pre-expanded, there is no dynamic expansion
-            // buffer and no sibling shift during D-Pad navigation.
+            // 💎 Modern Cards (Expanded): Uniform 16:9 Widescreen Cards (10% Smaller: 396px)
             // =================================================================
             if (this.cardType === 'square' || this.cardType === 'artist' || (isExpanded && this.cardType === 'person')) {
-                this.itemWidth = Math.round(338 * modernMultiplier);
+                this.itemWidth = Math.round(223 * scale);
             } else {
-                this.itemWidth = Math.round(600 * modernMultiplier);
+                this.itemWidth = Math.round(396 * scale);
             }
-            this.itemMargin = Math.round(40 * modernMultiplier);
+            this.itemMargin = Math.round(26 * scale);
             this.sidePadding = 60;
 
             // Inject CSS custom properties on the track container
-            this.track.style.setProperty('--card-width', `${Math.round(600 * modernMultiplier)}px`);
-            this.track.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-width', `${Math.round(396 * scale)}px`);
+            this.track.style.setProperty('--card-height', `${Math.round(222.75 * scale)}px`);
             this.track.style.setProperty('--card-margin', `${this.itemMargin}px`);
-            this.track.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
-            this.track.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-expanded-width', `${Math.round(396 * scale)}px`);
+            this.track.style.setProperty('--card-square-width', `${Math.round(223 * scale)}px`);
+            this.track.style.setProperty('--card-expansion', '0px');
+        } else if (isModernPosters) {
+            // =================================================================
+            // 💎 Modern Posters: Uniform Portrait 2:3 Posters + Resized Landscape/Square Cards
+            // =================================================================
+            // Standard poster cards (and cast/crew/guests) render at 212px width * scale (2:3 aspect ratio, height 318px).
+            // Landscape cards (e.g. My Media library row) resized to 396px * scale (16:9, height 222.75px).
+            // Square / artist cards resized to 223px * scale (1:1, height 223px).
+            // =================================================================
+            if (this.cardType === 'square' || this.cardType === 'artist') {
+                this.itemWidth = Math.round(223 * scale);
+                this.itemMargin = Math.round(26 * scale);
+            } else if (this.isLandscape) {
+                this.itemWidth = Math.round(396 * scale);
+                this.itemMargin = Math.round(26 * scale);
+            } else {
+                this.itemWidth = Math.round(212 * scale);
+                this.itemMargin = Math.round(26 * scale);
+            }
+            this.sidePadding = 60;
+
+            // Inject CSS custom properties on the track container
+            this.track.style.setProperty('--card-width', `${Math.round(212 * scale)}px`);
+            this.track.style.setProperty('--card-height', `${Math.round(318 * scale)}px`);
+            this.track.style.setProperty('--card-margin', `${this.itemMargin}px`);
+            this.track.style.setProperty('--card-expanded-width', `${Math.round(396 * scale)}px`);
+            this.track.style.setProperty('--card-landscape-width', `${Math.round(396 * scale)}px`);
+            this.track.style.setProperty('--card-landscape-height', `${Math.round(222.75 * scale)}px`);
+            this.track.style.setProperty('--card-square-width', `${Math.round(223 * scale)}px`);
+            this.track.style.setProperty('--card-square-height', `${Math.round(223 * scale)}px`);
             this.track.style.setProperty('--card-expansion', '0px');
         } else if (isModern) {
-            const modernMultiplier = scale / 1.5;
-            this.modernMultiplier = modernMultiplier;
+            this.modernMultiplier = scale;
 
-            // Target Height: 600px * 56.25% (16:9) = 337.5px
+            // Target Height: 468px * 56.25% (16:9) = 263.25px (* scale)
             if (this.isLandscape) {
-                this.itemWidth = Math.round(600 * modernMultiplier);
+                this.itemWidth = Math.round(468 * scale);
             } else if (this.cardType === 'square' || this.cardType === 'artist') {
-                this.itemWidth = Math.round(338 * modernMultiplier); // 338px * 100% = 338px height
+                this.itemWidth = Math.round(264 * scale); // 264px height
             } else {
-                this.itemWidth = Math.round(225 * modernMultiplier); // 225px * 150% = 337.5px height
+                this.itemWidth = Math.round(175.5 * scale); // 175.5px * 150% = 263.25px height
             }
-            this.itemMargin = Math.round(40 * modernMultiplier); // Increased gap for premium feel
-            this.sidePadding = 60; // Match classic alignment (60px)
+            this.itemMargin = Math.round(31 * scale);
+            this.sidePadding = 60;
 
             // Inject CSS custom properties on the track container to update card styles dynamically
-            this.track.style.setProperty('--card-width', `${Math.round(225 * modernMultiplier)}px`);
-            this.track.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-width', `${Math.round(175.5 * scale)}px`);
+            this.track.style.setProperty('--card-height', `${Math.round(263.25 * scale)}px`);
             this.track.style.setProperty('--card-margin', `${this.itemMargin}px`);
-            this.track.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
-            this.track.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
-            this.track.style.setProperty('--card-expansion', `${Math.round(375 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-expanded-width', `${Math.round(468 * scale)}px`);
+            this.track.style.setProperty('--card-square-width', `${Math.round(264 * scale)}px`);
+            this.track.style.setProperty('--card-expansion', `${Math.round(292.5 * scale)}px`);
         } else {
             this.itemWidth = Math.round((this.isLandscape ? 400 : 240) * scale);
             this.itemMargin = Math.round(24 * scale);

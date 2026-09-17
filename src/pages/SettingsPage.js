@@ -247,7 +247,6 @@ class SettingsPage extends Page {
      * Render the admin-only Libraries management tab.
      * Includes a global library scan button and a live list of server libraries
      * with individual metadata refresh options.
-     * Follows Apple HIG minimal design with zero blur and zero shadows.
      * @returns {string} HTML markup for the tab
      */
     _renderLibrariesTab() {
@@ -1458,7 +1457,8 @@ class SettingsPage extends Page {
             [
                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
                 { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' },
-                { value: 'expanded', label: i18n.t('LayoutExpandedPosters') || 'Modern Cards' }
+                { value: 'expanded', label: i18n.t('LayoutExpandedPosters') || 'Modern Cards' },
+                { value: 'modern-posters', label: i18n.t('LayoutModernPosters') || 'Modern Posters' }
             ],
             layoutManager.getMediaRowsLayout() || 'classic'
         )}
@@ -1661,17 +1661,50 @@ class SettingsPage extends Page {
                         ${(() => {
                 const mediaRowsLayout = layoutManager.getMediaRowsLayout();
                 const isExpanded = mediaRowsLayout === 'expanded';
+                const isModernPosters = mediaRowsLayout === 'modern-posters';
                 const isModern = mediaRowsLayout === 'modern';
-                
+
                 let cardSizeOptions;
                 let defaultValue;
                 let storageKey;
 
                 if (isExpanded) {
                     cardSizeOptions = [
-                        { value: '1', label: '100% (Small)' },
+                        { value: '1', label: '100%' },
                         { value: '1.05', label: '105%' },
-                        { value: '1.1', label: '110% (Default)' },
+                        { value: '1.1', label: '110%' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120% (Default)' },
+                        { value: '1.25', label: '125%' },
+                        { value: '1.3', label: '130%' },
+                        { value: '1.35', label: '135%' },
+                        { value: '1.4', label: '140%' },
+                        { value: '1.45', label: '145%' },
+                        { value: '1.5', label: '150%' }
+                    ];
+                    defaultValue = '1.2';
+                    storageKey = 'pref:expandedCardSizeScale';
+                } else if (isModernPosters) {
+                    cardSizeOptions = [
+                        { value: '1', label: '100%' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110%' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120% (Default)' },
+                        { value: '1.25', label: '125%' },
+                        { value: '1.3', label: '130%' },
+                        { value: '1.35', label: '135%' },
+                        { value: '1.4', label: '140%' },
+                        { value: '1.45', label: '145%' },
+                        { value: '1.5', label: '150%' }
+                    ];
+                    defaultValue = '1.2';
+                    storageKey = 'pref:modernPostersCardSizeScale';
+                } else if (isModern) {
+                    cardSizeOptions = [
+                        { value: '1', label: '100% (Default)' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110%' },
                         { value: '1.15', label: '115%' },
                         { value: '1.2', label: '120%' },
                         { value: '1.25', label: '125%' },
@@ -1681,19 +1714,7 @@ class SettingsPage extends Page {
                         { value: '1.45', label: '145%' },
                         { value: '1.5', label: '150%' }
                     ];
-                    defaultValue = '1.1';
-                    storageKey = 'pref:expandedCardSizeScale';
-                } else if (isModern) {
-                    cardSizeOptions = [
-                        { value: '1.2', label: '120%' },
-                        { value: '1.25', label: '125%' },
-                        { value: '1.3', label: '130% (Default)' },
-                        { value: '1.35', label: '135%' },
-                        { value: '1.4', label: '140%' },
-                        { value: '1.45', label: '145%' },
-                        { value: '1.5', label: '150%' }
-                    ];
-                    defaultValue = '1.3';
+                    defaultValue = '1';
                     storageKey = 'pref:modernCardSizeScale';
                 } else {
                     cardSizeOptions = [
@@ -1960,13 +1981,13 @@ class SettingsPage extends Page {
                 </div>
 
                 ${(() => {
-                    // Check if both media types are using cinematic backdrops; hide title style dropdown only if both are
-                    const movieLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
-                    const seasonLayout = storage.getItem('pref:seasonEpisodeDetailsLayout') || movieLayout;
-                    const isMovieBackdrop = movieLayout === 'backdropMinimal' || movieLayout === 'backdropLeft';
-                    const isSeasonBackdrop = seasonLayout === 'backdropMinimal' || seasonLayout === 'backdropLeft';
-                    const hideTitleStyle = isMovieBackdrop && isSeasonBackdrop;
-                    return `
+                // Check if both media types are using cinematic backdrops; hide title style dropdown only if both are
+                const movieLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+                const seasonLayout = storage.getItem('pref:seasonEpisodeDetailsLayout') || movieLayout;
+                const isMovieBackdrop = movieLayout === 'backdropMinimal' || movieLayout === 'backdropLeft';
+                const isSeasonBackdrop = seasonLayout === 'backdropMinimal' || seasonLayout === 'backdropLeft';
+                const hideTitleStyle = isMovieBackdrop && isSeasonBackdrop;
+                return `
                 <div class="setting-item ${hideTitleStyle ? 'hidden' : ''}" id="details-title-style-container">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
@@ -1974,26 +1995,26 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                'details-title-style-select',
-                [
-                    {
-                        value: 'both',
-                        label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon'
-                    },
-                    {
-                        value: 'logo-only',
-                        label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)'
-                    },
-                    {
-                        value: 'text-only',
-                        label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title'
-                    }
-                ],
-                storage.getItem('pref:detailsTitleStyle') || 'both'
-            )}
+                    'details-title-style-select',
+                    [
+                        {
+                            value: 'both',
+                            label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon'
+                        },
+                        {
+                            value: 'logo-only',
+                            label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)'
+                        },
+                        {
+                            value: 'text-only',
+                            label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title'
+                        }
+                    ],
+                    storage.getItem('pref:detailsTitleStyle') || 'both'
+                )}
                     </div>
                 </div>`;
-                })()}
+            })()}
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -4247,18 +4268,18 @@ class SettingsPage extends Page {
             'ass-renderer-select',
             [
                 // Prioritize libass-wasm as the recommended option on devices with WebAssembly support
-                { 
-                    value: 'libass-wasm', 
-                    label: platformInfo.hasWasmSupport 
-                        ? 'libass-wasm (WebGL/WASM, Recommended)' 
-                        : 'libass-wasm (WebGL/WASM, Unsupported)' 
+                {
+                    value: 'libass-wasm',
+                    label: platformInfo.hasWasmSupport
+                        ? 'libass-wasm (WebGL/WASM, Recommended)'
+                        : 'libass-wasm (WebGL/WASM, Unsupported)'
                 },
                 // libjass is the DOM fallback for older engines lacking WebAssembly (Tizen 3/4, WebOS <= 4.0)
-                { 
-                    value: 'libjass', 
-                    label: platformInfo.hasWasmSupport 
-                        ? 'libjass (DOM, Older TV Compatible)' 
-                        : 'libjass (DOM, Recommended / Older TV)' 
+                {
+                    value: 'libjass',
+                    label: platformInfo.hasWasmSupport
+                        ? 'libjass (DOM, Older TV Compatible)'
+                        : 'libjass (DOM, Recommended / Older TV)'
                 },
                 // ass.js lightweight experimental fallback
                 { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' }
@@ -9115,6 +9136,7 @@ class SettingsPage extends Page {
                 key: (() => {
                     const layout = layoutManager.getMediaRowsLayout();
                     if (layout === 'expanded') return 'pref:expandedCardSizeScale';
+                    if (layout === 'modern-posters') return 'pref:modernPostersCardSizeScale';
                     if (layout === 'modern') return 'pref:modernCardSizeScale';
                     return 'pref:classicCardSizeScale';
                 })(),
@@ -9394,6 +9416,11 @@ class SettingsPage extends Page {
                             layoutManager.setTextScale(parseFloat(newValue));
                         } else if (id === 'media-rows-layout-select') {
                             layoutManager.setMediaRowsLayout(newValue);
+                            if (newValue === 'expanded') {
+                                storage.setItem('pref:expandedCardSizeScale', '1.2');
+                            } else if (newValue === 'modern-posters') {
+                                storage.setItem('pref:modernPostersCardSizeScale', '1.2');
+                            }
                             this._triggerHardReload();
                         } else if (id === 'login-page-layout-select') {
                             layoutManager.setLoginPageLayout(newValue);
@@ -9493,7 +9520,9 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'layout_direction' ||
                                 settingConfig.key === 'app_language' ||
                                 settingConfig.key === 'pref:classicCardSizeScale' ||
-                                settingConfig.key === 'pref:modernCardSizeScale'
+                                settingConfig.key === 'pref:modernCardSizeScale' ||
+                                settingConfig.key === 'pref:expandedCardSizeScale' ||
+                                settingConfig.key === 'pref:modernPostersCardSizeScale'
                             ) {
                                 this._triggerHardReload();
                             }

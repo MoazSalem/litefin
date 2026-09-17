@@ -2,17 +2,26 @@
    Modern & Expanded Home Layout
    ========================================================================= */
 html[data-layout-media-rows="modern"] .home-rows,
-html[data-layout-media-rows="expanded"] .home-rows {
+html[data-layout-media-rows="expanded"] .home-rows,
+html[data-layout-media-rows="modern-posters"] .home-rows {
     padding-top: 18px;
     padding-bottom: var(--row-padding-bottom, 30px);
 }
 
+/* Add vertical clearance to row-items so scaled focus cards (1.05x) and outside subtitles never get clipped */
+html[data-layout-media-rows="modern-posters"] .row-items,
+html[data-layout-media-rows="expanded"] .row-items {
+    padding-top: 32px;
+    padding-bottom: calc(52px * var(--card-title-font-scale, 1));
+}
+
 /* =========================================================================
-   Row Headers (Modern & Expanded)
+   Row Headers (Modern, Expanded & Modern Posters)
    ========================================================================= */
 
 html[data-layout-media-rows="modern"] .row-title,
-html[data-layout-media-rows="expanded"] .row-title {
+html[data-layout-media-rows="expanded"] .row-title,
+html[data-layout-media-rows="modern-posters"] .row-title {
     font-size: 2.4rem;
     font-weight: 800;
     padding: 0 60px;
@@ -26,47 +35,68 @@ html[data-layout-media-rows="expanded"] .row-title {
 
 /* Focus hint for the row title when a card in it is focused */
 html[data-layout-media-rows="modern"] .media-row:focus-within .row-title,
-html[data-layout-media-rows="expanded"] .media-row:focus-within .row-title {
+html[data-layout-media-rows="expanded"] .media-row:focus-within .row-title,
+html[data-layout-media-rows="modern-posters"] .media-row:focus-within .row-title {
     transform: translateX(4px);
     color: #fff;
 }
 
 /* =========================================================================
-   Expanded Posters Layout (Ultra-Lightweight Static Widescreen)
+   Modern Cards & Modern Posters Layout (Ultra-Lightweight Static Cards)
    =========================================================================
    Inspired by Apple Human Interface Guidelines: sleek, minimal, hardware-
    accelerated, and blazing fast on low-end Smart TVs.
-   In this layout mode, all poster cards are rendered at full widescreen (16:9)
-   dimensions statically by default.
+   - Modern Cards (expanded): 16:9 widescreen cards statically rendered.
+   - Modern Posters (modern-posters): 2:3 portrait posters statically rendered.
    - Eliminates width transitions and dynamic sibling shifts on focus
    - Eliminates runtime dual-image downloading and opacity crossfades
    - Uses a single hardware-composited layer per card with instant focus ring
+   - Outside labels below cards (Title + Subtitle)
    ========================================================================= */
 
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-expanded-width, 600px);
-    margin-right: var(--card-margin, 40px);
+    width: var(--card-expanded-width, 396px);
+    margin-right: var(--card-margin, 26px);
     margin-left: 0;
     overflow: visible !important;
     transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-width, 212px);
+    margin-right: var(--card-margin, 26px);
+    margin-left: 0;
+    overflow: visible !important;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+html[data-layout-media-rows="modern-posters"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-landscape-width, var(--card-expanded-width, 396px));
+}
+
+html[data-layout-media-rows="expanded"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-square-width, 223px);
+}
+
+html[data-layout-media-rows="modern-posters"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-square-width, 223px);
+}
+
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
-html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover {
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover {
     -webkit-transform: scale(1.05);
     transform: scale(1.05);
     z-index: 10;
     outline: none;
 }
 
-html[data-layout-media-rows="expanded"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-square-width, 338px);
-}
-
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
     width: 100%;
-    height: var(--card-height, 337.5px) !important;
+    height: var(--card-height, 222.75px) !important;
     padding-bottom: 0 !important;
     border-radius: 24px;
     border: none !important;
@@ -77,16 +107,43 @@ html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode
     overflow: hidden;
 }
 
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+    width: 100%;
+    height: var(--card-height, 318px) !important;
+    padding-bottom: 0 !important;
+    border-radius: 24px;
+    border: none !important;
+    box-shadow: none;
+    transition: background-color 0.22s ease;
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05));
+    position: relative;
+    overflow: hidden;
+}
+
+html[data-layout-media-rows="modern-posters"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+    height: var(--card-landscape-height, 222.75px) !important;
+}
+
+html[data-layout-media-rows="modern-posters"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+    height: var(--card-square-height, var(--card-square-width, 223px)) !important;
+}
+
 /* Apple HIG-Style Focus Highlight & Focus Ring */
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
-html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image {
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image {
     background: var(--jf-surface-hover, rgba(255, 255, 255, 0.1));
 }
 
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
-html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after {
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after {
     content: '';
     position: absolute;
     top: 0;
@@ -101,7 +158,8 @@ html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode
 }
 
 /* Image sizing: Single layer, perfect fit */
-html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img {
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -112,19 +170,22 @@ html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode
     transition: opacity 0.3s ease;
 }
 
-/* Outside Labels & Typography for Expanded Posters (Below Cards) */
-html[data-layout-media-rows="expanded"] .media-card .card-info {
+/* Outside Labels & Typography for Expanded Posters and Modern Posters (Below Cards) */
+html[data-layout-media-rows="expanded"] .media-card .card-info,
+html[data-layout-media-rows="modern-posters"] .media-card .card-info {
     padding: 14px 4px 0 4px;
     opacity: 1 !important;
     display: block !important;
     text-align: left;
 }
 
-html[data-layout-media-rows="expanded"] .media-card .card-info.inside {
+html[data-layout-media-rows="expanded"] .media-card .card-info.inside,
+html[data-layout-media-rows="modern-posters"] .media-card .card-info.inside {
     display: none !important;
 }
 
-html[data-layout-media-rows="expanded"] .media-card .card-title {
+html[data-layout-media-rows="expanded"] .media-card .card-title,
+html[data-layout-media-rows="modern-posters"] .media-card .card-title {
     font-size: calc(1.4rem * var(--card-title-font-scale, 1));
     font-weight: 700;
     letter-spacing: -0.3px;
@@ -135,7 +196,8 @@ html[data-layout-media-rows="expanded"] .media-card .card-title {
     text-overflow: ellipsis;
 }
 
-html[data-layout-media-rows="expanded"] .media-card .card-subtitle {
+html[data-layout-media-rows="expanded"] .media-card .card-subtitle,
+html[data-layout-media-rows="modern-posters"] .media-card .card-subtitle {
     font-size: calc(1.15rem * var(--card-title-font-scale, 1));
     font-weight: 500;
     margin-top: 4px;
@@ -155,9 +217,9 @@ html[data-layout-media-rows="expanded"] .media-card .card-subtitle {
    ========================================================================= */
 /* Exclude grid-based cards and episode cards to preserve their specialized sizing and layout. */
 html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-width, 225px);
-    height: var(--card-height, 337.5px) !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
-    margin-right: var(--card-margin, 40px);
+    width: var(--card-width, 175.5px);
+    height: var(--card-height, 263.25px) !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
+    margin-right: var(--card-margin, 31px);
     margin-left: 0;
     overflow: visible !important; /* Fix: Allow focus box-shadow to be visible */
     
@@ -172,9 +234,9 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
     
     /* Sibling Shifting Logic:
        ONLY shift siblings if the focused card is a growing poster (not a native landscape/square).
-       Difference = 600px - 225px = 375px.
+       Difference = 468px - 175.5px = 292.5px.
      */
-    --expansion-amount: var(--card-expansion, 375px);
+    --expansion-amount: var(--card-expansion, 292.5px);
     --is-after-focus: clamp(0, var(--focused-index, -1) - var(--item-index, -1), 1);
 }
 
@@ -193,36 +255,36 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
 html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus ~ .media-card,
 html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused ~ .media-card,
 html[data-layout-media-rows="modern"] .media-card.has-expansion:hover ~ .media-card {
-    /* Translate downstream siblings cleanly to make room for the 600px expanded asset */
-    transform: translateX(var(--card-expansion, 375px));
+    /* Translate downstream siblings cleanly to make room for the 468px expanded asset */
+    transform: translateX(var(--card-expansion, 292.5px));
 }
 
 /* =========================================================================
    Poster Expansion Triggers
    =========================================================================
-   Forces the card width from 225px to 600px.
+   Forces the card width from 175.5px to 468px.
    When the mouse hovers over the row container, we disable the D-Pad expansion
    on the focused card (unless it is the card currently under the mouse pointer)
    to ensure the UI follows the user's immediate visual attention.
    
    SPECIFICITY FIX: We append the exact same exclusion pseudo-classes
    (:not(.grid-card):not(.episode-row-card):not(.episode-card)) and !important
-   so hover width overrides the base card 225px rule without being shadowed.
+   so hover width overrides the base card 175.5px rule without being shadowed.
    ========================================================================= */
 html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
 html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
 html[data-layout-media-rows="modern"] .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):hover {
-    width: var(--card-expanded-width, 600px) !important;
-    height: var(--card-height, 337.5px) !important; /* Lockdown physical dimensions to avoid layout jumps */
+    width: var(--card-expanded-width, 468px) !important;
+    height: var(--card-height, 263.25px) !important; /* Lockdown physical dimensions to avoid layout jumps */
     z-index: 100; /* Stack on top of surrounding collapsed assets */
 }
 
 html[data-layout-media-rows="modern"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-expanded-width, 600px); /* Height: 600 * 0.5625 = 337.5px */
+    width: var(--card-expanded-width, 468px); /* Height: 468 * 0.5625 = 263.25px */
 }
 
 html[data-layout-media-rows="modern"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-square-width, 338px); /* Height: 338 * 1 = 338px */
+    width: var(--card-square-width, 264px); /* Height: 264 * 1 = 264px */
 }
 
 /* Integrated Labels: Reveal timing */
@@ -592,32 +654,42 @@ html[data-layout-media-rows="modern"] .media-card[data-item-type="CollectionFold
 }
 
 /* =========================================================================
-   Progress Bar (Floating Style - Modern & Expanded)
+   Progress Bar (Floating Style - Modern, Expanded & Modern Posters)
    ========================================================================= */
 
 html[data-layout-media-rows="modern"] .card-progress-container,
-html[data-layout-media-rows="expanded"] .card-progress-container {
+html[data-layout-media-rows="expanded"] .card-progress-container,
+html[data-layout-media-rows="modern-posters"] .card-progress-container {
     bottom: 20px;
-    left: 32px;
-    right: 32px;
+    left: 20px;
+    right: 20px;
     height: 8px;
     background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.6);
     border-radius: 10px;
     overflow: hidden;
 }
 
+html[data-layout-media-rows="expanded"] .card-progress-container,
+html[data-layout-media-rows="modern-posters"] .media-card.landscape .card-progress-container {
+    left: 32px;
+    right: 32px;
+}
+
 html[data-layout-media-rows="modern"] progress.card-progress,
-html[data-layout-media-rows="expanded"] progress.card-progress {
+html[data-layout-media-rows="expanded"] progress.card-progress,
+html[data-layout-media-rows="modern-posters"] progress.card-progress {
     height: 100%;
 }
 
 html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-bar,
-html[data-layout-media-rows="expanded"] progress.card-progress::-webkit-progress-bar {
+html[data-layout-media-rows="expanded"] progress.card-progress::-webkit-progress-bar,
+html[data-layout-media-rows="modern-posters"] progress.card-progress::-webkit-progress-bar {
     background: transparent;
 }
 
 html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-value,
-html[data-layout-media-rows="expanded"] progress.card-progress::-webkit-progress-value {
+html[data-layout-media-rows="expanded"] progress.card-progress::-webkit-progress-value,
+html[data-layout-media-rows="modern-posters"] progress.card-progress::-webkit-progress-value {
     background-color: var(--jf-accent);
     border-radius: 10px;
     /* Spring-like transition for progress updates */
@@ -626,7 +698,7 @@ html[data-layout-media-rows="expanded"] progress.card-progress::-webkit-progress
 }
 
 /* =========================================================================
-   Badges & Indicators (Modern & Expanded)
+   Badges & Indicators (Modern, Expanded & Modern Posters)
    ========================================================================= */
 
 html[data-layout-media-rows="modern"] .count-badge,
@@ -638,7 +710,12 @@ html[data-layout-media-rows="expanded"] .count-badge,
 html[data-layout-media-rows="expanded"] .played-badge,
 html[data-layout-media-rows="expanded"] .episode-badge,
 html[data-layout-media-rows="expanded"] .quality-badge,
-html[data-layout-media-rows="expanded"] .game-card-badge {
+html[data-layout-media-rows="expanded"] .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge,
+html[data-layout-media-rows="modern-posters"] .episode-badge,
+html[data-layout-media-rows="modern-posters"] .quality-badge,
+html[data-layout-media-rows="modern-posters"] .game-card-badge {
     position: absolute;
     top: 22px;
     z-index: 8;
@@ -674,14 +751,30 @@ html[data-layout-media-rows="expanded"] .media-card.focused .game-card-badge,
 html[data-layout-media-rows="expanded"] .media-card:hover .count-badge,
 html[data-layout-media-rows="expanded"] .media-card:hover .played-badge,
 html[data-layout-media-rows="expanded"] .media-card:hover .episode-badge,
-html[data-layout-media-rows="expanded"] .media-card:hover .quality-badge {
+html[data-layout-media-rows="expanded"] .media-card:hover .quality-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .count-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .played-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .episode-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .quality-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .count-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .played-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .episode-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .quality-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .count-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .played-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .episode-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .quality-badge {
     transform: scale(1.05);
 }
 
 html[data-layout-media-rows="modern"] .count-badge,
 html[data-layout-media-rows="modern"] .played-badge,
 html[data-layout-media-rows="expanded"] .count-badge,
-html[data-layout-media-rows="expanded"] .played-badge {
+html[data-layout-media-rows="expanded"] .played-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge {
     right: 22px;
     width: 44px;
     height: 44px;
@@ -692,7 +785,8 @@ html[data-layout-media-rows="expanded"] .played-badge {
 }
 
 html[data-layout-media-rows="modern"] .episode-badge,
-html[data-layout-media-rows="expanded"] .episode-badge {
+html[data-layout-media-rows="expanded"] .episode-badge,
+html[data-layout-media-rows="modern-posters"] .episode-badge {
     left: 22px;
     padding: 5px 12px;
     border-radius: 10px;
@@ -703,7 +797,9 @@ html[data-layout-media-rows="expanded"] .episode-badge {
 html[data-layout-media-rows="modern"] .quality-badge,
 html[data-layout-media-rows="modern"] .game-card-badge,
 html[data-layout-media-rows="expanded"] .quality-badge,
-html[data-layout-media-rows="expanded"] .game-card-badge {
+html[data-layout-media-rows="expanded"] .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .quality-badge,
+html[data-layout-media-rows="modern-posters"] .game-card-badge {
     right: 22px;
     padding: 5px 14px;
     border-radius: 10px;
@@ -718,7 +814,11 @@ html[data-layout-media-rows="modern"] .count-badge ~ .game-card-badge,
 html[data-layout-media-rows="expanded"] .played-badge ~ .quality-badge,
 html[data-layout-media-rows="expanded"] .count-badge ~ .quality-badge,
 html[data-layout-media-rows="expanded"] .played-badge ~ .game-card-badge,
-html[data-layout-media-rows="expanded"] .count-badge ~ .game-card-badge {
+html[data-layout-media-rows="expanded"] .count-badge ~ .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge ~ .quality-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge ~ .quality-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge ~ .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge ~ .game-card-badge {
     right: 74px;
 }
 

@@ -890,6 +890,7 @@
     "LayoutDirection": "Layout Direction",
     "LayoutDirectionDescription": "Force the application's text reading direction (requires restart)",
     "LayoutExpandedPosters": "Modern Cards",
+    "LayoutModernPosters": "Modern Posters",
     "LayoutExpandingPosters": "Expanding Posters",
     "LayoutFloatingButtonsSidebar": "Floating Buttons",
     "LayoutFloatingIslandSidebar": "Floating Island",

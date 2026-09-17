@@ -46,7 +46,8 @@
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
-html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track {
+html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
     padding-left: 60px;
 }
 
@@ -56,7 +57,8 @@ html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track {
 }
 
 [dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
-[dir="rtl"] html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track {
+[dir="rtl"] html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
+[dir="rtl"] html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
     padding-left: 0;
     padding-right: 60px;
 }
@@ -82,7 +84,8 @@ html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track {
  * We override classic skeletons with high-specificity modern selectors.
  */
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card,
-html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card {
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card {
     width: var(--card-width) !important;
     height: var(--card-height) !important;
     margin-right: var(--card-margin) !important;
@@ -90,12 +93,14 @@ html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card {
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape,
-html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.landscape {
-    width: var(--card-expanded-width) !important;
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.landscape,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.landscape {
+    width: var(--card-expanded-width, var(--card-landscape-width, 400px)) !important;
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square,
-html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.square {
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.square,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.square {
     width: var(--card-square-width) !important;
 }
 
@@ -193,7 +198,7 @@ html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.square 
     height: 0;
     padding-bottom: 150%;
     overflow: hidden;
-    background: rgba(var(--jf-accent-rgb),.4); 
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05)); 
     border-radius: var(--jf-border-radius);
 
     /* Focus Border: Moved here, transparent by default */

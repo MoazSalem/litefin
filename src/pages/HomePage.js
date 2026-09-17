@@ -890,20 +890,19 @@ class HomePage extends Page {
         descriptors.sort((a, b) => a.priority - b.priority);
 
         // ====================================================================
-        // Force Expandable Posters Layout Override
+        // Layout Overrides for Modern Posters & Force Expandable Posters
         // ====================================================================
-        // If the user is running the Modern layout and has toggled on the force-poster
-        // preference under settings, we dynamically coerce all horizontal track rows
-        // to use standard portrait layouts ('portrait') with 'poster' cards.
-        // This ensures the custom expanding-backdrops and visual transitions apply
-        // universally, aligning with unified grids.
+        // In Modern Posters layout or if Force Expandable Posters is active in Modern mode,
+        // all horizontal rows (except My Media library row and Square rows) render as portrait posters.
         // ====================================================================
         const isModern = layoutManager.getLayout() === 'modern';
+        const isModernPosters = layoutManager.getLayout() === 'modern-posters';
         const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
-        if (forceExpandablePosters) {
+        if (forceExpandablePosters || isModernPosters) {
             for (const desc of descriptors) {
                 // The "My Media" row uses library folder cards that must remain as static landscape cards
-                if (desc.id !== 'my-media') {
+                // Square rows (music, livetv, etc.) remain square
+                if (desc.id !== 'my-media' && desc.layout !== 'square' && desc.cardType !== 'library' && desc.cardType !== 'square') {
                     desc.layout = 'portrait';
                     desc.cardType = 'poster';
                 }
@@ -1234,26 +1233,37 @@ class HomePage extends Page {
             const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
             const isModern = mediaLayout === 'modern';
             const isExpanded = mediaLayout === 'expanded';
+            const isModernPosters = mediaLayout === 'modern-posters';
             if (isExpanded) {
-                const scale = parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.1;
-                const modernMultiplier = scale / 1.5;
-                const itemMargin = Math.round(40 * modernMultiplier);
-                sectionEl.style.setProperty('--card-width', `${Math.round(600 * modernMultiplier)}px`);
-                sectionEl.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+                const scale = parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.2;
+                const itemMargin = Math.round(26 * scale);
+                sectionEl.style.setProperty('--card-width', `${Math.round(396 * scale)}px`);
+                sectionEl.style.setProperty('--card-height', `${Math.round(222.75 * scale)}px`);
                 sectionEl.style.setProperty('--card-margin', `${itemMargin}px`);
-                sectionEl.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
-                sectionEl.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-expanded-width', `${Math.round(396 * scale)}px`);
+                sectionEl.style.setProperty('--card-square-width', `${Math.round(223 * scale)}px`);
+                sectionEl.style.setProperty('--card-expansion', '0px');
+            } else if (isModernPosters) {
+                const scale = parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2;
+                const itemMargin = Math.round(26 * scale);
+                sectionEl.style.setProperty('--card-width', `${Math.round(212 * scale)}px`);
+                sectionEl.style.setProperty('--card-height', `${Math.round(318 * scale)}px`);
+                sectionEl.style.setProperty('--card-margin', `${itemMargin}px`);
+                sectionEl.style.setProperty('--card-expanded-width', `${Math.round(396 * scale)}px`);
+                sectionEl.style.setProperty('--card-landscape-width', `${Math.round(396 * scale)}px`);
+                sectionEl.style.setProperty('--card-landscape-height', `${Math.round(222.75 * scale)}px`);
+                sectionEl.style.setProperty('--card-square-width', `${Math.round(223 * scale)}px`);
+                sectionEl.style.setProperty('--card-square-height', `${Math.round(223 * scale)}px`);
                 sectionEl.style.setProperty('--card-expansion', '0px');
             } else if (isModern) {
-                const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3;
-                const modernMultiplier = scale / 1.5;
-                const itemMargin = Math.round(40 * modernMultiplier);
-                sectionEl.style.setProperty('--card-width', `${Math.round(225 * modernMultiplier)}px`);
-                sectionEl.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+                const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.0;
+                const itemMargin = Math.round(31 * scale);
+                sectionEl.style.setProperty('--card-width', `${Math.round(175.5 * scale)}px`);
+                sectionEl.style.setProperty('--card-height', `${Math.round(263.25 * scale)}px`);
                 sectionEl.style.setProperty('--card-margin', `${itemMargin}px`);
-                sectionEl.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
-                sectionEl.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
-                sectionEl.style.setProperty('--card-expansion', `${Math.round(375 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-expanded-width', `${Math.round(468 * scale)}px`);
+                sectionEl.style.setProperty('--card-square-width', `${Math.round(264 * scale)}px`);
+                sectionEl.style.setProperty('--card-expansion', `${Math.round(292.5 * scale)}px`);
             } else {
                 const scale = parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
                 const itemWidth = Math.round((landscape ? 400 : 240) * scale);
@@ -2520,6 +2530,7 @@ class HomePage extends Page {
         const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
         const isModern = mediaLayout === 'modern';
         const isExpanded = mediaLayout === 'expanded';
+        const isModernPosters = mediaLayout === 'modern-posters';
         const VIEWPORT_WIDTH = window.innerWidth || 1920;
         const SIDE_PADDING = 60;
         const MAX_VISIBLE = Math.ceil(parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10) * 0.8);
@@ -2527,27 +2538,38 @@ class HomePage extends Page {
         let itemWidth, itemMargin;
 
         if (isExpanded) {
-            const scale = parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.1;
-            const m = scale / 1.5;
+            const scale = parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.2;
 
             if (cardType === 'square' || cardType === 'artist' || (isExpanded && cardType === 'person')) {
-                itemWidth = Math.round(338 * m);
+                itemWidth = Math.round(223 * scale);
             } else {
-                itemWidth = Math.round(600 * m);
+                itemWidth = Math.round(396 * scale);
             }
-            itemMargin = Math.round(40 * m);
+            itemMargin = Math.round(26 * scale);
+        } else if (isModernPosters) {
+            const scale = parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2;
+
+            if (cardType === 'square' || cardType === 'artist') {
+                itemWidth = Math.round(223 * scale);
+                itemMargin = Math.round(26 * scale);
+            } else if (isLandscape) {
+                itemWidth = Math.round(396 * scale);
+                itemMargin = Math.round(26 * scale);
+            } else {
+                itemWidth = Math.round(212 * scale);
+                itemMargin = Math.round(26 * scale);
+            }
         } else if (isModern) {
-            const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3;
-            const m = scale / 1.5;
+            const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.0;
 
             if (isLandscape) {
-                itemWidth = Math.round(600 * m);
+                itemWidth = Math.round(468 * scale);
             } else if (cardType === 'square' || cardType === 'artist') {
-                itemWidth = Math.round(338 * m);
+                itemWidth = Math.round(264 * scale);
             } else {
-                itemWidth = Math.round(225 * m);
+                itemWidth = Math.round(175.5 * scale);
             }
-            itemMargin = Math.round(40 * m);
+            itemMargin = Math.round(31 * scale);
         } else {
             const scale = parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
             itemWidth = Math.round((isLandscape ? 400 : 240) * scale);

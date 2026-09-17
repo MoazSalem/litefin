@@ -302,7 +302,8 @@ class CardRenderer {
         const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows') || 'classic';
         const isModern = mediaLayout === 'modern';
         const isExpanded = mediaLayout === 'expanded';
-        const isModernOrExpanded = isModern || isExpanded;
+        const isModernPosters = mediaLayout === 'modern-posters';
+        const isModernOrExpanded = isModern || isExpanded || isModernPosters;
 
         const libraryThumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
         const isDynamicThumb = (type === 'library' && libraryThumbMode !== 'off') || Boolean(item._dynamicThumbUrl);
@@ -357,9 +358,10 @@ class CardRenderer {
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
             const isArtist = item.Type === 'MusicArtist' || item.Type === 'Artist';
 
-            // In Expanded Posters layout, person/cast/guest star cards use square (1:1) aspect ratio
+            // In Expanded Posters layout, person/cast/guest star cards use square (1:1) aspect ratio.
+            // In Modern Posters layout, cast/crew/guests use portrait posters (2:3).
             if (primaryTag || (itemId && isArtist)) {
-                // Sizing parameters: fetch square preset when in expanded layout
+                // Sizing parameters: fetch square preset only when in expanded layout
                 const params = imageService.getParams(isExpanded ? 'square' : 'poster', contextType);
                 imageUrl = _imgUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
@@ -1223,12 +1225,12 @@ class CardRenderer {
         // 3. In Classic layout ('classic'):
         //    - Standard outside labels underneath cards.
         // ====================================================================
-        const isSquare = type === 'square' || type === 'artist' || (isExpanded && type === 'person');
+        const isSquare = type === 'square' || type === 'artist' || ((isExpanded || isModernPosters) && type === 'person');
         // In vertical 2D grids (!isGrid is false), we disable inside integrated labels
         // and force standard outside labels to keep the entire grid uniform and clean.
-        // In Expanded Posters ('expanded'), titles and subtitles render cleanly outside below cards.
+        // In Expanded Posters ('expanded') & Modern Posters ('modern-posters'), titles and subtitles render cleanly outside below cards.
         const renderInside = isModern && (isLandscape || isSquare || canExpand) && !isGrid;
-        const renderOutside = (!isModern && !isExpanded) || isExpanded || isGrid || (isModern && !isLandscape && !isSquare);
+        const renderOutside = (!isModern && !isExpanded) || isExpanded || isModernPosters || isGrid || (isModern && !isLandscape && !isSquare);
 
         // Final visibility logic (Classic vs Modern vs Expanded)
         // For library cards, inside .card-info is bypassed in favor of clean native artwork or .card-overlay-label on dynamic thumbs
@@ -1336,7 +1338,7 @@ class CardRenderer {
         const hideInitials = options.hideInitials || false;
         const isLibrary = options.isLibrary || item.Type === 'CollectionFolder' || item.CollectionType !== undefined;
         const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
-        const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded';
+        const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded' || mediaLayout === 'modern-posters';
         const isGameItem = CardRenderer.isGame(item);
         const gameIconSvg = isGameItem ? getStaticIcon('detailsIcons', 'gamepad', 'outlined') : '';
 
@@ -1390,7 +1392,8 @@ class CardRenderer {
             const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
             const isModern = mediaLayout === 'modern';
             const isExpanded = mediaLayout === 'expanded';
-            const isSquare = viewMode === 'square' || viewMode === 'artist' || (isExpanded && viewMode === 'person');
+            const isModernPosters = mediaLayout === 'modern-posters';
+            const isSquare = viewMode === 'square' || viewMode === 'artist' || ((isExpanded || isModernPosters) && viewMode === 'person');
             const isIntegratedModern =
                 isModern && (isLandscape || viewMode === 'thumb' || viewMode === 'banner' || isSquare);
             const isPortraitModern = isModern && !isLandscape && !isSquare;

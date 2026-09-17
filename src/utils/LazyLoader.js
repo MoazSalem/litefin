@@ -447,7 +447,7 @@ class LazyLoader {
 
         if (isSupportedParent) {
             const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
-            const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded';
+            const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded' || mediaLayout === 'modern-posters';
 
             parent.classList.remove('skeleton-shimmer');
 
@@ -460,7 +460,8 @@ class LazyLoader {
 
             if (gradNum && initials && name && !parent.querySelector('.media-fallback')) {
                 const hideInitials = img.dataset.fbHideInitials === 'true';
-                const showName = hideInitials || !isModernOrExpanded;
+                const isLibrary = parent.closest('.library-grid, .library-row, .library-content') !== null || parent.dataset?.contextType === 'library';
+                const showName = isLibrary || hideInitials || !isModernOrExpanded;
                 // dataset.* decodes the escaped attribute values back to raw
                 // strings — escape again before insertAdjacentHTML.
                 const fallbackHtml = `
