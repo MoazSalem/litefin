@@ -944,6 +944,11 @@ class CardRenderer {
         // 'artist' is an alias for the square type — same 1:1 aspect ratio card
         if (type === 'square' || type === 'artist') cssClass = 'media-card square';
 
+        // Live TV Channel card classification
+        if (item.Type === 'TvChannel') {
+            cssClass += ' tv-channel-card';
+        }
+
         if (item._isStudioCard || item._isNetworkCard || type === 'logo') {
             cssClass += ' seerr-logo-card';
         }

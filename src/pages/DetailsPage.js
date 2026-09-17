@@ -1176,10 +1176,14 @@ class DetailsPage extends Page {
             posterType = 'square';
 
         // Apply class for CSS aspect ratio
-        posterContainer.classList.remove('landscape', 'square');
+        posterContainer.classList.remove('landscape', 'square', 'tv-channel-poster');
         if (posterType !== 'poster') {
             posterContainer.classList.add(posterType);
         }
+        if (item.Type === 'TvChannel') {
+            posterContainer.classList.add('tv-channel-poster');
+        }
+        posterContainer.setAttribute('data-type', item.Type || '');
 
         if (item.ImageTags && item.ImageTags.Primary) {
             const params = imageService.getParams('details-poster');

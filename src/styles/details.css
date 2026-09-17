@@ -285,6 +285,24 @@
     transition: opacity 0.3s ease-in;
 }
 
+/*
+ * ============================================================================
+ * Live TV Channel Hero Poster (Apple HIG Clean Icon Aesthetics)
+ * ============================================================================
+ * Preserve channel logo aspect ratio with contain and centered breathing room.
+ * Matches .media-card channel styling for complete visual harmony.
+ * ============================================================================
+ */
+.hero-poster.tv-channel-poster img,
+.hero-poster[data-type="TvChannel"] img,
+.hero-poster.square[data-type="TvChannel"] img,
+.details-page[data-item-type="TvChannel"] .hero-poster img {
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+}
+
 .hero-poster img.loaded {
     opacity: 1;
 }

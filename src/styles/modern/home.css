@@ -188,6 +188,15 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
     transition: opacity 0.3s ease;
 }
 
+/* Live TV Channel Card Contain Override for Modern Layout */
+html[data-layout-media-rows="modern"] .media-card[data-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="modern"] .media-card[data-item-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="modern"] .media-card.tv-channel-card .card-image img {
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+}
+
 /* Layer Stack: 
    1. Thumb (Back)
    2. Poster (Front)

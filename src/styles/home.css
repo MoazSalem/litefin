@@ -239,6 +239,24 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
     transition: opacity 150ms ease-out;
 }
 
+/*
+ * ============================================================================
+ * LIVE TV CHANNEL MEDIA CARDS (Apple HIG Clean Icon Aesthetics)
+ * ============================================================================
+ * Channel logos come in varying aspect ratios (often transparent PNG logos).
+ * Using contain with generous 24px breathing room ensures crisp logo presentation
+ * without aggressive cropping or distortion.
+ * ============================================================================
+ */
+.media-card[data-type="TvChannel"] .card-image img,
+.media-card[data-item-type="TvChannel"] .card-image img,
+.media-card.tv-channel-card .card-image img {
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+    background: rgba(0, 0, 0, .5);
+}
+
 .media-card .card-image img.loaded {
     opacity: 1;
 }

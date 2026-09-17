@@ -571,6 +571,15 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     border-radius: calc(var(--jf-border-radius-lg) - 3px);
 }
 
+/* Live TV Channel Card Contain Override for Library Grids */
+.library-grid .media-card[data-type="TvChannel"] .card-image img,
+.library-grid .media-card[data-item-type="TvChannel"] .card-image img,
+.library-grid .media-card.tv-channel-card .card-image img {
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+}
+
 /* ── View mode: Small Poster ─────────────────────────────────────── */
 /* Tighter portrait cards (160px) — exactly 9 per 1080p row. 
    Calculated: 9 * 160px + 8 * 20px = 1600px block width. 
