@@ -4169,9 +4169,22 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
             'ass-renderer-select',
             [
-                { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
-                { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' },
-                { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
+                // Prioritize libass-wasm as the recommended option on devices with WebAssembly support
+                { 
+                    value: 'libass-wasm', 
+                    label: platformInfo.hasWasmSupport 
+                        ? 'libass-wasm (WebGL/WASM, Recommended)' 
+                        : 'libass-wasm (WebGL/WASM, Unsupported)' 
+                },
+                // libjass is the DOM fallback for older engines lacking WebAssembly (Tizen 3/4, WebOS <= 4.0)
+                { 
+                    value: 'libjass', 
+                    label: platformInfo.hasWasmSupport 
+                        ? 'libjass (DOM, Older TV Compatible)' 
+                        : 'libjass (DOM, Recommended / Older TV)' 
+                },
+                // ass.js lightweight experimental fallback
+                { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' }
             ],
             PlayerSettings.get('assRenderer')
         )}

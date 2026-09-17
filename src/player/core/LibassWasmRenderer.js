@@ -19,6 +19,7 @@ import FontLoader from '../../utils/FontLoader.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 const log = logger.create('LibassWasmRenderer');
 
@@ -60,26 +61,19 @@ function getAvailableFonts() {
 
 export default class LibassWasmRenderer {
     /**
-     * Runtime capability check for WebAssembly support.
-     * Evaluates whether the current browser engine possesses WebAssembly support
-     * and is capable of compiling a basic WASM binary.
+     * =========================================================================
+     * WebAssembly Support Verification
+     * =========================================================================
+     * Runtime capability check for WebAssembly execution.
+     * Evaluates whether the underlying platform runtime has full WebAssembly
+     * execution support (present by default on Chromium 57+).
+     *
+     * Delegates to centralized platformInfo.hasWasmSupport detection.
      *
      * @returns {boolean} True if WebAssembly execution is supported.
      */
     static isSupported() {
-        try {
-            // Validate the presence of the global WebAssembly object and instantiate API
-            if (typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function') {
-                // Instantiate a minimal 8-byte WASM binary module to verify runtime compilation capability
-                const module = new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
-                if (module instanceof WebAssembly.Module) {
-                    return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
-                }
-            }
-        } catch (e) {
-            // Trapped execution or instantiation failure indicates lack of WebAssembly support
-        }
-        return false;
+        return platformInfo.hasWasmSupport;
     }
 
     /**
