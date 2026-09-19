@@ -170,6 +170,13 @@ export class TizenAVPlayer {
         // fallback and forces the gate open after a short window.
         this._seekBufferTimeoutId = null;
 
+        // ── DirectPlay Seek Verification Guard ───────────────────────────────
+        // When DirectPlaying raw progressive containers (such as MKVs with
+        // missing SeekHead cues), AVPlay may accept seekTo() without actually
+        // jumping or may silently fail to decode from the target keyframe.
+        // This timer verifies playhead arrival and triggers remux escalation.
+        this._directSeekVerifyTimeout = null;
+
         // ── Buffering Deadlock Detection ─────────────────────────────────────
         //
         // Certain MKV files contain audio tracks with a "delay relative to video"
@@ -846,9 +853,24 @@ export class TizenAVPlayer {
                         (this._pendingSubtitleIndex === null || this._pendingSubtitleIndex === -1)) {
                         const seekMs = this._pendingSeekMs;
                         this._pendingSeekMs = null;
+                        const resumeTicks = Math.round(seekMs * 10000);
                         log.info(`Resume seek to ${seekMs}ms (post first frame, no subtitle pending)`);
+
+                        // Arm DirectPlay seek verification guard
+                        this._verifyDirectPlaySeek(resumeTicks);
+
                         this._safeSeekTo(seekMs, null, (e) => {
                             log.warn('Resume seek failed:', e);
+                            const isDirectPlay = this._currentPlayOptions?.playMethod === 'DirectPlay';
+                            const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || Boolean(this._currentPlayOptions?.mediaSource?.LiveStreamId);
+                            // On DirectPlay seek error past 5s, escalate to server remuxing
+                            if (isDirectPlay && !isLive && seekMs >= 5000) {
+                                log.warn(`TizenAVPlayer: Resume seek to ${seekMs}ms failed natively — escalating to Remux`);
+                                this.onEvent({
+                                    type: 'resumeseekfailed',
+                                    data: { targetPositionTicks: resumeTicks }
+                                });
+                            }
                         });
                     }
                 }
@@ -917,9 +939,24 @@ export class TizenAVPlayer {
                             if (this._pendingSeekMs !== null) {
                                 const stuckSeekMs = this._pendingSeekMs;
                                 this._pendingSeekMs = null;
+                                const resumeTicks = Math.round(stuckSeekMs * 10000);
                                 log.warn(`[SubtitleSeek] Subtitle timed out — flushing deferred seek to ${stuckSeekMs}ms`);
+
+                                // Arm DirectPlay seek verification guard
+                                this._verifyDirectPlaySeek(resumeTicks);
+
                                 this._safeSeekTo(stuckSeekMs, null, (e) => {
                                     log.warn('[SubtitleSeek] Deferred seek after subtitle timeout failed:', e);
+                                    const isDirectPlay = this._currentPlayOptions?.playMethod === 'DirectPlay';
+                                    const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || Boolean(this._currentPlayOptions?.mediaSource?.LiveStreamId);
+                                    // If hardware seek fails on DirectPlay, signal remux fallback
+                                    if (isDirectPlay && !isLive && stuckSeekMs >= 5000) {
+                                        log.warn(`TizenAVPlayer: Deferred seek to ${stuckSeekMs}ms failed — escalating to Remux`);
+                                        this.onEvent({
+                                            type: 'resumeseekfailed',
+                                            data: { targetPositionTicks: resumeTicks }
+                                        });
+                                    }
                                 });
                             }
                         }
@@ -1174,8 +1211,12 @@ export class TizenAVPlayer {
                                 const seekMs = this._pendingSeekMs;
                                 const seekSubIndex = tizenSubIndex; // capture for post-seek closure
                                 this._pendingSeekMs = null; // consume now to prevent double-apply
+                                const resumeTicks = Math.round(seekMs * 10000);
 
                                 log.info(`[SubtitleSeek] Subtitle confirmed — seeking to resume position ${seekMs}ms (deferred via setTimeout to decouple from subtitle call stack)`);
+
+                                // Arm DirectPlay seek verification guard
+                                this._verifyDirectPlaySeek(resumeTicks);
 
                                 // Defer the seek to decouple it from the subtitle call chain.
                                 // After a close+open cycle on resume, the decoder is in a
@@ -1213,6 +1254,16 @@ export class TizenAVPlayer {
                                         },
                                         (e) => {
                                             log.warn('[SubtitleSeek] Deferred resume seek failed:', e);
+                                            const isDirectPlay = this._currentPlayOptions?.playMethod === 'DirectPlay';
+                                            const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || Boolean(this._currentPlayOptions?.mediaSource?.LiveStreamId);
+                                            // Trigger server remux if direct progressive seek is unsupported
+                                            if (isDirectPlay && !isLive && seekMs >= 5000) {
+                                                log.warn(`TizenAVPlayer: DirectPlay resume seek to ${seekMs}ms failed natively — escalating to Remux`);
+                                                this.onEvent({
+                                                    type: 'resumeseekfailed',
+                                                    data: { targetPositionTicks: resumeTicks }
+                                                });
+                                            }
                                         }
                                     );
                                 }, 0);
@@ -1554,6 +1605,59 @@ export class TizenAVPlayer {
     }
 
     /**
+     * ── DirectPlay Seek Verification Guard ──────────────────────────────────
+     * When DirectPlaying raw progressive media (such as MKV containers missing
+     * SeekHead Cues or MP4s with fragmented indices), Samsung AVPlay's hardware
+     * demuxer may silently fail to seek, remaining stuck near 0s or rolling back.
+     *
+     * If the current stream is DirectPlay (non-live, target >= 5s), we schedule
+     * a 2.5s verification check. If the hardware playhead has not arrived near
+     * the requested target, we emit 'resumeseekfailed' to trigger JellyfinPlayer's
+     * automatic Remux fallback path.
+     *
+     * @private
+     * @param {number} positionTicks - Target position in ticks
+     */
+    _verifyDirectPlaySeek(positionTicks) {
+        // DirectPlay check: transcode / HLS streams handle seeking server-side
+        const isDirectPlay = this._currentPlayOptions?.playMethod === 'DirectPlay';
+        // Live streams cannot be seek-verified using absolute timestamps
+        const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || Boolean(this._currentPlayOptions?.mediaSource?.LiveStreamId);
+        const targetSeconds = positionTicks / 10000000;
+
+        // Skip verification for HLS, Live TV, or near-zero seeks (< 5s)
+        if (!isDirectPlay || isLive || targetSeconds < 5) {
+            return;
+        }
+
+        // Cancel previous pending verification check
+        if (this._directSeekVerifyTimeout !== null) {
+            clearTimeout(this._directSeekVerifyTimeout);
+            this._directSeekVerifyTimeout = null;
+        }
+
+        // Schedule verification check after 2.5s settling time
+        this._directSeekVerifyTimeout = setTimeout(() => {
+            this._directSeekVerifyTimeout = null;
+            if (!this._avplay || !this._isPrepared) return;
+
+            // Measure actual hardware decoder position vs target
+            const curSec = this.getCurrentTime();
+            const drift = Math.abs(curSec - targetSeconds);
+            // Allow 15s keyframe drift tolerance (typical max GOP length)
+            const isNear = drift < 15 || curSec >= (targetSeconds - 15);
+
+            if (!isNear) {
+                log.warn(`TizenAVPlayer: DirectPlay seek to ${targetSeconds.toFixed(2)}s failed (stuck at ${curSec.toFixed(2)}s) — emitting resumeseekfailed for Remux fallback`);
+                this.onEvent({
+                    type: 'resumeseekfailed',
+                    data: { targetPositionTicks: positionTicks }
+                });
+            }
+        }, 2500);
+    }
+
+    /**
      * Re-assert the active native subtitle track after a seek completes.
      * Some firmware drops the TEXT track selection during buffer flush, causing
      * subtitles to go silent even though setSilentSubtitle(false) was called.
@@ -1862,6 +1966,12 @@ export class TizenAVPlayer {
             this._seekBufferTimeoutId = null;
         }
 
+        // Clear DirectPlay seek verification guard timer
+        if (this._directSeekVerifyTimeout !== null) {
+            clearTimeout(this._directSeekVerifyTimeout);
+            this._directSeekVerifyTimeout = null;
+        }
+
         // Unconditionally cancel the seek safety timer on stop to avoid fires
         // referencing a dead, stopped, or closed player instance
         if (this._seekSafetyTimeoutId !== null) {
@@ -2071,6 +2181,9 @@ export class TizenAVPlayer {
             this._bufferingCompleteDuringSeek = false;
             this._isNativeBuffering = false;
 
+            // Arm DirectPlay seek verification guard
+            this._verifyDirectPlaySeek(positionTicks);
+
             // ── Cancel the subtitle confirmation timer ───────────────────────────
             // The 4-second re-apply timer calls setSelectTrack() + setSilentSubtitle(),
             // which are illegal during seekTo(). Cancel it proactively so there's
@@ -2233,6 +2346,23 @@ export class TizenAVPlayer {
                     if (this._bufferingCompleteDuringSeek) {
                         this._bufferingComplete = true;
                         this._bufferingCompleteDuringSeek = false;
+                    }
+
+                    // DirectPlay seek failure escalation:
+                    // If hardware demuxer rejects seekTo on raw container, escalate to Remux
+                    const isDirectPlay = this._currentPlayOptions?.playMethod === 'DirectPlay';
+                    const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || Boolean(this._currentPlayOptions?.mediaSource?.LiveStreamId);
+                    const targetSeconds = positionTicks / 10000000;
+                    if (isDirectPlay && !isLive && targetSeconds >= 5) {
+                        log.warn(`TizenAVPlayer: DirectPlay seek to ${targetSeconds.toFixed(2)}s failed natively — emitting resumeseekfailed for Remux fallback`);
+                        if (this._directSeekVerifyTimeout !== null) {
+                            clearTimeout(this._directSeekVerifyTimeout);
+                            this._directSeekVerifyTimeout = null;
+                        }
+                        this.onEvent({
+                            type: 'resumeseekfailed',
+                            data: { targetPositionTicks: positionTicks }
+                        });
                     }
 
                     // Apply pending operation on error too
