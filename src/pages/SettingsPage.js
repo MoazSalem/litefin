@@ -35,6 +35,7 @@ import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
 import { seerr } from '../api/seerrClient.js';
 import { escapeHtml } from '../utils/Utils.js';
+import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('SettingsPage');
 
@@ -246,7 +247,6 @@ class SettingsPage extends Page {
      * Render the admin-only Libraries management tab.
      * Includes a global library scan button and a live list of server libraries
      * with individual metadata refresh options.
-     * Follows Apple HIG minimal design with zero blur and zero shadows.
      * @returns {string} HTML markup for the tab
      */
     _renderLibrariesTab() {
@@ -791,6 +791,9 @@ class SettingsPage extends Page {
                     // Tinted background theme mapping closely with specific selected colors.
                     { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
 
+                    // Light Tinted theme providing a luminous, warm tinted base derived from accent color.
+                    { value: 'tinted-light', label: i18n.t('ThemeTintedLight') || 'Light Tinted' },
+
                     // Black OLED theme for extreme battery saving and deep contrast profiles.
                     { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
 
@@ -830,6 +833,20 @@ class SettingsPage extends Page {
                                 </button>
                             `;
             })()}
+                    </div>
+                </div>
+
+                <!-- Lighter Background Mode (Tinted and Classic themes only) -->
+                <div class="setting-item ${!['tinted', 'tinted-light', 'classic-dark', 'classic-light'].includes(layoutManager.getThemeMode()) ? 'hidden' : ''}" id="lighter-background-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LighterBackground">${i18n.t('LighterBackground') || 'Lighter Background'}</span>
+                        <span class="setting-description" data-i18n="LighterBackgroundDescription">${i18n.t('LighterBackgroundDescription') || 'Swap the primary background with the alternate background for a lighter shade.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getLighterBackground() ? 'active' : ''}" 
+                                id="toggle-lighter-background" 
+                                tabindex="0">
+                        </button>
                     </div>
                 </div>
 
@@ -1439,15 +1456,32 @@ class SettingsPage extends Page {
             'media-rows-layout-select',
             [
                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
-                { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' }
+                { value: 'modern', label: i18n.t('LayoutModern') || 'Modern' },
+                { value: 'expanded', label: i18n.t('LayoutExpandedPosters') || 'Modern Cards' },
+                { value: 'modern-posters', label: i18n.t('LayoutModernPosters') || 'Modern Posters' },
+                { value: 'expanding', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' }
             ],
             layoutManager.getMediaRowsLayout() || 'classic'
         )}
                     </div>
                 </div>
 
-                <!-- Force Expandable Posters option: hidden unless media rows layout is modern/expanding posters -->
-                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'modern' ? '' : 'hidden'}">
+                <!-- Prefer Backdrops Over Thumbs option: hidden unless media rows layout is expanding or expanded -->
+                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'expanding' || layoutManager.getMediaRowsLayout() === 'expanded' ? '' : 'hidden'}" id="item-prefer-backdrops-over-thumbs">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferBackdropsOverThumbs">${i18n.t('PreferBackdropsOverThumbs') || 'Use Backdrops Instead of Thumbs'}</span>
+                        <span class="setting-description" data-i18n="PreferBackdropsOverThumbsDescription">${i18n.t('PreferBackdropsOverThumbsDescription') || 'Prefer backdrop artwork over thumbnails for wide cards in Expanding and Expanded layouts.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:preferBackdropsOverThumbs') === 'true' ? 'active' : ''}" 
+                                 id="toggle-prefer-backdrops-over-thumbs" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Force Expandable Posters option: hidden unless media rows layout is expanding posters -->
+                <div class="setting-item ${layoutManager.getMediaRowsLayout() === 'expanding' ? '' : 'hidden'}" id="item-home-force-expandable-posters">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
                         <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
@@ -1626,18 +1660,82 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${(() => {
-                const isModernLayout = layoutManager.getMediaRowsLayout() === 'modern';
-                const cardSizeOptions = isModernLayout
-                    ? [
-                        { value: '1.2', label: '120%' },
+                const mediaRowsLayout = layoutManager.getMediaRowsLayout();
+                const isExpanded = mediaRowsLayout === 'expanded';
+                const isModernPosters = mediaRowsLayout === 'modern-posters';
+                const isModern = mediaRowsLayout === 'modern';
+                const isExpanding = mediaRowsLayout === 'expanding';
+
+                let cardSizeOptions;
+                let defaultValue;
+                let storageKey;
+
+                if (isExpanded) {
+                    cardSizeOptions = [
+                        { value: '1', label: '100%' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110%' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120% (Default)' },
                         { value: '1.25', label: '125%' },
-                        { value: '1.3', label: '130% (Default)' },
+                        { value: '1.3', label: '130%' },
                         { value: '1.35', label: '135%' },
                         { value: '1.4', label: '140%' },
                         { value: '1.45', label: '145%' },
                         { value: '1.5', label: '150%' }
-                    ]
-                    : [
+                    ];
+                    defaultValue = '1.2';
+                    storageKey = 'pref:expandedCardSizeScale';
+                } else if (isModernPosters) {
+                    cardSizeOptions = [
+                        { value: '1', label: '100%' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110%' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120% (Default)' },
+                        { value: '1.25', label: '125%' },
+                        { value: '1.3', label: '130%' },
+                        { value: '1.35', label: '135%' },
+                        { value: '1.4', label: '140%' },
+                        { value: '1.45', label: '145%' },
+                        { value: '1.5', label: '150%' }
+                    ];
+                    defaultValue = '1.2';
+                    storageKey = 'pref:modernPostersCardSizeScale';
+                } else if (isModern) {
+                    cardSizeOptions = [
+                        { value: '1', label: '100%' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110%' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120% (Default)' },
+                        { value: '1.25', label: '125%' },
+                        { value: '1.3', label: '130%' },
+                        { value: '1.35', label: '135%' },
+                        { value: '1.4', label: '140%' },
+                        { value: '1.45', label: '145%' },
+                        { value: '1.5', label: '150%' }
+                    ];
+                    defaultValue = '1.2';
+                    storageKey = 'pref:modernCardSizeScale';
+                } else if (isExpanding) {
+                    cardSizeOptions = [
+                        { value: '1', label: '100% (Default)' },
+                        { value: '1.05', label: '105%' },
+                        { value: '1.1', label: '110%' },
+                        { value: '1.15', label: '115%' },
+                        { value: '1.2', label: '120%' },
+                        { value: '1.25', label: '125%' },
+                        { value: '1.3', label: '130%' },
+                        { value: '1.35', label: '135%' },
+                        { value: '1.4', label: '140%' },
+                        { value: '1.45', label: '145%' },
+                        { value: '1.5', label: '150%' }
+                    ];
+                    defaultValue = '1';
+                    storageKey = 'pref:expandingCardSizeScale';
+                } else {
+                    cardSizeOptions = [
                         { value: '1', label: '100% (Small / Default)' },
                         { value: '1.05', label: '105%' },
                         { value: '1.1', label: '110%' },
@@ -1650,10 +1748,10 @@ class SettingsPage extends Page {
                         { value: '1.45', label: '145%' },
                         { value: '1.5', label: '150%' }
                     ];
-                const defaultValue = isModernLayout ? '1.3' : '1';
-                const storageKey = isModernLayout
-                    ? 'pref:modernCardSizeScale'
-                    : 'pref:classicCardSizeScale';
+                    defaultValue = '1';
+                    storageKey = 'pref:classicCardSizeScale';
+                }
+
                 return this._renderDropdown(
                     'classic-card-size-scale-select',
                     cardSizeOptions,
@@ -1901,13 +1999,13 @@ class SettingsPage extends Page {
                 </div>
 
                 ${(() => {
-                    // Check if both media types are using cinematic backdrops; hide title style dropdown only if both are
-                    const movieLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
-                    const seasonLayout = storage.getItem('pref:seasonEpisodeDetailsLayout') || movieLayout;
-                    const isMovieBackdrop = movieLayout === 'backdropMinimal' || movieLayout === 'backdropLeft';
-                    const isSeasonBackdrop = seasonLayout === 'backdropMinimal' || seasonLayout === 'backdropLeft';
-                    const hideTitleStyle = isMovieBackdrop && isSeasonBackdrop;
-                    return `
+                // Check if both media types are using cinematic backdrops; hide title style dropdown only if both are
+                const movieLayout = storage.getItem('pref:detailsLayout') || 'posterLeft';
+                const seasonLayout = storage.getItem('pref:seasonEpisodeDetailsLayout') || movieLayout;
+                const isMovieBackdrop = movieLayout === 'backdropMinimal' || movieLayout === 'backdropLeft';
+                const isSeasonBackdrop = seasonLayout === 'backdropMinimal' || seasonLayout === 'backdropLeft';
+                const hideTitleStyle = isMovieBackdrop && isSeasonBackdrop;
+                return `
                 <div class="setting-item ${hideTitleStyle ? 'hidden' : ''}" id="details-title-style-container">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
@@ -1915,26 +2013,26 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                'details-title-style-select',
-                [
-                    {
-                        value: 'both',
-                        label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon'
-                    },
-                    {
-                        value: 'logo-only',
-                        label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)'
-                    },
-                    {
-                        value: 'text-only',
-                        label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title'
-                    }
-                ],
-                storage.getItem('pref:detailsTitleStyle') || 'both'
-            )}
+                    'details-title-style-select',
+                    [
+                        {
+                            value: 'both',
+                            label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon'
+                        },
+                        {
+                            value: 'logo-only',
+                            label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)'
+                        },
+                        {
+                            value: 'text-only',
+                            label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title'
+                        }
+                    ],
+                    storage.getItem('pref:detailsTitleStyle') || 'both'
+                )}
                     </div>
                 </div>`;
-                })()}
+            })()}
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -2627,7 +2725,25 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item" id="hero-carousel-indicator-animation-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                <div class="setting-item" id="hero-carousel-indicator-style-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselIndicatorStyle">${i18n.t('HeroCarouselIndicatorStyle') || 'Indicator Style'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselIndicatorStyleDescription">${i18n.t('HeroCarouselIndicatorStyleDescription') || 'Visual style of the hero carousel position indicators.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'hero-carousel-indicator-style-select',
+                [
+                    { value: 'dots', label: i18n.t('IndicatorStyleDots') || 'Simple Dots' },
+                    { value: 'lines', label: i18n.t('IndicatorStyleLines') || 'Lines' },
+                    { value: 'progress', label: i18n.t('IndicatorStyleProgress') || 'Progress Pill' }
+                ],
+                storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots'
+            )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-indicator-animation-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' && (storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots') === 'progress' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HeroCarouselIndicatorAnimation">${i18n.t('HeroCarouselIndicatorAnimation') || 'Indicator Animation'}</span>
                         <span class="setting-description" data-i18n="HeroCarouselIndicatorAnimationDescription">${i18n.t('HeroCarouselIndicatorAnimationDescription') || 'Enable the progress bar animation for the carousel dots.'}</span>
@@ -4169,9 +4285,22 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
             'ass-renderer-select',
             [
-                { value: 'libjass', label: 'libjass (DOM, Older TV Compatible)' },
-                { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' },
-                { value: 'libass-wasm', label: 'libass-wasm (WebGL/WASM, Custom Octopus)' }
+                // Prioritize libass-wasm as the recommended option on devices with WebAssembly support
+                {
+                    value: 'libass-wasm',
+                    label: platformInfo.hasWasmSupport
+                        ? 'libass-wasm (WebGL/WASM, Recommended)'
+                        : 'libass-wasm (WebGL/WASM, Unsupported)'
+                },
+                // libjass is the DOM fallback for older engines lacking WebAssembly (Tizen 3/4, WebOS <= 4.0)
+                {
+                    value: 'libjass',
+                    label: platformInfo.hasWasmSupport
+                        ? 'libjass (DOM, Older TV Compatible)'
+                        : 'libjass (DOM, Recommended / Older TV)'
+                },
+                // ass.js lightweight experimental fallback
+                { value: 'assjs', label: 'ass.js (Lightweight DOM, Experimental)' }
             ],
             PlayerSettings.get('assRenderer')
         )}
@@ -6382,6 +6511,24 @@ class SettingsPage extends Page {
 
         // Initial visibility check for Details Page Title Style setting based on current layout settings
         this._updateDetailsTitleStyleVisibility();
+
+        // Initial visibility check for Lighter Background setting based on active theme
+        this._updateLighterBackgroundVisibility();
+    }
+
+    /**
+     * Updates visibility of the lighter background toggle based on active theme mode.
+     * Only available for tinted and classic themes (tinted, tinted-light, classic-dark, classic-light).
+     * @private
+     */
+    _updateLighterBackgroundVisibility() {
+        const item = this.$('#lighter-background-item');
+        if (item) {
+            const currentMode = layoutManager.getThemeMode();
+            const isSupported = ['tinted', 'tinted-light', 'classic-dark', 'classic-light'].includes(currentMode);
+            item.classList.toggle('hidden', !isSupported);
+            focusManager.invalidateCache('settings-content');
+        }
     }
 
     _updateDetailsTitleStyleVisibility() {
@@ -6628,6 +6775,26 @@ class SettingsPage extends Page {
             });
         }
 
+        // ==========================================
+        // TOGGLE LIGHTER BACKGROUND (Tinted & Classic themes)
+        // ==========================================
+        // Controls whether the main canvas background is swapped with the
+        // alternate background for a brighter presentation on supported themes.
+        const lighterBgBtn = this.$('#toggle-lighter-background');
+        if (lighterBgBtn) {
+            lighterBgBtn.addEventListener('click', () => {
+                // Invert the current lighter background setting state
+                const newValue = !layoutManager.getLighterBackground();
+
+                // Persist and apply changes via LayoutManager
+                layoutManager.setLighterBackground(newValue);
+
+                // Update tactile switch element visual state
+                lighterBgBtn.classList.toggle('active', newValue);
+                log.info(`Lighter Background set to: ${newValue}`);
+            });
+        }
+
         // Toggle Enable Collection Rows in Home Screen
         const enableCollectionRowsBtn = this.$('#toggle-enable-collection-rows');
         const moviesColItem = this.$('#trending-movies-collection-item');
@@ -6770,7 +6937,8 @@ class SettingsPage extends Page {
                 forceExpandablePostersBtn.classList.toggle('active', newValue);
                 log.info(`Force Expandable Posters on Home set to: ${newValue}`);
 
-                // Clear the homepage pageCache so the card layouts refresh instantly on navigation
+                // Clear the homepage pageCache and CardRenderer cache so the card layouts refresh instantly on navigation
+                CardRenderer.clearCache();
                 state.delete('home:pageCache');
             });
         }
@@ -7037,11 +7205,15 @@ class SettingsPage extends Page {
                 const styleItem = this.$('#hero-carousel-style-item');
                 const zoomItem = this.$('#hero-carousel-zoom-item');
                 const heroQualityItem = this.$('#hero-image-quality-item');
+                const indicatorStyleItem = this.$('#hero-carousel-indicator-style-item');
                 const indicatorAnimItem = this.$('#hero-carousel-indicator-animation-item');
                 const intervalItem = this.$('#hero-carousel-interval-item');
                 const countItem = this.$('#hero-carousel-count-item');
                 const mdbItem = this.$('#hero-carousel-mdb-item');
                 const ignoreWatchedItem = this.$('#hero-carousel-ignore-watched-item');
+
+                // Read current indicator style to determine if animation toggle is applicable
+                const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
 
                 // Apply transitions/display toggles based on the master toggle value.
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
@@ -7049,7 +7221,8 @@ class SettingsPage extends Page {
                 if (styleItem) styleItem.style.display = newValue ? '' : 'none';
                 if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
                 if (heroQualityItem) heroQualityItem.style.display = newValue ? '' : 'none';
-                if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
+                if (indicatorStyleItem) indicatorStyleItem.style.display = newValue ? '' : 'none';
+                if (indicatorAnimItem) indicatorAnimItem.style.display = newValue && indicatorStyle === 'progress' ? '' : 'none';
                 if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
                 if (countItem) countItem.style.display = newValue ? '' : 'none';
 
@@ -7374,6 +7547,19 @@ class SettingsPage extends Page {
 
                 // Clear the homepage pageCache to refresh randomized hero pool selections
                 state.delete('home:pageCache');
+            });
+        }
+
+        // Toggle Prefer Backdrops Over Thumbs (Wide Cards)
+        const preferBackdropsBtn = this.$('#toggle-prefer-backdrops-over-thumbs');
+        if (preferBackdropsBtn) {
+            preferBackdropsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:preferBackdropsOverThumbs') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:preferBackdropsOverThumbs', newValue.toString());
+                preferBackdropsBtn.classList.toggle('active', newValue);
+                CardRenderer.clearCache();
+                log.info(`Prefer Backdrops Over Thumbs set to: ${newValue}`);
             });
         }
 
@@ -8965,10 +9151,14 @@ class SettingsPage extends Page {
             'login-page-layout-select': { key: 'pref:loginPageLayout', type: 'local', triggerEvent: true },
             'sidebar-layout-select': { key: 'pref:sidebarLayoutMode', type: 'local', triggerEvent: true },
             'classic-card-size-scale-select': {
-                key:
-                    layoutManager.getMediaRowsLayout() === 'modern'
-                        ? 'pref:modernCardSizeScale'
-                        : 'pref:classicCardSizeScale',
+                key: (() => {
+                    const layout = layoutManager.getMediaRowsLayout();
+                    if (layout === 'expanded') return 'pref:expandedCardSizeScale';
+                    if (layout === 'modern-posters') return 'pref:modernPostersCardSizeScale';
+                    if (layout === 'modern') return 'pref:modernCardSizeScale';
+                    if (layout === 'expanding') return 'pref:expandingCardSizeScale';
+                    return 'pref:classicCardSizeScale';
+                })(),
                 type: 'local',
                 triggerEvent: true
             },
@@ -9089,6 +9279,7 @@ class SettingsPage extends Page {
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
+            'hero-carousel-indicator-style-select': { key: 'pref:heroCarouselIndicatorStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
@@ -9231,6 +9422,7 @@ class SettingsPage extends Page {
                             layoutManager.setOsdSeekBarProgressColor(newValue);
                         } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
+                            this._updateLighterBackgroundVisibility();
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
                             layoutManager.setUiFont(newValue);
@@ -9243,6 +9435,17 @@ class SettingsPage extends Page {
                             layoutManager.setTextScale(parseFloat(newValue));
                         } else if (id === 'media-rows-layout-select') {
                             layoutManager.setMediaRowsLayout(newValue);
+                            if (newValue === 'expanded') {
+                                storage.setItem('pref:expandedCardSizeScale', '1.2');
+                            } else if (newValue === 'modern-posters') {
+                                storage.setItem('pref:modernPostersCardSizeScale', '1.2');
+                            } else if (newValue === 'modern') {
+                                storage.setItem('pref:modernCardSizeScale', '1.2');
+                            } else if (newValue === 'expanding') {
+                                storage.setItem('pref:expandingCardSizeScale', '1');
+                            } else if (newValue === 'classic') {
+                                storage.setItem('pref:classicCardSizeScale', '1');
+                            }
                             this._triggerHardReload();
                         } else if (id === 'login-page-layout-select') {
                             layoutManager.setLoginPageLayout(newValue);
@@ -9309,6 +9512,7 @@ class SettingsPage extends Page {
                                 'pref:homeRowsLimit',
                                 'pref:nextUpMaxDays',
                                 'pref:heroCarouselStyle',
+                                'pref:heroCarouselIndicatorStyle',
                                 'pref:heroCarouselCount',
                                 'pref:heroCarouselInterval'
                             ];
@@ -9317,6 +9521,14 @@ class SettingsPage extends Page {
                                     `Invalidating home page cache due to local setting change: ${settingConfig.key}`
                                 );
                                 state.delete('home:pageCache');
+                            }
+
+                            if (settingConfig.key === 'pref:heroCarouselIndicatorStyle') {
+                                const animToggleItem = this.$('#hero-carousel-indicator-animation-item');
+                                if (animToggleItem) {
+                                    const isCarouselEnabled = storage.getItem('pref:heroCarousel') !== 'false';
+                                    animToggleItem.style.display = isCarouselEnabled && newValue === 'progress' ? '' : 'none';
+                                }
                             }
 
                             if (settingConfig.key === 'pref:detailsLayout' || settingConfig.key === 'pref:seasonEpisodeDetailsLayout') {
@@ -9333,7 +9545,9 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'layout_direction' ||
                                 settingConfig.key === 'app_language' ||
                                 settingConfig.key === 'pref:classicCardSizeScale' ||
-                                settingConfig.key === 'pref:modernCardSizeScale'
+                                settingConfig.key === 'pref:modernCardSizeScale' ||
+                                settingConfig.key === 'pref:expandedCardSizeScale' ||
+                                settingConfig.key === 'pref:modernPostersCardSizeScale'
                             ) {
                                 this._triggerHardReload();
                             }
@@ -9352,6 +9566,7 @@ class SettingsPage extends Page {
                                     pageCache.thumbUrls = {};
                                     state.set('home:pageCache', pageCache);
                                 }
+                                CardRenderer.clearCache();
                             }
 
                             if (id === 'screensaver-type-select') {

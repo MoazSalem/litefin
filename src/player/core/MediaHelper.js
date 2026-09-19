@@ -71,8 +71,8 @@ export const MediaHelper = {
             // Any source that requires opening or has a live stream ID must be proxied by the server
             const requiresServerProxy = mediaSource.RequiresOpening || mediaSource.LiveStreamId || (mediaSource.Path &&
                 (mediaSource.Path.includes('127.0.0.1') ||
-                 mediaSource.Path.includes('localhost') ||
-                 mediaSource.Path.includes('LiveStreamFiles')));
+                    mediaSource.Path.includes('localhost') ||
+                    mediaSource.Path.includes('LiveStreamFiles')));
 
             // ================================================================
             // PROTOCOL DETECTION & ROUTING:
@@ -88,7 +88,7 @@ export const MediaHelper = {
             // ================================================================
             const isHttpProxy = mediaSource.Protocol === 'Http' && requiresServerProxy;
             const hasTranscodeReasons = mediaSource.TranscodingUrl && mediaSource.TranscodingUrl.includes('TranscodeReasons=');
-            
+
             const needsLiveProxy = isHttpProxy && !hasTranscodeReasons;
 
             if (needsLiveProxy) {
@@ -139,19 +139,19 @@ export const MediaHelper = {
                     isHls = true;
                 }
 
-            // ----------------------------------------------------------------
-            // SPECIAL CASE: Remote/external HTTP sources (e.g. publicly-hosted
-            // IPTV with a direct URL). These are NOT loopback and should be
-            // played directly from the source URL.
-            // ----------------------------------------------------------------
+                // ----------------------------------------------------------------
+                // SPECIAL CASE: Remote/external HTTP sources (e.g. publicly-hosted
+                // IPTV with a direct URL). These are NOT loopback and should be
+                // played directly from the source URL.
+                // ----------------------------------------------------------------
             } else if (mediaSource.IsRemote && mediaSource.Protocol === 'Http' && mediaSource.Path) {
                 url = mediaSource.Path;
                 isHls = url.includes('.m3u8') || mediaSource.Container === 'hls';
 
-            // For DirectStream or Remux, always prefer the server-provided TranscodingUrl —
-            // it has AudioStreamIndex, SubtitleStreamIndex, and all session params
-            // baked in. For DirectPlay, build the static URL directly (TranscodingUrl
-            // may be an HLS manifest the native player can't handle).
+                // For DirectStream or Remux, always prefer the server-provided TranscodingUrl —
+                // it has AudioStreamIndex, SubtitleStreamIndex, and all session params
+                // baked in. For DirectPlay, build the static URL directly (TranscodingUrl
+                // may be an HLS manifest the native player can't handle).
             } else if ((playMethod === 'DirectStream' || playMethod === 'Remux') && mediaSource.TranscodingUrl) {
                 url = serverUrl + mediaSource.TranscodingUrl;
                 isHls = url.includes('.m3u8');
@@ -331,8 +331,8 @@ export const MediaHelper = {
             if (audioStreamIndexStr) {
                 audioStream = mediaSource.MediaStreams?.find(s => s.Index === parseInt(audioStreamIndexStr, 10));
             } else {
-                audioStream = mediaSource.MediaStreams?.find(s => s.Type === 'Audio' && s.IsDefault) || 
-                              mediaSource.MediaStreams?.find(s => s.Type === 'Audio');
+                audioStream = mediaSource.MediaStreams?.find(s => s.Type === 'Audio' && s.IsDefault) ||
+                    mediaSource.MediaStreams?.find(s => s.Type === 'Audio');
             }
 
             if (audioStream && audioStream.Codec && !allowedAudioCodecs.includes(audioStream.Codec.toLowerCase())) {
@@ -420,8 +420,8 @@ export const MediaHelper = {
         if (!deliveryPath) {
             // Build the URL manually from the track's own index and the known
             // media source — this matches the Jellyfin server's subtitle route.
-            const codec  = (track.Codec || 'pgssub').toLowerCase();
-            const format_  = format || codec;            // honour caller's override
+            const codec = (track.Codec || 'pgssub').toLowerCase();
+            const format_ = format || codec;            // honour caller's override
             deliveryPath = `/Videos/${itemId}/${mediaSourceId}/Subtitles/${track.Index}/0/Stream.${format_}`;
             const sep = '?';
             return `${serverUrl}${deliveryPath}${sep}${authKey}=${encodeURIComponent(authToken)}`;
@@ -459,7 +459,7 @@ export const MediaHelper = {
         // swap the extension — mirrors jellyfin-web's url.replace('.vtt', format).
         if (format) {
             url = url.replace(/\.\w+(?=\?)/, `.${format}`)  // before query string
-                     .replace(/\.\w+$/, `.${format}`);      // or at end of string
+                .replace(/\.\w+$/, `.${format}`);      // or at end of string
         }
 
         // Append auth token only if the DeliveryUrl doesn't already include one.
@@ -549,15 +549,6 @@ export const MediaHelper = {
         return ranges;
     },
 
-    // ========================================================================
-    // Cross-Origin Helpers
-    // ========================================================================
-
-    /**
-     * Get cross-origin value for media element
-     * @param {Object} mediaSource
-     * @returns {string|null}
-     */
     getCrossOriginValue(mediaSource) {
         return null; // Disable CORS checks for video element to avoid "Failed to initialize" on local networks
     },
@@ -603,6 +594,62 @@ export const MediaHelper = {
         }
 
         log.warn(`HLS manifest polling timed out after ${maxRetries * delayMs}ms — proceeding`);
+    },
+
+    // ========================================================================
+    // Media Error Diagnostics
+    // ========================================================================
+
+    /**
+     * Parse and format HTML5 MediaError objects into rich, informative diagnostics.
+     * Provides clear human-readable error names and descriptions when older TV
+     * browsers (such as webOS 4 / Tizen 3) emit an empty or generic 'Unknown error'.
+     *
+     * @param {MediaError|Object|null} error - The video element's error object
+     * @returns {{code: number, name: string, message: string, details: string}}
+     */
+    formatMediaError(error) {
+        // Extract numeric error code (default to 0 if not present)
+        const code = error?.code || 0;
+        const rawMessage = error?.message || '';
+
+        let name = 'MEDIA_ERR_UNKNOWN';
+        let details = 'An unknown media playback error occurred.';
+
+        // Map standard HTML5 MediaError codes
+        switch (code) {
+            case 1: // MEDIA_ERR_ABORTED
+                name = 'MEDIA_ERR_ABORTED';
+                details = 'Media playback was aborted by client request.';
+                break;
+            case 2: // MEDIA_ERR_NETWORK
+                name = 'MEDIA_ERR_NETWORK';
+                details = 'A network error caused the media download to fail.';
+                break;
+            case 3: // MEDIA_ERR_DECODE
+                name = 'MEDIA_ERR_DECODE';
+                details = 'Hardware/software decoder error: Incompatible codec, profile, bit depth, or corrupted bitstream.';
+                break;
+            case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                name = 'MEDIA_ERR_SRC_NOT_SUPPORTED';
+                details = 'The media resource format or MIME type is not supported by this device.';
+                break;
+            default:
+                break;
+        }
+
+        // Build clean diagnostic message incorporating raw error if provided
+        const hasSpecificMsg = rawMessage && rawMessage.trim().length > 0 && rawMessage.toLowerCase() !== 'unknown error';
+        const message = hasSpecificMsg
+            ? `${name} (${code}): ${rawMessage} — ${details}`
+            : `${name} (${code}): ${details}`;
+
+        return {
+            code,
+            name,
+            message,
+            details
+        };
     }
 };
 

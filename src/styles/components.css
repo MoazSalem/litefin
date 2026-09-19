@@ -319,7 +319,8 @@ progress.card-progress::-webkit-progress-value {
     padding: 20px;
     background: #1a1a1a;
     /* Default */
-    border-radius: calc(var(--jf-border-radius) - 3px);
+    border-radius: inherit;
+    -webkit-border-radius: inherit;
     overflow: hidden;
     z-index: 1;
 }
@@ -374,7 +375,7 @@ progress.card-progress::-webkit-progress-value {
     -webkit-box-orient: vertical;
     overflow: hidden;
     /* Simplified shadow to avoid Tizen rendering artifacts */
-    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+    text-shadow: 0 2px 3px rgba(0, 0, 0, 0.7);
 }
 
 .landscape .media-fallback-name {

@@ -175,7 +175,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to top, var(--jf-background) 3%, rgba(0,0,0,0.8) 10%, transparent 40%);
+    background: linear-gradient(to top,var(--jf-background) 4%,rgba(0,0,0,.8) 30%,transparent 40%);
     z-index: 2;
 }
 
@@ -581,6 +581,127 @@
     width: 100%;
     -webkit-animation: none !important;
     animation: none !important;
+}
+
+/* ============================================================================
+   Zero-Animation Indicator Styles (Lines & Simple Dots)
+   ============================================================================
+   Designed according to Apple Human Interface Guidelines for clean minimalism,
+   impeccable contrast, and optimal TV render performance by eliminating all
+   layout thrashing and heavy GPU keyframe animations.
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   Style 1: Big Lines (Segmented Horizontal Progress Bars)
+   Sleek wide horizontal segmented bars inspired by modern luxury interfaces.
+   ---------------------------------------------------------------------------- */
+.hero-carousel-container.indicator-lines .hero-indicators {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    width: 280px;
+    max-width: 40vw;
+}
+
+/* Base line segment styling */
+.hero-carousel-container.indicator-lines .hero-dot {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 0%;
+    flex: 1 1 0%;
+    min-width: 24px;
+    height: 3px;
+    border-radius: 2px;
+    border: none;
+    background: rgba(255, 255, 255, 0.25);
+    margin-right: 8px;
+    padding: 0;
+    width: auto;
+    -webkit-transition: none !important;
+    transition: none !important;
+    overflow: hidden;
+}
+
+/* Last child removes trailing right margin */
+.hero-carousel-container.indicator-lines .hero-dot:last-child {
+    margin-right: 0;
+    margin-left: 0;
+}
+
+/* Active line segment: bright solid white with full opacity */
+.hero-carousel-container.indicator-lines .hero-dot.active {
+    background: #ffffff;
+    width: auto;
+    opacity: 1;
+}
+
+/* Suppress internal progress fill completely */
+.hero-carousel-container.indicator-lines .hero-dot-progress {
+    display: none !important;
+}
+
+/* Banner mode specific width expansion for Big Lines */
+.hero-carousel-container.banner.indicator-lines .hero-indicators {
+    width: calc(100% - 80px);
+    max-width: none;
+    left: 40px;
+    right: 40px;
+    bottom: 24px;
+}
+
+.hero-carousel-container.banner.compact.indicator-lines .hero-indicators {
+    width: calc(100% - 60px);
+    left: 30px;
+    right: 30px;
+    bottom: 16px;
+}
+
+/* ----------------------------------------------------------------------------
+   Style 2: Simple Dots (Classic Minimalist Circular Indicators)
+   Pure Apple HIG circular dots with instant active state switching.
+   ---------------------------------------------------------------------------- */
+.hero-carousel-container.indicator-dots .hero-indicators {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+}
+
+/* Base dot circle */
+.hero-carousel-container.indicator-dots .hero-dot {
+    width: 8px;
+    height: 8px;
+    min-width: 8px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.28);
+    margin-right: 10px;
+    padding: 0;
+    -webkit-transition: none !important;
+    transition: none !important;
+    overflow: hidden;
+}
+
+/* Last child removes trailing right margin */
+.hero-carousel-container.indicator-dots .hero-dot:last-child {
+    margin-right: 0;
+    margin-left: 0;
+}
+
+/* Active dot circle: fixed 8px diameter, solid white */
+.hero-carousel-container.indicator-dots .hero-dot.active {
+    width: 8px;
+    background: #ffffff;
+    opacity: 1;
+}
+
+/* Suppress internal progress fill completely */
+.hero-carousel-container.indicator-dots .hero-dot-progress {
+    display: none !important;
 }
 
 /* ============================================================================

@@ -538,11 +538,12 @@ export function buildJellyfinProfile(options = {}) {
         /*
          * Native WebOS DirectPlay for TS and M2TS containers:
          *
-         * Only the native WebOS backend (WebOSPlayer) direct-plays progressive TS/M2TS
-         * streams natively over HTTP. The fallback HTML5 backend (Hls.js) lacks progressive
-         * TS demuxing in standard browsers and continues to rely on HLS.
+         * Only the native WebOS backend (WebOSPlayer) on WebOS 5+ direct-plays progressive TS/M2TS
+         * streams natively over HTTP. Older WebOS 3/4 hardware demuxers crash with decode errors
+         * on raw HTTP progressive TS streams and require HLS packaging instead.
+         * The fallback HTML5 backend (Hls.js) lacks progressive TS demuxing in standard browsers.
          */
-        if (!isHtml5) {
+        if (!isHtml5 && caps.webosVersion >= 5) {
             // Build supported video codecs list for MPEG-TS container
             const tsVideoCodecs = ['h264', 'vc1'];
             if (enableHEVC) tsVideoCodecs.push('hevc');

@@ -1,16 +1,30 @@
 /* =========================================================================
-   Modern Home Layout
+   Modern, Expanded & Expanding Home Layout
    ========================================================================= */
-html[data-layout-media-rows="modern"] .home-rows {
+html[data-layout-media-rows="modern"] .home-rows,
+html[data-layout-media-rows="expanded"] .home-rows,
+html[data-layout-media-rows="modern-posters"] .home-rows,
+html[data-layout-media-rows="expanding"] .home-rows {
     padding-top: 18px;
     padding-bottom: var(--row-padding-bottom, 30px);
 }
 
+/* Add vertical clearance to row-items so scaled focus cards (1.05x) and outside subtitles never get clipped */
+html[data-layout-media-rows="modern"] .row-items,
+html[data-layout-media-rows="modern-posters"] .row-items,
+html[data-layout-media-rows="expanded"] .row-items {
+    padding-top: 32px;
+    padding-bottom: calc(52px * var(--card-title-font-scale, 1));
+}
+
 /* =========================================================================
-   Modern Row Headers
+   Row Headers (Modern, Expanded, Modern Posters & Expanding)
    ========================================================================= */
 
-html[data-layout-media-rows="modern"] .row-title {
+html[data-layout-media-rows="modern"] .row-title,
+html[data-layout-media-rows="expanded"] .row-title,
+html[data-layout-media-rows="modern-posters"] .row-title,
+html[data-layout-media-rows="expanding"] .row-title {
     font-size: 2.4rem;
     font-weight: 800;
     padding: 0 60px;
@@ -23,23 +37,211 @@ html[data-layout-media-rows="modern"] .row-title {
 }
 
 /* Focus hint for the row title when a card in it is focused */
-html[data-layout-media-rows="modern"] .media-row:focus-within .row-title {
+html[data-layout-media-rows="modern"] .media-row:focus-within .row-title,
+html[data-layout-media-rows="expanded"] .media-row:focus-within .row-title,
+html[data-layout-media-rows="modern-posters"] .media-row:focus-within .row-title,
+html[data-layout-media-rows="expanding"] .media-row:focus-within .row-title {
     transform: translateX(4px);
     color: #fff;
 }
 
 /* =========================================================================
-   Modern Media Card Design
+   Modern, Modern Cards & Modern Posters Layout (Ultra-Lightweight Static Cards)
+   =========================================================================
+   Inspired by Apple Human Interface Guidelines: sleek, minimal, hardware-
+   accelerated, and blazing fast on low-end Smart TVs.
+   - Modern: Portrait posters for movie/series rows, 16:9 cards for next up/continue watching/my media, squares for music/artists.
+   - Modern Cards (expanded): 16:9 widescreen cards statically rendered.
+   - Modern Posters (modern-posters): 2:3 portrait posters statically rendered.
+   - Eliminates width transitions and dynamic sibling shifts on focus
+   - Eliminates runtime dual-image downloading and opacity crossfades
+   - Uses a single hardware-composited layer per card with instant focus ring
+   - Outside labels below cards (Title + Subtitle)
+   ========================================================================= */
+
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-expanded-width, 396px);
+    margin-right: var(--card-margin, 26px);
+    margin-left: 0;
+    overflow: visible !important;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card),
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-width, 212px);
+    margin-right: var(--card-margin, 26px);
+    margin-left: 0;
+    overflow: visible !important;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+html[data-layout-media-rows="modern"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card),
+html[data-layout-media-rows="modern-posters"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-landscape-width, var(--card-expanded-width, 396px));
+}
+
+html[data-layout-media-rows="expanded"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card),
+html[data-layout-media-rows="modern"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card),
+html[data-layout-media-rows="modern-posters"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-square-width, 223px);
+}
+
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover {
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
+    z-index: 10;
+    outline: none;
+}
+
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+    width: 100%;
+    height: var(--card-height, 222.75px) !important;
+    padding-bottom: 0 !important;
+    border-radius: 24px;
+    border: none !important;
+    box-shadow: none;
+    transition: background-color 0.22s ease;
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05));
+    position: relative;
+    overflow: hidden;
+}
+
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+    width: 100%;
+    height: var(--card-height, 318px) !important;
+    padding-bottom: 0 !important;
+    border-radius: 24px;
+    border: none !important;
+    box-shadow: none;
+    transition: background-color 0.22s ease;
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05));
+    position: relative;
+    overflow: hidden;
+}
+
+html[data-layout-media-rows="modern"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+    height: var(--card-landscape-height, 222.75px) !important;
+}
+
+html[data-layout-media-rows="modern"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+    height: var(--card-square-height, var(--card-square-width, 223px)) !important;
+}
+
+/* Apple HIG-Style Focus Highlight & Focus Ring */
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image {
+    background: var(--jf-surface-hover, rgba(255, 255, 255, 0.1));
+}
+
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 24px;
+    border: 4px solid var(--jf-focus-border-color, var(--jf-accent));
+    box-sizing: border-box;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Image sizing: Single layer, perfect fit */
+html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img,
+html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img,
+html[data-layout-media-rows="modern-posters"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 24px;
+    transition: opacity 0.3s ease;
+}
+
+/* Outside Labels & Typography for Modern, Expanded & Modern Posters (Below Cards) */
+html[data-layout-media-rows="modern"] .media-card .card-info,
+html[data-layout-media-rows="expanded"] .media-card .card-info,
+html[data-layout-media-rows="modern-posters"] .media-card .card-info {
+    padding: 14px 4px 0 4px;
+    opacity: 1 !important;
+    display: block !important;
+    text-align: left;
+}
+
+html[data-layout-media-rows="modern"] .media-card .card-info.inside,
+html[data-layout-media-rows="expanded"] .media-card .card-info.inside,
+html[data-layout-media-rows="modern-posters"] .media-card .card-info.inside {
+    display: none !important;
+}
+
+html[data-layout-media-rows="modern"] .media-card .card-title,
+html[data-layout-media-rows="expanded"] .media-card .card-title,
+html[data-layout-media-rows="modern-posters"] .media-card .card-title {
+    font-size: calc(1.4rem * var(--card-title-font-scale, 1));
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+html[data-layout-media-rows="modern"] .media-card .card-subtitle,
+html[data-layout-media-rows="expanded"] .media-card .card-subtitle,
+html[data-layout-media-rows="modern-posters"] .media-card .card-subtitle {
+    font-size: calc(1.15rem * var(--card-title-font-scale, 1));
+    font-weight: 500;
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* =========================================================================
+   Expanding Media Card Design (Expanding Posters Mode)
    ========================================================================= */
 
 /* =========================================================================
-   Modern Media Card (Row Tracks Only)
+   Expanding Media Card (Row Tracks Only)
    ========================================================================= */
 /* Exclude grid-based cards and episode cards to preserve their specialized sizing and layout. */
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-width, 225px);
-    height: var(--card-height, 337.5px) !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
-    margin-right: var(--card-margin, 40px);
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-width, 175.5px);
+    height: var(--card-height, 263.25px) !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
+    margin-right: var(--card-margin, 31px);
     margin-left: 0;
     overflow: visible !important; /* Fix: Allow focus box-shadow to be visible */
     
@@ -54,12 +256,10 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
     
     /* Sibling Shifting Logic:
        ONLY shift siblings if the focused card is a growing poster (not a native landscape/square).
-       Difference = 600px - 225px = 375px.
+       Difference = 468px - 175.5px = 292.5px.
      */
-    --expansion-amount: var(--card-expansion, 375px);
+    --expansion-amount: var(--card-expansion, 292.5px);
     --is-after-focus: clamp(0, var(--focused-index, -1) - var(--item-index, -1), 1);
-    /* Note: We only shift if we are NOT the focused item ourselves and we are AFTER it */
-    /* This calculation is slightly complex to avoid shifting the focused item itself */
 }
 
 /* =========================================================================
@@ -74,62 +274,62 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
    item from fighting with a hovered item over column space, ensuring only ONE
    expanded poster claims layout territory at any given instant.
    ========================================================================= */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus ~ .media-card,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused ~ .media-card,
-html[data-layout-media-rows="modern"] .media-card.has-expansion:hover ~ .media-card {
-    /* Translate downstream siblings cleanly to make room for the 600px expanded asset */
-    transform: translateX(var(--card-expansion, 375px));
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus ~ .media-card,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused ~ .media-card,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover ~ .media-card {
+    /* Translate downstream siblings cleanly to make room for the 468px expanded asset */
+    transform: translateX(var(--card-expansion, 292.5px));
 }
 
 /* =========================================================================
    Poster Expansion Triggers
    =========================================================================
-   Forces the card width from 225px to 600px.
+   Forces the card width from 175.5px to 468px.
    When the mouse hovers over the row container, we disable the D-Pad expansion
    on the focused card (unless it is the card currently under the mouse pointer)
    to ensure the UI follows the user's immediate visual attention.
    
    SPECIFICITY FIX: We append the exact same exclusion pseudo-classes
    (:not(.grid-card):not(.episode-row-card):not(.episode-card)) and !important
-   so hover width overrides the base card 225px rule without being shadowed.
+   so hover width overrides the base card 175.5px rule without being shadowed.
    ========================================================================= */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
-html[data-layout-media-rows="modern"] .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):hover {
-    width: var(--card-expanded-width, 600px) !important;
-    height: var(--card-height, 337.5px) !important; /* Lockdown physical dimensions to avoid layout jumps */
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):focus,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card).focused,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:not(.grid-card):not(.episode-row-card):not(.episode-card):hover {
+    width: var(--card-expanded-width, 468px) !important;
+    height: var(--card-height, 263.25px) !important; /* Lockdown physical dimensions to avoid layout jumps */
     z-index: 100; /* Stack on top of surrounding collapsed assets */
 }
 
-html[data-layout-media-rows="modern"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-expanded-width, 600px); /* Height: 600 * 0.5625 = 337.5px */
+html[data-layout-media-rows="expanding"] .media-card.landscape:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-expanded-width, 468px); /* Height: 468 * 0.5625 = 263.25px */
 }
 
-html[data-layout-media-rows="modern"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) {
-    width: var(--card-square-width, 338px); /* Height: 338 * 1 = 338px */
+html[data-layout-media-rows="expanding"] .media-card.square:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    width: var(--card-square-width, 264px); /* Height: 264 * 1 = 264px */
 }
 
 /* Integrated Labels: Reveal timing */
-html[data-layout-media-rows="modern"] .media-card.has-expansion .card-info.inside {
+html[data-layout-media-rows="expanding"] .media-card.has-expansion .card-info.inside {
     opacity: 0;
     /* PERFORMANCE: Fast transition aligned with 0.25s card expansion. */
     transition: opacity 0.2s ease 0.2s;
 }
 
 /* Inside Label reveal during D-pad navigation or mouse hover */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside,
-html[data-layout-media-rows="modern"] .media-card.has-expansion:hover .card-info.inside {
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .card-info.inside {
     opacity: 1; /* Match the active visual expansion */
 }
 
-html[data-layout-media-rows="modern"] .media-card.landscape .card-info.inside,
-html[data-layout-media-rows="modern"] .media-card.square .card-info.inside {
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-info.inside,
+html[data-layout-media-rows="expanding"] .media-card.square .card-info.inside {
     opacity: 1; /* Always visible for items that don't expand */
 }
 
 /* Apply modern relative container overrides only to horizontal cards */
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image {
     width: 100%;
     height: 100% !important; /* Force height to match parent .media-card */
     padding-bottom: 0 !important; /* KILL the global aspect-ratio padding hack */
@@ -147,9 +347,9 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
 }
 
 /* Exclude grid cards and episode cards from modern focus transformations to prevent interference with classic scaling */
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image {
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image {
     /* Focus ring is handled by ::after; outer shadows removed */
     box-shadow: none;
     transform: translateY(-8px);
@@ -157,9 +357,9 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
 }
 
 /* The Focus Ring Overlay: Using ::after ensures it sits on top of the image and tint */
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after {
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image::after,
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image::after,
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image::after {
     content: '';
     position: absolute;
     top: 0;
@@ -167,17 +367,14 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
     right: 0;
     bottom: 0;
     border-radius: 24px;
-    box-shadow: inset 0 0 0 4px var(--jf-accent);
+    border: 4px solid var(--jf-focus-border-color, var(--jf-accent));
+    box-sizing: border-box;
     z-index: 10;
     pointer-events: none;
-    
-    /* PERFORMANCE: Removed the 'focusPulse' infinite keyframe animation entirely.
-       Continuous box-shadow/opacity animations drive continuous browser repaints, which severely
-       lags weaker TV hardware. favors a static, elegant, instant visual focus accent. */
 }
 
 /* Exclude grid cards and episode cards from modern absolute image sizing */
-html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img {
+html[data-layout-media-rows="expanding"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) .card-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -188,26 +385,38 @@ html[data-layout-media-rows="modern"] .media-card:not(.grid-card):not(.episode-r
     transition: opacity 0.3s ease;
 }
 
-/* Layer Stack: 
+/* Live TV Channel Card Contain Override for Expanding & Expanded Layouts */
+html[data-layout-media-rows="expanding"] .media-card[data-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="expanding"] .media-card[data-item-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="expanding"] .media-card.tv-channel-card .card-image img,
+html[data-layout-media-rows="modern"] .media-card[data-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="modern"] .media-card[data-item-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="modern"] .media-card.tv-channel-card .card-image img,
+html[data-layout-media-rows="expanded"] .media-card[data-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="expanded"] .media-card[data-item-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="expanded"] .media-card.tv-channel-card .card-image img,
+html[data-layout-media-rows="modern-posters"] .media-card[data-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="modern-posters"] .media-card[data-item-type="TvChannel"] .card-image img,
+html[data-layout-media-rows="modern-posters"] .media-card.tv-channel-card .card-image img {
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+}
+
+/* Layer Stack for Expanding Posters: 
    1. Thumb (Back)
    2. Poster (Front)
    3. Thumb Loaded (Top Front on focus)
 */
-html[data-layout-media-rows="modern"] .media-card .card-image img.thumb-layer {
+html[data-layout-media-rows="expanding"] .media-card .card-image img.thumb-layer {
     z-index: 3; /* Behind poster initially, but above shimmer (z-index 2) */
     opacity: 0;
-    
-    /* PERFORMANCE: Removed the 'transform: scale' transition. Texture resampling during 
-       card expansion layout shifts is extremely CPU/GPU intensive on TV browsers.
-       Fading opacity alone provides a cleaner, butter-smooth transition. */
     transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-html[data-layout-media-rows="modern"] .media-card .card-image img.poster-layer {
+html[data-layout-media-rows="expanding"] .media-card .card-image img.poster-layer {
     z-index: 4; /* In front of thumb, above shimmer */
     opacity: 1;
-    
-    /* PERFORMANCE: Removed the scale transform transition for extreme TV performance. */
     transition: opacity 0.2s ease-in;
 }
 
@@ -217,24 +426,21 @@ html[data-layout-media-rows="modern"] .media-card .card-image img.poster-layer {
    Fades out the front poster and pops the widescreen back-drop thumb layer 
    forward on active visual expansion states.
    ========================================================================= */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.thumb-layer,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer,
-html[data-layout-media-rows="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.thumb-layer {
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.thumb-layer,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion.expansion-ready:hover .card-image img.thumb-layer {
     opacity: 1;
     z-index: 5; /* Render above poster and shimmer on expansion */
-    /* PERFORMANCE: Scale-transforms removed to prioritize composited rendering speed. */
 }
 
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer,
-html[data-layout-media-rows="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.poster-layer {
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion.expansion-ready:hover .card-image img.poster-layer {
     opacity: 0;
-    /* PERFORMANCE: Removed scale down and expensive CSS filters. CSS brightness/filters 
-       require rendering context passes, causing noticeable frames-per-second drop on TVs. */
 }
 
 /* Integrated Labels (Inside): Hidden by default for posters, visible for native landscape/square */
-html[data-layout-media-rows="modern"] .media-card.has-expansion .card-info.inside {
+html[data-layout-media-rows="expanding"] .media-card.has-expansion .card-info.inside {
     opacity: 0;
     visibility: hidden;
     z-index: 10;
@@ -246,9 +452,9 @@ html[data-layout-media-rows="modern"] .media-card.has-expansion .card-info.insid
    Label Overlays Visibility
    =========================================================================
    Brings up inside labels only when the card is in an active expanding state. */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside,
-html[data-layout-media-rows="modern"] .media-card.has-expansion:hover .card-info.inside {
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .card-info.inside {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -257,75 +463,73 @@ html[data-layout-media-rows="modern"] .media-card.has-expansion:hover .card-info
 }
 
 /* Native landscape/square cards always show their inside labels */
-html[data-layout-media-rows="modern"] .media-card.landscape .card-info.inside,
-html[data-layout-media-rows="modern"] .media-card.square .card-info.inside {
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-info.inside,
+html[data-layout-media-rows="expanding"] .media-card.square .card-info.inside {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
 }
 
 /* Outside Labels (Standard): Hide when card expands into landscape via focus or hover */
-/* Hide standard outside labels once the card expands */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info:not(.inside),
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info:not(.inside),
-html[data-layout-media-rows="modern"] .media-card.has-expansion:hover .card-info:not(.inside) {
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info:not(.inside),
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info:not(.inside),
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .card-info:not(.inside) {
     opacity: 0;
     transition: opacity 0.2s ease;
 }
 
-html[data-layout-media-rows="modern"] .media-card.landscape .card-info.inside,
-html[data-layout-media-rows="modern"] .media-card.square .card-info.inside {
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-info.inside,
+html[data-layout-media-rows="expanding"] .media-card.square .card-info.inside {
     opacity: 1;
     z-index: 10;
 }
 
 /* =========================================================================
-   Modern Card Info & Typography
+   Card Info & Typography (Expanding Mode)
    ========================================================================= */
 
-html[data-layout-media-rows="modern"] .media-card .card-info {
+html[data-layout-media-rows="expanding"] .media-card .card-info {
     padding: 16px 8px 0 8px;
     transition: opacity 0.3s ease, transform 0.3s ease;
     opacity: 1; /* Visible for landscape/square */
 }
 
-/* Hide outside labels for modern posters to keep the grid clean */
-/* Hide outside labels only for modern expanding horizontal posters, NOT grid posters or episode cards! */
-html[data-layout-media-rows="modern"] .media-card:not(.landscape):not(.square):not(.grid-card):not(.episode-row-card):not(.episode-card) .card-info:not(.inside) {
+/* Hide outside labels for expanding posters to keep the grid clean */
+html[data-layout-media-rows="expanding"] .media-card:not(.landscape):not(.square):not(.grid-card):not(.episode-row-card):not(.episode-card) .card-info:not(.inside) {
     opacity: 0;
 }
 
-html[data-layout-media-rows="modern"] .card-title {
+html[data-layout-media-rows="expanding"] .card-title {
     font-size: calc(1.35rem * var(--card-title-font-scale, 1));
     font-weight: 700;
     letter-spacing: -0.3px;
     color: rgba(255, 255, 255, 0.9);
 }
 
-html[data-layout-media-rows="modern"] .card-subtitle {
+html[data-layout-media-rows="expanding"] .card-subtitle {
     font-size: calc(1.1rem * var(--card-title-font-scale, 1));
     font-weight: 500;
     margin-top: 0px;
     color: rgba(255, 255, 255, 0.5);
 }
 
-html[data-layout-media-rows="modern"] .media-card:focus .card-title,
-html[data-layout-media-rows="modern"] .media-card.focused .card-title,
-html[data-layout-media-rows="modern"] .media-card:hover .card-title {
+html[data-layout-media-rows="expanding"] .media-card:focus .card-title,
+html[data-layout-media-rows="expanding"] .media-card.focused .card-title,
+html[data-layout-media-rows="expanding"] .media-card:hover .card-title {
     color: #fff;
 }
 
-html[data-layout-media-rows="modern"] .media-card:focus .card-subtitle,
-html[data-layout-media-rows="modern"] .media-card.focused .card-subtitle,
-html[data-layout-media-rows="modern"] .media-card:hover .card-subtitle {
+html[data-layout-media-rows="expanding"] .media-card:focus .card-subtitle,
+html[data-layout-media-rows="expanding"] .media-card.focused .card-subtitle,
+html[data-layout-media-rows="expanding"] .media-card:hover .card-subtitle {
     color: rgba(255, 255, 255, 0.7);
 }
 
 /* =========================================================================
-   Modern Card Overlays (Labels/Badges)
+   Expanding Card Overlays (Labels/Badges)
    ========================================================================= */
 
-html[data-layout-media-rows="modern"] .media-card .card-image .card-image-tint {
+html[data-layout-media-rows="expanding"] .media-card .card-image .card-image-tint {
     position: absolute;
     top: 0;
     left: 0;
@@ -344,41 +548,41 @@ html[data-layout-media-rows="modern"] .media-card .card-image .card-image-tint {
    =========================================================================
    Show standard overlay gradient backdrop to maximize white text legibility.
    ========================================================================= */
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-image .card-image-tint,
-html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-image .card-image-tint,
-html[data-layout-media-rows="modern"] .media-card.has-expansion:hover .card-image .card-image-tint,
-html[data-layout-media-rows="modern"] .media-card.landscape .card-image .card-image-tint,
-html[data-layout-media-rows="modern"] .media-card.square .card-image .card-image-tint {
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .card-image .card-image-tint,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .card-image .card-image-tint,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .card-image .card-image-tint,
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-image .card-image-tint,
+html[data-layout-media-rows="expanding"] .media-card.square .card-image .card-image-tint {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.3s ease 0.2s, visibility 0.3s ease 0.2s; /* Delayed reveal to match expansion */
 }
 
-html[data-layout-media-rows="modern"] .card-overlay-tint {
+html[data-layout-media-rows="expanding"] .card-overlay-tint {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 25%, transparent 60%);
-    border-radius: 24px; /* Fix: Match card radius */
+    background: rgba(0, 0, 0, 0.38);
+    border-radius: 24px; /* Match card radius */
     z-index: 7;
     pointer-events: none;
+    transition: background-color 0.2s ease;
 }
 
-/* Specificity Fix: Modern layout must preserve its gradient on focus */
-html[data-layout-media-rows="modern"] .media-card:focus .card-overlay-tint,
-html[data-layout-media-rows="modern"] .media-card.focused .card-overlay-tint {
-    /* Restore modern gradient and ensure it's below the pseudo-element focus ring */
-    background: linear-gradient(0deg, rgba(0, 0, 0, .9) 0, rgba(0, 0, 0, .5) 25%, transparent 60%) !important;
+/* Dimming tint on focus */
+html[data-layout-media-rows="expanding"] .media-card:focus .card-overlay-tint,
+html[data-layout-media-rows="expanding"] .media-card.focused .card-overlay-tint,
+html[data-layout-media-rows="expanding"] .media-card:hover .card-overlay-tint {
+    background: rgba(0, 0, 0, 0.25) !important;
 }
 
-html[data-layout-media-rows="modern"] .card-overlay-label,
-html[data-layout-media-rows="modern"] .card-info.inside {
+html[data-layout-media-rows="expanding"] .card-info.inside {
     position: absolute;
     bottom: 40px; /* Positioned above the progress bar (which ends at ~24px) */
     left: 30px;
-    right: 30px; /* NEW: Constrain width so text wraps */
+    right: 30px; /* Constrain width so text wraps */
     top: auto;
     transform: none;
     padding: 0;
@@ -387,7 +591,7 @@ html[data-layout-media-rows="modern"] .card-info.inside {
     pointer-events: none;
 }
 
-html[data-layout-media-rows="modern"] .card-info.inside .card-title {
+html[data-layout-media-rows="expanding"] .card-info.inside .card-title {
     font-size: calc(1.5rem * var(--card-title-font-scale, 1)); /* Slightly larger for inside placement */
     
     /* PERFORMANCE: Replaced 6px blur text-shadow with a highly efficient 2px blur offset. */
@@ -404,7 +608,7 @@ html[data-layout-media-rows="modern"] .card-info.inside .card-title {
     white-space: normal; /* Override classic nowrap */
 }
 
-html[data-layout-media-rows="modern"] .card-info.inside .card-subtitle {
+html[data-layout-media-rows="expanding"] .card-info.inside .card-subtitle {
     font-size: calc(1.2rem * var(--card-title-font-scale, 1));
     color: rgba(255, 255, 255, 0.8);
     
@@ -419,60 +623,94 @@ html[data-layout-media-rows="modern"] .card-info.inside .card-subtitle {
     width: 100%;
 }
 
-html[data-layout-media-rows="modern"] .card-info.inside .card-meta {
+html[data-layout-media-rows="expanding"] .card-info.inside .card-meta {
     margin-top: 6px;
     color: rgba(255, 255, 255, 0.6);
 }
 
-html[data-layout-media-rows="modern"] .card-overlay-label {
-    width: 85%;
-    font-size: 1.8rem; 
+/* Centered Library & Dynamic Thumb Text Overlays (Matching Classic) */
+html[data-layout-media-rows="expanding"] .card-overlay-label,
+html[data-layout-media-rows="modern"] .card-overlay-label,
+html[data-layout-media-rows="expanded"] .card-overlay-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    bottom: auto;
+    right: auto;
+    z-index: 8;
+    color: #ffffff;
+    font-size: 2.2rem;
     font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -0.8px;
-    
-    /* PERFORMANCE: Lowered blur radius from 15px to 4px for immediate hardware acceleration. */
-    text-shadow: 0 2px 4px rgba(0,0,0,0.9);
-    
+    text-align: center;
+    width: 90%;
+    line-height: 1.2;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.8), 0 2px 4px rgba(0, 0, 0, 0.5);
+    letter-spacing: -0.5px;
+    word-wrap: break-word;
+    pointer-events: none;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
     text-transform: none;
 }
 
-/* Hide the redundant info box for library cards in modern mode */
-/* Hide the redundant info box for library cards on horizontal tracks, but KEEP them for grid library cards */
-html[data-layout-media-rows="modern"] .media-card[data-context-type="library"]:not(.grid-card) .card-info,
-html[data-layout-media-rows="modern"] .media-card[data-item-type="CollectionFolder"]:not(.grid-card) .card-info {
-    display: none;
-}
-
+html[data-layout-media-rows="expanding"] .media-card:focus .card-overlay-label,
+html[data-layout-media-rows="expanding"] .media-card.focused .card-overlay-label,
+html[data-layout-media-rows="expanding"] .media-card:hover .card-overlay-label,
 html[data-layout-media-rows="modern"] .media-card:focus .card-overlay-label,
 html[data-layout-media-rows="modern"] .media-card.focused .card-overlay-label,
-html[data-layout-media-rows="modern"] .media-card:hover .card-overlay-label {
-    transform: translateY(-4px) translateX(10px) scale(1.02);
+html[data-layout-media-rows="modern"] .media-card:hover .card-overlay-label,
+html[data-layout-media-rows="expanded"] .media-card:focus .card-overlay-label,
+html[data-layout-media-rows="expanded"] .media-card.focused .card-overlay-label,
+html[data-layout-media-rows="expanded"] .media-card:hover .card-overlay-label {
+    transform: translate(-50%, -50%) scale(1.05);
+    color: #ffffff;
+}
+
+/* Hide the redundant inside info box for expanding & modern library cards */
+html[data-layout-media-rows="expanding"] .media-card[data-context-type="library"]:not(.grid-card) .card-info,
+html[data-layout-media-rows="expanding"] .media-card[data-item-type="CollectionFolder"]:not(.grid-card) .card-info,
+html[data-layout-media-rows="modern"] .media-card[data-context-type="library"]:not(.grid-card) .card-info,
+html[data-layout-media-rows="modern"] .media-card[data-item-type="CollectionFolder"]:not(.grid-card) .card-info {
+    display: none !important;
 }
 
 /* =========================================================================
-   Modern Progress Bar (Floating Style)
+   Progress Bar (Floating Style - Modern, Expanded & Modern Posters)
    ========================================================================= */
 
-html[data-layout-media-rows="modern"] .card-progress-container {
+html[data-layout-media-rows="modern"] .card-progress-container,
+html[data-layout-media-rows="expanded"] .card-progress-container,
+html[data-layout-media-rows="modern-posters"] .card-progress-container {
     bottom: 20px;
-    left: 32px;
-    right: 32px;
+    left: 20px;
+    right: 20px;
     height: 8px;
     background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.6);
     border-radius: 10px;
     overflow: hidden;
 }
 
-html[data-layout-media-rows="modern"] progress.card-progress {
+html[data-layout-media-rows="expanded"] .card-progress-container,
+html[data-layout-media-rows="modern-posters"] .media-card.landscape .card-progress-container {
+    left: 32px;
+    right: 32px;
+}
+
+html[data-layout-media-rows="modern"] progress.card-progress,
+html[data-layout-media-rows="expanded"] progress.card-progress,
+html[data-layout-media-rows="modern-posters"] progress.card-progress {
     height: 100%;
 }
 
-html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-bar {
+html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-bar,
+html[data-layout-media-rows="expanded"] progress.card-progress::-webkit-progress-bar,
+html[data-layout-media-rows="modern-posters"] progress.card-progress::-webkit-progress-bar {
     background: transparent;
 }
 
-html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-value {
+html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-value,
+html[data-layout-media-rows="expanded"] progress.card-progress::-webkit-progress-value,
+html[data-layout-media-rows="modern-posters"] progress.card-progress::-webkit-progress-value {
     background-color: var(--jf-accent);
     border-radius: 10px;
     /* Spring-like transition for progress updates */
@@ -481,17 +719,27 @@ html[data-layout-media-rows="modern"] progress.card-progress::-webkit-progress-v
 }
 
 /* =========================================================================
-   Modern Badges & Indicators
+   Badges & Indicators (Modern, Expanded & Modern Posters)
    ========================================================================= */
 
 html[data-layout-media-rows="modern"] .count-badge,
 html[data-layout-media-rows="modern"] .played-badge,
 html[data-layout-media-rows="modern"] .episode-badge,
 html[data-layout-media-rows="modern"] .quality-badge,
-html[data-layout-media-rows="modern"] .game-card-badge {
+html[data-layout-media-rows="modern"] .game-card-badge,
+html[data-layout-media-rows="expanded"] .count-badge,
+html[data-layout-media-rows="expanded"] .played-badge,
+html[data-layout-media-rows="expanded"] .episode-badge,
+html[data-layout-media-rows="expanded"] .quality-badge,
+html[data-layout-media-rows="expanded"] .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge,
+html[data-layout-media-rows="modern-posters"] .episode-badge,
+html[data-layout-media-rows="modern-posters"] .quality-badge,
+html[data-layout-media-rows="modern-posters"] .game-card-badge {
     position: absolute;
     top: 22px;
-    z-index: 5;
+    z-index: 8;
     font-weight: 700;
     pointer-events: none;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -510,12 +758,44 @@ html[data-layout-media-rows="modern"] .media-card.focused .game-card-badge,
 html[data-layout-media-rows="modern"] .media-card:hover .count-badge,
 html[data-layout-media-rows="modern"] .media-card:hover .played-badge,
 html[data-layout-media-rows="modern"] .media-card:hover .episode-badge,
-html[data-layout-media-rows="modern"] .media-card:hover .quality-badge {
+html[data-layout-media-rows="modern"] .media-card:hover .quality-badge,
+html[data-layout-media-rows="expanded"] .media-card:focus .count-badge,
+html[data-layout-media-rows="expanded"] .media-card:focus .played-badge,
+html[data-layout-media-rows="expanded"] .media-card:focus .episode-badge,
+html[data-layout-media-rows="expanded"] .media-card:focus .quality-badge,
+html[data-layout-media-rows="expanded"] .media-card:focus .game-card-badge,
+html[data-layout-media-rows="expanded"] .media-card.focused .count-badge,
+html[data-layout-media-rows="expanded"] .media-card.focused .played-badge,
+html[data-layout-media-rows="expanded"] .media-card.focused .episode-badge,
+html[data-layout-media-rows="expanded"] .media-card.focused .quality-badge,
+html[data-layout-media-rows="expanded"] .media-card.focused .game-card-badge,
+html[data-layout-media-rows="expanded"] .media-card:hover .count-badge,
+html[data-layout-media-rows="expanded"] .media-card:hover .played-badge,
+html[data-layout-media-rows="expanded"] .media-card:hover .episode-badge,
+html[data-layout-media-rows="expanded"] .media-card:hover .quality-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .count-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .played-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .episode-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .quality-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:focus .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .count-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .played-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .episode-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .quality-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.focused .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .count-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .played-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .episode-badge,
+html[data-layout-media-rows="modern-posters"] .media-card:hover .quality-badge {
     transform: scale(1.05);
 }
 
 html[data-layout-media-rows="modern"] .count-badge,
-html[data-layout-media-rows="modern"] .played-badge {
+html[data-layout-media-rows="modern"] .played-badge,
+html[data-layout-media-rows="expanded"] .count-badge,
+html[data-layout-media-rows="expanded"] .played-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge {
     right: 22px;
     width: 44px;
     height: 44px;
@@ -525,7 +805,9 @@ html[data-layout-media-rows="modern"] .played-badge {
     justify-content: center;
 }
 
-html[data-layout-media-rows="modern"] .episode-badge {
+html[data-layout-media-rows="modern"] .episode-badge,
+html[data-layout-media-rows="expanded"] .episode-badge,
+html[data-layout-media-rows="modern-posters"] .episode-badge {
     left: 22px;
     padding: 5px 12px;
     border-radius: 10px;
@@ -534,7 +816,11 @@ html[data-layout-media-rows="modern"] .episode-badge {
 }
 
 html[data-layout-media-rows="modern"] .quality-badge,
-html[data-layout-media-rows="modern"] .game-card-badge {
+html[data-layout-media-rows="modern"] .game-card-badge,
+html[data-layout-media-rows="expanded"] .quality-badge,
+html[data-layout-media-rows="expanded"] .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .quality-badge,
+html[data-layout-media-rows="modern-posters"] .game-card-badge {
     right: 22px;
     padding: 5px 14px;
     border-radius: 10px;
@@ -545,18 +831,26 @@ html[data-layout-media-rows="modern"] .game-card-badge {
 html[data-layout-media-rows="modern"] .played-badge ~ .quality-badge,
 html[data-layout-media-rows="modern"] .count-badge ~ .quality-badge,
 html[data-layout-media-rows="modern"] .played-badge ~ .game-card-badge,
-html[data-layout-media-rows="modern"] .count-badge ~ .game-card-badge {
+html[data-layout-media-rows="modern"] .count-badge ~ .game-card-badge,
+html[data-layout-media-rows="expanded"] .played-badge ~ .quality-badge,
+html[data-layout-media-rows="expanded"] .count-badge ~ .quality-badge,
+html[data-layout-media-rows="expanded"] .played-badge ~ .game-card-badge,
+html[data-layout-media-rows="expanded"] .count-badge ~ .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge ~ .quality-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge ~ .quality-badge,
+html[data-layout-media-rows="modern-posters"] .played-badge ~ .game-card-badge,
+html[data-layout-media-rows="modern-posters"] .count-badge ~ .game-card-badge {
     right: 74px;
 }
+
 /* =========================================================================
    Modern Gradient Fallback Expansion Improvements
    ========================================================================= */
 
 /* 
-   When a poster using a fallback gradient is hovered or D-pad focused, it
-   smoothly expands to 600px width. We dissolve the initials (opacity: 0)
-   with a clean ease curve so they don't overlap or clash with the beautiful
-   title and subtitle text overlay that fades in over the expanded card.
+   When a poster using a fallback gradient is hovered or D-pad focused in modern mode,
+   it smoothly expands to 600px width. We dissolve the initials (opacity: 0)
+   with a clean ease curve so they don't overlap or clash with the text overlay.
 */
 html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .media-fallback-initials,
 html[data-layout-media-rows="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .media-fallback-initials,
@@ -564,4 +858,5 @@ html[data-layout-media-rows="modern"] .media-card.has-expansion.expansion-ready:
     opacity: 0;
     transition: opacity 0.25s ease;
 }
+
 

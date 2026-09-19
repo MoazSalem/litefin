@@ -470,8 +470,10 @@ export default class SubtitleManager {
                 // DOM rendering of parsed text-based formats (VTT, SRT, etc.).
                 return 'DOM / Text';
             case DeliveryMethod.ASS_CANVAS: {
-                // ASS/SSA renderer engine: return 'libjass' or 'libass-wasm' directly.
-                const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+                // Determine ASS/SSA renderer engine: default to libass-wasm on platforms
+                // with WebAssembly support (Chromium 57+), or libjass on legacy platforms.
+                const defaultEngine = platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass';
+                const preferredEngine = PlayerSettings.get('assRenderer') || defaultEngine;
                 return preferredEngine;
             }
             case DeliveryMethod.PGS_BITMAP:
@@ -505,7 +507,8 @@ export default class SubtitleManager {
         if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
             // Sync the master style modifications toggle and preferred engine
             const enableModifications = PlayerSettings.get('enableAssStyleModifications') === true;
-            const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+            const defaultEngine = platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass';
+            const preferredEngine = PlayerSettings.get('assRenderer') || defaultEngine;
             this._assRenderer.setStyleConfig({ enableModifications, preferredEngine });
 
             const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
@@ -865,7 +868,9 @@ export default class SubtitleManager {
             }
 
             // Select and initialize ASS subtitle rendering backend with WASM feature gating
-            const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+            // Default to libass-wasm on platforms with WebAssembly capability (Chromium 57+)
+            const defaultEngine = platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass';
+            const preferredEngine = PlayerSettings.get('assRenderer') || defaultEngine;
             let TargetRendererClass;
             
             // Check if the user selected libass-wasm as the preferred renderer

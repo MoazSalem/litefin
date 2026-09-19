@@ -1176,10 +1176,14 @@ class DetailsPage extends Page {
             posterType = 'square';
 
         // Apply class for CSS aspect ratio
-        posterContainer.classList.remove('landscape', 'square');
+        posterContainer.classList.remove('landscape', 'square', 'tv-channel-poster');
         if (posterType !== 'poster') {
             posterContainer.classList.add(posterType);
         }
+        if (item.Type === 'TvChannel') {
+            posterContainer.classList.add('tv-channel-poster');
+        }
+        posterContainer.setAttribute('data-type', item.Type || '');
 
         if (item.ImageTags && item.ImageTags.Primary) {
             const params = imageService.getParams('details-poster');
@@ -3776,6 +3780,7 @@ class DetailsPage extends Page {
             listId: 'people-row',
             items: this._people,
             isLandscape: false,
+            cardType: 'person',
             renderCard: (person) => this._renderMediaCard(person, false, 'person'),
             focusSectionName: 'details-people',
             onClick: (card) => {
@@ -4184,6 +4189,7 @@ class DetailsPage extends Page {
             listId: 'guest-stars-row',
             items: people,
             isLandscape: false,
+            cardType: 'person',
             renderCard: (p) => this._renderMediaCard(p, false, 'person'),
             focusSectionName: 'guest-stars-section',
             onClick: (card) => {
@@ -5182,9 +5188,9 @@ class DetailsPage extends Page {
                 focusManager.focusElement(this._prevFocus);
             } else {
                 const fallbackEl = this.$('.more-btn') ||
-                                   this.$('.resume-btn') ||
-                                   this.$('.play-btn') ||
-                                   this.$('#actions button');
+                    this.$('.resume-btn') ||
+                    this.$('.play-btn') ||
+                    this.$('#actions button');
                 if (fallbackEl) {
                     focusManager.focusElement(fallbackEl);
                 } else {
@@ -5896,7 +5902,7 @@ class DetailsPage extends Page {
                 prevBtn.classList.remove('hidden');
                 prevBtn.setAttribute('tabindex', '0');
 
-                // Build rich tooltip label conforming to Apple HIG concise style
+                // Build rich tooltip label
                 const seasonNum = (this._prevEpisode.ParentIndexNumber || 0).toString().padStart(2, '0');
                 const epNum = (this._prevEpisode.IndexNumber || 0).toString().padStart(2, '0');
                 const epLabel = this._prevEpisode.IndexNumber !== undefined
@@ -6217,8 +6223,8 @@ class DetailsPage extends Page {
 
         // Move Favorite Button BEFORE Audio, Subtitle, or More buttons if present
         const anchorBtn = actionsContainer.querySelector('.audio-btn') ||
-                          actionsContainer.querySelector('.subtitle-btn') ||
-                          actionsContainer.querySelector('.more-btn');
+            actionsContainer.querySelector('.subtitle-btn') ||
+            actionsContainer.querySelector('.more-btn');
         if (anchorBtn && this._favBtn.el) {
             actionsContainer.insertBefore(this._favBtn.el, anchorBtn);
         }

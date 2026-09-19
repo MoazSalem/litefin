@@ -1528,26 +1528,30 @@ export class HtmlVideoPlayer {
 
         // Ignore errors if we don't have a source and no HLS player is active.
         // This commonly happens during stop/cleanup when src is removed.
-        if (!video.src && !this._hlsPlayer) {
+        if (!video.src && !this._hlsPlayer && (!video.firstChild || !video.firstChild.src)) {
             log.debug('Ignoring error event on empty source during cleanup');
             return;
         }
 
-        const errorCode = video.error?.code || 0;
-        const errorMessage = video.error?.message || 'Unknown error';
-
-        log.error(`Error ${errorCode}: ${errorMessage}`);
+        const formatted = MediaHelper.formatMediaError(video.error);
+        log.error(`HtmlVideoPlayer: Error ${formatted.code} (${formatted.name}): ${formatted.message}`);
 
         // Try HLS.js recovery for decode errors
-        if (errorCode === 3 && this._hlsPlayer) {
+        if (formatted.code === 3 && this._hlsPlayer) {
             log.info('Attempting HLS.js media error recovery');
             this._hlsPlayer.recoverMediaError();
             return;
         }
 
-        const isNetworkError = errorCode === 2 || (errorMessage && /network|connection|pipeline_error_network/i.test(errorMessage));
+        const isNetworkError = formatted.code === 2 || /network|connection|pipeline_error_network/i.test(formatted.message);
 
-        this.onEvent({ type: 'error', data: { code: errorCode, message: errorMessage, isNetworkError: isNetworkError } });
+        this.onEvent({
+            type: 'error',
+            data: {
+                ...formatted,
+                isNetworkError
+            }
+        });
     }
 
     /** @private */

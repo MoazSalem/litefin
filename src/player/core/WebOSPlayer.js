@@ -277,6 +277,7 @@ export class WebOSPlayer {
         this._timeUpdated = false;
         this._subtitleOffset = 0;
         this._previousOffset = 0;
+        this._hlsFallbackAttempted = false;
 
         // Initialize robust seek state immediately to avoid race conditions with early 'playing' events.
         // Do not attempt robust resume for live TV/streams.
@@ -423,10 +424,13 @@ export class WebOSPlayer {
         // MEDIA FRAGMENT RESUME:
         // Append `#t=seconds` to the url for HLS streaming to hint the native HLS demuxer
         // to download chunks starting from the resume position immediately.
+        // NOTE: Older WebOS 3/4 demuxers crash with MEDIA_ERR_DECODE when `#t=` is present,
+        // so we strictly gate media fragments to WebOS 5+.
         // ====================================================================
         let url = options.url;
         const seconds = (options.playerStartPositionTicks || 0) / 10000000;
-        if (seconds > 0) {
+        const webosVersion = getDeviceCapabilities()?.webosVersion || 1;
+        if (seconds > 0 && webosVersion >= 5) {
             log.info(`WebOSPlayer: Appending media fragment #t=${seconds} to native HLS URL`);
             url += `#t=${seconds}`;
         }
@@ -459,9 +463,19 @@ export class WebOSPlayer {
 
             const onLoadError = () => {
                 video.removeEventListener('canplay', onCanPlay);
-                const err = video.error;
-                log.error('WebOSPlayer: Native HLS source load error', err);
-                reject(err || new Error('Native HLS load failed'));
+                video.removeEventListener('error', onLoadError);
+                const formatted = MediaHelper.formatMediaError(video.error);
+                log.error('WebOSPlayer: Native HLS source load error', formatted.message);
+
+                // If native HLS failed on this platform (common on webOS 4), fall back to Hls.js seamlessly
+                if (Hls.isSupported() && !this._hlsFallbackAttempted) {
+                    log.info('WebOSPlayer: Native HLS load failed — attempting seamless fallback to Hls.js MSE pipeline');
+                    this._hlsFallbackAttempted = true;
+                    this._playWithHlsJs(video, options).then(resolve).catch(reject);
+                    return;
+                }
+
+                reject(video.error || new Error(formatted.message));
             };
 
             video.addEventListener('canplay', onCanPlay);
@@ -509,10 +523,12 @@ export class WebOSPlayer {
         // We append the media fragment `#t=seconds` to the direct play URL.
         // This instructs the WebOS media pipeline to start demuxing/decoding
         // from the resume position right from the first packet load.
+        // NOTE: Strictly gated to WebOS 5+ to prevent decode errors on WebOS 3/4.
         // ====================================================================
         let url = options.url;
         const seconds = (options.playerStartPositionTicks || 0) / 10000000;
-        if (seconds > 0) {
+        const webosVersion = getDeviceCapabilities()?.webosVersion || 1;
+        if (seconds > 0 && webosVersion >= 5) {
             log.info(`WebOSPlayer: Appending media fragment #t=${seconds} to native DirectPlay URL`);
             url += `#t=${seconds}`;
         }
@@ -1972,25 +1988,50 @@ export class WebOSPlayer {
         const video = e.target;
 
         // Ignore stale error events fired during stop/cleanup (no src set)
-        if (!video.src && !this._hlsPlayer) {
+        if (!video.src && !this._hlsPlayer && (!video.firstChild || !video.firstChild.src)) {
             log.debug('WebOSPlayer: Ignoring error on empty source during cleanup');
             return;
         }
 
-        const errorCode    = video.error?.code    || 0;
-        const errorMessage = video.error?.message || 'Unknown error';
-        log.error('WebOSPlayer: Error', errorCode, errorMessage);
+        const formatted = MediaHelper.formatMediaError(video.error);
+        log.error(`WebOSPlayer: Error ${formatted.code} (${formatted.name}): ${formatted.message}`);
 
         // Attempt Hls.js media error recovery before giving up
-        if (errorCode === 3 && this._hlsPlayer) {
+        if (formatted.code === 3 && this._hlsPlayer) {
             log.info('WebOSPlayer: Attempting Hls.js media error recovery');
             this._hlsPlayer.recoverMediaError();
             return;
         }
 
-        const isNetworkError = errorCode === 2 || (errorMessage && /network|connection|pipeline_error_network/i.test(errorMessage));
+        const isNetworkError = formatted.code === 2 || /network|connection|pipeline_error_network/i.test(formatted.message);
 
-        this.onEvent({ type: 'error', data: { code: errorCode, message: errorMessage, isNetworkError: isNetworkError } });
+        // If native HLS playback triggered a decode error (code 3) or not supported (code 4)
+        // and Hls.js is available in this environment, attempt seamless fallback to Hls.js
+        const isHlsStream = this._currentPlayOptions?.isHls || (this._currentSrc && this._currentSrc.includes('.m3u8'));
+        if ((formatted.code === 3 || formatted.code === 4) && !this._hlsPlayer && isHlsStream && Hls.isSupported() && !this._hlsFallbackAttempted) {
+            log.warn('WebOSPlayer: Native HLS pipeline threw decode error. Attempting seamless Hls.js fallback...');
+            this._hlsFallbackAttempted = true;
+            this._playWithHlsJs(video, this._currentPlayOptions)
+                .catch(err => {
+                    log.error('WebOSPlayer: Fallback to Hls.js also failed:', err);
+                    this.onEvent({
+                        type: 'error',
+                        data: {
+                            ...formatted,
+                            isNetworkError
+                        }
+                    });
+                });
+            return;
+        }
+
+        this.onEvent({
+            type: 'error',
+            data: {
+                ...formatted,
+                isNetworkError
+            }
+        });
     }
 
     /** @private */

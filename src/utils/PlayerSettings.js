@@ -178,14 +178,16 @@ const DEFAULTS = {
        ASS SUBTITLE RENDERING ENGINE
        -------------------------------------------------------------------------
        Determines which engine is used to parse and render styled ASS/SSA cues:
-         'libjass'    — DOM-based native JS renderer. High performance on older,
-                        limited hardware, but doesn't support complex typesetting.
          'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
-                         accurate styling and drawing support.
+                         accurate styling and drawing support. Default engine
+                         when WebAssembly is supported (Chromium 57+).
+         'libjass'    — DOM-based native JS renderer. High performance on older,
+                         limited hardware without WebAssembly support
+                         (e.g., Tizen 3.0/4.0 running Chrome 47/56, WebOS <= 4.0).
          'assjs'      — Lightweight DOM-based renderer (ass.js). Uses browser
-                        native font fallback. Experimental on Tizen AVPlay.
+                         native font fallback. Experimental on Tizen AVPlay.
        ------------------------------------------------------------------------- */
-    assRenderer: 'libjass',
+    assRenderer: platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass',
 
     // Enable extracting and loading fonts embedded in media containers
     subtitleAssLoadContainerFonts: true,
@@ -655,6 +657,20 @@ export const PlayerSettings = {
             if (stored === 'true') return 'enable';
             if (stored === 'false') return 'disable';
         }
+
+        // =====================================================================
+        // ASS RENDERER HARDWARE CAPABILITY FALLBACK
+        // =====================================================================
+        // If libass-wasm was previously stored or selected, but the current
+        // device lacks WebAssembly execution capability (e.g. running on legacy
+        // Chromium < 57 engines such as Tizen 3.0/4.0 or WebOS <= 4.0),
+        // automatically fallback to libjass DOM rendering to prevent player crash.
+        // =====================================================================
+        if (key === 'assRenderer' && stored === 'libass-wasm' && !platformInfo.hasWasmSupport) {
+            log.info('Stored assRenderer is libass-wasm, but device lacks WebAssembly support; falling back to libjass');
+            return 'libjass';
+        }
+
         return stored;
     },
 

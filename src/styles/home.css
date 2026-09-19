@@ -45,7 +45,9 @@
     padding-left: 72px;
 }
 
-html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
+html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
     padding-left: 60px;
 }
 
@@ -54,7 +56,9 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
     padding-right: 72px;
 }
 
-[dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
+[dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
+[dir="rtl"] html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
+[dir="rtl"] html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
     padding-left: 0;
     padding-right: 60px;
 }
@@ -74,23 +78,29 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 }
 
 /*
- * ── Modern Skeleton Dimensions ───────────────────────────────────────────
- * Modern cards use dynamically calculated variables (--card-width,
+ * ── Modern & Expanded Skeleton Dimensions ────────────────────────────────
+ * Modern & Expanded cards use dynamically calculated variables (--card-width,
  * --card-expanded-width, --card-margin) that scale with user settings.
  * We override classic skeletons with high-specificity modern selectors.
  */
-html[data-layout-media-rows="modern"] .media-row--skeleton .media-card {
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card {
     width: var(--card-width) !important;
     height: var(--card-height) !important;
     margin-right: var(--card-margin) !important;
     margin-left: 0 !important;
 }
 
-html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape {
-    width: var(--card-expanded-width) !important;
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.landscape,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.landscape {
+    width: var(--card-expanded-width, var(--card-landscape-width, 400px)) !important;
 }
 
-html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
+html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square,
+html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.square,
+html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.square {
     width: var(--card-square-width) !important;
 }
 
@@ -188,7 +198,7 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
     height: 0;
     padding-bottom: 150%;
     overflow: hidden;
-    background: rgba(var(--jf-accent-rgb),.4); 
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05)); 
     border-radius: var(--jf-border-radius);
 
     /* Focus Border: Moved here, transparent by default */
@@ -237,6 +247,24 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square {
     /* Pre-load state */
     opacity: 0;
     transition: opacity 150ms ease-out;
+}
+
+/*
+ * ============================================================================
+ * LIVE TV CHANNEL MEDIA CARDS (Apple HIG Clean Icon Aesthetics)
+ * ============================================================================
+ * Channel logos come in varying aspect ratios (often transparent PNG logos).
+ * Using contain with generous 24px breathing room ensures crisp logo presentation
+ * without aggressive cropping or distortion.
+ * ============================================================================
+ */
+.media-card[data-type="TvChannel"] .card-image img,
+.media-card[data-item-type="TvChannel"] .card-image img,
+.media-card.tv-channel-card .card-image img {
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+    background: rgba(0, 0, 0, .5);
 }
 
 .media-card .card-image img.loaded {

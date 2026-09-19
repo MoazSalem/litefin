@@ -77,7 +77,9 @@
    ======================================================================== */
 
 .media-card.seerr-logo-card .card-image,
-html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image {
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image,
+html[data-layout-media-rows="expanded"] .media-card.seerr-logo-card:not(.grid-card) .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card.seerr-logo-card:not(.grid-card) .card-image {
     background: #181d28 !important;
     background-color: #181d28 !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -86,9 +88,19 @@ html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card
     transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, border-color 0.2s ease !important;
 }
 
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image,
+html[data-layout-media-rows="expanded"] .media-card.seerr-logo-card:not(.grid-card) .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card.seerr-logo-card:not(.grid-card) .card-image {
+    border-radius: 24px !important;
+}
+
 .media-card.seerr-logo-card .card-image img,
 html[data-layout-media-rows="modern"] .media-card.seerr-logo-card .card-image img,
-html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image img {
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card) .card-image img,
+html[data-layout-media-rows="expanded"] .media-card.seerr-logo-card .card-image img,
+html[data-layout-media-rows="expanded"] .media-card.seerr-logo-card:not(.grid-card) .card-image img,
+html[data-layout-media-rows="modern-posters"] .media-card.seerr-logo-card .card-image img,
+html[data-layout-media-rows="modern-posters"] .media-card.seerr-logo-card:not(.grid-card) .card-image img {
     object-fit: contain !important;
     padding: 40px 80px !important;
     box-sizing: border-box !important;
@@ -117,7 +129,11 @@ html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:not(.grid-card
 .media-card.seerr-logo-card.focused .card-image,
 .media-card.seerr-logo-card:hover .card-image,
 html[data-layout-media-rows="modern"] .media-card.seerr-logo-card:focus .card-image,
-html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-image {
+html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-image,
+html[data-layout-media-rows="expanded"] .media-card.seerr-logo-card:focus .card-image,
+html[data-layout-media-rows="expanded"] .media-card.seerr-logo-card.focused .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card.seerr-logo-card:focus .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card.seerr-logo-card.focused .card-image {
     background: #232a3b !important;
     background-color: #232a3b !important;
     border-color: rgba(255, 255, 255, 0.9) !important;
@@ -132,6 +148,12 @@ html[data-layout-media-rows="modern"] .media-card.seerr-logo-card.focused .card-
     border-radius: 12px !important;
     overflow: hidden !important;
     position: relative !important;
+}
+
+html[data-layout-media-rows="modern"] .media-card.seerr-genre-card .card-image,
+html[data-layout-media-rows="expanded"] .media-card.seerr-genre-card .card-image,
+html[data-layout-media-rows="modern-posters"] .media-card.seerr-genre-card .card-image {
+    border-radius: 24px !important;
 }
 
 .media-card.seerr-genre-card .card-image img {

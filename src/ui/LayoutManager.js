@@ -20,6 +20,7 @@ import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { themeUtils } from '../utils/ThemeUtils.js';
 
 import { debugOverlay } from './DebugOverlay.js';
+import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('LayoutManager');
 
@@ -35,6 +36,7 @@ const THEME_MODES = {
     CLASSIC_LIGHT: 'classic-light',
     BLACK: 'black',
     TINTED: 'tinted',
+    TINTED_LIGHT: 'tinted-light',
     AMBIENT: 'ambient'
 };
 
@@ -67,6 +69,13 @@ class LayoutManager {
 
         // Current theme color (HEX)
         this._themeColor = DEFAULT_THEME_COLOR;
+
+        /*
+         * Lighter background mode for Tinted and Classic themes.
+         * When enabled, swaps the primary canvas background with the alternate
+         * background shade for an elevated, higher-contrast luminous aesthetic.
+         */
+        this._lighterBackground = false;
 
         // Current font
         this._uiFont = 'default';
@@ -203,6 +212,11 @@ class LayoutManager {
         log.info(`Loading theme: savedMode="${savedThemeMode}" -> initialMode="${initialMode}"`);
 
         const savedThemeColor = storage.getItem('litefin:themeColor') || this._themeColor;
+        /*
+         * Load saved lighter background preference (only applies to tinted and classic modes).
+         * Defaults to false (standard deep canvas background).
+         */
+        const savedLighterBackground = storage.getItem('litefin:lighterBackground') === 'true';
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
         const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
@@ -245,6 +259,8 @@ class LayoutManager {
         this.setSidebarLayout(savedSidebarLayout, false);
         this.setThemeMode(initialMode, false);
         this.setThemeColor(savedThemeColor, false);
+        // Apply lighter background configuration without extra persistence cycle
+        this.setLighterBackground(savedLighterBackground, false);
         this.setUiFont(savedUiFont, false);
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
@@ -341,11 +357,14 @@ class LayoutManager {
         if (save) {
             storage.setItem('pref:mediaRowsLayout', layout);
         }
-        // Update badge style if it is auto
+        // Update badge style dynamically if set to auto
+        // Both 'modern' (expanding), 'expanded' (static widescreen), and 'modern-posters' media rows utilize
+        // dark translucent card backgrounds and bottom overlay labels, requiring the dark badge style.
         if (this._badgeStyle === 'auto') {
-            const resolvedStyle = layout === 'modern' ? 'dark' : 'tinted';
+            const resolvedStyle = (layout === 'modern' || layout === 'expanded' || layout === 'modern-posters' || layout === 'expanding') ? 'dark' : 'tinted';
             document.documentElement.setAttribute('data-badge-style', resolvedStyle);
         }
+        CardRenderer.clearCache();
         eventBus.emit('mediaRowsLayout:changed', { layout });
     }
 
@@ -541,9 +560,21 @@ class LayoutManager {
             --jf-focus-border-color: ${accents.accent};`;
 
         // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
-        // Only inject base text colors if NOT tinted. Tinted mode handles its own
-        // transparent text colors in tinted.css, which we shouldn't override globally.
-        if (this._themeMode !== THEME_MODES.TINTED) {
+        if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
+            /*
+             * Light Tinted mode applies warm cream / champagne typography tailored
+             * to harmonize with the elevated tinted background shade.
+             */
+            const tints = themeUtils.getTintedLightColors(this._themeColor);
+            dynamicCss += `
+            --jf-text-primary: ${tints.textPrimary};
+            --jf-text-secondary: ${tints.textSecondary};
+            --jf-text-tertiary: ${tints.textTertiary};
+            
+            --text-primary: var(--jf-text-primary);
+            --text-secondary: var(--jf-text-secondary);
+            --text-muted: var(--jf-text-secondary);`;
+        } else if (this._themeMode !== THEME_MODES.TINTED) {
             const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
             dynamicCss += `
             --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
@@ -554,7 +585,7 @@ class LayoutManager {
             --text-secondary: var(--jf-text-secondary);
             --text-muted: var(--jf-text-secondary);`;
         } else {
-            // For tinted mode, just pass through the custom aliases
+            // For dark tinted mode, just pass through the custom aliases
             dynamicCss += `
             --text-primary: var(--jf-text-primary);
             --text-secondary: var(--jf-text-secondary);
@@ -562,16 +593,38 @@ class LayoutManager {
         }
 
         // 2. Apply background variables based on theme mode
-        if (this._themeMode === THEME_MODES.TINTED) {
-            const tints = themeUtils.getTintedColors(this._themeColor);
+        if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
+            const tints = themeUtils.getTintedLightColors(this._themeColor);
+            /*
+             * Light Tinted theme provides an elevated, luminous background (~26% lightness)
+             * with crisp card elevation and rich tint characteristics (e.g., mocha/brown).
+             */
+            const bg = this._lighterBackground ? tints.backgroundAlt : tints.background;
+            const bgAlt = this._lighterBackground ? tints.background : tints.backgroundAlt;
             dynamicCss += `
-            --jf-background: ${tints.background};
-            --jf-background-alt: ${tints.backgroundAlt};
+            --jf-background: ${bg};
+            --jf-background-alt: ${bgAlt};
             --jf-surface: ${tints.surface};
             --jf-card-bg: ${tints.cardBg};
             --jf-card-bg-hover: ${tints.cardBgHover};
             --jf-divider: ${tints.divider};
-            --jf-navbar-bg: ${tints.background};`;
+            --jf-navbar-bg: ${bg};`;
+        } else if (this._themeMode === THEME_MODES.TINTED) {
+            const tints = themeUtils.getTintedColors(this._themeColor);
+            /*
+             * In Tinted mode, swapping background and background-alt provides
+             * a noticeably lighter canvas while keeping the deeper tint on complementary bars.
+             */
+            const bg = this._lighterBackground ? tints.backgroundAlt : tints.background;
+            const bgAlt = this._lighterBackground ? tints.background : tints.backgroundAlt;
+            dynamicCss += `
+            --jf-background: ${bg};
+            --jf-background-alt: ${bgAlt};
+            --jf-surface: ${tints.surface};
+            --jf-card-bg: ${tints.cardBg};
+            --jf-card-bg-hover: ${tints.cardBgHover};
+            --jf-divider: ${tints.divider};
+            --jf-navbar-bg: ${bg};`;
         } else if (this._themeMode === THEME_MODES.AMBIENT) {
             // Elegant, matte ultra-dark background.
             // A deeply saturated charcoal canvas serves as the foundation.
@@ -594,14 +647,33 @@ class LayoutManager {
             --jf-divider: rgba(255, 255, 255, 0.05);
             --jf-navbar-bg: #000000;`;
         } else if (this._themeMode === THEME_MODES.CLASSIC_DARK) {
+            /*
+             * In Classic Dark mode, swaps #101010 and #151515 for a lighter charcoal base.
+             */
+            const bg = this._lighterBackground ? '#151515' : '#101010';
+            const bgAlt = this._lighterBackground ? '#101010' : '#151515';
             dynamicCss += `
-            --jf-background: #101010;
-            --jf-background-alt: #151515;
+            --jf-background: ${bg};
+            --jf-background-alt: ${bgAlt};
             --jf-surface: #1a1a1a;
             --jf-card-bg: #151515;
             --jf-card-bg-hover: #252525;
             --jf-divider: rgba(255, 255, 255, 0.08);
-            --jf-navbar-bg: #151515;`;
+            --jf-navbar-bg: ${this._lighterBackground ? '#101010' : '#151515'};`;
+        } else if (this._themeMode === THEME_MODES.CLASSIC_LIGHT) {
+            /*
+             * In Classic Light mode, swaps #fdfdfd and #f5f5f5 for softer contrast balance.
+             */
+            const bg = this._lighterBackground ? '#f5f5f5' : '#fdfdfd';
+            const bgAlt = this._lighterBackground ? '#fdfdfd' : '#f5f5f5';
+            dynamicCss += `
+            --jf-background: ${bg};
+            --jf-background-alt: ${bgAlt};
+            --jf-surface: #ffffff;
+            --jf-card-bg: #ffffff;
+            --jf-card-bg-hover: #fcfcfc;
+            --jf-divider: #eeeeee;
+            --jf-navbar-bg: ${this._lighterBackground ? '#fdfdfd' : 'rgba(255, 255, 255, 0.95)'};`;
         }
 
         dynamicCss += `\n        }`;
@@ -616,11 +688,22 @@ class LayoutManager {
         // ====================================================================
         if (platformInfo.isAncientChrome) {
             // Resolve the exact background color for the current theme mode
-            const resolvedBg = this._themeMode === THEME_MODES.TINTED
-                ? themeUtils.getTintedColors(this._themeColor).background
-                : (this._themeMode === THEME_MODES.AMBIENT ? '#0a0b0c'
-                    : (this._themeMode === THEME_MODES.BLACK ? '#000000'
-                        : (this._themeMode === THEME_MODES.CLASSIC_LIGHT ? '#f5f5f5' : '#101010')));
+            let resolvedBg = '#101010';
+            if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
+                const tints = themeUtils.getTintedLightColors(this._themeColor);
+                resolvedBg = this._lighterBackground ? tints.backgroundAlt : tints.background;
+            } else if (this._themeMode === THEME_MODES.TINTED) {
+                const tints = themeUtils.getTintedColors(this._themeColor);
+                resolvedBg = this._lighterBackground ? tints.backgroundAlt : tints.background;
+            } else if (this._themeMode === THEME_MODES.AMBIENT) {
+                resolvedBg = '#0a0b0c';
+            } else if (this._themeMode === THEME_MODES.BLACK) {
+                resolvedBg = '#000000';
+            } else if (this._themeMode === THEME_MODES.CLASSIC_LIGHT) {
+                resolvedBg = this._lighterBackground ? '#f5f5f5' : '#fdfdfd';
+            } else if (this._themeMode === THEME_MODES.CLASSIC_DARK) {
+                resolvedBg = this._lighterBackground ? '#151515' : '#101010';
+            }
 
             // Write static background-color rule directly to body
             dynamicCss += `\n/* Direct theme overrides for Chrome < 32 */\n`;
@@ -678,6 +761,42 @@ class LayoutManager {
      */
     getThemeColor() {
         return this._themeColor;
+    }
+
+    /**
+     * Returns whether the lighter background mode is active.
+     * @returns {boolean} True if lighter background swap is enabled.
+     */
+    getLighterBackground() {
+        return this._lighterBackground;
+    }
+
+    /**
+     * Sets and activates the lighter background mode across supported themes.
+     * Swaps the primary background with the alternate background and re-applies CSS vars.
+     *
+     * @param {boolean} enabled - Whether lighter background mode is active
+     * @param {boolean} [save=true] - Whether to persist this preference in storage
+     */
+    setLighterBackground(enabled, save = true) {
+        // Update in-memory state
+        this._lighterBackground = !!enabled;
+
+        // Stamp data attribute for optional CSS scoping
+        document.documentElement.setAttribute('data-lighter-background', this._lighterBackground ? 'true' : 'false');
+
+        // Persist preference to storage if requested
+        if (save) {
+            storage.setItem('litefin:lighterBackground', this._lighterBackground ? 'true' : 'false');
+        }
+
+        // Re-calculate and inject active theme stylesheet variables
+        this._applyDynamicTheme();
+
+        log.info(`Lighter background preference updated: ${this._lighterBackground}`);
+
+        // Notify UI listeners of state alteration
+        eventBus.emit('lighterBackground:changed', { enabled: this._lighterBackground });
     }
 
     // Font and Rounded Corners helpers (Existing logic maintained)

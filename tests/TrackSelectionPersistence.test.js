@@ -371,3 +371,16 @@ test('ResponseProfiles contains only valid DLNA schema without non-standard cond
         "WebOSProfile must not declare Property: 'VideoCodec' in ResponseProfiles as it violates Jellyfin ProfileConditionValue enum"
     );
 });
+
+test('MediaHelper.formatMediaError provides descriptive error messages for all standard codes', () => {
+    // Extract formatMediaError from MediaHelper source
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    );
+    
+    // Verify formatMediaError function exists and maps error codes 1-4
+    assert.ok(mediaHelperSource.includes('formatMediaError(error)'), 'MediaHelper must define formatMediaError');
+    assert.ok(mediaHelperSource.includes('MEDIA_ERR_DECODE'), 'MediaHelper must map code 3 to MEDIA_ERR_DECODE');
+    assert.ok(mediaHelperSource.includes('MEDIA_ERR_SRC_NOT_SUPPORTED'), 'MediaHelper must map code 4 to MEDIA_ERR_SRC_NOT_SUPPORTED');
+});

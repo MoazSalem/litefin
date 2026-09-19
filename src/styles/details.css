@@ -285,6 +285,48 @@
     transition: opacity 0.3s ease-in;
 }
 
+/* 
+ * ============================================================================
+ * Modern Layouts: Proportionally Rounded Hero Poster
+ * ============================================================================
+ * Uses a generous 28px squircle radius matching modern card aesthetics.
+ * ============================================================================
+ */
+html[data-layout-media-rows="modern"] .hero-poster,
+html[data-layout-media-rows="expanded"] .hero-poster,
+html[data-layout-media-rows="modern-posters"] .hero-poster {
+    border-radius: 28px;
+    -webkit-border-radius: 28px;
+}
+
+html[data-layout-media-rows="modern"] .hero-poster img,
+html[data-layout-media-rows="modern"] .hero-poster .media-fallback,
+html[data-layout-media-rows="expanded"] .hero-poster img,
+html[data-layout-media-rows="expanded"] .hero-poster .media-fallback,
+html[data-layout-media-rows="modern-posters"] .hero-poster img,
+html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
+    border-radius: 28px;
+    -webkit-border-radius: 28px;
+}
+
+/*
+ * ============================================================================
+ * Live TV Channel Hero Poster (Apple HIG Clean Icon Aesthetics)
+ * ============================================================================
+ * Preserve channel logo aspect ratio with contain and centered breathing room.
+ * Matches .media-card channel styling for complete visual harmony.
+ * ============================================================================
+ */
+.hero-poster.tv-channel-poster img,
+.hero-poster[data-type="TvChannel"] img,
+.hero-poster.square[data-type="TvChannel"] img,
+.details-page[data-item-type="TvChannel"] .hero-poster img {
+    object-fit: contain !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+}
+
 .hero-poster img.loaded {
     opacity: 1;
 }
@@ -1580,6 +1622,76 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .person-page #person-episodes .card-image {
     width: 100%;
     height: 194px !important; /* True 16:9 widescreen ratio (~344px card width) */
+}
+
+/* Modern Layouts: Rounded Corners for Person Page & Seerr Grids */
+html[data-layout-media-rows="modern"] .person-grid .card-image,
+html[data-layout-media-rows="expanded"] .person-grid .card-image,
+html[data-layout-media-rows="modern-posters"] .person-grid .card-image,
+html[data-layout-media-rows="modern"] .person-page #person-episodes .card-image,
+html[data-layout-media-rows="expanded"] .person-page #person-episodes .card-image,
+html[data-layout-media-rows="modern-posters"] .person-page #person-episodes .card-image {
+    border-radius: 24px !important;
+    -webkit-border-radius: 24px !important;
+    border: none !important;
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05)) !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+html[data-layout-media-rows="modern"] .person-grid .card-image img,
+html[data-layout-media-rows="expanded"] .person-grid .card-image img,
+html[data-layout-media-rows="modern-posters"] .person-grid .card-image img,
+html[data-layout-media-rows="modern"] .person-page #person-episodes .card-image img,
+html[data-layout-media-rows="expanded"] .person-page #person-episodes .card-image img,
+html[data-layout-media-rows="modern-posters"] .person-page #person-episodes .card-image img {
+    border-radius: 24px !important;
+    -webkit-border-radius: 24px !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+html[data-layout-media-rows="modern"] .person-grid .media-card:focus .card-image,
+html[data-layout-media-rows="modern"] .person-grid .media-card.focused .card-image,
+html[data-layout-media-rows="expanded"] .person-grid .media-card:focus .card-image,
+html[data-layout-media-rows="expanded"] .person-grid .media-card.focused .card-image,
+html[data-layout-media-rows="modern-posters"] .person-grid .media-card:focus .card-image,
+html[data-layout-media-rows="modern-posters"] .person-grid .media-card.focused .card-image,
+html[data-layout-media-rows="modern"] .person-page #person-episodes .media-card:focus .card-image,
+html[data-layout-media-rows="modern"] .person-page #person-episodes .media-card.focused .card-image,
+html[data-layout-media-rows="expanded"] .person-page #person-episodes .media-card:focus .card-image,
+html[data-layout-media-rows="expanded"] .person-page #person-episodes .media-card.focused .card-image,
+html[data-layout-media-rows="modern-posters"] .person-page #person-episodes .media-card:focus .card-image,
+html[data-layout-media-rows="modern-posters"] .person-page #person-episodes .media-card.focused .card-image {
+    border: none !important;
+    outline: none !important;
+}
+
+/* Modern Layouts: Person & Episode Grid Apple HIG Overlay Focus Ring */
+html[data-layout-media-rows="modern"] .person-grid .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern"] .person-grid .media-card.focused .card-image::after,
+html[data-layout-media-rows="expanded"] .person-grid .media-card:focus .card-image::after,
+html[data-layout-media-rows="expanded"] .person-grid .media-card.focused .card-image::after,
+html[data-layout-media-rows="modern-posters"] .person-grid .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern-posters"] .person-grid .media-card.focused .card-image::after,
+html[data-layout-media-rows="modern"] .person-page #person-episodes .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern"] .person-page #person-episodes .media-card.focused .card-image::after,
+html[data-layout-media-rows="expanded"] .person-page #person-episodes .media-card:focus .card-image::after,
+html[data-layout-media-rows="expanded"] .person-page #person-episodes .media-card.focused .card-image::after,
+html[data-layout-media-rows="modern-posters"] .person-page #person-episodes .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern-posters"] .person-page #person-episodes .media-card.focused .card-image::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 24px;
+    -webkit-border-radius: 24px;
+    border: 4px solid var(--jf-focus-border-color, var(--jf-accent));
+    box-sizing: border-box;
+    z-index: 10;
+    pointer-events: none;
 }
 
 

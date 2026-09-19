@@ -446,7 +446,8 @@ class LazyLoader {
                 parent.classList.contains('queue-row__thumb-wrap'));
 
         if (isSupportedParent) {
-            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+            const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
+            const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded' || mediaLayout === 'modern-posters';
 
             parent.classList.remove('skeleton-shimmer');
 
@@ -459,12 +460,14 @@ class LazyLoader {
 
             if (gradNum && initials && name && !parent.querySelector('.media-fallback')) {
                 const hideInitials = img.dataset.fbHideInitials === 'true';
+                const isLibrary = parent.closest('.library-grid, .library-row, .library-content') !== null || parent.dataset?.contextType === 'library';
+                const showName = isLibrary || hideInitials || !isModernOrExpanded;
                 // dataset.* decodes the escaped attribute values back to raw
                 // strings — escape again before insertAdjacentHTML.
                 const fallbackHtml = `
                     <div class="media-fallback grad-${gradNum}">
                         ${!hideInitials ? `<div class="media-fallback-initials">${escapeHtml(initials)}</div>` : ''}
-                        ${!isModern ? `<div class="media-fallback-name">${escapeHtml(name)}</div>` : ''}
+                        ${showName ? `<div class="media-fallback-name">${escapeHtml(name)}</div>` : ''}
                     </div>
                 `;
                 parent.insertAdjacentHTML('afterbegin', fallbackHtml);

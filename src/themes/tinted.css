@@ -7,7 +7,8 @@
  * ============================================================================
  */
 
-[data-theme-mode="tinted"] {
+[data-theme-mode="tinted"],
+[data-theme-mode="tinted-light"] {
     --jf-overlay-bg: rgba(0, 0, 0, 0.8);
 
     --jf-text-primary: #ffffff;
@@ -49,7 +50,8 @@
     --jf-primary-btn-color: var(--jf-accent-content-color);
 }
 
-[data-theme-mode="tinted"] .page::before {
+[data-theme-mode="tinted"] .page::before,
+[data-theme-mode="tinted-light"] .page::before {
     content: '';
     position: fixed;
     top: 0;
