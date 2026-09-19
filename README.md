@@ -1,5 +1,5 @@
 <h1 align="center">Litefin</h1>
-<h3 align="center">A High-Performance, Native Jellyfin Client for Samsung Tizen and LG web-OS TVs</h3>
+<h3 align="center">A Jellyfin Client for Samsung Tizen and LG web-OS TVs</h3>
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/MoazSalem/litefin?color=blue&label=version&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
 [![GitHub all releases](https://img.shields.io/github/downloads/MoazSalem/litefin/total?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
