@@ -567,6 +567,25 @@ export function buildJellyfinProfile(options = {}) {
                 bitrateCondition
             ]
         },
+        // ---------------------------------------------------------------------
+        // Video Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
+        // Enforce maximum audio channels on audio streams inside video files.
+        // ---------------------------------------------------------------------
+        {
+            Type: 'VideoAudio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    Value: maxAudioChannels,
+                    IsRequired: false
+                }
+            ]
+        },
+        // ---------------------------------------------------------------------
+        // Standalone Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
         {
             Type: 'Audio',
             Conditions: [

@@ -919,6 +919,27 @@ export function buildJellyfinProfile(options = {}) {
                     : [])
             ]
         },
+        // ---------------------------------------------------------------------
+        // Video Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
+        // Enforce maximum audio channels on audio streams inside video files
+        // (MKV, MP4, TS, etc.) so Jellyfin evaluates server-side transcode/downmix.
+        // ---------------------------------------------------------------------
+        {
+            Type: 'VideoAudio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    // ProfileCondition.Value must be a string in Jellyfin's schema
+                    Value: maxAudioChannelsStr,
+                    IsRequired: false
+                }
+            ]
+        },
+        // ---------------------------------------------------------------------
+        // Standalone Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
         {
             Type: 'Audio',
             Conditions: [
