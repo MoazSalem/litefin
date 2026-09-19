@@ -543,16 +543,59 @@ export const MediaHelper = {
     },
 
     // ========================================================================
-    // Cross-Origin Helpers
+    // Media Error Diagnostics
     // ========================================================================
 
     /**
-     * Get cross-origin value for media element
-     * @param {Object} mediaSource
-     * @returns {string|null}
+     * Parse and format HTML5 MediaError objects into rich, informative diagnostics.
+     * Provides clear human-readable error names and descriptions when older TV
+     * browsers (such as webOS 4 / Tizen 3) emit an empty or generic 'Unknown error'.
+     *
+     * @param {MediaError|Object|null} error - The video element's error object
+     * @returns {{code: number, name: string, message: string, details: string}}
      */
-    getCrossOriginValue(mediaSource) {
-        return null; // Disable CORS checks for video element to avoid "Failed to initialize" on local networks
+    formatMediaError(error) {
+        // Extract numeric error code (default to 0 if not present)
+        const code = error?.code || 0;
+        const rawMessage = error?.message || '';
+
+        let name = 'MEDIA_ERR_UNKNOWN';
+        let details = 'An unknown media playback error occurred.';
+
+        // Map standard HTML5 MediaError codes
+        switch (code) {
+            case 1: // MEDIA_ERR_ABORTED
+                name = 'MEDIA_ERR_ABORTED';
+                details = 'Media playback was aborted by client request.';
+                break;
+            case 2: // MEDIA_ERR_NETWORK
+                name = 'MEDIA_ERR_NETWORK';
+                details = 'A network error caused the media download to fail.';
+                break;
+            case 3: // MEDIA_ERR_DECODE
+                name = 'MEDIA_ERR_DECODE';
+                details = 'Hardware/software decoder error: Incompatible codec, profile, bit depth, or corrupted bitstream.';
+                break;
+            case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                name = 'MEDIA_ERR_SRC_NOT_SUPPORTED';
+                details = 'The media resource format or MIME type is not supported by this device.';
+                break;
+            default:
+                break;
+        }
+
+        // Build clean diagnostic message incorporating raw error if provided
+        const hasSpecificMsg = rawMessage && rawMessage.trim().length > 0 && rawMessage.toLowerCase() !== 'unknown error';
+        const message = hasSpecificMsg
+            ? `${name} (${code}): ${rawMessage} — ${details}`
+            : `${name} (${code}): ${details}`;
+
+        return {
+            code,
+            name,
+            message,
+            details
+        };
     }
 };
 
