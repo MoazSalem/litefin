@@ -124,6 +124,11 @@ class PlayerPage extends Page {
         this._autoRecoveryTimer = null;
         this._autoRecoveryPositionTicks = 0;
         this._autoRecoveryAttempts = 0;
+
+        // Early Playback Stall Watchdog & Network event handlers
+        this._playbackStallTimer = null;
+        this._onNetworkOffline = null;
+        this._onNetworkOnline = null;
     }
 
     /**
@@ -417,6 +422,18 @@ class PlayerPage extends Page {
             eventBus.on('app:hidden', this._onAppHidden);
             this._onAppVisible = () => this._handleAppVisible();
             eventBus.on('app:visible', this._onAppVisible);
+
+            // ================================================================
+            // NETWORK RESILIENCE & OFFLINE EVENT HANDLERS
+            // ================================================================
+            // Detect network disconnection immediately rather than waiting
+            // 20-30s for the browser/demuxer socket timeouts.
+            this._onNetworkOffline = () => this._handleNetworkOffline();
+            this._onNetworkOnline = () => this._handleNetworkOnline();
+            eventBus.on('websocket:disconnected', this._onNetworkOffline);
+            eventBus.on('websocket:connected', this._onNetworkOnline);
+            window.addEventListener('offline', this._onNetworkOffline);
+            window.addEventListener('online', this._onNetworkOnline);
 
             // ================================================================
             // REMOTE CONTROL HANDLERS
@@ -900,9 +917,18 @@ class PlayerPage extends Page {
         // Listen for player events
         // Note: 'ready' is not emitted by JellyfinPlayer, so we call it manually below
         // this._player.on('play', () => this._onPlaying()); // Handled by 'playing'
-        this._player.on('pause', () => this._onPaused());
-        this._player.on('ended', () => this._onEnded());
-        this._player.on('error', (err) => this._onPlayerError(err));
+        this._player.on('pause', () => {
+            this._clearPlaybackStallWatchdog();
+            this._onPaused();
+        });
+        this._player.on('ended', () => {
+            this._clearPlaybackStallWatchdog();
+            this._onEnded();
+        });
+        this._player.on('error', (err) => {
+            this._clearPlaybackStallWatchdog();
+            this._onPlayerError(err);
+        });
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
         this._player.on('secondarysubtitlechange', (data) => this._onSecondarySubtitleChange(data));
@@ -910,6 +936,7 @@ class PlayerPage extends Page {
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
         this._player.on('seek', (data) => {
+            this._clearPlaybackStallWatchdog();
             if (data && data.positionTicks !== undefined) {
                 // Synchronize seek target directly to resume position
                 if (typeof data.positionTicks === 'number') {
@@ -920,8 +947,11 @@ class PlayerPage extends Page {
                 this._reportPlaybackProgress('timeupdate');
             }
         });
-        // Waiting listener removed to prevent loading screen during seek/buffer
+        // Hook buffering/stalled events for proactive network dropout watchdog
+        this._player.on('waiting', () => this._onPlayerWaiting());
+        this._player.on('stalled', () => this._onPlayerWaiting());
         this._player.on('restarting', () => {
+            this._clearPlaybackStallWatchdog();
             log.info('Player restarting (quality change), showing loading');
             this._showLoading(true);
 
@@ -946,6 +976,7 @@ class PlayerPage extends Page {
         });
 
         this._player.on('playing', () => {
+            this._clearPlaybackStallWatchdog();
             this._showLoading(false);
             this._onPlaying();
         });
@@ -1786,6 +1817,7 @@ class PlayerPage extends Page {
         eventBus.emit('player:paused', { item: this._item });
 
         this._isPaused = true;
+        this._clearPlaybackStallWatchdog();
         // Report paused state with explicit 'pause' event
         this._reportPlaybackProgress('pause');
 
@@ -2420,6 +2452,120 @@ class PlayerPage extends Page {
     }
 
     /**
+     * ========================================================================
+     * Early Playback Stall Watchdog
+     * ========================================================================
+     * If the video element or AVPlayer enters a stalled/waiting buffering state,
+     * this watchdog checks network health after 3.5 seconds. If unreachable,
+     * it immediately trips Auto-Recovery rather than waiting ~30s for demuxer fatal.
+     * ========================================================================
+     * @private
+     */
+    _onPlayerWaiting() {
+        if (this._isAutoRecovering || this._isPaused || this._isExiting) return;
+
+        // Clear any active stall timer
+        this._clearPlaybackStallWatchdog();
+
+        // 3.5-second watchdog: if still stalled and network is failing, engage auto-recovery early
+        this._playbackStallTimer = setTimeout(async () => {
+            if (this._isAutoRecovering || this._isPaused || this._isExiting) return;
+
+            log.warn('[PlaybackWatchdog] Buffering stalled for 3.5s, checking network health...');
+
+            // If browser already reports offline or WebSocket disconnected, recover immediately
+            const isNavigatorOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+            const isWsDisconnected = typeof api !== 'undefined' && api.isWebSocketConnected === false;
+
+            if (isNavigatorOffline || isWsDisconnected) {
+                log.warn('[PlaybackWatchdog] Offline status confirmed during stall. Starting auto-recovery.');
+                this._startAutoRecovery({
+                    isNetworkError: true,
+                    message: 'Playback stalled while offline'
+                });
+                return;
+            }
+
+            // Otherwise, perform a quick 1.5s ping check to verify server availability
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const pingUrl = `${api.serverUrl}/System/Ping`;
+                const response = await fetch(pingUrl, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                log.info('[PlaybackWatchdog] Server ping succeeded during stall; waiting for stream buffer to resume.');
+            } catch (err) {
+                log.warn('[PlaybackWatchdog] Server ping check failed during stall:', err.message);
+                if (!this._isAutoRecovering && !this._isPaused && !this._isExiting) {
+                    this._startAutoRecovery({
+                        isNetworkError: true,
+                        message: 'Server unreachable during playback stall'
+                    });
+                }
+            }
+        }, 3500);
+    }
+
+    /**
+     * Clear the playback stall watchdog timer.
+     * @private
+     */
+    _clearPlaybackStallWatchdog() {
+        if (this._playbackStallTimer) {
+            clearTimeout(this._playbackStallTimer);
+            this._playbackStallTimer = null;
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Handle Network Dropout & WebSocket Disconnection Events
+     * ========================================================================
+     * When network connectivity drops, engaging auto-recovery immediately prevents
+     * the player from freezing for 20-30s while the browser/OS socket times out.
+     * ========================================================================
+     * @private
+     */
+    _handleNetworkOffline() {
+        log.warn('[AutoRecovery] Network offline event or WebSocket disconnect detected');
+        const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
+        
+        // If actively playing or buffered and not already recovering or paused
+        if (!this._isAutoRecovering && !this._isPaused && !this._isExiting && (this._hasReportedStart || currentPosTicks > 0)) {
+            log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
+            this._startAutoRecovery({
+                isNetworkError: true,
+                message: 'Network offline / WebSocket disconnected'
+            });
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Handle Network Online Restoration Event
+     * ========================================================================
+     * Accelerates the reconnection check step when internet/WebSocket comes back.
+     * ========================================================================
+     * @private
+     */
+    _handleNetworkOnline() {
+        log.info('[AutoRecovery] Network online / WebSocket connected event received');
+        if (this._isAutoRecovering && this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+            this._pollForReconnection();
+        }
+    }
+
+    /**
      * Show or hide the Apple-style Frosted Glass Reconnection HUD.
      * @param {boolean} show - Whether to display or hide the HUD
      * @param {string} [statusText] - Optional status message to show
@@ -2454,6 +2600,7 @@ class PlayerPage extends Page {
         if (this._isAutoRecovering) return;
         this._isAutoRecovering = true;
         this._autoRecoveryAttempts = 0;
+        this._clearPlaybackStallWatchdog();
 
         // 1. Capture exact playback position before backend is torn down
         const currentTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
@@ -4323,6 +4470,21 @@ class PlayerPage extends Page {
         if (this._subtitleTimeout) {
             clearTimeout(this._subtitleTimeout);
             this._subtitleTimeout = null;
+        }
+
+        // Clear stall watchdog timer
+        this._clearPlaybackStallWatchdog();
+
+        // Remove network offline/online listeners
+        if (this._onNetworkOffline) {
+            eventBus.off('websocket:disconnected', this._onNetworkOffline);
+            window.removeEventListener('offline', this._onNetworkOffline);
+            this._onNetworkOffline = null;
+        }
+        if (this._onNetworkOnline) {
+            eventBus.off('websocket:connected', this._onNetworkOnline);
+            window.removeEventListener('online', this._onNetworkOnline);
+            this._onNetworkOnline = null;
         }
 
         // Remove app lifecycle listeners

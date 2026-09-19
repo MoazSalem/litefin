@@ -754,6 +754,20 @@ export class TizenAVPlayer {
                 this._bufferingComplete = false;
                 this._isNativeBuffering = true;
 
+                // Immediate check if navigator is already explicitly offline
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    log.warn('TizenAVPlayer: Buffering while offline — emitting network error early');
+                    this.onEvent({
+                        type: 'error',
+                        data: {
+                            code: 'PLAYER_ERROR_CONNECTION_FAILED',
+                            message: 'PLAYER_ERROR_CONNECTION_FAILED',
+                            isNetworkError: true
+                        }
+                    });
+                    return;
+                }
+
                 if (this._isPlaying && !this._suppressWaitingEvent) {
                     this.onEvent({ type: 'waiting' });
                 }

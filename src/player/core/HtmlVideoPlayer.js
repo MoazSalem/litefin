@@ -1607,10 +1607,38 @@ export class HtmlVideoPlayer {
     _startStallCheck() {
         this._clearStallCheck();
         
+        // Immediate check if navigator is already explicitly offline
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            log.warn('Playback stalled while navigator is offline — emitting network error early');
+            this.onEvent({
+                type: 'error',
+                data: {
+                    code: 2,
+                    message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                    isNetworkError: true
+                }
+            });
+            return;
+        }
+
         // If we stay in waiting/stalled for too long on Tizen, try to kick it
         this._stallTimer = setTimeout(() => {
             if (this._videoElement && !this._videoElement.paused && this._started) {
-                log.warn('Playback still stalled after 5s - attempting recovery kick');
+                log.warn('Playback still stalled after 3.5s - attempting recovery kick');
+                
+                // If navigator turned offline during stall, fire network error immediately
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    this.onEvent({
+                        type: 'error',
+                        data: {
+                            code: 2,
+                            message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                            isNetworkError: true
+                        }
+                    });
+                    return;
+                }
+
                 try {
                     // Small jump to trigger buffer re-evaluation
                     this._videoElement.currentTime += 0.01;
@@ -1618,7 +1646,7 @@ export class HtmlVideoPlayer {
                     log.error('Stall recovery kick failed:', e);
                 }
             }
-        }, 5000);
+        }, 3500);
     }
 
     /** @private */

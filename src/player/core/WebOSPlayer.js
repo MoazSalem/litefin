@@ -1988,7 +1988,9 @@ export class WebOSPlayer {
             return;
         }
 
-        this.onEvent({ type: 'error', data: { code: errorCode, message: errorMessage } });
+        const isNetworkError = errorCode === 2 || (errorMessage && /network|connection|pipeline_error_network/i.test(errorMessage));
+
+        this.onEvent({ type: 'error', data: { code: errorCode, message: errorMessage, isNetworkError: isNetworkError } });
     }
 
     /** @private */
@@ -2166,6 +2168,20 @@ export class WebOSPlayer {
     _startStallCheck() {
         this._clearStallCheck();
 
+        // Immediate check if navigator is already explicitly offline
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            log.warn('WebOSPlayer: Playback stalled while navigator is offline — emitting network error early');
+            this.onEvent({
+                type: 'error',
+                data: {
+                    code: 2,
+                    message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                    isNetworkError: true
+                }
+            });
+            return;
+        }
+
         // ----------------------------------------------------------------
         // Sample the buffer AND currentTime RIGHT NOW, at the moment the
         // stall is detected. Buffer tells us network vs decoder. currentTime
@@ -2280,6 +2296,19 @@ export class WebOSPlayer {
             // ────────────────────────────────────────────────────────────────
             this._stallTimer = setTimeout(() => {
                 if (!this._videoElement || this._videoElement.paused || !this._started) return;
+
+                // If navigator turned offline during stall, fire network error immediately
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    this.onEvent({
+                        type: 'error',
+                        data: {
+                            code: 2,
+                            message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                            isNetworkError: true
+                        }
+                    });
+                    return;
+                }
 
                 // Self-recovery check (same as fast path)
                 const timeNow = this._videoElement.currentTime;
