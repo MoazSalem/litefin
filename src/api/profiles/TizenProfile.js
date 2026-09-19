@@ -817,6 +817,32 @@ export function buildJellyfinProfile(options = {}) {
                 ...hdrCondition
             ]
         },
+        // ---------------------------------------------------------------------
+        // Video Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
+        // In Jellyfin's DLNA profile schema, Type: 'VideoAudio' evaluates the
+        // audio streams embedded inside video containers (MKV, MP4, TS, etc.).
+        // Without this, the server only matches Type: 'Audio' against pure audio
+        // files (music), allowing video tracks with higher channel counts (e.g. 7.1)
+        // to bypass user settings and attempt native DirectPlay on AVPlay.
+        // ---------------------------------------------------------------------
+        {
+            Type: 'VideoAudio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    // ProfileCondition.Value must be a string in Jellyfin's schema
+                    Value: maxAudioChannelsStr,
+                    IsRequired: false
+                }
+            ]
+        },
+        // ---------------------------------------------------------------------
+        // Standalone Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
+        // Enforces maximum audio channels for music and standalone audio tracks.
+        // ---------------------------------------------------------------------
         {
             Type: 'Audio',
             Conditions: [
@@ -869,20 +895,36 @@ export function buildJellyfinProfile(options = {}) {
     // NOTE: This does NOT control the output channel count of transcodes — that is governed
     // solely by MaxAudioChannels in the TranscodingProfile, which we've already set correctly.
     // This CodecProfile only affects DirectPlay/DirectStream path decisions.
-    codecProfiles.push({
-        Type: 'Audio',
-        Codec: 'aac',
-        Conditions: [
-            {
-                Condition: 'LessThanEqual',
-                Property: 'AudioChannels',
-                // Permit DirectPlay of AAC only if channel count is within safe limits.
-                // ProfileCondition.Value must always be a string in Jellyfin's schema.
-                Value: caps.tizenVersion >= 6 ? maxAudioChannelsStr : '2',
-                IsRequired: false
-            }
-        ]
-    });
+    codecProfiles.push(
+        {
+            Type: 'VideoAudio',
+            Codec: 'aac',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    // Permit DirectPlay of AAC only if channel count is within safe limits.
+                    // ProfileCondition.Value must always be a string in Jellyfin's schema.
+                    Value: caps.tizenVersion >= 6 ? maxAudioChannelsStr : '2',
+                    IsRequired: false
+                }
+            ]
+        },
+        {
+            Type: 'Audio',
+            Codec: 'aac',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    // Permit DirectPlay of AAC only if channel count is within safe limits.
+                    // ProfileCondition.Value must always be a string in Jellyfin's schema.
+                    Value: caps.tizenVersion >= 6 ? maxAudioChannelsStr : '2',
+                    IsRequired: false
+                }
+            ]
+        }
+    );
 
     // Explicitly force transcoding of DTS/TrueHD tracks if the user
     // has disabled passthrough for them.

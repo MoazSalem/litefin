@@ -262,7 +262,8 @@ var http = require('http');
 var urlMod = require('url');
 
 var PORT = 8123;
-var LISTEN_HOST = '0.0.0.0';
+/* Bind strictly to loopback (127.0.0.1) so the service never opens listening sockets on the TV's physical Ethernet NIC */
+var LISTEN_HOST = '127.0.0.1';
 
 function writeResponse(res, code, contentType, body) {
     var headers = {

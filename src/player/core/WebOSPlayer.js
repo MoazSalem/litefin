@@ -418,6 +418,8 @@ export class WebOSPlayer {
         // Clear any stale source first
         video.removeAttribute('src');
 
+        // Ensure HLS manifest exists before assigning source
+        await MediaHelper.pollHlsManifest(options.url);
         // ====================================================================
         // MEDIA FRAGMENT RESUME:
         // Append `#t=seconds` to the url for HLS streaming to hint the native HLS demuxer
@@ -432,6 +434,9 @@ export class WebOSPlayer {
             log.info(`WebOSPlayer: Appending media fragment #t=${seconds} to native HLS URL`);
             url += `#t=${seconds}`;
         }
+
+        // Ensure HLS manifest exists before assigning source
+        await MediaHelper.pollHlsManifest(options.url);
 
         // Use a <source> element with the MIME type hint so WebOS picks the
         // right codec path — without it, some versions skip the native HLS path.
@@ -605,21 +610,66 @@ export class WebOSPlayer {
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut:    20000,
                 fragLoadingTimeOut:     20000,
-                maxBufferSize:          60 * 1000 * 1000, // 60 MB
+                maxBufferSize:          60 * 1000 * 1000,
                 enableWorker:           true
             });
+
+            let bufferReady = false;
+            let initialBufferTimer = null;
+            let resolved = false;
+
+            const resolveOnce = (value) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                resolve(value);
+            };
+
+            const rejectOnce = (reason) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                reject(reason);
+            };
+
+            const startPlayback = () => {
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => resolveOnce())
+                        .catch(err => this._handleAutoplayError(err, video, options, resolveOnce, rejectOnce));
+                } else {
+                    resolveOnce();
+                }
+            };
+
+            // Buffer-readiness gate: defer play() until the first segment is buffered.
+            const onBufferAppended = () => {
+                if (bufferReady) return;
+                bufferReady = true;
+                clearTimeout(initialBufferTimer);
+                log.info('WebOSPlayer: Hls.js initial segment buffered, starting playback');
+                startPlayback();
+            };
+
+            initialBufferTimer = setTimeout(() => {
+                if (!bufferReady) {
+                    log.warn('WebOSPlayer: Hls.js initial buffer timeout (3s) — forcing play');
+                    bufferReady = true;
+                    startPlayback();
+                }
+            }, 3000);
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('WebOSPlayer: Hls.js manifest parsed');
                 this._applyInitialTracks(options, hls);
-                const playPromise = video.play();
-                if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                    playPromise
-                        .then(resolve)
-                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
-                } else {
-                    resolve();
+
+                if (options.autoPlay === false) {
+                    resolveOnce();
                 }
+                // Otherwise BUFFER_APPENDED or timeout will call startPlayback()
             });
 
             if (options.playerStartPositionTicks) {
@@ -629,7 +679,6 @@ export class WebOSPlayer {
             }
 
             hls.on(Hls.Events.ERROR, (event, data) => {
-                // Swallow non-fatal buffer stalls — they typically self-recover
                 if (data.details === 'bufferStalledError' && !data.fatal) {
                     log.warn('WebOSPlayer: Hls.js non-fatal buffer stall');
                     return;
@@ -648,11 +697,14 @@ export class WebOSPlayer {
                             break;
                         default:
                             hls.destroy();
-                            reject(new Error('Hls.js fatal error'));
+                            rejectOnce(new Error('Hls.js fatal error'));
                             break;
                     }
                 }
             });
+
+            // Listen for the first segment buffered — triggers play()
+            hls.on(Hls.Events.BUFFER_APPENDED, onBufferAppended);
 
             hls.loadSource(options.url);
             hls.attachMedia(video);
@@ -1951,6 +2003,8 @@ export class WebOSPlayer {
             return;
         }
 
+        const isNetworkError = formatted.code === 2 || /network|connection|pipeline_error_network/i.test(formatted.message);
+
         // If native HLS playback triggered a decode error (code 3) or not supported (code 4)
         // and Hls.js is available in this environment, attempt seamless fallback to Hls.js
         const isHlsStream = this._currentPlayOptions?.isHls || (this._currentSrc && this._currentSrc.includes('.m3u8'));
@@ -1960,12 +2014,24 @@ export class WebOSPlayer {
             this._playWithHlsJs(video, this._currentPlayOptions)
                 .catch(err => {
                     log.error('WebOSPlayer: Fallback to Hls.js also failed:', err);
-                    this.onEvent({ type: 'error', data: formatted });
+                    this.onEvent({
+                        type: 'error',
+                        data: {
+                            ...formatted,
+                            isNetworkError
+                        }
+                    });
                 });
             return;
         }
 
-        this.onEvent({ type: 'error', data: formatted });
+        this.onEvent({
+            type: 'error',
+            data: {
+                ...formatted,
+                isNetworkError
+            }
+        });
     }
 
     /** @private */
@@ -2143,6 +2209,20 @@ export class WebOSPlayer {
     _startStallCheck() {
         this._clearStallCheck();
 
+        // Immediate check if navigator is already explicitly offline
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            log.warn('WebOSPlayer: Playback stalled while navigator is offline — emitting network error early');
+            this.onEvent({
+                type: 'error',
+                data: {
+                    code: 2,
+                    message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                    isNetworkError: true
+                }
+            });
+            return;
+        }
+
         // ----------------------------------------------------------------
         // Sample the buffer AND currentTime RIGHT NOW, at the moment the
         // stall is detected. Buffer tells us network vs decoder. currentTime
@@ -2257,6 +2337,19 @@ export class WebOSPlayer {
             // ────────────────────────────────────────────────────────────────
             this._stallTimer = setTimeout(() => {
                 if (!this._videoElement || this._videoElement.paused || !this._started) return;
+
+                // If navigator turned offline during stall, fire network error immediately
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    this.onEvent({
+                        type: 'error',
+                        data: {
+                            code: 2,
+                            message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                            isNetworkError: true
+                        }
+                    });
+                    return;
+                }
 
                 // Self-recovery check (same as fast path)
                 const timeNow = this._videoElement.currentTime;
