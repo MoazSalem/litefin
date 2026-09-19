@@ -1302,8 +1302,8 @@ body.webos-cursor-active .focused {
  * Disables expensive GPU-accelerated CSS properties to prevent compositor 
  * memory exhaustion and rendering glitches on Tizen/WebOS hardware.
  */
-/* Global transition removal, EXCLUDING media cards, loading indicators, and OSD (handled by scaling toggle) */
-html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small):not(.player-osd):not(.osd-main):not(.osd-top):not(.osd-bottom) {
+/* Global transition removal, EXCLUDING media cards, loading indicators, OSD, and subtitle renderers */
+html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small):not(.player-osd):not(.osd-main):not(.osd-top):not(.osd-bottom):not(.subtitle-overlay):not(.subtitle-line):not(.libjass-wrapper):not(.libjass-subs):not([class*="ASS-"]):not(.libass-wasm-wrapper):not(.pgs-subtitle-wrapper) {
     /* Stop forcing GPU promotion for every moving part */
     will-change: auto !important;
 
@@ -1329,6 +1329,30 @@ html[data-low-vram="true"] .loading-spinner-small::before {
     -webkit-animation: animloader-gpu 1s infinite ease-in-out !important;
     animation: animloader-gpu 1s infinite ease-in-out !important;
     will-change: transform !important;
+}
+
+/* 
+ * Subtitle Renderers & Overlays Exception
+ * Subtitle animations (ASS/SSA transforms, movements, fades, karaoke, and dynamic cue styles)
+ * are localized strictly to active cues. We explicitly restore animations, transitions,
+ * and transforms for all subtitle containers and their descendant elements in Low VRAM mode.
+ */
+html[data-low-vram="true"] .subtitle-overlay,
+html[data-low-vram="true"] .subtitle-overlay *,
+html[data-low-vram="true"] .libjass-wrapper,
+html[data-low-vram="true"] .libjass-wrapper *,
+html[data-low-vram="true"] .libjass-subs,
+html[data-low-vram="true"] .libjass-subs *,
+html[data-low-vram="true"] [class*="ASS-"],
+html[data-low-vram="true"] [class*="ASS-"] *,
+html[data-low-vram="true"] .libass-wasm-wrapper,
+html[data-low-vram="true"] .libass-wasm-wrapper *,
+html[data-low-vram="true"] .pgs-subtitle-wrapper,
+html[data-low-vram="true"] .pgs-subtitle-wrapper * {
+    -webkit-transition: inherit;
+    transition: inherit;
+    -webkit-animation: inherit;
+    animation: inherit;
 }
 
 /* 
