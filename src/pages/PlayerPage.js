@@ -452,8 +452,26 @@ class PlayerPage extends Page {
                 };
             };
 
+            /*
+             * ================================================================
+             * HARDWARE & NETWORK REMOTE PLAYBACK COMMANDS
+             * ================================================================
+             * When scrubbing the timeline in 'Confirm Seek with OK' mode,
+             * remote playback controls (Play, Pause, Play/Pause) serve as
+             * direct seek confirmation triggers in addition to the OK key.
+             * ================================================================
+             */
             this._onRemotePause = () => {
                 log.info('Remote: Pause');
+
+                // If user was preview scrubbing, commit the seek and remain paused
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Pause confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('pause');
+                    this._reportPlaybackProgress('pause');
+                    return;
+                }
+
                 if (this._player?.pause) {
                     this._player.pause();
                     // Report pause state to server
@@ -470,6 +488,15 @@ class PlayerPage extends Page {
 
             this._onRemotePlay = () => {
                 log.info('Remote: Play/Resume');
+
+                // If user was preview scrubbing, commit the seek and unpause playback
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Play confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('play');
+                    this._reportPlaybackProgress('unpause');
+                    return;
+                }
+
                 // Player library uses unpause() or togglePlay() - not play()
                 if (this._player?.unpause) {
                     this._player.unpause();
@@ -490,6 +517,15 @@ class PlayerPage extends Page {
 
             this._onRemotePlayPause = () => {
                 log.info('Remote: PlayPause');
+
+                // If user was preview scrubbing, commit the seek and resume playback
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Play/Pause confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('playPause');
+                    this._reportPlaybackProgress(this._player?.isPaused?.() ? 'pause' : 'unpause');
+                    return;
+                }
+
                 const wasPaused = this._player?.isPaused?.();
                 if (this._player?.togglePlay) {
                     this._player.togglePlay();

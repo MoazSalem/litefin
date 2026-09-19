@@ -151,6 +151,38 @@ for (const paused of [false, true]) {
     });
 }
 
+for (const playKey of ['play', 'playPause']) {
+    test(`preview, then ${playKey} button commits seek and unpauses playback`, () => {
+        const { osd, seeks, advance } = setup(true, true); // initially paused
+        osd.handleInput('right');
+        assert.equal(osd._seekTargetTicks, 110 * 10000000);
+        assert.deepEqual(seeks, []);
+        assert.equal(osd._player.isPaused(), true);
+        osd.handleInput(playKey);
+        for (let i = 0; i < 5; i++) {
+            advance(100);
+            osd.handleInput(playKey);
+        }
+        assert.deepEqual(seeks, [110 * 10000000]);
+        assert.equal(osd._player.isPaused(), false);
+    });
+}
+
+test('preview, then pause button commits seek and keeps playback paused', () => {
+    const { osd, seeks, advance } = setup(true, false); // initially playing
+    osd.handleInput('right');
+    assert.equal(osd._seekTargetTicks, 110 * 10000000);
+    assert.deepEqual(seeks, []);
+    assert.equal(osd._player.isPaused(), true); // paused during scrub
+    osd.handleInput('pause');
+    for (let i = 0; i < 5; i++) {
+        advance(100);
+        osd.handleInput('pause');
+    }
+    assert.deepEqual(seeks, [110 * 10000000]);
+    assert.equal(osd._player.isPaused(), true); // remains paused after commit
+});
+
 test('Back cancels to the real current position without seeking', () => {
     const { osd, seeks, position, advance } = setup();
     osd.handleInput('left');
