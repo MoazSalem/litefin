@@ -513,8 +513,11 @@ const iconStyles = {
                 outlined: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Majesticons by Gerrit Halfmann - https://github.com/halfmage/majesticons/blob/main/LICENSE --><g fill="currentColor"><path d="M6.416 3.788C8.289 2.44 10.506 2 12 2c3.526 0 5.826 1.492 7.212 3.416C20.56 7.289 21 9.506 21 11v9a1 1 0 0 1-1.707.707L18 19.414L16.414 21a2 2 0 0 1-2.828 0L12 19.414L10.414 21a2 2 0 0 1-2.828 0L6 19.414l-1.293 1.293A1 1 0 0 1 3 20v-9c0-3.526 1.492-5.826 3.416-7.212zm1.168 1.624C6.175 6.426 5 8.126 5 11v6.682A2 2 0 0 1 7.414 18L9 19.586L10.586 18a2 2 0 0 1 2.828 0L15 19.586L16.586 18A2 2 0 0 1 19 17.682V11c0-1.173-.36-2.956-1.412-4.416C16.575 5.175 14.874 4 12 4c-1.173 0-2.956.36-4.416 1.412zM7 10a2 2 0 1 1 4 0a2 2 0 0 1-4 0zm8-2a2 2 0 1 0 0 4a2 2 0 0 0 0-4z"/></g></svg>`,
                 filled: `<svg width="32" height="32" viewBox="0 0 24 24"><!-- Icon from Majesticons by Gerrit Halfmann - https://github.com/halfmage/majesticons/blob/main/LICENSE --><g fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.416 3.788C8.289 2.44 10.506 2 12 2c3.526 0 5.826 1.492 7.212 3.416C20.56 7.289 21 9.506 21 11v9a1 1 0 0 1-1.707.707L18 19.414L16.414 21a2 2 0 0 1-2.828 0L12 19.414L10.414 21a2 2 0 0 1-2.828 0L6 19.414l-1.293 1.293A1 1 0 0 1 3 20v-9c0-3.526 1.492-5.826 3.416-7.212zM7 10a2 2 0 1 1 4 0a2 2 0 0 1-4 0zm6 0a2 2 0 1 1 4 0a2 2 0 0 1-4 0z" fill="currentColor"/></g></svg>`
             },
+            /*
+             * Rating star is a static score indicator in metadata badges (Hero Carousel, Card, Details, UpNext).
+             * We define only the filled variant so that resolveIcon returns a single SVG rather than a dual outline+filled stack.
+             */
             ratingStar: {
-                outlined: `<svg class="rating-star-icon" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="M9.6 15.65L12 13.8l2.4 1.85l-.9-3.05l2.25-1.6h-2.8L12 7.9l-.95 3.1h-2.8l2.25 1.6zm2.4.65l-3.7 2.825q-.275.225-.6.213t-.575-.188t-.387-.475t-.013-.65L8.15 13.4l-3.625-2.575q-.3-.2-.375-.525t.025-.6t.35-.488t.6-.212H9.6l1.45-4.8q.125-.35.388-.538T12 3.475t.563.188t.387.537L14.4 9h4.475q.35 0 .6.213t.35.487t.025.6t-.375.525L15.85 13.4l1.425 4.625q.125.35-.012.65t-.388.475t-.575.188t-.6-.213zm0-4.525"/></svg>`,
                 filled: `<svg class="rating-star-icon" viewBox="1.55 1.55 20.9 20.9"><!-- Icon from Material 3 --><path fill="currentColor" d="m12 16.3l-3.7 2.825q-.275.225-.6.213t-.575-.188t-.387-.475t-.013-.65L8.15 13.4l-3.625-2.575q-.3-.2-.375-.525t.025-.6t.35-.488t.6-.212H9.6l1.45-4.8q.125-.35.388-.538T12 3.475t.563.188t.387.537L14.4 9h4.475q.35 0 .6.213t.35.487t.025.6t-.375.525L15.85 13.4l1.425 4.625q.125.35-.012.65t-.388.475t-.575.188t-.6-.213z"/></svg>`
             }
         },
@@ -789,6 +792,14 @@ const iconStyles = {
             debug: {
                 outlined: `<svg width="32" height="32" viewBox="2 2 20 20"><!-- Icon from Material 3 --><path fill="currentColor" d="M21 15v-2h-3.07c-.05-.39-.12-.77-.22-1.14l2.58-1.49l-1-1.73L16.92 10c-.28-.48-.62-.91-.99-1.29c.1-.56.2-1.69-.58-2.89L17 4.17l-1.41-1.41l-1.72 1.72c-1.68-.89-3.1-.33-3.73 0L8.41 2.76L7 4.17l1.65 1.65c-.78 1.2-.68 2.34-.58 2.89c-.37.39-.71.82-.99 1.29L4.71 8.63l-1 1.73l2.58 1.49c-.1.37-.17.75-.22 1.14H3v2h3.07c.05.39.12.77.22 1.14l-2.58 1.49l1 1.73L7.08 18c1.08 1.81 2.88 3 4.92 3s3.84-1.19 4.92-3l2.37 1.37l1-1.73l-2.58-1.49c.1-.37.17-.75.22-1.14H21zm-9-9c.88 0 1.62.57 1.88 1.36C13.29 7.13 12.66 7 12 7s-1.29.13-1.88.36C10.38 6.57 11.12 6 12 6m0 13c-2.21 0-4-2.24-4-5s1.79-5 4-5s4 2.24 4 5s-1.79 5-4 5" /><path fill="currentColor" d="M11 11h2v6h-2z"/></svg>`,
                 filled: `<svg width="32" height="32" viewBox="2 2 20 20"><!-- Icon from Material 3 --><path fill="currentColor" d="M21 14c0-.55-.45-1-1-1h-2.07c-.05-.39-.12-.77-.22-1.14l1.72-.99c.48-.28.64-.89.37-1.37a1.01 1.01 0 0 0-1.37-.37l-1.51.87c-.28-.48-.62-.91-.99-1.29c.04-.23.07-.46.07-.71c0-.8-.24-1.55-.65-2.18l.94-.94a.996.996 0 1 0-1.41-1.41l-1.02 1.02c-1.68-.89-3.1-.33-3.73 0L9.12 3.46a.996.996 0 1 0-1.41 1.41l.94.94C8.24 6.45 8 7.2 8 8c0 .25.03.48.07.72c-.37.38-.71.81-.99 1.28l-1.51-.87a.996.996 0 0 0-1.36.37c-.28.48-.11 1.09.37 1.37l1.72.99c-.1.37-.17.75-.22 1.14H4c-.55 0-1 .45-1 1s.45 1 1 1h2.07c.05.39.12.77.22 1.14l-1.72.99c-.48.28-.64.89-.37 1.37c.28.48.89.64 1.37.37L7.08 18c1.08 1.81 2.88 3 4.92 3s3.84-1.19 4.92-3l1.51.87c.48.28 1.09.11 1.37-.37s.11-1.09-.37-1.37l-1.72-.99c.1-.37.17-.75.22-1.14H20c.55 0 1-.45 1-1m-9 3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1s1 .45 1 1v4c0 .55-.45 1-1 1"/></svg>`
+            },
+            /*
+             * Settings tab icon for Admin Libraries Management.
+             * Matches the standard multi-collection library stack icon across themes.
+             */
+            libraries: {
+                outlined: `<svg viewBox="0 0 24 24" width="32" height="32" fill="none"><path fill="currentColor" d="M4 3a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-4.703L16 20a1 1 0 0 0 1.186.77l3.912-.832a1 1 0 0 0 .77-1.186l-2.91-13.694a1 1 0 0 0-1.186-.77l-2.78.59A1 1 0 0 0 14 4h-4a1 1 0 0 0-1-1zm6 3h3v8h-3zm0 13v-3h3v3zM8 5v10H5V5zm0 12v2H5v-2zm9.332-.35l1.956-.416l.416 1.956l-1.956.416zm-.416-1.957l-1.663-7.825l1.956-.416l1.664 7.826z"/></svg>`,
+                filled: `<svg viewBox="0 0 24 24" width="32" height="32" fill="none"><path fill="currentColor" d="M4 3a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9.303l2.021 9.51a1 1 0 0 0 1.186.77l2.935-.623a1 1 0 0 0 .77-1.186l-2.91-13.694a1 1 0 0 0-1.187-.77L15 5.302V5a1 1 0 0 0-1-1H9a1 1 0 0 0-1-1zm5 3h4v8H9zm4 10v3H9v-3zm-6 1v2H5v-2zm11.77 1.814l-.416-1.956l.978-.208l.416 1.956z"/></svg>`
             }
         }
     }
@@ -967,7 +978,12 @@ function createIconProxy(category) {
                     const activeStyle = getActiveStyle();
                     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                     const categorySet = styleSet[category] || iconStyles['default'][category];
-                    const resolved = resolveIcon(categorySet[prop]);
+                    
+                    // Fall back to default style entry if the current theme omits this specific icon
+                    const iconDef = (categorySet && categorySet[prop] !== undefined)
+                        ? categorySet[prop]
+                        : (iconStyles['default'][category] ? iconStyles['default'][category][prop] : undefined);
+                    const resolved = resolveIcon(iconDef);
 
                     // Automatically inject "osd-icon" class for OSD icons.
                     if (category === 'osdIcons' && resolved) {
@@ -976,17 +992,21 @@ function createIconProxy(category) {
                     return resolved;
                 },
                 ownKeys(target) {
-                    // Expose existing property keys for the proxy
+                    // Expose existing property keys for the proxy, merging theme keys with default keys
                     const activeStyle = getActiveStyle();
                     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                     const categorySet = styleSet[category] || iconStyles['default'][category];
-                    return Reflect.ownKeys(categorySet);
+                    const defaultKeys = Object.keys(iconStyles['default'][category] || {});
+                    const currentKeys = Object.keys(categorySet || {});
+                    const mergedKeys = Array.from(new Set([...defaultKeys, ...currentKeys]));
+                    return Reflect.ownKeys(mergedKeys);
                 },
                 getOwnPropertyDescriptor(target, prop) {
                     const activeStyle = getActiveStyle();
                     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                     const categorySet = styleSet[category] || iconStyles['default'][category];
-                    return Reflect.getOwnPropertyDescriptor(categorySet, prop);
+                    return Reflect.getOwnPropertyDescriptor(categorySet, prop) ||
+                           Reflect.getOwnPropertyDescriptor(iconStyles['default'][category] || {}, prop);
                 }
             }
         );
@@ -1003,7 +1023,12 @@ function createIconProxy(category) {
                 const activeStyle = getActiveStyle();
                 const styleSet = iconStyles[activeStyle] || iconStyles['default'];
                 const categorySet = styleSet[category] || iconStyles['default'][category];
-                const resolved = resolveIcon(categorySet[prop]);
+                
+                // Fall back per-property to ensure no blank icons render on legacy platforms
+                const iconDef = (categorySet && categorySet[prop] !== undefined)
+                    ? categorySet[prop]
+                    : defaultSet[prop];
+                const resolved = resolveIcon(iconDef);
 
                 // Automatically inject "osd-icon" class for OSD icons.
                 if (category === 'osdIcons' && resolved) {
@@ -1050,7 +1075,12 @@ export function getLibraryIcon(type) {
     const libraryIcons = styleSet.libraryIcons || iconStyles['default'].libraryIcons;
 
     // Fetch and return the full SVG string directly
-    const rawIcon = libraryIcons[resolvedType] || libraryIcons['folders'] || libraryIcons['default'];
+    const rawIcon = libraryIcons[resolvedType] ||
+                    libraryIcons['folders'] ||
+                    libraryIcons['default'] ||
+                    iconStyles['default'].libraryIcons[resolvedType] ||
+                    iconStyles['default'].libraryIcons['folders'] ||
+                    iconStyles['default'].libraryIcons['default'];
     return resolveIcon(rawIcon);
 }
 
@@ -1067,7 +1097,11 @@ export function getStaticIcon(category, name, preferredVariant = 'outlined') {
     const styleSet = iconStyles[activeStyle] || iconStyles['default'];
     const categorySet = styleSet[category] || iconStyles['default'][category];
     if (!categorySet) return '';
-    const iconEntry = categorySet[name];
+    
+    // Per-property lookup with fallback to default theme
+    const iconEntry = categorySet[name] !== undefined
+        ? categorySet[name]
+        : (iconStyles['default'][category] ? iconStyles['default'][category][name] : undefined);
     if (!iconEntry) return '';
     if (typeof iconEntry === 'string') return iconEntry;
 
