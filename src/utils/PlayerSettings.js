@@ -484,8 +484,22 @@ const DEFAULTS = {
     // When enabled, pressing Back while controls are hidden (or activating exit)
     // presents a confirmation modal before stopping playback and leaving the player.
     confirmExitPlayer: false,
+
     // Remote timeline previews are applied only when OK is pressed.
     confirmSeekWithOK: false,
+
+    /*
+     * Pause Playback While Scrubbing Seek Bar
+     * -------------------------------------------------------------------------
+     * Temporarily pauses video/audio playback when the user starts scrubbing
+     * or seeking on the timeline (via directional remote keys or dragging the
+     * slider), and automatically resumes playback once seeking is confirmed
+     * or finished (if playback was active before seeking began).
+     *
+     *   true  (default) — Pauses playback while scrubbing/seeking timeline.
+     *   false           — Playback keeps playing uninterrupted during scrub.
+     */
+    pausePlaybackOnScrub: true,
 
     // Enable mouse/magic cursor support in the OSD (hover and click)
     // Disabled by default on Tizen due to cursor interaction bugs

@@ -17,7 +17,12 @@ function setup(enabled = true, paused = false) {
     let now = 1000;
     let nextTimer = 1;
     const timers = new Map();
-    const settings = { confirmSeekWithOK: enabled, skipBackLength: 5000, skipForwardLength: 10000 };
+    const settings = {
+        confirmSeekWithOK: enabled,
+        pausePlaybackOnScrub: true,
+        skipBackLength: 5000,
+        skipForwardLength: 10000
+    };
     const context = vm.createContext({
         Component: class {},
         document: {
@@ -212,15 +217,42 @@ test('long hold accelerates, a new burst resets acceleration, and bounds clamp',
     assert.deepEqual(seeks, [0]);
 });
 
-test('disabled option preserves 800ms debounce and accumulated seeks', () => {
+test('disabled confirmSeek preserves 800ms debounce, pauses during scrub, and unpauses on commit', () => {
     const { osd, seeks, advance } = setup(false);
     osd.handleInput('right');
+    // While scrubbing (at 400ms), playback is temporarily paused when pausePlaybackOnScrub=true
+    assert.equal(osd._player.isPaused(), true);
     advance(400);
     osd.handleInput('right');
     advance(799);
     assert.deepEqual(seeks, []);
+    assert.equal(osd._player.isPaused(), true);
     advance(1);
     assert.deepEqual(seeks, [120 * 10000000]);
+    // Once debounced seek commits, playback is automatically resumed
+    assert.equal(osd._player.isPaused(), false);
+});
+
+test('pausePlaybackOnScrub=false leaves playback unpaused throughout seek scrub', () => {
+    const { osd, seeks, advance, settings } = setup(false);
+    settings.pausePlaybackOnScrub = false;
+    osd.handleInput('right');
+    assert.equal(osd._player.isPaused(), false);
+    advance(400);
+    osd.handleInput('right');
+    assert.equal(osd._player.isPaused(), false);
+    advance(800);
+    assert.deepEqual(seeks, [120 * 10000000]);
+    assert.equal(osd._player.isPaused(), false);
+});
+
+test('slider drag pauses on start and unpauses on change commit', () => {
+    const { osd, seeks } = setup(false);
+    assert.equal(osd._player.isPaused(), false);
+    osd._handlePositionSliderInput({ target: { value: 25 } });
+    assert.equal(osd._player.isPaused(), true);
+    osd._handlePositionSliderChange({ target: { value: 50 } });
+    assert.deepEqual(seeks, [1800 * 10000000]);
     assert.equal(osd._player.isPaused(), false);
 });
 
@@ -363,6 +395,16 @@ test('preference defaults off, persists as a boolean and can be reset', () => {
     // Reset back to default (false)
     settings.reset('confirmSeekWithOK');
     assert.equal(settings.get('confirmSeekWithOK'), false);
+
+    // Default pausePlaybackOnScrub is on (true)
+    assert.equal(settings.get('pausePlaybackOnScrub'), true);
+    // Test setting to disabled
+    settings.set('pausePlaybackOnScrub', false);
+    assert.equal(saved.get('player:pausePlaybackOnScrub'), 'false');
+    assert.equal(settings.get('pausePlaybackOnScrub'), false);
+    // Reset back to default (true)
+    settings.reset('pausePlaybackOnScrub');
+    assert.equal(settings.get('pausePlaybackOnScrub'), true);
 });
 
 for (const hasRepeatMetadata of [true, false]) {

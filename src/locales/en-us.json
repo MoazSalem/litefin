@@ -568,6 +568,8 @@
     "ConfirmPin": "Re-enter your PIN to confirm",
     "ConfirmSeekWithOK": "Confirm seeking with OK",
     "ConfirmSeekWithOKDescription": "While scrolling the timeline, show the preview and apply the new position only when OK is pressed.",
+    "PausePlaybackOnScrub": "Pause playback while scrubbing",
+    "PausePlaybackOnScrubDescription": "Pause playback when scrubbing the seek bar and resume when finished.",
     "ConnectionErrorMessage": "We couldn't connect to <strong>{0}</strong>.<br>Check if your server is running or try another one.",
     "Container": "Container",
     "controls": "Controls",

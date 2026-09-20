@@ -3242,6 +3242,17 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="PausePlaybackOnScrub">${i18n.t('PausePlaybackOnScrub') || 'Pause playback while scrubbing'}</span>
+                        <span class="setting-description" data-i18n="PausePlaybackOnScrubDescription">${i18n.t('PausePlaybackOnScrubDescription') || 'Pause playback when scrubbing the seek bar and resume when finished.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('pausePlaybackOnScrub') ? 'active' : ''}"
+                                id="toggle-pause-on-scrub" tabindex="0"></button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelAudioLanguagePreference">${i18n.t('LabelAudioLanguagePreference')}</span>
                         <span class="setting-description" data-i18n="PreferredAudioLanguageDescription">${i18n.t('PreferredAudioLanguageDescription')}</span>
                     </div>
@@ -9980,13 +9991,24 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Seek With Arrows
+        // Toggle Switch for Confirm Seek With OK
         const confirmSeekToggle = this.$('#toggle-confirm-seek');
         if (confirmSeekToggle) {
             confirmSeekToggle.addEventListener('click', () => {
                 const enabled = !PlayerSettings.get('confirmSeekWithOK');
                 PlayerSettings.set('confirmSeekWithOK', enabled);
                 confirmSeekToggle.classList.toggle('active', enabled);
+            });
+        }
+
+        // Toggle Switch for Pause Playback While Scrubbing
+        const pauseOnScrubToggle = this.$('#toggle-pause-on-scrub');
+        if (pauseOnScrubToggle) {
+            pauseOnScrubToggle.addEventListener('click', () => {
+                const enabled = !PlayerSettings.get('pausePlaybackOnScrub');
+                PlayerSettings.set('pausePlaybackOnScrub', enabled);
+                pauseOnScrubToggle.classList.toggle('active', enabled);
+                log.info(`Pause Playback On Scrub set to: ${enabled}`);
             });
         }
 

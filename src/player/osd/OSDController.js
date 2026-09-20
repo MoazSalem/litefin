@@ -2711,11 +2711,32 @@ export default class OSDController extends Component {
                 const startPos = (this._player.getCurrentPositionTicks && this._player.getCurrentPositionTicks()) || 0;
                 this._seekTargetTicks = startPos;
                 this._seekStartTime = Date.now();
-                if (requireConfirmation) {
+
+                /*
+                 * ====================================================================
+                 * PAUSE PLAYBACK ON SCRUB INITIALIZATION
+                 * ====================================================================
+                 * When the user begins scrubbing the seekbar (either via remote arrows
+                 * or fast-forward/rewind actions), check the user's preference for
+                 * pausePlaybackOnScrub. If enabled (true by default), capture the
+                 * previous playback state and pause the video so the seek preview
+                 * remains stationary while the user maneuvers the timeline.
+                 * ====================================================================
+                 */
+                if (PlayerSettings.get('pausePlaybackOnScrub')) {
+                    // Record whether playback was actively running before scrub started
                     this._seekResumePlayback = !this._player.isPaused();
-                    if (this._seekResumePlayback) this._player.pause();
+                    // Pause active playback during the scrub operation
+                    if (this._seekResumePlayback && typeof this._player.pause === 'function') {
+                        this._player.pause();
+                        this.updatePlayPauseButton();
+                    }
+                } else {
+                    // Setting disabled: do not capture or alter playback pause state
+                    this._seekResumePlayback = false;
                 }
-                log.info(`Seek scrub session started from: ${this._formatTime(startPos)}`);
+
+                log.info(`Seek scrub session started from: ${this._formatTime(startPos)} (paused=${this._player.isPaused()})`);
             }
 
             /*
@@ -2797,6 +2818,8 @@ export default class OSDController extends Component {
             }
 
             this._seekDebounceTimer = setTimeout(() => {
+                // Capture resume playback flag before clearing session state
+                const resumePlayback = this._seekResumePlayback;
                 try {
                     if (this._seekTargetTicks !== null && this._player.seek) {
                         log.info(`Seek scrub session committed. Jumping to: ${this._formatTime(this._seekTargetTicks, duration >= 3600 * 10000000)}`);
@@ -2805,14 +2828,24 @@ export default class OSDController extends Component {
                 } catch (e) {
                     log.error('Deferred seek failed:', e);
                 } finally {
+                    // Reset internal seek tracking properties
                     this._seekTargetTicks = null;
                     this._seekStartTime = null;
                     this._seekDebounceTimer = null;
                     this._isDraggingSeekbar = false;
+                    this._seekResumePlayback = false;
                     if (tooltip) tooltip.classList.remove('visible');
 
                     /* Hide trickplay thumbnail when seek session ends */
                     this._hideTrickplayThumb();
+
+                    /*
+                     * If playback was paused specifically for this scrub session,
+                     * unpause the player now that the position jump has been applied.
+                     */
+                    if (resumePlayback) {
+                        this._restoreSeekPlayback(resumePlayback);
+                    }
                 }
             }, 800);
 
@@ -3002,7 +3035,26 @@ export default class OSDController extends Component {
         }
 
         if (this._seekRequiresConfirmation) this._clearSeekState();
-        this._isDraggingSeekbar = true;
+
+        /*
+         * ====================================================================
+         * SLIDER SCRUB DRAGGING & PAUSE STATE
+         * ====================================================================
+         * When mouse/pointer or remote dragging starts on the slider input,
+         * engage the dragging flag and optionally pause active playback if
+         * pausePlaybackOnScrub is enabled in settings.
+         * ====================================================================
+         */
+        if (!this._isDraggingSeekbar) {
+            this._isDraggingSeekbar = true;
+            if (PlayerSettings.get('pausePlaybackOnScrub') && this._player) {
+                this._seekResumePlayback = !this._player.isPaused();
+                if (this._seekResumePlayback && typeof this._player.pause === 'function') {
+                    this._player.pause();
+                    this.updatePlayPauseButton();
+                }
+            }
+        }
         this.resetAutoHide();
 
         const percentRaw = e.target.value;
@@ -3079,9 +3131,14 @@ export default class OSDController extends Component {
             return;
         }
 
+        // Capture scrub playback restore state before resetting drag
+        const resumePlayback = this._seekResumePlayback;
+        this._isDraggingSeekbar = false;
+        this._seekResumePlayback = false;
+
         try {
-            if (this._seekRequiresConfirmation) this._clearSeekState();
-            const duration = this._player.getDurationTicks();
+            if (this._seekRequiresConfirmation) this._clearSeekState(false);
+            const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
             const percent = e.target.value / 100;
             const targetTicks = duration * percent;
 
@@ -3094,6 +3151,14 @@ export default class OSDController extends Component {
             this._player.seek(targetTicks);
         } catch (err) {
             log.error('Slider seek failed:', err);
+        } finally {
+            /*
+             * Restore active playback if paused when scrubbing began
+             */
+            if (resumePlayback) {
+                this._restoreSeekPlayback(resumePlayback);
+            }
+            this.updatePlayPauseButton();
         }
     }
 
@@ -3184,6 +3249,7 @@ export default class OSDController extends Component {
         } catch (err) {
             log.error('Could not resume playback after timeline preview:', err);
         }
+        this.updatePlayPauseButton();
     }
 
     _clearSeekState(restorePlayback = true) {
