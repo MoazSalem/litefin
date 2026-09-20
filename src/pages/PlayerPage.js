@@ -973,6 +973,8 @@ class PlayerPage extends Page {
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
         this._player.on('seek', (data) => {
             this._clearPlaybackStallWatchdog();
+            this._clearSubtitle();
+            this._clearSecondarySubtitle();
             if (data && data.positionTicks !== undefined) {
                 // Synchronize seek target directly to resume position
                 if (typeof data.positionTicks === 'number') {

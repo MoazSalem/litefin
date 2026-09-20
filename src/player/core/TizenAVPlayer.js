@@ -2209,6 +2209,12 @@ export class TizenAVPlayer {
                 }
             }
 
+            // Immediately clear the DOM subtitle overlay on seek start
+            this.onEvent({
+                type: 'subtitlechange',
+                data: { text: '', duration: 0 }
+            });
+
             // ── Mark seek in progress ────────────────────────────────────────────
             // Set before _safeSeekTo so that onbufferingcomplete (which fires during
             // seek) does not trigger _checkNativePlay → play() while seekTo is still
