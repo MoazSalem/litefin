@@ -19,6 +19,7 @@ import { shouldShowScore } from '../utils/visibility.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { detailsIcons } from '../utils/Icons.js';
 import { escapeHtml } from '../utils/Utils.js';
+import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratingsFormatter.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -205,26 +206,41 @@ class HeroCarousel {
      * Renders MDBList Ratings and Awards for the carousel row.
      * @private
      */
-    _renderMdbMetadata(data) {
+     _renderMdbMetadata(data) {
         if (!data) return '';
 
         let html = '';
         const assetBase = `${api.serverUrl}/Plugins/MdbListRatings/Assets/`;
+        const features = data.features || null;
 
         // 1. Render Ratings
         if (data.ratings && data.ratings.length > 0) {
             for (const rating of data.ratings) {
-                if (rating.value === null || rating.value === undefined) continue;
+                // Resolve normalized provider info and precision formatting
+                const provider = getMdbProviderInfo(
+                    rating.source || rating.Source,
+                    rating.value !== undefined ? rating.value : rating.Value,
+                    rating.score !== undefined ? rating.score : rating.Score,
+                    features
+                );
 
-                const provider = this._getMdbProviderInfo(rating.source, rating.value);
-                const formattedValue = provider.format ? provider.format(rating.value) : rating.value;
+                // Skip if formatting failed or no display text
+                if (!provider || !provider.formattedText) continue;
 
                 if (provider.assetName) {
                     const iconUrl = `${assetBase}${provider.assetName}`;
+                    // Include onerror fallback to hide broken image icon cleanly on older 10.xx servers
                     html += `
-                        <div class="hero-mdb-item">
-                            <img src="${iconUrl}" class="hero-mdb-icon" alt="" />
-                            <span class="hero-mdb-value">${formattedValue}</span>
+                        <div class="hero-mdb-item" title="${provider.displayName}: ${provider.formattedText}">
+                            <img src="${iconUrl}" class="hero-mdb-icon" alt="${provider.displayName}" onerror="this.onerror=null;this.style.display='none';" />
+                            <span class="hero-mdb-value">${provider.formattedText}</span>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="hero-mdb-item" title="${provider.displayName}: ${provider.formattedText}">
+                            <span class="hero-mdb-icon star-emoji">⭐</span>
+                            <span class="hero-mdb-value">${provider.formattedText}</span>
                         </div>
                     `;
                 }
@@ -235,45 +251,11 @@ class HeroCarousel {
     }
 
     /**
-     * Helper to get provider info for MDBList ratings.
+     * Helper to get provider info for MDBList ratings (backward-compatible delegate).
      * @private
      */
-    _getMdbProviderInfo(source, value) {
-        const s = source ? source.toLowerCase() : '';
-        const score = parseFloat(value);
-
-        if (s === 'imdb') {
-            return { assetName: 'IMDb.png' };
-        }
-        if (s === 'tomatoes') {
-            const assetName = score < 60 ? 'Rotten_Tomatoes_rotten.png' : 'Rotten_Tomatoes.png';
-            return { assetName, format: (v) => `${v}%` };
-        }
-        if (s === 'tomatoesaudience' || s === 'popcorn') {
-            const assetName =
-                score < 60 ? 'Rotten_Tomatoes_negative_audience.png' : 'Rotten_Tomatoes_positive_audience.png';
-            return { assetName, format: (v) => `${v}%` };
-        }
-        if (s === 'metacritic') {
-            return { assetName: 'Metacritic.png' };
-        }
-        if (s === 'trakt') {
-            return { assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
-        }
-        if (s === 'tmdb') {
-            return {
-                assetName: 'TMDB.png',
-                format: (v) => {
-                    const num = parseFloat(v);
-                    return (num > 10 ? num / 10 : num).toFixed(1);
-                }
-            };
-        }
-        if (s === 'letterboxd') {
-            return { assetName: 'letterboxd.png', format: (v) => parseFloat(v).toFixed(1) };
-        }
-
-        return { assetName: null };
+    _getMdbProviderInfo(source, value, score = null) {
+        return getMdbProviderInfo(source, value, score);
     }
     /**
      * Initialize the component after it's in the DOM
