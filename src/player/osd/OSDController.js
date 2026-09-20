@@ -656,9 +656,18 @@ export default class OSDController extends Component {
              * Magic Cursor: Clicking anywhere in the 36px tall slider container seeks to
              * that position. Without this, the user would have to hit the 8px tall range
              * input precisely, which is nearly impossible with a TV magic cursor.
+             *
+             * SCOPED TO MAIN SEEKBAR:
+             * We verify that the clicked slider container specifically contains the main
+             * playback seekbar (#osdPositionSlider). Secondary seekbars (such as Subtitle Offset
+             * or appearance settings) must handle their own clicks and never hijack main video seek.
              */
             const sliderContainer = resolvedTarget.closest?.('.osd-slider-container');
-            if (sliderContainer && !resolvedTarget.closest?.('.osd-overlays')) {
+            const isMainSeekbarContainer = sliderContainer &&
+                this._osdPositionSliderEl &&
+                sliderContainer.contains(this._osdPositionSliderEl);
+
+            if (isMainSeekbarContainer && !resolvedTarget.closest?.('.osd-overlays')) {
                 e.stopPropagation();
 
                 // Sync focus state to seekbar row so D-pad resumes from here
@@ -671,7 +680,7 @@ export default class OSDController extends Component {
                  * at the very top of the click handler, so it never reaches this block.
                  */
 
-                const slider = sliderContainer.querySelector('input[type="range"]');
+                const slider = this._osdPositionSliderEl;
                 if (slider) {
                     const rect = sliderContainer.getBoundingClientRect();
                     const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -823,8 +832,17 @@ export default class OSDController extends Component {
             targetBtn.classList.add('magic-hover');
             this._lastHoveredEl = targetBtn;
 
-            /* Handle OSD slider interaction (scrubbing) */
-            if (targetBtn.classList.contains('osd-slider-container')) {
+            /* 
+             * Handle OSD slider interaction (scrubbing) EXCLUSIVELY for the main seekbar.
+             * Secondary seekbars (e.g. Subtitle Offset or Subtitle Quick Settings) maintain
+             * their own dedicated pointer/mouse listeners and must never trigger video timeline
+             * seeking or show the main seekbar preview thumbnail tooltip.
+             */
+            const isMainSeekbarHovered = targetBtn.classList.contains('osd-slider-container') &&
+                this._osdPositionSliderEl &&
+                targetBtn.contains(this._osdPositionSliderEl);
+
+            if (isMainSeekbarHovered) {
                 /* 
                  * If the user is HOLDING the button (e.buttons === 1), we treat 
                  * this as an active drag. This bypasses the WebOS pointer-events 
@@ -837,6 +855,10 @@ export default class OSDController extends Component {
                     this._handlePositionSliderMouseMove(e);
                 }
             } else {
+                /* 
+                 * When hovering over any non-main element or secondary seekbars,
+                 * ensure the main video position slider's preview tooltip is hidden.
+                 */
                 this._handlePositionSliderMouseLeave(e);
             }
         } else {

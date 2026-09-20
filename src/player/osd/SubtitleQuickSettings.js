@@ -568,8 +568,166 @@ export default class SubtitleQuickSettings extends BaseMenu {
     }
 
     _bindEvents() {
-        // TV navigation uses keyboard events via handleKey, not click events
-        // Click handlers removed to prevent spurious triggers on menu open
+        if (!this.$el) return;
+
+        // Clean up any previously registered active drag listeners if re-binding
+        if (typeof this._cleanupActiveDrag === 'function') {
+            this._cleanupActiveDrag();
+            this._cleanupActiveDrag = null;
+        }
+
+        // Select all rendered setting items within the menu overlay
+        const trackItems = this.$el.querySelectorAll('.track-item');
+
+        trackItems.forEach((trackItem) => {
+            const index = parseInt(trackItem.dataset.index, 10);
+            const item = this.items[index];
+            if (!item) return;
+
+            /*
+             * Click handling for menu item rows.
+             * Discard TV keyboard-synthesized clicks (detail === 0 or coordinates (0, 0))
+             * to avoid duplicate triggers when pressing Enter on remote controls.
+             */
+            trackItem.addEventListener('click', (e) => {
+                if (this.inputBlocked) return;
+                if (e.detail === 0 || (e.clientX === 0 && e.clientY === 0)) return;
+
+                // If click occurred inside the slider container, allow the slider handler to manage it
+                if (e.target.closest('.osd-slider-container')) return;
+
+                e.stopPropagation();
+                this.focusIndex = index;
+                this.updateFocus();
+
+                // For select items, clicking advances to the next option
+                if (item.type === 'select') {
+                    this._handleAdjust(1);
+                }
+            });
+
+            /*
+             * Slider handling for mouse, touch, and pointer events.
+             * Provides immediate real-time feedback, smoothly updates the fill bar,
+             * numeric indicator label, and refreshes active subtitle rendering.
+             */
+            if (item.type === 'slider') {
+                const sliderContainer = trackItem.querySelector('.osd-slider-container');
+                const slider = trackItem.querySelector('input[type="range"]');
+                const fill = trackItem.querySelector('.osd-slider-fill');
+                const valueDisplay = trackItem.querySelector('.sub-setting-value');
+
+                if (!slider || !sliderContainer) return;
+
+                // Calculate precision factor based on step definition
+                const stepDecimals = (String(item.step).split('.')[1] || '').length;
+                const factor = Math.pow(10, stepDecimals || 1);
+
+                /**
+                 * Applies the new slider numeric value, updating PlayerSettings,
+                 * UI indicators, and triggering subtitle redraw.
+                 * @param {number} val 
+                 */
+                const applySliderValue = (val) => {
+                    val = Math.max(item.min, Math.min(item.max, val));
+                    val = Math.round(val * factor) / factor;
+
+                    slider.value = val;
+                    PlayerSettings.set(item.key, val);
+
+                    // Update track fill bar percentage
+                    const percent = ((val - item.min) / (item.max - item.min)) * 100;
+                    if (fill) {
+                        fill.setAttribute('data-percent', percent);
+                        fill.style.width = `${percent}%`;
+                    }
+
+                    // Update numeric indicator text
+                    if (valueDisplay) {
+                        const sign = (item.id === 'offset' && val > 0) ? '+' : '';
+                        valueDisplay.textContent = `${sign}${val}${item.unit || ''}`;
+                    }
+
+                    // Request real-time subtitle update on active playback
+                    if (this.player && this.player.refreshSubtitles) {
+                        this.player.refreshSubtitles();
+                    }
+                };
+
+                /**
+                 * Computes slider value based on pointer X coordinates relative to the track.
+                 * @param {MouseEvent|PointerEvent} e 
+                 */
+                const updateFromPointer = (e) => {
+                    const rect = sliderContainer.getBoundingClientRect();
+                    if (!rect.width) return;
+                    const isRTL = document.documentElement.dir === 'rtl';
+                    let fraction = (e.clientX - rect.left) / rect.width;
+                    if (isRTL) fraction = 1 - fraction;
+                    fraction = Math.max(0, Math.min(1, fraction));
+                    const val = item.min + fraction * (item.max - item.min);
+                    applySliderValue(val);
+                };
+
+                // Native input and change events from keyboard or direct range input interaction
+                slider.addEventListener('input', (e) => {
+                    e.stopPropagation();
+                    applySliderValue(parseFloat(e.target.value));
+                });
+                slider.addEventListener('change', (e) => {
+                    e.stopPropagation();
+                    applySliderValue(parseFloat(e.target.value));
+                });
+
+                // Smooth pointer / mouse scrubbing across the full container height
+                let isDragging = false;
+
+                const onPointerMove = (e) => {
+                    if (!isDragging) return;
+                    updateFromPointer(e);
+                };
+
+                const onPointerUp = () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        window.removeEventListener('pointermove', onPointerMove);
+                        window.removeEventListener('pointerup', onPointerUp);
+                        window.removeEventListener('mousemove', onPointerMove);
+                        window.removeEventListener('mouseup', onPointerUp);
+                    }
+                };
+
+                const onPointerDown = (e) => {
+                    if (this.inputBlocked) return;
+                    if (e.detail === 0 || (e.clientX === 0 && e.clientY === 0)) return;
+                    if (e.button !== undefined && e.button !== 0) return;
+
+                    e.stopPropagation();
+                    this.focusIndex = index;
+                    this.updateFocus();
+
+                    isDragging = true;
+                    this._cleanupActiveDrag = onPointerUp;
+                    updateFromPointer(e);
+
+                    window.addEventListener('pointermove', onPointerMove);
+                    window.addEventListener('pointerup', onPointerUp);
+                    window.addEventListener('mousemove', onPointerMove);
+                    window.addEventListener('mouseup', onPointerUp);
+                };
+
+                sliderContainer.addEventListener('pointerdown', onPointerDown);
+                sliderContainer.addEventListener('mousedown', onPointerDown);
+            }
+        });
+    }
+
+    hide() {
+        if (typeof this._cleanupActiveDrag === 'function') {
+            this._cleanupActiveDrag();
+            this._cleanupActiveDrag = null;
+        }
+        super.hide();
     }
 
     handleKey(key) {
