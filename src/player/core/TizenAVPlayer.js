@@ -312,6 +312,11 @@ export class TizenAVPlayer {
             // Reset state for new playback session:
             // This MUST happen after _stopInternal() as that reset resets these flags.
             this._isPlaying = options.autoPlay !== false; // Signal intent to play
+
+            // Proactively clear any deferred pause leftover from previous suspend/error
+            // cycles so it never intercepts and suppresses our fresh playback start.
+            this._pendingPause = false;
+
             this._isTizenPlaying = false;
             this._bufferingComplete = false;
             this._isNativeBuffering = false;
@@ -1897,7 +1902,19 @@ export class TizenAVPlayer {
         this._isTizenPlaying = false;
         this._hasEmittedPlaying = false;
 
-        if (!wasPlaying) return; // Already considered paused — nothing to do
+        // Verify native AVPlay state directly to prevent dropping pause calls when
+        // internal flags were desynced (such as recovering from app backgrounding or server sleep).
+        let isNativelyPlaying = false;
+        try {
+            if (this._avplay && this._avplay.getState() === 'PLAYING') {
+                isNativelyPlaying = true;
+            }
+        } catch (_) {
+            // Ignore getState inspection errors here
+        }
+
+        // Only exit early if we were neither logically playing nor natively playing in hardware
+        if (!wasPlaying && !isNativelyPlaying) return; // Already considered paused — nothing to do
 
         // Queue 'pause' as the post-seek operation if a seek is in flight,
         // so the intended state is preserved after the seek completes.
@@ -2040,6 +2057,10 @@ export class TizenAVPlayer {
         this._lastSubtitleTrackChangeTime = 0;
         this._deferredSeekTicks = null;
         this._pendingOpAfterSeek = null;
+
+        // Reset any pending deferred pause on teardown
+        this._pendingPause = false;
+
         this._queuedSeekPositionMs = null;
         if (this._deferredSeekTimerId !== null) {
             clearTimeout(this._deferredSeekTimerId);

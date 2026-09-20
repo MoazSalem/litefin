@@ -759,20 +759,35 @@ export class JellyfinPlayer extends EventEmitter {
         // before the player has actually jumped to the resume position.
         if (this._pendingStartPositionTicks !== null) {
             const targetSec = this._pendingStartPositionTicks / 10000000;
-            const currentTime = event.data?.time || 0;
+            // Account for any active transcoding offset so transcoded segments calculate target position accurately
+            const offsetSec = (this._transcodingOffsetTicks || 0) / 10000000;
+            const effectiveCurrentTime = (event.data?.time || 0) + offsetSec;
 
-            if (event.type === PlayerEvent.TIME_UPDATE && currentTime > 0) {
+            if (event.type === PlayerEvent.TIME_UPDATE && (event.data?.time || 0) > 0) {
                 // Check if we have arrived near our target resume position (within 15s GOP keyframe tolerance)
-                if (Math.abs(currentTime - targetSec) < 15 || currentTime >= (targetSec - 15)) {
+                if (Math.abs(effectiveCurrentTime - targetSec) < 15 || effectiveCurrentTime >= (targetSec - 15)) {
                     this._pendingStartPositionTicks = null;
-                    log.info(`Resume verified at ${currentTime}s. Dismissing loading screen.`);
+                    log.info(`Resume verified at ${effectiveCurrentTime}s. Dismissing loading screen.`);
+
+                    // Synchronize logical paused state — playback has safely engaged at the target position
+                    this._isPaused = false;
+                    this._subtitleManager?.play();
+
+                    // Emit PLAY followed by PLAYING so OSD and higher layers reflect active playback immediately
+                    this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                     // allow timeupdate to proceed below
                 } else if (Date.now() - (this._resumeWaitStartTime || 0) > 15000) {
                     // Fallback: 15 seconds have passed, seek likely failed or is taking too long.
                     // Release the spinner so we don't hold the UI hostage forever.
                     this._pendingStartPositionTicks = null;
-                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${currentTime}s but expected ${targetSec}s. Dismissing screen.`);
+                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s. Dismissing screen.`);
+
+                    // Restore active playing state even upon fallback
+                    this._isPaused = false;
+                    this._subtitleManager?.play();
+
+                    this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                 } else {
                     // Still waiting to reach target time. Suppress early timeupdates.
@@ -1841,9 +1856,15 @@ export class JellyfinPlayer extends EventEmitter {
      * Resume playback
      */
     unpause() {
+        // Immediately mark state as unpaused so togglePlay and UI stay in sync
+        this._isPaused = false;
+        this._subtitleManager?.play();
+
+        // Notify listeners that playback has been resumed
         this.emit(PlayerEvent.PLAY);
+
+        // Instruct active hardware backend to unpause
         this._backend?.unpause();
-        // State update and event emission handled by _handleBackendEvent
     }
 
     /**
@@ -2840,9 +2861,14 @@ export class JellyfinPlayer extends EventEmitter {
 
     /**
      * Check if paused
+     * Queries the underlying backend hardware state if available to prevent state desync
      * @returns {boolean}
      */
     isPaused() {
+        // Consult backend as the ultimate source of truth when running
+        if (this._backend && typeof this._backend.isPaused === 'function') {
+            return this._backend.isPaused();
+        }
         return this._isPaused;
     }
 

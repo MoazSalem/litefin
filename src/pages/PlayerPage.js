@@ -1874,7 +1874,14 @@ class PlayerPage extends Page {
             // Send 'unpause' event when resuming from pause
             if (this._isPaused) {
                 this._reportPlaybackProgress('unpause');
+                // Ensure page-level pause tracker is reset to false
+                this._isPaused = false;
             }
+        }
+
+        // Always update the OSD play/pause button when playing starts or unpauses
+        if (this._osd) {
+            this._osd.updatePlayPauseButton();
         }
     }
 
@@ -3524,6 +3531,9 @@ class PlayerPage extends Page {
                 this._resumePosition = currentTicks;
             }
 
+            // Reset pause state so the retried playback session starts unpaused
+            this._isPaused = false;
+
             // Reset start report guard for the new playback session
             this._hasReportedStart = false;
 
@@ -3536,6 +3546,11 @@ class PlayerPage extends Page {
             // with _resumePosition cleanly preserved so the stream restores from where it failed.
             log.info(`Retrying playback from preserved resume position: ${this._resumePosition} ticks`);
             await this._startPlayback();
+
+            // Refresh OSD button state to show pause icon once playback resumes
+            if (this._osd) {
+                this._osd.updatePlayPauseButton();
+            }
 
             this._showLoading(false);
         } catch (error) {

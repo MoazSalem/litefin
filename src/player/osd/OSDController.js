@@ -349,8 +349,12 @@ export default class OSDController extends Component {
         // Mouse move to show OSD (attached to container)
         if (this._player) {
             this._player.on('mediastreamschange', (e) => this._onMediaStreamsChange(e));
+
+            // Keep play/pause button state synchronized on all playback transitions
             this._player.on('play', () => this.updatePlayPauseButton());
+            this._player.on('playing', () => this.updatePlayPauseButton());
             this._player.on('pause', () => this.updatePlayPauseButton());
+
             this._player.on('chaptersloaded', () => this._updateChapterButtons());
             this._player.on('seek', (e) => this._onPlayerSeek(e));
             // Also update markers when duration becomes available
