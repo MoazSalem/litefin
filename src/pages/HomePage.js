@@ -2531,6 +2531,7 @@ class HomePage extends Page {
         const isModern = mediaLayout === 'modern';
         const isExpanded = mediaLayout === 'expanded';
         const isModernPosters = mediaLayout === 'modern-posters';
+        const isExpanding = mediaLayout === 'expanding';
         const VIEWPORT_WIDTH = window.innerWidth || 1920;
         const SIDE_PADDING = 60;
         const MAX_VISIBLE = Math.ceil(parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10) * 0.8);
@@ -2546,8 +2547,10 @@ class HomePage extends Page {
                 itemWidth = Math.round(396 * scale);
             }
             itemMargin = Math.round(26 * scale);
-        } else if (isModernPosters) {
-            const scale = parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2;
+        } else if (isModern || isModernPosters) {
+            const scale = isModernPosters
+                ? parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2
+                : parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.2;
 
             if (cardType === 'square' || cardType === 'artist') {
                 itemWidth = Math.round(223 * scale);
@@ -2559,8 +2562,8 @@ class HomePage extends Page {
                 itemWidth = Math.round(212 * scale);
                 itemMargin = Math.round(26 * scale);
             }
-        } else if (isModern) {
-            const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.0;
+        } else if (isExpanding) {
+            const scale = parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0;
 
             if (isLandscape) {
                 itemWidth = Math.round(468 * scale);

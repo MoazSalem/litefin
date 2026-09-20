@@ -573,7 +573,7 @@ html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-labe
                 visibility 0.2s !important;
 }
 
-/* Reveal tooltip with Apple fluid spring scaling on focus / hover */
+/* Reveal tooltip with fluid spring scaling on focus / hover */
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .item-text,

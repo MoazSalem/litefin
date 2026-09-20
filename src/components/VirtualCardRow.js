@@ -64,7 +64,7 @@ export class VirtualCardRow {
             this.modernMultiplier = scale;
 
             // =================================================================
-            // 💎 Modern Cards (Expanded): Uniform 16:9 Widescreen Cards (396px base)
+            // Modern Cards (Expanded): Uniform 16:9 Widescreen Cards (396px base)
             // =================================================================
             if (this.cardType === 'square' || this.cardType === 'artist' || (isExpanded && this.cardType === 'person')) {
                 this.itemWidth = Math.round(223 * scale);
@@ -83,7 +83,7 @@ export class VirtualCardRow {
             this.track.style.setProperty('--card-expansion', '0px');
         } else if (isModern || isModernPosters) {
             // =================================================================
-            // 💎 Modern & Modern Posters Layout (Ultra-Lightweight Static Cards)
+            // Modern & Modern Posters Layout (Ultra-Lightweight Static Cards)
             // =================================================================
             // - Modern: Portrait posters for movie/series, 16:9 landscape cards
             //   for next up/continue watching/my media, squares for music/artists.
@@ -113,7 +113,7 @@ export class VirtualCardRow {
             this.track.style.setProperty('--card-expansion', '0px');
         } else if (isExpanding) {
             // =================================================================
-            // 💎 Expanding Posters Mode (Dynamic Focus Expansion & Shifting)
+            // Expanding Posters Mode (Dynamic Focus Expansion & Shifting)
             // =================================================================
             this.modernMultiplier = scale;
 
@@ -321,47 +321,73 @@ export class VirtualCardRow {
 
             const dummyContent = document.createElement('div');
             dummyContent.style.width = `${this.itemWidth}px`;
-            const isModernDesign = isModern || isExpanded || isModernPosters || isExpanding;
-            const borderWidth = isModernDesign ? '4px' : '3px';
-            dummyContent.style.border = `${borderWidth} solid transparent`;
             dummyContent.style.display = 'block';
 
-            // Emulate .card-image
-            const imageRatioDiv = document.createElement('div');
-            imageRatioDiv.style.width = '100%';
-            imageRatioDiv.style.height = '0';
-            let padding = '150%'; // Classic & Modern Portrait Poster (2:3)
-            if (this.cardType === 'square' || this.cardType === 'artist' || ((isExpanded || isModernPosters) && this.cardType === 'person')) {
-                // Square / Artist / Person icon: 1:1 aspect ratio
-                padding = '100%';
-            } else if (this.isLandscape || isExpanded) {
-                // Landscape or Expanded Poster: 16:9 widescreen
-                padding = '56.25%';
-            }
-            imageRatioDiv.style.paddingBottom = padding;
-            imageRatioDiv.style.border = `${borderWidth} solid transparent`;
-            dummyContent.appendChild(imageRatioDiv);
+            if (!isModern && !isExpanded && !isModernPosters && !isExpanding) {
+                // =============================================================
+                // Classic Layout: Restored Native Dimensions & Dummy Metrics
+                // =============================================================
+                // Fully separate Classic calculations with authentic values.
+                // 3px transparent border, 12px 4px 0 4px info padding,
+                // and font-scaled line-box expansion for title and subtitle.
+                // =============================================================
+                dummyContent.style.border = '3px solid transparent';
 
-            // Emulate .card-info
-            // Only Expanding mode puts labels inside the card without external dummy height
-            const isIntegratedExpanding =
-                isExpanding && (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist');
-            const isPortraitExpanding =
-                isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+                // Emulate .card-image
+                const imageRatioDiv = document.createElement('div');
+                imageRatioDiv.style.width = '100%';
+                imageRatioDiv.style.height = '0';
+                imageRatioDiv.style.paddingBottom = this.isLandscape
+                    ? '56.25%'
+                    : this.cardType === 'square' || this.cardType === 'artist'
+                        ? '100%'
+                        : '150%';
+                imageRatioDiv.style.border = '3px solid transparent';
+                dummyContent.appendChild(imageRatioDiv);
 
-            if (!this.hideLabels && !isIntegratedExpanding && !isPortraitExpanding) {
-                const infoDiv = document.createElement('div');
-                const infoPadding = isModernDesign ? '14px 4px 0 4px' : '12px 4px 0 4px';
-                infoDiv.style.padding = infoPadding;
-
-                if (isModernDesign) {
-                    // Modern / Expanded / Modern Posters: 1.4rem title + 4px margin + 1.15rem subtitle
-                    infoDiv.innerHTML = `<div style="height: 1.68rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1.15rem; margin-top: 4px; line-height: normal;">&nbsp;</div>`;
-                } else {
-                    // Classic: 1.2rem title + 6px margin + 1rem subtitle
-                    infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
+                // Emulate .card-info
+                if (!this.hideLabels) {
+                    const infoDiv = document.createElement('div');
+                    infoDiv.style.padding = '12px 4px 0 4px';
+                    // font-size with CSS custom property ensures line-box height scales correctly
+                    infoDiv.innerHTML = `<div style="font-size: calc(1.2rem * var(--card-title-font-scale, 1)); font-weight: 600; line-height: 1.35; margin: 0;">&nbsp;</div><div style="font-size: calc(1rem * var(--card-title-font-scale, 1)); line-height: 1.35; margin-top: 6px;">&nbsp;</div>`;
+                    dummyContent.appendChild(infoDiv);
                 }
-                dummyContent.appendChild(infoDiv);
+            } else {
+                // =============================================================
+                // Modern, Expanded, Modern Posters & Expanding Dummy
+                // =============================================================
+                dummyContent.style.border = '4px solid transparent';
+
+                // Emulate .card-image
+                const imageRatioDiv = document.createElement('div');
+                imageRatioDiv.style.width = '100%';
+                imageRatioDiv.style.height = '0';
+                let padding = '150%'; // Classic & Modern Portrait Poster (2:3)
+                if (this.cardType === 'square' || this.cardType === 'artist' || ((isExpanded || isModernPosters) && this.cardType === 'person')) {
+                    // Square / Artist / Person icon: 1:1 aspect ratio
+                    padding = '100%';
+                } else if (this.isLandscape || isExpanded) {
+                    // Landscape or Expanded Poster: 16:9 widescreen
+                    padding = '56.25%';
+                }
+                imageRatioDiv.style.paddingBottom = padding;
+                imageRatioDiv.style.border = '4px solid transparent';
+                dummyContent.appendChild(imageRatioDiv);
+
+                // Emulate .card-info
+                // Only Expanding mode puts labels inside the card without external dummy height
+                const isIntegratedExpanding =
+                    isExpanding && (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist');
+                const isPortraitExpanding =
+                    isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+
+                if (!this.hideLabels && !isIntegratedExpanding && !isPortraitExpanding) {
+                    const infoDiv = document.createElement('div');
+                    infoDiv.style.padding = '14px 4px 0 4px';
+                    infoDiv.innerHTML = `<div style="font-size: calc(1.4rem * var(--card-title-font-scale, 1)); font-weight: 700; line-height: 1.2; margin: 0;">&nbsp;</div><div style="font-size: calc(1.15rem * var(--card-title-font-scale, 1)); font-weight: 500; line-height: 1.2; margin-top: 4px;">&nbsp;</div>`;
+                    dummyContent.appendChild(infoDiv);
+                }
             }
 
             dummyDiv.appendChild(dummyContent);
@@ -413,7 +439,7 @@ export class VirtualCardRow {
         }
 
         // =================================================================
-        // 💎 STARTUP BACKDROP CACHING (Expanding Posters Mode)
+        // STARTUP BACKDROP CACHING (Expanding Posters Mode)
         // =================================================================
         if (isExpanding) {
             const firstCard = this.domNodes.get(0);

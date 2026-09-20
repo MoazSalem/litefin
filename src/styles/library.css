@@ -572,7 +572,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     -webkit-border-radius: inherit;
 }
 
-/* Modern Layouts: Apple HIG 24px Rounded Corners for Library Grids */
+/* Modern Layouts: 24px Rounded Corners for Library Grids */
 html[data-layout-media-rows="modern"] .library-grid .media-card .card-image,
 html[data-layout-media-rows="expanded"] .library-grid .media-card .card-image,
 html[data-layout-media-rows="modern-posters"] .library-grid .media-card .card-image {
@@ -621,7 +621,7 @@ html[data-layout-media-rows="modern-posters"] .library-grid .media-card.focused 
     outline: none !important;
 }
 
-/* Modern Layouts: Library Grid Apple HIG Overlay Focus Ring */
+/* Modern Layouts: Library Grid Overlay Focus Ring */
 html[data-layout-media-rows="modern"] .library-grid .media-card:focus .card-image::after,
 html[data-layout-media-rows="modern"] .library-grid .media-card.focused .card-image::after,
 html[data-layout-media-rows="expanded"] .library-grid .media-card:focus .card-image::after,
@@ -1724,21 +1724,19 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
 }
 
 /* Horizontal Scroll Container (Upcoming, Suggestions) */
-.row-items {
+.library-content .row-items {
     display: block; /* Match layout.css stable block layout */
     overflow: hidden; 
     padding: 10px 0;
     /* scrollbar-width handled by layout.css */
 }
 
-.media-card {
+.library-content .row-items .media-card {
     margin-right: 20px;
 }
 
-
-
 /* Ensure focus rings don't clip */
-.media-card {
+.library-content .media-card {
     margin: 5px;
     /* Extra robustness */
 

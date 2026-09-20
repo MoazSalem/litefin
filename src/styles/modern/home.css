@@ -10,9 +10,12 @@ html[data-layout-media-rows="expanding"] .home-rows {
 }
 
 /* Add vertical clearance to row-items so scaled focus cards (1.05x) and outside subtitles never get clipped */
+html[data-layout-media-rows="classic"] .row-items,
+html:not([data-layout-media-rows]) .row-items,
 html[data-layout-media-rows="modern"] .row-items,
 html[data-layout-media-rows="modern-posters"] .row-items,
-html[data-layout-media-rows="expanded"] .row-items {
+html[data-layout-media-rows="expanded"] .row-items,
+html[data-layout-media-rows="expanding"] .row-items {
     padding-top: 32px;
     padding-bottom: calc(52px * var(--card-title-font-scale, 1));
 }
@@ -48,8 +51,6 @@ html[data-layout-media-rows="expanding"] .media-row:focus-within .row-title {
 /* =========================================================================
    Modern, Modern Cards & Modern Posters Layout (Ultra-Lightweight Static Cards)
    =========================================================================
-   Inspired by Apple Human Interface Guidelines: sleek, minimal, hardware-
-   accelerated, and blazing fast on low-end Smart TVs.
    - Modern: Portrait posters for movie/series rows, 16:9 cards for next up/continue watching/my media, squares for music/artists.
    - Modern Cards (expanded): 16:9 widescreen cards statically rendered.
    - Modern Posters (modern-posters): 2:3 portrait posters statically rendered.
@@ -139,7 +140,7 @@ html[data-layout-media-rows="modern-posters"] .media-card.square:not(.grid-card)
     height: var(--card-square-height, var(--card-square-width, 223px)) !important;
 }
 
-/* Apple HIG-Style Focus Highlight & Focus Ring */
+/* Focus Highlight & Focus Ring */
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):focus .card-image,
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card).focused .card-image,
 html[data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card):hover .card-image,

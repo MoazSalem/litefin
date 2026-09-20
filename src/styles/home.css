@@ -251,7 +251,7 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.s
 
 /*
  * ============================================================================
- * LIVE TV CHANNEL MEDIA CARDS (Apple HIG Clean Icon Aesthetics)
+ * LIVE TV CHANNEL MEDIA CARDS (Clean Icon Aesthetics)
  * ============================================================================
  * Channel logos come in varying aspect ratios (often transparent PNG logos).
  * Using contain with generous 24px breathing room ensures crisp logo presentation

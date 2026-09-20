@@ -2,10 +2,10 @@
  * ============================================================================
  * Litefin Tizen - Emulator Page
  * ============================================================================
- * Full-screen standalone emulator host designed following Apple's Human
- * Interface Guidelines (HIG). Renders JellyEmu's backend session seamlessly,
+ * Full-screen standalone emulator host designed
+ * Renders JellyEmu's backend session seamlessly,
  * provides hardware-accelerated iframe containment, traps TV remote back events,
- * and displays an Apple TV-style frosted-glass pause/exit HUD with spring
+ * and display pause/exit HUD with spring
  * animations before allowing the user to return to Litefin.
  * ============================================================================
  */
@@ -33,7 +33,7 @@ class EmulatorPage extends Page {
 
     /**
      * Renders the base DOM hierarchy.
-     * Standalone full-screen container matching Apple Human Interface Guidelines:
+     * Standalone full-screen container matching:
      * ultra-smooth transitions, and translucent glass floating HUD.
      */
     render() {
@@ -47,7 +47,7 @@ class EmulatorPage extends Page {
                     allow="autoplay; fullscreen; gamepad *; xr-spatial-tracking; microphone"
                 ></iframe>
 
-                <!-- Apple TV Inspired Frosted Glass Pause / Exit Dialog -->
+                <!-- Pause / Exit Dialog -->
                 <div class="emulator-pause-overlay hidden" id="emulator-pause-overlay" aria-hidden="true">
                     <div class="emulator-pause-card" role="dialog" aria-modal="true">
                         <div class="emulator-pause-badge">
@@ -238,7 +238,6 @@ class EmulatorPage extends Page {
     /**
      * Traps the TV Remote Back key.
      * Instead of killing the application or losing uncommitted save states immediately,
-     * it reveals the sleek Apple TV-style pause modal.
      *
      * @returns {boolean} True if handled, preventing Router default navigation.
      */
@@ -255,7 +254,7 @@ class EmulatorPage extends Page {
     }
 
     /**
-     * Displays the Apple TV-style translucent frosted HUD.
+     * Displays the HUD.
      * @private
      */
     _showPauseMenu() {

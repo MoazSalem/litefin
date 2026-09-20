@@ -172,7 +172,7 @@ body.lyrics-active .audio-player-center {
     transition: opacity 0.5s ease-out;
 }
 
-/* Apple-style deep ambient vignette backdrop when Light Music Player is active */
+/* Deep ambient vignette backdrop when Light Music Player is active */
 html[data-light-music-player="true"] .audio-visual-overlay {
     background: radial-gradient(circle at 50% 40%, #161822 0%, #0c0d12 60%, #040507 100%);
 }

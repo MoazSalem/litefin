@@ -311,7 +311,7 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
 
 /*
  * ============================================================================
- * Live TV Channel Hero Poster (Apple HIG Clean Icon Aesthetics)
+ * Live TV Channel Hero Poster
  * ============================================================================
  * Preserve channel logo aspect ratio with contain and centered breathing room.
  * Matches .media-card channel styling for complete visual harmony.
@@ -1667,7 +1667,7 @@ html[data-layout-media-rows="modern-posters"] .person-page #person-episodes .med
     outline: none !important;
 }
 
-/* Modern Layouts: Person & Episode Grid Apple HIG Overlay Focus Ring */
+/* Modern Layouts: Person & Episode Grid Overlay Focus Ring */
 html[data-layout-media-rows="modern"] .person-grid .media-card:focus .card-image::after,
 html[data-layout-media-rows="modern"] .person-grid .media-card.focused .card-image::after,
 html[data-layout-media-rows="expanded"] .person-grid .media-card:focus .card-image::after,
@@ -2042,7 +2042,7 @@ html[data-layout-quirks="c26"] .episode-row-overview {
     will-change: transform;
 }
 
-/* Apple TV Style Translucent Frosted Glass Pause Overlay */
+/* Pause Overlay */
 .emulator-pause-overlay {
     position: fixed;
     top: 0;

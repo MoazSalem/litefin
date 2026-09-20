@@ -142,7 +142,7 @@
     width: 420px;
 }
 
-/* Modern Layouts: Apple HIG 24px Rounded Corners for Library Rows & Genre Grids */
+/* Modern Layouts: 24px Rounded Corners for Library Rows & Genre Grids */
 html[data-layout-media-rows="modern"] .library-row .media-card .card-image,
 html[data-layout-media-rows="expanded"] .library-row .media-card .card-image,
 html[data-layout-media-rows="modern-posters"] .library-row .media-card .card-image,
@@ -207,7 +207,7 @@ html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card.focu
     outline: none !important;
 }
 
-/* Modern Layouts: Library Rows Apple HIG Overlay Focus Ring */
+/* Modern Layouts: Library Rows Overlay Focus Ring */
 html[data-layout-media-rows="modern"] .library-row .media-card:focus .card-image::after,
 html[data-layout-media-rows="modern"] .library-row .media-card.focused .card-image::after,
 html[data-layout-media-rows="expanded"] .library-row .media-card:focus .card-image::after,

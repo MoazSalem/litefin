@@ -40,9 +40,6 @@ class CardRenderer {
      * Determines whether the given item represents a JellyEmu game ROM.
      * Checks Tags, Type, MediaType, and Path extension semantics.
      *
-     * Following Apple Human Interface Guidelines: ensure consistent visual categorization
-     * across all surfaces (library grids, continue watching, recently added).
-     *
      * @param {Object} item
      * @returns {boolean}
      */
@@ -111,7 +108,7 @@ class CardRenderer {
 
     /**
      * Generate Game Platform Badge HTML if item is a game ROM.
-     * Rendered as an Apple HIG frosted-glass pill badge.
+     * Rendered as a frosted-glass pill badge.
      * @param {Object} item
      * @returns {string} HTML string
      */
@@ -1213,7 +1210,7 @@ class CardRenderer {
         //    - Expandable posters render BOTH to support smooth focus crossfade.
         //
         // 2. In Modern ('modern'), Modern Cards ('expanded') & Modern Posters ('modern-posters'):
-        //    - Titles and subtitles render cleanly OUTSIDE below cards (Apple HIG style).
+        //    - Titles and subtitles render cleanly OUTSIDE below cards (style).
         //    - Standard outside labels provide maximum legibility without cluttering card artwork.
         //
         // 3. In Classic layout ('classic'):
@@ -1253,9 +1250,8 @@ class CardRenderer {
                     ${progressHtml}
                     ${videoBadgeHtml}
                     ${!options.showMeta ? badgeContainer : ''}
-                    ${
-                        showInside
-                            ? `
+                    ${showInside
+                ? `
                     <div class="card-info inside">
                         ${options.showMeta
                     ? `

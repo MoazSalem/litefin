@@ -586,11 +586,6 @@
 /* ============================================================================
    Zero-Animation Indicator Styles (Lines & Simple Dots)
    ============================================================================
-   Designed according to Apple Human Interface Guidelines for clean minimalism,
-   impeccable contrast, and optimal TV render performance by eliminating all
-   layout thrashing and heavy GPU keyframe animations.
-   ============================================================================ */
-
 /* ----------------------------------------------------------------------------
    Style 1: Big Lines (Segmented Horizontal Progress Bars)
    Sleek wide horizontal segmented bars inspired by modern luxury interfaces.
@@ -660,7 +655,6 @@
 
 /* ----------------------------------------------------------------------------
    Style 2: Simple Dots (Classic Minimalist Circular Indicators)
-   Pure Apple HIG circular dots with instant active state switching.
    ---------------------------------------------------------------------------- */
 .hero-carousel-container.indicator-dots .hero-indicators {
     display: -webkit-box;
