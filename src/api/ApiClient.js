@@ -50,6 +50,12 @@ export class ApiClient {
         // Track retries to prevent infinite loops on 401
         this._retryingRequests = new Set();
 
+        // ── Litefin Companion Server Plugin Detection Cache ───────────────
+        // Cached availability state for the Litefin server-side companion plugin.
+        // null = unprobed / unknown, true = installed & active, false = missing
+        this._hasLitefinServerPlugin = null;
+        this._litefinPluginProbePromise = null;
+
         // ── ETag Response Cache ───────────────────────────────────────────
         // In-memory cache of { etag, body } keyed by full request URL.
         // Used to send If-None-Match on GET requests and short-circuit to 304
@@ -114,6 +120,11 @@ export class ApiClient {
         // Normalize URL (remove trailing slash)
         this._serverUrl = serverUrl.replace(/\/+$/, '');
         state.set('server:url', this._serverUrl);
+
+        // Invalidate server-scoped plugin presence cache on server change
+        this._hasLitefinServerPlugin = null;
+        this._litefinPluginProbePromise = null;
+
         log.info(`Server set to ${this._serverUrl}`);
     }
 
@@ -151,6 +162,10 @@ export class ApiClient {
         this._userId = null;
         state.set('user:authenticated', false);
         state.set('user:data', null);
+
+        // Reset server-side plugin detection cache
+        this._hasLitefinServerPlugin = null;
+        this._litefinPluginProbePromise = null;
 
         // Wipe ETag cache — cached responses are bound to the previous auth session
         this._etagCache.clear();
@@ -518,7 +533,10 @@ export class ApiClient {
                 throw networkError;
             }
 
-            if (options.warnOnError) {
+            if (options.silent) {
+                // Completely silent suppression (e.g., for background capability probes)
+                log.debug(`Request to ${endpoint} failed (silent probe):`, error.message || error);
+            } else if (options.warnOnError) {
                 log.warn(`Request to ${endpoint} failed (suppressed):`, error.message || error);
             } else {
                 log.error(`Request to ${endpoint} failed:`, error.message || error);
@@ -844,6 +862,99 @@ export class ApiClient {
     }
 
     /**
+     * Centralized capability check for the Litefin server companion plugin.
+     * Evaluates availability once per session (using the admin plugin registry
+     * or a silent probe endpoint) and caches the boolean result.
+     *
+     * When the Litefin server plugin is not installed, downstream callers
+    /**
+     * Checks if the Litefin companion server plugin is installed, enabled, and active on the Jellyfin server.
+     * Caches the result after the initial check so downstream calls can
+     * immediately bypass all /Litefin/* endpoints and seamlessly fall back to
+     * native Jellyfin routes without logging 404 warnings or errors.
+     *
+     * @param {boolean} [force=false] - Force re-probing the server rather than using cached state
+     * @returns {Promise<boolean>} True if Litefin server companion plugin is active and enabled
+     */
+    async isLitefinPluginAvailable(force = false) {
+        if (force) {
+            this._hasLitefinServerPlugin = null;
+        }
+
+        // 1. Return cached evaluation immediately if already resolved
+        if (this._hasLitefinServerPlugin !== null) {
+            return this._hasLitefinServerPlugin;
+        }
+
+        // 2. Return active probe promise to prevent duplicate concurrent probes
+        if (this._litefinPluginProbePromise) {
+            return this._litefinPluginProbePromise;
+        }
+
+        this._litefinPluginProbePromise = (async () => {
+            try {
+                // Strategy A: Check admin installed plugins list if accessible
+                try {
+                    const { serverPluginClient } = await import('../plugins/ServerPluginClient.js');
+                    if (serverPluginClient && typeof serverPluginClient.getInstalledPlugins === 'function') {
+                        if (force) {
+                            serverPluginClient.reset();
+                        }
+                        const adminList = await serverPluginClient.getInstalledPlugins();
+                        if (Array.isArray(adminList)) {
+                            const match = adminList.some((p) => {
+                                const name = (p.Name || p.name || '').toLowerCase();
+                                const id = (p.Id || p.id || '').toLowerCase();
+                                const matchesName = name.includes('litefin') || id.includes('litefin');
+                                const status = (p.Status || p.status || '').toString().toLowerCase();
+                                const isExplicitlyDisabled =
+                                    status === 'disabled' ||
+                                    status === 'deleted' ||
+                                    status === 'malfunctioned' ||
+                                    status === 'notsupported' ||
+                                    status === 'superseded';
+                                const isActive = !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
+                                return matchesName && isActive;
+                            });
+                            this._hasLitefinServerPlugin = match;
+                            log.info(`Litefin server companion plugin ${match ? 'detected & active' : 'not present or disabled'} via admin registry`);
+                            return match;
+                        }
+                    }
+                } catch (_) {
+                    // Ignore and proceed to probe fallback
+                }
+
+                // Strategy B: Lightweight silent probe to /Litefin/Hero
+                log.debug('Probing Litefin server companion plugin presence...');
+                const probeResult = await this.get('/Litefin/Hero', { limit: 1 }, { silent: true, warnOnError: true });
+                this._hasLitefinServerPlugin = !!probeResult;
+                log.info('Litefin server companion plugin is installed and accessible');
+                return true;
+            } catch (err) {
+                // 404 indicates the plugin is not installed or disabled on this server
+                if (err.status === 404 || err.message?.includes('Not found') || err.message?.includes('404')) {
+                    log.info('Litefin server companion plugin is not installed or disabled — using native Jellyfin routes');
+                    this._hasLitefinServerPlugin = false;
+                    return false;
+                }
+                // 403 / 401 indicates endpoint exists on server but user is not authorized
+                if (err.status === 403 || err.status === 401) {
+                    this._hasLitefinServerPlugin = true;
+                    return true;
+                }
+                // Network or unexpected error — return false without permanently caching
+                log.debug('Litefin server plugin probe query unsettled:', err.message || err);
+                return false;
+            } finally {
+                this._litefinPluginProbePromise = null;
+            }
+        })();
+
+        return this._litefinPluginProbePromise;
+    }
+
+    /**
      * Batch fetch latest items for multiple parent library IDs in a single request.
      * @param {string[]} parentIds - Array of library parent GUIDs
      * @param {Object} [params] - Optional parameters (Limit, isPlayed, fields)
@@ -851,6 +962,11 @@ export class ApiClient {
      */
     async getBatchLatest(parentIds = [], params = {}) {
         if (!parentIds || parentIds.length === 0) return {};
+
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         try {
             return await this.get('/Litefin/Items/Latest', {
                 parentIds: parentIds.join(','),
@@ -868,6 +984,11 @@ export class ApiClient {
      */
     async getLibraryThumbnails(parentIds = []) {
         if (!parentIds || parentIds.length === 0) return {};
+
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         try {
             return await this.get('/Litefin/Items/Thumbnails', {
                 parentIds: parentIds.join(',')
@@ -883,6 +1004,10 @@ export class ApiClient {
      * @returns {Promise<Object|null>} QueryResult object with Items array or null on fallback
      */
     async getHomeHero(params = {}) {
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         try {
             return await this.get('/Litefin/Hero', params, { warnOnError: true });
         } catch (e) {
@@ -913,6 +1038,10 @@ export class ApiClient {
      * @returns {Promise<Object>} Object containing the merged items list
      */
     async getMergedRows(params = {}) {
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         // Query the custom plugin controller route directly on the server
         return this.get('/Litefin/MergedRows/ContinueAndNextUp', params);
     }
@@ -1112,17 +1241,20 @@ export class ApiClient {
             // Attempt to fetch from native Jellyfin endpoint (available in newer servers)
             return await this.get(`/Items/${itemId}/Collections`, { ...defaults, ...params }, { warnOnError: true });
         } catch (err) {
-            // Fall back to the Litefin plugin endpoint if the native route is not found
+            // Fall back to the Litefin plugin endpoint if the native route is not found and plugin is verified present
             if (err.status === 404 || err.message?.includes('Not found')) {
-                log.debug(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
-                try {
-                    return await this.get(
-                        `/Litefin/Items/${itemId}/Collections`,
-                        { ...defaults, ...params },
-                        { warnOnError: true }
-                    );
-                } catch (fallbackErr) {
-                    return { Items: [] };
+                const isAvailable = await this.isLitefinPluginAvailable();
+                if (isAvailable) {
+                    log.debug(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
+                    try {
+                        return await this.get(
+                            `/Litefin/Items/${itemId}/Collections`,
+                            { ...defaults, ...params },
+                            { warnOnError: true }
+                        );
+                    } catch (fallbackErr) {
+                        return { Items: [] };
+                    }
                 }
             }
             // A 400 Bad Request simply means the item is not part of any collection on this server version
@@ -1170,21 +1302,26 @@ export class ApiClient {
     }
 
     async getPersonItems(personId) {
-        // Try custom Litefin plugin endpoint first (single request with roles pre-populated)
-        try {
-            return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 100 }, { warnOnError: true });
-        } catch (err) {
-            // Fallback to standard Jellyfin endpoint if plugin is not installed
-            return this.get(`/Users/${this._userId}/Items`, {
-                PersonIds: personId,
-                IncludeItemTypes: 'Movie,Series,Episode',
-                Recursive: true,
-                Limit: 500,
-                Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
-                SortBy: 'PremiereDate',
-                SortOrder: 'Descending'
-            });
+        // Check centralized Litefin server companion plugin presence before attempting optimized endpoint
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (isAvailable) {
+            try {
+                return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 100 }, { warnOnError: true });
+            } catch (err) {
+                // Fallback to standard Jellyfin endpoint if plugin request fails
+            }
         }
+
+        // Fallback to standard Jellyfin endpoint
+        return this.get(`/Users/${this._userId}/Items`, {
+            PersonIds: personId,
+            IncludeItemTypes: 'Movie,Series,Episode',
+            Recursive: true,
+            Limit: 500,
+            Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
+            SortBy: 'PremiereDate',
+            SortOrder: 'Descending'
+        });
     }
 
     // Separate call to get items with People field (for character roles)

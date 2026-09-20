@@ -68,8 +68,8 @@ function getPlugins(tier, options = {}) {
          * The file is a no-op on non-WebOS platforms so safe to include in all builds.
          */
         { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' },
-        // Copy early boot diagnostic backup logger for all builds
-        { from: 'src/backup-logger.js', to: 'js/backup-logger.js' },
+        // Copy early boot diagnostic console logger for all builds
+        { from: 'src/logger.js', to: 'js/logger.js' },
         // Copy early DOM and ES2015 polyfills script for all builds
         { from: 'src/early-polyfills.js', to: 'js/early-polyfills.js' }
     ];
@@ -478,12 +478,12 @@ const ultraLegacyConfig = {
         /*
          * Ultra-legacy gets its own extended plugin list:
          *   1. A separate HTML template (index.ultra-legacy.html) that includes the
-         *      backup-logger <script> tag before any other scripts.
-         *   2. An extra CopyWebpackPlugin entry to ship backup-logger.js to dist.
+         *      logger.js <script> tag before any other scripts.
+         *   2. An extra CopyWebpackPlugin entry to ship logger.js to dist.
          *   3. NormalModuleReplacementPlugin to swap LibassWasmRenderer with a stub
          *      so the WASM dependencies are kept out of the bundle.
          *
-         * The backup logger patches console.* BEFORE the webpack bundle executes,
+         * The logger patches console.* BEFORE the webpack bundle executes,
          * which is the only effective way to intercept the boot crash on Chrome 32/38
          * (Tizen 2.x / WebOS 3.x). All other build tiers do not need or include it.
          */
@@ -503,12 +503,12 @@ const ultraLegacyConfig = {
         });
 
         /*
-         * Push backup-logger.js into the CopyPlugin pattern list.
+         * Push logger.js into the CopyPlugin pattern list.
          * CopyPlugin exposes its patterns array directly.
          */
         base.forEach(function (p) {
             if (p.patterns) {
-                p.patterns.push({ from: 'src/backup-logger.js', to: 'js/backup-logger.js' });
+                p.patterns.push({ from: 'src/logger.js', to: 'js/logger.js' });
             }
         });
 

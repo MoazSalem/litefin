@@ -26,7 +26,7 @@ Litefin produces 8 distinct package bundles to maximize performance on modern ch
 | **Modern** | Tizen 6.5+ (2021+), webOS 6.0+ (2021+) | Native ES6+, no transpilation | Full WebAssembly libass, native modern web APIs |
 | **Normal** | Tizen 5.0–6.0 (2019–2020), webOS 4.5–5.0 | Chromium 63+, partial transpilation | Optimized ES6 features, hardware AVPlay/webOS APIs |
 | **Legacy** | Tizen 3.0–4.0 (2017–2018), webOS 3.5–4.0 | Chromium 47, full ES5 Babel transpilation | Core-JS polyfills, legacy subtitle fallback |
-| **Ultra-Legacy** | Tizen 2.4 (2015–2016), webOS 1.0–3.0 | Chromium 32/38, heavy polyfills | `backup-logger`, `style-loader` (CORS fix), no-service options |
+| **Ultra-Legacy** | Tizen 2.4 (2015–2016), webOS 1.0–3.0 | Chromium 32/38, heavy polyfills | `logger.js`, `style-loader` (CORS fix), no-service options |
 | **Debug** | Modern + Source Maps | Unminified + DevTools hooks | Runtime `DebugOverlay`, verbose logging, live metrics |
 
 ---
@@ -216,7 +216,7 @@ To prevent memory leaks and dangling focus references on constrained TV memory:
 - **Samsung Tizen Legacy Quirks**:
   - Never use `%c` formatting in `console.log` (causes runtime exceptions in Chromium 32).
   - Use `style-loader` instead of `MiniCssExtractPlugin` for ultra-legacy builds to avoid local `file://` CORS stylesheet restrictions.
-  - Ensure early polyfills in `src/early-polyfills.js` and `src/backup-logger.js` execute before any framework imports.
+  - Ensure early polyfills in `src/early-polyfills.js` and `src/logger.js` execute before any framework imports.
 
 ---
 
@@ -225,7 +225,7 @@ To prevent memory leaks and dangling focus references on constrained TV memory:
 ```
 src/
 ├── index.js                     # Main application bootstrap & polyfill initialization
-├── backup-logger.js             # Zero-dependency console logger for Tizen 2.x
+├── logger.js                    # Zero-dependency console logger for early boot & safe interceptor
 ├── early-polyfills.js           # Critical startup polyfills (AbortController, URLSearchParams)
 ├── core/
 │   ├── App.js                   # Root application controller & route definitions

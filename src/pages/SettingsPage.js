@@ -371,11 +371,12 @@ class SettingsPage extends Page {
                 <div class="setting-item" id="seerr-status-card">
                     <div class="setting-label">
                         <span class="setting-name">
-                            ${i18n.t('SeerrStatusLabel', ['Seerr Integration State'])}
-                            <span id="seerr-status-badge" class="plugin-status plugin-status--pending">Probing...</span>
+                            ${i18n.t('LitefinAndSeerrStatusLabel', ['Litefin Plugin & Seerr State'])}
+                            <span id="litefin-plugin-status-badge" class="plugin-status plugin-status--pending">Probing...</span>
+                            <span id="seerr-status-badge" class="plugin-status plugin-status--pending" style="display: none;">Probing...</span>
                         </span>
                         <span class="setting-description" id="seerr-status-description">
-                            Probing server plugin status...
+                            Probing server companion plugin and Seerr status...
                         </span>
                     </div>
                 </div>
@@ -386,36 +387,88 @@ class SettingsPage extends Page {
         `;
     }
 
-    /** Queries the Litefin server plugin to reflect the Seerr integration state in the Plugins tab. */
+    /** Queries the Litefin server companion plugin to reflect Litefin plugin and Seerr integration state in the Plugins tab. */
     async _refreshSeerrStatus() {
-        const badgeEl = this.$('#seerr-status-badge');
+        const litefinBadgeEl = this.$('#litefin-plugin-status-badge');
+        const seerrBadgeEl = this.$('#seerr-status-badge');
         const descEl = this.$('#seerr-status-description');
-        if (!badgeEl || !descEl) return;
+        if (!descEl) return;
 
         try {
+            // Check whether the Litefin companion server plugin is installed and active on the Jellyfin server
+            const isLitefinAvailable = await api.isLitefinPluginAvailable(true);
+
+            if (!isLitefinAvailable) {
+                if (litefinBadgeEl) {
+                    litefinBadgeEl.className = 'plugin-status plugin-status--disabled';
+                    litefinBadgeEl.textContent = i18n.t('LitefinPluginMissing', ['Litefin Plugin: Missing']);
+                }
+                if (seerrBadgeEl) {
+                    seerrBadgeEl.style.display = 'none';
+                }
+                descEl.textContent = i18n.t('LitefinPluginMissingDesc', [
+                    'Litefin companion plugin is not installed on the Jellyfin server. Seerr integration, batch queries, and server backups are disabled.'
+                ]);
+                return;
+            }
+
+            // Litefin server plugin is installed & active
+            if (litefinBadgeEl) {
+                litefinBadgeEl.className = 'plugin-status plugin-status--active';
+                litefinBadgeEl.textContent = i18n.t('LitefinPluginActive', ['Litefin Plugin: Active']);
+            }
+
+            // Query Seerr configuration & connectivity through the Litefin server plugin
             const status = await seerr.status(true);
+            if (seerrBadgeEl) {
+                seerrBadgeEl.style.display = '';
+            }
+
             if (status.configured && status.available) {
-                badgeEl.className = 'plugin-status plugin-status--active';
-                badgeEl.textContent = i18n.t('ConfiguredAndConnected', ['Configured & Connected']);
-                descEl.textContent = i18n.t('SeerrStatusConnectedDesc', ['Litefin plugin is installed on the Jellyfin server and connected to Seerr.']);
+                if (seerrBadgeEl) {
+                    seerrBadgeEl.className = 'plugin-status plugin-status--active';
+                    seerrBadgeEl.textContent = i18n.t('SeerrStatusConnected', ['Seerr: Connected']);
+                }
+                descEl.textContent = i18n.t('SeerrStatusConnectedDesc', [
+                    'Litefin companion plugin is active and successfully connected to Seerr.'
+                ]);
             } else if (status.configured && !status.available) {
-                badgeEl.className = 'plugin-status plugin-status--disabled';
-                badgeEl.textContent = i18n.t('ServerUnreachable', ['Server Unreachable']);
-                descEl.textContent = i18n.t('SeerrStatusUnreachableDesc', ['Seerr is configured in the Litefin plugin, but the Jellyfin server cannot reach the Seerr server instance.']);
+                if (seerrBadgeEl) {
+                    seerrBadgeEl.className = 'plugin-status plugin-status--disabled';
+                    seerrBadgeEl.textContent = i18n.t('SeerrStatusUnreachable', ['Seerr: Unreachable']);
+                }
+                descEl.textContent = i18n.t('SeerrStatusUnreachableDesc', [
+                    'Litefin plugin is installed, but the Jellyfin server cannot reach the configured Seerr instance.'
+                ]);
             } else if (!status.configured && status.available) {
-                badgeEl.className = 'plugin-status plugin-status--pending';
-                badgeEl.textContent = i18n.t('NotConfigured', ['Not Configured']);
-                descEl.textContent = i18n.t('SeerrStatusNotConfiguredDesc', ['Litefin plugin is installed on the Jellyfin server, but Seerr URL or API key is not configured in the Litefin plugin settings.']);
+                if (seerrBadgeEl) {
+                    seerrBadgeEl.className = 'plugin-status plugin-status--pending';
+                    seerrBadgeEl.textContent = i18n.t('SeerrStatusNotConfigured', ['Seerr: Not Configured']);
+                }
+                descEl.textContent = i18n.t('SeerrStatusNotConfiguredDesc', [
+                    'Litefin companion plugin is active, but Seerr URL or API key is not configured in the plugin settings.'
+                ]);
             } else {
-                badgeEl.className = 'plugin-status plugin-status--disabled';
-                badgeEl.textContent = i18n.t('NotConfigured', ['Not Configured / Missing']);
-                descEl.textContent = i18n.t('SeerrStatusMissingDesc', ['Seerr is not configured in the Litefin plugin or the server cannot reach Seerr.']);
+                if (seerrBadgeEl) {
+                    seerrBadgeEl.className = 'plugin-status plugin-status--disabled';
+                    seerrBadgeEl.textContent = i18n.t('SeerrStatusDisabled', ['Seerr: Disabled']);
+                }
+                descEl.textContent = i18n.t('SeerrStatusMissingDesc', [
+                    'Litefin companion plugin is active on the server, but Seerr integration is not configured.'
+                ]);
             }
         } catch (err) {
-            log.warn('Seerr server integration status check failed', err);
-            badgeEl.className = 'plugin-status plugin-status--disabled';
-            badgeEl.textContent = i18n.t('PluginMissing', ['Plugin Missing / Unreachable']);
-            descEl.textContent = i18n.t('SeerrStatusPluginMissingDesc', ['Litefin plugin is not installed on the Jellyfin server.']);
+            log.warn('Litefin & Seerr server integration status check failed', err);
+            if (litefinBadgeEl) {
+                litefinBadgeEl.className = 'plugin-status plugin-status--disabled';
+                litefinBadgeEl.textContent = i18n.t('PluginMissing', ['Plugin Missing / Unreachable']);
+            }
+            if (seerrBadgeEl) {
+                seerrBadgeEl.style.display = 'none';
+            }
+            descEl.textContent = i18n.t('SeerrStatusPluginMissingDesc', [
+                'Litefin companion plugin is not reachable on the Jellyfin server.'
+            ]);
         }
     }
 
@@ -5684,6 +5737,21 @@ class SettingsPage extends Page {
 
         try {
             msgEl.innerText = i18n.t('CheckingBackupStatus') || 'Checking server for settings backup...';
+
+            // Verify Litefin companion server plugin is installed and active before calling backup endpoint
+            const isPluginAvailable = await api.isLitefinPluginAvailable(true);
+            if (!isPluginAvailable) {
+                msgEl.innerText =
+                    i18n.t('BackupPluginError') ||
+                    'Server backup plugin is not available. Please ensure the Litefin backup plugin is installed on your Jellyfin server.';
+
+                const selectContainer = this.$('#backup-select-container');
+                const actionsContainer = this.$('#backup-actions-container');
+                if (selectContainer) selectContainer.innerHTML = '';
+                if (actionsContainer) actionsContainer.innerHTML = '';
+                return;
+            }
+
             // Perform authenticated GET request to server backup endpoint (returns array)
             const backups = await api.get('/Litefin/Backup');
 

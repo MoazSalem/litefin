@@ -14,11 +14,27 @@ import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('TizenAVPlayer');
 
-// Cache the Tizen firmware version once at module load.
-// Used to gate hardware-specific workarounds (e.g. subtitle pause/resume cycle
-// is only needed on Tizen 2.4–3.x; Tizen 4.0+ handles it natively).
-const TIZEN_VERSION = detectTizenVersion();
-const DEVICE_CAPS = getDeviceCapabilities();
+// ────────────────────────────────────────────────────────────────────────────
+// Lazy Platform Capability and Firmware Detection
+// ────────────────────────────────────────────────────────────────────────────
+// Cached lazily to prevent executing Tizen hardware/firmware detection at module
+// import time when running on non-Tizen platforms (e.g. desktop web or WebOS).
+let _cachedTizenVersion = null;
+let _cachedDeviceCaps = null;
+
+function getTizenVersion() {
+    if (_cachedTizenVersion === null) {
+        _cachedTizenVersion = detectTizenVersion();
+    }
+    return _cachedTizenVersion;
+}
+
+function getTizenDeviceCaps() {
+    if (_cachedDeviceCaps === null) {
+        _cachedDeviceCaps = getDeviceCapabilities();
+    }
+    return _cachedDeviceCaps;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Audio Capability Detection Helpers
@@ -33,7 +49,7 @@ const isTrueHdSupported = () => {
     if (setting === 'enable') return true;
     if (setting === 'disable') return false;
     try {
-        const caps = getDeviceCapabilities();
+        const caps = getTizenDeviceCaps();
         return !!caps?.truehd;
     } catch (e) {
         return false;
@@ -45,7 +61,7 @@ const isDtsSupported = () => {
     if (setting === 'enable') return true;
     if (setting === 'disable') return false;
     try {
-        const caps = getDeviceCapabilities();
+        const caps = getTizenDeviceCaps();
         return !!caps?.dts;
     } catch (e) {
         return false;
@@ -398,7 +414,10 @@ export class TizenAVPlayer {
                     //    in ADAPTIVE_INFO (set below) replaces it and handles 4K/8K dynamically.
                     //    On Tizen < 5.0, set it only when the device is UHD-capable AND the
                     //    content is 4K+ (or likely 4K+ based on bitrate when resolution unknown).
-                    if (!isDirectPlay && TIZEN_VERSION < 5.0 && DEVICE_CAPS.uhd &&
+                    const tizenVersion = getTizenVersion();
+                    const deviceCaps = getTizenDeviceCaps();
+
+                    if (!isDirectPlay && tizenVersion < 5.0 && deviceCaps.uhd &&
                         (options.mediaSource?.Height > 1080 || options.mediaSource?.Width > 1920 || options.mediaSource?.Bitrate > 20000000)) {
                         try {
                             this._avplay.setStreamingProperty("SET_MODE_4K", "TRUE");
@@ -418,8 +437,8 @@ export class TizenAVPlayer {
                             // Limit FIXED_MAX_RESOLUTION to 4K (3840x2160) max.
                             // 8K hardware decoder targets (7680x4320) cause HLS pipeline initialization
                             // failures on certain Samsung TVs during adaptive stream setup.
-                            const maxAllowedWidth = Math.min(DEVICE_CAPS.screenWidth || 3840, 3840);
-                            const maxAllowedHeight = Math.min(DEVICE_CAPS.screenHeight || 2160, 2160);
+                            const maxAllowedWidth = Math.min(deviceCaps.screenWidth || 3840, 3840);
+                            const maxAllowedHeight = Math.min(deviceCaps.screenHeight || 2160, 2160);
 
                             // Calculate final resolution bounds for the AVPlay ABR pipeline
                             if (contentWidth > 0 && contentHeight > 0) {
@@ -2632,7 +2651,7 @@ export class TizenAVPlayer {
         // Note: Our config.xml requires Tizen 4.0+, so the < 4.0 path only
         // activates if someone sideloads onto an older TV.
         // ================================================================
-        const needsPauseForSubSwitch = TIZEN_VERSION < 4;
+        const needsPauseForSubSwitch = getTizenVersion() < 4;
         let wasPlaying = false;
 
         if (needsPauseForSubSwitch) {

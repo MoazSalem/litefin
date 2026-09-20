@@ -79,6 +79,12 @@ const KNOWN_PROBES = {
             return `/Plugins/MdbListRatings/CachedByItemId?itemId=${item.Id}`;
         },
         dataEndpoint: (itemId) => `/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`
+    },
+
+    // Litefin Companion Server Plugin
+    'litefin': {
+        probeEndpoint: () => `/Litefin/Hero?limit=1`,
+        dataEndpoint: () => `/Litefin/Hero`
     }
 };
 
@@ -273,18 +279,31 @@ class ServerPluginClient {
             'intro-skipper': ['intro skipper', 'introskipper'],
             'open-subtitles': ['open subtitles', 'opensubtitles'],
             'local-intros': ['local intros', 'localintros'],
-            'mdblist-ratings': ['mdblist', 'mdb list', 'mdblist ratings']
+            'mdblist-ratings': ['mdblist', 'mdb list', 'mdblist ratings'],
+            'litefin': ['litefin']
         };
 
         const namesToCheck = NAME_MAP[pluginId] || [pluginId.toLowerCase()];
 
         const match = adminList.find((plugin) => {
             const name = (plugin.Name || plugin.name || '').toLowerCase();
-            return namesToCheck.some((n) => name.includes(n));
+            const id = (plugin.Id || plugin.id || '').toLowerCase();
+            const matches = namesToCheck.some((n) => name.includes(n)) || (pluginId && id.includes(pluginId.toLowerCase()));
+            if (!matches) return false;
+
+            // Verify plugin is active and enabled on the Jellyfin server
+            const status = (plugin.Status || plugin.status || '').toString().toLowerCase();
+            const isExplicitlyDisabled =
+                status === 'disabled' ||
+                status === 'deleted' ||
+                status === 'malfunctioned' ||
+                status === 'notsupported' ||
+                status === 'superseded';
+            return !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
         });
 
         const result = { available: !!match, data: match || null };
-        log.debug(`Plugin '${pluginId}' ${result.available ? 'FOUND' : 'NOT FOUND'} in admin list`);
+        log.debug(`Plugin '${pluginId}' ${result.available ? 'FOUND & ACTIVE' : 'NOT FOUND OR DISABLED'} in admin list`);
         return result;
     }
 

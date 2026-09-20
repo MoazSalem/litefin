@@ -7,6 +7,7 @@
  */
 
 import { logger } from '../../utils/Logger.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { BaseProfile } from './BaseProfile.js';
 
@@ -144,7 +145,13 @@ export function getDeviceCapabilities() {
         maxAudioChannels: uhd8K ? 8 : 6
     };
 
-    log.info('Tizen capabilities:', JSON.stringify(_cachedCapabilities, null, 2));
+    // Only log capabilities at info level if running on an actual Tizen device
+    if (typeof tizen !== 'undefined' || platformInfo.isTizen) {
+        log.info('Tizen capabilities:', JSON.stringify(_cachedCapabilities, null, 2));
+    } else {
+        log.debug('Tizen capabilities (mock/fallback):', JSON.stringify(_cachedCapabilities, null, 2));
+    }
+
     return _cachedCapabilities;
 }
 

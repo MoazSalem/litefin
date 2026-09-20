@@ -79,8 +79,15 @@ export class SeerrClient {
             } catch (_) {}
         }
 
+        // Verify Litefin companion server plugin is present before attempting endpoint request
+        const isLitefinAvailable = await api.isLitefinPluginAvailable();
+        if (!isLitefinAvailable) {
+            this._status = { configured: false, available: false };
+            return this._status;
+        }
+
         try {
-            const payload = await api.get(`${API_ROOT}/Status`);
+            const payload = await api.get(`${API_ROOT}/Status`, {}, { silent: true, warnOnError: true });
             this._status = {
                 configured: !!payload?.configured,
                 available: !!payload?.available

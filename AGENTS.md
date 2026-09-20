@@ -250,8 +250,8 @@ log.verbose('message'); // Level 4 — verbose trace
 ### Critical Files
 
 - `src/index.js` — App entry point (polyfills + bootstrap)
-- `src/index.ultra-legacy.html` — Ultra-legacy HTML entry with backup-logger
-- `src/backup-logger.js` — Zero-dependency console monkeypatch for ultra-legacy Tizen 2.x
+- `src/index.ultra-legacy.html` — Ultra-legacy HTML entry with logger.js
+- `src/logger.js` — Zero-dependency console monkeypatch and safe interceptor for early boot
 - `src/core/App.js` — Application controller (init, route registration, sidebar lifecycle)
 - `src/core/Component.js` — Base UI component class
 - `src/core/EventBus.js` — Pub/sub event system
