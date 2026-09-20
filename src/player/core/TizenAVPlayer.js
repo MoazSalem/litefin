@@ -111,6 +111,11 @@ export class TizenAVPlayer {
         // Throttle for timeupdate events
         this._lastTimeUpdateTicks = 0;
 
+        // Authoritative presentation timestamp (in seconds) of the currently rendered video frame.
+        // Anchored directly to AVPlay's hardware presentation clock from oncurrentplaytime(time)
+        // or user seek targets, preventing subtitle desync caused by demuxer keyframe drift.
+        this._currentTimeSec = 0;
+
         // When pause() is called while AVPlay is mid-seek or mid-buffer, the native
         // avplay.pause() call would throw PLAYER_ERROR_INVALID_OPERATION. Instead,
         // we set this flag and apply the native pause the next time _checkNativePlay()
@@ -963,7 +968,7 @@ export class TizenAVPlayer {
                     }
                 }
 
-                // This is called periodically with current time in ms
+                // This is called periodically with current time in ms.
                 // Throttle to ~250ms to reduce main thread load on slow TVs.
                 // ─────────────────────────────────────────────────────────────
                 // Seek In-Progress Suppression:
@@ -976,9 +981,28 @@ export class TizenAVPlayer {
                     return;
                 }
 
-                const currentTime = this.getCurrentTime();
+                // ─────────────────────────────────────────────────────────────
+                // Presentation Clock Extraction:
+                // Samsung AVPlay passes the exact presentation timestamp (in ms)
+                // of the video frame currently rendered to the display in the 'time'
+                // callback parameter.
+                //
+                // We MUST use 'time' directly rather than querying this.getCurrentTime()
+                // (which makes a synchronous WebIDL IPC call to webapis.avplay.getCurrentTime()).
+                // On Samsung Tizen hardware, getCurrentTime() returns the demuxer buffer
+                // read head or audio PTS, which after a seek lags behind the video display
+                // PTS by the keyframe/preroll delta (0.5s–2.5s). That lag was the direct
+                // cause of post-seek external subtitle delay.
+                // ─────────────────────────────────────────────────────────────
+                const currentTime = (typeof time === 'number' && !isNaN(time) && time >= 0)
+                    ? time / 1000
+                    : this.getCurrentTime();
+
+                // Cache authoritative presentation timestamp
+                this._currentTimeSec = currentTime;
                 const currentTimeTicks = Math.floor(currentTime * 10000000);
 
+                // Throttle to ~250ms (2,500,000 ticks) to protect TV CPU
                 if (Math.abs(currentTimeTicks - this._lastTimeUpdateTicks) > 2500000) {
                     this._lastTimeUpdateTicks = currentTimeTicks;
                     this.onEvent({ type: 'timeupdate', data: { time: currentTime } });
@@ -2048,6 +2072,8 @@ export class TizenAVPlayer {
         this._isTizenPlaying = false;
         this._bufferingComplete = false;
         this._lastTrackPollTime = 0;
+        this._currentTimeSec = 0;
+        this._lastTimeUpdateTicks = 0;
     }
 
     /**
@@ -2228,12 +2254,23 @@ export class TizenAVPlayer {
                 (landedMs) => {
                     this._seekInProgress = false;
 
-                    // Emit verified timeupdate now that hardware decoder has settled
-                    const actualTimeSec = (typeof landedMs === 'number' && !isNaN(landedMs))
-                        ? landedMs / 1000
-                        : this.getCurrentTime();
-                    this._lastTimeUpdateTicks = Math.floor(actualTimeSec * 10000000);
-                    this.onEvent({ type: 'timeupdate', data: { time: actualTimeSec } });
+                    // ─────────────────────────────────────────────────────────────────
+                    // Post-Seek Time Anchor:
+                    // Emit the target seek position requested by the user/pipeline.
+                    //
+                    // While AVPlay's underlying demuxer repositions to the nearest
+                    // preceding keyframe (reported by landedMs in hardware telemetry),
+                    // video presentation and audio output resume from the requested
+                    // target timestamp.
+                    //
+                    // Emitting positionMs / 1000 ensures SubtitleManager and the UI
+                    // clock align with presentation rather than snapping backwards to
+                    // the GOP I-frame (which introduced an artificial 0.5s–2.5s delay).
+                    // ─────────────────────────────────────────────────────────────────
+                    const targetSec = positionMs / 1000;
+                    this._currentTimeSec = targetSec;
+                    this._lastTimeUpdateTicks = Math.floor(targetSec * 10000000);
+                    this.onEvent({ type: 'timeupdate', data: { time: targetSec } });
 
                     // If the seek did not trigger native buffering (e.g. seeking within
                     // cached/buffered range), onbufferingstart was never called.
@@ -2964,13 +3001,24 @@ export class TizenAVPlayer {
     getCurrentTime() {
         if (!this._avplay || !this._isPrepared) return 0;
 
+        // ─────────────────────────────────────────────────────────────────────
+        // Presentation Clock Precedence:
+        // If actively playing natively and we have a valid presentation timestamp from
+        // oncurrentplaytime or seek completion, prefer it over polling
+        // webapis.avplay.getCurrentTime(). This avoids synchronous WebIDL bridge
+        // latency and prevents reading demuxer buffer lag.
+        // ─────────────────────────────────────────────────────────────────────
+        if (this._isTizenPlaying && this._currentTimeSec > 0) {
+            return this._currentTimeSec;
+        }
+
         try {
             const timeMs = Number(this._avplay.getCurrentTime());
-            if (isNaN(timeMs)) return 0;
+            if (isNaN(timeMs)) return this._currentTimeSec || 0;
 
             return timeMs / 1000;
         } catch (e) {
-            return 0;
+            return this._currentTimeSec || 0;
         }
     }
 
