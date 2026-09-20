@@ -118,6 +118,17 @@ class PlayerPage extends Page {
         // Press-counter for the unlock gesture (3 rapid OK/Enter presses)
         this._unlockPressCount = 0;
         this._unlockLastPressTime = null;
+
+        // Auto-Recovery states for network dropouts / TV NIC driver resets
+        this._isAutoRecovering = false;
+        this._autoRecoveryTimer = null;
+        this._autoRecoveryPositionTicks = 0;
+        this._autoRecoveryAttempts = 0;
+
+        // Early Playback Stall Watchdog & Network event handlers
+        this._playbackStallTimer = null;
+        this._onNetworkOffline = null;
+        this._onNetworkOnline = null;
     }
 
     /**
@@ -193,11 +204,34 @@ class PlayerPage extends Page {
                         </div>
                     </div>
                 </div>
+
+                <!-- Reconnection HUD Overlay (Apple HIG Frosted Glass Aesthetic) -->
+                <div id="reconnect-hud" class="reconnect-hud hidden">
+                    <div class="reconnect-card glass-panel">
+                        <div class="reconnect-spinner-wrap">
+                            <div class="reconnect-spinner"></div>
+                            <div class="reconnect-pulse"></div>
+                        </div>
+                        <div class="reconnect-details">
+                            <div class="reconnect-title">Connection Lost</div>
+                            <div class="reconnect-status" id="reconnect-status">Reconnecting in background...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
 
     async onInit() {
+        // Reset auto-recovery states for new playback session
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+        this._autoRecoveryPositionTicks = 0;
+        this._autoRecoveryAttempts = 0;
+
         // Reset state for new playback session.
         // CRITICAL: _cachedPlayMethod must be cleared here — if the previous item was
         // DirectPlay, the stale cache would bleed into the new session and cause incorrect
@@ -379,19 +413,27 @@ class PlayerPage extends Page {
             // Initialize the player
             await this._initPlayer();
 
-            // Listen for app close/hide events to report playback stopped
+            // Listen for app close events to report playback stopped
             this._onAppBeforeExit = () => this._handleAppExit();
             eventBus.on('app:beforeExit', this._onAppBeforeExit);
 
-            // Pause playback when app goes to background (e.g. user switches TV input).
-            // We do NOT stop the player or report stopped — the session stays alive so
-            // the user can resume when they return without losing their position.
+            // Listen for app background/suspend events
             this._onAppHidden = () => this._handleAppHidden();
             eventBus.on('app:hidden', this._onAppHidden);
-
-            // When returning to foreground the player is still paused and ready.
             this._onAppVisible = () => this._handleAppVisible();
             eventBus.on('app:visible', this._onAppVisible);
+
+            // ================================================================
+            // NETWORK RESILIENCE & OFFLINE EVENT HANDLERS
+            // ================================================================
+            // Detect network disconnection immediately rather than waiting
+            // 20-30s for the browser/demuxer socket timeouts.
+            this._onNetworkOffline = () => this._handleNetworkOffline();
+            this._onNetworkOnline = () => this._handleNetworkOnline();
+            eventBus.on('websocket:disconnected', this._onNetworkOffline);
+            eventBus.on('websocket:connected', this._onNetworkOnline);
+            window.addEventListener('offline', this._onNetworkOffline);
+            window.addEventListener('online', this._onNetworkOnline);
 
             // ================================================================
             // REMOTE CONTROL HANDLERS
@@ -410,8 +452,26 @@ class PlayerPage extends Page {
                 };
             };
 
+            /*
+             * ================================================================
+             * HARDWARE & NETWORK REMOTE PLAYBACK COMMANDS
+             * ================================================================
+             * When scrubbing the timeline in 'Confirm Seek with OK' mode,
+             * remote playback controls (Play, Pause, Play/Pause) serve as
+             * direct seek confirmation triggers in addition to the OK key.
+             * ================================================================
+             */
             this._onRemotePause = () => {
                 log.info('Remote: Pause');
+
+                // If user was preview scrubbing, commit the seek and remain paused
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Pause confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('pause');
+                    this._reportPlaybackProgress('pause');
+                    return;
+                }
+
                 if (this._player?.pause) {
                     this._player.pause();
                     // Report pause state to server
@@ -428,6 +488,15 @@ class PlayerPage extends Page {
 
             this._onRemotePlay = () => {
                 log.info('Remote: Play/Resume');
+
+                // If user was preview scrubbing, commit the seek and unpause playback
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Play confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('play');
+                    this._reportPlaybackProgress('unpause');
+                    return;
+                }
+
                 // Player library uses unpause() or togglePlay() - not play()
                 if (this._player?.unpause) {
                     this._player.unpause();
@@ -448,6 +517,15 @@ class PlayerPage extends Page {
 
             this._onRemotePlayPause = () => {
                 log.info('Remote: PlayPause');
+
+                // If user was preview scrubbing, commit the seek and resume playback
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Play/Pause confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('playPause');
+                    this._reportPlaybackProgress(this._player?.isPaused?.() ? 'pause' : 'unpause');
+                    return;
+                }
+
                 const wasPaused = this._player?.isPaused?.();
                 if (this._player?.togglePlay) {
                     this._player.togglePlay();
@@ -875,9 +953,18 @@ class PlayerPage extends Page {
         // Listen for player events
         // Note: 'ready' is not emitted by JellyfinPlayer, so we call it manually below
         // this._player.on('play', () => this._onPlaying()); // Handled by 'playing'
-        this._player.on('pause', () => this._onPaused());
-        this._player.on('ended', () => this._onEnded());
-        this._player.on('error', (err) => this._onPlayerError(err));
+        this._player.on('pause', () => {
+            this._clearPlaybackStallWatchdog();
+            this._onPaused();
+        });
+        this._player.on('ended', () => {
+            this._clearPlaybackStallWatchdog();
+            this._onEnded();
+        });
+        this._player.on('error', (err) => {
+            this._clearPlaybackStallWatchdog();
+            this._onPlayerError(err);
+        });
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
         this._player.on('secondarysubtitlechange', (data) => this._onSecondarySubtitleChange(data));
@@ -885,6 +972,7 @@ class PlayerPage extends Page {
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
         this._player.on('seek', (data) => {
+            this._clearPlaybackStallWatchdog();
             if (data && data.positionTicks !== undefined) {
                 // Synchronize seek target directly to resume position
                 if (typeof data.positionTicks === 'number') {
@@ -895,8 +983,11 @@ class PlayerPage extends Page {
                 this._reportPlaybackProgress('timeupdate');
             }
         });
-        // Waiting listener removed to prevent loading screen during seek/buffer
+        // Hook buffering/stalled events for proactive network dropout watchdog
+        this._player.on('waiting', () => this._onPlayerWaiting());
+        this._player.on('stalled', () => this._onPlayerWaiting());
         this._player.on('restarting', () => {
+            this._clearPlaybackStallWatchdog();
             log.info('Player restarting (quality change), showing loading');
             this._showLoading(true);
 
@@ -921,6 +1012,7 @@ class PlayerPage extends Page {
         });
 
         this._player.on('playing', () => {
+            this._clearPlaybackStallWatchdog();
             this._showLoading(false);
             this._onPlaying();
         });
@@ -1761,6 +1853,7 @@ class PlayerPage extends Page {
         eventBus.emit('player:paused', { item: this._item });
 
         this._isPaused = true;
+        this._clearPlaybackStallWatchdog();
         // Report paused state with explicit 'pause' event
         this._reportPlaybackProgress('pause');
 
@@ -2362,8 +2455,327 @@ class PlayerPage extends Page {
         }
 
         log.error('Player error:', error);
+
+        // ====================================================================
+        // NETWORK DISCONNECTION & TV NIC RESILIENCE AUTO-RECOVERY
+        // ====================================================================
+        // When high-bitrate streaming triggers an Ethernet NIC blackout (e.g.
+        // Tizen 100Mbps USB-to-Ethernet RX FIFO overflow) or when transient network
+        // dropouts occur, the connection goes down for 30-45s while the kernel resets
+        // the driver. Instead of fatally dumping the user back to the library or
+        // showing a hard error dialog, we engage background auto-recovery:
+        //   1. Save the exact current playback position tick.
+        //   2. Present an Apple HIG frosted-glass Reconnection HUD.
+        //   3. Poll Tizen network status & Jellyfin ping until connectivity restores.
+        //   4. Seamlessly re-open and resume playback from the saved position tick.
+        // ====================================================================
+        const isNetwork = Boolean(
+            error?.isNetworkError ||
+            error?.code === 'PLAYER_ERROR_CONNECTION_FAILED' ||
+            error?.message === 'PLAYER_ERROR_CONNECTION_FAILED' ||
+            (typeof error?.message === 'string' && /connection|network|offline|PLAYER_ERROR_CONNECTION_FAILED|MEDIA_ERR_NETWORK/i.test(error.message))
+        );
+
+        const currentPosTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        if (isNetwork && !this._isAutoRecovering && (this._hasReportedStart || currentPosTicks > 0)) {
+            this._isSwitching = false;
+            this._startAutoRecovery(error);
+            return;
+        }
+
         this._isSwitching = false; // Reset lock on error
-        this._showError(error.message || 'Playback error');
+        this._showError(error?.message || 'Playback error');
+    }
+
+    /**
+     * ========================================================================
+     * Early Playback Stall Watchdog
+     * ========================================================================
+     * If the video element or AVPlayer enters a stalled/waiting buffering state,
+     * this watchdog checks network health after 3.5 seconds. If unreachable,
+     * it immediately trips Auto-Recovery rather than waiting ~30s for demuxer fatal.
+     * ========================================================================
+     * @private
+     */
+    _onPlayerWaiting() {
+        if (this._isAutoRecovering || this._isPaused || this._isExiting) return;
+
+        // Clear any active stall timer
+        this._clearPlaybackStallWatchdog();
+
+        // 3.5-second watchdog: if still stalled and network is failing, engage auto-recovery early
+        this._playbackStallTimer = setTimeout(async () => {
+            if (this._isAutoRecovering || this._isPaused || this._isExiting) return;
+
+            log.warn('[PlaybackWatchdog] Buffering stalled for 3.5s, checking network health...');
+
+            // If browser already reports offline or WebSocket disconnected, recover immediately
+            const isNavigatorOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+            const isWsDisconnected = typeof api !== 'undefined' && api.isWebSocketConnected === false;
+
+            if (isNavigatorOffline || isWsDisconnected) {
+                log.warn('[PlaybackWatchdog] Offline status confirmed during stall. Starting auto-recovery.');
+                this._startAutoRecovery({
+                    isNetworkError: true,
+                    message: 'Playback stalled while offline'
+                });
+                return;
+            }
+
+            // Otherwise, perform a quick 1.5s ping check to verify server availability
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const pingUrl = `${api.serverUrl}/System/Ping`;
+                const response = await fetch(pingUrl, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                log.info('[PlaybackWatchdog] Server ping succeeded during stall; waiting for stream buffer to resume.');
+            } catch (err) {
+                log.warn('[PlaybackWatchdog] Server ping check failed during stall:', err.message);
+                if (!this._isAutoRecovering && !this._isPaused && !this._isExiting) {
+                    this._startAutoRecovery({
+                        isNetworkError: true,
+                        message: 'Server unreachable during playback stall'
+                    });
+                }
+            }
+        }, 3500);
+    }
+
+    /**
+     * Clear the playback stall watchdog timer.
+     * @private
+     */
+    _clearPlaybackStallWatchdog() {
+        if (this._playbackStallTimer) {
+            clearTimeout(this._playbackStallTimer);
+            this._playbackStallTimer = null;
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Handle Network Dropout & WebSocket Disconnection Events
+     * ========================================================================
+     * When network connectivity drops, engaging auto-recovery immediately prevents
+     * the player from freezing for 20-30s while the browser/OS socket times out.
+     * ========================================================================
+     * @private
+     */
+    _handleNetworkOffline() {
+        log.warn('[AutoRecovery] Network offline event or WebSocket disconnect detected');
+        const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
+        
+        // If actively playing or buffered and not already recovering or paused
+        if (!this._isAutoRecovering && !this._isPaused && !this._isExiting && (this._hasReportedStart || currentPosTicks > 0)) {
+            log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
+            this._startAutoRecovery({
+                isNetworkError: true,
+                message: 'Network offline / WebSocket disconnected'
+            });
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Handle Network Online Restoration Event
+     * ========================================================================
+     * Accelerates the reconnection check step when internet/WebSocket comes back.
+     * ========================================================================
+     * @private
+     */
+    _handleNetworkOnline() {
+        log.info('[AutoRecovery] Network online / WebSocket connected event received');
+        if (this._isAutoRecovering && this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+            this._pollForReconnection();
+        }
+    }
+
+    /**
+     * Show or hide the Apple-style Frosted Glass Reconnection HUD.
+     * @param {boolean} show - Whether to display or hide the HUD
+     * @param {string} [statusText] - Optional status message to show
+     * @private
+     */
+    _showReconnectHUD(show, statusText = '') {
+        const hud = this.$('#reconnect-hud');
+        if (!hud) return;
+
+        if (show) {
+            const statusEl = this.$('#reconnect-status');
+            if (statusEl && statusText) {
+                statusEl.textContent = statusText;
+            }
+            hud.classList.remove('hidden');
+        } else {
+            hud.classList.add('hidden');
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Resilient Auto-Recovery Pipeline for Network Drops & NIC Watchdog Resets
+     * ========================================================================
+     * Preserves the exact playback position, displays a non-intrusive frosted
+     * glass reconnection card, and polls for network recovery before auto-resuming.
+     * ========================================================================
+     * @param {Object|Error} error - The network error that triggered recovery
+     * @private
+     */
+    async _startAutoRecovery(error) {
+        if (this._isAutoRecovering) return;
+        this._isAutoRecovering = true;
+        this._autoRecoveryAttempts = 0;
+        this._clearPlaybackStallWatchdog();
+
+        // 1. Capture exact playback position before backend is torn down
+        const currentTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
+        // Rewind 2 seconds (20,000,000 ticks) so the viewer doesn't miss the interrupted scene
+        this._autoRecoveryPositionTicks = Math.max(0, currentTicks - 20000000);
+        log.info(
+            `[AutoRecovery] Network dropout detected (${error?.message || error}). Captured position: ${(this._autoRecoveryPositionTicks / 10000000).toFixed(1)}s`
+        );
+
+        // 2. Hide OSD and show sleek Apple HIG Reconnection HUD
+        if (this._osd) this._osd.hide();
+        this._showReconnectHUD(true, 'Connection lost. Reconnecting to server...');
+
+        // 3. Stop backend player without scrobbling 'stopped' to preserve continue-watching state
+        try {
+            if (this._player?.stop) {
+                await this._player.stop();
+            }
+        } catch (stopErr) {
+            log.warn('[AutoRecovery] Backend stop during recovery:', stopErr);
+        }
+
+        // 4. Begin non-blocking polling check loop
+        this._pollForReconnection();
+    }
+
+    /**
+     * Poll for network restoration and Jellyfin server availability.
+     * Uses Tizen webapis.network gateway check alongside periodic /System/Ping calls.
+     * @private
+     */
+    _pollForReconnection() {
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+
+        const maxAttempts = 45; // 45 * 2s = 90s total recovery window
+        const pollInterval = 2000;
+
+        const checkStep = async () => {
+            if (!this._isAutoRecovering) return;
+
+            this._autoRecoveryAttempts++;
+            const statusEl = this.$('#reconnect-status');
+            if (statusEl) {
+                statusEl.textContent = `Reconnecting to server... (${this._autoRecoveryAttempts}/${maxAttempts})`;
+            }
+
+            log.info(`[AutoRecovery] Checking server connectivity (attempt ${this._autoRecoveryAttempts}/${maxAttempts})...`);
+
+            let isOnline = false;
+
+            // Ping Jellyfin server directly
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1800);
+                const pingUrl = `${api.serverUrl}/System/Ping`;
+                const response = await fetch(pingUrl, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    isOnline = true;
+                }
+            } catch (pingErr) {
+                log.debug('[AutoRecovery] Server ping check failed:', pingErr.message);
+            }
+
+            if (isOnline) {
+                log.info('[AutoRecovery] Server connectivity restored! Auto-resuming playback...');
+                if (statusEl) {
+                    statusEl.textContent = 'Connection restored! Resuming playback...';
+                }
+                await new Promise((r) => setTimeout(r, 600));
+                this._finishAutoRecovery();
+                return;
+            }
+
+            if (this._autoRecoveryAttempts >= maxAttempts) {
+                log.warn('[AutoRecovery] Max recovery attempts reached. Presenting manual error screen.');
+                this._cancelAutoRecovery();
+                this._showError('Connection lost. Please check your network connection and try again.');
+                return;
+            }
+
+            this._autoRecoveryTimer = setTimeout(checkStep, pollInterval);
+        };
+
+        this._autoRecoveryTimer = setTimeout(checkStep, pollInterval);
+    }
+
+    /**
+     * Successfully recovered network: re-initialize player and resume from captured position.
+     * @private
+     */
+    async _finishAutoRecovery() {
+        this._showReconnectHUD(false);
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+
+        try {
+            this._showLoading(true);
+
+            // Re-assign resume position
+            this._resumePosition = this._autoRecoveryPositionTicks;
+            this._hasReportedStart = false;
+
+            // Re-initialize player instance
+            if (!this._player || this._player.isDestroyed) {
+                await this._initPlayer();
+            }
+
+            // Start playback from saved position
+            await this._startPlayback();
+            this._showLoading(false);
+        } catch (resumeErr) {
+            log.error('[AutoRecovery] Failed to resume playback after reconnect:', resumeErr);
+            this._showError('Failed to resume playback after reconnection.');
+        }
+    }
+
+    /**
+     * Cancel ongoing auto-recovery process and dismiss HUD.
+     * @private
+     */
+    _cancelAutoRecovery() {
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+        this._showReconnectHUD(false);
     }
 
     _onTimeUpdate(positionTicks) {
@@ -2780,15 +3192,18 @@ class PlayerPage extends Page {
                 MediaSourceId: mediaSource?.Id,
                 ...playerState,
                 IsPaused: isPaused,
-                EventName: eventName,
-
-                // Report the current queue state so the dashboard can reflect what's
-                // up next and remote control queue operations work correctly.
-                NowPlayingQueue: this._buildNowPlayingQueue()
+                EventName: eventName
             };
 
-            // Debug: Log progress reports for pause/unpause events
+            // ================================================================
+            // OPTIMIZED PROGRESS PAYLOAD:
+            // Only attach NowPlayingQueue on explicit state transitions (e.g. pause,
+            // unpause, track change), NOT on every routine 10-second timeupdate.
+            // This cuts megabytes of unnecessary JSON payload serialization and
+            // prevents bandwidth / connection congestion during active video playback.
+            // ================================================================
             if (eventName !== 'timeupdate') {
+                info.NowPlayingQueue = this._buildNowPlayingQueue();
                 log.info(`Reporting ${eventName}, IsPaused:`, isPaused);
             }
 
@@ -3487,21 +3902,25 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Handle app going to background — pause playback and tell the server.
-     * The player and session remain alive so the user can resume on return.
-     * This is intentionally different from _handleAppExit() which fully stops
-     * the session (only used on actual app close via beforeunload).
+     * Handle app going to background — pause playback, optionally suspend AVPlay decoder,
+     * and report state to server. The player and session remain alive so the user can
+     * resume on return.
      */
     _handleAppHidden() {
-        // Don't pause if we're already in the process of stopping playback
+        // Exit early if page teardown is already underway or background setup has completed
         if (this._isExiting || this._backgroundPrepared) return;
 
         this._backgroundPrepared = true;
-
         log.info('App backgrounded, pausing playback');
-        this._resumePlaybackAfterProfileSelection = this._player?.isPaused
+
+        // Capture true playing state prior to pausing, ensuring we know whether playback
+        // was running or already paused by the viewer when app enters background.
+        const wasPlaying = this._player?.isPaused
             ? !this._player.isPaused()
             : !this._isPaused;
+        this._resumePlaybackAfterProfileSelection = wasPlaying;
+
+        // Determine if profile selection dialog should intercept on foreground resume
         const shouldGateProfileSelection =
             storage.getItem('pref:showProfilesOnResume') === 'true' &&
             state.get('user:sessionCount', 0) > 1;
@@ -3538,6 +3957,18 @@ class PlayerPage extends Page {
             }
         }
 
+        // Suspend the AVPlay decoder to release hardware resources back to the OS.
+        // We pass the pre-pause wasPlaying flag explicitly so TizenAVPlayer preserves
+        // true playback intent rather than seeing an artificial PAUSED state.
+        const backend = this._player?._backend;
+        if (typeof backend?.suspend === 'function') {
+            try {
+                backend.suspend(wasPlaying);
+            } catch (e) {
+                log.warn('Failed to suspend AVPlay:', e);
+            }
+        }
+
         // Prepare the takeover while the app is still hidden. webOS may paint the
         // video surface before the first foreground callback, so waiting until
         // app:visible would briefly expose the previous stream.
@@ -3547,17 +3978,78 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Handle app returning to foreground — the player is still paused and
-     * ready. We do NOT auto-resume; the user presses play to continue.
+     * Handle app returning to foreground — restore suspended decoder if needed.
+     * Restores hardware media plane and resumes playback if stream was active before suspend.
      */
-    _handleAppVisible() {
+    async _handleAppVisible() {
         if (this._isExiting) return;
 
+        // Reset background preparation guard when profile selection is inactive
         if (!this._resumeProfileSelectionActive) this._backgroundPrepared = false;
 
-        log.info('App foregrounded, player paused state preserved');
-        // The player remains paused. When the user presses play, the normal
-        // togglePlay/unpause flow resumes from the current position.
+        log.info('App foregrounded, checking decoder restoration state');
+
+        const backend = this._player?._backend;
+        if (backend && typeof backend.isSuspended === 'function' && backend.isSuspended()) {
+            const url = backend.getCurrentUrl?.();
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+
+            // All streams loaded in AVPlay have a playback URL (direct play, HLS, or Live TV).
+            // Do not gate on playSessionId so all stream types can be properly restored.
+            if (url) {
+                log.info('[AVPlay] Attempting decoder restoration from background state');
+                const { success, wasPlaying } = await backend.restore(url, 0);
+
+                if (success) {
+                    log.info('[AVPlay] Decoder successfully restored from background');
+
+                    // Resume playback immediately if user was watching before backgrounding
+                    // and profile selection modal is not currently holding the screen.
+                    if (wasPlaying && !this._resumeProfileSelectionActive) {
+                        try {
+                            this._isPaused = false;
+                            if (typeof this._player?.unpause === 'function') {
+                                this._player.unpause();
+                            } else if (typeof backend.unpause === 'function') {
+                                backend.unpause();
+                            }
+                            this._reportPlaybackProgress('unpause');
+                            if (this._osd) {
+                                this._osd.updatePlayPauseButton();
+                            }
+                        } catch (e) {
+                            log.warn('Failed to resume playback after AVPlay restore:', e);
+                        }
+                    }
+                } else {
+                    // Watchdog Recovery: If restoreAsync fails (e.g. Tizen OS evicted hardware surface
+                    // due to memory pressure while in background), perform seamless stream reload
+                    log.warn('[AVPlay] Decoder restore failed or surface evicted; triggering recovery watchdog');
+
+                    const savedMs = typeof backend.getSuspendedPositionMs === 'function'
+                        ? backend.getSuspendedPositionMs()
+                        : 0;
+                    const savedTicks = savedMs > 0
+                        ? savedMs * 10000
+                        : (this._player?.getCurrentPositionTicks?.() || 0);
+
+                    log.info(`[RestoreWatchdog] Seamlessly reloading stream from ${(savedTicks / 10000000).toFixed(1)}s`);
+
+                    this._resumePosition = savedTicks;
+                    this._showLoading(true);
+                    try {
+                        await this._startPlayback();
+                    } catch (err) {
+                        log.error('[RestoreWatchdog] Playback recovery failed:', err);
+                        this._reportPlaybackStopped(mediaSource, savedTicks, false);
+                    } finally {
+                        this._showLoading(false);
+                    }
+                }
+            } else {
+                log.warn('[AVPlay] Decoder suspended but URL is missing, cannot restore');
+            }
+        }
     }
 
     // ========================================================================
@@ -3570,6 +4062,14 @@ class PlayerPage extends Page {
         if (this._isScreenLocked) {
             this._showLockIndicator();
             return;
+        }
+
+        // If auto-recovery is in progress, cancel it and exit cleanly
+        if (this._isAutoRecovering) {
+            log.info('Canceling active auto-recovery on user Back navigation');
+            this._cancelAutoRecovery();
+            this._stopAndExit();
+            return true;
         }
 
         // ====================================================================
@@ -3989,6 +4489,9 @@ class PlayerPage extends Page {
         this._backgroundPrepared = false;
         log.info('destroy() called');
 
+        // Cancel any pending auto-recovery timers
+        this._cancelAutoRecovery();
+
         // Stop pause reporting heartbeat timer
         this._stopPauseReportTimer();
 
@@ -4005,13 +4508,26 @@ class PlayerPage extends Page {
             this._subtitleTimeout = null;
         }
 
-        // Remove app exit listener
+        // Clear stall watchdog timer
+        this._clearPlaybackStallWatchdog();
+
+        // Remove network offline/online listeners
+        if (this._onNetworkOffline) {
+            eventBus.off('websocket:disconnected', this._onNetworkOffline);
+            window.removeEventListener('offline', this._onNetworkOffline);
+            this._onNetworkOffline = null;
+        }
+        if (this._onNetworkOnline) {
+            eventBus.off('websocket:connected', this._onNetworkOnline);
+            window.removeEventListener('online', this._onNetworkOnline);
+            this._onNetworkOnline = null;
+        }
+
+        // Remove app lifecycle listeners
         if (this._onAppBeforeExit) {
             eventBus.off('app:beforeExit', this._onAppBeforeExit);
             this._onAppBeforeExit = null;
         }
-
-        // Remove background/foreground listeners
         if (this._onAppHidden) {
             eventBus.off('app:hidden', this._onAppHidden);
             this._onAppHidden = null;

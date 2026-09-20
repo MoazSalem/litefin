@@ -295,4 +295,46 @@ test('doesAudioTrackRequireDirectStream: Tizen AVPlay does NOT require remux (ha
     assert.strictEqual(requiresRemux, false, 'Tizen AVPlay uses native hardware demuxing and does not need remuxing');
 });
 
+test('isAudioTrackNativelyPlayable respects allowedAudioChannels setting', () => {
+    // -------------------------------------------------------------------------
+    // User configured max channels to 6 (5.1 surround)
+    // -------------------------------------------------------------------------
+    const { isAudioTrackNativelyPlayable } = setup({
+        allowedAudioChannels: 6
+    });
+
+    // 8 channels (7.1) should not be considered natively playable without transcode
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'eac3', Channels: 8 }), false);
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 8 }), false);
+
+    // 6 channels (5.1) and 2 channels (stereo) are within limits and natively playable
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'eac3', Channels: 6 }), true);
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 2 }), true);
+});
+
+test('resolveBestAudioStream selects 5.1 track when default track is 7.1 and max channels is 5.1', () => {
+    // -------------------------------------------------------------------------
+    // When allowedAudioChannels is 6, resolveBestAudioStream should avoid the
+    // 7.1 track and auto-select the 5.1 track in the matching language
+    // -------------------------------------------------------------------------
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        allowedAudioChannels: 6
+    });
+
+    const mediaSource = {
+        Id: 'source-71',
+        DefaultAudioStreamIndex: 0,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'eac3', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 1, 'Should select English AC3 5.1 instead of EAC3 7.1');
+});
+
+
 

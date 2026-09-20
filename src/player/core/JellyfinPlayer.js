@@ -70,6 +70,18 @@ export function isAudioTrackNativelyPlayable(track) {
     if (!track || !track.Codec) return true;
     const codec = track.Codec.toLowerCase();
 
+    // =========================================================================
+    // Maximum Audio Channels Setting Validation
+    // =========================================================================
+    // When the user configures a maximum channel constraint (e.g. 5.1 / 6 channels),
+    // any audio track exceeding this channel count (e.g. 7.1 / 8 channels) requires
+    // server-side transcoding/downmixing and is not natively playable without processing.
+    // =========================================================================
+    const allowedChannels = PlayerSettings.get('allowedAudioChannels');
+    if (allowedChannels && allowedChannels > 0 && typeof track.Channels === 'number' && track.Channels > allowedChannels) {
+        return false;
+    }
+
     // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
     if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
         return false;

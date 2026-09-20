@@ -1638,38 +1638,53 @@ export default class OSDController extends Component {
             return true;
         }
 
-        // Some remotes repeat OK without a reliable keyup. Consume the rest of
-        // the confirmation burst so it cannot toggle playback after committing.
-        if (key === 'enter' && this._seekConfirmTime !== null) {
+        /*
+         * ========================================================================
+         * TIMELINE SEEK CONFIRMATION & GHOST REPEAT GUARD
+         * ========================================================================
+         * TV remotes can repeat keydown events for Enter, Play, Pause, or Play/Pause
+         * without sending distinct keyup events. If a seek confirmation was just
+         * committed, consume the rest of the confirmation burst for 800ms so it does
+         * not accidentally toggle play/pause immediately after jumping.
+         * ========================================================================
+         */
+        const isConfirmSeekKey = key === 'enter' || key === 'play' || key === 'playPause' || key === 'pause';
+        if (isConfirmSeekKey && this._seekConfirmTime !== null) {
             const repeated = e?.repeat || Date.now() - this._seekConfirmTime < 800;
             this._seekConfirmTime = repeated ? Date.now() : null;
             if (repeated) {
                 e?.preventDefault();
                 return true;
             }
-        } else if (key !== 'enter') {
+        } else if (!isConfirmSeekKey) {
             this._seekConfirmTime = null;
         }
+
+        /*
+         * Cancel pending preview scrub when pressing Back.
+         * Restores player state to where it was before scrubbing started.
+         */
         if (this._seekRequiresConfirmation && key === 'back') {
             e?.preventDefault();
             return this._handleBack();
         }
-        if (this._seekRequiresConfirmation && key === 'enter' && this._currentFocusRow === 2) {
-            e?.preventDefault();
-            e?.stopPropagation();
-            const target = this._seekTargetTicks;
-            const resumePlayback = this._seekResumePlayback;
-            this._clearSeekState(false);
-            try {
-                this._player.seek(target);
-            } catch (err) {
-                log.error('Confirmed seek failed:', err);
-            } finally {
-                this._restoreSeekPlayback(resumePlayback);
-            }
-            this._seekConfirmTime = Date.now();
-            this.resetAutoHide();
-            return true;
+
+        /*
+         * ========================================================================
+         * MULTI-KEY SEEK CONFIRMATION COMMIT
+         * ========================================================================
+         * When timeline preview seeking is active on the seekbar (Row 2), users
+         * can confirm the jump using either OK/Enter, or dedicated media playback
+         * buttons (Play, Pause, Play/Pause).
+         *
+         * Behavior:
+         *   - 'play' / 'playPause': Jumps to target and forces playback to resume.
+         *   - 'pause': Jumps to target and keeps playback paused.
+         *   - 'enter': Jumps to target and restores the initial playback state.
+         * ========================================================================
+         */
+        if (this._seekRequiresConfirmation && isConfirmSeekKey && this._currentFocusRow === 2) {
+            return this.confirmPendingSeek(key, e);
         }
 
         const wasHidden = !this._isOsdVisible;
@@ -2315,6 +2330,54 @@ export default class OSDController extends Component {
 
 
 
+    /**
+     * Check if a timeline seek confirmation preview session is currently active.
+     * @returns {boolean} True if the user is scrubbing and waiting for confirmation
+     */
+    hasPendingSeekConfirmation() {
+        return Boolean(this._seekRequiresConfirmation && this._seekTargetTicks !== null);
+    }
+
+    /**
+     * Commit and confirm the pending seek preview session.
+     *
+     * @param {string} key - Triggering key: 'enter', 'play', 'playPause', or 'pause'
+     * @param {Event|null} [e] - Optional DOM keyboard/key event
+     * @returns {boolean} True if a pending seek was confirmed and committed
+     */
+    confirmPendingSeek(key = 'enter', e = null) {
+        if (!this.hasPendingSeekConfirmation()) return false;
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        const target = this._seekTargetTicks;
+        const resumePlayback = key === 'pause'
+            ? false
+            : (key === 'play' || key === 'playPause' ? true : this._seekResumePlayback);
+
+        // Clear preview scrub flags before executing the jump
+        this._clearSeekState(false);
+        try {
+            this._player.seek(target);
+        } catch (err) {
+            log.error('Confirmed seek failed:', err);
+        } finally {
+            // Ensure playback state matches key intent
+            if (key === 'pause') {
+                if (typeof this._player.pause === 'function') this._player.pause();
+            } else {
+                this._restoreSeekPlayback(resumePlayback);
+            }
+        }
+
+        // Record confirmation timestamp to absorb ghost bounces
+        this._seekConfirmTime = Date.now();
+        this.updatePlayPauseButton();
+        this.resetAutoHide();
+        return true;
+    }
+
     _findActionIndex(action) {
         const controls = this._getControls();
         return controls.findIndex(btn => btn.dataset.action === action);
@@ -2325,7 +2388,11 @@ export default class OSDController extends Component {
     // ===================================
 
     _executeAction(action) {
-        if (this._seekRequiresConfirmation) {
+        if (this.hasPendingSeekConfirmation()) {
+            if (action === 'togglePlay') {
+                this.confirmPendingSeek('playPause');
+                return;
+            }
             this._clearSeekState();
             this._updateState();
         }
@@ -3102,10 +3169,18 @@ export default class OSDController extends Component {
         }
     }
 
+    /*
+     * Resumes playback after committing or exiting a timeline seek scrub session
+     * if playback was active prior to scrubbing or requested by the confirm key.
+     */
     _restoreSeekPlayback(resumePlayback) {
-        if (!resumePlayback) return;
+        if (!resumePlayback || !this._player) return;
         try {
-            this._player.unpause();
+            if (typeof this._player.unpause === 'function') {
+                this._player.unpause();
+            } else if (typeof this._player.play === 'function') {
+                this._player.play();
+            }
         } catch (err) {
             log.error('Could not resume playback after timeline preview:', err);
         }
