@@ -999,10 +999,12 @@ class PlayerPage extends Page {
             // events from JellyfinPlayer.stop(), so no stop report is sent.
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
             if (mediaSource?.PlaySessionId && this._item && !this._item.isIntro) {
                 // Use sync XHR (isSync=true) to guarantee the stop signal
                 // reaches the server before the new session starts.
-                this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
+                this._reportPlaybackStopped(mediaSource, positionTicks, true, durationTicks).catch((err) => {
                     log.warn('Failed to report playback stopped during restart:', err);
                 });
             }
@@ -1149,6 +1151,32 @@ class PlayerPage extends Page {
         }
 
         const item = this._item;
+
+        /*
+         * Defensive metadata backfill:
+         * When items are played from a minimal play queue (or remote sync), they
+         * may lack RunTimeTicks or MediaSources if the queue API didn't return them.
+         * We fetch full item details here so duration is guaranteed to be available
+         * for progress tracking, OSD timeline, and playback stop scrobbling.
+         */
+        if (item && !item.RunTimeTicks) {
+            try {
+                const fullItem = await api.getItem(item.Id, {
+                    Fields: 'RunTimeTicks,Chapters,MediaSources,Trickplay'
+                });
+                if (fullItem?.RunTimeTicks) {
+                    item.RunTimeTicks = fullItem.RunTimeTicks;
+                    if (!item.MediaSources?.length && fullItem.MediaSources?.length) {
+                        item.MediaSources = fullItem.MediaSources;
+                    }
+                    if (!item.Chapters?.length && fullItem.Chapters?.length) {
+                        item.Chapters = fullItem.Chapters;
+                    }
+                }
+            } catch (err) {
+                log.warn('Failed to backfill item metadata in _startPlayback:', err);
+            }
+        }
 
         // Reset version and track selections if the item has changed (e.g. queue advance/prev)
         if (this._playingItemId !== item.Id) {
@@ -1921,16 +1949,20 @@ class PlayerPage extends Page {
             this._isSwitching = true;
             this._showLoading(true);
 
-            // Report the stop of the current play session
+            // Report the stop of the current play session. Capture media source,
+            // position ticks, and total duration before calling stop(), as stop()
+            // tears down the player backend and clears internal duration caches.
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
             // Notify plugins that the previous session ended before starting the same item again
             pluginManager.notifyPlayerStop();
 
             if (this._player?.stop) this._player.stop();
 
-            this._reportPlaybackStopped(mediaSource, positionTicks, false).then(() => {
+            this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks).then(() => {
                 // Settle and restart
                 setTimeout(async () => {
                     this._resumePosition = 0;
@@ -2013,9 +2045,13 @@ class PlayerPage extends Page {
             // server and scrobbling to ani-sync / trakt plugins.
             this._isPlaybackEnded = true;
 
-            // Capture current info before stopping
+            // Capture current info before stopping (player.stop clears internal state).
+            // We must grab durationTicks here while the backend and media source are still
+            // alive, otherwise duration drops to 0 after stop() and completion overrides fail.
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
             // Capture track preferences for next episode
             this._captureActiveTrackSelection();
@@ -2028,8 +2064,8 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            // Report stopped (async)
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+            // Report stopped (async) with captured duration
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
 
             // Give Tizen/Player a moment to settle
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2150,6 +2186,13 @@ class PlayerPage extends Page {
                     // Capture position before stopping
                     const mediaSource = this._player?.getCurrentMediaSource?.();
                     const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+                    const durationTicks =
+                        this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+
+                    // If user was near end of outgoing item, mark ended
+                    if (durationTicks > 0 && positionTicks >= durationTicks * 0.8) {
+                        this._isPlaybackEnded = true;
+                    }
 
                     // Notify plugins before switch
                     pluginManager.notifyPlayerStop();
@@ -2158,7 +2201,7 @@ class PlayerPage extends Page {
                         await this._player.stop();
                     }
 
-                    await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+                    await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
 
                     // Brief settle delay (same as _playNextItem)
                     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2215,6 +2258,8 @@ class PlayerPage extends Page {
                 // Capture current info before stopping
                 const mediaSource = this._player?.getCurrentMediaSource?.();
                 const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+                const durationTicks =
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
                 // Capture track preferences for next episode
                 this._captureActiveTrackSelection();
@@ -2227,7 +2272,7 @@ class PlayerPage extends Page {
                     await this._player.stop();
                 }
 
-                await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+                await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
 
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -2387,9 +2432,26 @@ class PlayerPage extends Page {
         this._showLoading(true);
 
         try {
-            /* Capture current position before stopping. */
+            /*
+             * Capture current position, media source, and duration BEFORE calling
+             * stop(), because stop() clears internal player references and unloads
+             * media elements, causing subsequent duration queries to return 0.
+             */
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+
+            /*
+             * When the user manually advances to the next episode in the queue, or
+             * has watched >= 80% of the outgoing episode before manually selecting
+             * another item, mark playback as ended so the outgoing item triggers
+             * the completion override and scrobbles to ani-sync / trakt plugins.
+             */
+            const previousIndex = playQueue._queue?.findIndex((e) => e.Id === this._item?.Id) ?? -1;
+            if (targetIndex === previousIndex + 1 || (durationTicks > 0 && positionTicks >= durationTicks * 0.8)) {
+                this._isPlaybackEnded = true;
+            }
 
             // Capture track preferences for next episode
             this._captureActiveTrackSelection();
@@ -2401,7 +2463,7 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
 
             /* Brief settle delay — same as _playNextItem/_playPreviousItem. */
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -3712,7 +3774,12 @@ class PlayerPage extends Page {
      * @param {number} [capturedPosition] - Pre-captured position ticks
      * @param {boolean} [isSync=false] - Whether to use synchronous XHR
      */
-    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = false) {
+    async _reportPlaybackStopped(
+        capturedMediaSource = null,
+        capturedPosition = null,
+        isSync = false,
+        capturedDuration = null
+    ) {
         if (this._item?.isIntro) {
             log.info('Skipping PlaybackStopped report for intro item');
             return;
@@ -3741,8 +3808,13 @@ class PlayerPage extends Page {
             // the reported position with the total duration ticks of the media. This
             // guarantees the server marks PlayedToCompletion = true and fires tracker sync
             // (such as jellyfin-ani-sync or Trakt).
+            // We prioritize capturedDuration passed by the caller before player.stop() ran.
             const durationTicks =
-                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                capturedDuration ||
+                this._player?.getDurationTicks?.() ||
+                mediaSource?.RunTimeTicks ||
+                this._item?.RunTimeTicks ||
+                0;
             const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
             if (_isNearComplete) {
                 log.info(
@@ -3874,15 +3946,11 @@ class PlayerPage extends Page {
 
         log.info('App exit detected, reporting playback stopped');
 
-        // Capture info before it's too late
+        // Capture session info before stopping (stop clears internal player state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
         const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
-        const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
-
-        if (!playSessionId) {
-            log.warn('Skipping exit report - no PlaySessionId');
-            return;
-        }
+        const durationTicks =
+            this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
         // Stop the backend player immediately to free resources and tear down
         // the media pipeline (video element, HLS.js, AVPlay, WebOSPlayer, etc.)
@@ -3897,7 +3965,7 @@ class PlayerPage extends Page {
         // Use synchronous XHR (isSync=true) for the same reason as _stopAndExit
         // — the app context may be destroyed before an async fetch completes.
         if (this._item) {
-            this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
+            this._reportPlaybackStopped(mediaSource, positionTicks, true, durationTicks).catch((err) => {
                 log.warn('Failed to report on exit:', err);
             });
         }
@@ -4133,6 +4201,8 @@ class PlayerPage extends Page {
         // Capture session info BEFORE stopping (stop clears internal state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
         const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        const durationTicks =
+            this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
         try {
             // Notify plugins that playback is ending — they clean up OSD widgets
@@ -4154,7 +4224,7 @@ class PlayerPage extends Page {
             // falls back to async fetch (keepalive), awaiting ensures the fetch has a
             // chance to complete before the page context is destroyed.
             try {
-                await this._reportPlaybackStopped(mediaSource, positionTicks, true);
+                await this._reportPlaybackStopped(mediaSource, positionTicks, true, durationTicks);
             } catch (err) {
                 log.warn('Background stop report failed:', err);
             }
@@ -4753,12 +4823,14 @@ class PlayerPage extends Page {
 
         // Stop current playback cleanly
         if (this._player?.stop) {
-            // Capture current info for reporting
+            // Capture current info for reporting before stopping
             const mediaSource = this._player.getCurrentMediaSource();
             const positionTicks = this._player.getCurrentPositionTicks();
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
             await this._player.stop();
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
         }
 
         // Briefly settle hardware to prevent decoder state overlaps

@@ -543,9 +543,15 @@ class PlayQueue {
         // We do NOT pass StartItemId so we get every episode, including those
         // before the one the user clicked — that way the Previous button works
         // correctly across season boundaries.
+        /*
+         * Query the episode list with RunTimeTicks explicitly requested.
+         * Omitting RunTimeTicks causes queued items to lack duration metadata,
+         * which breaks progress tracking, stop scrobbling, and completion calculations
+         * during back-to-back episode playback.
+         */
         const response = await api.getEpisodes(currentItem.SeriesId, {
             Limit: 500, // large enough for any series
-            Fields: 'Overview,Chapters,MediaSources,Trickplay'
+            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,Trickplay'
         });
 
         log.info(
@@ -585,6 +591,11 @@ class PlayQueue {
         // Fetch movies, episodes, and audio separately to maintain UI-like ordering.
         // All three fetches share the same sort field so the full queue is consistent
         // with whatever Display Order the user has chosen for this collection.
+        /*
+         * Request RunTimeTicks for movies, episodes, and audio in BoxSet queues.
+         * This ensures any queued successor item retains duration metadata needed
+         * for server scrobbling and playback completion overrides.
+         */
         const [moviesResponse, episodesResponse, audioResponse] = await Promise.all([
             api.getItems({
                 ParentId: parentId,
@@ -593,7 +604,7 @@ class PlayQueue {
                 SortBy: sortBy,
                 SortOrder: 'Ascending',
                 Limit: 100,
-                Fields: 'Trickplay'
+                Fields: 'RunTimeTicks,Trickplay'
             }),
             api.getItems({
                 ParentId: parentId,
@@ -602,7 +613,7 @@ class PlayQueue {
                 SortBy: sortBy,
                 SortOrder: 'Ascending',
                 Limit: 100,
-                Fields: 'Trickplay'
+                Fields: 'RunTimeTicks,Trickplay'
             }),
             api.getItems({
                 ParentId: parentId,
@@ -610,7 +621,8 @@ class PlayQueue {
                 IncludeItemTypes: 'Audio',
                 SortBy: sortBy,
                 SortOrder: 'Ascending',
-                Limit: 100
+                Limit: 100,
+                Fields: 'RunTimeTicks'
             })
         ]);
 
@@ -637,9 +649,13 @@ class PlayQueue {
         log.debug('Building Season queue for:', seasonId);
 
         // Fetch only episodes for this specific season
+        /*
+         * Fetch season episodes with RunTimeTicks included in the requested fields
+         * to guarantee accurate playback duration on consecutive episodes.
+         */
         const response = await api.getEpisodes(currentItem.SeriesId, {
             SeasonId: seasonId,
-            Fields: 'Overview,Chapters,MediaSources,Trickplay'
+            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,Trickplay'
         });
 
         const episodes = response.Items || [];
