@@ -46,6 +46,9 @@ export class SubtitleParser {
         const lines = vttText.split(/\r\n|\r|\n/);
         let i = 0;
 
+        // Extract style declarations from any WebVTT STYLE blocks (::cue rules)
+        const styleMap = this._parseVTTStyles(vttText);
+
         // Skip WEBVTT header line
         if (lines[0] && lines[0].startsWith('WEBVTT')) {
             i++;
@@ -54,9 +57,18 @@ export class SubtitleParser {
         while (i < lines.length) {
             let line = lines[i].trim();
 
-            // Skip empty lines, NOTE blocks, and STYLE blocks
-            if (!line || line.startsWith('NOTE') || line.startsWith('STYLE')) {
+            // Skip empty lines and NOTE blocks
+            if (!line || line.startsWith('NOTE')) {
                 i++;
+                continue;
+            }
+
+            // Skip entire STYLE blocks (STYLE until empty line separator)
+            if (line.startsWith('STYLE')) {
+                i++;
+                while (i < lines.length && lines[i].trim() !== '') {
+                    i++;
+                }
                 continue;
             }
 
@@ -94,7 +106,7 @@ export class SubtitleParser {
                     cues.push({
                         start,
                         end,
-                        text: this._cleanText(textLines.join('<br>'))
+                        text: this._cleanText(textLines.join('<br>'), styleMap)
                     });
                 }
             } else {
@@ -346,10 +358,229 @@ export class SubtitleParser {
     }
 
     /**
-     * Clean subtitle text (preserve safe HTML tags)
+     * Map of standard WebVTT color classes to CSS color hex codes.
+     * The W3C WebVTT specification explicitly standardizes 8 base colors.
+     */
+    static WEBVTT_NAMED_COLORS = {
+        white: '#ffffff',
+        lime: '#00ff00',
+        cyan: '#00ffff',
+        red: '#ff0000',
+        yellow: '#ffff00',
+        magenta: '#ff00ff',
+        blue: '#0000ff',
+        black: '#000000',
+        gray: '#808080',
+        grey: '#808080'
+    };
+
+    /**
+     * Parses WebVTT STYLE blocks and extracts CSS rules mapped by selector / class name.
+     * WebVTT specs allow ::cue(.class), ::cue(tag), ::cue { ... } blocks.
+     *
+     * @param {string} vttText - Full WebVTT content
+     * @returns {Object.<string, Object.<string, string>>} Map of className -> CSS style properties
      * @private
      */
-    static _cleanText(text) {
+    static _parseVTTStyles(vttText) {
+        const styleMap = {};
+        if (!vttText || typeof vttText !== 'string') return styleMap;
+
+        // Match all STYLE blocks: STYLE followed by CSS declarations until double newline or cue timing
+        const styleBlockRegex = /STYLE\b[^\n]*\n([\s\S]*?)(?=(?:\r?\n\r?\n|\r?\n(?:NOTE\b|[0-9a-fA-F-]+\r?\n)?(?:\d{2}:)?\d{2}:\d{2}|$))/g;
+        let match;
+
+        while ((match = styleBlockRegex.exec(vttText)) !== null) {
+            const cssContent = match[1];
+            // Match rule blocks: selector { declarations }
+            const ruleRegex = /([^{]+)\{([^}]+)\}/g;
+            let ruleMatch;
+
+            while ((ruleMatch = ruleRegex.exec(cssContent)) !== null) {
+                const selector = ruleMatch[1].trim();
+                const declarations = ruleMatch[2];
+
+                // Parse declarations into key-value map
+                const parsedStyles = {};
+                const declRegex = /([\w-]+)\s*:\s*([^;]+);?/g;
+                let declMatch;
+                while ((declMatch = declRegex.exec(declarations)) !== null) {
+                    const prop = declMatch[1].trim().toLowerCase();
+                    const val = declMatch[2].trim();
+                    // Store safe visual properties (color, background-color, background, opacity)
+                    if (['color', 'background-color', 'background', 'opacity'].includes(prop)) {
+                        parsedStyles[prop] = val;
+                    }
+                }
+
+                if (Object.keys(parsedStyles).length === 0) continue;
+
+                // Extract target class names from selector:
+                // e.g. ::cue(.color808080), ::cue(.c1), .color808080
+                const classMatches = selector.match(/\.([a-zA-Z0-9_.-]+)/g);
+                if (classMatches) {
+                    for (const rawClass of classMatches) {
+                        const cleanClass = rawClass.replace('.', '').toLowerCase();
+                        styleMap[cleanClass] = { ...(styleMap[cleanClass] || {}), ...parsedStyles };
+                    }
+                } else if (selector.includes('::cue')) {
+                    // Global cue default styles
+                    styleMap['__default__'] = { ...(styleMap['__default__'] || {}), ...parsedStyles };
+                }
+            }
+        }
+
+        return styleMap;
+    }
+
+    /**
+     * Converts WebVTT style and class tags into standard inline HTML elements.
+     *
+     * In WebVTT (and subtitles transcoded by Jellyfin/ffmpeg or converted from
+     * ASS/TTML/CC), colors and formatting are expressed through class spans:
+     * - Hex text colors: <c.color808080>Text</c> -> <span style="color: #808080;">Text</span>
+     * - Hex background colors: <c.bg_color000000>Text</c> -> <span style="background-color: #000000;">Text</span>
+     * - WebVTT STYLE block classes: <c.c1>Text</c> -> <span style="color: #ff0000;">Text</span>
+     * - Named WebVTT colors: <c.yellow>Text</c> -> <span style="color: #ffff00;">Text</span>
+     * - Named background colors: <c.bg_yellow>Text</c> -> <span style="background-color: #ffff00;">Text</span>
+     * - Combined classes: <c.color808080.bg_color000000>Text</c>
+     * - Voice tags: <v Speaker>Text</v> -> <span class="cue-voice" title="Speaker">Text</span>
+     * - Generic class spans without colors: <c.someclass>Text</c> -> <span class="someclass">Text</span>
+     * - Bare spans: <c>Text</c> -> <span>Text</span>
+     *
+     * When subtitleOverrideColors is disabled (default = false), colors specified in the
+     * subtitle file are honored, while untagged/unstyled text cleanly falls back to the
+     * user's customized Litefin subtitle color.
+     * When subtitleOverrideColors is enabled (true), all embedded tag colors are suppressed
+     * so that all subtitle text is cleanly overridden by the user's selected subtitle color.
+     *
+     * @param {string} text - Raw subtitle text
+     * @param {Object.<string, Object.<string, string>>} [styleMap={}] - Parsed STYLE block rules
+     * @returns {string} Text with WebVTT tags converted to standard HTML tags
+     */
+    static _convertWebVTTTags(text, styleMap = {}) {
+        if (!text || typeof text !== 'string') return '';
+
+        /* -------------------------------------------------------------
+           1. Convert closing </c> and </v> tags to standard </span> tags.
+           ------------------------------------------------------------- */
+        let result = text.replace(/<\/(?:c|v)>/gi, '</span>');
+
+        /* -------------------------------------------------------------
+           2. Convert voice tags: <v Voice Name> or <v.class Voice Name>
+           ------------------------------------------------------------- */
+        result = result.replace(/<v(?:\.([^\s>]+))?(?:\s+([^>]+))?>/gi, (_match, className, voiceName) => {
+            const classes = ['cue-voice'];
+            if (className) {
+                classes.push(...className.split('.').filter(Boolean));
+            }
+            const titleAttr = voiceName ? ` title="${voiceName.trim().replace(/"/g, '&quot;')}"` : '';
+            return `<span class="${classes.join(' ')}"${titleAttr}>`;
+        });
+
+        /* -------------------------------------------------------------
+           3. Convert WebVTT <c> and <c.class1.class2...> tags to spans.
+           Always preserve the extracted style and color information in
+           the parsed cue objects so that in-player settings toggling
+           (override on/off) can dynamically re-render on the fly without
+           re-fetching or losing the original subtitle author styling.
+           ------------------------------------------------------------- */
+        result = result.replace(/<c(?:\.([a-zA-Z0-9_.-]+))?>/gi, (_match, classListStr) => {
+            if (!classListStr) {
+                // Bare <c> tag with no class list
+                return '<span>';
+            }
+
+            const rawClasses = classListStr.split('.').filter(Boolean);
+            const inlineStyles = [];
+            const customClasses = [];
+
+            for (const cls of rawClasses) {
+                const lower = cls.toLowerCase();
+
+                /* -------------------------------------------------------------
+                   A. Check styleMap from WebVTT STYLE blocks
+                   ------------------------------------------------------------- */
+                if (styleMap && styleMap[lower]) {
+                    const s = styleMap[lower];
+                    if (s.color) {
+                        inlineStyles.push(`color: ${s.color}`);
+                    }
+                    if (s['background-color']) {
+                        inlineStyles.push(`background-color: ${s['background-color']}`);
+                    } else if (s.background) {
+                        inlineStyles.push(`background-color: ${s.background}`);
+                    }
+                    continue;
+                }
+
+                /* -------------------------------------------------------------
+                   B. Check for hex foreground color: e.g. color808080, colorF00
+                   ------------------------------------------------------------- */
+                const hexColorMatch = lower.match(/^color#?([0-9a-f]{3,8})$/i);
+                if (hexColorMatch) {
+                    inlineStyles.push(`color: #${hexColorMatch[1]}`);
+                    continue;
+                }
+
+                /* -------------------------------------------------------------
+                   C. Check for hex background color: e.g. bg_color000000, bg_color#000
+                   ------------------------------------------------------------- */
+                const hexBgMatch = lower.match(/^bg_color#?([0-9a-f]{3,8})$/i);
+                if (hexBgMatch) {
+                    inlineStyles.push(`background-color: #${hexBgMatch[1]}`);
+                    continue;
+                }
+
+                /* -------------------------------------------------------------
+                   D. Check for standard WebVTT named foreground colors
+                   ------------------------------------------------------------- */
+                if (SubtitleParser.WEBVTT_NAMED_COLORS[lower]) {
+                    inlineStyles.push(`color: ${SubtitleParser.WEBVTT_NAMED_COLORS[lower]}`);
+                    continue;
+                }
+
+                /* -------------------------------------------------------------
+                   E. Check for standard WebVTT named background colors
+                   ------------------------------------------------------------- */
+                if (lower.startsWith('bg_')) {
+                    const bgName = lower.slice(3);
+                    if (SubtitleParser.WEBVTT_NAMED_COLORS[bgName]) {
+                        inlineStyles.push(`background-color: ${SubtitleParser.WEBVTT_NAMED_COLORS[bgName]}`);
+                        continue;
+                    }
+                }
+
+                /* -------------------------------------------------------------
+                   F. Unrecognized semantic class (e.g. .narration, .speaker1)
+                   Preserved in class attribute without setting color, guaranteeing
+                   a clean fallback to the parent .subtitle-line color.
+                   ------------------------------------------------------------- */
+                customClasses.push(cls);
+            }
+
+            const attrs = [];
+            if (customClasses.length > 0) {
+                attrs.push(`class="${customClasses.join(' ')}"`);
+            }
+            if (inlineStyles.length > 0) {
+                attrs.push(`style="${inlineStyles.join('; ')};"`);
+            }
+
+            return attrs.length > 0 ? `<span ${attrs.join(' ')}>` : '<span>';
+        });
+
+        return result;
+    }
+
+    /**
+     * Clean subtitle text (remove ASS tags, convert WebVTT classes/colors to spans)
+     * @param {string} text - Raw subtitle line text
+     * @param {Object.<string, Object.<string, string>>} [styleMap={}] - Parsed STYLE block rules
+     * @returns {string} Sanitized/formatted text
+     * @private
+     */
+    static _cleanText(text, styleMap = {}) {
         if (!text) return '';
 
         /**
@@ -361,6 +592,12 @@ export class SubtitleParser {
          * The regex /\{[^\}]*\}/g is performant as it avoids backtracking issues
          * by matching any character that is NOT a closing brace.
          */
-        return text.replace(/\{[^}]*\}/g, '');
+        const strippedAss = text.replace(/\{[^}]*\}/g, '');
+
+        /**
+         * 2. Convert WebVTT color and class spans (<c.color808080>, <c.yellow>, STYLE block classes)
+         * into styled <span> tags so that inline styling is preserved and rendered.
+         */
+        return this._convertWebVTTTags(strippedAss, styleMap);
     }
 }

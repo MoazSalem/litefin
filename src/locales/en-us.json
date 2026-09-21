@@ -365,6 +365,8 @@
     "SubtitleGreen": "Green",
     "SubtitleMagenta": "Magenta",
     "SubtitleOffset": "Subtitle Offset",
+    "SubtitleOverrideColors": "Override Subtitle Colors",
+    "SubtitleOverrideColorsDesc": "Override colors embedded in subtitles with your selected subtitle color",
     "SubtitleRed": "Red",
     "Subtitles": "Subtitles",
     "SubtitlesTabDescription": "Customize subtitle styling, text appearance, font sizes, colors, and ASS rendering.",

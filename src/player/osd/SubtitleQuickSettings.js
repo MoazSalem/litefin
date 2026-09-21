@@ -232,6 +232,33 @@ export default class SubtitleQuickSettings extends BaseMenu {
             },
 
             /* -------------------------------------------------------------
+               Subtitle Color Override Toggle
+               -------------------------------------------------------------
+               Adhering to Apple's Human Interface Guidelines for clear,
+               unambiguous direct control: allows users to choose whether
+               embedded font or WebVTT color tags in external subtitles
+               should be overridden by their chosen subtitle color.
+               
+               - Off (default): honors embedded author styling (<c.yellow>,
+                 STYLE block classes, hex colors) and falls back to the
+                 user's configured subtitle color when no color is specified.
+               - On: cleanly suppresses embedded color tags and forces all
+                 lines to render in the user's customized subtitle color.
+               ------------------------------------------------------------- */
+            {
+                id: 'overrideColors',
+                type: 'select',
+                label: i18n.t('SubtitleOverrideColors') || 'Override Subtitle Colors',
+                labelKey: 'SubtitleOverrideColors',
+                key: 'subtitleOverrideColors',
+                visible: !isASS,
+                options: [
+                    { value: true, label: i18n.t('On') },
+                    { value: false, label: i18n.t('Off') }
+                ]
+            },
+
+            /* -------------------------------------------------------------
                SDR Subtitle Opacity Slider
                Allows precise opacity adjustments when viewing standard range media.
                ------------------------------------------------------------- */

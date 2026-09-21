@@ -4640,6 +4640,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OverrideSubtitleColors">${i18n.t('OverrideSubtitleColors') || 'Override Embedded Subtitle Colors'}</span>
+                        <span class="setting-description" data-i18n="OverrideSubtitleColorsDescription">${i18n.t('OverrideSubtitleColorsDescription') || 'Override author-specified colors in subtitles with your selected subtitle color.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('subtitleOverrideColors') ? 'active' : ''}" 
+                                 id="subtitle-override-colors-toggle" 
+                                 data-setting="subtitleOverrideColors"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="TextOpacitySdr">${i18n.t('TextOpacitySdr')}</span>
                         <span class="setting-description" data-i18n="TextOpacitySdrDescription">${i18n.t('TextOpacitySdrDescription')}</span>
                     </div>
@@ -9309,6 +9323,7 @@ class SettingsPage extends Page {
             'subtitle-letter-spacing': { key: 'subtitleLetterSpacing', type: 'player' },
             'subtitle-bottom-offset': { key: 'subtitleBottomOffset', type: 'player' },
             'subtitle-force-text-toggle': { key: 'disableAssStyling', type: 'player' },
+            'subtitle-override-colors-toggle': { key: 'subtitleOverrideColors', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
             'debug-height-select': { key: 'debug_height', type: 'debug' },
             'debug-position-select': { key: 'debug_position', type: 'debug' },
@@ -9858,6 +9873,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('disableAssStyling', newValue);
                 forceTextToggle.classList.toggle('active', newValue);
                 log.info(`Force Text Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Override Subtitle Colors
+        const overrideColorsToggle = this.$('#subtitle-override-colors-toggle');
+        if (overrideColorsToggle) {
+            overrideColorsToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleOverrideColors') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleOverrideColors', newValue);
+                overrideColorsToggle.classList.toggle('active', newValue);
+                log.info(`Override Subtitle Colors set to: ${newValue}`);
             });
         }
 

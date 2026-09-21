@@ -242,6 +242,18 @@ const DEFAULTS = {
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
 
+    /* -------------------------------------------------------------------------
+       OVERRIDE EMBEDDED SUBTITLE COLORS
+       -------------------------------------------------------------------------
+       When enabled (default = true), all embedded and external subtitle colors
+       (such as WebVTT <c.color...>, <c.yellow>, <font color=...>, and STYLE blocks)
+       are overridden with the user's configured subtitle text color (SDR/HDR).
+       When disabled (false), author-specified colors in the subtitle file are
+       honored, falling back to the user's configured subtitle color when no
+       color is specified.
+       ------------------------------------------------------------------------- */
+    subtitleOverrideColors: true,
+
     // Subtitle text color for SDR content
     subtitleTextColor: '#ffffff',
 

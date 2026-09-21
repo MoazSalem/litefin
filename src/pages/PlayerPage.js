@@ -3041,6 +3041,14 @@ class PlayerPage extends Page {
         // timeout logic replaced by _onTimeUpdate check
 
         if (data && data.text && data.text.trim().length > 0) {
+            /* -------------------------------------------------------------
+               Retain a reference to the active primary cue data payload so that
+               real-time appearance adjustments (e.g. toggling subtitle color
+               override in the OSD SubtitleQuickSettings menu) can immediately
+               re-render and sanitize the current cue on screen.
+               ------------------------------------------------------------- */
+            this._currentSubtitleData = data;
+
             // Render subtitle
             // Cue text is external content (SRT/VTT/ASS from the server or a
             // sidecar file); SubtitleParser only strips ASS {...} tags, so it
@@ -3107,6 +3115,7 @@ class PlayerPage extends Page {
     }
 
     _clearSubtitle() {
+        this._currentSubtitleData = null;
         const overlay = document.getElementById('subtitle-overlay');
         if (overlay) {
             overlay.innerHTML = '';
@@ -3134,6 +3143,11 @@ class PlayerPage extends Page {
         if (!overlay) return;
 
         if (data && data.text && data.text.trim().length > 0) {
+            /* -------------------------------------------------------------
+               Retain secondary cue data for immediate real-time styling updates.
+               ------------------------------------------------------------- */
+            this._currentSecondarySubtitleData = data;
+
             // Render the secondary subtitle text (sanitized: escapes all HTML,
             // re-allows only bare i/b/u/em/strong styling tags)
             overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
@@ -3191,6 +3205,7 @@ class PlayerPage extends Page {
      * Clear the secondary subtitle overlay.
      */
     _clearSecondarySubtitle() {
+        this._currentSecondarySubtitleData = null;
         const overlay = document.getElementById('secondary-subtitle-overlay');
         if (overlay) {
             overlay.innerHTML = '';
@@ -3259,6 +3274,15 @@ class PlayerPage extends Page {
         // Refresh primary overlay
         const overlay = document.getElementById('subtitle-overlay');
         if (overlay && !overlay.classList.contains('hidden')) {
+            /* -------------------------------------------------------------
+               Re-render the active primary cue through sanitizeSubtitleText
+               so that dynamic tag formatting adjustments (such as toggling
+               subtitleOverrideColors in the OSD) take effect immediately.
+               ------------------------------------------------------------- */
+            if (this._currentSubtitleData && this._currentSubtitleData.text) {
+                overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(this._currentSubtitleData.text)}</span>`;
+            }
+
             const span = overlay.querySelector('.subtitle-line');
             if (span) {
                 log.debug('Refreshing primary subtitle styles');
@@ -3286,6 +3310,13 @@ class PlayerPage extends Page {
         // Refresh secondary overlay (inherits primary appearance — always re-apply on any change)
         const secondaryOverlay = document.getElementById('secondary-subtitle-overlay');
         if (secondaryOverlay && !secondaryOverlay.classList.contains('hidden')) {
+            /* -------------------------------------------------------------
+               Re-render active secondary cue text through sanitizeSubtitleText.
+               ------------------------------------------------------------- */
+            if (this._currentSecondarySubtitleData && this._currentSecondarySubtitleData.text) {
+                secondaryOverlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(this._currentSecondarySubtitleData.text)}</span>`;
+            }
+
             const span = secondaryOverlay.querySelector('.subtitle-line');
             if (span) {
                 log.debug('Refreshing secondary subtitle styles');
