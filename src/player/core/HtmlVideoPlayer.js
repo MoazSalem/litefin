@@ -835,8 +835,17 @@ export class HtmlVideoPlayer {
             video.currentTime = Math.max(0, targetSeconds);
         }
 
-        // Manual timeupdate for paused state (native event is delayed or absent on many browsers)
-        this.onEvent({ type: 'timeupdate', data: { time: targetSeconds } });
+        // ---------------------------------------------------------------------
+        // Defer timeupdate to native demuxer arrival:
+        // Do NOT fire a synthetic timeupdate here with targetSeconds. In HLS
+        // (especially with transcoded audio and direct-streamed video), the
+        // underlying browser demuxer lands on the nearest GOP keyframe, which
+        // may differ by 1–5 seconds from targetSeconds. Emitting a synthetic
+        // timeupdate prematurely causes SubtitleManager and the UI clock to desync
+        // before the presentation time is settled.
+        // The authoritative timeupdate will fire from _onSeeked once the hardware
+        // demuxer completes repositioning.
+        // ---------------------------------------------------------------------
 
         // ---------------------------------------------------------------------
         // DirectPlay Seek Verification Guard:
@@ -1600,6 +1609,26 @@ export class HtmlVideoPlayer {
     /** @private */
     _onSeeked() {
         const video = this._videoElement;
+
+        // ---------------------------------------------------------------------
+        // Demuxer Landed Confirmation:
+        // Dispatch the official 'seeked' event so orchestrator clears seeking lock.
+        // ---------------------------------------------------------------------
+        this.onEvent({ type: 'seeked' });
+
+        // ---------------------------------------------------------------------
+        // Accurate Post-Seek Presentation Timestamp:
+        // Emit a timeupdate using the media element's true landed currentTime.
+        // In HLS (particularly with transcoded audio and direct-streamed video),
+        // the hardware demuxer snaps to the nearest GOP keyframe. Reporting
+        // the actual position ensures subtitles and the OSD timeline stay
+        // strictly synchronized with the hardware video presentation clock.
+        // ---------------------------------------------------------------------
+        this.onEvent({
+            type: 'timeupdate',
+            data: { time: this.getCurrentTime() }
+        });
+
         if (video && !video.paused) {
             // Re-use _onPlaying logic for seeked-playing transition
             this._onPlaying();

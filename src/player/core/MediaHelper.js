@@ -450,6 +450,22 @@ export const MediaHelper = {
             return `${serverUrl}${deliveryPath}?${authKey}=${encodeURIComponent(authToken)}`;
         }
 
+        // ====================================================================
+        // SUBTITLE CUE TIMELINE NORMALIZATION:
+        // When playback starts with a non-zero StartPositionTicks, Jellyfin server
+        // builds DeliveryUrl with that offset in the URL path:
+        //   /Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{startPositionTicks}/Stream.{format}
+        //
+        // Jellyfin's SubtitleService shifts every cue timestamp backwards by
+        // startPositionTicks when this segment is non-zero. Since Litefin fetches
+        // and parses external text subtitles into memory once for the stream lifetime,
+        // baked-in cue offsets permanently corrupt the subtitle clock on any seek.
+        //
+        // Replacing any non-zero start position segment with '0' guarantees that
+        // the server returns absolute timestamps matching the media timeline.
+        // ====================================================================
+        deliveryPath = deliveryPath.replace(/(\/Subtitles\/[^/]+)\/\d+(\/Stream\b)/i, '$1/0$2');
+
         // Ensure it's a fully-qualified URL (DeliveryUrl is usually root-relative)
         let url = deliveryPath.startsWith('http')
             ? deliveryPath

@@ -2295,21 +2295,25 @@ export class TizenAVPlayer {
                     this._seekInProgress = false;
 
                     // ─────────────────────────────────────────────────────────────────
-                    // Post-Seek Time Anchor:
-                    // Emit the target seek position requested by the user/pipeline.
+                    // Post-Seek Time Anchor & Demuxer Landed Confirmation:
+                    // When seeking in AVPlay (especially with HLS streams where audio is
+                    // transcoded and video is direct-streamed), AVPlay lands on the
+                    // nearest GOP keyframe represented by landedMs.
                     //
-                    // While AVPlay's underlying demuxer repositions to the nearest
-                    // preceding keyframe (reported by landedMs in hardware telemetry),
-                    // video presentation and audio output resume from the requested
-                    // target timestamp.
-                    //
-                    // Emitting positionMs / 1000 ensures SubtitleManager and the UI
-                    // clock align with presentation rather than snapping backwards to
-                    // the GOP I-frame (which introduced an artificial 0.5s–2.5s delay).
+                    // Using landedMs ensures SubtitleManager and the UI timeline align
+                    // precisely with the actual demuxed hardware presentation PTS,
+                    // preventing subtitles from jumping 1–5s ahead of the video stream.
+                    // Fall back to requested positionMs only if landedMs is invalid.
                     // ─────────────────────────────────────────────────────────────────
-                    const targetSec = positionMs / 1000;
+                    const actualMs = (typeof landedMs === 'number' && !isNaN(landedMs) && landedMs >= 0)
+                        ? landedMs
+                        : positionMs;
+                    const targetSec = actualMs / 1000;
                     this._currentTimeSec = targetSec;
                     this._lastTimeUpdateTicks = Math.floor(targetSec * 10000000);
+
+                    // Dispatch seeked event to unlock orchestrator seeking guards
+                    this.onEvent({ type: 'seeked' });
                     this.onEvent({ type: 'timeupdate', data: { time: targetSec } });
 
                     // If the seek did not trigger native buffering (e.g. seeking within

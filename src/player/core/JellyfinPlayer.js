@@ -549,6 +549,7 @@ export class JellyfinPlayer extends EventEmitter {
         this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
         this._pendingStartPositionTicks = null; // Target position before first frame
         this._isSeeking = false; // Track seeking state to suppress loading screens during seek
+        this._seekFailsafeTimeout = null; // Failsafe timer to clear _isSeeking if seeked event is lost
 
         // Secondary subtitle stream index (kept here for OSD queries)
         this._currentSecondarySubtitleStreamIndex = -1;
@@ -722,10 +723,19 @@ export class JellyfinPlayer extends EventEmitter {
      */
     _handleBackendEvent(event) {
         // Clear seeking flag on relevant events
+        // Only clear _isSeeking on explicit SEEKED or PLAYING events, never on TIME_UPDATE.
+        // Clearing on TIME_UPDATE causes premature un-gating of subtitle ticking before
+        // the hardware demuxer has settled on the post-seek keyframe PTS.
         if (event.type === PlayerEvent.SEEKED || 
-            event.type === PlayerEvent.PLAYING || 
-            (event.type === PlayerEvent.TIME_UPDATE && this._isSeeking)) {
+            event.type === PlayerEvent.PLAYING) {
             this._isSeeking = false;
+            const clearTimer = typeof clearTimeout !== 'undefined'
+                ? clearTimeout
+                : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+            if (clearTimer && this._seekFailsafeTimeout) {
+                clearTimer(this._seekFailsafeTimeout);
+                this._seekFailsafeTimeout = null;
+            }
         }
 
         // Intercept events if we are waiting for the initial Transcode Seek
@@ -810,18 +820,36 @@ export class JellyfinPlayer extends EventEmitter {
             this._subtitleManager?.play();
         }
 
-        // Handle timeupdate — tick the SubtitleManager to update cues
+        // =====================================================================
+        // SUBTITLE SYNC & ABSOLUTE CLOCK TICKING:
+        // Handle timeupdate from backend player and tick SubtitleManager.
+        //
+        // Crucial timeline synchronization note:
+        // event.data.time reflects the backend player's stream-relative position in seconds.
+        // When audio or video is transcoded, or remuxed to HLS with an offset, the stream
+        // decoder starts at presentation time 0s, but external subtitles (and PlayerPage's
+        // cue cleanup checks) live on the absolute media timeline.
+        //
+        // We add (this._transcodingOffsetTicks / 10000000) to event.data.time to convert
+        // the stream position into absolute media seconds. This prevents subtitle desync
+        // when audio is transcoded, across initial resume offsets, and during scrubbing/seeks.
+        // =====================================================================
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
+            const offsetSeconds = (this._transcodingOffsetTicks || 0) / 10000000;
+            const absoluteTimeSeconds = event.data.time + offsetSeconds;
+
             try {
-                // SubtitleManager handles both primary and secondary subtitle ticking
-                if (this._subtitleManager) {
-                    this._subtitleManager.tick(event.data.time);
+                // Tick SubtitleManager using absolute media timeline seconds.
+                // Suppress cue ticking while seeking is actively in flight to prevent premature cue display
+                // before the demuxer lands on the keyframe PTS.
+                if (this._subtitleManager && !this._isSeeking) {
+                    this._subtitleManager.tick(absoluteTimeSeconds);
                 }
             } catch (e) {
                 console.error('Error ticking subtitle manager:', e.message || e, e.stack);
             }
             
-            // Re-emit normalized timeupdate with absolute ticks
+            // Re-emit normalized timeupdate with absolute ticks for UI/OSD and playback reporting
             this.emit(PlayerEvent.TIME_UPDATE, this.getCurrentPositionTicks());
             return;
         }
@@ -1898,6 +1926,14 @@ export class JellyfinPlayer extends EventEmitter {
         
         this._isPlaying = false;
         this._isPaused = false;
+        this._isSeeking = false;
+        const clearTimer = typeof clearTimeout !== 'undefined'
+            ? clearTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+        if (clearTimer && this._seekFailsafeTimeout) {
+            clearTimer(this._seekFailsafeTimeout);
+            this._seekFailsafeTimeout = null;
+        }
 
         // Only emit stop events if we are NOT restarting
         if (!this._isRestarting) {
@@ -1921,6 +1957,25 @@ export class JellyfinPlayer extends EventEmitter {
         // High-Priority State Update: Indicate that seeking is actively occurring
         this._isSeeking = true;
         this._seekTargetTicks = positionTicks;
+
+        // Failsafe seeking timer: If neither SEEKED nor PLAYING fires within 5 seconds
+        // (e.g. edge-case decoder stalls on some TV firmware), ensure _isSeeking resets.
+        const clearTimer = typeof clearTimeout !== 'undefined'
+            ? clearTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+        if (clearTimer && this._seekFailsafeTimeout) {
+            clearTimer(this._seekFailsafeTimeout);
+            this._seekFailsafeTimeout = null;
+        }
+        const setTimer = typeof setTimeout !== 'undefined'
+            ? setTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.setTimeout : null);
+        if (setTimer) {
+            this._seekFailsafeTimeout = setTimer(() => {
+                this._isSeeking = false;
+                this._seekFailsafeTimeout = null;
+            }, 5000);
+        }
 
         // INSTANT SUBTITLE WIPE:
         // Clear all active subtitles instantly when seeking. This prevents the currently

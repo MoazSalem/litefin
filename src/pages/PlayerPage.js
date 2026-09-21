@@ -2864,13 +2864,15 @@ class PlayerPage extends Page {
             this._resumePosition = ticks;
         }
 
-        // 1. Check primary subtitle sync — clear if cue end time has passed
-        if (this._subtitleEndTime !== null && ticks >= this._subtitleEndTime) {
+        // 1. Check primary subtitle sync — clear if cue end time has passed.
+        // Guard against clearing while seeking is in flight to prevent premature cue dismissal.
+        if (!this._player?.isSeeking && this._subtitleEndTime !== null && ticks >= this._subtitleEndTime) {
             this._clearSubtitle();
         }
 
-        // 2. Check secondary subtitle sync — clear if cue end time has passed
-        if (this._secondarySubtitleEndTime !== null && ticks >= this._secondarySubtitleEndTime) {
+        // 2. Check secondary subtitle sync — clear if cue end time has passed.
+        // Guard against clearing while seeking is in flight to prevent premature cue dismissal.
+        if (!this._player?.isSeeking && this._secondarySubtitleEndTime !== null && ticks >= this._secondarySubtitleEndTime) {
             this._clearSecondarySubtitle();
         }
 
@@ -3033,6 +3035,11 @@ class PlayerPage extends Page {
             overlay.classList.add('hidden');
         }
         this._subtitleEndTime = null;
+
+        // Synchronize SubtitleManager's active cue state so that if playback re-enters
+        // or re-evaluates the same cue time range, SubtitleManager does not think the cue
+        // is still actively displayed in the DOM.
+        this._player?._subtitleManager?.clearActivePrimaryCue?.();
     }
 
     /**
@@ -3112,6 +3119,9 @@ class PlayerPage extends Page {
             overlay.classList.add('hidden');
         }
         this._secondarySubtitleEndTime = null;
+
+        // Synchronize SubtitleManager's active cue state
+        this._player?._subtitleManager?.clearActiveSecondaryCue?.();
     }
 
     _onMediaStreamsChange(data) {

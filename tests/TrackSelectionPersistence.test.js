@@ -384,3 +384,208 @@ test('MediaHelper.formatMediaError provides descriptive error messages for all s
     assert.ok(mediaHelperSource.includes('MEDIA_ERR_DECODE'), 'MediaHelper must map code 3 to MEDIA_ERR_DECODE');
     assert.ok(mediaHelperSource.includes('MEDIA_ERR_SRC_NOT_SUPPORTED'), 'MediaHelper must map code 4 to MEDIA_ERR_SRC_NOT_SUPPORTED');
 });
+
+test('MediaHelper.getSubtitleUrl normalizes startPositionTicks in DeliveryUrl to 0 to prevent cue desync', () => {
+    // Read and isolate MediaHelper source for evaluation without external DOM dependencies
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace('export const MediaHelper', 'const MediaHelper')
+    .replace('export default MediaHelper;', '');
+
+    // Setup isolated execution sandbox with minimal mock services
+    const context = vm.createContext({
+        storage: { getItem: () => null, setItem: () => {} },
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const evaluated = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    // Case 1: Server returned DeliveryUrl with baked-in startPositionTicks (e.g. 500s / 5,000,000,000 ticks)
+    // SubtitleService on Jellyfin server would shift all cue times backwards unless normalized to 0.
+    const trackWithOffset = {
+        Index: 2,
+        Codec: 'vtt',
+        DeliveryUrl: '/Videos/item123/media456/Subtitles/2/5000000000/Stream.vtt?api_key=token'
+    };
+    const normalizedUrl = evaluated.getSubtitleUrl(trackWithOffset, {
+        serverUrl: 'http://127.0.0.1:8096',
+        itemId: 'item123',
+        mediaSourceId: 'media456'
+    });
+
+    // Ensure the non-zero start offset segment was replaced with 0
+    assert.ok(
+        normalizedUrl.includes('/Subtitles/2/0/Stream.vtt'),
+        `Expected startPositionTicks to be normalized to 0, got: ${normalizedUrl}`
+    );
+
+    // Case 2: DeliveryUrl already starts at 0 (e.g. fresh playback)
+    const trackZero = {
+        Index: 2,
+        Codec: 'vtt',
+        DeliveryUrl: '/Videos/item123/media456/Subtitles/2/0/Stream.vtt'
+    };
+    const zeroUrl = evaluated.getSubtitleUrl(trackZero, {
+        serverUrl: 'http://127.0.0.1:8096',
+        itemId: 'item123',
+        mediaSourceId: 'media456',
+        authToken: 'secret'
+    });
+    assert.ok(
+        zeroUrl.includes('/Subtitles/2/0/Stream.vtt'),
+        `Expected startPositionTicks 0 preserved, got: ${zeroUrl}`
+    );
+});
+
+test('MediaHelper.buildStreamUrl keeps playerStartPositionTicks for DirectStream so client resumes at startPositionTicks', () => {
+    // Read and isolate MediaHelper source for evaluation without external DOM dependencies
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace('export const MediaHelper', 'const MediaHelper')
+    .replace('export default MediaHelper;', '');
+
+    const context = vm.createContext({
+        storage: { getItem: () => null, setItem: () => {} },
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const evaluated = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    // MediaSource simulating audio transcoding (video direct, audio transcoded to HLS stream)
+    const mediaSource = {
+        Id: 'source1',
+        SupportsDirectPlay: false,
+        SupportsDirectStream: true,
+        TranscodingUrl: '/videos/item123/master.m3u8?TranscodeReasons=AudioCodecNotSupported',
+        TranscodingSubProtocol: 'hls',
+        MediaStreams: [
+            { Type: 'Video', Codec: 'h264' },
+            { Type: 'Audio', Codec: 'truehd' }
+        ]
+    };
+
+    // User resumes playback 5 minutes into the movie (3,000,000,000 ticks)
+    const startTicks = 3000000000;
+    const streamInfo = evaluated.buildStreamUrl({
+        serverUrl: 'http://127.0.0.1:8096',
+        itemId: 'item123',
+        mediaSource,
+        startPositionTicks: startTicks,
+        playSessionId: 'session123',
+        authToken: 'token123'
+    });
+
+    // In audio transcode (DirectStream + HLS TranscodingUrl), the HLS playlist spans the entire media timeline from 0.
+    // - playerStartPositionTicks MUST equal startPositionTicks (so player backend resumes at 5 minutes)
+    // - transcodingOffsetTicks MUST be 0
+    assert.equal(streamInfo.transcodingOffsetTicks, 0);
+    assert.equal(streamInfo.playerStartPositionTicks, startTicks);
+    assert.equal(streamInfo.playMethod, 'DirectStream');
+    assert.equal(streamInfo.isHls, true);
+});
+
+test('JellyfinPlayer ticks SubtitleManager with absolute media timeline seconds during TIME_UPDATE', () => {
+    const playerSource = readFileSync(
+        new URL('../src/player/core/JellyfinPlayer.js', import.meta.url),
+        'utf8'
+    );
+
+    // Verify JellyfinPlayer uses _transcodingOffsetTicks to calculate absoluteTimeSeconds
+    assert.ok(
+        playerSource.includes('event.data.time + offsetSeconds'),
+        'JellyfinPlayer must compute absoluteTimeSeconds from event.data.time + offsetSeconds'
+    );
+    assert.ok(
+        playerSource.includes('this._subtitleManager.tick(absoluteTimeSeconds)'),
+        'JellyfinPlayer must tick SubtitleManager with absoluteTimeSeconds'
+    );
+});
+
+test('Seek synchronization: backends emit seeked and defer timeupdate to native demuxer arrival', () => {
+    const htmlSource = readFileSync(
+        new URL('../src/player/core/HtmlVideoPlayer.js', import.meta.url),
+        'utf8'
+    );
+    const webosSource = readFileSync(
+        new URL('../src/player/core/WebOSPlayer.js', import.meta.url),
+        'utf8'
+    );
+    const tizenSource = readFileSync(
+        new URL('../src/player/core/TizenAVPlayer.js', import.meta.url),
+        'utf8'
+    );
+    const jellyfinSource = readFileSync(
+        new URL('../src/player/core/JellyfinPlayer.js', import.meta.url),
+        'utf8'
+    );
+    const playerPageSource = readFileSync(
+        new URL('../src/pages/PlayerPage.js', import.meta.url),
+        'utf8'
+    );
+    const subManagerSource = readFileSync(
+        new URL('../src/player/core/SubtitleManager.js', import.meta.url),
+        'utf8'
+    );
+
+    // 1. HtmlVideoPlayer and WebOSPlayer must emit 'seeked' and true currentTime in _onSeeked
+    assert.ok(
+        htmlSource.includes("this.onEvent({ type: 'seeked' });"),
+        'HtmlVideoPlayer._onSeeked must emit seeked event'
+    );
+    assert.ok(
+        webosSource.includes("this.onEvent({ type: 'seeked' });"),
+        'WebOSPlayer._onSeeked must emit seeked event'
+    );
+
+    // 2. TizenAVPlayer must emit seeked and use landedMs to align with hardware keyframe
+    assert.ok(
+        tizenSource.includes("this.onEvent({ type: 'seeked' });"),
+        'TizenAVPlayer seek callback must emit seeked event'
+    );
+    assert.ok(
+        tizenSource.includes('typeof landedMs === \'number\''),
+        'TizenAVPlayer must use landedMs when available'
+    );
+
+    // 3. JellyfinPlayer suppresses subtitle ticking while seeking and only clears _isSeeking on SEEKED or PLAYING
+    assert.ok(
+        jellyfinSource.includes('if (this._subtitleManager && !this._isSeeking)'),
+        'JellyfinPlayer must suppress subtitle tick while isSeeking is active'
+    );
+    assert.ok(
+        !jellyfinSource.includes('(event.type === PlayerEvent.TIME_UPDATE && this._isSeeking)'),
+        'JellyfinPlayer must not clear _isSeeking on TIME_UPDATE'
+    );
+
+    // 4. PlayerPage._onTimeUpdate suppresses subtitle auto-clear while isSeeking
+    assert.ok(
+        playerPageSource.includes('!this._player?.isSeeking && this._subtitleEndTime !== null'),
+        'PlayerPage must guard primary subtitle auto-clear against active seeking'
+    );
+    assert.ok(
+        playerPageSource.includes('!this._player?.isSeeking && this._secondarySubtitleEndTime !== null'),
+        'PlayerPage must guard secondary subtitle auto-clear against active seeking'
+    );
+
+    // 5. SubtitleManager exposes clearActivePrimaryCue and clearActiveSecondaryCue
+    assert.ok(
+        subManagerSource.includes('clearActivePrimaryCue()'),
+        'SubtitleManager must implement clearActivePrimaryCue()'
+    );
+    assert.ok(
+        subManagerSource.includes('clearActiveSecondaryCue()'),
+        'SubtitleManager must implement clearActiveSecondaryCue()'
+    );
+});
+
+
