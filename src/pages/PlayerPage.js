@@ -1016,6 +1016,16 @@ class PlayerPage extends Page {
             this._hasReportedStart = false;
         });
 
+        // Mirror jellyfin-web: listen for playbackstart emitted by JellyfinPlayer
+        this._player.on('playbackstart', () => {
+            log.info('Player emitted playbackstart event');
+            if (!this._hasReportedStart) {
+                this._hasReportedStart = true;
+                this._isPaused = false;
+                this._reportPlaybackStart();
+            }
+        });
+
         this._player.on('playing', () => {
             this._clearPlaybackStallWatchdog();
             this._showLoading(false);
@@ -1445,9 +1455,21 @@ class PlayerPage extends Page {
             );
         }
 
-        // Report playback start to server
-        // Note: The player emits PLAYBACK_START event which could be used,
-        // but for now we'll rely on the player's internal logic or add reporting here if needed.
+        // ====================================================================
+        // Playback Start Reporting (Mirroring jellyfin-web onPlaybackStarted)
+        // ====================================================================
+        // Once this._player.play() resolves, the stream has been established
+        // and mediaSource metadata is resolved. Immediately send the playback
+        // start report to the server so that the active session is created
+        // and consecutive episode scrobbling/tracking (ani-sync / trakt) works.
+        // This guarantees start reporting even if the hardware decoder delays
+        // or suppresses the DOM 'playing' event on in-place track switches.
+        // ====================================================================
+        if (!this._hasReportedStart) {
+            this._hasReportedStart = true;
+            this._isPaused = false;
+            this._reportPlaybackStart();
+        }
 
         // Initialize OSD
         this._initOSD();
@@ -1976,22 +1998,24 @@ class PlayerPage extends Page {
             // Report the stop of the current play session. Capture media source,
             // position ticks, and total duration before calling stop(), as stop()
             // tears down the player backend and clears internal duration caches.
+            const outgoingItem = this._item;
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
             const durationTicks =
-                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
             // Notify plugins that the previous session ended before starting the same item again
             pluginManager.notifyPlayerStop();
 
             if (this._player?.stop) this._player.stop();
 
-            this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks).then(() => {
+            this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem).then(() => {
                 // Settle and restart
                 setTimeout(async () => {
                     this._resumePosition = 0;
                     this._cachedMediaSource = null;
                     this._hasReportedStart = false;
+                    this._isPlaybackEnded = false;
                     this._lastReportTime = 0;
 
                     try {
@@ -2060,8 +2084,8 @@ class PlayerPage extends Page {
         this._showLoading(true);
 
         try {
-            const nextItem = playQueue.advance();
-            log.info('Advancing to next item:', nextItem.Name);
+            // Guard outgoing item reference before changing queue pointer
+            const outgoingItem = this._item;
 
             // When explicitly advancing to the next queue item, the user has finished
             // with the current episode. Mark playback as ended so that the outgoing
@@ -2075,7 +2099,7 @@ class PlayerPage extends Page {
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
             const durationTicks =
-                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
             // Capture track preferences for next episode
             this._captureActiveTrackSelection();
@@ -2088,8 +2112,16 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            // Report stopped (async) with captured duration
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
+            // Report stopped (async) with captured duration and explicit outgoing item
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
+
+            // Now advance the queue cursor cleanly to the next item
+            const nextItem = playQueue.advance();
+            if (!nextItem) {
+                log.warn('_playNextItem: no next item available after queue advance');
+                return;
+            }
+            log.info('Advancing to next item:', nextItem.Name);
 
             // Give Tizen/Player a moment to settle
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2099,6 +2131,7 @@ class PlayerPage extends Page {
             this._resumePosition = 0;
             this._cachedMediaSource = null;
             this._hasReportedStart = false;
+            this._isPlaybackEnded = false;
             this._lastReportTime = 0;
 
             // Update OSD title
@@ -2207,11 +2240,11 @@ class PlayerPage extends Page {
                 this._showLoading(true);
 
                 try {
-                    // Capture position before stopping
+                    const outgoingItem = this._item;
                     const mediaSource = this._player?.getCurrentMediaSource?.();
                     const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
                     const durationTicks =
-                        this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                        this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
                     // If user was near end of outgoing item, mark ended
                     if (durationTicks > 0 && positionTicks >= durationTicks * 0.8) {
@@ -2225,7 +2258,7 @@ class PlayerPage extends Page {
                         await this._player.stop();
                     }
 
-                    await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
+                    await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
 
                     // Brief settle delay (same as _playNextItem)
                     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2235,6 +2268,7 @@ class PlayerPage extends Page {
                     this._resumePosition = startPositionTicks || 0;
                     this._cachedMediaSource = null;
                     this._hasReportedStart = false;
+                    this._isPlaybackEnded = false;
                     this._lastReportTime = 0;
 
                     if (this._osd) {
@@ -2277,13 +2311,14 @@ class PlayerPage extends Page {
 
             try {
                 const prevItem = playQueue.goBack();
+                const outgoingItem = this._item;
                 log.info('Going back to previous item:', prevItem.Name);
 
                 // Capture current info before stopping
                 const mediaSource = this._player?.getCurrentMediaSource?.();
                 const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
                 const durationTicks =
-                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
                 // Capture track preferences for next episode
                 this._captureActiveTrackSelection();
@@ -2296,7 +2331,7 @@ class PlayerPage extends Page {
                     await this._player.stop();
                 }
 
-                await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
+                await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
 
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -2304,6 +2339,7 @@ class PlayerPage extends Page {
                 this._resumePosition = 0;
                 this._cachedMediaSource = null;
                 this._hasReportedStart = false;
+                this._isPlaybackEnded = false;
                 this._lastReportTime = 0;
 
                 if (this._osd) {
@@ -2477,10 +2513,11 @@ class PlayerPage extends Page {
              * stop(), because stop() clears internal player references and unloads
              * media elements, causing subsequent duration queries to return 0.
              */
+            const outgoingItem = this._item;
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
             const durationTicks =
-                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
             /*
              * When the user manually advances to the next episode in the queue, or
@@ -2488,7 +2525,7 @@ class PlayerPage extends Page {
              * another item, mark playback as ended so the outgoing item triggers
              * the completion override and scrobbles to ani-sync / trakt plugins.
              */
-            const previousIndex = playQueue._queue?.findIndex((e) => e.Id === this._item?.Id) ?? -1;
+            const previousIndex = playQueue._queue?.findIndex((e) => e.Id === outgoingItem?.Id) ?? -1;
             if (targetIndex === previousIndex + 1 || (durationTicks > 0 && positionTicks >= durationTicks * 0.8)) {
                 this._isPlaybackEnded = true;
             }
@@ -2503,7 +2540,7 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
 
             /* Brief settle delay — same as _playNextItem/_playPreviousItem. */
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2513,6 +2550,7 @@ class PlayerPage extends Page {
             this._resumePosition = 0;
             this._cachedMediaSource = null;
             this._hasReportedStart = false;
+            this._isPlaybackEnded = false;
             this._lastReportTime = 0;
 
             if (this._osd) {
@@ -2976,6 +3014,10 @@ class PlayerPage extends Page {
                 ItemId: this._item.Id,
                 PlaySessionId: mediaSource?.PlaySessionId || mediaSource?.LiveStreamId,
                 MediaSourceId: mediaSource?.Id,
+                PlaylistItemId:
+                    this._item.PlaylistItemId ||
+                    playQueue.getCurrentItem()?.PlaylistItemId ||
+                    playQueue.stampPlaylistItemId(this._item),
                 ...playerState,
 
                 // Include the full queue so the server can display "up next" in the
@@ -3295,15 +3337,14 @@ class PlayerPage extends Page {
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
-            if (!playSessionId) {
-                log.warn('Skipping progress report - no PlaySessionId');
-                return;
-            }
-
             const info = {
                 ItemId: this._item.Id,
-                PlaySessionId: playSessionId,
+                PlaySessionId: playSessionId || undefined,
                 MediaSourceId: mediaSource?.Id,
+                PlaylistItemId:
+                    this._item.PlaylistItemId ||
+                    playQueue.getCurrentItem()?.PlaylistItemId ||
+                    playQueue.stampPlaylistItemId(this._item),
                 ...playerState,
                 IsPaused: isPaused,
                 EventName: eventName
@@ -3378,6 +3419,16 @@ class PlayerPage extends Page {
             RepeatMode: playQueue.getRepeatMode(),
             ShuffleMode: playQueue.getShuffleMode() ? 'Shuffled' : 'Sorted'
         };
+
+        // Mirror jellyfin-web: state.PlayState.PlaylistItemId = self.getCurrentPlaylistItemId(player);
+        // This ensures the server always associates the active playstate with the exact queue entry.
+        const playlistItemId =
+            this._item?.PlaylistItemId ||
+            playQueue.getCurrentItem()?.PlaylistItemId ||
+            (this._item ? playQueue.stampPlaylistItemId(this._item) : null);
+        if (playlistItemId) {
+            state.PlaylistItemId = playlistItemId;
+        }
 
         // Only include stream indices if they are valid numbers (strings or undefined cause 400 errors)
         const audioIndex = Number(this._player?.getCurrentAudioStreamIndex?.());
@@ -3836,13 +3887,15 @@ class PlayerPage extends Page {
         capturedMediaSource = null,
         capturedPosition = null,
         isSync = false,
-        capturedDuration = null
+        capturedDuration = null,
+        itemOverride = null
     ) {
-        if (this._item?.isIntro) {
+        const item = itemOverride || this._item;
+        if (item?.isIntro) {
             log.info('Skipping PlaybackStopped report for intro item');
             return;
         }
-        if (!this._item) return;
+        if (!item) return;
 
         // Skip reporting stopped completely if running in private/ghost mode
         if (this._isGhostMode) {
@@ -3871,7 +3924,7 @@ class PlayerPage extends Page {
                 capturedDuration ||
                 this._player?.getDurationTicks?.() ||
                 mediaSource?.RunTimeTicks ||
-                this._item?.RunTimeTicks ||
+                item?.RunTimeTicks ||
                 0;
             const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
             if (_isNearComplete) {
@@ -3894,7 +3947,7 @@ class PlayerPage extends Page {
 
             // 2. Build report body
             const data = {
-                ItemId: this._item.Id,
+                ItemId: item.Id,
                 PlaySessionId: playSessionId,
                 MediaSourceId: mediaSource?.Id,
                 PositionTicks: positionTicks,
@@ -3919,22 +3972,23 @@ class PlayerPage extends Page {
                     const raw = this._cachedPlayMethod || this._player?._currentPlayMethod;
                     if (!raw) return mediaSource?.TranscodingUrl ? 'DirectStream' : 'DirectPlay';
                     return raw === 'Remux' ? 'DirectStream' : raw;
-                })()
+                })(),
+
+                // Mirror jellyfin-web addPlaylistToPlaybackReport:
+                // Always report the complete NowPlayingQueue so the server updates
+                // session queue state and synchronizes queue positions.
+                NowPlayingQueue: this._buildNowPlayingQueue()
             };
 
-            // 2.5 Inject SyncPlay tracking fields if active
+            // Inject PlaylistItemId for the stopped item (mirroring jellyfin-web)
             const spm = window.__syncPlayManager;
-            if (spm && spm.isEnabled) {
-                if (spm._currentPlaylistItemId) {
-                    data.PlaylistItemId = spm._currentPlaylistItemId;
-                }
-                const queue = spm.currentPlayQueue;
-                if (queue && queue.Playlist && queue.Playlist.length > 0) {
-                    data.NowPlayingQueue = queue.Playlist.map((item) => ({
-                        Id: item.ItemId,
-                        PlaylistItemId: item.PlaylistItemId
-                    }));
-                }
+            const stopPlaylistItemId =
+                (spm && spm.isEnabled && spm._currentPlaylistItemId) ||
+                item.PlaylistItemId ||
+                playQueue.getQueue()?.find((q) => q.Id === item.Id)?.PlaylistItemId ||
+                playQueue.stampPlaylistItemId(item);
+            if (stopPlaylistItemId) {
+                data.PlaylistItemId = stopPlaylistItemId;
             }
 
             // 2.6 Close Live Stream if applicable

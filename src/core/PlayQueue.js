@@ -532,6 +532,20 @@ class PlayQueue {
         return this._queue[this._currentIndex];
     }
 
+    /**
+     * Public helper to guarantee an item possesses a session-unique PlaylistItemId.
+     * Stamping items prior to reporting prevents desynchronization with the server's
+     * session manager and ensures parity with jellyfin-web playlist tracking.
+     *
+     * @param {Object} item - Media item candidate
+     * @returns {string|null} The resolved PlaylistItemId
+     */
+    stampPlaylistItemId(item) {
+        if (!item) return null;
+        _stampPlaylistItemId(item);
+        return item.PlaylistItemId;
+    }
+
     // ========================================================================
     // Internal Queue Builders
     // ========================================================================
