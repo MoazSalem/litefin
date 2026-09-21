@@ -161,6 +161,19 @@ export function clearCapabilitiesCache() {
 }
 
 function _buildMinimalProfile(caps) {
+    // -------------------------------------------------------------------------
+    // Transcode Channel Limit Resolution
+    // -------------------------------------------------------------------------
+    // Priority: user transcode max channels -> user direct play channels -> caps
+    // -------------------------------------------------------------------------
+    const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
+    const userChannels = PlayerSettings.get('allowedAudioChannels');
+    const transChannels = (userTransChannels && userTransChannels > 0)
+        ? userTransChannels
+        : (userChannels && userChannels > 0)
+            ? userChannels
+            : caps.maxAudioChannels;
+
     return {
         Name: 'Litefin Tizen (Forced Transcode)',
         MaxStreamingBitrate: PlayerSettings.get('maxBitrateInternet') || 40000000,
@@ -177,7 +190,7 @@ function _buildMinimalProfile(caps) {
                 Protocol: 'hls',
                 // Integer fields — Jellyfin TranscodingProfileDto schema is strict
                 // (MaxAudioChannels, MinSegments, SegmentLength must be numbers, not strings)
-                MaxAudioChannels: caps.maxAudioChannels,
+                MaxAudioChannels: transChannels,
                 MinSegments: 1,
                 SegmentLength: PlayerSettings.get('tizenSegmentLength') || 3,
                 BreakOnNonKeyFrames: true
@@ -469,9 +482,17 @@ export function buildJellyfinProfile(options = {}) {
     // PlayerSettings.get('transcodeAudioCodec'). This allows choosing EAC3
     // (better quality, Dolby Digital Plus) vs AC3 (wider legacy compatibility).
     // EAC3 is the default. AAC is the safe last-resort for problem hardware.
-    // =========================================================================
+    // Transcode Maximum Audio Channels:
+    // When the user specifies an explicit transcode channel cap (e.g. 2 for
+    // stereo downmixing or 6 for 5.1), we instruct Jellyfin to encode the audio
+    // stream to this channel count. If set to -1 (auto), it inherits from the
+    // Direct Play maxAudioChannels configuration.
+    // -------------------------------------------------------------------------
     const transAudioCodecsArr = [];
-    const transMaxAudioChannels = maxAudioChannels;
+    const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
+    const transMaxAudioChannels = (userTransChannels && userTransChannels > 0)
+        ? userTransChannels
+        : maxAudioChannels;
 
     const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
 

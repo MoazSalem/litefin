@@ -28,8 +28,24 @@ const DEFAULTS = {
     // AUDIO SETTINGS
     // =========================================================================
 
-    // Maximum audio channels (-1 = all available)
+    // -------------------------------------------------------------------------
+    // MAXIMUM AUDIO CHANNELS (DIRECT PLAY LIMIT)
+    // -------------------------------------------------------------------------
+    // Governs the maximum audio channels allowed for native Direct Play (-1 = auto/all).
+    // Audio tracks exceeding this channel count (e.g. 7.1 when capped at 5.1)
+    // are rejected from Direct Play and routed to server transcoding or remuxing.
+    // -------------------------------------------------------------------------
     allowedAudioChannels: -1,
+
+    // -------------------------------------------------------------------------
+    // TRANSCODING MAXIMUM AUDIO CHANNELS
+    // -------------------------------------------------------------------------
+    // Governs the maximum output channel count when the server transcodes audio.
+    // Setting to -1 (auto) inherits from the allowedAudioChannels limit or device capability.
+    // Setting to a discrete value (e.g. 6 for 5.1 or 2 for Stereo) forces transcoded
+    // audio downmix independently of the Direct Play capability.
+    // -------------------------------------------------------------------------
+    transcodeMaxAudioChannels: -1,
 
     // Enable DTS passthrough (requires hardware support)
     enableDts: 'auto',

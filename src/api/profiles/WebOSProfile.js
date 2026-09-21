@@ -409,6 +409,17 @@ export function buildJellyfinProfile(options = {}) {
     const maxAudioChannelsStr = String(maxAudioChannels);
 
     // -------------------------------------------------------------------------
+    // Transcode Maximum Audio Channels Resolution
+    // -------------------------------------------------------------------------
+    // Dictates the maximum audio channels emitted during server transcode.
+    // If not set explicitly (-1 / auto), falls back to Direct Play channel cap.
+    // -------------------------------------------------------------------------
+    const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
+    const transMaxAudioChannels = (userTransChannels && userTransChannels > 0)
+        ? userTransChannels
+        : maxAudioChannels;
+
+    // -------------------------------------------------------------------------
     // fMP4 HLS preference resolution
     // -------------------------------------------------------------------------
     // enableFmp4HlsContainer = master toggle (default on).
@@ -727,7 +738,7 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
-            MaxAudioChannels: maxAudioChannels,
+            MaxAudioChannels: transMaxAudioChannels,
             // ---------------------------------------------------------------------
             // Segment sizing: fixed at 6 seconds for all TS content.
             //
@@ -790,7 +801,7 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: mkvVideoCodecs.join(','),
             Context: 'Static',
             CopyTimestamps: true,
-            MaxAudioChannels: maxAudioChannels
+            MaxAudioChannels: transMaxAudioChannels
         },
         {
             Container: 'mp4',
@@ -816,7 +827,7 @@ export function buildJellyfinProfile(options = {}) {
                 VideoCodec: transVideoCodecs,
                 Context: 'Streaming',
                 Protocol: 'hls',
-                MaxAudioChannels: maxAudioChannels,
+                MaxAudioChannels: transMaxAudioChannels,
                 MinSegments: 1,
                 SegmentLength: isHtml5
                     ? PlayerSettings.get('html5SegmentLength') || 2

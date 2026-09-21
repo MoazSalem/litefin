@@ -1759,6 +1759,9 @@ class PlayerPage extends Page {
             AudioCodec: 'aac',
             MaxStreamingBitrate: 120000000,
             TranscodingMaxAudioChannels: (() => {
+                // Check dedicated transcode channel cap first, then direct play cap, then fallback 6 (5.1)
+                const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
+                if (userTransChannels && userTransChannels > 0) return userTransChannels;
                 const userChannels = PlayerSettings.get('allowedAudioChannels');
                 return (userChannels && userChannels > 0) ? userChannels : 6;
             })(),

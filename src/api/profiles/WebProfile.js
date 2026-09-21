@@ -290,6 +290,16 @@ export function buildJellyfinProfile(options = {}) {
     const defaultMaxChannels = (enableDts || enableTrueHd) ? 8 : caps.maxAudioChannels;
     const maxAudioChannels = String((userMaxChannels && userMaxChannels > 0) ? userMaxChannels : defaultMaxChannels);
 
+    // -------------------------------------------------------------------------
+    // Transcode Maximum Audio Channels Resolution
+    // -------------------------------------------------------------------------
+    // Dedicated channel limit for server transcodes (-1 = follow Direct Play cap).
+    // -------------------------------------------------------------------------
+    const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
+    const transMaxAudioChannels = String((userTransChannels && userTransChannels > 0)
+        ? userTransChannels
+        : maxAudioChannels);
+
     // Standard web audio. Place EAC3 and AC3 first so they are preferred
     // over AAC in the DirectPlay lists when supported or force-enabled.
     const audioCodecs = [];
@@ -457,7 +467,7 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: broadTransVideo,
             Context: 'Streaming',
             Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
+            MaxAudioChannels: transMaxAudioChannels,
             MinSegments: '2',
             SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
             BreakOnNonKeyFrames: playbackMode !== 'remux',
@@ -474,7 +484,7 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
+            MaxAudioChannels: transMaxAudioChannels,
             MinSegments: '2',
             SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
             BreakOnNonKeyFrames: playbackMode !== 'remux',

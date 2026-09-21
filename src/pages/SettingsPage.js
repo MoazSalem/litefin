@@ -3552,10 +3552,12 @@ class SettingsPage extends Page {
 
                 <h3 class="setting-section-title" data-i18n="AudioSettings">${i18n.t('AudioSettings') || 'Audio'}</h3>
 
+                <!-- Maximum Audio Channels (Direct Play Gate) -->
+                <!-- Governs the maximum audio channels allowed for native direct play. Any track exceeding this limit forces transcode. -->
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="AllowedAudioChannels">${i18n.t('AllowedAudioChannels') || 'Maximum Audio Channels'}</span>
-                        <span class="setting-description" data-i18n="AllowedAudioChannelsDescription">${i18n.t('AllowedAudioChannelsDescription') || 'Configure maximum audio channels for video playback. Defaults to 5.1 (6 channels).'}</span>
+                        <span class="setting-description" data-i18n="AllowedAudioChannelsDescription">${i18n.t('AllowedAudioChannelsDescription') || 'Maximum audio channels allowed for Direct Play. Tracks with more channels will be transcoded.'}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
@@ -3563,11 +3565,33 @@ class SettingsPage extends Page {
                 [
                     { value: -1, label: i18n.t('AudioChannelsAuto') || 'Auto (No Limit)' },
                     { value: 8, label: i18n.t('AudioChannels71') || '7.1 Channels' },
-                    { value: 6, label: i18n.t('AudioChannels51') || '5.1 Channels (Default)' },
+                    { value: 6, label: i18n.t('AudioChannels51') || '5.1 Channels' },
                     { value: 2, label: i18n.t('AudioChannels20') || 'Stereo 2.0' },
                     { value: 1, label: i18n.t('AudioChannels10') || 'Mono 1.0' }
                 ],
-                PlayerSettings.get('allowedAudioChannels') ?? 6
+                PlayerSettings.get('allowedAudioChannels') ?? -1
+            )}
+                    </div>
+                </div>
+
+                <!-- Transcoding Maximum Audio Channels -->
+                <!-- Specifies the maximum number of audio channels the server should output when transcoding audio. -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="TranscodeMaxAudioChannels">${i18n.t('TranscodeMaxAudioChannels') || 'Transcoding Max Audio Channels'}</span>
+                        <span class="setting-description" data-i18n="TranscodeMaxAudioChannelsDescription">${i18n.t('TranscodeMaxAudioChannelsDescription') || 'Maximum audio channels output by the server when audio is transcoded.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'transcode-max-audio-channels-select',
+                [
+                    { value: -1, label: i18n.t('AudioChannelsAutoTranscode') || 'Auto (Match Max Channels)' },
+                    { value: 8, label: i18n.t('AudioChannels71') || '7.1 Channels' },
+                    { value: 6, label: i18n.t('AudioChannels51') || '5.1 Channels' },
+                    { value: 2, label: i18n.t('AudioChannels20') || 'Stereo 2.0' },
+                    { value: 1, label: i18n.t('AudioChannels10') || 'Mono 1.0' }
+                ],
+                PlayerSettings.get('transcodeMaxAudioChannels') ?? -1
             )}
                     </div>
                 </div>
@@ -9310,6 +9334,8 @@ class SettingsPage extends Page {
             'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
             /* Maximum audio channels — used by all three device profiles (Tizen, WebOS, Web) */
             'allowed-audio-channels-select': { type: 'player', key: 'allowedAudioChannels' },
+            /* Transcoding maximum audio channels — output channels for transcoded audio */
+            'transcode-max-audio-channels-select': { type: 'player', key: 'transcodeMaxAudioChannels' },
             /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
             'eac3-force-select': { type: 'player', key: 'enableEac3' },
             /* MP2 force-state override — corrects false positives or forces transcoding to avoid stalls */
