@@ -379,12 +379,23 @@ class LoginPage extends Page {
                                 </div>
                             </div>
                         </div>
+                        <!-- Action Buttons Row -->
                         <div class="login-actions modern-button-row">
+                            <!-- Primary Sign In Submit Button -->
                             <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0">
                                 <span data-i18n="ButtonSignIn">Sign In</span>
                             </button>
+                            <!-- Quick Connect Button (shown during auto-redirect when no users exist) -->
+                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0">
+                                <span data-i18n="QuickConnect">Quick Connect</span>
+                            </button>
+                            <!-- Back Button (shown when manually navigating from users picker) -->
                             <button type="button" class="btn btn-secondary back-btn" tabindex="0">
                                 <span data-i18n="ButtonBack">Back</span>
+                            </button>
+                            <!-- Change Server Button (shown during auto-redirect fallback) -->
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0">
+                                <span data-i18n="ButtonChangeServer">Change Server</span>
                             </button>
                         </div>
                         <p class="login-error" id="manual-error"></p>
@@ -399,14 +410,16 @@ class LoginPage extends Page {
                             <span class="login-user-name"></span>
                         </div>
                         <div class="input-group">
-                            <input
-                                type="password"
-                                id="password-input"
-                                class="text-input tv-input"
-                                placeholder="${i18n.t('PasswordPlaceholder')}"
-                                readonly
-                                tabindex="0"
-                            >
+                            <div class="input-container pass-input-container">
+                                <input
+                                    type="password"
+                                    id="password-input"
+                                    class="text-input tv-input"
+                                    placeholder="${i18n.t('PasswordPlaceholder')}"
+                                    readonly
+                                    tabindex="0"
+                                >
+                            </div>
                         </div>
                         <div class="login-actions modern-button-row">
                             <button type="button" class="btn btn-primary login-btn" tabindex="0">
@@ -1221,33 +1234,47 @@ class LoginPage extends Page {
         }
     }
 
+    /**
+     * Transition the UI to the manual username/password entry screen.
+     * When isAutoRedirect is true (because the server has no public/saved users available),
+     * we suppress the Back button (since going back to an empty user grid makes no sense)
+     * and expose the Quick Connect and Change Server buttons so users can easily authenticate
+     * via mobile/web PIN or switch servers without getting trapped.
+     *
+     * @param {boolean} [isAutoRedirect=false] - True if automatically routed here due to zero discoverable users
+     */
     _goToManualLogin(isAutoRedirect = false) {
         log.info(`Going to Manual Login. AutoRedirect=${isAutoRedirect}`);
         this._isManualLoginAutoRedirect = isAutoRedirect;
 
+        // Reset input fields for fresh credential entry
         this._manualUsername.value = '';
         this._manualPassword.value = '';
 
-        // Back button and Quick Connect button visibility based on auto-redirect (as requested)
+        // Back button: Hidden on auto-redirect (empty user list), visible if user manually navigated here
         const backBtn = this.$('.manual-section .back-btn');
         if (backBtn) {
             backBtn.style.display = isAutoRedirect ? 'none' : '';
         }
 
+        // Quick Connect button: Available on auto-redirect as an alternative authentication method
         const qcBtn = this.$('.manual-section .quick-connect-btn');
         if (qcBtn) {
             qcBtn.style.display = isAutoRedirect ? '' : 'none';
         }
 
+        // Change Server button: Available on auto-redirect unless locked in "Add User" workflow
         const changeServerBtn = this.$('.manual-section .change-server-btn');
         if (changeServerBtn) {
-            changeServerBtn.style.display = isAutoRedirect ? '' : 'none';
+            changeServerBtn.style.display = isAutoRedirect && !this._isAddUserMode ? '' : 'none';
         }
 
+        // Transition active visual section and spatial focus
         this._showState(STATE.MANUAL);
         this.setActiveSection('login-manual');
         focusManager.invalidateCache('login-manual');
 
+        // Focus the username input field for user entry
         setTimeout(() => {
             if (this._manualUsername) {
                 this._manualUsername.readOnly = true;
