@@ -1625,16 +1625,15 @@ export class JellyfinPlayer extends EventEmitter {
             // Start Position & Resume Offset Handling
             // -------------------------------------------------------------------------
             // We pass the intended startPositionTicks directly to MediaHelper.buildStreamUrl.
-            // For server-managed streams (Transcode/Remux), the server starts ffmpeg
-            // directly at the requested StartTimeTicks (-ss <seconds>).
+            // In HLS streaming (whether Transcode, DirectStream, or Remux), the server's HLS playlist
+            // covers the entire media timeline from 0s. The player backend (Hls.js, webOS native,
+            // or Tizen AVPlay) directly seeks to playerStartPositionTicks.
             //
             // MediaHelper handles timeline mapping cleanly:
-            //   - Transcode: transcodingOffsetTicks = startPositionTicks, playerStartPositionTicks = 0
-            //   - Remux/DirectStream: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
-            //   - DirectPlay: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
-            //
-            // This completely eliminates the zero-start stall trap where a client-side seek
-            // was issued into an ungenerated HLS stream on hardware TV players (webOS/Tizen).
+            //   - HLS (Transcode / DirectStream / Remux / DirectPlay):
+            //       transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
+            //   - Progressive Transcode (!isHls):
+            //       transcodingOffsetTicks = startPositionTicks, playerStartPositionTicks = 0
             // -------------------------------------------------------------------------
             const originalStartPositionTicks = options.startPositionTicks || 0;
             const effectiveStartPositionTicks = originalStartPositionTicks;

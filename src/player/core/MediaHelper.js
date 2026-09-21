@@ -205,13 +205,25 @@ export const MediaHelper = {
             }
         }
 
+        // =====================================================================
+        // Stream Offset & Start Position Mapping:
+        // In HLS streaming (whether Transcode, DirectStream, or Remux), the server's
+        // master.m3u8 playlist indexes segments across the full media timeline from 0s.
+        // The player backend (Hls.js, WebOS native, or Tizen AVPlay) directly seeks or
+        // starts buffering at playerStartPositionTicks.
+        //
+        // transcodingOffsetTicks is ONLY non-zero for progressive HTTP streams (!isHls)
+        // where ffmpeg cuts the beginning (-ss) without copying original timestamps.
+        // =====================================================================
+        const isProgressiveTranscode = (playMethod === 'Transcode' || playMethod === 'DirectStream') && !isHls;
+
         return {
             url,
             playMethod,
             isHls,
             mediaSource,
-            transcodingOffsetTicks: playMethod === 'Transcode' ? startPositionTicks : 0,
-            playerStartPositionTicks: playMethod === 'Transcode' ? 0 : startPositionTicks
+            transcodingOffsetTicks: isProgressiveTranscode ? startPositionTicks : 0,
+            playerStartPositionTicks: isProgressiveTranscode ? 0 : startPositionTicks
         };
     },
 

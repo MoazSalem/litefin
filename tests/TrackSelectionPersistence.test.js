@@ -494,6 +494,57 @@ test('MediaHelper.buildStreamUrl keeps playerStartPositionTicks for DirectStream
     assert.equal(streamInfo.isHls, true);
 });
 
+test('MediaHelper.buildStreamUrl sets playerStartPositionTicks for full Transcode in HLS mode', () => {
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace('export const MediaHelper', 'const MediaHelper')
+    .replace('export default MediaHelper;', '');
+
+    const context = vm.createContext({
+        storage: { getItem: () => null, setItem: () => {} },
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const evaluated = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    // MediaSource simulating video transcode (Transcode reasons: VideoCodecNotSupported, Transcode mode)
+    const mediaSource = {
+        Id: 'sourceTranscode',
+        SupportsDirectPlay: false,
+        SupportsDirectStream: false,
+        SupportsTranscoding: true,
+        TranscodingUrl: '/videos/item123/master.m3u8?TranscodeReasons=VideoCodecNotSupported',
+        TranscodingSubProtocol: 'hls',
+        MediaStreams: [
+            { Type: 'Video', Codec: 'av1' },
+            { Type: 'Audio', Codec: 'aac' }
+        ]
+    };
+
+    const startTicks = 3040123320; // 304s resume
+    const streamInfo = evaluated.buildStreamUrl({
+        serverUrl: 'http://127.0.0.1:8096',
+        itemId: 'item123',
+        mediaSource,
+        startPositionTicks: startTicks,
+        playSessionId: 'session123',
+        authToken: 'token123'
+    });
+
+    // In HLS transcoding (e.g. AV1 transcode or subtitle burn-in), the master.m3u8 spans the whole file timeline.
+    // - playerStartPositionTicks MUST equal startPositionTicks so the player (Hls.js / WebOS) seeks/buffers at 304s.
+    // - transcodingOffsetTicks MUST be 0 so the UI clock / seekbar doesn't fake an offset from 0:00.
+    assert.equal(streamInfo.transcodingOffsetTicks, 0);
+    assert.equal(streamInfo.playerStartPositionTicks, startTicks);
+    assert.equal(streamInfo.playMethod, 'Transcode');
+    assert.equal(streamInfo.isHls, true);
+});
+
 test('JellyfinPlayer ticks SubtitleManager with absolute media timeline seconds during TIME_UPDATE', () => {
     const playerSource = readFileSync(
         new URL('../src/player/core/JellyfinPlayer.js', import.meta.url),

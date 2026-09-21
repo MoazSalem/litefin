@@ -14,7 +14,6 @@ html[data-layout-login="modern"] .manual-form-container {
     flex-direction: column;
     margin-bottom: 60px;
     width: 100%;
-    max-width: 700px;
 }
 
 /* Manual-form-container spacing replacement for gap */
