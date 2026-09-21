@@ -554,6 +554,20 @@ export class JellyfinPlayer extends EventEmitter {
         // Secondary subtitle stream index (kept here for OSD queries)
         this._currentSecondarySubtitleStreamIndex = -1;
 
+        // ────────────────────────────────────────────────────────────────────
+        // Remux Stuck Watchdog
+        // ────────────────────────────────────────────────────────────────────
+        // Detects when falling back from a DirectPlay seek failure to Remux causes
+        // the client hardware decoder (e.g., WebOS MediaPipeline) to freeze on
+        // mid-GOP fMP4 stream segments lacking keyframe reference frames.
+        // If forward media progression does not occur within the evaluation window,
+        // this watchdog automatically escalates playback from 'remux' to 'transcode'.
+        // ────────────────────────────────────────────────────────────────────
+        this._remuxWatchdogTimeout = null;
+        this._remuxWatchdogActive = false;
+        this._remuxWatchdogTargetTicks = null;
+        this._remuxWatchdogInitialTime = null;
+
         // ====================================================================
         // Subtitle Manager — centralized subtitle orchestration
         // Handles delivery method selection, external subtitle fetching,
@@ -736,6 +750,31 @@ export class JellyfinPlayer extends EventEmitter {
                 clearTimer(this._seekFailsafeTimeout);
                 this._seekFailsafeTimeout = null;
             }
+        }
+
+        // ---------------------------------------------------------------------
+        // Remux Playback Health Monitor
+        // ---------------------------------------------------------------------
+        // When recovering from seek failures via Remux, check if playback is actively
+        // advancing. If time progresses forward by >= 0.3s, hardware decoding has
+        // successfully engaged with valid reference frames, so we can disarm the watchdog.
+        // ---------------------------------------------------------------------
+        if (this._remuxWatchdogActive && event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
+            const rawTime = event.data.time;
+            if (this._remuxWatchdogInitialTime === null) {
+                // Record baseline presentation time upon the first timeupdate
+                this._remuxWatchdogInitialTime = rawTime;
+            } else if (rawTime > this._remuxWatchdogInitialTime + 0.3) {
+                // Playhead is moving forward smoothly; decoder is healthy
+                log.info(`[JellyfinPlayer] Remux stream verified advancing at ${rawTime.toFixed(2)}s — disarming stuck watchdog.`);
+                this._clearRemuxStuckWatchdog();
+            }
+        }
+
+        // If the user manually pauses playback, disarm the watchdog to prevent false escalations
+        if (this._remuxWatchdogActive && event.type === PlayerEvent.PAUSE) {
+            log.info('[JellyfinPlayer] Playback paused during remux evaluation; disarming stuck watchdog.');
+            this._clearRemuxStuckWatchdog();
         }
 
         // Intercept events if we are waiting for the initial Transcode Seek
@@ -998,8 +1037,16 @@ export class JellyfinPlayer extends EventEmitter {
                         await this.stop();
                         await new Promise(resolve => setTimeout(resolve, 500));
                         await this.play(restartOptions);
+
+                        // -------------------------------------------------------------
+                        // Arm stuck-detection watchdog once remux stream is initiated.
+                        // If the hardware decoder hangs on mid-GOP stream copy, the
+                        // watchdog will detect lack of progress and escalate to transcode.
+                        // -------------------------------------------------------------
+                        this._armRemuxStuckWatchdog(effectiveTicks);
                     } catch (e) {
                         log.error('resumeseekfailed restart failed:', e);
+                        this._clearRemuxStuckWatchdog();
                     } finally {
                         this._isRestarting = false;
                     }
@@ -1010,6 +1057,115 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Re-emit events from backend
         this.emit(event.type, event.data);
+    }
+
+    // ========================================================================
+    // Remux Stuck Watchdog & Transcode Escalation
+    // ========================================================================
+
+    /**
+     * Arm the remux stuck-detection watchdog after falling back from DirectPlay seek failure.
+     *
+     * Why this is needed:
+     * When seeking in DirectPlay fails (e.g. on MKV over HTTP on webOS), we restart in
+     * 'remux' mode. However, if the stream has a long GOP and FFmpeg stream-copies mid-GOP
+     * (-codec:v copy), the first HLS segment starts on a non-IDR (P/B) frame without
+     * preceding reference frames. On hardware decoders (such as LG webOS MediaPipeline),
+     * this causes an indefinite decoder freeze: currentTime never advances, and the
+     * loading spinner never dismisses.
+     *
+     * This watchdog grants remuxing 8 seconds to decode frames and advance. If time
+     * ticks forward by at least 0.3s, the watchdog clears. If 8 seconds elapse without
+     * progression, it escalates playback to 'transcode', which forces a clean IDR
+     * keyframe and unblocks the decoder immediately.
+     *
+     * @private
+     * @param {number} targetTicks - Target resume position in ticks
+     */
+    _armRemuxStuckWatchdog(targetTicks) {
+        // Disarm any preexisting watchdog timer first
+        this._clearRemuxStuckWatchdog();
+
+        this._remuxWatchdogActive = true;
+        this._remuxWatchdogTargetTicks = targetTicks;
+        this._remuxWatchdogInitialTime = null;
+
+        log.info(`[JellyfinPlayer] Armed remux stuck watchdog (8s timeout) at ${(targetTicks / 10000000).toFixed(2)}s`);
+
+        const timerFn = typeof setTimeout !== 'undefined'
+            ? setTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.setTimeout : null);
+
+        if (!timerFn) return;
+
+        // Schedule stuck evaluation window (8 seconds)
+        this._remuxWatchdogTimeout = timerFn(() => {
+            this._handleRemuxWatchdogTimeout();
+        }, 8000);
+    }
+
+    /**
+     * Clear and disarm the remux stuck watchdog.
+     * @private
+     */
+    _clearRemuxStuckWatchdog() {
+        if (this._remuxWatchdogTimeout) {
+            const clearTimer = typeof clearTimeout !== 'undefined'
+                ? clearTimeout
+                : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+            if (clearTimer) {
+                clearTimer(this._remuxWatchdogTimeout);
+            }
+            this._remuxWatchdogTimeout = null;
+        }
+        this._remuxWatchdogActive = false;
+        this._remuxWatchdogTargetTicks = null;
+        this._remuxWatchdogInitialTime = null;
+    }
+
+    /**
+     * Handler invoked when the remux stuck watchdog times out without time progression.
+     * Automatically escalates playback from 'remux' to 'transcode' to break decoder freeze.
+     * @private
+     */
+    _handleRemuxWatchdogTimeout() {
+        // Guard against stale triggers if watchdog was already cleared or player is stopping
+        if (!this._remuxWatchdogActive || this._isRestarting || !this._currentPlayOptions) {
+            return;
+        }
+
+        const targetTicks = this._remuxWatchdogTargetTicks || this.getCurrentPositionTicks();
+        log.warn(`[JellyfinPlayer] Remux playback stuck after fallback (decoder frozen at ${(targetTicks / 10000000).toFixed(2)}s). Escalating to transcode.`);
+
+        // Disarm watchdog so we don't re-trigger or cascade
+        this._clearRemuxStuckWatchdog();
+
+        // Build transcode restart configuration preserving stream selections
+        const transcodeOptions = {
+            ...this._currentPlayOptions,
+            startPositionTicks: targetTicks,
+            playbackMode: 'transcode'
+        };
+
+        this._currentPlayOptions = transcodeOptions;
+        this._lastPlayOptions = transcodeOptions;
+        this._isRestarting = true;
+
+        this.emit(PlayerEvent.RESTARTING);
+
+        (async () => {
+            try {
+                // Teardown backend session cleanly before transcode re-initialization
+                await this.stop();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                // Start playback in full transcode mode
+                await this.play(transcodeOptions);
+            } catch (e) {
+                log.error('[JellyfinPlayer] Transcode escalation restart failed:', e);
+            } finally {
+                this._isRestarting = false;
+            }
+        })();
     }
 
     // ========================================================================
@@ -1918,6 +2074,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Only clear state if NOT restarting
         if (!this._isRestarting) {
+            this._clearRemuxStuckWatchdog();
             this._currentItem = null;
             this._currentMediaSource = null;
             this._currentPlayOptions = null;
