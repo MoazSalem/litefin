@@ -22,6 +22,7 @@ import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { getOverviewClampClass } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('PersonPage');
@@ -86,7 +87,7 @@ class PersonPage extends Page {
 
                             <!-- Bio -->
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6" id="person-bio" tabindex="-1"></div>
+                                <div class="overview-text ${getOverviewClampClass()}" id="person-bio" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -514,8 +515,9 @@ class PersonPage extends Page {
             // Assign biography overview content safely
             bioEl.innerHTML = p.Overview || '';
             bioEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
-            // Initially ensure standard clamp class is applied
-            bioEl.classList.add('line-clamp-6');
+            // Apply user-configured overview max lines clamp class
+            const clampClass = getOverviewClampClass();
+            bioEl.className = `overview-text ${clampClass}`;
         }
 
         // Reset "See More" button state visually and structurally
@@ -556,7 +558,7 @@ class PersonPage extends Page {
         if (!bioEl || !seeMoreBtn) return;
 
         // Compare scroll height against client layout height to detect overflow
-        if (bioEl.scrollHeight > bioEl.clientHeight) {
+        if (bioEl.scrollHeight > bioEl.clientHeight + 2) {
             // Show the "Show More" button to the user
             seeMoreBtn.style.display = 'block';
 

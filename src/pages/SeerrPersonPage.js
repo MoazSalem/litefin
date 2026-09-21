@@ -19,6 +19,7 @@ import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { getOverviewClampClass } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrPersonPage');
@@ -87,8 +88,8 @@ class SeerrPersonPage extends Page {
 
                             <!-- Biography overview -->
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6" id="person-bio" tabindex="-1"></div>
-                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
+                                <div class="overview-text ${getOverviewClampClass()}" id="person-bio" tabindex="-1"></div>
+                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore') || 'Show More'}</button>
                             </div>
                         </div>
                     </div>
@@ -315,7 +316,8 @@ class SeerrPersonPage extends Page {
         const bioEl = this.$('#person-bio');
         if (bioEl) {
             bioEl.textContent = p.biography || p.Biography || p.overview || p.Overview || '';
-            bioEl.classList.add('line-clamp-6');
+            const clampClass = getOverviewClampClass();
+            bioEl.className = `overview-text ${clampClass}`;
         }
 
         // Reset and hide "See More" button initially
@@ -348,7 +350,7 @@ class SeerrPersonPage extends Page {
         if (!bioEl || !seeMoreBtn) return;
 
         // Check whether content is truncated by scroll height comparison
-        if (bioEl.scrollHeight > bioEl.clientHeight) {
+        if (bioEl.scrollHeight > bioEl.clientHeight + 2) {
             seeMoreBtn.style.display = 'block';
 
             // Register dedicated focus section for the See More button

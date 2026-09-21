@@ -2089,6 +2089,34 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDetailsOverviewMaxLines">${i18n.t('LabelDetailsOverviewMaxLines') || 'Overview Max Lines'}</span>
+                        <span class="setting-description" data-i18n="DetailsOverviewMaxLinesDescription">${i18n.t('DetailsOverviewMaxLinesDescription') || 'Configure the maximum number of lines for overviews and biographies on details and person pages.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'details-overview-max-lines-select',
+                [
+                    { value: '2', label: i18n.t('ValueLines', [2]) || '2 lines' },
+                    { value: '3', label: i18n.t('ValueLines', [3]) || '3 lines' },
+                    { value: '4', label: i18n.t('ValueLines', [4]) || '4 lines' },
+                    { value: '5', label: i18n.t('ValueLines', [5]) || '5 lines' },
+                    {
+                        value: '6',
+                        label: `${i18n.t('ValueLines', [6]) || '6 lines'} (${i18n.t('Default') || 'Default'})`
+                    },
+                    { value: '7', label: i18n.t('ValueLines', [7]) || '7 lines' },
+                    { value: '8', label: i18n.t('ValueLines', [8]) || '8 lines' },
+                    { value: '10', label: i18n.t('ValueLines', [10]) || '10 lines' },
+                    { value: '12', label: i18n.t('ValueLines', [12]) || '12 lines' },
+                    { value: 'none', label: i18n.t('OptionDetailsOverviewLinesNone') || i18n.t('Unlimited') || 'Unlimited (Full Overview)' }
+                ],
+                storage.getItem('pref:detailsOverviewMaxLines') || '6'
+            )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelHideGhostMode">${i18n.t('LabelHideGhostMode') || 'Hide Ghost Mode Button'}</span>
                         <span class="setting-description" data-i18n="HideGhostModeDescription">${i18n.t('HideGhostModeDescription') || 'Hide the ghost mode (incognito play) button on the item details page.'}</span>
                     </div>
@@ -9392,6 +9420,7 @@ class SettingsPage extends Page {
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
+            'details-overview-max-lines-select': { key: 'pref:detailsOverviewMaxLines', type: 'local' },
             'details-layout-select': { key: 'pref:detailsLayout', type: 'local' },
             'season-episode-details-layout-select': { key: 'pref:seasonEpisodeDetailsLayout', type: 'local' },
             'episode-layout-select': { key: 'pref:episodeLayout', type: 'local' },

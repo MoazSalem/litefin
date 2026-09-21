@@ -5,6 +5,7 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
+import { storage } from './StorageService.js';
 
 export function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -276,3 +277,29 @@ export function sanitizeSubtitleText(text) {
             });
 }
 
+/**
+ * ============================================================================
+ * Overview & Biography Max Lines Clamp Helper
+ * ============================================================================
+ * Resolves the CSS class used to clamp the synopsis, description, or
+ * biography across item details and person pages (including Seerr).
+ *
+ * Adheres strictly to Apple Human Interface Guidelines and modern fluid UI
+ * standards by providing comfortable, legible reading lengths for desktop,
+ * tablet, mobile, and TV screen viewing contexts.
+ *
+ * @returns {string} The CSS clamp class (e.g. 'line-clamp-6', 'line-clamp-none')
+ * ============================================================================
+ */
+export function getOverviewClampClass() {
+    // Read the user-defined max lines preference from local storage
+    const maxLines = storage.getItem('pref:detailsOverviewMaxLines') || '6';
+
+    // If 'none' or unconstrained full text is selected, return line-clamp-none
+    if (maxLines === 'none') {
+        return 'line-clamp-none';
+    }
+
+    // Return the matching numeric clamp class (e.g., 'line-clamp-4', 'line-clamp-6')
+    return `line-clamp-${maxLines}`;
+}

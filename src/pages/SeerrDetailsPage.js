@@ -29,6 +29,7 @@ import { lazyLoader } from '../utils/LazyLoader.js';
 import { router } from '../core/Router.js';
 import { state } from '../core/StateManager.js';
 import { eventBus } from '../core/EventBus.js';
+import { getOverviewClampClass } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrDetailsPage');
@@ -101,7 +102,7 @@ class SeerrDetailsPage extends Page {
                                 </div>
                             </section>
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6" id="overview-text" tabindex="-1"></div>
+                                <div class="overview-text ${getOverviewClampClass()}" id="overview-text" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0">${i18n.t('ShowMore')}</button>
                             </div>
                         </div>
@@ -316,6 +317,8 @@ class SeerrDetailsPage extends Page {
         }
 
         overviewEl.textContent = item.Overview || '';
+        const clampClass = getOverviewClampClass();
+        overviewEl.className = `overview-text ${clampClass}`;
 
         if (item._detailImageUrl) {
             const poster = document.createElement('img');

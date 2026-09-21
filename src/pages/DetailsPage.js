@@ -46,7 +46,7 @@ import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
-import { escapeHtml } from '../utils/Utils.js';
+import { escapeHtml, getOverviewClampClass } from '../utils/Utils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -237,7 +237,7 @@ class DetailsPage extends Page {
 
                             <!-- Overview -->
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6" tabindex="-1"></div>
+                                <div class="overview-text ${getOverviewClampClass()}" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="ShowMore">${i18n.t('ShowMore')}</button>
                             </div>
 
@@ -2914,8 +2914,9 @@ class DetailsPage extends Page {
         overviewEl.innerHTML = item.Overview || '';
         overviewEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
 
-        // Reset state
-        overviewEl.classList.add('line-clamp-6');
+        // Reset overview element styling with user-selected line clamp setting
+        const clampClass = getOverviewClampClass();
+        overviewEl.className = `overview-text ${clampClass}`;
         this.$('.see-more-btn').style.display = 'none';
 
         // Reveal columns
@@ -3877,7 +3878,10 @@ class DetailsPage extends Page {
         const overviewEl = this.$('.overview-text');
         const seeMoreBtn = this.$('.see-more-btn');
 
-        if (overviewEl.scrollHeight > overviewEl.clientHeight) {
+        if (!overviewEl || !seeMoreBtn) return;
+
+        // If content height exceeds container bounds, expose the See More action button
+        if (overviewEl.scrollHeight > overviewEl.clientHeight + 2) {
             seeMoreBtn.style.display = 'block';
 
             // 1. Determine what is below the See More button
@@ -3893,6 +3897,9 @@ class DetailsPage extends Page {
 
             // 3. Link Actions -> See More
             this._updateLeaveDown('details-actions', 'details-see-more');
+        } else {
+            // Unclamped or short overview does not require truncation expansion
+            seeMoreBtn.style.display = 'none';
         }
     }
 
