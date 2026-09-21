@@ -581,6 +581,8 @@ class SubtitleEditorModal {
             // Patch the existing MediaSources array rather than replacing the whole item
             if (fresh?.MediaSources && detailsPage._item) {
                 detailsPage._item.MediaSources = fresh.MediaSources;
+                // Re-reconcile in-memory track selections against updated streams so indices never drift
+                detailsPage._restoreSavedTrackSelections?.();
             }
         } catch (err) {
             log.warn('Failed to reload MediaStreams after subtitle change', err);

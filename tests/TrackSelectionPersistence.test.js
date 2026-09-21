@@ -588,4 +588,161 @@ test('Seek synchronization: backends emit seeked and defer timeupdate to native 
     );
 });
 
+test('MediaHelper track memory: resilient to stream index shifting after downloading external subtitles', () => {
+    // =========================================================================
+    // Read and isolate MediaHelper source for evaluation without external DOM dependencies
+    // =========================================================================
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+        .replace(/^import .*;\r?\n/gm, '')
+        .replace('export const MediaHelper', 'const MediaHelper')
+        .replace('export default MediaHelper;', '');
+
+    // In-memory mock storage dictionary
+    const storageMap = new Map();
+    const storage = {
+        getItem: (k) => storageMap.get(k) ?? null,
+        setItem: (k, v) => storageMap.set(k, String(v)),
+        removeItem: (k) => storageMap.delete(k)
+    };
+
+    // Construct isolated context with mock platform services
+    const context = vm.createContext({
+        storage,
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const evaluated = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    // =========================================================================
+    // Scenario: User selects English audio track (Index 2).
+    // Initial server streams inventory before external subtitle download:
+    // Index 0: Video (hevc)
+    // Index 1: Audio (hin)
+    // Index 2: Audio (eng)
+    // =========================================================================
+    const initialSource = {
+        Id: 'source-100',
+        MediaStreams: [
+            { Index: 0, Type: 'Video', Codec: 'hevc' },
+            { Index: 1, Type: 'Audio', Language: 'hin', DisplayTitle: 'Hindi (AAC 2.0)', Codec: 'aac', Channels: 2 },
+            { Index: 2, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (EAC3 5.1)', Codec: 'eac3', Channels: 6 }
+        ]
+    };
+
+    const itemId = 'movie-user-reported-bug';
+
+    // 1. User selects English track (Index 2)
+    evaluated.saveTrackMemory(itemId, 'Audio', 2, initialSource);
+
+    // Verify persisted payload contains rich track metadata
+    const rawSaved = storage.getItem(`track:audio:${itemId}`);
+    assert.ok(rawSaved, 'Track memory should be persisted to storage');
+    const parsed = JSON.parse(rawSaved);
+    assert.equal(parsed.index, 2, 'Initial saved index should be 2');
+    assert.equal(parsed.language, 'eng', 'Saved language must be "eng"');
+    assert.equal(parsed.codec, 'eac3', 'Saved codec must be "eac3"');
+    assert.equal(parsed.channels, 6, 'Saved channels must be 6');
+
+    // =========================================================================
+    // Scenario Part 2: User exits to DetailsPage, downloads external subtitle.
+    // Jellyfin assigns external subtitle to Index 0, shifting all streams down:
+    // Index 0: Subtitle (external .srt)
+    // Index 1: Video (hevc)
+    // Index 2: Audio (hin) -> Hindi now occupies Index 2!
+    // Index 3: Audio (eng) -> English shifted from Index 2 to Index 3!
+    // =========================================================================
+    const shiftedSource = {
+        Id: 'source-100',
+        MediaStreams: [
+            { Index: 0, Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English (External SRT)', Codec: 'subrip', IsExternal: true },
+            { Index: 1, Type: 'Video', Codec: 'hevc' },
+            { Index: 2, Type: 'Audio', Language: 'hin', DisplayTitle: 'Hindi (AAC 2.0)', Codec: 'aac', Channels: 2 },
+            { Index: 3, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (EAC3 5.1)', Codec: 'eac3', Channels: 6 }
+        ]
+    };
+
+    // 2. Resolve saved track against the shifted media source
+    const resolvedIndex = evaluated.resolveSavedTrack(shiftedSource, 'Audio', rawSaved, itemId);
+
+    // Crucial check: Must NOT return index 2 (Hindi). Must resolve to shifted index 3 (English)!
+    assert.equal(resolvedIndex, 3, 'Should resolve to English track (index 3), NOT Hindi track (index 2)');
+
+    // Verify self-healing updated the stored item record with the new index
+    const healedRaw = storage.getItem(`track:audio:${itemId}`);
+    const healedParsed = JSON.parse(healedRaw);
+    assert.equal(healedParsed.index, 3, 'Storage should self-heal and be updated to new index 3');
+    assert.equal(healedParsed.language, 'eng', 'Storage should preserve track language metadata');
+});
+
+test('MediaHelper track memory: handles Subtitle Off (-1) and backward compatibility with legacy numbers', () => {
+    // Read and isolate MediaHelper source
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+        .replace(/^import .*;\r?\n/gm, '')
+        .replace('export const MediaHelper', 'const MediaHelper')
+        .replace('export default MediaHelper;', '');
+
+    // In-memory mock storage dictionary
+    const storageMap = new Map();
+    const storage = {
+        getItem: (k) => storageMap.get(k) ?? null,
+        setItem: (k, v) => storageMap.set(k, String(v)),
+        removeItem: (k) => storageMap.delete(k)
+    };
+
+    // Construct isolated context with mock platform services
+    const context = vm.createContext({
+        storage,
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const evaluated = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    const mediaSource = {
+        Id: 'source-200',
+        MediaStreams: [
+            { Index: 0, Type: 'Video', Codec: 'h264' },
+            { Index: 1, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (AAC)', Codec: 'aac', Channels: 2 },
+            { Index: 2, Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish (SRT)', Codec: 'subrip', IsExternal: false }
+        ]
+    };
+
+    // 1. Subtitle Off (-1)
+    evaluated.saveTrackMemory('item-sub-off', 'Subtitle', -1, mediaSource);
+    const subOffRaw = storage.getItem('track:subtitle:item-sub-off');
+    assert.equal(JSON.parse(subOffRaw).index, -1, 'Subtitle Off should be persisted with index -1');
+    assert.equal(evaluated.resolveSavedTrack(mediaSource, 'Subtitle', subOffRaw), -1, 'Subtitle Off should resolve to -1');
+
+    // 2. Legacy numeric string ("1")
+    const resolvedLegacy = evaluated.resolveSavedTrack(mediaSource, 'Audio', '1');
+    assert.equal(resolvedLegacy, 1, 'Legacy string "1" without metadata should resolve to index 1');
+
+    // 3. Legacy numeric string ("-1") for Subtitle
+    const resolvedLegacySubOff = evaluated.resolveSavedTrack(mediaSource, 'Subtitle', '-1');
+    assert.equal(resolvedLegacySubOff, -1, 'Legacy string "-1" should resolve to -1');
+});
+
+test('SubtitleEditorModal re-syncs DetailsPage track selections after downloading subtitles', () => {
+    const modalSource = readFileSync(
+        new URL('../src/components/SubtitleEditorModal.js', import.meta.url),
+        'utf8'
+    );
+
+    // Verify SubtitleEditorModal._reloadSubtitleStreams calls detailsPage._restoreSavedTrackSelections
+    assert.ok(
+        modalSource.includes('detailsPage._restoreSavedTrackSelections?.()'),
+        'SubtitleEditorModal must invoke detailsPage._restoreSavedTrackSelections to refresh in-memory track indices'
+    );
+});
+
+
 

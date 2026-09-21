@@ -33,6 +33,7 @@ import { RichMetadataTable } from '../components/RichMetadataTable.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
+import { MediaHelper } from '../player/core/MediaHelper.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { prewarmManager } from '../player/core/PrewarmManager.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -859,73 +860,15 @@ class DetailsPage extends Page {
             // Restore Persisted Track Selections for this Media Item
             // =========================================================================
             // When resuming or navigating to an item where the user previously selected
-            // an audio commentary or subtitle track, restore that selection from storage
-            // if it is still valid within the active MediaSource stream inventory.
+            // an audio commentary or subtitle track, restore that selection using
+            // identity-aware reconciliation so that any stream index shifts (e.g. from
+            // newly downloaded external subtitles) automatically re-map to the right stream.
             // =========================================================================
             const activeSource =
                 this._item.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
                 this._item.MediaSources?.[0];
 
-            const savedAudioTrack = storage.getItem(`track:audio:${this._itemId}`);
-            if (savedAudioTrack !== null && savedAudioTrack !== undefined) {
-                const parsedAudio = Number(savedAudioTrack);
-                if (activeSource?.MediaStreams?.some((s) => s.Type === 'Audio' && s.Index === parsedAudio)) {
-                    this._selectedAudioIndex = parsedAudio;
-                    log.info(`[DetailsPage] Restored saved audio track for ${this._itemId}: ${parsedAudio}`);
-                } else {
-                    this._selectedAudioIndex = undefined;
-                }
-            } else {
-                this._selectedAudioIndex = undefined;
-            }
-
-            // =====================================================================
-            // Auto-Resolve Optimal DirectPlay Audio Track for Prewarm
-            // =====================================================================
-            // If the item has not been played previously (no track persisted in
-            // localStorage), resolve the optimal audio track before triggering prewarm.
-            // On media with TrueHD default tracks (e.g. 4K Dolby Vision releases),
-            // this selects the compatible AC3/EAC3 backup track instead of allowing
-            // the server to evaluate the unsupported TrueHD default. This ensures the
-            // background PlaybackInfo prewarm requests the exact direct-playable stream,
-            // preventing transcode degradation and whitewashed video on first play.
-            // =====================================================================
-            if (this._selectedAudioIndex === undefined && activeSource) {
-                const bestStream = resolveBestAudioStream(activeSource);
-                if (bestStream) {
-                    this._selectedAudioIndex = bestStream.Index;
-                    log.info(
-                        `[DetailsPage] Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
-                    );
-                }
-            }
-
-            const savedSubtitleTrack = storage.getItem(`track:subtitle:${this._itemId}`);
-            if (savedSubtitleTrack !== null && savedSubtitleTrack !== undefined) {
-                const parsedSubtitle = Number(savedSubtitleTrack);
-                if (
-                    parsedSubtitle === -1 ||
-                    activeSource?.MediaStreams?.some((s) => s.Type === 'Subtitle' && s.Index === parsedSubtitle)
-                ) {
-                    this._selectedSubtitleIndex = parsedSubtitle;
-                    log.info(`[DetailsPage] Restored saved subtitle track for ${this._itemId}: ${parsedSubtitle}`);
-                } else {
-                    this._selectedSubtitleIndex = undefined;
-                }
-            } else {
-                this._selectedSubtitleIndex = undefined;
-            }
-
-            // Trigger prewarm for playable media items, passing the restored version ID and restored tracks
-            const isGameItem = this._isGame(item);
-
-            if (!isGameItem && (item.Type === 'Movie' || item.Type === 'Episode' || item.Type === 'Video' || item.Type === 'Trailer')) {
-                prewarmManager.prewarm(item, {
-                    mediaSourceId: this._selectedMediaSourceId || item.MediaSources?.[0]?.Id,
-                    audioStreamIndex: this._selectedAudioIndex,
-                    subtitleStreamIndex: this._selectedSubtitleIndex
-                });
-            }
+            this._restoreSavedTrackSelections(activeSource);
 
             // Await user data (likely already resolved from state cache)
             this._currentUser = await userPromise;
@@ -1075,6 +1018,104 @@ class DetailsPage extends Page {
             log.error('Failed to load', error);
             this.showError(i18n.t('FailedToLoadDetails'));
             this.setLoading(false);
+        }
+    }
+
+    /**
+     * Restore saved audio and subtitle track selections for the active media source.
+     * Uses MediaHelper.resolveSavedTrack to ensure that if Jellyfin re-indexed streams
+     * (for instance, after external subtitles are downloaded or deleted), track identities
+     * are preserved and in-memory selection indices are dynamically updated.
+     *
+     * @param {Object} [activeSource] - The active MediaSource to evaluate
+     */
+    _restoreSavedTrackSelections(activeSource = null) {
+        // Resolve target media source from parameter, selected ID, or first available source
+        const source =
+            activeSource ||
+            this._item?.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+            this._item?.MediaSources?.[0];
+
+        // Guard against missing media source or streams
+        if (!source || !source.MediaStreams) {
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
+            return;
+        }
+
+        // =====================================================================
+        // Restore Saved Audio Track
+        // =====================================================================
+        // Consult track memory, resolving through MediaHelper to reconcile any
+        // stream index shifts caused by external subtitles or re-probing.
+        const savedAudioTrack = storage.getItem(`track:audio:${this._itemId}`);
+        if (savedAudioTrack !== null && savedAudioTrack !== undefined) {
+            const resolvedAudio = MediaHelper.resolveSavedTrack(source, 'Audio', savedAudioTrack, this._itemId);
+            if (resolvedAudio !== undefined) {
+                this._selectedAudioIndex = resolvedAudio;
+                log.info(`[DetailsPage] Restored saved audio track for ${this._itemId}: ${resolvedAudio}`);
+            } else {
+                this._selectedAudioIndex = undefined;
+            }
+        } else {
+            this._selectedAudioIndex = undefined;
+        }
+
+        // =====================================================================
+        // Auto-Resolve Optimal DirectPlay Audio Track for Prewarm
+        // =====================================================================
+        // If the item has not been played previously (no track persisted in
+        // storage), resolve the optimal audio track before triggering prewarm.
+        // On media with TrueHD default tracks (e.g. 4K Dolby Vision releases),
+        // this selects the compatible AC3/EAC3 backup track instead of allowing
+        // the server to evaluate the unsupported TrueHD default. This ensures the
+        // background PlaybackInfo prewarm requests the exact direct-playable stream,
+        // preventing transcode degradation and whitewashed video on first play.
+        if (this._selectedAudioIndex === undefined) {
+            const bestStream = resolveBestAudioStream(source);
+            if (bestStream) {
+                this._selectedAudioIndex = bestStream.Index;
+                log.info(
+                    `[DetailsPage] Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                );
+            }
+        }
+
+        // =====================================================================
+        // Restore Saved Subtitle Track
+        // =====================================================================
+        // Restore subtitle selection, verifying identity through MediaHelper.
+        const savedSubtitleTrack = storage.getItem(`track:subtitle:${this._itemId}`);
+        if (savedSubtitleTrack !== null && savedSubtitleTrack !== undefined) {
+            const resolvedSubtitle = MediaHelper.resolveSavedTrack(source, 'Subtitle', savedSubtitleTrack, this._itemId);
+            if (resolvedSubtitle !== undefined) {
+                this._selectedSubtitleIndex = resolvedSubtitle;
+                log.info(`[DetailsPage] Restored saved subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
+            } else {
+                this._selectedSubtitleIndex = undefined;
+            }
+        } else {
+            this._selectedSubtitleIndex = undefined;
+        }
+
+        // =====================================================================
+        // Refresh Prewarm With Reconciled Tracks
+        // =====================================================================
+        // Trigger background prewarm for playable media items with the reconciled tracks
+        const isGameItem = this._isGame(this._item);
+        if (
+            !isGameItem &&
+            this._item &&
+            (this._item.Type === 'Movie' ||
+                this._item.Type === 'Episode' ||
+                this._item.Type === 'Video' ||
+                this._item.Type === 'Trailer')
+        ) {
+            prewarmManager.prewarm(this._item, {
+                mediaSourceId: this._selectedMediaSourceId || source.Id,
+                audioStreamIndex: this._selectedAudioIndex,
+                subtitleStreamIndex: this._selectedSubtitleIndex
+            });
         }
     }
 
@@ -4703,8 +4744,9 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
 
-            // Persist track selection per-item so it survives navigation, exits, and app restarts
-            storage.setItem(`track:audio:${this._itemId}`, String(index));
+            // Persist track selection per-item with full metadata to survive re-indexing
+            const activeTrack = tracks.find((s) => s.Index === index);
+            MediaHelper.saveTrackMemory(this._itemId, 'Audio', activeTrack || index, mediaSource);
 
             // Re-render hero header to update the audio specifications pill
             this._renderHeroText();
@@ -4776,8 +4818,9 @@ class DetailsPage extends Page {
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
 
-            // Persist track selection per-item so it survives navigation, exits, and app restarts
-            storage.setItem(`track:subtitle:${this._itemId}`, String(index));
+            // Persist track selection per-item with full metadata to survive re-indexing
+            const activeTrack = displayTracks.find((s) => s.Index === index);
+            MediaHelper.saveTrackMemory(this._itemId, 'Subtitle', activeTrack || index, mediaSource);
 
             // Re-trigger zero-latency prewarm with updated subtitle track selection
             if (

@@ -666,6 +666,201 @@ export const MediaHelper = {
             message,
             details
         };
+    },
+
+    // =========================================================================
+    // Track Selection Persistence & Dynamic Re-indexing Resolution
+    // =========================================================================
+
+    /**
+     * Persist selected track choice with metadata signature for an item.
+     * Storing the track metadata (language, title, codec, channels) alongside its index
+     * prevents silent track regressions when Jellyfin shifts stream indices (for instance,
+     * when external subtitles or additional tracks are downloaded or deleted).
+     *
+     * @param {string} itemId - Media item ID
+     * @param {'Audio'|'Subtitle'} type - Track type
+     * @param {Object|number} trackOrIndex - The selected MediaStream object or stream index (-1 for Subtitle Off)
+     * @param {Object} [mediaSource] - Optional MediaSource to resolve metadata if only an index was supplied
+     */
+    saveTrackMemory(itemId, type, trackOrIndex, mediaSource = null) {
+        // Validate required identification inputs
+        if (!itemId || !type) return;
+
+        // Build standardized storage key for track type and item ID
+        const storageKey = `track:${type.toLowerCase()}:${itemId}`;
+
+        // Subtitle Off is invariant to stream indexing shifts and always uses index -1
+        if (type === 'Subtitle' && (trackOrIndex === -1 || trackOrIndex?.Index === -1)) {
+            storage.setItem(storageKey, JSON.stringify({ index: -1 }));
+            return;
+        }
+
+        // Determine stream object and target index
+        let stream = null;
+        const index = typeof trackOrIndex === 'number' ? trackOrIndex : trackOrIndex?.Index;
+
+        // If a full stream object was passed, use it directly
+        if (typeof trackOrIndex === 'object' && trackOrIndex !== null) {
+            stream = trackOrIndex;
+        } else if (mediaSource?.MediaStreams && typeof index === 'number') {
+            // Otherwise resolve the stream from the provided media source inventory
+            stream = mediaSource.MediaStreams.find((s) => s.Type === type && s.Index === index);
+        }
+
+        if (stream) {
+            // Snapshot full track identity attributes for robust reconciliation across re-indexing
+            const data = {
+                index: stream.Index,
+                language: stream.Language || 'und',
+                title: stream.DisplayTitle || stream.Title || 'none',
+                codec: stream.Codec || '',
+                channels: stream.Channels || null,
+                isExternal: stream.IsExternal || false
+            };
+            storage.setItem(storageKey, JSON.stringify(data));
+        } else if (typeof index === 'number') {
+            // Fallback when stream object is missing from memory
+            storage.setItem(storageKey, JSON.stringify({ index }));
+        }
+    },
+
+    /**
+     * Resolve a saved track selection against the active MediaSource.
+     * Validates that the track at the saved index still matches the recorded metadata.
+     * If stream indices shifted due to external subtitle downloads, deletions, or server re-probing,
+     * this dynamically re-identifies the correct stream index and updates storage.
+     *
+     * Backward-compatible with legacy numeric strings (e.g. "2" or "-1").
+     *
+     * @param {Object} mediaSource - Active MediaSource containing MediaStreams
+     * @param {'Audio'|'Subtitle'} type - 'Audio' or 'Subtitle'
+     * @param {string|number|Object} savedRaw - The stored track value
+     * @param {string} [itemId] - Optional item ID to automatically update storage if re-indexed
+     * @returns {number|undefined} The resolved stream index, -1 for Subtitle Off, or undefined if invalid
+     */
+    resolveSavedTrack(mediaSource, type, savedRaw, itemId = null) {
+        // Guard check: Media source and MediaStreams must be populated
+        if (!mediaSource || !Array.isArray(mediaSource.MediaStreams)) return undefined;
+        if (savedRaw === null || savedRaw === undefined) return undefined;
+
+        // Parse saved value (handles JSON object string, legacy numeric string, or plain number/object)
+        let saved;
+        if (typeof savedRaw === 'string') {
+            try {
+                saved = JSON.parse(savedRaw);
+            } catch {
+                const num = Number(savedRaw);
+                saved = !isNaN(num) ? num : null;
+            }
+        } else {
+            saved = savedRaw;
+        }
+
+        if (saved === null || saved === undefined) return undefined;
+
+        // Normalize numeric or object structure into standard shape
+        const savedObj = typeof saved === 'number' ? { index: saved } : saved;
+        if (typeof savedObj.index !== 'number') return undefined;
+
+        // Subtitle Off (-1) is invariant to stream indexing shifts
+        if (type === 'Subtitle' && savedObj.index === -1) {
+            return -1;
+        }
+
+        // Filter media streams matching requested track type
+        const candidateStreams = mediaSource.MediaStreams.filter((s) => s.Type === type);
+        if (candidateStreams.length === 0) return undefined;
+
+        // =====================================================================
+        // Step 1: Check if the stream currently at savedObj.index still matches
+        // =====================================================================
+        const streamAtIndex = candidateStreams.find((s) => s.Index === savedObj.index);
+        const hasMetadata = savedObj.language && savedObj.language !== 'und';
+
+        if (streamAtIndex) {
+            // For legacy storage entries without recorded language, trust the existing index
+            if (!hasMetadata) {
+                return streamAtIndex.Index;
+            }
+
+            // Verify language alignment
+            const langMatches = (streamAtIndex.Language || 'und').toLowerCase() === savedObj.language.toLowerCase();
+            // Verify title alignment if saved
+            const titleMatches =
+                !savedObj.title ||
+                savedObj.title === 'none' ||
+                (streamAtIndex.DisplayTitle || streamAtIndex.Title || 'none') === savedObj.title;
+
+            // If identity attributes align, stream has not shifted
+            if (langMatches && titleMatches) {
+                return streamAtIndex.Index;
+            }
+
+            // Stream index collision: another track now occupies this index due to stream shifting
+            log.warn(
+                `[Track Memory] Stream index ${savedObj.index} for ${type} no longer matches saved track ` +
+                `("${savedObj.language}" - "${savedObj.title}"). Stream at index is now ` +
+                `("${streamAtIndex.Language}" - "${streamAtIndex.DisplayTitle || streamAtIndex.Title}"). ` +
+                `Searching for shifted track...`
+            );
+        }
+
+        // =====================================================================
+        // Step 2: Stream shifted or missing — Reconcile by track metadata
+        // =====================================================================
+        if (hasMetadata) {
+            const targetLang = savedObj.language.toLowerCase();
+
+            // Priority A: Exact Language AND Title/DisplayTitle match
+            let matchedStream = candidateStreams.find(
+                (s) =>
+                    (s.Language || 'und').toLowerCase() === targetLang &&
+                    (s.DisplayTitle || s.Title || 'none') === savedObj.title
+            );
+
+            // Priority B: Language AND Codec (and Channels for Audio streams)
+            if (!matchedStream && savedObj.codec) {
+                matchedStream = candidateStreams.find(
+                    (s) =>
+                        (s.Language || 'und').toLowerCase() === targetLang &&
+                        (s.Codec || '').toLowerCase() === savedObj.codec.toLowerCase() &&
+                        (savedObj.channels ? s.Channels === savedObj.channels : true)
+                );
+            }
+
+            // Priority C: Language AND External status (for Subtitle streams)
+            if (!matchedStream && type === 'Subtitle' && savedObj.isExternal !== undefined) {
+                matchedStream = candidateStreams.find(
+                    (s) =>
+                        (s.Language || 'und').toLowerCase() === targetLang &&
+                        Boolean(s.IsExternal) === Boolean(savedObj.isExternal)
+                );
+            }
+
+            // Priority D: Fall back to best Language match
+            if (!matchedStream) {
+                matchedStream = candidateStreams.find(
+                    (s) => (s.Language || 'und').toLowerCase() === targetLang
+                );
+            }
+
+            if (matchedStream) {
+                log.info(
+                    `[Track Memory] Re-indexed shifted ${type} track from old index ${savedObj.index} ` +
+                    `to new index ${matchedStream.Index} (${matchedStream.Language} - "${matchedStream.DisplayTitle || matchedStream.Title}")`
+                );
+
+                // Self-healing: persist the new index and refreshed metadata immediately
+                if (itemId) {
+                    this.saveTrackMemory(itemId, type, matchedStream, mediaSource);
+                }
+
+                return matchedStream.Index;
+            }
+        }
+
+        return undefined;
     }
 };
 

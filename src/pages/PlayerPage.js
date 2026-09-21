@@ -23,6 +23,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import OSDController from '../player/osd/OSDController.js';
 import { JellyfinPlayer, resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
+import { MediaHelper } from '../player/core/MediaHelper.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -1216,24 +1217,41 @@ class PlayerPage extends Page {
         let savedSubtitleIndex =
             preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
 
+        // If preSelectedAudio was passed, verify against persisted item track memory
+        // to guard against index drift if external tracks were added/deleted before player launch
+        if (savedAudioIndex !== undefined && item?.Id) {
+            const savedItemAudio = storage.getItem(`track:audio:${item.Id}`);
+            if (savedItemAudio !== null && savedItemAudio !== undefined) {
+                const reconciledAudio = MediaHelper.resolveSavedTrack(mediaSource, 'Audio', savedItemAudio, item.Id);
+                if (reconciledAudio !== undefined && reconciledAudio !== savedAudioIndex) {
+                    log.warn(
+                        `[Track Memory] preSelectedAudio index ${savedAudioIndex} diverged from re-indexed track ${reconciledAudio}. Reconciling to index ${reconciledAudio}.`
+                    );
+                    savedAudioIndex = reconciledAudio;
+                }
+            }
+        }
+
         // =========================================================================
         // 2.1 Restore Item-Specific Track Memory
         // =========================================================================
         // If the user previously selected an audio or subtitle track specifically for
         // this media item (such as an audio commentary track or specific language),
         // we prioritize restoring it directly when resuming or continuing playback.
+        // Uses MediaHelper.resolveSavedTrack to ensure that if streams shifted due to
+        // newly downloaded external subtitles, the correct language track is selected.
         // =========================================================================
         if (savedAudioIndex === undefined && item?.Id) {
             const savedItemAudio = storage.getItem(`track:audio:${item.Id}`);
             if (savedItemAudio !== null && savedItemAudio !== undefined) {
-                const parsedIndex = Number(savedItemAudio);
-                const streamMatch = mediaSource?.MediaStreams?.find(
-                    (s) => s.Type === 'Audio' && s.Index === parsedIndex
-                );
-                if (streamMatch) {
-                    savedAudioIndex = parsedIndex;
+                const resolvedAudio = MediaHelper.resolveSavedTrack(mediaSource, 'Audio', savedItemAudio, item.Id);
+                if (resolvedAudio !== undefined) {
+                    savedAudioIndex = resolvedAudio;
+                    const streamMatch = mediaSource?.MediaStreams?.find(
+                        (s) => s.Type === 'Audio' && s.Index === savedAudioIndex
+                    );
                     log.info(
-                        `[Track Memory] Restored item-specific audio track: Index ${savedAudioIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                        `[Track Memory] Restored item-specific audio track: Index ${savedAudioIndex} (${streamMatch?.DisplayTitle || streamMatch?.Title || streamMatch?.Language})`
                     );
                 }
             }
@@ -1242,18 +1260,17 @@ class PlayerPage extends Page {
         if (savedSubtitleIndex === undefined && item?.Id) {
             const savedItemSubtitle = storage.getItem(`track:subtitle:${item.Id}`);
             if (savedItemSubtitle !== null && savedItemSubtitle !== undefined) {
-                const parsedSubIndex = Number(savedItemSubtitle);
-                if (parsedSubIndex === -1) {
-                    savedSubtitleIndex = -1;
-                    log.info(`[Track Memory] Restored item-specific subtitle track: Off (-1)`);
-                } else {
-                    const streamMatch = mediaSource?.MediaStreams?.find(
-                        (s) => s.Type === 'Subtitle' && s.Index === parsedSubIndex
-                    );
-                    if (streamMatch) {
-                        savedSubtitleIndex = parsedSubIndex;
+                const resolvedSubtitle = MediaHelper.resolveSavedTrack(mediaSource, 'Subtitle', savedItemSubtitle, item.Id);
+                if (resolvedSubtitle !== undefined) {
+                    savedSubtitleIndex = resolvedSubtitle;
+                    if (savedSubtitleIndex === -1) {
+                        log.info(`[Track Memory] Restored item-specific subtitle track: Off (-1)`);
+                    } else {
+                        const streamMatch = mediaSource?.MediaStreams?.find(
+                            (s) => s.Type === 'Subtitle' && s.Index === savedSubtitleIndex
+                        );
                         log.info(
-                            `[Track Memory] Restored item-specific subtitle track: Index ${savedSubtitleIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                            `[Track Memory] Restored item-specific subtitle track: Index ${savedSubtitleIndex} (${streamMatch?.DisplayTitle || streamMatch?.Title || streamMatch?.Language})`
                         );
                     }
                 }
@@ -2333,16 +2350,20 @@ class PlayerPage extends Page {
         // 1. Audio Track Capture
         const activeAudioIndex = this._player._currentAudioStreamIndex;
         if (activeAudioIndex !== undefined && activeAudioIndex !== -1) {
-            // Persist per-item selection so resuming this specific item restores the exact track
+            // Find the active audio stream object from the current media source inventory
+            const activeAudioTrack = mediaSource.MediaStreams.find(
+                (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
+            );
+
+            // Persist per-item selection so resuming this specific item restores the exact track.
+            // Uses MediaHelper.saveTrackMemory to record full stream metadata (language, title, codec, channels)
+            // ensuring resilience against server re-indexing or stream shifts when external subtitles are downloaded.
             if (this._item.Id) {
-                storage.setItem(`track:audio:${this._item.Id}`, String(activeAudioIndex));
-                log.info(`[Track Memory] Saved item audio index: ${this._item.Id} -> ${activeAudioIndex}`);
+                MediaHelper.saveTrackMemory(this._item.Id, 'Audio', activeAudioTrack || activeAudioIndex, mediaSource);
+                log.info(`[Track Memory] Saved item audio track: ${this._item.Id} -> index ${activeAudioIndex}`);
             }
 
             if (PlayerSettings.get('rememberTracksForSession') !== false) {
-                const activeAudioTrack = mediaSource.MediaStreams.find(
-                    (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
-                );
                 if (activeAudioTrack) {
                     // Save undetermined ('und') instead of 'none' if language is missing
                     // to distinguish undefined languages from disabled tracks.
@@ -2367,10 +2388,25 @@ class PlayerPage extends Page {
         if (hasSubtitles) {
             const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
             if (activeSubtitleIndex !== undefined) {
-                // Persist per-item selection so resuming this specific item restores the exact track
+                // Find stream object or treat index -1 as Subtitle Off
+                const activeSubtitleTrack =
+                    activeSubtitleIndex === -1
+                        ? -1
+                        : mediaSource.MediaStreams.find(
+                              (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
+                          );
+
+                // Persist per-item selection so resuming this specific item restores the exact track.
+                // Uses MediaHelper.saveTrackMemory to record metadata (language, title, external status)
+                // so subsequent playback accurately identifies the chosen subtitle even if stream indices shift.
                 if (this._item.Id) {
-                    storage.setItem(`track:subtitle:${this._item.Id}`, String(activeSubtitleIndex));
-                    log.info(`[Track Memory] Saved item subtitle index: ${this._item.Id} -> ${activeSubtitleIndex}`);
+                    MediaHelper.saveTrackMemory(
+                        this._item.Id,
+                        'Subtitle',
+                        activeSubtitleTrack !== undefined ? activeSubtitleTrack : activeSubtitleIndex,
+                        mediaSource
+                    );
+                    log.info(`[Track Memory] Saved item subtitle track: ${this._item.Id} -> index ${activeSubtitleIndex}`);
                 }
 
                 if (PlayerSettings.get('rememberTracksForSession') !== false) {
@@ -2381,10 +2417,7 @@ class PlayerPage extends Page {
                         log.info(`[Track Memory] Saved Subtitle: none`);
                     } else {
                         // Search for the stream details using the active stream index
-                        const activeSubtitleTrack = mediaSource.MediaStreams.find(
-                            (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                        );
-                        if (activeSubtitleTrack) {
+                        if (activeSubtitleTrack && typeof activeSubtitleTrack === 'object') {
                             // Use undetermined ('und') for tracks with empty/undefined language
                             // to prevent them from matching the 'none' check (which disables subtitles).
                             storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
