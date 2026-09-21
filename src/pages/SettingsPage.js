@@ -23,6 +23,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { availableLanguages } from '../locales/languages.js';
+import { languageManager } from '../utils/LanguageManager.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
@@ -60,19 +61,27 @@ class SettingsPage extends Page {
         if (!cachedCultures) {
             try {
                 const cultures = await api.getCultures();
-                // Map to dropdown format and sort alphabetically by display name
-                cachedCultures = cultures
-                    .map((c) => ({
-                        value: c.ThreeLetterISOLanguageName,
-                        label: i18n.ensureBiDi(c.DisplayName)
-                    }))
-                    .sort((a, b) => a.label.localeCompare(b.label));
+                if (cultures && Array.isArray(cultures)) {
+                    // Register dynamic culture mappings in LanguageManager for O(1) matching
+                    languageManager.registerCultures(cultures);
 
-                this.prefLanguages = cachedCultures;
+                    // Map to dropdown format and sort alphabetically by display name
+                    cachedCultures = cultures
+                        .map((c) => ({
+                            value: c.ThreeLetterISOLanguageName || c.Name,
+                            label: i18n.ensureBiDi(c.DisplayName),
+                            ThreeLetterISOLanguageName: c.ThreeLetterISOLanguageName,
+                            TwoLetterISOLanguageName: c.TwoLetterISOLanguageName,
+                            DisplayName: c.DisplayName
+                        }))
+                        .sort((a, b) => a.label.localeCompare(b.label));
 
-                // Re-render if we are on a tab that uses these languages
-                if (this.activeTab === 'player' || this.activeTab === 'subtitles') {
-                    this._switchTab(this.activeTab, true);
+                    this.prefLanguages = cachedCultures;
+
+                    // Re-render if we are on a tab that uses these languages
+                    if (this.activeTab === 'player' || this.activeTab === 'subtitles') {
+                        this._switchTab(this.activeTab, true);
+                    }
                 }
             } catch (error) {
                 log.error('Failed to fetch cultures:', error);
@@ -491,6 +500,20 @@ class SettingsPage extends Page {
             this.uiLanguages,
             storage.getItem('app_language') || 'en-us'
         )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="FavoriteLanguages">${i18n.t('FavoriteLanguages') || 'Favorite Languages'}</span>
+                        <span class="setting-description" data-i18n="FavoriteLanguagesDescription">${i18n.t('FavoriteLanguagesDescription') || 'Limit language dropdowns and media tracks across the app to your favorite languages.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="setting-action-btn select-btn" id="btn-manage-favorite-languages" tabindex="0" data-focusable="true">
+                            <span class="btn-label" id="favorite-languages-count-label">
+                                ${languageManager.hasFavorites() ? i18n.t('LanguagesSelected', [languageManager.getFavorites().length]) : (i18n.t('AllLanguages') || 'All Languages')}
+                            </span>
+                        </button>
                     </div>
                 </div>
 
@@ -8536,7 +8559,7 @@ class SettingsPage extends Page {
         `;
     }
 
-    _renderSelectionModal(title, options, currentValue, onSelect) {
+    _renderSelectionModal(title, options, currentValue, onSelect, selectId = '') {
         const overlay = this.$('#modal-overlay');
         if (!overlay) return;
 
@@ -8544,104 +8567,252 @@ class SettingsPage extends Page {
         this._prevFocus = focusManager.getFocused();
         this._prevSection = focusManager.getActiveSection();
 
-        overlay.innerHTML = `
-            <div class="settings-modal" role="dialog" aria-modal="true">
-                <div class="modal-header">
-                    <h2>${title}</h2>
-                </div>
-                <div class="modal-options">
-                    ${options.length === 0
+        // Check if this dropdown is a language selection menu
+        const isLanguageSelect = selectId === 'app-language-select' ||
+            selectId === 'audio-lang-select' ||
+            selectId === 'subtitle-lang-select' ||
+            (title && (title.toLowerCase().includes('language') || title.toLowerCase().includes('idioma') || title.toLowerCase().includes('langue') || title.toLowerCase().includes('sprache')));
+
+        // Determine initial filter view (if favorites exist and this is a language picker, default to favorites)
+        let activeFilter = (isLanguageSelect && languageManager.hasFavorites()) ? 'favorites' : 'all';
+
+        const renderModalContent = () => {
+            // Determine active options according to filter
+            let displayOptions = options;
+            if (isLanguageSelect && activeFilter === 'favorites') {
+                displayOptions = languageManager.filterOptions(options);
+            }
+
+            const favoritesCount = options.filter(o => languageManager.isFavorite(o)).length;
+
+            let filterPillsHtml = '';
+            if (isLanguageSelect && languageManager.hasFavorites()) {
+                filterPillsHtml = `
+                    <div class="modal-filter-pills" id="modal-lang-filter-pills">
+                        <button class="modal-filter-pill ${activeFilter === 'favorites' ? 'active' : ''}" data-filter="favorites" tabindex="0">
+                            ★ ${i18n.t('FavoritesOnly') || 'Favorites'} (${favoritesCount})
+                        </button>
+                        <button class="modal-filter-pill ${activeFilter === 'all' ? 'active' : ''}" data-filter="all" tabindex="0">
+                            ${i18n.t('AllLanguages') || 'All Languages'} (${options.length})
+                        </button>
+                    </div>
+                `;
+            }
+
+            const optionsHtml = displayOptions.length === 0
                 ? `
-                        <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
-                            ${i18n.t('NoOptionsAvailable') || 'No options available'}
-                        </div>
-                    `
-                : options
-                    .map((opt) => {
-                        let badge = '';
-                        if (opt.completeness !== undefined) {
-                            const percentage = Math.floor(opt.completeness);
-                            let innerBadge = '';
-                            if (percentage === 0) {
-                                innerBadge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
-                            } else if (percentage < 85) {
-                                innerBadge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
-                            } else {
-                                innerBadge = `<span class="track-badge lang-badge badge-success">100%</span>`;
-                            }
-                            badge = `<span class="track-badges">${innerBadge}</span>`;
+                    <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
+                        ${i18n.t('NoOptionsAvailable') || 'No options available'}
+                    </div>
+                `
+                : displayOptions.map((opt) => {
+                    let badge = '';
+                    if (opt.completeness !== undefined) {
+                        const percentage = Math.floor(opt.completeness);
+                        let innerBadge = '';
+                        if (percentage === 0) {
+                            innerBadge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
+                        } else if (percentage < 85) {
+                            innerBadge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
+                        } else {
+                            innerBadge = `<span class="track-badge lang-badge badge-success">100%</span>`;
                         }
-                        return `
+                        badge = `<span class="track-badges">${innerBadge}</span>`;
+                    }
+
+                    // For language dropdowns, show a star toggle button on the right
+                    let starBtnHtml = '';
+                    if (isLanguageSelect) {
+                        const valStr = String(opt.value).toLowerCase();
+                        const isSpecial = valStr === 'none' || valStr === 'default' || valStr === 'auto' || valStr === '-1';
+                        if (!isSpecial) {
+                            const isFav = languageManager.isFavorite(opt);
+                            starBtnHtml = `
+                                <span class="modal-star-btn ${isFav ? 'active' : ''}" data-value="${opt.value}" title="Toggle Favorite" role="button" aria-label="Toggle Favorite">
+                                    ${isFav ? '★' : '☆'}
+                                </span>
+                            `;
+                        }
+                    }
+
+                    return `
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                             <span style="margin-right: 12px;">${escapeHtml(i18n.ensureBiDi(opt.label))}</span>
-                             ${badge}
+                            <span class="modal-option-label">${escapeHtml(i18n.ensureBiDi(opt.label))}</span>
+                            ${badge}
+                            ${starBtnHtml}
                         </button>
                     `;
-                    })
-                    .join('')
+                }).join('');
+
+            overlay.innerHTML = `
+                <div class="settings-modal" role="dialog" aria-modal="true">
+                    <div class="modal-header">
+                        <h2>${title}</h2>
+                    </div>
+                    ${filterPillsHtml}
+                    <div class="modal-options">
+                        ${optionsHtml}
+                    </div>
+                    <div class="modal-actions">
+                        <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="ButtonCancel">${i18n.t('ButtonCancel')}</button>
+                    </div>
+                </div>
+            `;
+
+            // Bind option clicks
+            overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    // Check if star button inside was clicked
+                    if (e.target.closest('.modal-star-btn')) {
+                        e.stopPropagation();
+                        const starBtn = e.target.closest('.modal-star-btn');
+                        const val = starBtn.dataset.value;
+                        const matchedOpt = options.find((o) => String(o.value) === String(val)) || val;
+                        const isNowFav = languageManager.toggleFavorite(matchedOpt);
+
+                        if (activeFilter === 'all') {
+                            // In "All Languages" view, update in-place without destroying DOM or losing scroll/focus
+                            starBtn.classList.toggle('active', isNowFav);
+                            starBtn.textContent = isNowFav ? '★' : '☆';
+
+                            // Update the Favorites count badge on the pill
+                            const favPill = overlay.querySelector('.modal-filter-pill[data-filter="favorites"]');
+                            if (favPill) {
+                                const newCount = options.filter((o) => languageManager.isFavorite(o)).length;
+                                favPill.textContent = `★ ${i18n.t('FavoritesOnly') || 'Favorites'} (${newCount})`;
+                            }
+                        } else {
+                            // In "Favorites" view, item is removed from view, preserve focus position on nearest option
+                            const currentIdx = Array.from(overlay.querySelectorAll('.modal-option-btn')).indexOf(btn);
+                            renderModalContent();
+                            const remainingOptions = overlay.querySelectorAll('.modal-option-btn');
+                            if (remainingOptions.length > 0) {
+                                const targetIdx = Math.min(currentIdx, remainingOptions.length - 1);
+                                focusManager.setActiveSection('modal-options');
+                                focusManager.focusElement(remainingOptions[targetIdx]);
+                            }
+                        }
+                        return;
+                    }
+                    e.stopPropagation();
+                    onSelect(btn.dataset.value);
+                    this._closeSelectionModal();
+                });
+            });
+
+            // Bind filter pill clicks
+            overlay.querySelectorAll('.modal-filter-pill').forEach((pill) => {
+                pill.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    activeFilter = pill.dataset.filter;
+                    renderModalContent();
+                });
+            });
+
+            overlay.querySelector('#btn-modal-cancel').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._closeSelectionModal();
+            });
+
+            // Register Focus Sections with Left/Right tab switching
+            if (overlay.querySelector('#modal-lang-filter-pills')) {
+                this.registerFocusSection('modal-filter-pills', overlay.querySelector('#modal-lang-filter-pills'), {
+                    orientation: 'horizontal',
+                    leaveDown: 'modal-options',
+                    onMove: (direction) => {
+                        const isRtl = document.documentElement.getAttribute('dir') === 'rtl';
+                        if (direction === 'left') {
+                            const targetFilter = isRtl ? 'all' : 'favorites';
+                            if (activeFilter !== targetFilter) {
+                                activeFilter = targetFilter;
+                                renderModalContent();
+                                setTimeout(() => {
+                                    const pill = overlay.querySelector(`.modal-filter-pill[data-filter="${targetFilter}"]`);
+                                    if (pill) focusManager.focusElement(pill);
+                                }, 50);
+                                return true;
+                            }
+                        } else if (direction === 'right') {
+                            const targetFilter = isRtl ? 'favorites' : 'all';
+                            if (activeFilter !== targetFilter) {
+                                activeFilter = targetFilter;
+                                renderModalContent();
+                                setTimeout(() => {
+                                    const pill = overlay.querySelector(`.modal-filter-pill[data-filter="${targetFilter}"]`);
+                                    if (pill) focusManager.focusElement(pill);
+                                }, 50);
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                });
             }
-                </div>
-                <div class="modal-actions">
-                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="ButtonCancel">${i18n.t('ButtonCancel')}</button>
-                </div>
-            </div>
-        `;
+
+            this.registerFocusSection('modal-options', overlay.querySelector('.modal-options'), {
+                orientation: 'vertical',
+                leaveDown: 'modal-actions',
+                leaveUp: overlay.querySelector('#modal-lang-filter-pills') ? 'modal-filter-pills' : 'modal-actions',
+                enterTo: 'last-focused',
+                onMove: (direction) => {
+                    // Allow switching between Favorites and All Languages via Left/Right arrows while browsing options
+                    if (isLanguageSelect && languageManager.hasFavorites()) {
+                        const isRtl = document.documentElement.getAttribute('dir') === 'rtl';
+                        if (direction === 'left') {
+                            const targetFilter = isRtl ? 'all' : 'favorites';
+                            if (activeFilter !== targetFilter) {
+                                activeFilter = targetFilter;
+                                renderModalContent();
+                                return true;
+                            }
+                        } else if (direction === 'right') {
+                            const targetFilter = isRtl ? 'favorites' : 'all';
+                            if (activeFilter !== targetFilter) {
+                                activeFilter = targetFilter;
+                                renderModalContent();
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
+            });
+
+            this.registerFocusSection('modal-actions', overlay.querySelector('.modal-actions'), {
+                orientation: 'horizontal',
+                leaveUp: 'modal-options',
+                onMove: (direction) => {
+                    if (direction === 'down') {
+                        focusManager.setActiveSection('modal-options', true, null, { enterTo: 'first' });
+                        return true;
+                    }
+                    return false;
+                }
+            });
+
+            // Focus appropriate element
+            if (displayOptions.length === 0) {
+                focusManager.setActiveSection('modal-actions');
+                setTimeout(() => {
+                    const cancelBtn = overlay.querySelector('#btn-modal-cancel');
+                    if (cancelBtn) focusManager.focusElement(cancelBtn);
+                }, 50);
+            } else {
+                focusManager.setActiveSection('modal-options');
+                setTimeout(() => {
+                    const selected = overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn');
+                    if (selected) focusManager.focusElement(selected);
+                }, 50);
+            }
+        };
 
         // Show Overlay
         overlay.classList.add('visible');
         overlay.setAttribute('aria-hidden', 'false');
 
-        // Bind Events
-        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                onSelect(btn.dataset.value);
-                this._closeSelectionModal();
-            });
-        });
-
-        overlay.querySelector('#btn-modal-cancel').addEventListener('click', (e) => {
-            e.stopPropagation();
-            this._closeSelectionModal();
-        });
-
-        // Register Focus Sections
-        this.registerFocusSection('modal-options', overlay.querySelector('.modal-options'), {
-            orientation: 'vertical',
-            leaveDown: 'modal-actions',
-            leaveUp: 'modal-actions',
-            enterTo: 'last-focused'
-        });
-
-        this.registerFocusSection('modal-actions', overlay.querySelector('.modal-actions'), {
-            orientation: 'horizontal',
-            leaveUp: 'modal-options',
-            onMove: (direction) => {
-                if (direction === 'down') {
-                    focusManager.setActiveSection('modal-options', true, null, { enterTo: 'first' });
-                    return true;
-                }
-                return false;
-            }
-        });
-
-        // Set Focus
-        if (options.length === 0) {
-            focusManager.setActiveSection('modal-actions');
-            setTimeout(() => {
-                const cancelBtn = overlay.querySelector('#btn-modal-cancel');
-                if (cancelBtn) focusManager.focusElement(cancelBtn);
-            }, 50);
-        } else {
-            focusManager.setActiveSection('modal-options');
-            setTimeout(() => {
-                const selected =
-                    overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn');
-                if (selected) focusManager.focusElement(selected);
-            }, 50);
-        }
+        renderModalContent();
     }
 
     _closeSelectionModal() {
@@ -8659,6 +8830,7 @@ class SettingsPage extends Page {
         overlay.innerHTML = '';
 
         // Unregister modal focus
+        focusManager.unregister('modal-filter-pills');
         focusManager.unregister('modal-options');
         focusManager.unregister('modal-loader-options');
         focusManager.unregister('modal-color-grid');
@@ -9919,7 +10091,7 @@ class SettingsPage extends Page {
                     }
 
                     log.debug(`Setting ${id} saved: ${newValue}`);
-                });
+                }, id);
             });
         });
 
@@ -10539,6 +10711,251 @@ class SettingsPage extends Page {
                 debugOverlay.toggleModule(module, newState);
             });
         });
+
+        // Manage Favorite Languages Button
+        const manageFavLangBtn = this.$('#btn-manage-favorite-languages');
+        if (manageFavLangBtn) {
+            manageFavLangBtn.addEventListener('click', () => {
+                this._showFavoriteLanguagesModal();
+            });
+        }
+    }
+
+    /**
+     * Display dedicated Favorite Languages management modal with search,
+     * quick popular language chips, full culture/UI list, and instant toggle states.
+     */
+    _showFavoriteLanguagesModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Save focus context
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
+        // Build comprehensive master list of all known languages without duplicates
+        const allLangs = [];
+        const seenKeys = new Set();
+
+        /**
+         * Helper to normalize and add language entry while strictly preventing
+         * duplicate entries across 2-letter codes, 3-letter codes, aliases, and names.
+         * @param {any} item - Language object, culture entry, or dropdown option
+         */
+        const addLanguageEntry = (item) => {
+            if (!item) return;
+
+            // Normalize item into canonical structure { code, twoLetter, name, nativeName }
+            const norm = languageManager.normalizeLanguage(item);
+            if (!norm || !norm.code) return;
+
+            const canonicalCode = (norm.code || '').toLowerCase();
+            const twoLetterCode = (norm.twoLetter || '').toLowerCase();
+            const englishName = (norm.name || '').toLowerCase();
+
+            // Check if this language has already been registered under any representation
+            if (seenKeys.has(canonicalCode) || (twoLetterCode && seenKeys.has(twoLetterCode)) || (englishName && seenKeys.has(englishName))) {
+                return;
+            }
+
+            // Register all variations in lookup set to prevent subsequent aliases/duplicates
+            seenKeys.add(canonicalCode);
+            if (twoLetterCode) seenKeys.add(twoLetterCode);
+            if (englishName) seenKeys.add(englishName);
+            if (norm.altCodes && Array.isArray(norm.altCodes)) {
+                norm.altCodes.forEach((alt) => seenKeys.add(alt.toLowerCase()));
+            }
+
+            allLangs.push(norm);
+        };
+
+        // 1. Add standard common languages (highest quality baseline)
+        languageManager.getAllStandardLanguages().forEach(addLanguageEntry);
+
+        // 2. Add Jellyfin server cultures if available
+        if (cachedCultures && Array.isArray(cachedCultures)) {
+            cachedCultures.forEach(addLanguageEntry);
+        }
+
+        // 3. Add client UI languages if available
+        if (this.uiLanguages && Array.isArray(this.uiLanguages)) {
+            this.uiLanguages.forEach(addLanguageEntry);
+        }
+
+        // Sort alphabetically by English name
+        allLangs.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        let searchQuery = '';
+
+        const renderModal = () => {
+            // Filter all languages based on real-time search query
+            const filteredLangs = searchQuery
+                ? allLangs.filter((l) => {
+                    const q = searchQuery.toLowerCase();
+                    return (l.name && l.name.toLowerCase().includes(q)) ||
+                        (l.nativeName && l.nativeName.toLowerCase().includes(q)) ||
+                        (l.code && l.code.toLowerCase().includes(q)) ||
+                        (l.twoLetter && l.twoLetter.toLowerCase().includes(q));
+                })
+                : allLangs;
+
+            // Generate full language rows with star toggle badges
+            const langRowsHtml = filteredLangs.map((l) => {
+                const isFav = languageManager.isFavorite(l);
+                const codeBadge = (l.twoLetter || l.code).toUpperCase();
+                const nativeStr = (l.nativeName && l.nativeName !== l.name) ? ` (${escapeHtml(l.nativeName)})` : '';
+                return `
+                    <button class="modal-option-btn fav-lang-row ${isFav ? 'selected' : ''}" data-code="${l.code}" tabindex="0">
+                        <div class="fav-lang-info">
+                            <span class="track-badge">${codeBadge}</span>
+                            <span class="fav-lang-name">${escapeHtml(l.name)}${nativeStr}</span>
+                        </div>
+                        <div class="fav-lang-star ${isFav ? 'active' : ''}">${isFav ? '★' : '☆'}</div>
+                    </button>
+                `;
+            }).join('');
+
+            overlay.innerHTML = `
+                <div class="settings-modal fav-languages-modal" role="dialog" aria-modal="true">
+                    <div class="modal-header">
+                        <h2 data-i18n="FavoriteLanguages">${i18n.t('FavoriteLanguages') || 'Favorite Languages'}</h2>
+                    </div>
+                    
+                    <!-- Search Input -->
+                    <div class="fav-lang-search-box">
+                        <input type="text" id="fav-lang-search-input" class="fav-lang-search-input" 
+                               placeholder="${i18n.t('SearchLanguages') || 'Search languages...'}" 
+                               value="${escapeHtml(searchQuery)}" tabindex="0" />
+                    </div>
+
+                    <!-- Full Language List -->
+                    <div class="modal-options fav-lang-list" id="fav-lang-list">
+                        ${langRowsHtml || `<div class="modal-no-options" data-i18n="NoResultsFound">${i18n.t('NoResultsFound') || 'No languages found'}</div>`}
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="modal-action-btn" id="btn-fav-lang-clear" tabindex="0" data-i18n="ClearAll">${i18n.t('ClearAll') || 'Clear All'}</button>
+                        <button class="modal-action-btn btn-primary" id="btn-fav-lang-done" tabindex="0" data-i18n="Done">${i18n.t('Done') || 'Done'}</button>
+                    </div>
+                </div>
+            `;
+
+            // Bind Row Toggles in-place without destroying DOM or losing scroll/focus
+            overlay.querySelectorAll('.fav-lang-row').forEach((row) => {
+                row.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const code = row.dataset.code;
+                    const match = allLangs.find((l) => l.code === code) || code;
+                    const isNowFav = languageManager.toggleFavorite(match);
+
+                    // Update UI in-place
+                    row.classList.toggle('selected', isNowFav);
+                    const starEl = row.querySelector('.fav-lang-star');
+                    if (starEl) {
+                        starEl.classList.toggle('active', isNowFav);
+                        starEl.textContent = isNowFav ? '★' : '☆';
+                    }
+                });
+            });
+
+            // Bind Search Input
+            const searchInput = overlay.querySelector('#fav-lang-search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    searchQuery = e.target.value;
+                    renderModal();
+                    // Restore input focus
+                    const updatedInput = overlay.querySelector('#fav-lang-search-input');
+                    if (updatedInput) {
+                        updatedInput.focus();
+                        updatedInput.setSelectionRange(updatedInput.value.length, updatedInput.value.length);
+                    }
+                });
+            }
+
+            // Bind Clear All in-place
+            overlay.querySelector('#btn-fav-lang-clear').addEventListener('click', (e) => {
+                e.stopPropagation();
+                languageManager.clearFavorites();
+                overlay.querySelectorAll('.fav-lang-row').forEach((row) => {
+                    row.classList.remove('selected');
+                    const starEl = row.querySelector('.fav-lang-star');
+                    if (starEl) {
+                        starEl.classList.remove('active');
+                        starEl.textContent = '☆';
+                    }
+                });
+            });
+
+            // Bind Done Button
+            overlay.querySelector('#btn-fav-lang-done').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._closeFavoriteLanguagesModal();
+            });
+
+            // Register Focus Sections: Search -> List -> Actions
+            this.registerFocusSection('fav-search', overlay.querySelector('.fav-lang-search-box'), {
+                orientation: 'horizontal',
+                leaveDown: 'fav-list'
+            });
+
+            this.registerFocusSection('fav-list', overlay.querySelector('#fav-lang-list'), {
+                orientation: 'vertical',
+                leaveUp: 'fav-search',
+                leaveDown: 'fav-actions'
+            });
+
+            this.registerFocusSection('fav-actions', overlay.querySelector('.modal-actions'), {
+                orientation: 'horizontal',
+                leaveUp: 'fav-list'
+            });
+
+            // Initial focus to search input or first item in language list
+            focusManager.setActiveSection('fav-search');
+            setTimeout(() => {
+                const searchEl = overlay.querySelector('#fav-lang-search-input');
+                if (searchEl) focusManager.focusElement(searchEl);
+            }, 50);
+        };
+
+        // Show Overlay
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+
+        renderModal();
+    }
+
+    _closeFavoriteLanguagesModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay || !overlay.classList.contains('visible')) return;
+
+        overlay.classList.remove('visible');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = '';
+
+        // Unregister modal focus sections
+        focusManager.unregister('fav-search');
+        focusManager.unregister('fav-list');
+        focusManager.unregister('fav-actions');
+
+        // Update settings button label badge
+        const countLabel = this.$('#favorite-languages-count-label');
+        if (countLabel) {
+            countLabel.innerText = languageManager.hasFavorites()
+                ? i18n.t('LanguagesSelected', [languageManager.getFavorites().length])
+                : (i18n.t('AllLanguages') || 'All Languages');
+        }
+
+        // Restore focus
+        if (this._prevSection) {
+            focusManager.setActiveSection(this._prevSection, false);
+        }
+        if (this._prevFocus) {
+            focusManager.focusElement(this._prevFocus);
+        }
+
+        this._prevFocus = null;
+        this._prevSection = null;
     }
 
     _triggerHardReload() {

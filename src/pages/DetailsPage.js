@@ -43,6 +43,7 @@ import { i18n } from '../utils/i18n.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
+import { languageManager } from '../utils/LanguageManager.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
@@ -4859,6 +4860,24 @@ class DetailsPage extends Page {
         this._prevFocus = focusManager.getFocused();
         this._prevSection = focusManager.getActiveSection();
 
+        // Check if this is an audio or subtitle stream selection menu
+        const isTrackSelection = title.toLowerCase().includes('subtitle') || title.toLowerCase().includes('audio');
+        const totalRawTracks = tracks;
+        let displayTracks = tracks;
+        let isFiltered = false;
+
+        if (isTrackSelection && languageManager.hasFavorites()) {
+            if (!this._detailsShowAllTracks) {
+                const filtered = tracks.filter((t) => t.Index === -1 || t.Index === currentIndex || languageManager.isFavoriteTrack(t));
+                if (filtered.length < tracks.length) {
+                    displayTracks = filtered;
+                    isFiltered = true;
+                }
+            } else {
+                isFiltered = true;
+            }
+        }
+
         // Reuse or create overlay
         let overlay = document.getElementById('details-track-menu');
         if (!overlay) {
@@ -4871,7 +4890,21 @@ class DetailsPage extends Page {
         }
 
         // Generate HTML - Using settings-modal structure
-        const optionsHtml = tracks
+        let toggleAllHtml = '';
+        if (isFiltered) {
+            const toggleLabel = this._detailsShowAllTracks
+                ? `★ ${i18n.t('ShowFavoriteTracksOnly') || 'Show Favorites Only'}`
+                : `★ ${i18n.t('ShowAllTracks') || 'Show All Tracks'} (${totalRawTracks.length})`;
+            toggleAllHtml = `
+                <button class="modal-option-btn details-track-toggle-btn" tabindex="0">
+                    <span class="track-option-label">
+                        <span class="track-label-text">${toggleLabel}</span>
+                    </span>
+                </button>
+            `;
+        }
+
+        const optionsHtml = displayTracks
             .map((track, i) => {
                 const isSelected = track.Index === currentIndex;
                 const label =
@@ -4920,6 +4953,7 @@ class DetailsPage extends Page {
                 </div>
                 <div class="modal-options">
                     ${optionsHtml}
+                    ${toggleAllHtml}
                 </div>
                 <div class="modal-actions">
                     <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
@@ -4994,7 +5028,7 @@ class DetailsPage extends Page {
         };
 
         // Bind click events for options
-        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+        overlay.querySelectorAll('.modal-option-btn:not(.details-track-toggle-btn)').forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 // data-index may be a numeric stream index OR a MediaSource GUID string.
@@ -5006,6 +5040,16 @@ class DetailsPage extends Page {
                 this._closeTrackMenu();
             };
         });
+
+        // Bind toggle all tracks button
+        const toggleAllBtn = overlay.querySelector('.details-track-toggle-btn');
+        if (toggleAllBtn) {
+            toggleAllBtn.onclick = (e) => {
+                e.stopPropagation();
+                this._detailsShowAllTracks = !this._detailsShowAllTracks;
+                this._renderTrackSelectionMenu(title, totalRawTracks, currentIndex, onSelect);
+            };
+        }
 
         // Bind cancel button
         overlay.querySelector('#btn-modal-cancel').onclick = (e) => {

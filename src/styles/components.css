@@ -1975,6 +1975,200 @@ html[data-layout-quirks="c26"] .media-fallback {
     -webkit-box-pack: center !important;
 }
 
+/* ============================================================================
+   Favorite Languages & Modal Filter Pills (Flat, crisp, zero shadows/blurs)
+   ============================================================================ */
+
+/* Segmented Filter Pills at Top of Modals */
+.modal-filter-pills {
+    display: flex;
+    gap: 10px;
+    padding: 12px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Individual Filter Pill Button */
+.modal-filter-pill {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary, #aaa);
+    background: #242424;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: center;
+    outline: none;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Focused Filter Pill: High contrast inverted feedback */
+.modal-filter-pill:hover,
+.modal-filter-pill:focus,
+.modal-filter-pill.focused {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border-color: #ffffff !important;
+    transform: scale(1.04);
+    outline: none !important;
+    z-index: 3;
+}
+
+/* Active Filter Pill */
+.modal-filter-pill.active {
+    background: var(--jf-accent, #00a4dc);
+    color: #ffffff;
+    border-color: var(--jf-accent, #00a4dc);
+}
+
+/* Focused Active Filter Pill */
+.modal-filter-pill.active:focus,
+.modal-filter-pill.active.focused {
+    background: #ffffff !important;
+    color: var(--jf-accent, #0077aa) !important;
+    border-color: #ffffff !important;
+    transform: scale(1.04);
+}
+
+/* Modal Option Label Flex Layout */
+.modal-option-label {
+    flex: 1;
+    min-width: 0;
+    text-align: start;
+    white-space: normal;
+    text-overflow: ellipsis;
+}
+
+/* Modal Star Button */
+.modal-star-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    font-size: 1.35rem;
+    color: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: 12px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s ease, transform 0.15s ease;
+    user-select: none;
+}
+
+/* Star Active Gold Tone */
+.modal-star-btn.active {
+    color: #f1c40f;
+}
+
+/* Star Hover Expansion */
+.modal-star-btn:hover {
+    color: #f39c12;
+    transform: scale(1.15);
+}
+
+/* Star in Focused Row Highlight */
+.modal-option-btn:focus .modal-star-btn.active,
+.modal-option-btn.focused .modal-star-btn.active {
+    color: #ffffff;
+}
+
+/* Inactive Star in Focused Row */
+.modal-option-btn:focus .modal-star-btn:not(.active),
+.modal-option-btn.focused .modal-star-btn:not(.active) {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Favorite Languages Management Modal Container */
+.fav-languages-modal {
+    max-width: 720px;
+    width: 90vw;
+    background: #1a1a1a;
+    border: 1px solid #333333;
+}
+
+/* Search Header Box */
+.fav-lang-search-box {
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Real-Time Language Search Input */
+.fav-lang-search-input {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 1.15rem;
+    color: #ffffff;
+    background: #222222;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    outline: none;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Search Input Focused State */
+.fav-lang-search-input:focus,
+.fav-lang-search-input.focused {
+    background: #2a2a2a;
+    border-color: #ffffff;
+    outline: 2px solid var(--jf-accent, #00a4dc);
+    outline-offset: 2px;
+}
+
+/* Scrollable Full Language List */
+.fav-lang-list {
+    max-height: 440px;
+    overflow-y: auto;
+}
+
+/* Language Row Item */
+.fav-lang-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+/* Language Row Info Group */
+.fav-lang-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Inline Favorite Star Indicator */
+.fav-lang-star {
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+/* Star Active State */
+.fav-lang-star.active {
+    color: #f1c40f;
+}
+
+/* Selected Row Star */
+.fav-lang-row.selected .fav-lang-star {
+    color: #f1c40f;
+}
+
+/* Focused Row Active Star */
+.fav-lang-row.focused .fav-lang-star.active {
+    color: #ffffff;
+}
+
+/* Track Menu Toggle All Buttons */
+.track-toggle-all-btn,
+.details-track-toggle-btn {
+    margin-top: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2) !important;
+    color: var(--jf-accent, #00a4dc) !important;
+    font-weight: 600;
+}
+
 
 
 

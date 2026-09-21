@@ -1,5 +1,6 @@
 import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
+import { languageManager } from '../../utils/LanguageManager.js';
 
 /**
  * TrackMenu
@@ -9,6 +10,7 @@ import { i18n } from '../../utils/i18n.js';
  * - Handles track switching (direct play or transcoding triggers).
  * - Reflects the currently selected indices.
  * - Supports "Off" state for subtitles.
+ * - Filters by Favorite Languages when configured.
  */
 export default class TrackMenu extends BaseMenu {
     constructor(osdController) {
@@ -16,6 +18,7 @@ export default class TrackMenu extends BaseMenu {
         this.type = 'subtitles';
         this.mode = 'primary';
         this.isModal = true;
+        this._showAllTracks = false;
     }
 
     async open(type, mode = 'primary') {
@@ -115,6 +118,22 @@ export default class TrackMenu extends BaseMenu {
             currentIndex = this.osd.currentAudioIndex;
         }
 
+        const totalRawTracks = tracks;
+        let isFiltered = false;
+
+        // Apply favorite language filtering if user has favorites configured
+        if (languageManager.hasFavorites()) {
+            if (!this._showAllTracks) {
+                const filtered = tracks.filter(t => t.Index === -1 || t.Index === currentIndex || languageManager.isFavoriteTrack(t));
+                if (filtered.length < tracks.length) {
+                    tracks = filtered;
+                    isFiltered = true;
+                }
+            } else {
+                isFiltered = true;
+            }
+        }
+
         // Cache the currently rendered list of tracks for accurate selectTrack lookup
         this._renderedTracks = tracks;
 
@@ -137,6 +156,19 @@ export default class TrackMenu extends BaseMenu {
                 <button class="track-option track-mode-switch">
                     <span class="track-option-check"></span>
                     <span class="track-option-label">${label}</span>
+                </button>
+            `;
+        }
+
+        let toggleAllHtml = '';
+        if (isFiltered) {
+            const toggleLabel = this._showAllTracks
+                ? `★ ${i18n.t('ShowFavoriteTracksOnly') || 'Show Favorites Only'}`
+                : `★ ${i18n.t('ShowAllTracks') || 'Show All Tracks'} (${totalRawTracks.length})`;
+            toggleAllHtml = `
+                <button class="track-option track-toggle-all-btn" data-action="toggle-all">
+                    <span class="track-option-check"></span>
+                    <span class="track-option-label">${toggleLabel}</span>
                 </button>
             `;
         }
@@ -189,6 +221,7 @@ export default class TrackMenu extends BaseMenu {
                 <div class="track-menu-options">
                     ${headerHtml}
                     ${optionsHtml}
+                    ${toggleAllHtml}
                 </div>
             </div>
         `;
@@ -229,6 +262,18 @@ export default class TrackMenu extends BaseMenu {
                 if (e.detail === 0) return;
                 if (e.clientX === 0 && e.clientY === 0) return;
                 this.switchMode();
+            });
+        }
+
+        const toggleAllBtn = this.$el.querySelector('.track-toggle-all-btn');
+        if (toggleAllBtn) {
+            toggleAllBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (toggleAllBtn._programmaticFocus) return;
+                if (e.detail === 0) return;
+                if (e.clientX === 0 && e.clientY === 0) return;
+                this._showAllTracks = !this._showAllTracks;
+                this.render();
             });
         }
 
@@ -287,14 +332,23 @@ export default class TrackMenu extends BaseMenu {
     }
 
     handleEnter() {
-        if (this.type === 'subtitles') {
-            if (this.focusIndex === 0) {
-                this.switchMode();
-            } else {
-                this.selectTrack(this.focusIndex - 1);
-            }
-        } else {
-            this.selectTrack(this.focusIndex);
+        const options = this.$el?.querySelectorAll('.track-option') || [];
+        const focusedEl = options[this.focusIndex];
+        if (!focusedEl) return;
+
+        if (focusedEl.classList.contains('track-mode-switch')) {
+            this.switchMode();
+            return;
+        }
+
+        if (focusedEl.classList.contains('track-toggle-all-btn')) {
+            this._showAllTracks = !this._showAllTracks;
+            this.render();
+            return;
+        }
+
+        if (focusedEl.dataset.menuIndex !== undefined) {
+            this.selectTrack(parseInt(focusedEl.dataset.menuIndex));
         }
     }
 

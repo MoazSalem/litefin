@@ -556,6 +556,11 @@
     margin: 0;
 }
 
+[dir="rtl"] .modal-star-btn {
+    margin-left: 0;
+    margin-right: 12px;
+}
+
 [dir="rtl"] .identity-card {
     text-align: right !important;
 }
