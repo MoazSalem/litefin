@@ -19,7 +19,7 @@ import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
-import { getOverviewClampClass } from '../utils/Utils.js';
+import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrPersonPage');
@@ -89,7 +89,7 @@ class SeerrPersonPage extends Page {
                             <!-- Biography overview -->
                             <div class="details-overview">
                                 <div class="overview-text ${getOverviewClampClass()}" id="person-bio" tabindex="-1"></div>
-                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore') || 'Show More'}</button>
+                                <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}" style="display: none;">${getOverviewButtonText()}</button>
                             </div>
                         </div>
                     </div>
@@ -324,7 +324,8 @@ class SeerrPersonPage extends Page {
         const seeMoreBtn = this.$('.see-more-btn');
         if (seeMoreBtn) {
             seeMoreBtn.style.display = 'none';
-            seeMoreBtn.textContent = i18n.t('ShowMore');
+            seeMoreBtn.textContent = getOverviewButtonText();
+            seeMoreBtn.setAttribute('data-i18n', shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore');
         }
 
         // Reveal info column
@@ -349,8 +350,15 @@ class SeerrPersonPage extends Page {
 
         if (!bioEl || !seeMoreBtn) return;
 
-        // Check whether content is truncated by scroll height comparison
-        if (bioEl.scrollHeight > bioEl.clientHeight + 2) {
+        const alwaysShow = shouldAlwaysShowOverviewButton();
+        const hasText = Boolean(bioEl.textContent && bioEl.textContent.trim().length > 0);
+        const isTruncated = bioEl.scrollHeight > bioEl.clientHeight + 2;
+
+        seeMoreBtn.textContent = getOverviewButtonText();
+        seeMoreBtn.setAttribute('data-i18n', alwaysShow ? 'DetailedView' : 'ShowMore');
+
+        // Check whether content is truncated OR always-show option is enabled with text
+        if ((alwaysShow && hasText) || isTruncated) {
             seeMoreBtn.style.display = 'block';
 
             // Register dedicated focus section for the See More button

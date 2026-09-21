@@ -29,7 +29,7 @@ import { lazyLoader } from '../utils/LazyLoader.js';
 import { router } from '../core/Router.js';
 import { state } from '../core/StateManager.js';
 import { eventBus } from '../core/EventBus.js';
-import { getOverviewClampClass } from '../utils/Utils.js';
+import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrDetailsPage');
@@ -103,7 +103,7 @@ class SeerrDetailsPage extends Page {
                             </section>
                             <div class="details-overview">
                                 <div class="overview-text ${getOverviewClampClass()}" id="overview-text" tabindex="-1"></div>
-                                <button class="see-more-btn" tabindex="0">${i18n.t('ShowMore')}</button>
+                                <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}">${getOverviewButtonText()}</button>
                             </div>
                         </div>
                     </div>
@@ -542,9 +542,15 @@ class SeerrDetailsPage extends Page {
         const seeMoreBtn = this.$('.see-more-btn');
         if (!overviewEl || !seeMoreBtn) return;
 
+        const alwaysShow = shouldAlwaysShowOverviewButton();
+        const hasText = Boolean(overviewEl.textContent && overviewEl.textContent.trim().length > 0);
         const isTruncated = overviewEl.scrollHeight > overviewEl.clientHeight + 2;
-        seeMoreBtn.classList.toggle('hidden', !isTruncated);
-        seeMoreBtn.tabIndex = isTruncated ? 0 : -1;
+        const shouldShow = (alwaysShow && hasText) || isTruncated;
+
+        seeMoreBtn.textContent = getOverviewButtonText();
+        seeMoreBtn.setAttribute('data-i18n', alwaysShow ? 'DetailedView' : 'ShowMore');
+        seeMoreBtn.classList.toggle('hidden', !shouldShow);
+        seeMoreBtn.tabIndex = shouldShow ? 0 : -1;
         this._registerFocus();
     }
 

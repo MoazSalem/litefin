@@ -15,16 +15,23 @@ globalThis.document = {
     createElement: () => ({ canPlayType: () => '' })
 };
 
-const { getOverviewClampClass } = await import('../src/utils/Utils.js');
+const { i18n } = await import('../src/utils/i18n.js');
+i18n.dictionary = JSON.parse(readFileSync('src/locales/en-us.json', 'utf8'));
+
+const { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } = await import(
+    '../src/utils/Utils.js'
+);
 const { storage } = await import('../src/utils/StorageService.js');
 
 /**
  * ============================================================================
- * Unit Tests: Overview & Biography Max Lines Customization
+ * Unit Tests: Overview & Biography Max Lines & Detailed View Button
  * ============================================================================
- * Verifies that the overview line-clamp settings correctly resolve the CSS
- * utility classes across all supported limits and unconstrained mode.
- * Also asserts that the UI pages and stylesheet contain proper hooks.
+ * Verifies that:
+ * 1. Line-clamp settings resolve CSS classes properly.
+ * 2. pref:detailsAlwaysShowSeeMore toggle correctly drives button visibility
+ *    and switches the label between 'Show More' (default) and 'Detailed View'.
+ * 3. Stylesheet, localization files, and page implementations are wired up.
  * ============================================================================
  */
 
@@ -57,6 +64,23 @@ test('getOverviewClampClass returns line-clamp-none when set to none', () => {
     storage.removeItem('pref:detailsOverviewMaxLines');
 });
 
+test('shouldAlwaysShowOverviewButton and getOverviewButtonText default off', () => {
+    storageMap.clear();
+
+    assert.equal(shouldAlwaysShowOverviewButton(), false);
+    assert.equal(getOverviewButtonText(), 'Show more');
+});
+
+test('shouldAlwaysShowOverviewButton and getOverviewButtonText switch to Detailed View when enabled', () => {
+    storage.setItem('pref:detailsAlwaysShowSeeMore', 'true');
+
+    assert.equal(shouldAlwaysShowOverviewButton(), true);
+    assert.equal(getOverviewButtonText(), 'Detailed View');
+
+    // Clean up
+    storage.removeItem('pref:detailsAlwaysShowSeeMore');
+});
+
 test('details.css defines all required line-clamp utility classes', () => {
     const cssContent = readFileSync('src/styles/details.css', 'utf8');
 
@@ -78,7 +102,7 @@ test('details.css defines all required line-clamp utility classes', () => {
     }
 });
 
-test('SettingsPage has details-overview-max-lines-select registered', () => {
+test('SettingsPage has details-overview-max-lines-select and toggle-details-always-show-see-more registered', () => {
     const settingsContent = readFileSync('src/pages/SettingsPage.js', 'utf8');
 
     assert.ok(
@@ -89,25 +113,42 @@ test('SettingsPage has details-overview-max-lines-select registered', () => {
         settingsContent.includes("'details-overview-max-lines-select': { key: 'pref:detailsOverviewMaxLines', type: 'local' }"),
         'SettingsPage.js must map details-overview-max-lines-select to pref:detailsOverviewMaxLines'
     );
+    assert.ok(
+        settingsContent.includes('toggle-details-always-show-see-more'),
+        'SettingsPage.js must include toggle-details-always-show-see-more toggle switch'
+    );
+    assert.ok(
+        settingsContent.includes('pref:detailsAlwaysShowSeeMore'),
+        'SettingsPage.js must reference pref:detailsAlwaysShowSeeMore'
+    );
 });
 
-test('Details, Person, Seerr Details, and Seerr Person pages integrate getOverviewClampClass', () => {
+test('Details, Person, Seerr Details, and Seerr Person pages integrate getOverviewClampClass and Detailed View helpers', () => {
     const detailsPage = readFileSync('src/pages/DetailsPage.js', 'utf8');
     const personPage = readFileSync('src/pages/PersonPage.js', 'utf8');
     const seerrDetailsPage = readFileSync('src/pages/SeerrDetailsPage.js', 'utf8');
     const seerrPersonPage = readFileSync('src/pages/SeerrPersonPage.js', 'utf8');
 
-    assert.ok(detailsPage.includes('getOverviewClampClass'), 'DetailsPage.js must use getOverviewClampClass');
-    assert.ok(personPage.includes('getOverviewClampClass'), 'PersonPage.js must use getOverviewClampClass');
-    assert.ok(seerrDetailsPage.includes('getOverviewClampClass'), 'SeerrDetailsPage.js must use getOverviewClampClass');
-    assert.ok(seerrPersonPage.includes('getOverviewClampClass'), 'SeerrPersonPage.js must use getOverviewClampClass');
+    for (const [name, content] of Object.entries({
+        DetailsPage: detailsPage,
+        PersonPage: personPage,
+        SeerrDetailsPage: seerrDetailsPage,
+        SeerrPersonPage: seerrPersonPage
+    })) {
+        assert.ok(content.includes('getOverviewClampClass'), `${name} must use getOverviewClampClass`);
+        assert.ok(content.includes('shouldAlwaysShowOverviewButton'), `${name} must use shouldAlwaysShowOverviewButton`);
+        assert.ok(content.includes('getOverviewButtonText'), `${name} must use getOverviewButtonText`);
+    }
 });
 
-test('en-us.json contains overview max lines and value lines translation keys', () => {
+test('en-us.json contains overview max lines, value lines, and Detailed View translation keys', () => {
     const enUs = JSON.parse(readFileSync('src/locales/en-us.json', 'utf8'));
 
     assert.equal(enUs.LabelDetailsOverviewMaxLines, 'Overview Max Lines');
     assert.ok(enUs.DetailsOverviewMaxLinesDescription);
     assert.equal(enUs.ValueLines, '{0} lines');
     assert.equal(enUs.LinesValue, '{0} lines');
+    assert.equal(enUs.LabelDetailsAlwaysShowSeeMore, 'Always Show Detailed View Button');
+    assert.ok(enUs.DetailsAlwaysShowSeeMoreDescription);
+    assert.equal(enUs.DetailedView, 'Detailed View');
 });

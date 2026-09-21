@@ -46,7 +46,7 @@ import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
-import { escapeHtml, getOverviewClampClass } from '../utils/Utils.js';
+import { escapeHtml, getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -238,7 +238,7 @@ class DetailsPage extends Page {
                             <!-- Overview -->
                             <div class="details-overview">
                                 <div class="overview-text ${getOverviewClampClass()}" tabindex="-1"></div>
-                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore">${i18n.t('ShowMore')}</button>
+                                <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}">${getOverviewButtonText()}</button>
                             </div>
 
                         </div>
@@ -3880,8 +3880,16 @@ class DetailsPage extends Page {
 
         if (!overviewEl || !seeMoreBtn) return;
 
-        // If content height exceeds container bounds, expose the See More action button
-        if (overviewEl.scrollHeight > overviewEl.clientHeight + 2) {
+        const alwaysShow = shouldAlwaysShowOverviewButton();
+        const hasText = Boolean(overviewEl.textContent && overviewEl.textContent.trim().length > 0);
+        const isTruncated = overviewEl.scrollHeight > overviewEl.clientHeight + 2;
+
+        // Dynamically reflect current button label & i18n tag
+        seeMoreBtn.textContent = getOverviewButtonText();
+        seeMoreBtn.setAttribute('data-i18n', alwaysShow ? 'DetailedView' : 'ShowMore');
+
+        // If content height exceeds container bounds OR always-show option is enabled with text, expose button
+        if ((alwaysShow && hasText) || isTruncated) {
             seeMoreBtn.style.display = 'block';
 
             // 1. Determine what is below the See More button

@@ -6,6 +6,7 @@
 
 import { PlayerSettings } from './PlayerSettings.js';
 import { storage } from './StorageService.js';
+import { i18n } from './i18n.js';
 
 export function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -302,4 +303,41 @@ export function getOverviewClampClass() {
 
     // Return the matching numeric clamp class (e.g., 'line-clamp-4', 'line-clamp-6')
     return `line-clamp-${maxLines}`;
+}
+
+/**
+ * ============================================================================
+ * Overview Always Show Button Helper
+ * ============================================================================
+ * Checks whether the user has configured the app to always show the overview
+ * modal button on details and person pages (including Seerr) even if the
+ * description is short and doesn't overflow.
+ *
+ * @returns {boolean} True if the button should always be rendered, false otherwise.
+ * ============================================================================
+ */
+export function shouldAlwaysShowOverviewButton() {
+    // Read the user-defined toggle preference, off by default (false)
+    return storage.getItem('pref:detailsAlwaysShowSeeMore') === 'true';
+}
+
+/**
+ * ============================================================================
+ * Overview Button Label Helper
+ * ============================================================================
+ * Resolves the appropriate button label based on the active setting:
+ * - When pref:detailsAlwaysShowSeeMore is true, returns 'Detailed View'.
+ * - When false/default, returns 'Show More'.
+ *
+ * @returns {string} The localized button text.
+ * ============================================================================
+ */
+export function getOverviewButtonText() {
+    // If the always-show toggle is enabled, switch label to "Detailed View"
+    if (shouldAlwaysShowOverviewButton()) {
+        return i18n.t('DetailedView') || 'Detailed View';
+    }
+
+    // Default standard label when truncated
+    return i18n.t('ShowMore') || 'Show more';
 }

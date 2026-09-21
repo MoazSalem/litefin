@@ -2117,6 +2117,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDetailsAlwaysShowSeeMore">${i18n.t('LabelDetailsAlwaysShowSeeMore') || 'Always Show Detailed View Button'}</span>
+                        <span class="setting-description" data-i18n="DetailsAlwaysShowSeeMoreDescription">${i18n.t('DetailsAlwaysShowSeeMoreDescription') || 'Always display the Detailed View button on details and person pages even if the description fits without truncation.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:detailsAlwaysShowSeeMore') === 'true' ? 'active' : ''}" 
+                                id="toggle-details-always-show-see-more" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelHideGhostMode">${i18n.t('LabelHideGhostMode') || 'Hide Ghost Mode Button'}</span>
                         <span class="setting-description" data-i18n="HideGhostModeDescription">${i18n.t('HideGhostModeDescription') || 'Hide the ghost mode (incognito play) button on the item details page.'}</span>
                     </div>
@@ -7016,6 +7029,23 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // =====================================================================
+        // TOGGLE ALWAYS SHOW DETAILED VIEW BUTTON
+        // =====================================================================
+        // Registers click event handler for always displaying the Detailed View
+        // overview button on details and person pages.
+        // =====================================================================
+        const alwaysShowSeeMoreBtn = this.$('#toggle-details-always-show-see-more');
+        if (alwaysShowSeeMoreBtn) {
+            alwaysShowSeeMoreBtn.addEventListener('click', () => {
+                const isAlways = storage.getItem('pref:detailsAlwaysShowSeeMore') === 'true';
+                const newValue = !isAlways;
+                storage.setItem('pref:detailsAlwaysShowSeeMore', newValue.toString());
+                alwaysShowSeeMoreBtn.classList.toggle('active', newValue);
+                log.info(`Always Show Detailed View Button set to: ${newValue}`);
             });
         }
 

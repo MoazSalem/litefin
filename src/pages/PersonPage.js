@@ -22,7 +22,7 @@ import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
-import { getOverviewClampClass } from '../utils/Utils.js';
+import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('PersonPage');
@@ -88,7 +88,7 @@ class PersonPage extends Page {
                             <!-- Bio -->
                             <div class="details-overview">
                                 <div class="overview-text ${getOverviewClampClass()}" id="person-bio" tabindex="-1"></div>
-                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
+                                <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}" style="display: none;">${getOverviewButtonText()}</button>
                             </div>
 
                             <!-- Actions (Favorite, Seerr) -->
@@ -524,7 +524,8 @@ class PersonPage extends Page {
         const seeMoreBtn = this.$('.see-more-btn');
         if (seeMoreBtn) {
             seeMoreBtn.style.display = 'none';
-            seeMoreBtn.textContent = i18n.t('ShowMore');
+            seeMoreBtn.textContent = getOverviewButtonText();
+            seeMoreBtn.setAttribute('data-i18n', shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore');
         }
 
         // Force visibility immediately (bypass CSS transition issues)
@@ -557,9 +558,17 @@ class PersonPage extends Page {
         // Safety check to ensure elements exist in the DOM
         if (!bioEl || !seeMoreBtn) return;
 
-        // Compare scroll height against client layout height to detect overflow
-        if (bioEl.scrollHeight > bioEl.clientHeight + 2) {
-            // Show the "Show More" button to the user
+        const alwaysShow = shouldAlwaysShowOverviewButton();
+        const hasText = Boolean(bioEl.textContent && bioEl.textContent.trim().length > 0);
+        const isTruncated = bioEl.scrollHeight > bioEl.clientHeight + 2;
+
+        // Dynamically update button label & i18n attribute
+        seeMoreBtn.textContent = getOverviewButtonText();
+        seeMoreBtn.setAttribute('data-i18n', alwaysShow ? 'DetailedView' : 'ShowMore');
+
+        // Compare scroll height against client layout height to detect overflow OR check always-show pref
+        if ((alwaysShow && hasText) || isTruncated) {
+            // Show the "Show More" / "Detailed View" button to the user
             seeMoreBtn.style.display = 'block';
 
             // Register a dedicated vertical focus section for the see more button
