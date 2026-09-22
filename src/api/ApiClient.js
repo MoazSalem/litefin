@@ -404,10 +404,8 @@ export class ApiClient {
         try {
             // Create abort controller for timeout
             // Support per-request timeout override via options.timeout
-            // IMPORTANT: keepalive requests (e.g. reportPlaybackStopped) must NOT
-            // have an AbortSignal — the Fetch spec throws a TypeError when both
-            // keepalive:true and signal are present. We skip the timeout entirely
-            // for keepalive requests since they complete in the background anyway.
+            // Note: keepalive requests must not attach an AbortSignal in older
+            // environments where the Fetch specification disallowed signals on keepalive.
             const timeout = options.timeout || (options.keepalive ? 0 : REQUEST_TIMEOUT);
             const controller = new AbortController();
             const timeoutId = timeout ? setTimeout(() => controller.abort(), timeout) : null;
@@ -416,7 +414,30 @@ export class ApiClient {
             }
 
             log.debug(`Fetching ${url} (timeout: ${timeout || 'none'}ms)...`);
-            const response = await fetch(url, fetchOptions);
+            let response;
+            try {
+                response = await fetch(url, fetchOptions);
+            } catch (fetchErr) {
+                /*
+                 * On Smart TVs and legacy web runtimes (such as Tizen 5.5 running Chromium 69),
+                 * cross-origin fetch calls with keepalive:true and non-simple headers (like Authorization
+                 * or Content-Type: application/json) trigger an immediate 'TypeError: Failed to fetch'
+                 * due to lack of CORS preflight support for keepalive in older browser engines.
+                 * If keepalive was active and threw a TypeError, fall back to a standard fetch without keepalive.
+                 */
+                if (fetchOptions.keepalive && fetchErr instanceof TypeError) {
+                    log.warn(`Fetch with keepalive failed (${fetchErr.message}); retrying without keepalive...`);
+                    delete fetchOptions.keepalive;
+                    if (!fetchOptions.signal && REQUEST_TIMEOUT) {
+                        const fallbackController = new AbortController();
+                        setTimeout(() => fallbackController.abort(), REQUEST_TIMEOUT);
+                        fetchOptions.signal = fallbackController.signal;
+                    }
+                    response = await fetch(url, fetchOptions);
+                } else {
+                    throw fetchErr;
+                }
+            }
             if (timeoutId) clearTimeout(timeoutId);
 
             // Handle 304 Not Modified — return cached response body
@@ -1865,9 +1886,23 @@ export class ApiClient {
         return this.post('/Sessions/Playing/Progress', info);
     }
 
-    async reportPlaybackStopped(info) {
-        // Use keepalive to ensure request completes even if app is closing
-        return this.post('/Sessions/Playing/Stopped', info, { keepalive: true });
+    /**
+     * Report to the server that playback has stopped for an active session.
+     *
+     * Note: In previous revisions, keepalive:true was passed here under the assumption
+     * that it would help when an app unloads. However, on Smart TVs running older
+     * Chromium engines (e.g. Tizen 5.5 running Chromium 69), cross-origin fetch
+     * requests with custom headers like Authorization reject keepalive requests
+     * with 'TypeError: Failed to fetch'. Unload events already use synchronous XHR
+     * in PlayerPage._reportPlaybackStopped, so keepalive is neither needed nor
+     * safe to mandate here.
+     *
+     * @param {Object} info - Playback stop payload
+     * @param {Object} [options={}] - Additional request options
+     * @returns {Promise<any>}
+     */
+    async reportPlaybackStopped(info, options = {}) {
+        return this.post('/Sessions/Playing/Stopped', info, options);
     }
 
     // ========================================================================

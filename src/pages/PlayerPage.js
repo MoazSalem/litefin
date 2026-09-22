@@ -4066,7 +4066,36 @@ class PlayerPage extends Page {
                 }
             } else {
                 log.info('Reporting playback stopped (async), position:', positionTicks);
-                await api.reportPlaybackStopped(data);
+                try {
+                    // Send stop report through standard API client request
+                    await api.reportPlaybackStopped(data);
+                } catch (asyncErr) {
+                    /*
+                     * If async stop reporting fails for any reason (e.g. transient network
+                     * glitch or TV webview micro-timeout during track transition), execute
+                     * an immediate synchronous XHR fallback. This guarantees the Jellyfin
+                     * server receives PlaybackStopped, marking the item as played and firing
+                     * plugin webhooks (jellyfin-ani-sync, Trakt, etc.) without dropping the event.
+                     */
+                    log.warn('Async stop report failed, executing synchronous XHR fallback:', asyncErr);
+                    try {
+                        const url = `${api.serverUrl}/Sessions/Playing/Stopped`;
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', url, false);
+                        xhr.setRequestHeader('Content-Type', 'application/json');
+                        xhr.setRequestHeader('Authorization', api.getAuthHeader());
+
+                        // Include Emby token header if connected to an Emby server
+                        if (api.isEmby() && api.accessToken) {
+                            xhr.setRequestHeader('X-Emby-Token', api.accessToken);
+                        }
+
+                        xhr.send(JSON.stringify(data));
+                        log.info('Synchronous XHR fallback stop report completed with status:', xhr.status);
+                    } catch (xhrFallbackErr) {
+                        log.error('Synchronous XHR fallback stop report also failed:', xhrFallbackErr);
+                    }
+                }
             }
         } catch (error) {
             log.warn('Failed to report playback stopped:', error);
