@@ -5061,6 +5061,11 @@ class DetailsPage extends Page {
     async _showMoreOptionsModal(itemId, transitionContext = null) {
         const oldOnBack = transitionContext?.oldOnBack || this.onBack;
 
+        // Ensure user policy & session information is fully available for permissions
+        if (!this._currentUser) {
+            this._currentUser = state.get('user:data');
+        }
+
         // Auto-deactivate rich metadata trap if it was active to avoid trap stack conflicts
         if (this._isRichMetaActive) {
             this._deactivateRichMeta();
@@ -5181,11 +5186,21 @@ class DetailsPage extends Page {
             }
 
             // ── Add to Playlist / Collection ────────────────────────────────────
-            // Show for any media item that can be added to a group
+            // Show playlist/collection target options for supported media types.
+            // Following Apple Human Interface Guidelines and Jellyfin authorization rules:
+            // - Menus only surface actionable, permitted commands to keep interactions clean.
+            // - Playlists are user-level collections, permitted for all active accounts.
+            // - BoxSets / Collections alter shared server libraries and are strictly restricted
+            //   to administrators; hidden completely for standard users.
             const nonPlayableTypes = ['Person', 'CollectionFolder', 'UserView', 'Folder', 'Genre', 'Studio', 'Year'];
             if (this._item?.Id && !nonPlayableTypes.includes(this._item.Type)) {
+                // User playlist creation/addition
                 options.push({ id: 'add-to-playlist', label: i18n.t('AddToPlaylist') });
-                options.push({ id: 'add-to-collection', label: i18n.t('AddToCollection') || 'Add to Collection' });
+
+                // Server collection creation/addition (Admin privilege required)
+                if (p.IsAdministrator) {
+                    options.push({ id: 'add-to-collection', label: i18n.t('AddToCollection') || 'Add to Collection' });
+                }
             }
 
             // ── Delete Media Permission Check ────────────────────────────────────
@@ -5450,6 +5465,13 @@ class DetailsPage extends Page {
                         oldOnBack: oldOnBack
                     });
                 } else if (id === 'add-to-playlist' || id === 'add-to-collection') {
+                    // Defensively verify admin permissions if collection mode is selected
+                    if (id === 'add-to-collection' && !this._currentUser?.Policy?.IsAdministrator) {
+                        log.warn('Unauthorized attempt to trigger AddToTargetModal in collection mode');
+                        this._closeMoreMenu();
+                        return;
+                    }
+
                     this._isMoreMenuOpen = false;
                     overlay.classList.remove('visible');
                     focusManager.unregister('details-more-menu');

@@ -14,6 +14,7 @@ import { state } from '../core/StateManager.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('ApiClient');
 
@@ -379,6 +380,17 @@ export class ApiClient {
             Accept: 'application/json', // Explicitly request JSON response
             ...options.headers
         };
+
+        // ------------------------------------------------------------------
+        // Accept-Language Header (Jellyfin 12+ Localization Middleware)
+        // Passes the client's current UI language so that server messages,
+        // localized metadata, genre descriptions, and scheduled task notifications
+        // are returned in the client's active language rather than server host default.
+        // ------------------------------------------------------------------
+        if (!headers['Accept-Language']) {
+            const activeLang = i18n?.currentLang || (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
+            headers['Accept-Language'] = `${activeLang},en;q=0.8`;
+        }
 
         // Add If-None-Match header if we have a cached ETag for this URL
         if (etagEntry && etagEntry.etag) {
