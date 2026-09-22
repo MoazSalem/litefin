@@ -3558,6 +3558,20 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdHideUnfocusedProgress">${i18n.t('LabelOsdHideUnfocusedProgress') || 'Hide Progress and Time on Seekbar'}</span>
+                        <span class="setting-description" data-i18n="OsdHideUnfocusedProgressDescription">${i18n.t('OsdHideUnfocusedProgressDescription') || 'Hides the progress bar, times, and ends-at time when the seekbar is not focused. When focused, values are shown normally. Note: If OSD Focus Mode is set to \'Always return to Seekbar\', this setting will not work because the seekbar is always focused.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideUnfocusedProgress') ? 'active' : ''}" 
+                                id="toggle-osd-hide-unfocused-progress" 
+                                data-setting="osdHideUnfocusedProgress"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
 
                 <h3 class="setting-section-title" data-i18n="VideoQuality">${i18n.t('VideoQuality')}</h3>
 
@@ -8022,6 +8036,17 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('keepFocusOnSubtitleOffset', newValue);
                 keepFocusOffsetBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Hide Progress and Time on Seekbar when Unfocused
+        const hideUnfocusedProgressBtn = this.$('#toggle-osd-hide-unfocused-progress');
+        if (hideUnfocusedProgressBtn) {
+            hideUnfocusedProgressBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHideUnfocusedProgress');
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHideUnfocusedProgress', newValue);
+                hideUnfocusedProgressBtn.classList.toggle('active', newValue);
             });
         }
 

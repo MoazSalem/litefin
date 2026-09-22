@@ -547,6 +547,9 @@ export default class OSDController extends Component {
         this._osdTotalTimeEl = this._osdEl.querySelector('#osdTotalTime');
         this._osdPositionFillEl = this._osdEl.querySelector('#osdPositionFill');
         this._osdPositionSliderEl = this._osdEl.querySelector('#osdPositionSlider');
+        this._osdBottomEl = this._osdEl.querySelector('.osd-bottom');
+        this._osdSliderRowEl = this._osdEl.querySelector('.osd-slider-row');
+        this._osdEndsAtEl = this._osdEl.querySelector('#osdEndsAt');
         this._osdClockEl = this._osdEl.querySelector('#osdClock');
         this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
 
@@ -820,6 +823,30 @@ export default class OSDController extends Component {
             if (nextBtn) nextBtn.remove();
         }
 
+        /*
+         * Anti-spoiler / minimalist seekbar display mode:
+         * Mask progress fill bar, current/total duration timestamps, and 'Ends at' indicator
+         * whenever the seekbar is not focused. When focused, values reappear normally.
+         */
+        if (PlayerSettings.get('osdHideUnfocusedProgress') === true) {
+            if (this._osdBottomEl) {
+                this._osdBottomEl.classList.add('hide-unfocused-progress');
+            }
+            if (this._osdSliderRowEl) {
+                this._osdSliderRowEl.classList.add('hide-unfocused-progress');
+            }
+        }
+
+        // Desktop mouse hover synchronization for seekbar row
+        if (this._osdSliderRowEl) {
+            this._osdSliderRowEl.addEventListener('mouseenter', () => {
+                this._osdBottomEl?.classList.add('hovered');
+            });
+            this._osdSliderRowEl.addEventListener('mouseleave', () => {
+                this._osdBottomEl?.classList.remove('hovered');
+            });
+        }
+
         this.updatePlayPauseButton();
 
         return this._osdEl;
@@ -867,6 +894,14 @@ export default class OSDController extends Component {
                 targetBtn.contains(this._osdPositionSliderEl);
 
             if (isMainSeekbarHovered) {
+                // Reveal seekbar progress, times, and ends-at while magic cursor hovers over seekbar
+                if (this._osdSliderRowEl) {
+                    this._osdSliderRowEl.classList.add('magic-hover');
+                }
+                if (this._osdBottomEl) {
+                    this._osdBottomEl.classList.add('magic-hover');
+                }
+
                 /* 
                  * If the user is HOLDING the button (e.buttons === 1), we treat 
                  * this as an active drag. This bypasses the WebOS pointer-events 
@@ -879,6 +914,12 @@ export default class OSDController extends Component {
                     this._handlePositionSliderMouseMove(e);
                 }
             } else {
+                if (this._osdSliderRowEl) {
+                    this._osdSliderRowEl.classList.remove('magic-hover');
+                }
+                if (this._osdBottomEl) {
+                    this._osdBottomEl.classList.remove('magic-hover');
+                }
                 /* 
                  * When hovering over any non-main element or secondary seekbars,
                  * ensure the main video position slider's preview tooltip is hidden.
@@ -887,6 +928,12 @@ export default class OSDController extends Component {
             }
         } else {
             this._lastHoveredEl = null;
+            if (this._osdSliderRowEl) {
+                this._osdSliderRowEl.classList.remove('magic-hover');
+            }
+            if (this._osdBottomEl) {
+                this._osdBottomEl.classList.remove('magic-hover');
+            }
             this._handlePositionSliderMouseLeave(e);
         }
     }
@@ -898,6 +945,12 @@ export default class OSDController extends Component {
     _clearMagicHover() {
         if (this._osdEl) {
             this._osdEl.querySelectorAll('.magic-hover').forEach(el => el.classList.remove('magic-hover'));
+        }
+        if (this._osdSliderRowEl) {
+            this._osdSliderRowEl.classList.remove('magic-hover');
+        }
+        if (this._osdBottomEl) {
+            this._osdBottomEl.classList.remove('magic-hover');
         }
         this._lastHoveredEl = null;
     }
@@ -1279,6 +1332,10 @@ export default class OSDController extends Component {
 
         // Clear Magic Cursor hover when hiding
         this._clearMagicHover();
+
+        // Clear seekbar active state when hiding
+        this._osdSliderRowEl?.classList.remove('seekbar-active');
+        this._osdBottomEl?.classList.remove('seekbar-active');
 
         // Potential timer stop: only stop if no menus or overlays are currently
         // active and requiring background updates (like PlaybackInfo).
@@ -2314,6 +2371,16 @@ export default class OSDController extends Component {
     _updateFocus() {
         this._osdEl.querySelectorAll('.focused').forEach(el => el.classList.remove('focused'));
 
+        /*
+         * Anti-spoiler seekbar active state:
+         * Immediately and synchronously strip seekbar-active whenever focus is NOT on the seekbar (Row 2).
+         * Guarantees that progress bar, times, and ends-at disappear INSTANTLY when navigating away.
+         */
+        if (this._currentFocusRow !== 2) {
+            this._osdSliderRowEl?.classList.remove('seekbar-active');
+            this._osdBottomEl?.classList.remove('seekbar-active');
+        }
+
         if (this._currentFocusRow === -1) {
             const btn = this._cachedOverlayRow[Math.min(this._currentFocusIndex, this._cachedOverlayRow.length - 1)];
             if (btn) {
@@ -2368,6 +2435,17 @@ export default class OSDController extends Component {
                 if (!sliderContainer.hasAttribute('tabindex')) sliderContainer.setAttribute('tabindex', '0');
                 sliderContainer.classList.add('focused');
                 sliderContainer.focus();
+            }
+
+            /*
+             * Synchronize focused state with seekbar row and bottom container elements.
+             * Smoothly transitions times, ends-at, and progress fill into view if osdHideUnfocusedProgress is on.
+             */
+            if (this._osdSliderRowEl) {
+                this._osdSliderRowEl.classList.add('focused', 'seekbar-active');
+            }
+            if (this._osdBottomEl) {
+                this._osdBottomEl.classList.add('seekbar-active');
             }
         }
     }
@@ -2879,6 +2957,8 @@ export default class OSDController extends Component {
                     this._seekStartTime = null;
                     this._seekDebounceTimer = null;
                     this._isDraggingSeekbar = false;
+                    this._osdSliderRowEl?.classList.remove('dragging');
+                    this._osdBottomEl?.classList.remove('dragging');
                     this._seekResumePlayback = false;
                     if (tooltip) tooltip.classList.remove('visible');
 
@@ -3093,6 +3173,8 @@ export default class OSDController extends Component {
          */
         if (!this._isDraggingSeekbar) {
             this._isDraggingSeekbar = true;
+            this._osdSliderRowEl?.classList.add('dragging');
+            this._osdBottomEl?.classList.add('dragging');
             if (PlayerSettings.get('pausePlaybackOnScrub') && this._player) {
                 this._seekResumePlayback = !this._player.isPaused();
                 if (this._seekResumePlayback && typeof this._player.pause === 'function') {
@@ -3180,6 +3262,8 @@ export default class OSDController extends Component {
         // Capture scrub playback restore state before resetting drag
         const resumePlayback = this._seekResumePlayback;
         this._isDraggingSeekbar = false;
+        this._osdSliderRowEl?.classList.remove('dragging');
+        this._osdBottomEl?.classList.remove('dragging');
         this._seekResumePlayback = false;
 
         try {
@@ -3312,6 +3396,8 @@ export default class OSDController extends Component {
         this._seekTargetTicks = null;
         this._seekStartTime = null;
         this._isDraggingSeekbar = false;
+        this._osdSliderRowEl?.classList.remove('dragging');
+        this._osdBottomEl?.classList.remove('dragging');
 
         const tooltip = this._osdEl?.querySelector('#osdSeekTooltip');
         if (tooltip) tooltip.classList.remove('visible');

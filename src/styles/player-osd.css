@@ -946,6 +946,120 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 }
 
 /* ============================================================================
+   ANTI-SPOILER / MINIMALIST OSD SEEKBAR (HIDE PROGRESS, TIME & ENDS AT WHEN UNFOCUSED)
+   ============================================================================
+   Adheres to Apple Human Interface Guidelines:
+   - Preserves box dimensions to prevent layout jitter or sudden element jumps.
+   - Hides INSTANTLY (0ms) when leaving the seekbar as requested by user.
+   - Smoothly reveals progress fill, thumb, times, and ends-at when focusing or interacting with seekbar.
+   - Strictly decoupled from play/pause or other control buttons (no :focus-within on bottom container).
+   ============================================================================ */
+
+/* Base state: Hidden INSTANTLY when unfocused (no delay or trailing fade-out) */
+.osd-bottom.hide-unfocused-progress .osd-ends-at,
+.osd-bottom.hide-unfocused-progress .osd-time,
+.osd-slider-row.hide-unfocused-progress .osd-time {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: none !important;
+}
+
+/* Mask progress bar fill until focus is received */
+.osd-bottom.hide-unfocused-progress .osd-slider-fill,
+.osd-slider-row.hide-unfocused-progress .osd-slider-fill {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+/* Mask seekbar thumbs until focus is received */
+.osd-bottom.hide-unfocused-progress .osd-slider::-webkit-slider-thumb,
+.osd-slider-row.hide-unfocused-progress .osd-slider::-webkit-slider-thumb {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+.osd-bottom.hide-unfocused-progress .osd-slider::-moz-range-thumb,
+.osd-slider-row.hide-unfocused-progress .osd-slider::-moz-range-thumb {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+/* ============================================================================
+   ACTIVE / REVEALED STATES
+   ============================================================================
+   Triggered EXCLUSIVELY when the user focuses the seekbar (.seekbar-active),
+   hovers directly over the seekbar row (.osd-slider-row:hover / .hovered),
+   points via Magic Remote on the seekbar (.magic-hover), or scrubs (.dragging).
+   Note: Does NOT trigger when play/pause or other control buttons are focused!
+   ============================================================================ */
+
+/* Revealed state for Ends At indicator (standard 0.9 opacity) */
+.osd-bottom.hide-unfocused-progress.seekbar-active .osd-ends-at,
+.osd-bottom.hide-unfocused-progress.magic-hover .osd-ends-at,
+.osd-bottom.hide-unfocused-progress.dragging .osd-ends-at,
+.osd-bottom.hide-unfocused-progress.hovered .osd-ends-at {
+    opacity: 0.9 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transition: opacity 0.15s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+/* Revealed states for Time labels */
+.osd-bottom.hide-unfocused-progress.seekbar-active .osd-time,
+.osd-bottom.hide-unfocused-progress.magic-hover .osd-time,
+.osd-bottom.hide-unfocused-progress.dragging .osd-time,
+.osd-bottom.hide-unfocused-progress.hovered .osd-time,
+.osd-slider-row.hide-unfocused-progress.seekbar-active .osd-time,
+.osd-slider-row.hide-unfocused-progress:hover .osd-time,
+.osd-slider-row.hide-unfocused-progress.magic-hover .osd-time,
+.osd-slider-row.hide-unfocused-progress.dragging .osd-time {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transition: opacity 0.15s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+/* Revealed states for Progress Fill */
+.osd-bottom.hide-unfocused-progress.seekbar-active .osd-slider-fill,
+.osd-bottom.hide-unfocused-progress.magic-hover .osd-slider-fill,
+.osd-bottom.hide-unfocused-progress.dragging .osd-slider-fill,
+.osd-bottom.hide-unfocused-progress.hovered .osd-slider-fill,
+.osd-slider-row.hide-unfocused-progress.seekbar-active .osd-slider-fill,
+.osd-slider-row.hide-unfocused-progress:hover .osd-slider-fill,
+.osd-slider-row.hide-unfocused-progress.magic-hover .osd-slider-fill,
+.osd-slider-row.hide-unfocused-progress.dragging .osd-slider-fill {
+    opacity: 1 !important;
+    transition: width 0.1s ease-out, opacity 0.15s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+/* Revealed states for WebKit Thumb */
+.osd-bottom.hide-unfocused-progress.seekbar-active .osd-slider::-webkit-slider-thumb,
+.osd-bottom.hide-unfocused-progress.magic-hover .osd-slider::-webkit-slider-thumb,
+.osd-bottom.hide-unfocused-progress.dragging .osd-slider::-webkit-slider-thumb,
+.osd-bottom.hide-unfocused-progress.hovered .osd-slider::-webkit-slider-thumb,
+.osd-slider-row.hide-unfocused-progress.seekbar-active .osd-slider::-webkit-slider-thumb,
+.osd-slider-row.hide-unfocused-progress:hover .osd-slider::-webkit-slider-thumb,
+.osd-slider-row.hide-unfocused-progress.magic-hover .osd-slider::-webkit-slider-thumb,
+.osd-slider-row.hide-unfocused-progress.dragging .osd-slider::-webkit-slider-thumb {
+    opacity: 1 !important;
+    transition: height 0.1s, width 0.1s, margin-top 0.1s, opacity 0.15s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+/* Revealed states for Mozilla Thumb */
+.osd-bottom.hide-unfocused-progress.seekbar-active .osd-slider::-moz-range-thumb,
+.osd-bottom.hide-unfocused-progress.magic-hover .osd-slider::-moz-range-thumb,
+.osd-bottom.hide-unfocused-progress.dragging .osd-slider::-moz-range-thumb,
+.osd-bottom.hide-unfocused-progress.hovered .osd-slider::-moz-range-thumb,
+.osd-slider-row.hide-unfocused-progress.seekbar-active .osd-slider::-moz-range-thumb,
+.osd-slider-row.hide-unfocused-progress:hover .osd-slider::-moz-range-thumb,
+.osd-slider-row.hide-unfocused-progress.magic-hover .osd-slider::-moz-range-thumb,
+.osd-slider-row.hide-unfocused-progress.dragging .osd-slider::-moz-range-thumb {
+    opacity: 1 !important;
+    transition: opacity 0.15s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+/* ============================================================================
    Utility
    ============================================================================ */
 

@@ -571,6 +571,19 @@ const DEFAULTS = {
     // Keep focus on subtitle offset menu (prevent auto-hide)
     keepFocusOnSubtitleOffset: true,
 
+    /*
+     * Hide Seekbar Progress & Time When Unfocused
+     * -------------------------------------------------------------------------
+     * Anti-spoiler & minimalist OSD presentation mode.
+     * When set to true, the seekbar fill progress bar, thumb handle, and elapsed/remaining
+     * time indicators are masked with opacity 0 whenever the seekbar does not have focus.
+     * Navigating focus directly to the seekbar row (Row 2) restores visibility immediately.
+     *
+     * Note: This setting has no visual effect if osdFocusRestoreMode is set to 'seekbar',
+     * since the seekbar immediately regains focus whenever the OSD is revealed.
+     */
+    osdHideUnfocusedProgress: false,
+
     // Time display mode ('total', 'remaining')
     osdTimeDisplayMode: 'total',
 
