@@ -1322,12 +1322,29 @@ class LibraryPage extends Page {
                 if (f.Is4K) params.Is4K = true;
                 if (f.Is3D) params.Is3D = true;
 
-                // Multi-value params
-                if (f.Genres) params.GenreIds = f.Genres;
+                // ------------------------------------------------------------------
+                // Multi-Value Query Filters (Genres, Years, Ratings, Tags, Languages)
+                // ------------------------------------------------------------------
+                if (f.Genres) {
+                    // Check if the genre filter string contains GUIDs (JF12 Filters2) or raw names (pre-12)
+                    const firstGenre = f.Genres.split(',')[0];
+                    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firstGenre);
+                    if (isGuid) {
+                        // Pass exact GUIDs when provided by modern Jellyfin 12+ API
+                        params.GenreIds = f.Genres;
+                    } else {
+                        // Fall back to genre names on legacy servers to prevent 400 Bad Request
+                        params.Genres = f.Genres;
+                    }
+                }
                 if (f.Years) params.Years = f.Years;
                 if (f.OfficialRatings) params.OfficialRatings = f.OfficialRatings;
                 if (f.Tags) params.Tags = f.Tags;
                 if (f.Studios) params.StudioIds = f.Studios;
+
+                // Jellyfin 12+ Audio & Subtitle Language track filters
+                if (f.AudioLanguages) params.AudioLanguages = f.AudioLanguages;
+                if (f.SubtitleLanguages) params.SubtitleLanguages = f.SubtitleLanguages;
             }
 
             // Handle View Types
@@ -4805,7 +4822,7 @@ class LibraryPage extends Page {
         } catch (e) {
             log.error('Failed to fetch filters', e);
             // We can still show static filters
-            filtersData = { Genres: [], OfficialRatings: [], Tags: [], Years: [] };
+            filtersData = { Genres: [], OfficialRatings: [], Tags: [], Years: [], AudioLanguages: [], SubtitleLanguages: [] };
         }
 
         this._renderFilterModal(filtersData);
@@ -4822,8 +4839,39 @@ class LibraryPage extends Page {
         const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
         const isMusic = this.state.libraryInfo?.CollectionType === 'music';
 
+        // ------------------------------------------------------------------
+        // Parse Genres: Supports both legacy string arrays and JF12 Name/Id objects
+        // ------------------------------------------------------------------
         const genreItems = Array.isArray(data?.Genres)
-            ? data.Genres.map((g) => (typeof g === 'object' ? g : { label: g, value: g, type: 'multi' }))
+            ? data.Genres.map((g) => {
+                  if (typeof g === 'object' && g !== null) {
+                      return {
+                          label: g.label || g.Name || '',
+                          value: g.value || g.Id || g.Name || '',
+                          type: g.type || 'multi'
+                      };
+                  }
+                  return { label: g, value: g, type: 'multi' };
+              })
+            : [];
+
+        // ------------------------------------------------------------------
+        // Parse Jellyfin 12+ Audio & Subtitle Languages
+        // ------------------------------------------------------------------
+        const audioLanguageItems = Array.isArray(data?.AudioLanguages)
+            ? data.AudioLanguages.map((l) => ({
+                  label: l.Name || l.label || l.Value || l,
+                  value: l.Value || l.value || l,
+                  type: 'multi'
+              }))
+            : [];
+
+        const subtitleLanguageItems = Array.isArray(data?.SubtitleLanguages)
+            ? data.SubtitleLanguages.map((l) => ({
+                  label: l.Name || l.label || l.Value || l,
+                  value: l.Value || l.value || l,
+                  type: 'multi'
+              }))
             : [];
 
         const languageItems = Array.isArray(data?.Languages)
@@ -4913,6 +4961,20 @@ class LibraryPage extends Page {
                           { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
                           { label: 'Option3D', key: 'Is3D', type: 'boolean' }
                       ]
+                  },
+                  {
+                      title: 'AudioTracks',
+                      id: 'sec-audio-languages',
+                      hidden: isMusic, // Hide audio track filter for music
+                      itemKey: 'AudioLanguages',
+                      items: audioLanguageItems
+                  },
+                  {
+                      title: 'SubtitleTracks',
+                      id: 'sec-subtitle-languages',
+                      hidden: isMusic, // Hide subtitle track filter for music
+                      itemKey: 'SubtitleLanguages',
+                      items: subtitleLanguageItems
                   },
                   {
                       title: 'HeaderYears',

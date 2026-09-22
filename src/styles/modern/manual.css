@@ -1,6 +1,5 @@
 /* ============================================================================
    Modern Layout - Manual Login & Password Forms
-   Styled in accordance with Apple HIG: clear primary vs secondary visual
    hierarchy, sleek dark-mode surfaces, rounded squircle corners, and responsive flex.
    ============================================================================ */
 
@@ -126,7 +125,7 @@ html[data-layout-login="modern"] .login-btn {
     font-weight: 600;
     color: var(--jf-text-primary);
     cursor: pointer;
-    /* Smooth Apple-style micro-transitions */
+    /* Smooth micro-transitions */
     transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
@@ -151,7 +150,7 @@ html[data-layout-login="modern"] .back-btn {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6));
-    /* Smooth Apple-style micro-transitions */
+    /* Smooth micro-transitions */
     transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
     margin: 0px;
 }
@@ -166,7 +165,6 @@ html[data-layout-login="modern"] .back-btn.focused {
 
 /* ============================================================================
    Modern Layout - Secondary Action Buttons (Back, Quick Connect, Change Server)
-   Designed following Apple HIG principles: subtle translucent surface,
    high-contrast focus rings, refined typography, and smooth micro-interactions.
    ============================================================================ */
 html[data-layout-login="modern"] .manual-section .quick-connect-btn,

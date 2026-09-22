@@ -199,7 +199,7 @@ html[data-light-music-player="true"] .audio-backdrop {
 html[data-light-music-player="true"] .audio-album-art {
     /* Eliminate heavy drop shadow to prevent continuous layer composite repaints */
     box-shadow: none !important;
-    /* Clean Apple-style hairline border for subtle depth without rendering penalties */
+    /* Clean hairline border for subtle depth without rendering penalties */
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -642,7 +642,7 @@ html[data-layout-tier="ultra-legacy"] .subtitle-line {
 }
 
 /* ============================================================================
- * APPLE HIG RECONNECTION HUD (NETWORK RESILIENCE OVERLAY)
+ * RECONNECTION HUD (NETWORK RESILIENCE OVERLAY)
  * ============================================================================
  * Minimalist, elegant floating notification card inspired by macOS / tvOS.
  * Uses high-depth backdrop blur, subtle 1px border highlight, soft spring

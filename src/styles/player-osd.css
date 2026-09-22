@@ -948,7 +948,6 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 /* ============================================================================
    ANTI-SPOILER / MINIMALIST OSD SEEKBAR (HIDE PROGRESS, TIME & ENDS AT WHEN UNFOCUSED)
    ============================================================================
-   Adheres to Apple Human Interface Guidelines:
    - Preserves box dimensions to prevent layout jitter or sudden element jumps.
    - Hides INSTANTLY (0ms) when leaving the seekbar as requested by user.
    - Smoothly reveals progress fill, thumb, times, and ends-at when focusing or interacting with seekbar.

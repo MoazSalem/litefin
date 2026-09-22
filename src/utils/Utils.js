@@ -285,7 +285,6 @@ export function sanitizeSubtitleText(text) {
  * Resolves the CSS class used to clamp the synopsis, description, or
  * biography across item details and person pages (including Seerr).
  *
- * Adheres strictly to Apple Human Interface Guidelines and modern fluid UI
  * standards by providing comfortable, legible reading lengths for desktop,
  * tablet, mobile, and TV screen viewing contexts.
  *

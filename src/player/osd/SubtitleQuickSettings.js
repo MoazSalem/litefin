@@ -234,7 +234,6 @@ export default class SubtitleQuickSettings extends BaseMenu {
             /* -------------------------------------------------------------
                Subtitle Color Override Toggle
                -------------------------------------------------------------
-               Adhering to Apple's Human Interface Guidelines for clear,
                unambiguous direct control: allows users to choose whether
                embedded font or WebVTT color tags in external subtitles
                should be overridden by their chosen subtitle color.

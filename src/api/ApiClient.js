@@ -1613,11 +1613,84 @@ export class ApiClient {
         return this.get('/MusicGenres', { ...defaults, ...params });
     }
 
-    async getItemFilters(params = {}) {
+    /**
+     * Get query filters from the modern Jellyfin 12+ Filters2 endpoint.
+     * Returns AudioLanguages, SubtitleLanguages, Tags, and Genres with IDs.
+     *
+     * @param {Object} [params] - Query parameters (e.g. ParentId, IncludeItemTypes, Recursive)
+     * @returns {Promise<Object>} Object with Genres, Tags, AudioLanguages, SubtitleLanguages
+     */
+    async getItemFilters2(params = {}) {
+        // Build base query parameters
         const defaults = {
             UserId: this._userId,
             Recursive: true
         };
+
+        // Forward request directly to the JF12 Filters2 endpoint
+        return this.get('/Items/Filters2', { ...defaults, ...params });
+    }
+
+    /**
+     * Get query filters for library browsing.
+     *
+     * On Jellyfin 12+, this method combines results from both the legacy
+     * /Items/Filters endpoint (which still provides OfficialRatings and Years)
+     * and the modern /Items/Filters2 endpoint (which provides AudioLanguages,
+     * SubtitleLanguages, and Genres with IDs).
+     *
+     * On older servers (<12), it seamlessly falls back to /Items/Filters only.
+     *
+     * @param {Object} [params] - Query parameters (ParentId, IncludeItemTypes, etc.)
+     * @returns {Promise<Object>} Combined filters object
+     */
+    async getItemFilters(params = {}) {
+        // Base defaults required by both filter endpoints
+        const defaults = {
+            UserId: this._userId,
+            Recursive: true
+        };
+
+        // ------------------------------------------------------------------
+        // Jellyfin 12+ Combined Filter Fetching:
+        // /Items/Filters provides: OfficialRatings, Years, Genres, Tags
+        // /Items/Filters2 provides: AudioLanguages, SubtitleLanguages, Genres (with IDs), Tags
+        // Running both queries concurrently provides a rich filter set without any breaking changes.
+        // ------------------------------------------------------------------
+        if (this.isJF12Plus()) {
+            try {
+                // Execute both requests in parallel using allSettled to ensure resilience
+                const [legacyRes, v2Res] = await Promise.allSettled([
+                    this.get('/Items/Filters', { ...defaults, ...params }),
+                    this.getItemFilters2(params)
+                ]);
+
+                // Safely unpack responses
+                const legacy = legacyRes.status === 'fulfilled' && legacyRes.value ? legacyRes.value : {};
+                const v2 = v2Res.status === 'fulfilled' && v2Res.value ? v2Res.value : {};
+
+                // Return combined filter structure
+                return {
+                    // Prefer v2 Genres (contains Name & Id pairs) if present, else legacy string names
+                    Genres: (v2.Genres && v2.Genres.length > 0) ? v2.Genres : (legacy.Genres || []),
+                    Tags: (v2.Tags && v2.Tags.length > 0) ? v2.Tags : (legacy.Tags || []),
+                    // Ratings and Years only exist on the legacy endpoint
+                    OfficialRatings: legacy.OfficialRatings || [],
+                    Years: legacy.Years || [],
+                    // Audio and Subtitle language arrays from JF12 Filters2
+                    AudioLanguages: v2.AudioLanguages || [],
+                    SubtitleLanguages: v2.SubtitleLanguages || []
+                };
+            } catch (err) {
+                // Log and gracefully fall through to legacy if anything unexpected occurs
+                log.warn('Failed to load combined filters on JF12+, falling back to legacy endpoint:', err);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Pre-JF12 Legacy Route Fallback:
+        // Query the standard /Items/Filters endpoint
+        // ------------------------------------------------------------------
         return this.get('/Items/Filters', { ...defaults, ...params });
     }
 

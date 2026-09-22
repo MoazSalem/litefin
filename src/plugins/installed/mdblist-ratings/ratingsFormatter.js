@@ -95,7 +95,7 @@ export function parseNumericValue(value) {
 }
 
 /**
- * Formats a provider rating value with Apple-style typographic precision.
+ * Formats a provider rating value with typographic precision.
  * 
  * - 0-10 Scale (IMDb, Letterboxd, Simkl, MAL, etc.): Formats with 1 decimal place (e.g. 8.5, 7.0).
  * - 0-100 / Percentage Scale (RT, Trakt, Metacritic, MDBList): Formats as rounded integer (e.g. 85%).

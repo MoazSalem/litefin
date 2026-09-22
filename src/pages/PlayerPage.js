@@ -206,7 +206,7 @@ class PlayerPage extends Page {
                     </div>
                 </div>
 
-                <!-- Reconnection HUD Overlay (Apple HIG Frosted Glass Aesthetic) -->
+                <!-- Reconnection HUD Overlay
                 <div id="reconnect-hud" class="reconnect-hud hidden">
                     <div class="reconnect-card glass-panel">
                         <div class="reconnect-spinner-wrap">
@@ -2432,8 +2432,8 @@ class PlayerPage extends Page {
                     activeSubtitleIndex === -1
                         ? -1
                         : mediaSource.MediaStreams.find(
-                              (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                          );
+                            (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
+                        );
 
                 // Persist per-item selection so resuming this specific item restores the exact track.
                 // Uses MediaHelper.saveTrackMemory to record metadata (language, title, external status)
@@ -2610,7 +2610,7 @@ class PlayerPage extends Page {
         // the driver. Instead of fatally dumping the user back to the library or
         // showing a hard error dialog, we engage background auto-recovery:
         //   1. Save the exact current playback position tick.
-        //   2. Present an Apple HIG frosted-glass Reconnection HUD.
+        //   2. Present frosted-glass Reconnection HUD.
         //   3. Poll Tizen network status & Jellyfin ping until connectivity restores.
         //   4. Seamlessly re-open and resume playback from the saved position tick.
         // ====================================================================
@@ -2718,7 +2718,7 @@ class PlayerPage extends Page {
     _handleNetworkOffline() {
         log.warn('[AutoRecovery] Network offline event or WebSocket disconnect detected');
         const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
-        
+
         // If actively playing or buffered and not already recovering or paused
         if (!this._isAutoRecovering && !this._isPaused && !this._isExiting && (this._hasReportedStart || currentPosTicks > 0)) {
             log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
@@ -2747,7 +2747,7 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Show or hide the Apple-style Frosted Glass Reconnection HUD.
+     * Show or hide the Reconnection HUD.
      * @param {boolean} show - Whether to display or hide the HUD
      * @param {string} [statusText] - Optional status message to show
      * @private
@@ -2791,7 +2791,7 @@ class PlayerPage extends Page {
             `[AutoRecovery] Network dropout detected (${error?.message || error}). Captured position: ${(this._autoRecoveryPositionTicks / 10000000).toFixed(1)}s`
         );
 
-        // 2. Hide OSD and show sleek Apple HIG Reconnection HUD
+        // 2. Hide OSD and show Reconnection HUD
         if (this._osd) this._osd.hide();
         this._showReconnectHUD(true, 'Connection lost. Reconnecting to server...');
 
