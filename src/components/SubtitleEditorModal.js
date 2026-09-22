@@ -5,6 +5,7 @@ import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { languageManager } from '../utils/LanguageManager.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('SubtitleEditor');
 
@@ -565,19 +566,49 @@ class SubtitleEditorModal {
                           const name = r.Name || `Result ${idx + 1}`;
                           const provider = r.ProviderName || '';
                           const format = (r.Format || '').toUpperCase();
-                          const downloads = r.DownloadCount != null ? `↓ ${r.DownloadCount}` : '';
-                          const frameRate = r.FrameRate ? `FPS: ${r.FrameRate}` : '';
-                          const isPerfectMatch = r.IsHashMatch;
+                          const downloads = r.DownloadCount != null ? `↓ ${r.DownloadCount.toLocaleString()}` : '';
+                          const frameRate = r.FrameRate ? `${r.FrameRate} fps` : '';
+                          const isPerfectMatch = !!r.IsHashMatch;
+
+                          // Hearing Impaired / SDH detection from API flags or filename tags
+                          const isHearingImpaired = !!(
+                              r.HearingImpaired ||
+                              r.IsHearingImpaired ||
+                              (r.ThreeLetterISOLanguageName && r.ThreeLetterISOLanguageName.toLowerCase().includes('hi')) ||
+                              (name && /\b(sdh|hearing impaired|hi)\b/i.test(name))
+                          );
+
+                          // Forced subtitle detection from API flags or filename tags
+                          const isForced = !!(
+                              r.IsForced ||
+                              r.Forced ||
+                              (name && /\bforced\b/i.test(name))
+                          );
+
+                          // Match rate percentage or badge calculation
+                          let matchBadge = '';
+                          if (isPerfectMatch) {
+                              matchBadge = `<span class="track-badge match-badge">★ 100% Match</span>`;
+                          } else if (typeof r.Score === 'number' && !isNaN(r.Score)) {
+                              const pct = r.Score <= 1 ? Math.round(r.Score * 100) : Math.round(r.Score);
+                              if (pct > 0) {
+                                  matchBadge = `<span class="track-badge match-badge">${pct}% Match</span>`;
+                              }
+                          } else if (typeof r.CommunityRating === 'number' && !isNaN(r.CommunityRating) && r.CommunityRating > 0) {
+                              matchBadge = `<span class="track-badge match-badge">★ ${r.CommunityRating.toFixed(1)}</span>`;
+                          }
 
                           return `
                     <button class="modal-option-btn subtitle-result-btn" data-id="${r.Id}" tabindex="0">
                         <div class="subtitle-result-info">
-                            <div class="track-label-text">${name}</div>
+                            <div class="track-label-text">${escapeHtml(name)}</div>
                             <div class="subtitle-result-meta">
-                                ${isPerfectMatch ? `<span class="track-badge match-badge">${i18n.t('PerfectMatch') || 'Perfect match'}</span>` : ''}
-                                ${provider ? `<span class="track-badge">${provider}</span>` : ''}
-                                ${format ? `<span class="track-badge">${format}</span>` : ''}
-                                ${frameRate ? `<span class="track-badge">${frameRate}</span>` : ''}
+                                ${matchBadge}
+                                ${isHearingImpaired ? `<span class="track-badge badge-sdh" title="${i18n.t('HearingImpaired') || 'Hearing Impaired'}">SDH</span>` : ''}
+                                ${isForced ? `<span class="track-badge badge-forced" title="${i18n.t('Forced') || 'Forced'}">Forced</span>` : ''}
+                                ${provider ? `<span class="track-badge provider-badge">${escapeHtml(provider)}</span>` : ''}
+                                ${format ? `<span class="track-badge">${escapeHtml(format)}</span>` : ''}
+                                ${frameRate ? `<span class="track-badge">${escapeHtml(frameRate)}</span>` : ''}
                                 ${downloads ? `<span class="track-badge">${downloads}</span>` : ''}
                             </div>
                         </div>

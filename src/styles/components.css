@@ -1059,6 +1059,34 @@ progress.card-progress::-webkit-progress-value {
     border-color: var(--jf-accent);
 }
 
+.track-badge.badge-sdh {
+    background: rgba(255, 193, 7, 0.18);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.4);
+}
+
+.track-badge.badge-forced {
+    background: rgba(235, 87, 87, 0.18);
+    color: #eb5757;
+    border-color: rgba(235, 87, 87, 0.4);
+}
+
+.track-badge.provider-badge {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--jf-text-primary, #ffffff);
+    border-color: rgba(255, 255, 255, 0.25);
+    text-transform: none;
+}
+
+.modal-option-btn.focused .track-badge.badge-sdh,
+.modal-option-btn.focused .track-badge.badge-forced,
+.modal-option-btn.focused .track-badge.provider-badge,
+.modal-option-btn.focused .track-badge.match-badge {
+    background: var(--jf-bg-dark, #000000) !important;
+    color: var(--jf-accent, #ffffff) !important;
+    border-color: var(--jf-accent, #ffffff) !important;
+}
+
 .track-badge {
     display: inline-block;
     vertical-align: middle;

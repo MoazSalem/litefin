@@ -8716,6 +8716,14 @@ class SettingsPage extends Page {
                 this._closeSelectionModal();
             });
 
+            // Allow exiting modal by clicking the backdrop outside dialog
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    e.stopPropagation();
+                    this._closeSelectionModal();
+                }
+            };
+
             // Register Focus Sections with Left/Right tab switching
             if (overlay.querySelector('#modal-lang-filter-pills')) {
                 this.registerFocusSection('modal-filter-pills', overlay.querySelector('#modal-lang-filter-pills'), {
@@ -8824,6 +8832,9 @@ class SettingsPage extends Page {
             eventBus.off('focus:changed', this._modalFocusChangedHandler);
             this._modalFocusChangedHandler = null;
         }
+
+        // Clean up backdrop click handler
+        overlay.onclick = null;
 
         overlay.classList.remove('visible');
         overlay.setAttribute('aria-hidden', 'true');
@@ -10835,7 +10846,6 @@ class SettingsPage extends Page {
 
                     <div class="modal-actions">
                         <button class="modal-action-btn" id="btn-fav-lang-clear" tabindex="0" data-i18n="ClearAll">${i18n.t('ClearAll') || 'Clear All'}</button>
-                        <button class="modal-action-btn btn-primary" id="btn-fav-lang-done" tabindex="0" data-i18n="Done">${i18n.t('Done') || 'Done'}</button>
                     </div>
                 </div>
             `;
@@ -10887,11 +10897,13 @@ class SettingsPage extends Page {
                 });
             });
 
-            // Bind Done Button
-            overlay.querySelector('#btn-fav-lang-done').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._closeFavoriteLanguagesModal();
-            });
+            // Allow exiting modal by clicking the backdrop outside dialog
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    e.stopPropagation();
+                    this._closeFavoriteLanguagesModal();
+                }
+            };
 
             // Register Focus Sections: Search -> List -> Actions
             this.registerFocusSection('fav-search', overlay.querySelector('.fav-lang-search-box'), {
@@ -10929,11 +10941,17 @@ class SettingsPage extends Page {
         const overlay = this.$('#modal-overlay');
         if (!overlay || !overlay.classList.contains('visible')) return;
 
+        // Detach backdrop click listener
+        overlay.onclick = null;
+
         overlay.classList.remove('visible');
         overlay.setAttribute('aria-hidden', 'true');
         overlay.innerHTML = '';
 
-        // Unregister modal focus sections
+        // Unregister modal focus sections from both Page and FocusManager
+        this.unregisterFocusSection('fav-search');
+        this.unregisterFocusSection('fav-list');
+        this.unregisterFocusSection('fav-actions');
         focusManager.unregister('fav-search');
         focusManager.unregister('fav-list');
         focusManager.unregister('fav-actions');
@@ -10946,12 +10964,19 @@ class SettingsPage extends Page {
                 : (i18n.t('AllLanguages') || 'All Languages');
         }
 
-        // Restore focus
-        if (this._prevSection) {
-            focusManager.setActiveSection(this._prevSection, false);
-        }
-        if (this._prevFocus) {
+        // Restore active section and focus
+        const targetSection = this._prevSection || 'settings-display';
+        focusManager.setActiveSection(targetSection, false);
+
+        if (this._prevFocus && document.contains(this._prevFocus)) {
             focusManager.focusElement(this._prevFocus);
+        } else {
+            const manageBtn = this.$('#btn-manage-favorite-languages');
+            if (manageBtn) {
+                focusManager.focusElement(manageBtn);
+            } else {
+                focusManager.focusFirstInActiveSection();
+            }
         }
 
         this._prevFocus = null;
@@ -11911,6 +11936,11 @@ class SettingsPage extends Page {
     onBack() {
         const overlay = this.$('#modal-overlay');
         if (overlay && overlay.classList.contains('visible')) {
+            // Check if Favorite Languages modal is open
+            if (overlay.querySelector('.fav-languages-modal')) {
+                this._closeFavoriteLanguagesModal();
+                return true;
+            }
             this._closeSelectionModal();
             return true;
         }
