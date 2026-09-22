@@ -1134,24 +1134,44 @@ class LoginPage extends Page {
         try {
             this._selectedUser = user;
 
-            // Check HasPassword field (key jellyfin-web pattern)
-            if (user.HasPassword === false) {
-                // No password required - login directly
-                log.info(`User "${user.Name}" has no password, logging in directly`);
-                this._showState(STATE.LOADING);
+            /*
+             * Passwordless user detection — version-aware.
+             *
+             * JF 10.10 / 10.11: Server reliably sets HasPassword=false for users
+             *   with no password, so we can trust the explicit === false check.
+             *
+             * JF 12+: HasPassword is hard-coded to `true` in UserDto and never
+             *   reflects the real state, so the === false check is permanently dead.
+             *   Instead we speculatively attempt a silent empty-password login; if
+             *   the server accepts it we navigate home immediately.  If it returns
+             *   a 401 we catch the error silently and fall through to the password
+             *   form — the user never sees the transient loading flash.
+             */
+            const isPasswordless =
+                // Old-server explicit signal — still trustworthy on pre-12 builds
+                user.HasPassword === false ||
+                // JF12+: try a silent empty-password login to detect passwordless users
+                (api.isJF12Plus() && await (async () => {
+                    try {
+                        this._showState(STATE.LOADING);
+                        cancelDiscovery();
+                        await auth.login(user.Name, '');
+                        // Success — user has no password, navigate away now
+                        if (this._isAddUserMode) {
+                            router.navigate('/profiles', { replace: true });
+                        } else {
+                            router.navigate('/home', { replace: true });
+                        }
+                        return true; // signal passwordless succeeded
+                    } catch (_silentErr) {
+                        // 401 / auth failure — user does have a password, show the form
+                        log.debug(`User "${user.Name}" requires a password (silent probe rejected)`);
+                        return false;
+                    }
+                })());
 
-                // Stop any running discovery just in case
-                cancelDiscovery();
-
-                await auth.login(user.Name, '');
-                // In addUser mode, return to the profiles screen instead of going home
-                if (this._isAddUserMode) {
-                    router.navigate('/profiles', { replace: true });
-                } else {
-                    router.navigate('/home', { replace: true });
-                }
-            } else {
-                // Password required - show password form
+            if (!isPasswordless) {
+                // Password required — show the password entry form
                 log.info(`LoginPage: User "${user.Name}" requires password`);
 
                 // Update password section with user info

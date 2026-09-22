@@ -108,6 +108,31 @@ export class ApiClient {
         return !!(info.ServerName && (!info.ProductName || info.ProductName.toLowerCase().includes('emby')));
     }
 
+    /**
+     * Check if the connected server is Jellyfin 12.0 or newer.
+     *
+     * JF 12.0 canonicalized many user-scoped routes: the old
+     * /Users/{userId}/Items/{itemId}/... prefix was deprecated in favour of
+     * /Items/{itemId}?userId=...  (and similar non-user-scoped paths for
+     * PlayedItems, FavoriteItems, Configuration, etc.).
+     *
+     * Old routes still exist as silent legacy fallbacks on JF12, but this flag
+     * lets us proactively use the new paths on modern servers while keeping
+     * full backward compatibility with 10.10 / 10.11 installs.
+     *
+     * @returns {boolean} True when the major server version is >= 12.
+     */
+    isJF12Plus() {
+        /*
+         * The Version field comes from /System/Info/Public and is stored in
+         * global state during the initial server handshake.
+         * Shape: "12.0.0.4" — we only care about the major component.
+         */
+        const info = state.get('server:info') || {};
+        const major = parseInt((info.Version || '').split('.')[0], 10);
+        return !isNaN(major) && major >= 12;
+    }
+
     // ========================================================================
     // Configuration Methods
     // ========================================================================
@@ -748,9 +773,25 @@ export class ApiClient {
     }
 
     /**
-     * Update user configuration
+     * Update user configuration.
+     *
+     * JF12+ canonical: POST /Users/Configuration?userId=...
+     * Legacy (pre-12):  POST /Users/{userId}/Configuration
+     *
+     * Both routes are supported in JF12 (old one kept as silent fallback),
+     * but we prefer the new form on modern servers.
+     *
+     * @param {Object} configuration - The UserConfiguration object to save
      */
     async updateUserConfiguration(configuration) {
+        if (this.isJF12Plus()) {
+            // New JF12 canonical route — userId goes in the query string
+            return this.post(
+                `/Users/Configuration?userId=${encodeURIComponent(this._userId)}`,
+                configuration
+            );
+        }
+        // Legacy path used by JF 10.10 / 10.11
         return this.post(`/Users/${this._userId}/Configuration`, configuration);
     }
 
@@ -826,6 +867,13 @@ export class ApiClient {
             ParentId: parentId
         };
 
+        /*
+         * JF12+ canonical: GET /Items/Latest?userId=...
+         * Legacy (pre-12):  GET /Users/{userId}/Items/Latest
+         */
+        if (this.isJF12Plus()) {
+            return this.get('/Items/Latest', { UserId: this._userId, ...defaults, ...params });
+        }
         return this.get(`/Users/${this._userId}/Items/Latest`, { ...defaults, ...params });
     }
 
@@ -849,14 +897,24 @@ export class ApiClient {
             MediaTypes: 'Video'
         };
 
+        /*
+         * JF12+ canonical: GET /UserItems/Resume?userId=...
+         * Legacy (pre-12):  GET /Users/{userId}/Items/Resume
+         */
+        if (this.isJF12Plus()) {
+            return this.get('/UserItems/Resume', { UserId: this._userId, ...defaults, ...params });
+        }
         return this.get(`/Users/${this._userId}/Items/Resume`, { ...defaults, ...params });
     }
 
     /**
-     * Get recently played audio items
+     * Get recently played audio items.
+     *
+     * JF12+ canonical: GET /Items?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items
      */
     async getRecentlyPlayedAudio(parentId, limit = 15) {
-        return this.get(`/Users/${this._userId}/Items`, {
+        const params = {
             ParentId: parentId,
             IncludeItemTypes: 'Audio',
             Recursive: true,
@@ -864,14 +922,21 @@ export class ApiClient {
             SortBy: 'DatePlayed',
             SortOrder: 'Descending',
             Limit: limit
-        });
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...params });
+        }
+        return this.get(`/Users/${this._userId}/Items`, params);
     }
 
     /**
-     * Get frequently played audio items
+     * Get frequently played audio items.
+     *
+     * JF12+ canonical: GET /Items?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items
      */
     async getFrequentlyPlayedAudio(parentId, limit = 15) {
-        return this.get(`/Users/${this._userId}/Items`, {
+        const params = {
             ParentId: parentId,
             IncludeItemTypes: 'Audio',
             Recursive: true,
@@ -879,7 +944,11 @@ export class ApiClient {
             SortBy: 'PlayCount',
             SortOrder: 'Descending',
             Limit: limit
-        });
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...params });
+        }
+        return this.get(`/Users/${this._userId}/Items`, params);
     }
 
     /**
@@ -1101,7 +1170,21 @@ export class ApiClient {
     // Item Endpoints
     // ========================================================================
 
+    /**
+     * Get a single item by ID with user-specific data (playback state, etc.).
+     *
+     * JF12+ canonical: GET /Items/{itemId}?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}
+     *
+     * @param {string} itemId - The Jellyfin item GUID
+     * @param {Object} [params] - Additional query parameters
+     */
     async getItem(itemId, params = {}) {
+        if (this.isJF12Plus()) {
+            // New JF12 form — userId is a query param on the non-user route
+            return this.get(`/Items/${itemId}`, { userId: this._userId, ...params });
+        }
+        // Legacy path for JF 10.10 / 10.11
         return this.get(`/Users/${this._userId}/Items/${itemId}`, params);
     }
 
@@ -1117,10 +1200,17 @@ export class ApiClient {
 
     /**
      * Get pre-roll intro items for a given media item.
+     *
+     * JF12+ canonical: GET /Items/{itemId}/Intros?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}/Intros
+     *
      * @param {string} itemId - The target media item ID
      * @returns {Promise<Object>} Object containing Items array and TotalRecordCount
      */
     async getIntros(itemId) {
+        if (this.isJF12Plus()) {
+            return this.get(`/Items/${itemId}/Intros`, { userId: this._userId });
+        }
         return this.get(`/Users/${this._userId}/Items/${itemId}/Intros`);
     }
 
@@ -1131,10 +1221,16 @@ export class ApiClient {
      * each with their own Id — so they can be played directly through the
      * normal JellyfinPlayer.play({ itemId }) pipeline without any special casing.
      *
+     * JF12+ canonical: GET /Items/{itemId}/LocalTrailers?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}/LocalTrailers
+     *
      * @param {string} itemId - The parent item's ID
      * @returns {Promise<BaseItemDto[]>} Array of trailer items (may be empty)
      */
     async getLocalTrailers(itemId) {
+        if (this.isJF12Plus()) {
+            return this.get(`/Items/${itemId}/LocalTrailers`, { userId: this._userId });
+        }
         return this.get(`/Users/${this._userId}/Items/${itemId}/LocalTrailers`);
     }
 
@@ -1142,10 +1238,16 @@ export class ApiClient {
      * Get special features (extras) for an item.
      * Includes trailers, featurettes, behind the scenes, etc.
      *
+     * JF12+ canonical: GET /Items/{itemId}/SpecialFeatures?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}/SpecialFeatures
+     *
      * @param {string} itemId - The parent item's ID
      * @returns {Promise<BaseItemDto[]>} Array of special feature items
      */
     async getSpecialFeatures(itemId) {
+        if (this.isJF12Plus()) {
+            return this.get(`/Items/${itemId}/SpecialFeatures`, { userId: this._userId });
+        }
         return this.get(`/Users/${this._userId}/Items/${itemId}/SpecialFeatures`);
     }
 
@@ -1333,8 +1435,10 @@ export class ApiClient {
             }
         }
 
-        // Fallback to standard Jellyfin endpoint
-        return this.get(`/Users/${this._userId}/Items`, {
+        // Fallback to standard Jellyfin items endpoint.
+        // JF12+ canonical: GET /Items?UserId=...&PersonIds=...
+        // Legacy (pre-12):  GET /Users/{userId}/Items?PersonIds=...
+        const fallbackParams = {
             PersonIds: personId,
             IncludeItemTypes: 'Movie,Series,Episode',
             Recursive: true,
@@ -1342,18 +1446,28 @@ export class ApiClient {
             Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
             SortBy: 'PremiereDate',
             SortOrder: 'Descending'
-        });
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...fallbackParams });
+        }
+        return this.get(`/Users/${this._userId}/Items`, fallbackParams);
     }
 
-    // Separate call to get items with People field (for character roles)
+    // Separate call to get items with People field (for character roles).
+    // JF12+ canonical: GET /Items?UserId=...&PersonIds=...
+    // Legacy (pre-12):  GET /Users/{userId}/Items?PersonIds=...
     async getPersonItemsWithRoles(personId) {
-        return this.get(`/Users/${this._userId}/Items`, {
+        const params = {
             PersonIds: personId,
             IncludeItemTypes: 'Movie,Series',
             Recursive: true,
             Limit: 200,
             Fields: 'People'
-        });
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...params });
+        }
+        return this.get(`/Users/${this._userId}/Items`, params);
     }
 
     // ========================================================================
@@ -1369,7 +1483,38 @@ export class ApiClient {
         return this.get(`/Audio/${itemId}/Lyrics`);
     }
 
+    /**
+     * Get all album artists in the library.
+     *
+     * JF12+ canonical: GET /Persons?personTypes=AlbumArtist&userId=...
+     *   (The /Artists/AlbumArtists endpoint is marked [Obsolete("Use GetPersons")]
+     *    in JF12 source — ArtistsController.cs.)
+     *
+     * Legacy (pre-12):  GET /Artists/AlbumArtists?UserId=...
+     *
+     * Note: /Persons uses the lowercase `userId` param; /Artists used `UserId`.
+     *
+     * @param {Object} [params] - Additional query params (Limit, ParentId, etc.)
+     */
     async getAlbumArtists(params = {}) {
+        if (this.isJF12Plus()) {
+            /*
+             * /Persons?personTypes=AlbumArtist is the recommended replacement.
+             * We strip out ItemCounts from Fields since /Persons doesn't support
+             * that field and would silently ignore it.
+             */
+            const defaults = {
+                userId: this._userId,
+                personTypes: 'AlbumArtist',
+                Recursive: true,
+                SortBy: 'SortName',
+                SortOrder: 'Ascending',
+                EnableTotalRecordCount: true
+            };
+            return this.get('/Persons', { ...defaults, ...params, personTypes: 'AlbumArtist' });
+        }
+
+        // Legacy path for JF 10.10 / 10.11
         const defaults = {
             UserId: this._userId,
             Recursive: true,
@@ -1378,11 +1523,34 @@ export class ApiClient {
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
         };
-
         return this.get('/Artists/AlbumArtists', { ...defaults, ...params });
     }
 
+    /**
+     * Get all music artists in the library.
+     *
+     * JF12+ canonical: GET /Persons?personTypes=Artist&userId=...
+     *   (The /Artists endpoint is marked [Obsolete("Use GetPersons")]
+     *    in JF12 source — ArtistsController.cs.)
+     *
+     * Legacy (pre-12):  GET /Artists?UserId=...
+     *
+     * @param {Object} [params] - Additional query params
+     */
     async getMusicArtists(params = {}) {
+        if (this.isJF12Plus()) {
+            const defaults = {
+                userId: this._userId,
+                personTypes: 'Artist',
+                Recursive: true,
+                SortBy: 'SortName',
+                SortOrder: 'Ascending',
+                EnableTotalRecordCount: true
+            };
+            return this.get('/Persons', { ...defaults, ...params, personTypes: 'Artist' });
+        }
+
+        // Legacy path for JF 10.10 / 10.11
         const defaults = {
             UserId: this._userId,
             Recursive: true,
@@ -1391,7 +1559,6 @@ export class ApiClient {
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
         };
-
         return this.get('/Artists', { ...defaults, ...params });
     }
 
@@ -1406,6 +1573,13 @@ export class ApiClient {
             MediaTypes: 'Audio' // Only fetch Audio items
         };
 
+        /*
+         * JF12+ canonical: GET /UserItems/Resume?userId=...
+         * Legacy (pre-12):  GET /Users/{userId}/Items/Resume
+         */
+        if (this.isJF12Plus()) {
+            return this.get('/UserItems/Resume', { UserId: this._userId, ...defaults, ...params });
+        }
         return this.get(`/Users/${this._userId}/Items/Resume`, { ...defaults, ...params });
     }
 
@@ -2048,22 +2222,59 @@ export class ApiClient {
     }
 
     // ========================================================================
-    // Favorites Endpoints
+    // Favorites & Played State Endpoints
     // ========================================================================
 
+    /**
+     * Mark an item as a user favourite.
+     *
+     * JF12+ canonical: POST /UserFavoriteItems/{itemId}   (userId from token)
+     * Legacy (pre-12):  POST /Users/{userId}/FavoriteItems/{itemId}
+     */
     async markFavorite(itemId) {
+        if (this.isJF12Plus()) {
+            // New JF12 form — server infers the user from the auth token
+            return this.post(`/UserFavoriteItems/${itemId}`);
+        }
         return this.post(`/Users/${this._userId}/FavoriteItems/${itemId}`);
     }
 
+    /**
+     * Remove an item from user favourites.
+     *
+     * JF12+ canonical: DELETE /UserFavoriteItems/{itemId}
+     * Legacy (pre-12):  DELETE /Users/{userId}/FavoriteItems/{itemId}
+     */
     async unmarkFavorite(itemId) {
+        if (this.isJF12Plus()) {
+            return this.delete(`/UserFavoriteItems/${itemId}`);
+        }
         return this.delete(`/Users/${this._userId}/FavoriteItems/${itemId}`);
     }
 
+    /**
+     * Mark an item as played (watched).
+     *
+     * JF12+ canonical: POST /UserPlayedItems/{itemId}   (userId from token)
+     * Legacy (pre-12):  POST /Users/{userId}/PlayedItems/{itemId}
+     */
     async markPlayed(itemId) {
+        if (this.isJF12Plus()) {
+            return this.post(`/UserPlayedItems/${itemId}`);
+        }
         return this.post(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
 
+    /**
+     * Unmark an item as played.
+     *
+     * JF12+ canonical: DELETE /UserPlayedItems/{itemId}
+     * Legacy (pre-12):  DELETE /Users/{userId}/PlayedItems/{itemId}
+     */
     async unmarkPlayed(itemId) {
+        if (this.isJF12Plus()) {
+            return this.delete(`/UserPlayedItems/${itemId}`);
+        }
         return this.delete(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
 
