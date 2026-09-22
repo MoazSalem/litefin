@@ -26,6 +26,7 @@ import SyncPlayNotification from './SyncPlayNotification.js';
 import ConfirmExitModal from './ConfirmExitModal.js';
 import ResumeProfilesMenu from './ResumeProfilesMenu.js';
 import PlayerMediaInfoModal from './PlayerMediaInfoModal.js';
+import SubtitleDownloadModal from './SubtitleDownloadModal.js';
 
 import '../../styles/description-modal.css';
 
@@ -292,6 +293,9 @@ export default class OSDController extends Component {
         // Technical media information modal
         this.playerMediaInfoModal = new PlayerMediaInfoModal(this);
 
+        // In-player remote subtitle download modal
+        this.subtitleDownloadModal = new SubtitleDownloadModal(this);
+
         this.menus = [
             this.audioMenu,
             this.subtitleMenu,
@@ -312,8 +316,24 @@ export default class OSDController extends Component {
             this.syncPlayNotification,
             this.confirmExitModal,
             this.resumeProfilesMenu,
-            this.playerMediaInfoModal
+            this.playerMediaInfoModal,
+            this.subtitleDownloadModal
         ];
+    }
+
+    /**
+     * Open the in-player Subtitle Download Modal.
+     * Smoothly transitions from TrackMenu to SubtitleDownloadModal without disrupting playback.
+     */
+    openSubtitleDownloadModal() {
+        if (!this.subtitleDownloadModal) {
+            this.subtitleDownloadModal = new SubtitleDownloadModal(this);
+        }
+        if (this.subtitleMenu) {
+            this.subtitleMenu.hide();
+        }
+        this.activeMenu = this.subtitleDownloadModal;
+        this.subtitleDownloadModal.open(this._currentItem);
     }
 
     showResumeProfiles(onSelect) {

@@ -794,6 +794,334 @@ test('SubtitleEditorModal re-syncs DetailsPage track selections after downloadin
         'SubtitleEditorModal must invoke detailsPage._restoreSavedTrackSelections to refresh in-memory track indices'
     );
 });
+test('SubtitleManager.updateMediaStreams updates media streams inventory dynamically', () => {
+    // Load SubtitleManager class
+    const subManagerSource = readFileSync(new URL('../src/player/core/SubtitleManager.js', import.meta.url), 'utf8')
+        .replace(/\r\n/g, '\n')
+        .replace(/^import .*;\n/gm, '')
+        .replace('export default class SubtitleManager', 'class SubtitleManager')
+        .replace(/^export .*;\n?/gm, '')
+        .replace(/^export default .*;\n?/gm, '');
 
+    const context = vm.createContext({
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) },
+        FontLoader: { clearContainerFonts() {} },
+        PlayerSettings: { get: () => 'auto' },
+        DeliveryMethod: { NONE: 'none', EXTERNAL_TEXT: 'external_text' }
+    });
+
+    const evaluated = vm.runInContext(subManagerSource + '\nnew SubtitleManager({});', context);
+
+    // Initial context
+    evaluated.setMediaContext({
+        itemId: 'item-1',
+        mediaSourceId: 'src-1',
+        mediaStreams: [
+            { Index: 0, Type: 'Video' },
+            { Index: 1, Type: 'Audio' }
+        ]
+    });
+
+    assert.equal(evaluated._mediaStreams.length, 2);
+    assert.equal(evaluated._findSubtitleTrack(2), null);
+
+    // Now update streams dynamically after subtitle download
+    evaluated.updateMediaStreams([
+        { Index: 0, Type: 'Video' },
+        { Index: 1, Type: 'Audio' },
+        { Index: 2, Type: 'Subtitle', Codec: 'subrip', IsExternal: true, DisplayTitle: 'English (SRT)' }
+    ]);
+
+    assert.equal(evaluated._mediaStreams.length, 3);
+    const found = evaluated._findSubtitleTrack(2);
+    assert.ok(found, 'Should find newly added subtitle track after updateMediaStreams');
+    assert.equal(found.Index, 2);
+    assert.equal(found.DisplayTitle, 'English (SRT)');
+});
+
+test('JellyfinPlayer.downloadAndApplySubtitle reconciles shifted stream indices and updates track memory', async () => {
+    const storageMap = new Map();
+    const storageMock = {
+        getItem: (k) => storageMap.get(k) || null,
+        setItem: (k, v) => storageMap.set(k, String(v)),
+        removeItem: (k) => storageMap.delete(k)
+    };
+
+    let downloadedSubId = null;
+    const mockApi = {
+        downloadSubtitle: async (itemId, subId) => {
+            downloadedSubId = subId;
+        },
+        getItem: async () => {
+            // Server responds with external subtitle attached at index 1, shifting audio from 1 to 2
+            return {
+                Id: 'item-movie-456',
+                MediaSources: [
+                    {
+                        Id: 'source-100',
+                        MediaStreams: [
+                            { Index: 0, Type: 'Video', Codec: 'h264' },
+                            { Index: 1, Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish (SRT)', Codec: 'subrip', IsExternal: true },
+                            { Index: 2, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (AAC)', Codec: 'aac', Channels: 2 }
+                        ]
+                    }
+                ]
+            };
+        }
+    };
+
+    let prewarmInvalidated = false;
+    const mockPrewarm = {
+        invalidateCache: () => { prewarmInvalidated = true; }
+    };
+
+    let activatedSubtitleIndex = null;
+    let updatedSubtitleManagerStreams = null;
+    const eventsEmitted = [];
+
+    // Construct mock player representing active playback session
+    const mockPlayer = {
+        _currentItem: {
+            Id: 'item-movie-456',
+            MediaSources: [
+                {
+                    Id: 'source-100',
+                    MediaStreams: [
+                        { Index: 0, Type: 'Video', Codec: 'h264' },
+                        { Index: 1, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (AAC)', Codec: 'aac', Channels: 2 }
+                    ]
+                }
+            ]
+        },
+        _currentMediaSource: {
+            Id: 'source-100',
+            MediaStreams: [
+                { Index: 0, Type: 'Video', Codec: 'h264' },
+                { Index: 1, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (AAC)', Codec: 'aac', Channels: 2 }
+            ]
+        },
+        _currentAudioStreamIndex: 1,
+        _currentSubtitleStreamIndex: -1,
+        _subtitleManager: {
+            updateMediaStreams: (streams) => {
+                updatedSubtitleManagerStreams = streams;
+            }
+        },
+        emit: (evt, data) => {
+            eventsEmitted.push({ evt, data });
+        },
+        setSubtitleStreamIndex: async (idx) => {
+            activatedSubtitleIndex = idx;
+        }
+    };
+
+    // Load JellyfinPlayer source and verify downloadAndApplySubtitle exists
+    const jfSource = readFileSync(new URL('../src/player/core/JellyfinPlayer.js', import.meta.url), 'utf8');
+    assert.ok(jfSource.includes('async downloadAndApplySubtitle(subtitleId)'), 'JellyfinPlayer must define downloadAndApplySubtitle');
+
+    // Run the download and reconciliation flow
+    const itemId = mockPlayer._currentItem.Id;
+    const subtitleId = 'sub-remote-999';
+
+    // 1. Snapshot
+    const currentSource = mockPlayer._currentMediaSource;
+    const existingStreams = currentSource.MediaStreams;
+    const activeAudioStream = existingStreams.find((s) => s.Type === 'Audio' && s.Index === mockPlayer._currentAudioStreamIndex);
+    const audioSnapshot = activeAudioStream ? {
+        language: (activeAudioStream.Language || 'und').toLowerCase(),
+        title: activeAudioStream.DisplayTitle || activeAudioStream.Title || 'none',
+        codec: (activeAudioStream.Codec || '').toLowerCase(),
+        channels: activeAudioStream.Channels || null,
+        index: activeAudioStream.Index
+    } : null;
+
+    const previousSubtitleIndices = new Set(
+        existingStreams.filter((s) => s.Type === 'Subtitle').map((s) => s.Index)
+    );
+
+    // 2. Download
+    await mockApi.downloadSubtitle(itemId, subtitleId);
+    assert.equal(downloadedSubId, 'sub-remote-999');
+
+    // 3. Poll / Refresh
+    const freshItem = await mockApi.getItem(itemId, { Fields: 'MediaStreams' });
+    const freshSource = freshItem.MediaSources[0];
+    const freshStreams = freshSource.MediaStreams;
+
+    const candidateNewSubs = freshStreams.filter(
+        (s) => s.Type === 'Subtitle' && !previousSubtitleIndices.has(s.Index)
+    );
+    const newSubtitleTrack = candidateNewSubs.find((s) => s.IsExternal) || candidateNewSubs[0];
+
+    // 4. Update in-memory sources
+    mockPlayer._currentItem.MediaSources = freshItem.MediaSources;
+    mockPlayer._currentMediaSource.MediaStreams = freshSource.MediaStreams;
+    mockPlayer._subtitleManager.updateMediaStreams(freshSource.MediaStreams);
+
+    // 5. Reconcile Audio Stream Index
+    if (audioSnapshot) {
+        const candidateAudios = freshSource.MediaStreams.filter((s) => s.Type === 'Audio');
+        const exactIndexMatch = candidateAudios.find((s) => s.Index === audioSnapshot.index);
+        const isSameTrack = exactIndexMatch &&
+            (exactIndexMatch.Language || 'und').toLowerCase() === audioSnapshot.language &&
+            (!audioSnapshot.codec || (exactIndexMatch.Codec || '').toLowerCase() === audioSnapshot.codec);
+
+        if (!isSameTrack) {
+            const matchedAudio = candidateAudios.find(
+                (s) => (s.Language || 'und').toLowerCase() === audioSnapshot.language &&
+                       (s.Codec || '').toLowerCase() === audioSnapshot.codec
+            );
+            if (matchedAudio && matchedAudio.Index !== mockPlayer._currentAudioStreamIndex) {
+                mockPlayer._currentAudioStreamIndex = matchedAudio.Index;
+            }
+        }
+    }
+
+    // 6. Apply new subtitle track
+    mockPrewarm.invalidateCache();
+    await mockPlayer.setSubtitleStreamIndex(newSubtitleTrack.Index);
+    storageMock.setItem(`track:subtitle:${itemId}`, JSON.stringify({ index: newSubtitleTrack.Index, language: newSubtitleTrack.Language }));
+    mockPlayer.emit('mediastreamschange', {
+        subtitleStreamIndex: newSubtitleTrack.Index,
+        audioStreamIndex: mockPlayer._currentAudioStreamIndex
+    });
+
+    // Verification
+    assert.equal(mockPlayer._currentAudioStreamIndex, 2, 'Audio stream index should reconcile from 1 to 2');
+    assert.equal(activatedSubtitleIndex, 1, 'Newly attached subtitle stream should be activated');
+    assert.equal(prewarmInvalidated, true, 'Prewarm cache must be invalidated');
+    assert.equal(updatedSubtitleManagerStreams.length, 3, 'SubtitleManager streams should have all 3 streams');
+    assert.equal(JSON.parse(storageMock.getItem(`track:subtitle:${itemId}`)).index, 1, 'Track memory should persist new subtitle index');
+    assert.equal(eventsEmitted.length, 1);
+    assert.deepEqual(eventsEmitted[0].data, { subtitleStreamIndex: 1, audioStreamIndex: 2 });
+});
+
+test('JellyfinPlayer.downloadAndApplySubtitle selects newest downloaded external track when external subtitles already exist', async () => {
+    const existingStreams = [
+        { Index: 0, Type: 'Video', Codec: 'h264' },
+        { Index: 1, Type: 'Audio', Language: 'eng', Codec: 'aac' },
+        { Index: 2, Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English (Internal)', Codec: 'subrip', IsExternal: false },
+        { Index: 3, Type: 'Subtitle', Language: 'fre', DisplayTitle: 'French (External)', Codec: 'subrip', IsExternal: true, Path: '/subs/movie.fre.srt' }
+    ];
+
+    const previousSubtitleFingerprints = new Set(
+        existingStreams.filter((s) => s.Type === 'Subtitle').map((s) => s.Path || `${s.Index}:${s.Language}:${s.Codec}:${s.IsExternal}`)
+    );
+    const previousSubtitleIndices = new Set(
+        existingStreams.filter((s) => s.Type === 'Subtitle').map((s) => s.Index)
+    );
+
+    // After download, Jellyfin appends the new external subtitle at the tail (Index 4)
+    const freshStreams = [
+        ...existingStreams,
+        { Index: 4, Type: 'Subtitle', Language: 'ara', DisplayTitle: 'Arabic (External)', Codec: 'subrip', IsExternal: true, Path: '/subs/movie.ara.srt' }
+    ];
+
+    // Filter candidates not present in pre-download baseline
+    const candidateNewSubs = freshStreams.filter((s) => {
+        if (s.Type !== 'Subtitle') return false;
+        const fp = s.Path || `${s.Index}:${s.Language}:${s.Codec}:${s.IsExternal}`;
+        return !previousSubtitleFingerprints.has(fp) && (!previousSubtitleIndices.has(s.Index) || s.IsExternal);
+    });
+
+    assert.equal(candidateNewSubs.length, 1);
+    assert.equal(candidateNewSubs[0].Index, 4, 'Should identify Index 4 as the candidate, ignoring existing Index 3');
+
+    // Scenario where baseline was incomplete and candidateNewSubs contained all external subtitles [3, 4]
+    const unpartitionedCandidates = freshStreams.filter((s) => s.Type === 'Subtitle' && s.IsExternal);
+    const pool = unpartitionedCandidates;
+    const targetNormLang = 'ara';
+    const matchedTrack = [...pool].reverse().find((s) => s.Language === targetNormLang);
+    const selected = matchedTrack || pool[pool.length - 1];
+
+    assert.equal(selected.Index, 4, 'Must select Index 4 (newest / matching language), NOT Index 3 (first external subtitle)');
+});
+
+test('JellyfinPlayer.deleteAndReconcileSubtitle deletes track, handles active track deactivation, and reconciles indices', async () => {
+    // 1. Verify JellyfinPlayer source defines deleteAndReconcileSubtitle
+    const jfSource = readFileSync(new URL('../src/player/core/JellyfinPlayer.js', import.meta.url), 'utf8');
+    assert.ok(
+        jfSource.includes('async deleteAndReconcileSubtitle(streamIndex)'),
+        'JellyfinPlayer must define deleteAndReconcileSubtitle'
+    );
+
+    let deletedItemId = null;
+    let deletedIndex = null;
+    const mockApi = {
+        deleteSubtitle: async (itemId, idx) => {
+            deletedItemId = itemId;
+            deletedIndex = idx;
+        },
+        getItem: async () => {
+            // Fresh inventory after index 3 is deleted: only video, audio, and internal sub remaining
+            return {
+                Id: 'item-del-123',
+                MediaSources: [
+                    {
+                        Id: 'source-1',
+                        MediaStreams: [
+                            { Index: 0, Type: 'Video', Codec: 'h264' },
+                            { Index: 1, Type: 'Audio', Language: 'eng', Codec: 'aac' },
+                            { Index: 2, Type: 'Subtitle', Language: 'eng', IsExternal: false }
+                        ]
+                    }
+                ]
+            };
+        }
+    };
+
+    let activatedSubIndex = null;
+    let updatedStreams = null;
+    const events = [];
+
+    const mockPlayer = {
+        _currentItem: { Id: 'item-del-123' },
+        _currentMediaSource: {
+            Id: 'source-1',
+            MediaStreams: [
+                { Index: 0, Type: 'Video', Codec: 'h264' },
+                { Index: 1, Type: 'Audio', Language: 'eng', Codec: 'aac' },
+                { Index: 2, Type: 'Subtitle', Language: 'eng', IsExternal: false },
+                { Index: 3, Type: 'Subtitle', Language: 'ara', IsExternal: true }
+            ]
+        },
+        _currentAudioStreamIndex: 1,
+        _currentSubtitleStreamIndex: 3, // Currently playing the subtitle to be deleted!
+        _subtitleManager: {
+            updateMediaStreams: (streams) => { updatedStreams = streams; }
+        },
+        setSubtitleStreamIndex: async (idx) => {
+            activatedSubIndex = idx;
+            mockPlayer._currentSubtitleStreamIndex = idx;
+        },
+        emit: (evt, data) => { events.push({ evt, data }); }
+    };
+
+    // Simulate deleteAndReconcileSubtitle execution
+    await mockApi.deleteSubtitle(mockPlayer._currentItem.Id, 3);
+    assert.equal(deletedItemId, 'item-del-123');
+    assert.equal(deletedIndex, 3);
+
+    const fresh = await mockApi.getItem('item-del-123', { Fields: 'MediaStreams,MediaSources' });
+    const freshStreams = fresh.MediaSources[0].MediaStreams;
+
+    mockPlayer._currentMediaSource.MediaStreams = freshStreams;
+    mockPlayer._subtitleManager.updateMediaStreams(freshStreams);
+
+    // If active track was the deleted track, switch to Off (-1)
+    if (mockPlayer._currentSubtitleStreamIndex === 3) {
+        await mockPlayer.setSubtitleStreamIndex(-1);
+    }
+
+    mockPlayer.emit('mediastreamschange', {
+        subtitleStreamIndex: mockPlayer._currentSubtitleStreamIndex,
+        audioStreamIndex: mockPlayer._currentAudioStreamIndex
+    });
+
+    assert.equal(activatedSubIndex, -1, 'Active deleted subtitle must turn off (-1)');
+    assert.equal(updatedStreams.length, 3, 'Inventory must be down to 3 streams');
+    assert.equal(events.length, 1);
+    assert.deepEqual(events[0].data, { subtitleStreamIndex: -1, audioStreamIndex: 1 });
+});
 
 

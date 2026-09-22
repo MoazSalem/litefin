@@ -3220,6 +3220,11 @@ class PlayerPage extends Page {
     _onMediaStreamsChange(data) {
         if (!this._item || !this._player) return;
 
+        // Keep local item MediaSources synchronized with fresh player sources
+        if (this._player._currentItem?.MediaSources) {
+            this._item.MediaSources = this._player._currentItem.MediaSources;
+        }
+
         // =====================================================================
         // Immediate Track Selection Persistence
         // =====================================================================

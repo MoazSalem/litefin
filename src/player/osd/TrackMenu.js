@@ -142,7 +142,8 @@ export default class TrackMenu extends BaseMenu {
         if (isNaN(currentIndex)) currentIndex = -1;
 
         const trackListIndex = tracks.findIndex(t => t.Index === currentIndex);
-        const headerOffset = this.type === 'subtitles' ? 1 : 0;
+        // Header items preceding track list: Secondary Subtitles (mode switch) and Download Subtitles
+        const headerOffset = this.type === 'subtitles' ? 2 : 0;
         
         // Default to 'Off' (0 + offset) if not found for subtitles, or first item (0) for audio
         this.focusIndex = trackListIndex < 0 ? (this.type === 'subtitles' ? headerOffset : 0) : trackListIndex + headerOffset;
@@ -215,11 +216,24 @@ export default class TrackMenu extends BaseMenu {
             `;
         }).join('');
 
+        let downloadSubsHtml = '';
+        if (this.type === 'subtitles') {
+            downloadSubsHtml = `
+                <button class="track-option track-download-subs-btn" data-action="download-subtitles">
+                    <span class="track-option-check"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg></span>
+                    <span class="track-option-label">
+                        <span class="track-label-text">${i18n.t('DownloadSubtitles') || 'Download Subtitles...'}</span>
+                    </span>
+                </button>
+            `;
+        }
+
         this.$el.innerHTML = `
             <div class="track-menu">
                 <div class="track-menu-title">${title}</div>
                 <div class="track-menu-options">
                     ${headerHtml}
+                    ${downloadSubsHtml}
                     ${optionsHtml}
                     ${toggleAllHtml}
                 </div>
@@ -274,6 +288,17 @@ export default class TrackMenu extends BaseMenu {
                 if (e.clientX === 0 && e.clientY === 0) return;
                 this._showAllTracks = !this._showAllTracks;
                 this.render();
+            });
+        }
+
+        const downloadSubsBtn = this.$el.querySelector('.track-download-subs-btn');
+        if (downloadSubsBtn) {
+            downloadSubsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (downloadSubsBtn._programmaticFocus) return;
+                if (e.detail === 0) return;
+                if (e.clientX === 0 && e.clientY === 0) return;
+                this.osd.openSubtitleDownloadModal();
             });
         }
 
@@ -344,6 +369,11 @@ export default class TrackMenu extends BaseMenu {
         if (focusedEl.classList.contains('track-toggle-all-btn')) {
             this._showAllTracks = !this._showAllTracks;
             this.render();
+            return;
+        }
+
+        if (focusedEl.classList.contains('track-download-subs-btn')) {
+            this.osd.openSubtitleDownloadModal();
             return;
         }
 

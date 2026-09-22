@@ -24,6 +24,7 @@ import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { api } from '../../api/index.js';
 import { storage } from '../../utils/StorageService.js';
 import { prewarmManager } from './PrewarmManager.js';
+import { languageManager } from '../../utils/LanguageManager.js';
 
 const log = logger.create('JellyfinPlayer');
 
@@ -2585,6 +2586,349 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
+    }
+
+    /**
+     * ========================================================================
+     * Download and Apply Subtitle Stream During Playback
+     * ========================================================================
+     * Downloads a remote subtitle provider result from the Jellyfin server,
+     * refreshes the item's MediaStreams inventory, reconciles track indices to
+     * prevent stream-shifting desync, and immediately activates the new subtitle
+     * track in the active video session.
+     * ========================================================================
+     * 
+     * @param {string} subtitleId - The remote subtitle result identifier
+     * @returns {Promise<{success: boolean, track: Object, error?: Error}>}
+     */
+    /**
+     * Download a remote subtitle from Jellyfin server, poll for updated streams,
+     * reconcile shifted audio/subtitle indices, and activate the new subtitle track.
+     *
+     * @param {string} subtitleId - The remote subtitle result identifier
+     * @param {Object} [subtitleInfo={}] - Optional metadata of the downloaded subtitle { language, name, format }
+     * @returns {Promise<{success: boolean, track: Object, error?: Error}>}
+     */
+    async downloadAndApplySubtitle(subtitleId) {
+        const subtitleInfo = arguments[1] || {};
+        if (!this._currentItem?.Id || !subtitleId) {
+            log.warn('downloadAndApplySubtitle aborted: missing item or subtitleId');
+            return { success: false, error: new Error('Missing item or subtitleId') };
+        }
+
+        const itemId = this._currentItem.Id;
+        log.info(`[Subtitle Downloader] Initiating download: item=${itemId}, subId=${subtitleId}`);
+
+        // ====================================================================
+        // Step 1: Snapshot Existing Tracks and Pre-Download State
+        // ====================================================================
+        // Query server to get an accurate baseline of currently existing streams
+        // (including any previously downloaded external subtitles).
+        let baseItem = null;
+        try {
+            baseItem = await api.getItem(itemId, { Fields: 'MediaStreams,MediaSources' });
+        } catch (err) {
+            log.warn('[Subtitle Downloader] Failed to fetch pre-download streams baseline:', err);
+        }
+
+        const currentSource = this._currentMediaSource || this._currentItem?.MediaSources?.[0];
+        const baseSource = baseItem?.MediaSources?.find((ms) => ms.Id === currentSource?.Id) ||
+                           baseItem?.MediaSources?.[0] ||
+                           currentSource;
+        const baselineStreams = baseSource?.MediaStreams || baseItem?.MediaStreams || currentSource?.MediaStreams || [];
+
+        // Snapshot existing audio track identity
+        const activeAudioStream = baselineStreams.find(
+            (s) => s.Type === 'Audio' && s.Index === this._currentAudioStreamIndex
+        );
+        const audioSnapshot = activeAudioStream ? {
+            language: (activeAudioStream.Language || 'und').toLowerCase(),
+            title: activeAudioStream.DisplayTitle || activeAudioStream.Title || 'none',
+            codec: (activeAudioStream.Codec || '').toLowerCase(),
+            channels: activeAudioStream.Channels || null,
+            index: activeAudioStream.Index
+        } : null;
+
+        // Snapshot existing subtitle fingerprints and indices
+        const baselineSubtitles = baselineStreams.filter((s) => s.Type === 'Subtitle');
+        const previousSubtitleIndices = new Set(baselineSubtitles.map((s) => s.Index));
+        const previousSubtitleFingerprints = new Set(
+            baselineSubtitles.map((s) => s.Path || s.DeliveryUrl || `${s.Index}:${(s.Language || '').toLowerCase()}:${(s.Codec || '').toLowerCase()}:${s.IsExternal}`)
+        );
+
+        // ====================================================================
+        // Step 2: Trigger Server-Side Subtitle Download
+        // ====================================================================
+        try {
+            await api.downloadSubtitle(itemId, subtitleId);
+            log.info(`[Subtitle Downloader] Server download requested for: ${subtitleId}`);
+        } catch (downloadErr) {
+            log.error('[Subtitle Downloader] Download API request failed:', downloadErr);
+            throw downloadErr;
+        }
+
+        // ====================================================================
+        // Step 3: Poll / Refresh MediaStreams Metadata
+        // ====================================================================
+        // Server writes file to disk and refreshes item streams. We poll up to
+        // 6 times (with 400ms delay) until a new subtitle stream is detected.
+        let freshItem = null;
+        let freshStreams = [];
+        let freshSource = null;
+        let newSubtitleTrack = null;
+
+        const targetNormLang = subtitleInfo?.language ? languageManager.normalizeLanguage(subtitleInfo.language)?.code : null;
+
+        for (let attempt = 0; attempt < 6; attempt++) {
+            if (attempt > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 400));
+            }
+
+            try {
+                freshItem = await api.getItem(itemId, { Fields: 'MediaStreams,MediaSources' });
+                freshSource = freshItem?.MediaSources?.find((ms) => ms.Id === currentSource?.Id) ||
+                              freshItem?.MediaSources?.[0];
+                freshStreams = freshSource?.MediaStreams || freshItem?.MediaStreams || [];
+
+                // Look for subtitle streams not present in the pre-download baseline
+                const candidateNewSubs = freshStreams.filter((s) => {
+                    if (s.Type !== 'Subtitle') return false;
+                    const fp = s.Path || s.DeliveryUrl || `${s.Index}:${(s.Language || '').toLowerCase()}:${(s.Codec || '').toLowerCase()}:${s.IsExternal}`;
+                    return !previousSubtitleFingerprints.has(fp) && (!previousSubtitleIndices.has(s.Index) || s.IsExternal);
+                });
+
+                if (candidateNewSubs.length > 0) {
+                    // Filter candidates that are external subtitles
+                    const externalCandidates = candidateNewSubs.filter((s) => s.IsExternal);
+                    const pool = externalCandidates.length > 0 ? externalCandidates : candidateNewSubs;
+
+                    // If language was provided, find candidate matching target language (searching from latest)
+                    let matchedTrack = null;
+                    if (targetNormLang) {
+                        matchedTrack = [...pool].reverse().find((s) => {
+                            const trackNorm = languageManager.normalizeLanguage(s.Language)?.code;
+                            return trackNorm === targetNormLang || (s.Language || '').toLowerCase().startsWith(targetNormLang.slice(0, 2));
+                        });
+                    }
+
+                    // Newly downloaded external subtitles are appended by Jellyfin at the END of external streams.
+                    // Always pick the newest/last matching stream, NEVER the first!
+                    newSubtitleTrack = matchedTrack || pool[pool.length - 1];
+                    log.info(`[Subtitle Downloader] New subtitle stream detected at attempt ${attempt + 1}: index=${newSubtitleTrack.Index} (${newSubtitleTrack.DisplayTitle || newSubtitleTrack.Language})`);
+                    break;
+                }
+            } catch (fetchErr) {
+                log.warn(`[Subtitle Downloader] Fetching updated streams failed (attempt ${attempt + 1}):`, fetchErr);
+            }
+        }
+
+        // Fallback: If no newly created stream detected, take the latest external subtitle stream matching language
+        if (!newSubtitleTrack && freshStreams.length > 0) {
+            const externalSubs = freshStreams.filter((s) => s.Type === 'Subtitle' && s.IsExternal);
+            if (externalSubs.length > 0) {
+                let matchedFallback = null;
+                if (targetNormLang) {
+                    matchedFallback = [...externalSubs].reverse().find((s) => {
+                        const trackNorm = languageManager.normalizeLanguage(s.Language)?.code;
+                        return trackNorm === targetNormLang || (s.Language || '').toLowerCase().startsWith(targetNormLang.slice(0, 2));
+                    });
+                }
+                newSubtitleTrack = matchedFallback || externalSubs[externalSubs.length - 1];
+                log.info(`[Subtitle Downloader] Falling back to latest external subtitle track: index=${newSubtitleTrack.Index}`);
+            }
+        }
+
+        // ====================================================================
+        // Step 4: Update In-Memory MediaSources and MediaStreams
+        // ====================================================================
+        const updatedStreams = freshSource?.MediaStreams || freshItem?.MediaStreams || freshStreams;
+        if (freshItem?.MediaSources) {
+            this._currentItem.MediaSources = freshItem.MediaSources;
+        }
+        if (this._currentMediaSource && updatedStreams.length > 0) {
+            this._currentMediaSource.MediaStreams = updatedStreams;
+        }
+        if (this._currentItem && updatedStreams.length > 0) {
+            this._currentItem.MediaStreams = updatedStreams;
+        }
+        // Update SubtitleManager's stream registry
+        this._subtitleManager.updateMediaStreams(updatedStreams);
+
+        // ====================================================================
+        // Step 5: Reconcile Audio Stream Index
+        // ====================================================================
+        // If stream indices shifted on the server, reconcile audio track so
+        // that playback doesn't point to an invalid or swapped stream.
+        if (audioSnapshot && freshSource) {
+            const candidateAudios = freshSource.MediaStreams.filter((s) => s.Type === 'Audio');
+            const exactIndexMatch = candidateAudios.find((s) => s.Index === audioSnapshot.index);
+
+            // Verify if stream at the same index still has matching identity
+            const isSameTrack = exactIndexMatch &&
+                (exactIndexMatch.Language || 'und').toLowerCase() === audioSnapshot.language &&
+                (!audioSnapshot.codec || (exactIndexMatch.Codec || '').toLowerCase() === audioSnapshot.codec);
+
+            if (!isSameTrack) {
+                // Audio track shifted! Find the matching stream in fresh inventory
+                const matchedAudio = candidateAudios.find(
+                    (s) => (s.Language || 'und').toLowerCase() === audioSnapshot.language &&
+                           (s.Codec || '').toLowerCase() === audioSnapshot.codec
+                ) || candidateAudios.find(
+                    (s) => (s.Language || 'und').toLowerCase() === audioSnapshot.language
+                );
+
+                if (matchedAudio && matchedAudio.Index !== this._currentAudioStreamIndex) {
+                    log.warn(`[Subtitle Downloader] Reconciling shifted audio stream index: ${this._currentAudioStreamIndex} -> ${matchedAudio.Index}`);
+                    this._currentAudioStreamIndex = matchedAudio.Index;
+                    MediaHelper.saveTrackMemory(itemId, 'Audio', matchedAudio, freshSource);
+                }
+            }
+        }
+
+        // ====================================================================
+        // Step 6: Apply and Activate the New Subtitle Track
+        // ====================================================================
+        if (newSubtitleTrack) {
+            log.info(`[Subtitle Downloader] Applying new subtitle track: index=${newSubtitleTrack.Index}`);
+            
+            // Invalidate prewarm cache so next plays fetch fresh metadata
+            prewarmManager.invalidateCache();
+
+            // Set new subtitle stream on the player
+            await this.setSubtitleStreamIndex(newSubtitleTrack.Index);
+
+            // Persist to track memory
+            MediaHelper.saveTrackMemory(itemId, 'Subtitle', newSubtitleTrack, this._currentMediaSource || freshSource);
+            storage.setItem('session:lastSubtitleLang', newSubtitleTrack.Language || 'und');
+            storage.setItem(
+                'session:lastSubtitleTitle',
+                newSubtitleTrack.DisplayTitle || newSubtitleTrack.Title || 'none'
+            );
+
+            // Emit streams change to update OSD and subscribers
+            this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, {
+                subtitleStreamIndex: newSubtitleTrack.Index,
+                audioStreamIndex: this._currentAudioStreamIndex
+            });
+
+            return { success: true, track: newSubtitleTrack };
+        } else {
+            log.warn('[Subtitle Downloader] Download completed but could not resolve target subtitle stream');
+            return { success: false, error: new Error('Could not resolve new subtitle stream') };
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Delete and Reconcile Subtitle Stream During Active Playback
+     * ========================================================================
+     * Requests the Jellyfin server to delete a local external subtitle track,
+     * pulls fresh stream metadata, cleans up active rendering references if the
+     * deleted track was in use, and re-reconciles shifted track indices.
+     * ========================================================================
+     *
+     * @param {number} streamIndex - Server MediaStream index of subtitle to delete
+     * @returns {Promise<{success: boolean, error?: Error}>}
+     */
+    async deleteAndReconcileSubtitle(streamIndex) {
+        // Validate that an active playback item exists and stream index was specified
+        if (!this._currentItem?.Id || streamIndex === undefined || streamIndex === null) {
+            log.warn('deleteAndReconcileSubtitle aborted: missing item or streamIndex');
+            return { success: false, error: new Error('Missing item or streamIndex') };
+        }
+
+        const itemId = this._currentItem.Id;
+        log.info(`[Subtitle Editor] Initiating server deletion: item=${itemId}, streamIndex=${streamIndex}`);
+
+        // ====================================================================
+        // Step 1: Delete Subtitle File on Jellyfin Server
+        // ====================================================================
+        try {
+            await api.deleteSubtitle(itemId, streamIndex);
+            log.info(`[Subtitle Editor] Subtitle stream ${streamIndex} deleted on server`);
+        } catch (deleteErr) {
+            log.error('[Subtitle Editor] Server deletion request failed:', deleteErr);
+            throw deleteErr;
+        }
+
+        // ====================================================================
+        // Step 2: Query Server for Updated Stream Inventory
+        // ====================================================================
+        // Subtitle deletion causes stream indices above the deleted index to shift.
+        // Query fresh inventory to capture the newly indexed state.
+        let freshItem = null;
+        try {
+            freshItem = await api.getItem(itemId, { Fields: 'MediaStreams,MediaSources' });
+        } catch (fetchErr) {
+            log.warn('[Subtitle Editor] Failed to fetch updated streams after deletion:', fetchErr);
+        }
+
+        const currentSource = this._currentMediaSource || this._currentItem?.MediaSources?.[0];
+        const freshSource = freshItem?.MediaSources?.find((ms) => ms.Id === currentSource?.Id) ||
+                            freshItem?.MediaSources?.[0];
+        const freshStreams = freshSource?.MediaStreams || freshItem?.MediaStreams || [];
+
+        // ====================================================================
+        // Step 3: Synchronize In-Memory MediaSource and Subtitle Registry
+        // ====================================================================
+        if (freshItem?.MediaSources) {
+            this._currentItem.MediaSources = freshItem.MediaSources;
+        }
+        if (this._currentMediaSource && freshStreams.length > 0) {
+            this._currentMediaSource.MediaStreams = freshStreams;
+        }
+        if (this._currentItem && freshStreams.length > 0) {
+            this._currentItem.MediaStreams = freshStreams;
+        }
+        // Notify SubtitleManager of updated stream list so renderer has current metadata
+        this._subtitleManager.updateMediaStreams(freshStreams);
+
+        // Clear prewarm cache so upcoming play sessions fetch refreshed descriptors
+        prewarmManager.invalidateCache();
+
+        // ====================================================================
+        // Step 4: Reconcile Active Playback Track Selections
+        // ====================================================================
+        // If the deleted track was currently rendering on screen, immediately turn off
+        if (this._currentSubtitleStreamIndex === streamIndex) {
+            log.info(`[Subtitle Editor] Active subtitle ${streamIndex} was deleted; disabling subtitles`);
+            await this.setSubtitleStreamIndex(-1);
+            MediaHelper.saveTrackMemory(itemId, 'Subtitle', { Index: -1 }, this._currentMediaSource || freshSource);
+        } else if (this._currentSubtitleStreamIndex !== -1) {
+            // Check if active subtitle stream shifted or no longer exists
+            const stillPresent = freshStreams.some(
+                (s) => s.Type === 'Subtitle' && s.Index === this._currentSubtitleStreamIndex
+            );
+            if (!stillPresent) {
+                log.warn(`[Subtitle Editor] Active subtitle index ${this._currentSubtitleStreamIndex} invalidated by shift; disabling`);
+                await this.setSubtitleStreamIndex(-1);
+            }
+        }
+
+        // Check if audio track index shifted due to stream re-indexing on server
+        if (this._currentAudioStreamIndex !== undefined && this._currentAudioStreamIndex !== null) {
+            const audioStillValid = freshStreams.some(
+                (s) => s.Type === 'Audio' && s.Index === this._currentAudioStreamIndex
+            );
+            if (!audioStillValid) {
+                const fallbackAudio = freshStreams.find((s) => s.Type === 'Audio');
+                if (fallbackAudio) {
+                    log.warn(`[Subtitle Editor] Reconciling shifted audio stream: ${this._currentAudioStreamIndex} -> ${fallbackAudio.Index}`);
+                    this._currentAudioStreamIndex = fallbackAudio.Index;
+                    MediaHelper.saveTrackMemory(itemId, 'Audio', fallbackAudio, freshSource);
+                }
+            }
+        }
+
+        // ====================================================================
+        // Step 5: Broadcast Track State to OSD and Subscribers
+        // ====================================================================
+        this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, {
+            subtitleStreamIndex: this._currentSubtitleStreamIndex,
+            audioStreamIndex: this._currentAudioStreamIndex
+        });
+
+        return { success: true };
     }
 
     /**

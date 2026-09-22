@@ -192,6 +192,32 @@ export default class SubtitleManager {
         log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}, playMethod=${this._playMethod}`);
     }
 
+    /**
+     * ========================================================================
+     * Dynamic Stream Inventory Synchronization
+     * ========================================================================
+     * Updates the internal media streams list without resetting currently active
+     * subtitle cues, renderers, or timeline clocks.
+     * 
+     * This is invoked when external subtitles are downloaded or deleted during an
+     * active playback session, ensuring that subsequent track searches via
+     * _findSubtitleTrack() immediately recognize the newly attached streams.
+     * ========================================================================
+     * 
+     * @param {Array<Object>} mediaStreams - Fresh array of MediaStreams from the server
+     */
+    updateMediaStreams(mediaStreams) {
+        // Guard against null or undefined payloads
+        if (!Array.isArray(mediaStreams)) {
+            log.warn('updateMediaStreams called with non-array payload:', mediaStreams);
+            return;
+        }
+
+        // Update internal streams reference
+        this._mediaStreams = mediaStreams;
+        log.info(`Dynamic stream inventory updated: ${mediaStreams.length} total streams`);
+    }
+
     // ========================================================================
     // Primary Subtitle
     // ========================================================================

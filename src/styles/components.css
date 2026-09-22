@@ -1297,14 +1297,17 @@ progress.card-progress::-webkit-progress-value {
     color: white;
 }
 
-#btn-subtitle-search {
+#btn-subtitle-search,
+#player-sub-search-btn {
     margin: 0;
     height: auto;
     border-radius: var(--jf-border-radius);
 }
 
 #btn-subtitle-search:focus,
-#btn-subtitle-search.focused {
+#btn-subtitle-search.focused,
+#player-sub-search-btn:focus,
+#player-sub-search-btn.focused {
     background: var(--jf-accent) !important;
     /* High contrast text color calculated by ThemeUtils */
     color: var(--jf-primary-btn-color) !important;
