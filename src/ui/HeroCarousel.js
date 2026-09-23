@@ -212,6 +212,7 @@ class HeroCarousel {
         let html = '';
         const assetBase = `${api.serverUrl}/Plugins/MdbListRatings/Assets/`;
         const features = data.features || null;
+        const settings = data.settings || null;
 
         // 1. Render Ratings
         if (data.ratings && data.ratings.length > 0) {
@@ -221,7 +222,8 @@ class HeroCarousel {
                     rating.source || rating.Source,
                     rating.value !== undefined ? rating.value : rating.Value,
                     rating.score !== undefined ? rating.score : rating.Score,
-                    features
+                    features,
+                    settings
                 );
 
                 // Skip if formatting failed or no display text

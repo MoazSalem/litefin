@@ -13,7 +13,7 @@
 
 /**
  * Provider alias normalization mapping.
- * Resolves sub-provider source keys to their canonical identity.
+ * Resolves sub-provider source keys and user-input variants to their canonical identity.
  */
 const PROVIDER_ALIASES = {
     whatson_imdb: 'imdb',
@@ -21,11 +21,17 @@ const PROVIDER_ALIASES = {
     whatson_tmdb: 'tmdb',
     whatson_trakt: 'trakt',
     whatson_tomatoes: 'tomatoes',
+    rt: 'tomatoes',
+    rottentomatoes: 'tomatoes',
+    rotten_tomatoes: 'tomatoes',
     whatson_popcorn: 'popcorn',
     tomatoesaudience: 'popcorn',
+    audience: 'popcorn',
+    rotten_tomatoes_audience: 'popcorn',
     whatson_metacritic: 'metacritic',
     whatson_metacriticuser: 'metacriticuser',
     metacriticus: 'metacriticuser',
+    metacritic_user: 'metacriticuser',
     whatson_letterboxd: 'letterboxd',
     simkl_mal: 'myanimelist',
     mal: 'myanimelist',
@@ -225,9 +231,10 @@ export function formatRatingValue(source, rawValue, rawScore) {
  * @param {*} rawValue - Native value
  * @param {*} rawScore - Score value
  * @param {Object} [features] - Optional WhatsOn/MDBList metadata features (e.g. IMDb Top 250 rank)
+ * @param {Object} [settings] - Optional WebClientSettings configuration from server
  * @returns {{ assetName: string|null, className: string, displayName: string, formattedText: string, numeric0to10: number }}
  */
-export function getMdbProviderInfo(source, rawValue, rawScore = null, features = null) {
+export function getMdbProviderInfo(source, rawValue, rawScore = null, features = null, settings = null) {
     // Resolve canonical identity and formatted numerical value
     const canonical = normalizeSourceKey(source);
     const formatted = formatRatingValue(source, rawValue, rawScore);
@@ -245,10 +252,11 @@ export function getMdbProviderInfo(source, rawValue, rawScore = null, features =
         };
     }
 
-    // 1. IMDb & IMDb Top 250 check
+    // 1. IMDb & IMDb Top 250 check (honors enableImdbTop250Icon setting)
     if (canonical === 'imdb') {
         const topRanking = features?.imdb_top_ranking || features?.imdbTopRanking || features?.ImdbTopRanking;
-        if (topRanking && parseInt(topRanking, 10) > 0 && parseInt(topRanking, 10) <= 250) {
+        const allowTop250 = settings ? settings.top250 === true : true;
+        if (allowTop250 && topRanking && parseInt(topRanking, 10) > 0 && parseInt(topRanking, 10) <= 250) {
             return {
                 assetName: 'imdb_top_250.png',
                 className: 'icon-imdb-top250',
@@ -266,11 +274,12 @@ export function getMdbProviderInfo(source, rawValue, rawScore = null, features =
         };
     }
 
-    // 2. Rotten Tomatoes Critics (Fresh vs Rotten vs Certified)
+    // 2. Rotten Tomatoes Critics (Fresh vs Rotten vs Certified, honors enableWebExtraTomatoesCertified setting)
     if (canonical === 'tomatoes') {
         const isCertified = features?.rotten_tomatoes_critics_certified || features?.rottenTomatoesCriticsCertified;
+        const allowCertified = settings ? settings.extras?.tc === true : true;
         let assetName = 'Rotten_Tomatoes.png';
-        if (isCertified) {
+        if (allowCertified && isCertified) {
             assetName = 'rotten-tomatoes-certified.png';
         } else if (score0to100 < 60 && score0to100 > 0) {
             assetName = 'Rotten_Tomatoes_rotten.png';
@@ -285,11 +294,12 @@ export function getMdbProviderInfo(source, rawValue, rawScore = null, features =
         };
     }
 
-    // 3. Rotten Tomatoes Audience (Popcorn)
+    // 3. Rotten Tomatoes Audience (Popcorn, honors enableWebExtraRottenVerified setting)
     if (canonical === 'popcorn') {
         const isAudienceCertified = features?.rotten_tomatoes_users_certified || features?.rottenTomatoesUsersCertified;
+        const allowAudienceCertified = settings ? settings.extras?.rv === true : true;
         let assetName = 'Rotten_Tomatoes_positive_audience.png';
-        if (isAudienceCertified) {
+        if (allowAudienceCertified && isAudienceCertified) {
             assetName = 'roten_tomatoes_ver.png';
         } else if (score0to100 < 60 && score0to100 > 0) {
             assetName = 'Rotten_Tomatoes_negative_audience.png';
@@ -304,14 +314,15 @@ export function getMdbProviderInfo(source, rawValue, rawScore = null, features =
         };
     }
 
-    // 4. Metacritic & Metacritic Must-See
+    // 4. Metacritic & Metacritic Must-See (honors enableWebExtraMetacriticMustSee setting)
     if (canonical === 'metacritic') {
         const isMustSee = features?.metacritic_must_see || features?.metacriticMustSee;
-        const assetName = isMustSee ? 'metacriticms.png' : 'Metacritic.png';
+        const allowMustSee = settings ? settings.extras?.mc === true : true;
+        const assetName = allowMustSee && isMustSee ? 'metacriticms.png' : 'Metacritic.png';
         return {
             assetName,
-            className: isMustSee ? 'icon-metacritic-ms' : 'icon-metacritic',
-            displayName: isMustSee ? 'Metacritic Must-See' : displayName,
+            className: allowMustSee && isMustSee ? 'icon-metacritic-ms' : 'icon-metacritic',
+            displayName: allowMustSee && isMustSee ? 'Metacritic Must-See' : displayName,
             formattedText: formatted.text,
             numeric0to10: formatted.numeric0to10
         };
@@ -366,4 +377,161 @@ export function getMdbProviderInfo(source, rawValue, rawScore = null, features =
         formattedText: formatted.text,
         numeric0to10: formatted.numeric0to10
     };
+}
+
+/**
+ * Parses a comma-, semicolon-, or newline-separated string of source names
+ * into a deduplicated list of lowercase strings.
+ *
+ * @param {string} raw - Raw delimited string
+ * @returns {Array<string>} Unique list of parsed sources
+ */
+export function parseSourcesList(raw) {
+    if (!raw) return [];
+    const parts = String(raw)
+        .split(/[\n,;]+/)
+        .map((x) => (x || '').trim().toLowerCase())
+        .filter(Boolean);
+
+    const seen = Object.create(null);
+    const out = [];
+    for (const p of parts) {
+        if (!seen[p]) {
+            seen[p] = true;
+            out.push(p);
+        }
+    }
+    return out;
+}
+
+/**
+ * Normalizes raw server WebClientSettings response into a structured configuration object.
+ * Matches Jellyfin Web's WebUiInjector configuration parser.
+ *
+ * @param {Object} [cfg] - Raw settings object from /Plugins/MdbListRatings/WebClientSettings
+ * @returns {Object} Normalized settings object
+ */
+export function normalizeWebClientSettings(cfg = {}) {
+    const rawMode = cfg?.webAllRatingsMode || cfg?.WebAllRatingsMode;
+    const mode = (typeof rawMode === 'number' && rawMode === 1) || String(rawMode).toLowerCase() === 'custom'
+        ? 'custom'
+        : 'all';
+
+    const orderRaw = cfg?.webAllRatingsOrderCsv || cfg?.WebAllRatingsOrderCsv || cfg?.webAllRatingsOrder || '';
+    const order = parseSourcesList(orderRaw);
+
+    const awardKeysRaw = cfg?.webAwardKeysCsv || cfg?.WebAwardKeysCsv || '';
+    const awardKeys = parseSourcesList(awardKeysRaw);
+
+    return {
+        enabled: cfg?.enableWebAllRatingsFromCache !== false,
+        mode,
+        order,
+        top250: Boolean(cfg?.enableImdbTop250Icon ?? cfg?.EnableImdbTop250Icon ?? false),
+        extras: {
+            tc: Boolean(cfg?.enableWebExtraTomatoesCertified ?? cfg?.EnableWebExtraTomatoesCertified ?? false),
+            rv: Boolean(cfg?.enableWebExtraRottenVerified ?? cfg?.EnableWebExtraRottenVerified ?? false),
+            mc: Boolean(cfg?.enableWebExtraMetacriticMustSee ?? cfg?.EnableWebExtraMetacriticMustSee ?? false),
+            al: Boolean(cfg?.enableWebExtraAniList ?? cfg?.EnableWebExtraAniList ?? false)
+        },
+        awards: {
+            enabled: Boolean(cfg?.enableWebAwardBadges ?? cfg?.EnableWebAwardBadges ?? true),
+            keys: awardKeys,
+            nominations: Boolean(cfg?.enableWebAwardNominationsBadge ?? cfg?.EnableWebAwardNominationsBadge ?? false)
+        }
+    };
+}
+
+/**
+ * Deduplicates ratings by equivalent provider family (e.g. IMDb vs WhatsOn IMDb vs Simkl IMDb).
+ * Preserves the one with the highest vote count, or first occurrence if votes are tied/missing.
+ * Matches Jellyfin Web WebUiInjector deduplication behavior.
+ *
+ * @param {Array} ratings - Raw ratings array from API response
+ * @returns {Array} Deduplicated ratings array
+ */
+export function dedupeEquivalentRatings(ratings) {
+    const input = Array.isArray(ratings) ? ratings : [];
+    const bestByFamily = Object.create(null);
+    const familyOrder = [];
+
+    for (const r of input) {
+        if (!r) continue;
+        const rawSource = r.source || r.Source;
+        if (!rawSource) continue;
+
+        const family = normalizeSourceKey(rawSource);
+        const existing = bestByFamily[family];
+
+        if (!existing) {
+            bestByFamily[family] = r;
+            familyOrder.push(family);
+            continue;
+        }
+
+        // Compare votes: known positive vote count beats unknown (-1)
+        const existingVotes = Number(existing.votes ?? existing.Votes ?? -1);
+        const candidateVotes = Number(r.votes ?? r.Votes ?? -1);
+        const ev = Number.isFinite(existingVotes) ? existingVotes : -1;
+        const cv = Number.isFinite(candidateVotes) ? candidateVotes : -1;
+
+        if (cv > ev) {
+            bestByFamily[family] = r;
+        }
+    }
+
+    const result = [];
+    for (const family of familyOrder) {
+        const winner = bestByFamily[family];
+        if (winner) {
+            result.push(winner);
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Filters and orders ratings according to user configuration from server WebClientSettings.
+ * 
+ * If mode is 'custom', only providers specified in settings.order are returned, in that order.
+ * If mode is 'all', all deduplicated providers are returned.
+ *
+ * @param {Array} ratings - Raw ratings array from API response
+ * @param {Object} [settings] - Normalized WebClientSettings from normalizeWebClientSettings()
+ * @returns {Array} Filtered and ordered ratings array
+ */
+export function filterAndOrderRatings(ratings, settings = null) {
+    // 1. Always deduplicate equivalent providers first (e.g. whatson_imdb vs imdb)
+    const deduped = dedupeEquivalentRatings(ratings);
+
+    // 2. If settings are not in custom mode or no order is specified, return deduped list
+    if (!settings || settings.mode !== 'custom' || !Array.isArray(settings.order) || settings.order.length === 0) {
+        return deduped;
+    }
+
+    // 3. In custom mode, build a map by canonical family
+    const familyMap = Object.create(null);
+    for (const r of deduped) {
+        const rawSource = r.source || r.Source;
+        if (!rawSource) continue;
+        const family = normalizeSourceKey(rawSource);
+        if (!familyMap[family]) {
+            familyMap[family] = r;
+        }
+    }
+
+    // 4. Extract ratings strictly following the user's custom order
+    const ordered = [];
+    const usedFamilies = Object.create(null);
+
+    for (const orderKey of settings.order) {
+        const requestedFamily = normalizeSourceKey(orderKey);
+        if (requestedFamily && familyMap[requestedFamily] && !usedFamilies[requestedFamily]) {
+            ordered.push(familyMap[requestedFamily]);
+            usedFamilies[requestedFamily] = true;
+        }
+    }
+
+    return ordered;
 }

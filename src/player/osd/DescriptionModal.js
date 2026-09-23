@@ -159,6 +159,7 @@ export default class DescriptionModal extends BaseMenu {
                 let html = '';
                 const assetBase = `${api.serverUrl}/Plugins/MdbListRatings/Assets/`;
                 const features = data.features || null;
+                const settings = data.settings || null;
 
                 for (const rating of data.ratings) {
                     // Resolve normalized provider info and precision formatting
@@ -166,7 +167,8 @@ export default class DescriptionModal extends BaseMenu {
                         rating.source || rating.Source,
                         rating.value !== undefined ? rating.value : rating.Value,
                         rating.score !== undefined ? rating.score : rating.Score,
-                        features
+                        features,
+                        settings
                     );
 
                     // Skip if formatting failed or no display text

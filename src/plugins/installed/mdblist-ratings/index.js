@@ -10,7 +10,12 @@
 import './mdblist-ratings.css';
 import { shouldShowScore } from '../../../utils/visibility.js';
 import { storage } from '../../../utils/StorageService.js';
-import { getMdbProviderInfo, formatRatingValue } from './ratingsFormatter.js';
+import {
+    getMdbProviderInfo,
+    formatRatingValue,
+    normalizeWebClientSettings,
+    filterAndOrderRatings
+} from './ratingsFormatter.js';
 
 export default {
     id: 'mdblist-ratings',
@@ -23,21 +28,58 @@ export default {
     async init(api) {
         this.api = api;
         this.log = api.log;
+        this._settings = null;
+        this._settingsPromise = null;
         this._awardsEnabledOnServer = true; // Default to true until checked
         this.log.info('MDBList Ratings plugin initialization started');
 
-        // Check if awards are enabled on the server configuration
-        // We await this to ensure capability is resolved before any metadata calls occur
-        await this._checkAwardsCapability(api);
+        // Fetch and cache server-side WebClientSettings (safe for non-admins)
+        // This resolves user provider selection (custom vs all), award toggles, and feature badges
+        await this.getSettings();
         this.log.info('MDBList Ratings plugin initialization complete');
     },
 
     /**
-     * Check if the server-side plugin supports and has enabled awards.
+     * Fetches and normalizes WebClientSettings from the server plugin.
+     * Caches the result to avoid redundant network requests.
+     * Accessible by both regular users and administrators.
+     *
+     * @returns {Promise<Object>} Normalized WebClientSettings
      */
-    async _checkAwardsCapability(api) {
+    async getSettings() {
+        if (this._settings) return this._settings;
+        if (this._settingsPromise) return this._settingsPromise;
+
+        this._settingsPromise = (async () => {
+            try {
+                // Fetch safe, non-admin web client settings
+                const cfg = await this.api.serverPlugins.call('/Plugins/MdbListRatings/WebClientSettings');
+                this._settings = normalizeWebClientSettings(cfg);
+                this._awardsEnabledOnServer = this._settings.awards.enabled;
+                this.log.info(
+                    `MDBList server settings loaded: mode=${this._settings.mode}, order=[${this._settings.order.join(',')}], awards=${this._settings.awards.enabled}`
+                );
+            } catch (err) {
+                // Fallback for legacy 10.xx plugins where WebClientSettings endpoint does not exist
+                this.log.info('MDBList WebClientSettings endpoint not available; probing legacy awards capability...');
+                await this._checkAwardsCapabilityLegacy(this.api);
+                this._settings = normalizeWebClientSettings({
+                    enableWebAwardBadges: this._awardsEnabledOnServer
+                });
+            } finally {
+                this._settingsPromise = null;
+            }
+            return this._settings;
+        })();
+
+        return this._settingsPromise;
+    },
+
+    /**
+     * Legacy probe for older Jellyfin 10.xx plugin versions without WebClientSettings.
+     */
+    async _checkAwardsCapabilityLegacy(api) {
         try {
-            // MDBList Ratings Server Plugin ID
             const pluginId = 'ab96f8b5-45ef-44be-81d6-99bc01e26b9d';
             const config = await api.serverPlugins.call(`/Plugins/${pluginId}/Configuration`);
 
@@ -48,17 +90,10 @@ export default {
                 this._awardsEnabledOnServer = true;
             }
         } catch (e) {
-            // If we can't fetch config (likely 403 for non-admins), we'll probe the endpoint instead
-            this.log.debug(
-                'Could not fetch server plugin config (expected for non-admins), probing endpoint instead...'
-            );
             try {
-                // If this endpoint exists, the plugin version supports awards
-                // We use AwardsDefinitions as a safe, no-side-effect probe
                 await api.serverPlugins.call('/Plugins/MdbListRatings/AwardsDefinitions');
                 this._awardsEnabledOnServer = true;
             } catch (err) {
-                // If 404, the server plugin is an old version that doesn't support awards
                 if (err.status === 404) {
                     this._awardsEnabledOnServer = false;
                     this.log.info(
@@ -76,16 +111,24 @@ export default {
      * @param {string} itemId - Jellyfin item ID
      * @param {string} [imdbId] - Optional IMDb ID if already known
      * @param {boolean} [includeAwards=true] - Whether to fetch awards metadata
-     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, imdbId: string }>}
+     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, settings: Object, imdbId: string }>}
      */
     async getItemMetadata(itemId, imdbId = null, includeAwards = true) {
         try {
+            // Ensure server settings are loaded first so filtering can be applied
+            const settings = await this.getSettings();
+
             // 1. Try to get IDs, ratings, and features from MDBList cache
             const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
 
-            // 2. Resolve IMDb ID only if awards are requested (to avoid wasteful fallback API calls)
+            // 2. Filter and order ratings strictly according to user settings & deduplicate
+            const rawRatings = data && data.hasCache ? data.ratings || [] : [];
+            const filteredRatings = filterAndOrderRatings(rawRatings, settings);
+
+            // 3. Resolve IMDb ID only if awards are requested and enabled
             let finalImdbId = null;
-            if (includeAwards) {
+            const awardsAllowed = includeAwards && settings.awards.enabled && this._awardsEnabledOnServer !== false;
+            if (awardsAllowed) {
                 finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb;
                 if (!finalImdbId) {
                     try {
@@ -97,16 +140,24 @@ export default {
                 }
             }
 
-            // 3. Fetch awards if we have an IMDb ID and requested
+            // 4. Fetch awards if allowed and user wants awards
             let awards = null;
             const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
-            if (includeAwards && finalImdbId && this._awardsEnabledOnServer !== false && userWantsAwards) {
+            if (awardsAllowed && finalImdbId && userWantsAwards) {
                 try {
                     const awardsData = await this.api.serverPlugins.call(
                         `/Plugins/MdbListRatings/AwardsByImdb?imdbId=${finalImdbId}`
                     );
-                    if (awardsData && awardsData.hasAwards) {
-                        awards = awardsData.badges || [];
+                    if (awardsData && awardsData.hasAwards && Array.isArray(awardsData.badges)) {
+                        let badges = awardsData.badges;
+                        // Filter by configured award keys if restricted in settings
+                        if (settings.awards.keys.length > 0) {
+                            badges = badges.filter((b) => {
+                                const key = String(b.key || b.Key || '').toLowerCase();
+                                return settings.awards.keys.includes(key);
+                            });
+                        }
+                        awards = badges;
                     }
                 } catch (e) {
                     this.log.debug(`Awards fetch skipped or failed for ${finalImdbId}`);
@@ -114,14 +165,15 @@ export default {
             }
 
             return {
-                ratings: data && data.hasCache ? data.ratings || [] : [],
+                ratings: filteredRatings,
                 badges: awards || [],
                 features: data?.whatsonFeatures || data?.whatson_features || null,
+                settings,
                 imdbId: finalImdbId
             };
         } catch (err) {
             this.log.warn(`MDBList Plugin metadata fetch failed for ${itemId}:`, err);
-            return { ratings: [], badges: [], features: null, imdbId };
+            return { ratings: [], badges: [], features: null, settings: this._settings, imdbId };
         }
     },
 
@@ -145,7 +197,7 @@ export default {
                     // Render Ratings Row (Respect Score Visibility / Mystery Mode)
                     const item = api.getCurrentItem();
                     if (metadata.ratings.length > 0 && shouldShowScore(item)) {
-                        this._renderRatingsRow(pageEl, metadata.ratings, metadata.features);
+                        this._renderRatingsRow(pageEl, metadata.ratings, metadata.features, metadata.settings);
                     }
 
                     // Render Awards Row
@@ -213,8 +265,9 @@ export default {
      * @param {HTMLElement} pageEl - Container page element
      * @param {Array} ratings - Array of rating objects
      * @param {Object} [features] - Extra metadata features (e.g. IMDb Top 250)
+     * @param {Object} [settings] - Server WebClientSettings configuration
      */
-    _renderRatingsRow(pageEl, ratings, features = null) {
+    _renderRatingsRow(pageEl, ratings, features = null, settings = null) {
         const metaRow = pageEl.querySelector('.details-meta-row');
         if (!metaRow) return;
 
@@ -229,17 +282,19 @@ export default {
 
         // Base URL for plugin assets
         const assetBase = `${this.api.serverUrl}/Plugins/MdbListRatings/Assets/`;
+        const activeSettings = settings || this._settings;
 
         // Build items
         let html = '<div class="mdblist-ratings-row" tabindex="-1">';
 
         for (const rating of ratings) {
-            // Resolve formatted provider info using centralized formatter
+            // Resolve formatted provider info using centralized formatter with settings
             const provider = getMdbProviderInfo(
                 rating.source || rating.Source,
                 rating.value !== undefined ? rating.value : rating.Value,
                 rating.score !== undefined ? rating.score : rating.Score,
-                features
+                features,
+                activeSettings
             );
 
             // Skip if formatting failed
@@ -272,7 +327,7 @@ export default {
         const targetRow = techRow || metaRow;
         targetRow.insertAdjacentHTML('afterend', html);
 
-        // Add subtle entrance animation
+        // Add subtle entrance animation with Apple HIG spring curve
         requestAnimationFrame(() => {
             const row = pageEl.querySelector('.mdblist-ratings-row');
             if (row) {
