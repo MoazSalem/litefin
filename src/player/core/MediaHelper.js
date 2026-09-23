@@ -18,6 +18,11 @@ import { logger } from '../../utils/Logger.js';
 
 const log = logger.create('MediaHelper');
 
+// Maximum number of media entities (series/items) preserved in track memory
+const MAX_LRU_ENTRIES = 50;
+// Storage key indexing all tracked entities in Least-Recently-Used order
+const LRU_INDEX_KEY = 'track:lru_index';
+
 export const MediaHelper = {
     /**
      * Build stream URL for playback
@@ -695,18 +700,148 @@ export const MediaHelper = {
      * @param {Object|number} trackOrIndex - The selected MediaStream object or stream index (-1 for Subtitle Off)
      * @param {Object} [mediaSource] - Optional MediaSource to resolve metadata if only an index was supplied
      */
-    saveTrackMemory(itemId, type, trackOrIndex, mediaSource = null) {
+    /**
+     * Retrieve the persistent LRU index of tracked media entities (shows/items).
+     *
+     * @private
+     * @returns {Array<{ id: string, type: 'series'|'item', lastUsed: number }>}
+     */
+    _getLruIndex() {
+        // Read raw index JSON array from storage
+        const raw = storage.getItem(LRU_INDEX_KEY);
+        if (!raw) return [];
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            log.warn('[Track Memory LRU] Failed to parse index, resetting:', e);
+            return [];
+        }
+    },
+
+    /**
+     * Persist the updated LRU index to storage.
+     *
+     * @private
+     * @param {Array<{ id: string, type: 'series'|'item', lastUsed: number }>} index
+     */
+    _saveLruIndex(index) {
+        // Store ordered list of entries
+        storage.setItem(LRU_INDEX_KEY, JSON.stringify(index));
+    },
+
+    /**
+     * Touch an entry in the LRU index to refresh its lifespan upon playback.
+     * If entry exists, bumps its lastUsed timestamp to Date.now() and moves it to the head.
+     *
+     * @param {string} [itemId] - Media item ID
+     * @param {string} [seriesId] - Optional series ID
+     */
+    touchTrackMemory(itemId, seriesId = null) {
+        if (!itemId && !seriesId) return;
+
+        // Series takes precedence for TV episodes to maintain show-level vitality
+        const targetId = seriesId ? `series:${seriesId}` : `item:${itemId}`;
+
+        // Retrieve current LRU index
+        const index = this._getLruIndex();
+        const existingIdx = index.findIndex((entry) => entry.id === targetId);
+
+        if (existingIdx !== -1) {
+            // Update existing entry timestamp and promote to the front
+            const entry = index.splice(existingIdx, 1)[0];
+            entry.lastUsed = Date.now();
+            index.unshift(entry);
+            this._saveLruIndex(index);
+
+            // Also update internal timestamp inside series object if applicable
+            if (seriesId) {
+                const seriesKey = `track:series:${seriesId}`;
+                const rawSeries = storage.getItem(seriesKey);
+                if (rawSeries) {
+                    try {
+                        const parsed = JSON.parse(rawSeries);
+                        parsed.lastUsed = Date.now();
+                        storage.setItem(seriesKey, JSON.stringify(parsed));
+                    } catch {
+                        // Ignore malformed record
+                    }
+                }
+            }
+
+            log.debug(`[Track Memory LRU] Touched and promoted ${targetId}`);
+        }
+    },
+
+    /**
+     * Register or update an entity in the LRU index and prune overflow.
+     *
+     * @private
+     * @param {string} idKey - Full entity key (e.g. 'series:123' or 'item:456')
+     * @param {'series'|'item'} type - Entity type
+     */
+    _registerLruEntry(idKey, type) {
+        const index = this._getLruIndex();
+        const existingIdx = index.findIndex((entry) => entry.id === idKey);
+
+        if (existingIdx !== -1) {
+            // Remove from current position to re-insert at the head
+            index.splice(existingIdx, 1);
+        }
+
+        // Insert at the head as most recently used
+        index.unshift({
+            id: idKey,
+            type,
+            lastUsed: Date.now()
+        });
+
+        // Prune oldest entries if capacity exceeded
+        while (index.length > MAX_LRU_ENTRIES) {
+            const evicted = index.pop();
+            if (evicted) {
+                this._evictLruEntry(evicted);
+            }
+        }
+
+        this._saveLruIndex(index);
+    },
+
+    /**
+     * Clean up stored track data for an evicted LRU entry.
+     *
+     * @private
+     * @param {{ id: string, type: 'series'|'item' }} entry
+     */
+    _evictLruEntry(entry) {
+        log.info(`[Track Memory LRU] Evicting oldest entry: ${entry.id}`);
+        if (entry.type === 'series') {
+            const seriesId = entry.id.replace('series:', '');
+            storage.removeItem(`track:series:${seriesId}`);
+        } else {
+            const itemId = entry.id.replace('item:', '');
+            storage.removeItem(`track:audio:${itemId}`);
+            storage.removeItem(`track:subtitle:${itemId}`);
+        }
+    },
+
+    /**
+     * Persist selected track choice with metadata signature for an item and its parent series.
+     * Storing track metadata (language, title, codec, channels) alongside its index
+     * prevents silent track regressions when Jellyfin shifts stream indices.
+     *
+     * @param {string} itemId - Media item ID
+     * @param {'Audio'|'Subtitle'} type - Track type
+     * @param {Object|number} trackOrIndex - Selected MediaStream object or stream index (-1 for Subtitle Off)
+     * @param {Object} [mediaSource] - Optional MediaSource to resolve metadata if only an index was supplied
+     * @param {string} [seriesId] - Optional Series ID for TV episodes
+     */
+    saveTrackMemory(itemId, type, trackOrIndex, mediaSource = null, seriesId = null) {
         // Validate required identification inputs
         if (!itemId || !type) return;
 
-        // Build standardized storage key for track type and item ID
-        const storageKey = `track:${type.toLowerCase()}:${itemId}`;
-
-        // Subtitle Off is invariant to stream indexing shifts and always uses index -1
-        if (type === 'Subtitle' && (trackOrIndex === -1 || trackOrIndex?.Index === -1)) {
-            storage.setItem(storageKey, JSON.stringify({ index: -1 }));
-            return;
-        }
+        // Subtitle Off check: invariant to stream indexing shifts and always uses index -1
+        const isSubOff = type === 'Subtitle' && (trackOrIndex === -1 || trackOrIndex?.Index === -1);
 
         // Determine stream object and target index
         let stream = null;
@@ -720,7 +855,14 @@ export const MediaHelper = {
             stream = mediaSource.MediaStreams.find((s) => s.Type === type && s.Index === index);
         }
 
-        if (stream) {
+        // =========================================================================
+        // 1. Persist Item-Specific Track Memory
+        // =========================================================================
+        const storageKey = `track:${type.toLowerCase()}:${itemId}`;
+
+        if (isSubOff) {
+            storage.setItem(storageKey, JSON.stringify({ index: -1 }));
+        } else if (stream) {
             // Snapshot full track identity attributes for robust reconciliation across re-indexing
             const data = {
                 index: stream.Index,
@@ -735,6 +877,147 @@ export const MediaHelper = {
             // Fallback when stream object is missing from memory
             storage.setItem(storageKey, JSON.stringify({ index }));
         }
+
+        // =========================================================================
+        // 2. Persist Series-Level Track Preference (if TV series episode)
+        // =========================================================================
+        if (seriesId) {
+            const seriesKey = `track:series:${seriesId}`;
+            let seriesData = null;
+            const existingRaw = storage.getItem(seriesKey);
+
+            if (existingRaw) {
+                try {
+                    seriesData = JSON.parse(existingRaw);
+                } catch {
+                    seriesData = null;
+                }
+            }
+            if (!seriesData || typeof seriesData !== 'object') {
+                seriesData = {};
+            }
+
+            if (type === 'Audio' && stream) {
+                // Save preferred audio language and title for the series
+                seriesData.audio = {
+                    language: stream.Language || 'und',
+                    title: stream.DisplayTitle || stream.Title || 'none',
+                    codec: stream.Codec || ''
+                };
+            } else if (type === 'Subtitle') {
+                if (isSubOff) {
+                    // Record explicit subtitle disabling for the series
+                    seriesData.subtitle = { isOff: true };
+                } else if (stream) {
+                    // Record preferred subtitle language and title for the series
+                    seriesData.subtitle = {
+                        isOff: false,
+                        language: stream.Language || 'und',
+                        title: stream.DisplayTitle || stream.Title || 'none',
+                        isExternal: stream.IsExternal || false
+                    };
+                }
+            }
+
+            seriesData.lastUsed = Date.now();
+            storage.setItem(seriesKey, JSON.stringify(seriesData));
+
+            // Register series in LRU ring buffer
+            this._registerLruEntry(`series:${seriesId}`, 'series');
+        } else {
+            // Register standalone movie/video in LRU ring buffer
+            this._registerLruEntry(`item:${itemId}`, 'item');
+        }
+    },
+
+    /**
+     * Resolve a series-level track preference against the active MediaSource.
+     * Matches tracks based on language and title to ensure consistency across episodes.
+     *
+     * @param {Object} mediaSource - Active MediaSource containing MediaStreams
+     * @param {'Audio'|'Subtitle'} type - Track type ('Audio' or 'Subtitle')
+     * @param {string} seriesId - Series ID
+     * @returns {number|undefined} The resolved stream index, -1 for Subtitle Off, or undefined
+     */
+    resolveSeriesTrack(mediaSource, type, seriesId) {
+        if (!mediaSource || !Array.isArray(mediaSource.MediaStreams) || !seriesId) {
+            return undefined;
+        }
+
+        const seriesKey = `track:series:${seriesId}`;
+        const raw = storage.getItem(seriesKey);
+        if (!raw) return undefined;
+
+        let seriesData = null;
+        try {
+            seriesData = JSON.parse(raw);
+        } catch {
+            return undefined;
+        }
+
+        if (!seriesData || typeof seriesData !== 'object') return undefined;
+
+        const candidateStreams = mediaSource.MediaStreams.filter((s) => s.Type === type);
+        if (candidateStreams.length === 0) return undefined;
+
+        // Resolve Audio preference
+        if (type === 'Audio' && seriesData.audio) {
+            const targetLang = (seriesData.audio.language || 'und').toLowerCase();
+            const targetTitle = seriesData.audio.title || 'none';
+
+            // Match Priority 1: Exact Language AND Title
+            let match = candidateStreams.find(
+                (s) =>
+                    (s.Language || 'und').toLowerCase() === targetLang &&
+                    (s.DisplayTitle || s.Title || 'none') === targetTitle
+            );
+
+            // Match Priority 2: Language match (when defined)
+            if (!match && targetLang !== 'und') {
+                match = candidateStreams.find(
+                    (s) => (s.Language || 'und').toLowerCase() === targetLang
+                );
+            }
+
+            if (match) {
+                log.info(
+                    `[Track Memory] Resolved series audio for ${seriesId}: Index ${match.Index} (${match.Language} - ${match.DisplayTitle || match.Title})`
+                );
+                return match.Index;
+            }
+        } else if (type === 'Subtitle' && seriesData.subtitle) {
+            // Resolve Subtitle preference
+            if (seriesData.subtitle.isOff) {
+                log.info(`[Track Memory] Resolved series subtitle for ${seriesId}: Off (-1)`);
+                return -1;
+            }
+
+            const targetLang = (seriesData.subtitle.language || 'und').toLowerCase();
+            const targetTitle = seriesData.subtitle.title || 'none';
+
+            // Match Priority 1: Exact Language AND Title
+            let match = candidateStreams.find(
+                (s) =>
+                    (s.Language || 'und').toLowerCase() === targetLang &&
+                    (s.DisplayTitle || s.Title || 'none') === targetTitle
+            );
+
+            // Match Priority 2: Language match (when defined)
+            if (!match && targetLang !== 'und') {
+                match = candidateStreams.find(
+                    (s) => (s.Language || 'und').toLowerCase() === targetLang
+                );
+            }
+
+            if (match) {
+                log.info(
+                    `[Track Memory] Resolved series subtitle for ${seriesId}: Index ${match.Index} (${match.Language} - ${match.DisplayTitle || match.Title})`
+                );
+                return match.Index;
+            }
+        }
+
+        return undefined;
     },
 
     /**

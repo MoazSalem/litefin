@@ -1124,4 +1124,197 @@ test('JellyfinPlayer.deleteAndReconcileSubtitle deletes track, handles active tr
     assert.deepEqual(events[0].data, { subtitleStreamIndex: -1, audioStreamIndex: 1 });
 });
 
+test('MediaHelper series-level track memory: saves show-wide preferences and resolves across different episodes', () => {
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+        .replace(/^import .*;\r?\n/gm, '')
+        .replace('export const MediaHelper', 'const MediaHelper')
+        .replace('export default MediaHelper;', '');
+
+    const storageMap = new Map();
+    const storage = {
+        getItem: (k) => storageMap.get(k) ?? null,
+        setItem: (k, v) => storageMap.set(k, String(v)),
+        removeItem: (k) => storageMap.delete(k)
+    };
+
+    const context = vm.createContext({
+        storage,
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const MediaHelper = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    // Episode 1 media source inventory
+    const ep1Source = {
+        Id: 'source-ep-1',
+        MediaStreams: [
+            { Index: 0, Type: 'Video', Codec: 'hevc' },
+            { Index: 1, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (Stereo)', Codec: 'aac' },
+            { Index: 2, Type: 'Audio', Language: 'jpn', DisplayTitle: 'Japanese (Surround 5.1)', Codec: 'flac' },
+            { Index: 3, Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English [Full]', Codec: 'subrip' },
+            { Index: 4, Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish', Codec: 'subrip' }
+        ]
+    };
+
+    const seriesId = 'series-anime-titan';
+    const ep1Id = 'ep-101';
+
+    // 1. User selects Japanese Audio (Index 2) and English Subtitle (Index 3) on Episode 1
+    MediaHelper.saveTrackMemory(ep1Id, 'Audio', 2, ep1Source, seriesId);
+    MediaHelper.saveTrackMemory(ep1Id, 'Subtitle', 3, ep1Source, seriesId);
+
+    // Verify series-level entry exists in storage
+    const seriesEntryRaw = storage.getItem(`track:series:${seriesId}`);
+    assert.ok(seriesEntryRaw, 'Series track preference must be saved in storage');
+    const seriesData = JSON.parse(seriesEntryRaw);
+    assert.equal(seriesData.audio.language, 'jpn');
+    assert.equal(seriesData.subtitle.language, 'eng');
+
+    // 2. User plays Episode 2 in another session.
+    // Notice Episode 2 has different stream order / indices:
+    // Index 0: Video
+    // Index 1: Audio (jpn) -> Japanese is now Index 1!
+    // Index 2: Audio (eng)
+    // Index 3: Subtitle (spa)
+    // Index 4: Subtitle (eng) -> English subtitles are now Index 4!
+    const ep2Source = {
+        Id: 'source-ep-2',
+        MediaStreams: [
+            { Index: 0, Type: 'Video', Codec: 'hevc' },
+            { Index: 1, Type: 'Audio', Language: 'jpn', DisplayTitle: 'Japanese (Surround 5.1)', Codec: 'flac' },
+            { Index: 2, Type: 'Audio', Language: 'eng', DisplayTitle: 'English (Stereo)', Codec: 'aac' },
+            { Index: 3, Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish', Codec: 'subrip' },
+            { Index: 4, Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English [Full]', Codec: 'subrip' }
+        ]
+    };
+
+    const resolvedAudio = MediaHelper.resolveSeriesTrack(ep2Source, 'Audio', seriesId);
+    const resolvedSubtitle = MediaHelper.resolveSeriesTrack(ep2Source, 'Subtitle', seriesId);
+
+    assert.equal(resolvedAudio, 1, 'Episode 2 must resolve Japanese audio track (Index 1) from series memory');
+    assert.equal(resolvedSubtitle, 4, 'Episode 2 must resolve English subtitle track (Index 4) from series memory');
+});
+
+test('MediaHelper series-level subtitle Off preference persists to subsequent episodes', () => {
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+        .replace(/^import .*;\r?\n/gm, '')
+        .replace('export const MediaHelper', 'const MediaHelper')
+        .replace('export default MediaHelper;', '');
+
+    const storageMap = new Map();
+    const storage = {
+        getItem: (k) => storageMap.get(k) ?? null,
+        setItem: (k, v) => storageMap.set(k, String(v)),
+        removeItem: (k) => storageMap.delete(k)
+    };
+
+    const context = vm.createContext({
+        storage,
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const MediaHelper = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    const seriesId = 'series-comedy-sitcom';
+    const ep1Id = 'ep-sitcom-1';
+
+    // User disables subtitles (Index -1) on Episode 1
+    MediaHelper.saveTrackMemory(ep1Id, 'Subtitle', -1, null, seriesId);
+
+    const seriesEntryRaw = storage.getItem(`track:series:${seriesId}`);
+    assert.ok(seriesEntryRaw);
+    const seriesData = JSON.parse(seriesEntryRaw);
+    assert.equal(seriesData.subtitle.isOff, true);
+
+    // On Episode 2:
+    const ep2Source = {
+        Id: 'source-ep-sitcom-2',
+        MediaStreams: [
+            { Index: 0, Type: 'Video', Codec: 'hevc' },
+            { Index: 1, Type: 'Audio', Language: 'eng', Codec: 'aac' },
+            { Index: 2, Type: 'Subtitle', Language: 'eng', Codec: 'subrip' }
+        ]
+    };
+
+    const resolvedSubtitle = MediaHelper.resolveSeriesTrack(ep2Source, 'Subtitle', seriesId);
+    assert.equal(resolvedSubtitle, -1, 'Episode 2 must resolve subtitle as Off (-1) from series preference');
+});
+
+test('MediaHelper LRU cache: touches on playback to keep active shows at head and evicts oldest when exceeding capacity', () => {
+    const mediaHelperSource = readFileSync(
+        new URL('../src/player/core/MediaHelper.js', import.meta.url),
+        'utf8'
+    )
+        .replace(/^import .*;\r?\n/gm, '')
+        .replace('export const MediaHelper', 'const MediaHelper')
+        .replace('export default MediaHelper;', '');
+
+    const storageMap = new Map();
+    const storage = {
+        getItem: (k) => storageMap.get(k) ?? null,
+        setItem: (k, v) => storageMap.set(k, String(v)),
+        removeItem: (k) => storageMap.delete(k)
+    };
+
+    const context = vm.createContext({
+        storage,
+        platformInfo: { isTizen: false, isWebOS: false },
+        state: { get: () => 'test-device' },
+        logger: { create: () => ({ info() {}, warn() {}, error() {}, debug() {} }) }
+    });
+
+    const MediaHelper = vm.runInContext(mediaHelperSource + '\nMediaHelper;', context);
+
+    const dummySource = {
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Language: 'eng', Title: 'Stereo' }
+        ]
+    };
+
+    // 1. Add Series A initially
+    MediaHelper.saveTrackMemory('ep-a-1', 'Audio', 0, dummySource, 'series-A');
+    assert.ok(storage.getItem('track:series:series-A'), 'series-A must be stored');
+
+    // 2. Add 49 other series (total 50 entries = MAX_LRU_ENTRIES)
+    for (let i = 1; i <= 49; i++) {
+        MediaHelper.saveTrackMemory(`ep-${i}-1`, 'Audio', 0, dummySource, `series-${i}`);
+    }
+
+    const indexBeforeTouch = JSON.parse(storage.getItem('track:lru_index'));
+    assert.equal(indexBeforeTouch.length, 50, 'LRU should contain 50 items');
+    // Series A was added first, so it is currently at the tail (index 49)
+    assert.equal(indexBeforeTouch[49].id, 'series:series-A');
+
+    // 3. User plays another episode of Series A — touchTrackMemory is called!
+    MediaHelper.touchTrackMemory('ep-a-2', 'series-A');
+
+    const indexAfterTouch = JSON.parse(storage.getItem('track:lru_index'));
+    // Series A should have been promoted to the head (index 0)!
+    assert.equal(indexAfterTouch[0].id, 'series:series-A', 'series-A must now be at the head of LRU after touch');
+    // The previous series-1 is now near the tail
+    assert.equal(indexAfterTouch[49].id, 'series:series-1', 'series-1 is now the oldest entry');
+
+    // 4. Now add a 51st show ('series-overflow')
+    MediaHelper.saveTrackMemory('ep-overflow-1', 'Audio', 0, dummySource, 'series-overflow');
+
+    const indexAfterOverflow = JSON.parse(storage.getItem('track:lru_index'));
+    assert.equal(indexAfterOverflow.length, 50, 'LRU capacity must stay capped at 50');
+
+    // Series A was touched, so it must NOT be evicted!
+    assert.ok(storage.getItem('track:series:series-A'), 'series-A must survive because it was touched');
+    // The oldest untouched series (series-1) must have been evicted from storage!
+    assert.strictEqual(storage.getItem('track:series:series-1'), null, 'Untouched series-1 must be evicted and deleted');
+});
+
+
 

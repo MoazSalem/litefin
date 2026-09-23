@@ -1062,6 +1062,17 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = undefined;
         }
 
+        // Check series-level audio preference for TV episodes if no item-level override exists
+        if (this._selectedAudioIndex === undefined && this._item?.SeriesId) {
+            const resolvedSeriesAudio = MediaHelper.resolveSeriesTrack(source, 'Audio', this._item.SeriesId);
+            if (resolvedSeriesAudio !== undefined) {
+                this._selectedAudioIndex = resolvedSeriesAudio;
+                log.info(
+                    `[DetailsPage] Restored series-level audio track for ${this._itemId}: ${resolvedSeriesAudio}`
+                );
+            }
+        }
+
         // =====================================================================
         // Auto-Resolve Optimal DirectPlay Audio Track for Prewarm
         // =====================================================================
@@ -1097,6 +1108,17 @@ class DetailsPage extends Page {
             }
         } else {
             this._selectedSubtitleIndex = undefined;
+        }
+
+        // Check series-level subtitle preference for TV episodes if no item-level override exists
+        if (this._selectedSubtitleIndex === undefined && this._item?.SeriesId) {
+            const resolvedSeriesSubtitle = MediaHelper.resolveSeriesTrack(source, 'Subtitle', this._item.SeriesId);
+            if (resolvedSeriesSubtitle !== undefined) {
+                this._selectedSubtitleIndex = resolvedSeriesSubtitle;
+                log.info(
+                    `[DetailsPage] Restored series-level subtitle track for ${this._itemId}: ${resolvedSeriesSubtitle}`
+                );
+            }
         }
 
         // =====================================================================
@@ -4760,9 +4782,15 @@ class DetailsPage extends Page {
             this._selectedAudioIndex = index;
             log.info('Selected Audio Index:', index);
 
-            // Persist track selection per-item with full metadata to survive re-indexing
+            // Persist track selection per-item and series-wide with full metadata to survive re-indexing
             const activeTrack = tracks.find((s) => s.Index === index);
-            MediaHelper.saveTrackMemory(this._itemId, 'Audio', activeTrack || index, mediaSource);
+            MediaHelper.saveTrackMemory(
+                this._itemId,
+                'Audio',
+                activeTrack || index,
+                mediaSource,
+                this._item?.SeriesId || null
+            );
 
             // Re-render hero header to update the audio specifications pill
             this._renderHeroText();
@@ -4834,9 +4862,15 @@ class DetailsPage extends Page {
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
 
-            // Persist track selection per-item with full metadata to survive re-indexing
+            // Persist track selection per-item and series-wide with full metadata to survive re-indexing
             const activeTrack = displayTracks.find((s) => s.Index === index);
-            MediaHelper.saveTrackMemory(this._itemId, 'Subtitle', activeTrack || index, mediaSource);
+            MediaHelper.saveTrackMemory(
+                this._itemId,
+                'Subtitle',
+                activeTrack || index,
+                mediaSource,
+                this._item?.SeriesId || null
+            );
 
             // Re-trigger zero-latency prewarm with updated subtitle track selection
             if (

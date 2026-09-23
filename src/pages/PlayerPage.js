@@ -1243,6 +1243,16 @@ class PlayerPage extends Page {
         }
 
         // =========================================================================
+        // 2.0 Touch LRU Track Memory on Playback
+        // =========================================================================
+        // Promotes this item/series to the head of the LRU ring buffer so active
+        // shows are never evicted while being actively watched or binge-watched.
+        // =========================================================================
+        if (item?.Id) {
+            MediaHelper.touchTrackMemory(item.Id, item.SeriesId || null);
+        }
+
+        // =========================================================================
         // 2.1 Restore Item-Specific Track Memory
         // =========================================================================
         // If the user previously selected an audio or subtitle track specifically for
@@ -1283,6 +1293,30 @@ class PlayerPage extends Page {
                             `[Track Memory] Restored item-specific subtitle track: Index ${savedSubtitleIndex} (${streamMatch?.DisplayTitle || streamMatch?.Title || streamMatch?.Language})`
                         );
                     }
+                }
+            }
+        }
+
+        // =========================================================================
+        // 2.15 Restore Series-Level Track Memory
+        // =========================================================================
+        // For TV shows, inherit preferred audio and subtitle languages established
+        // on previous episodes across sessions without requiring active session state.
+        // =========================================================================
+        if (item?.SeriesId) {
+            if (savedAudioIndex === undefined) {
+                const resolvedSeriesAudio = MediaHelper.resolveSeriesTrack(mediaSource, 'Audio', item.SeriesId);
+                if (resolvedSeriesAudio !== undefined) {
+                    savedAudioIndex = resolvedSeriesAudio;
+                    log.info(`[Track Memory] Restored series-level audio track: Index ${savedAudioIndex}`);
+                }
+            }
+
+            if (savedSubtitleIndex === undefined) {
+                const resolvedSeriesSubtitle = MediaHelper.resolveSeriesTrack(mediaSource, 'Subtitle', item.SeriesId);
+                if (resolvedSeriesSubtitle !== undefined) {
+                    savedSubtitleIndex = resolvedSeriesSubtitle;
+                    log.info(`[Track Memory] Restored series-level subtitle track: Index ${savedSubtitleIndex}`);
                 }
             }
         }
@@ -2398,7 +2432,13 @@ class PlayerPage extends Page {
             // Uses MediaHelper.saveTrackMemory to record full stream metadata (language, title, codec, channels)
             // ensuring resilience against server re-indexing or stream shifts when external subtitles are downloaded.
             if (this._item.Id) {
-                MediaHelper.saveTrackMemory(this._item.Id, 'Audio', activeAudioTrack || activeAudioIndex, mediaSource);
+                MediaHelper.saveTrackMemory(
+                    this._item.Id,
+                    'Audio',
+                    activeAudioTrack || activeAudioIndex,
+                    mediaSource,
+                    this._item.SeriesId || null
+                );
                 log.info(`[Track Memory] Saved item audio track: ${this._item.Id} -> index ${activeAudioIndex}`);
             }
 
@@ -2443,7 +2483,8 @@ class PlayerPage extends Page {
                         this._item.Id,
                         'Subtitle',
                         activeSubtitleTrack !== undefined ? activeSubtitleTrack : activeSubtitleIndex,
-                        mediaSource
+                        mediaSource,
+                        this._item.SeriesId || null
                     );
                     log.info(`[Track Memory] Saved item subtitle track: ${this._item.Id} -> index ${activeSubtitleIndex}`);
                 }
