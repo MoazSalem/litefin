@@ -1,5 +1,6 @@
 import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
+import { languageManager } from '../../utils/LanguageManager.js';
 
 /**
  * TrackMenu
@@ -9,6 +10,7 @@ import { i18n } from '../../utils/i18n.js';
  * - Handles track switching (direct play or transcoding triggers).
  * - Reflects the currently selected indices.
  * - Supports "Off" state for subtitles.
+ * - Filters by Favorite Languages when configured.
  */
 export default class TrackMenu extends BaseMenu {
     constructor(osdController) {
@@ -16,6 +18,7 @@ export default class TrackMenu extends BaseMenu {
         this.type = 'subtitles';
         this.mode = 'primary';
         this.isModal = true;
+        this._showAllTracks = false;
     }
 
     async open(type, mode = 'primary') {
@@ -115,6 +118,22 @@ export default class TrackMenu extends BaseMenu {
             currentIndex = this.osd.currentAudioIndex;
         }
 
+        const totalRawTracks = tracks;
+        let isFiltered = false;
+
+        // Apply favorite language filtering if user has favorites configured
+        if (languageManager.hasFavorites()) {
+            if (!this._showAllTracks) {
+                const filtered = tracks.filter(t => t.Index === -1 || t.Index === currentIndex || languageManager.isFavoriteTrack(t));
+                if (filtered.length < tracks.length) {
+                    tracks = filtered;
+                    isFiltered = true;
+                }
+            } else {
+                isFiltered = true;
+            }
+        }
+
         // Cache the currently rendered list of tracks for accurate selectTrack lookup
         this._renderedTracks = tracks;
 
@@ -123,7 +142,8 @@ export default class TrackMenu extends BaseMenu {
         if (isNaN(currentIndex)) currentIndex = -1;
 
         const trackListIndex = tracks.findIndex(t => t.Index === currentIndex);
-        const headerOffset = this.type === 'subtitles' ? 1 : 0;
+        // Header items preceding track list: Secondary Subtitles (mode switch) and Download Subtitles
+        const headerOffset = this.type === 'subtitles' ? 2 : 0;
         
         // Default to 'Off' (0 + offset) if not found for subtitles, or first item (0) for audio
         this.focusIndex = trackListIndex < 0 ? (this.type === 'subtitles' ? headerOffset : 0) : trackListIndex + headerOffset;
@@ -137,6 +157,19 @@ export default class TrackMenu extends BaseMenu {
                 <button class="track-option track-mode-switch">
                     <span class="track-option-check"></span>
                     <span class="track-option-label">${label}</span>
+                </button>
+            `;
+        }
+
+        let toggleAllHtml = '';
+        if (isFiltered) {
+            const toggleLabel = this._showAllTracks
+                ? `★ ${i18n.t('ShowFavoriteTracksOnly') || 'Show Favorites Only'}`
+                : `★ ${i18n.t('ShowAllTracks') || 'Show All Tracks'} (${totalRawTracks.length})`;
+            toggleAllHtml = `
+                <button class="track-option track-toggle-all-btn" data-action="toggle-all">
+                    <span class="track-option-check"></span>
+                    <span class="track-option-label">${toggleLabel}</span>
                 </button>
             `;
         }
@@ -183,12 +216,26 @@ export default class TrackMenu extends BaseMenu {
             `;
         }).join('');
 
+        let downloadSubsHtml = '';
+        if (this.type === 'subtitles') {
+            downloadSubsHtml = `
+                <button class="track-option track-download-subs-btn" data-action="download-subtitles">
+                    <span class="track-option-check"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg></span>
+                    <span class="track-option-label">
+                        <span class="track-label-text">${i18n.t('DownloadSubtitles') || 'Download Subtitles...'}</span>
+                    </span>
+                </button>
+            `;
+        }
+
         this.$el.innerHTML = `
             <div class="track-menu">
                 <div class="track-menu-title">${title}</div>
                 <div class="track-menu-options">
                     ${headerHtml}
+                    ${downloadSubsHtml}
                     ${optionsHtml}
+                    ${toggleAllHtml}
                 </div>
             </div>
         `;
@@ -229,6 +276,29 @@ export default class TrackMenu extends BaseMenu {
                 if (e.detail === 0) return;
                 if (e.clientX === 0 && e.clientY === 0) return;
                 this.switchMode();
+            });
+        }
+
+        const toggleAllBtn = this.$el.querySelector('.track-toggle-all-btn');
+        if (toggleAllBtn) {
+            toggleAllBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (toggleAllBtn._programmaticFocus) return;
+                if (e.detail === 0) return;
+                if (e.clientX === 0 && e.clientY === 0) return;
+                this._showAllTracks = !this._showAllTracks;
+                this.render();
+            });
+        }
+
+        const downloadSubsBtn = this.$el.querySelector('.track-download-subs-btn');
+        if (downloadSubsBtn) {
+            downloadSubsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (downloadSubsBtn._programmaticFocus) return;
+                if (e.detail === 0) return;
+                if (e.clientX === 0 && e.clientY === 0) return;
+                this.osd.openSubtitleDownloadModal();
             });
         }
 
@@ -287,14 +357,28 @@ export default class TrackMenu extends BaseMenu {
     }
 
     handleEnter() {
-        if (this.type === 'subtitles') {
-            if (this.focusIndex === 0) {
-                this.switchMode();
-            } else {
-                this.selectTrack(this.focusIndex - 1);
-            }
-        } else {
-            this.selectTrack(this.focusIndex);
+        const options = this.$el?.querySelectorAll('.track-option') || [];
+        const focusedEl = options[this.focusIndex];
+        if (!focusedEl) return;
+
+        if (focusedEl.classList.contains('track-mode-switch')) {
+            this.switchMode();
+            return;
+        }
+
+        if (focusedEl.classList.contains('track-toggle-all-btn')) {
+            this._showAllTracks = !this._showAllTracks;
+            this.render();
+            return;
+        }
+
+        if (focusedEl.classList.contains('track-download-subs-btn')) {
+            this.osd.openSubtitleDownloadModal();
+            return;
+        }
+
+        if (focusedEl.dataset.menuIndex !== undefined) {
+            this.selectTrack(parseInt(focusedEl.dataset.menuIndex));
         }
     }
 

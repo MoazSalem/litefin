@@ -18,7 +18,7 @@
             document.write('<script src="js/webOSTV.js"><\\/script>');
         }
     </script>
-    <script src="js/backup-logger.js"></script>
+    <script src="js/logger.js"></script>
 
     <script src="js/early-polyfills.js"></script>
 
@@ -208,6 +208,7 @@
                 var themes = {
                     'ambient': { accent: '#6b6ede', bg: '#0a0b0c', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
                     'tinted': { accent: '#6b6ede', bg: '#0f0a14', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
+                    'tinted-light': { accent: '#6b6ede', bg: '#2c2e59', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
                     'black': { accent: '#6b6ede', bg: '#000000', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
                     'classic-dark': { accent: '#6b6ede', bg: '#101010', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
                     'classic-light': { accent: '#6b6ede', bg: '#f5f5f5', text: '#101010', textSec: '#666666' }
@@ -222,9 +223,16 @@
                 // Fall back to the default theme accent color if the saved one is invalid
                 var accentColor = (savedThemeColor && savedThemeColor.indexOf('#') === 0) ? savedThemeColor : currentTheme.accent;
 
+                // Adjust background for lighter background mode on classic dark
+                var savedLighterBg = localStorage.getItem('litefin:lighterBackground') === 'true';
+                var bg = currentTheme.bg;
+                if (savedLighterBg) {
+                    if (savedTheme === 'classic-dark') bg = '#151515';
+                }
+
                 // Stamp the critical variables directly onto root stylesheet
                 document.documentElement.style.setProperty('--jf-accent', accentColor);
-                document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
+                document.documentElement.style.setProperty('--jf-background', bg);
                 document.documentElement.style.setProperty('--jf-text-primary', currentTheme.text);
                 document.documentElement.style.setProperty('--jf-text-secondary', currentTheme.textSec);
             } catch (e) {

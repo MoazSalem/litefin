@@ -631,14 +631,21 @@ class AuthManager {
 
     /**
      * Login with a public user object.
-     * Checks HasPassword to determine whether a password prompt is needed.
+     *
+     * On JF 10.10 / 10.11 we honour the HasPassword field to decide whether
+     * to send an empty string or the real password.  On JF 12+ HasPassword is
+     * always hard-coded to `true` and carries no meaningful information, so we
+     * skip that check and send the supplied password directly (empty string for
+     * passwordless users, real password for everyone else).
      *
      * @param {Object} user - User object from getPublicUsers()
-     * @param {string} [password=''] - Password (only meaningful when HasPassword)
+     * @param {string} [password=''] - Password (or empty string for passwordless)
      * @returns {Promise<Object>} Authentication result
      */
     async loginWithUser(user, password = '') {
-        const pw = user.HasPassword ? password : '';
+        // On legacy servers HasPassword correctly indicates whether a password
+        // is needed; on JF12+ it's always true so we just pass through as-is.
+        const pw = api.isJF12Plus() ? password : (user.HasPassword ? password : '');
         return this.login(user.Name, pw);
     }
 

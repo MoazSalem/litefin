@@ -14,6 +14,7 @@ import { state } from '../core/StateManager.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('ApiClient');
 
@@ -49,6 +50,12 @@ export class ApiClient {
 
         // Track retries to prevent infinite loops on 401
         this._retryingRequests = new Set();
+
+        // ── Litefin Companion Server Plugin Detection Cache ───────────────
+        // Cached availability state for the Litefin server-side companion plugin.
+        // null = unprobed / unknown, true = installed & active, false = missing
+        this._hasLitefinServerPlugin = null;
+        this._litefinPluginProbePromise = null;
 
         // ── ETag Response Cache ───────────────────────────────────────────
         // In-memory cache of { etag, body } keyed by full request URL.
@@ -102,6 +109,31 @@ export class ApiClient {
         return !!(info.ServerName && (!info.ProductName || info.ProductName.toLowerCase().includes('emby')));
     }
 
+    /**
+     * Check if the connected server is Jellyfin 12.0 or newer.
+     *
+     * JF 12.0 canonicalized many user-scoped routes: the old
+     * /Users/{userId}/Items/{itemId}/... prefix was deprecated in favour of
+     * /Items/{itemId}?userId=...  (and similar non-user-scoped paths for
+     * PlayedItems, FavoriteItems, Configuration, etc.).
+     *
+     * Old routes still exist as silent legacy fallbacks on JF12, but this flag
+     * lets us proactively use the new paths on modern servers while keeping
+     * full backward compatibility with 10.10 / 10.11 installs.
+     *
+     * @returns {boolean} True when the major server version is >= 12.
+     */
+    isJF12Plus() {
+        /*
+         * The Version field comes from /System/Info/Public and is stored in
+         * global state during the initial server handshake.
+         * Shape: "12.0.0.4" — we only care about the major component.
+         */
+        const info = state.get('server:info') || {};
+        const major = parseInt((info.Version || '').split('.')[0], 10);
+        return !isNaN(major) && major >= 12;
+    }
+
     // ========================================================================
     // Configuration Methods
     // ========================================================================
@@ -114,6 +146,11 @@ export class ApiClient {
         // Normalize URL (remove trailing slash)
         this._serverUrl = serverUrl.replace(/\/+$/, '');
         state.set('server:url', this._serverUrl);
+
+        // Invalidate server-scoped plugin presence cache on server change
+        this._hasLitefinServerPlugin = null;
+        this._litefinPluginProbePromise = null;
+
         log.info(`Server set to ${this._serverUrl}`);
     }
 
@@ -151,6 +188,10 @@ export class ApiClient {
         this._userId = null;
         state.set('user:authenticated', false);
         state.set('user:data', null);
+
+        // Reset server-side plugin detection cache
+        this._hasLitefinServerPlugin = null;
+        this._litefinPluginProbePromise = null;
 
         // Wipe ETag cache — cached responses are bound to the previous auth session
         this._etagCache.clear();
@@ -340,6 +381,17 @@ export class ApiClient {
             ...options.headers
         };
 
+        // ------------------------------------------------------------------
+        // Accept-Language Header (Jellyfin 12+ Localization Middleware)
+        // Passes the client's current UI language so that server messages,
+        // localized metadata, genre descriptions, and scheduled task notifications
+        // are returned in the client's active language rather than server host default.
+        // ------------------------------------------------------------------
+        if (!headers['Accept-Language']) {
+            const activeLang = i18n?.currentLang || (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
+            headers['Accept-Language'] = `${activeLang},en;q=0.8`;
+        }
+
         // Add If-None-Match header if we have a cached ETag for this URL
         if (etagEntry && etagEntry.etag) {
             headers['If-None-Match'] = etagEntry.etag;
@@ -363,10 +415,6 @@ export class ApiClient {
             }
         }
 
-        if (!options.body || !(options.body instanceof FormData)) {
-            headers['Content-Type'] = 'application/json';
-        }
-
         // Build fetch options
         const fetchOptions = {
             method,
@@ -375,12 +423,13 @@ export class ApiClient {
         };
 
         // Add body for POST/PUT requests
-        if (options.body) {
+        if (options.body !== undefined && options.body !== null) {
             if (options.body instanceof FormData) {
                 fetchOptions.body = options.body;
                 // Let browser set Content-Type for FormData
                 delete headers['Content-Type'];
             } else if (typeof options.body === 'object') {
+                headers['Content-Type'] = 'application/json';
                 fetchOptions.body = JSON.stringify(options.body);
             } else {
                 fetchOptions.body = options.body;
@@ -392,10 +441,8 @@ export class ApiClient {
         try {
             // Create abort controller for timeout
             // Support per-request timeout override via options.timeout
-            // IMPORTANT: keepalive requests (e.g. reportPlaybackStopped) must NOT
-            // have an AbortSignal — the Fetch spec throws a TypeError when both
-            // keepalive:true and signal are present. We skip the timeout entirely
-            // for keepalive requests since they complete in the background anyway.
+            // Note: keepalive requests must not attach an AbortSignal in older
+            // environments where the Fetch specification disallowed signals on keepalive.
             const timeout = options.timeout || (options.keepalive ? 0 : REQUEST_TIMEOUT);
             const controller = new AbortController();
             const timeoutId = timeout ? setTimeout(() => controller.abort(), timeout) : null;
@@ -404,7 +451,30 @@ export class ApiClient {
             }
 
             log.debug(`Fetching ${url} (timeout: ${timeout || 'none'}ms)...`);
-            const response = await fetch(url, fetchOptions);
+            let response;
+            try {
+                response = await fetch(url, fetchOptions);
+            } catch (fetchErr) {
+                /*
+                 * On Smart TVs and legacy web runtimes (such as Tizen 5.5 running Chromium 69),
+                 * cross-origin fetch calls with keepalive:true and non-simple headers (like Authorization
+                 * or Content-Type: application/json) trigger an immediate 'TypeError: Failed to fetch'
+                 * due to lack of CORS preflight support for keepalive in older browser engines.
+                 * If keepalive was active and threw a TypeError, fall back to a standard fetch without keepalive.
+                 */
+                if (fetchOptions.keepalive && fetchErr instanceof TypeError) {
+                    log.warn(`Fetch with keepalive failed (${fetchErr.message}); retrying without keepalive...`);
+                    delete fetchOptions.keepalive;
+                    if (!fetchOptions.signal && REQUEST_TIMEOUT) {
+                        const fallbackController = new AbortController();
+                        setTimeout(() => fallbackController.abort(), REQUEST_TIMEOUT);
+                        fetchOptions.signal = fallbackController.signal;
+                    }
+                    response = await fetch(url, fetchOptions);
+                } else {
+                    throw fetchErr;
+                }
+            }
             if (timeoutId) clearTimeout(timeoutId);
 
             // Handle 304 Not Modified — return cached response body
@@ -521,7 +591,10 @@ export class ApiClient {
                 throw networkError;
             }
 
-            if (options.warnOnError) {
+            if (options.silent) {
+                // Completely silent suppression (e.g., for background capability probes)
+                log.debug(`Request to ${endpoint} failed (silent probe):`, error.message || error);
+            } else if (options.warnOnError) {
                 log.warn(`Request to ${endpoint} failed (suppressed):`, error.message || error);
             } else {
                 log.error(`Request to ${endpoint} failed:`, error.message || error);
@@ -712,9 +785,25 @@ export class ApiClient {
     }
 
     /**
-     * Update user configuration
+     * Update user configuration.
+     *
+     * JF12+ canonical: POST /Users/Configuration?userId=...
+     * Legacy (pre-12):  POST /Users/{userId}/Configuration
+     *
+     * Both routes are supported in JF12 (old one kept as silent fallback),
+     * but we prefer the new form on modern servers.
+     *
+     * @param {Object} configuration - The UserConfiguration object to save
      */
     async updateUserConfiguration(configuration) {
+        if (this.isJF12Plus()) {
+            // New JF12 canonical route — userId goes in the query string
+            return this.post(
+                `/Users/Configuration?userId=${encodeURIComponent(this._userId)}`,
+                configuration
+            );
+        }
+        // Legacy path used by JF 10.10 / 10.11
         return this.post(`/Users/${this._userId}/Configuration`, configuration);
     }
 
@@ -728,6 +817,17 @@ export class ApiClient {
     // ========================================================================
     // Library Endpoints
     // ========================================================================
+
+    /**
+     * Trigger a scan / refresh of all media libraries on the server.
+     * Accessible by server administrators.
+     * POST /Library/Refresh
+     * @returns {Promise<any>}
+     */
+    async refreshAllLibraries() {
+        // Send POST request directly to server library refresh endpoint
+        return this.post('/Library/Refresh');
+    }
 
     /**
      * Get items from library
@@ -779,6 +879,13 @@ export class ApiClient {
             ParentId: parentId
         };
 
+        /*
+         * JF12+ canonical: GET /Items/Latest?userId=...
+         * Legacy (pre-12):  GET /Users/{userId}/Items/Latest
+         */
+        if (this.isJF12Plus()) {
+            return this.get('/Items/Latest', { UserId: this._userId, ...defaults, ...params });
+        }
         return this.get(`/Users/${this._userId}/Items/Latest`, { ...defaults, ...params });
     }
 
@@ -802,14 +909,24 @@ export class ApiClient {
             MediaTypes: 'Video'
         };
 
+        /*
+         * JF12+ canonical: GET /UserItems/Resume?userId=...
+         * Legacy (pre-12):  GET /Users/{userId}/Items/Resume
+         */
+        if (this.isJF12Plus()) {
+            return this.get('/UserItems/Resume', { UserId: this._userId, ...defaults, ...params });
+        }
         return this.get(`/Users/${this._userId}/Items/Resume`, { ...defaults, ...params });
     }
 
     /**
-     * Get recently played audio items
+     * Get recently played audio items.
+     *
+     * JF12+ canonical: GET /Items?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items
      */
     async getRecentlyPlayedAudio(parentId, limit = 15) {
-        return this.get(`/Users/${this._userId}/Items`, {
+        const params = {
             ParentId: parentId,
             IncludeItemTypes: 'Audio',
             Recursive: true,
@@ -817,14 +934,21 @@ export class ApiClient {
             SortBy: 'DatePlayed',
             SortOrder: 'Descending',
             Limit: limit
-        });
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...params });
+        }
+        return this.get(`/Users/${this._userId}/Items`, params);
     }
 
     /**
-     * Get frequently played audio items
+     * Get frequently played audio items.
+     *
+     * JF12+ canonical: GET /Items?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items
      */
     async getFrequentlyPlayedAudio(parentId, limit = 15) {
-        return this.get(`/Users/${this._userId}/Items`, {
+        const params = {
             ParentId: parentId,
             IncludeItemTypes: 'Audio',
             Recursive: true,
@@ -832,7 +956,104 @@ export class ApiClient {
             SortBy: 'PlayCount',
             SortOrder: 'Descending',
             Limit: limit
-        });
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...params });
+        }
+        return this.get(`/Users/${this._userId}/Items`, params);
+    }
+
+    /**
+     * Centralized capability check for the Litefin server companion plugin.
+     * Evaluates availability once per session (using the admin plugin registry
+     * or a silent probe endpoint) and caches the boolean result.
+     *
+     * When the Litefin server plugin is not installed, downstream callers
+    /**
+     * Checks if the Litefin companion server plugin is installed, enabled, and active on the Jellyfin server.
+     * Caches the result after the initial check so downstream calls can
+     * immediately bypass all /Litefin/* endpoints and seamlessly fall back to
+     * native Jellyfin routes without logging 404 warnings or errors.
+     *
+     * @param {boolean} [force=false] - Force re-probing the server rather than using cached state
+     * @returns {Promise<boolean>} True if Litefin server companion plugin is active and enabled
+     */
+    async isLitefinPluginAvailable(force = false) {
+        if (force) {
+            this._hasLitefinServerPlugin = null;
+        }
+
+        // 1. Return cached evaluation immediately if already resolved
+        if (this._hasLitefinServerPlugin !== null) {
+            return this._hasLitefinServerPlugin;
+        }
+
+        // 2. Return active probe promise to prevent duplicate concurrent probes
+        if (this._litefinPluginProbePromise) {
+            return this._litefinPluginProbePromise;
+        }
+
+        this._litefinPluginProbePromise = (async () => {
+            try {
+                // Strategy A: Check admin installed plugins list if accessible
+                try {
+                    const { serverPluginClient } = await import('../plugins/ServerPluginClient.js');
+                    if (serverPluginClient && typeof serverPluginClient.getInstalledPlugins === 'function') {
+                        if (force) {
+                            serverPluginClient.reset();
+                        }
+                        const adminList = await serverPluginClient.getInstalledPlugins();
+                        if (Array.isArray(adminList)) {
+                            const match = adminList.some((p) => {
+                                const name = (p.Name || p.name || '').toLowerCase();
+                                const id = (p.Id || p.id || '').toLowerCase();
+                                const matchesName = name.includes('litefin') || id.includes('litefin');
+                                const status = (p.Status || p.status || '').toString().toLowerCase();
+                                const isExplicitlyDisabled =
+                                    status === 'disabled' ||
+                                    status === 'deleted' ||
+                                    status === 'malfunctioned' ||
+                                    status === 'notsupported' ||
+                                    status === 'superseded';
+                                const isActive = !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
+                                return matchesName && isActive;
+                            });
+                            this._hasLitefinServerPlugin = match;
+                            log.info(`Litefin server companion plugin ${match ? 'detected & active' : 'not present or disabled'} via admin registry`);
+                            return match;
+                        }
+                    }
+                } catch (_) {
+                    // Ignore and proceed to probe fallback
+                }
+
+                // Strategy B: Lightweight silent probe to /Litefin/Hero
+                log.debug('Probing Litefin server companion plugin presence...');
+                const probeResult = await this.get('/Litefin/Hero', { limit: 1 }, { silent: true, warnOnError: true });
+                this._hasLitefinServerPlugin = !!probeResult;
+                log.info('Litefin server companion plugin is installed and accessible');
+                return true;
+            } catch (err) {
+                // 404 indicates the plugin is not installed or disabled on this server
+                if (err.status === 404 || err.message?.includes('Not found') || err.message?.includes('404')) {
+                    log.info('Litefin server companion plugin is not installed or disabled — using native Jellyfin routes');
+                    this._hasLitefinServerPlugin = false;
+                    return false;
+                }
+                // 403 / 401 indicates endpoint exists on server but user is not authorized
+                if (err.status === 403 || err.status === 401) {
+                    this._hasLitefinServerPlugin = true;
+                    return true;
+                }
+                // Network or unexpected error — return false without permanently caching
+                log.debug('Litefin server plugin probe query unsettled:', err.message || err);
+                return false;
+            } finally {
+                this._litefinPluginProbePromise = null;
+            }
+        })();
+
+        return this._litefinPluginProbePromise;
     }
 
     /**
@@ -843,6 +1064,11 @@ export class ApiClient {
      */
     async getBatchLatest(parentIds = [], params = {}) {
         if (!parentIds || parentIds.length === 0) return {};
+
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         try {
             return await this.get('/Litefin/Items/Latest', {
                 parentIds: parentIds.join(','),
@@ -860,6 +1086,11 @@ export class ApiClient {
      */
     async getLibraryThumbnails(parentIds = []) {
         if (!parentIds || parentIds.length === 0) return {};
+
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         try {
             return await this.get('/Litefin/Items/Thumbnails', {
                 parentIds: parentIds.join(',')
@@ -875,6 +1106,10 @@ export class ApiClient {
      * @returns {Promise<Object|null>} QueryResult object with Items array or null on fallback
      */
     async getHomeHero(params = {}) {
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         try {
             return await this.get('/Litefin/Hero', params, { warnOnError: true });
         } catch (e) {
@@ -905,6 +1140,10 @@ export class ApiClient {
      * @returns {Promise<Object>} Object containing the merged items list
      */
     async getMergedRows(params = {}) {
+        // Fast-path: Check centralized Litefin server plugin presence
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (!isAvailable) return null;
+
         // Query the custom plugin controller route directly on the server
         return this.get('/Litefin/MergedRows/ContinueAndNextUp', params);
     }
@@ -943,7 +1182,21 @@ export class ApiClient {
     // Item Endpoints
     // ========================================================================
 
+    /**
+     * Get a single item by ID with user-specific data (playback state, etc.).
+     *
+     * JF12+ canonical: GET /Items/{itemId}?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}
+     *
+     * @param {string} itemId - The Jellyfin item GUID
+     * @param {Object} [params] - Additional query parameters
+     */
     async getItem(itemId, params = {}) {
+        if (this.isJF12Plus()) {
+            // New JF12 form — userId is a query param on the non-user route
+            return this.get(`/Items/${itemId}`, { userId: this._userId, ...params });
+        }
+        // Legacy path for JF 10.10 / 10.11
         return this.get(`/Users/${this._userId}/Items/${itemId}`, params);
     }
 
@@ -959,10 +1212,17 @@ export class ApiClient {
 
     /**
      * Get pre-roll intro items for a given media item.
+     *
+     * JF12+ canonical: GET /Items/{itemId}/Intros?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}/Intros
+     *
      * @param {string} itemId - The target media item ID
      * @returns {Promise<Object>} Object containing Items array and TotalRecordCount
      */
     async getIntros(itemId) {
+        if (this.isJF12Plus()) {
+            return this.get(`/Items/${itemId}/Intros`, { userId: this._userId });
+        }
         return this.get(`/Users/${this._userId}/Items/${itemId}/Intros`);
     }
 
@@ -973,10 +1233,16 @@ export class ApiClient {
      * each with their own Id — so they can be played directly through the
      * normal JellyfinPlayer.play({ itemId }) pipeline without any special casing.
      *
+     * JF12+ canonical: GET /Items/{itemId}/LocalTrailers?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}/LocalTrailers
+     *
      * @param {string} itemId - The parent item's ID
      * @returns {Promise<BaseItemDto[]>} Array of trailer items (may be empty)
      */
     async getLocalTrailers(itemId) {
+        if (this.isJF12Plus()) {
+            return this.get(`/Items/${itemId}/LocalTrailers`, { userId: this._userId });
+        }
         return this.get(`/Users/${this._userId}/Items/${itemId}/LocalTrailers`);
     }
 
@@ -984,10 +1250,16 @@ export class ApiClient {
      * Get special features (extras) for an item.
      * Includes trailers, featurettes, behind the scenes, etc.
      *
+     * JF12+ canonical: GET /Items/{itemId}/SpecialFeatures?userId=...
+     * Legacy (pre-12):  GET /Users/{userId}/Items/{itemId}/SpecialFeatures
+     *
      * @param {string} itemId - The parent item's ID
      * @returns {Promise<BaseItemDto[]>} Array of special feature items
      */
     async getSpecialFeatures(itemId) {
+        if (this.isJF12Plus()) {
+            return this.get(`/Items/${itemId}/SpecialFeatures`, { userId: this._userId });
+        }
         return this.get(`/Users/${this._userId}/Items/${itemId}/SpecialFeatures`);
     }
 
@@ -1104,17 +1376,20 @@ export class ApiClient {
             // Attempt to fetch from native Jellyfin endpoint (available in newer servers)
             return await this.get(`/Items/${itemId}/Collections`, { ...defaults, ...params }, { warnOnError: true });
         } catch (err) {
-            // Fall back to the Litefin plugin endpoint if the native route is not found
+            // Fall back to the Litefin plugin endpoint if the native route is not found and plugin is verified present
             if (err.status === 404 || err.message?.includes('Not found')) {
-                log.debug(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
-                try {
-                    return await this.get(
-                        `/Litefin/Items/${itemId}/Collections`,
-                        { ...defaults, ...params },
-                        { warnOnError: true }
-                    );
-                } catch (fallbackErr) {
-                    return { Items: [] };
+                const isAvailable = await this.isLitefinPluginAvailable();
+                if (isAvailable) {
+                    log.debug(`Native Collections endpoint not found for item ${itemId}, attempting Litefin fallback`);
+                    try {
+                        return await this.get(
+                            `/Litefin/Items/${itemId}/Collections`,
+                            { ...defaults, ...params },
+                            { warnOnError: true }
+                        );
+                    } catch (fallbackErr) {
+                        return { Items: [] };
+                    }
                 }
             }
             // A 400 Bad Request simply means the item is not part of any collection on this server version
@@ -1162,32 +1437,49 @@ export class ApiClient {
     }
 
     async getPersonItems(personId) {
-        // Try custom Litefin plugin endpoint first (single request with roles pre-populated)
-        try {
-            return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 100 }, { warnOnError: true });
-        } catch (err) {
-            // Fallback to standard Jellyfin endpoint if plugin is not installed
-            return this.get(`/Users/${this._userId}/Items`, {
-                PersonIds: personId,
-                IncludeItemTypes: 'Movie,Series,Episode',
-                Recursive: true,
-                Limit: 500,
-                Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
-                SortBy: 'PremiereDate',
-                SortOrder: 'Descending'
-            });
+        // Check centralized Litefin server companion plugin presence before attempting optimized endpoint
+        const isAvailable = await this.isLitefinPluginAvailable();
+        if (isAvailable) {
+            try {
+                return await this.get(`/Litefin/Persons/${personId}/Items`, { limit: 100 }, { warnOnError: true });
+            } catch (err) {
+                // Fallback to standard Jellyfin endpoint if plugin request fails
+            }
         }
+
+        // Fallback to standard Jellyfin items endpoint.
+        // JF12+ canonical: GET /Items?UserId=...&PersonIds=...
+        // Legacy (pre-12):  GET /Users/{userId}/Items?PersonIds=...
+        const fallbackParams = {
+            PersonIds: personId,
+            IncludeItemTypes: 'Movie,Series,Episode',
+            Recursive: true,
+            Limit: 500,
+            Fields: 'ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
+            SortBy: 'PremiereDate',
+            SortOrder: 'Descending'
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...fallbackParams });
+        }
+        return this.get(`/Users/${this._userId}/Items`, fallbackParams);
     }
 
-    // Separate call to get items with People field (for character roles)
+    // Separate call to get items with People field (for character roles).
+    // JF12+ canonical: GET /Items?UserId=...&PersonIds=...
+    // Legacy (pre-12):  GET /Users/{userId}/Items?PersonIds=...
     async getPersonItemsWithRoles(personId) {
-        return this.get(`/Users/${this._userId}/Items`, {
+        const params = {
             PersonIds: personId,
             IncludeItemTypes: 'Movie,Series',
             Recursive: true,
             Limit: 200,
             Fields: 'People'
-        });
+        };
+        if (this.isJF12Plus()) {
+            return this.get('/Items', { UserId: this._userId, ...params });
+        }
+        return this.get(`/Users/${this._userId}/Items`, params);
     }
 
     // ========================================================================
@@ -1203,7 +1495,38 @@ export class ApiClient {
         return this.get(`/Audio/${itemId}/Lyrics`);
     }
 
+    /**
+     * Get all album artists in the library.
+     *
+     * JF12+ canonical: GET /Persons?personTypes=AlbumArtist&userId=...
+     *   (The /Artists/AlbumArtists endpoint is marked [Obsolete("Use GetPersons")]
+     *    in JF12 source — ArtistsController.cs.)
+     *
+     * Legacy (pre-12):  GET /Artists/AlbumArtists?UserId=...
+     *
+     * Note: /Persons uses the lowercase `userId` param; /Artists used `UserId`.
+     *
+     * @param {Object} [params] - Additional query params (Limit, ParentId, etc.)
+     */
     async getAlbumArtists(params = {}) {
+        if (this.isJF12Plus()) {
+            /*
+             * /Persons?personTypes=AlbumArtist is the recommended replacement.
+             * We strip out ItemCounts from Fields since /Persons doesn't support
+             * that field and would silently ignore it.
+             */
+            const defaults = {
+                userId: this._userId,
+                personTypes: 'AlbumArtist',
+                Recursive: true,
+                SortBy: 'SortName',
+                SortOrder: 'Ascending',
+                EnableTotalRecordCount: true
+            };
+            return this.get('/Persons', { ...defaults, ...params, personTypes: 'AlbumArtist' });
+        }
+
+        // Legacy path for JF 10.10 / 10.11
         const defaults = {
             UserId: this._userId,
             Recursive: true,
@@ -1212,11 +1535,34 @@ export class ApiClient {
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
         };
-
         return this.get('/Artists/AlbumArtists', { ...defaults, ...params });
     }
 
+    /**
+     * Get all music artists in the library.
+     *
+     * JF12+ canonical: GET /Persons?personTypes=Artist&userId=...
+     *   (The /Artists endpoint is marked [Obsolete("Use GetPersons")]
+     *    in JF12 source — ArtistsController.cs.)
+     *
+     * Legacy (pre-12):  GET /Artists?UserId=...
+     *
+     * @param {Object} [params] - Additional query params
+     */
     async getMusicArtists(params = {}) {
+        if (this.isJF12Plus()) {
+            const defaults = {
+                userId: this._userId,
+                personTypes: 'Artist',
+                Recursive: true,
+                SortBy: 'SortName',
+                SortOrder: 'Ascending',
+                EnableTotalRecordCount: true
+            };
+            return this.get('/Persons', { ...defaults, ...params, personTypes: 'Artist' });
+        }
+
+        // Legacy path for JF 10.10 / 10.11
         const defaults = {
             UserId: this._userId,
             Recursive: true,
@@ -1225,7 +1571,6 @@ export class ApiClient {
             SortOrder: 'Ascending',
             EnableTotalRecordCount: true
         };
-
         return this.get('/Artists', { ...defaults, ...params });
     }
 
@@ -1240,6 +1585,13 @@ export class ApiClient {
             MediaTypes: 'Audio' // Only fetch Audio items
         };
 
+        /*
+         * JF12+ canonical: GET /UserItems/Resume?userId=...
+         * Legacy (pre-12):  GET /Users/{userId}/Items/Resume
+         */
+        if (this.isJF12Plus()) {
+            return this.get('/UserItems/Resume', { UserId: this._userId, ...defaults, ...params });
+        }
         return this.get(`/Users/${this._userId}/Items/Resume`, { ...defaults, ...params });
     }
 
@@ -1273,11 +1625,84 @@ export class ApiClient {
         return this.get('/MusicGenres', { ...defaults, ...params });
     }
 
-    async getItemFilters(params = {}) {
+    /**
+     * Get query filters from the modern Jellyfin 12+ Filters2 endpoint.
+     * Returns AudioLanguages, SubtitleLanguages, Tags, and Genres with IDs.
+     *
+     * @param {Object} [params] - Query parameters (e.g. ParentId, IncludeItemTypes, Recursive)
+     * @returns {Promise<Object>} Object with Genres, Tags, AudioLanguages, SubtitleLanguages
+     */
+    async getItemFilters2(params = {}) {
+        // Build base query parameters
         const defaults = {
             UserId: this._userId,
             Recursive: true
         };
+
+        // Forward request directly to the JF12 Filters2 endpoint
+        return this.get('/Items/Filters2', { ...defaults, ...params });
+    }
+
+    /**
+     * Get query filters for library browsing.
+     *
+     * On Jellyfin 12+, this method combines results from both the legacy
+     * /Items/Filters endpoint (which still provides OfficialRatings and Years)
+     * and the modern /Items/Filters2 endpoint (which provides AudioLanguages,
+     * SubtitleLanguages, and Genres with IDs).
+     *
+     * On older servers (<12), it seamlessly falls back to /Items/Filters only.
+     *
+     * @param {Object} [params] - Query parameters (ParentId, IncludeItemTypes, etc.)
+     * @returns {Promise<Object>} Combined filters object
+     */
+    async getItemFilters(params = {}) {
+        // Base defaults required by both filter endpoints
+        const defaults = {
+            UserId: this._userId,
+            Recursive: true
+        };
+
+        // ------------------------------------------------------------------
+        // Jellyfin 12+ Combined Filter Fetching:
+        // /Items/Filters provides: OfficialRatings, Years, Genres, Tags
+        // /Items/Filters2 provides: AudioLanguages, SubtitleLanguages, Genres (with IDs), Tags
+        // Running both queries concurrently provides a rich filter set without any breaking changes.
+        // ------------------------------------------------------------------
+        if (this.isJF12Plus()) {
+            try {
+                // Execute both requests in parallel using allSettled to ensure resilience
+                const [legacyRes, v2Res] = await Promise.allSettled([
+                    this.get('/Items/Filters', { ...defaults, ...params }),
+                    this.getItemFilters2(params)
+                ]);
+
+                // Safely unpack responses
+                const legacy = legacyRes.status === 'fulfilled' && legacyRes.value ? legacyRes.value : {};
+                const v2 = v2Res.status === 'fulfilled' && v2Res.value ? v2Res.value : {};
+
+                // Return combined filter structure
+                return {
+                    // Prefer v2 Genres (contains Name & Id pairs) if present, else legacy string names
+                    Genres: (v2.Genres && v2.Genres.length > 0) ? v2.Genres : (legacy.Genres || []),
+                    Tags: (v2.Tags && v2.Tags.length > 0) ? v2.Tags : (legacy.Tags || []),
+                    // Ratings and Years only exist on the legacy endpoint
+                    OfficialRatings: legacy.OfficialRatings || [],
+                    Years: legacy.Years || [],
+                    // Audio and Subtitle language arrays from JF12 Filters2
+                    AudioLanguages: v2.AudioLanguages || [],
+                    SubtitleLanguages: v2.SubtitleLanguages || []
+                };
+            } catch (err) {
+                // Log and gracefully fall through to legacy if anything unexpected occurs
+                log.warn('Failed to load combined filters on JF12+, falling back to legacy endpoint:', err);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Pre-JF12 Legacy Route Fallback:
+        // Query the standard /Items/Filters endpoint
+        // ------------------------------------------------------------------
         return this.get('/Items/Filters', { ...defaults, ...params });
     }
 
@@ -1720,13 +2145,23 @@ export class ApiClient {
         return this.post('/Sessions/Playing/Progress', info);
     }
 
-    async reportPlaybackStopped(info) {
-        // Use keepalive to ensure request completes even if app is closing
-        return this.post('/Sessions/Playing/Stopped', info, { keepalive: true });
-    }
-
-    async deletePlaybackProgress(itemId) {
-        return this.delete(`/Users/${this._userId}/Items/${itemId}/Resume`);
+    /**
+     * Report to the server that playback has stopped for an active session.
+     *
+     * Note: In previous revisions, keepalive:true was passed here under the assumption
+     * that it would help when an app unloads. However, on Smart TVs running older
+     * Chromium engines (e.g. Tizen 5.5 running Chromium 69), cross-origin fetch
+     * requests with custom headers like Authorization reject keepalive requests
+     * with 'TypeError: Failed to fetch'. Unload events already use synchronous XHR
+     * in PlayerPage._reportPlaybackStopped, so keepalive is neither needed nor
+     * safe to mandate here.
+     *
+     * @param {Object} info - Playback stop payload
+     * @param {Object} [options={}] - Additional request options
+     * @returns {Promise<any>}
+     */
+    async reportPlaybackStopped(info, options = {}) {
+        return this.post('/Sessions/Playing/Stopped', info, options);
     }
 
     // ========================================================================
@@ -1872,22 +2307,59 @@ export class ApiClient {
     }
 
     // ========================================================================
-    // Favorites Endpoints
+    // Favorites & Played State Endpoints
     // ========================================================================
 
+    /**
+     * Mark an item as a user favourite.
+     *
+     * JF12+ canonical: POST /UserFavoriteItems/{itemId}   (userId from token)
+     * Legacy (pre-12):  POST /Users/{userId}/FavoriteItems/{itemId}
+     */
     async markFavorite(itemId) {
+        if (this.isJF12Plus()) {
+            // New JF12 form — server infers the user from the auth token
+            return this.post(`/UserFavoriteItems/${itemId}`);
+        }
         return this.post(`/Users/${this._userId}/FavoriteItems/${itemId}`);
     }
 
+    /**
+     * Remove an item from user favourites.
+     *
+     * JF12+ canonical: DELETE /UserFavoriteItems/{itemId}
+     * Legacy (pre-12):  DELETE /Users/{userId}/FavoriteItems/{itemId}
+     */
     async unmarkFavorite(itemId) {
+        if (this.isJF12Plus()) {
+            return this.delete(`/UserFavoriteItems/${itemId}`);
+        }
         return this.delete(`/Users/${this._userId}/FavoriteItems/${itemId}`);
     }
 
+    /**
+     * Mark an item as played (watched).
+     *
+     * JF12+ canonical: POST /UserPlayedItems/{itemId}   (userId from token)
+     * Legacy (pre-12):  POST /Users/{userId}/PlayedItems/{itemId}
+     */
     async markPlayed(itemId) {
+        if (this.isJF12Plus()) {
+            return this.post(`/UserPlayedItems/${itemId}`);
+        }
         return this.post(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
 
+    /**
+     * Unmark an item as played.
+     *
+     * JF12+ canonical: DELETE /UserPlayedItems/{itemId}
+     * Legacy (pre-12):  DELETE /Users/{userId}/PlayedItems/{itemId}
+     */
     async unmarkPlayed(itemId) {
+        if (this.isJF12Plus()) {
+            return this.delete(`/UserPlayedItems/${itemId}`);
+        }
         return this.delete(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
 
@@ -2037,6 +2509,170 @@ export class ApiClient {
      */
     get isWebSocketConnected() {
         return this._webSocket && this._webSocket.readyState === WebSocket.OPEN;
+    }
+
+    // ========================================================================
+    // Remote Metadata & Identify Endpoints (Admin)
+    // ========================================================================
+
+    /**
+     * Search remote metadata providers for matching item candidates (e.g. TMDB, TVDB, IMDb).
+     * POST /Items/RemoteSearch/{ItemType}
+     *
+     * @param {string} itemType - Item type (e.g. 'Movie', 'Series', 'BoxSet', 'Person', 'MusicAlbum', 'MusicArtist', 'Book')
+     * @param {Object} searchInfo - Search info object { Name, Year, ProviderIds: { Tmdb, Imdb, Tvdb, ... } }
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {boolean} [includeDisabledProviders=false] - Whether to include disabled providers
+     * @returns {Promise<Array<Object>>} List of RemoteSearchResult objects
+     */
+    async getRemoteSearchResults(itemType, searchInfo, itemId, includeDisabledProviders = false) {
+        // Construct standard Jellyfin RemoteSearchQuery payload
+        const payload = {
+            SearchInfo: searchInfo || {},
+            ItemId: itemId,
+            IncludeDisabledProviders: !!includeDisabledProviders
+        };
+
+        // Normalize item type for endpoint path
+        const typeSegment = encodeURIComponent(itemType);
+        return this.post(`/Items/RemoteSearch/${typeSegment}`, payload);
+    }
+
+    /**
+     * Apply remote search result metadata and images to an item.
+     * POST /Items/RemoteSearch/Apply/{ItemId}?replaceAllImages={bool}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {Object} searchResult - The RemoteSearchResult object returned from getRemoteSearchResults
+     * @param {boolean} [replaceAllImages=true] - Replace all existing images with provider images
+     * @returns {Promise<any>}
+     */
+    async applyRemoteSearchResult(itemId, searchResult, replaceAllImages = true) {
+        // Invalidate cached ETag entries since item metadata is being updated on server
+        this.clearEtagCache();
+
+        // Clear details page cached data to ensure immediate UI update
+        state.clearByPrefix(`details:${itemId}`);
+
+        const url = `/Items/RemoteSearch/Apply/${encodeURIComponent(itemId)}?replaceAllImages=${replaceAllImages ? 'true' : 'false'}`;
+        return this.post(url, searchResult);
+    }
+
+    // ========================================================================
+    // Item Images Endpoints (Admin & Management)
+    // ========================================================================
+
+    /**
+     * Get item image metadata for all currently existing images on the item.
+     * GET /Items/{ItemId}/Images
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @returns {Promise<Array<Object>>} Array of image info objects (ImageType, ImageIndex, ImageTag, Width, Height, Size, etc.)
+     */
+    async getItemImages(itemId) {
+        return this.get(`/Items/${encodeURIComponent(itemId)}/Images`);
+    }
+
+    /**
+     * Get available remote provider images for an item (e.g. from TMDB, Fanart.tv, TVDB).
+     * GET /Items/{ItemId}/RemoteImages
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {Object} [options={}] - Query options
+     * @param {string} [options.type] - Optional ImageType filter (e.g. 'Primary', 'Backdrop', 'Logo', 'Thumb', 'Art', 'Banner', 'Disc')
+     * @param {boolean} [options.includeAllLanguages=true] - Whether to include images in all languages
+     * @returns {Promise<Object>} { Images: Array, TotalRecordCount: number, Providers: Array }
+     */
+    async getItemRemoteImages(itemId, options = {}) {
+        const params = {};
+        if (options.type) {
+            params.type = options.type;
+        }
+        if (options.includeAllLanguages !== undefined) {
+            params.includeAllLanguages = options.includeAllLanguages;
+        } else {
+            params.includeAllLanguages = true;
+        }
+
+        return this.get(`/Items/${encodeURIComponent(itemId)}/RemoteImages`, params);
+    }
+
+    /**
+     * Download and set a remote provider image on the item.
+     * POST /Items/RemoteImages/Download?Type={Type}&ImageUrl={ImageUrl}&ProviderName={ProviderName}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {string} type - ImageType (e.g. 'Primary', 'Backdrop', 'Logo', 'Thumb', 'Art', 'Banner', 'Disc')
+     * @param {string} imageUrl - Full URL of the remote image
+     * @param {string} [providerName=''] - Provider name (e.g. 'TheMovieDb', 'FanArt')
+     * @returns {Promise<any>}
+     */
+    async downloadRemoteImage(itemId, type, imageUrl, providerName = '') {
+        // Clear cached responses so refreshed image tags are fetched
+        this.clearEtagCache();
+        state.clearByPrefix(`details:${itemId}`);
+
+        const params = {
+            Type: type,
+            ImageUrl: imageUrl
+        };
+        if (providerName) {
+            params.ProviderName = providerName;
+        }
+
+        return this.post(`/Items/${encodeURIComponent(itemId)}/RemoteImages/Download`, null, { params });
+    }
+
+    /**
+     * Delete an existing image from an item.
+     * DELETE /Items/{ItemId}/Images/{ImageType} or DELETE /Items/{ItemId}/Images/{ImageType}/{Index}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {string} imageType - ImageType (e.g. 'Primary', 'Backdrop', 'Logo', 'Thumb', 'Art', 'Banner', 'Disc')
+     * @param {number|null} [imageIndex=null] - Optional image index (for multi-image types like Backdrop)
+     * @returns {Promise<any>}
+     */
+    async deleteItemImage(itemId, imageType, imageIndex = null) {
+        // Clear cached responses
+        this.clearEtagCache();
+        state.clearByPrefix(`details:${itemId}`);
+
+        let endpoint = `/Items/${encodeURIComponent(itemId)}/Images/${encodeURIComponent(imageType)}`;
+        if (imageIndex !== null && imageIndex !== undefined) {
+            endpoint += `/${encodeURIComponent(imageIndex)}`;
+        }
+
+        return this.delete(endpoint);
+    }
+
+    /**
+     * Update the display order / priority index of an existing image on an item.
+     * Reorders multi-image collections (such as backdrops, thumbnails, or art)
+     * so that index 0 is used as the primary display asset across the server.
+     *
+     * POST /Items/{ItemId}/Images/{ImageType}/{Index}/Index?newIndex={newIndex}
+     *
+     * @param {string} itemId - Target Jellyfin item ID
+     * @param {string} imageType - ImageType (e.g. 'Backdrop', 'Thumb', 'Art', 'Banner')
+     * @param {number} imageIndex - Current 0-based image position index
+     * @param {number} newIndex - Desired 0-based target position index
+     * @returns {Promise<any>} Server acknowledgement
+     */
+    async updateItemImageIndex(itemId, imageType, imageIndex, newIndex) {
+        // Invalidate caching layers so updated image tag mappings resolve immediately
+        this.clearEtagCache();
+        state.clearByPrefix(`details:${itemId}`);
+
+        // Construct parameterized endpoint path targeting the selected image index
+        const safeItemId = encodeURIComponent(itemId);
+        const safeType = encodeURIComponent(imageType);
+        const safeIndex = encodeURIComponent(imageIndex);
+        const endpoint = `/Items/${safeItemId}/Images/${safeType}/${safeIndex}/Index`;
+
+        // Dispatch POST request carrying the newIndex query parameter
+        return this.post(endpoint, null, {
+            params: { newIndex }
+        });
     }
 
     // ========================================================================

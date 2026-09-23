@@ -73,9 +73,15 @@ export default class ASSRenderer {
         this._isSeeking = false;
 
         /*
-         * Timeupdate throttle: during normal playback we tick libjass at most
-         * once every 100ms (matching the AVPlay tick rate and providing
-         * sub-100ms subtitle accuracy without excessive main-thread load).
+         * Timeupdate throttle: on HTML5 video, the browser fires timeupdate up
+         * to ~4 times per second. We throttle those calls so libjass doesn't do
+         * synchronous ASS cue layout work more often than necessary.
+         *
+         * This throttle is intentionally SKIPPED on the Tizen/AVPlay path
+         * (where _videoElement is null). AVPlay TIME_UPDATE events already arrive
+         * every 250–500 ms — applying an additional 100 ms wall-clock throttle
+         * there would only add latency on top of an already slow tick cadence,
+         * making subtitles appear consistently behind the audio.
          */
         this._lastTickTime = 0;
         this._tickThrottleMs = 100;
@@ -112,12 +118,11 @@ export default class ASSRenderer {
     // ========================================================================
 
     /**
-     * Update the current playback time (only used for AVPlay/ManualClock mode).
-     * In HTML5 video mode, this is driven by the timeupdate event in _createRenderer().
+     * Update the current playback time. Called by SubtitleManager on every tick
+     * for both the HTML5 and Tizen/AVPlay paths.
      *
-     * The stored _delaySeconds offset is applied here for both modes.
-     * A positive delay means subtitles display later — we subtract from the clock
-     * time so libjass "thinks" it's earlier and fires cues later.
+     * The stored _delaySeconds offset is applied here: a positive delay subtracts
+     * from the clock time so libjass "thinks" it's earlier and fires cues later.
      *
      * @param {number} timeSeconds - Current time in seconds
      */
@@ -142,13 +147,20 @@ export default class ASSRenderer {
             }
 
             /*
-             * During normal playback, throttle to _tickThrottleMs (100ms).
-             * libjass interpolates between ticks internally, so this doesn't
-             * visibly degrade subtitle accuracy while cutting main-thread load.
+             * During normal playback on HTML5, the browser fires timeupdate up to
+             * ~4x/second. We throttle those to avoid redundant synchronous ASS cue
+             * layout work on the main thread.
+             *
+             * NOTE: ManualClock does NOT interpolate between ticks — it renders at
+             * exactly the time passed to clock.tick(). This throttle is therefore
+             * skipped on the Tizen/AVPlay path (no _videoElement) where ticks are
+             * already infrequent and every single one carries real timing information.
              */
-            const now = Date.now();
-            if (now - this._lastTickTime < this._tickThrottleMs) return;
-            this._lastTickTime = now;
+            if (this._videoElement) {
+                const now = Date.now();
+                if (now - this._lastTickTime < this._tickThrottleMs) return;
+                this._lastTickTime = now;
+            }
 
             this._doTick(timeSeconds);
         }
@@ -730,10 +742,12 @@ export default class ASSRenderer {
         }
 
         if (this._videoElement) {
-            this._videoElement.removeEventListener('timeupdate', this._onTimeUpdate);
+            // Note: 'timeupdate' is NOT removed here — ASSRenderer no longer registers
+            // that listener. SubtitleManager.tick() is the sole time driver for both
+            // HTML5 and Tizen. Only the clock state listeners are cleaned up.
             this._videoElement.removeEventListener('seeking', this._onSeeking);
-            this._videoElement.removeEventListener('play', this._onPlay);
-            this._videoElement.removeEventListener('pause', this._onPause);
+            this._videoElement.removeEventListener('play',    this._onPlay);
+            this._videoElement.removeEventListener('pause',   this._onPause);
         }
 
         if (this._onWindowResize) {
@@ -853,30 +867,34 @@ export default class ASSRenderer {
 
         if (this._videoElement) {
             /*
-             * CRITICAL: Always remove any previously registered listeners before adding
-             * new ones. _createRenderer() can be called multiple times (e.g. from
-             * setFontStyles() when the user changes the subtitle font). Without this
-             * removal step, every call stacks a new 'timeupdate' listener on top of
-             * the old one. Since this._onTimeUpdate is reassigned, destroy() can no
-             * longer clean up the old listener reference — causing double-ticking that
-             * puts libjass's SVG state machine into a half-initialized state and crashes
-             * with "Cannot read properties of undefined (reading 'appendItem')".
+             * CRITICAL: Always remove any previously registered listeners before
+             * adding new ones. _createRenderer() can be called multiple times
+             * (e.g. from setFontStyles() when the user changes the subtitle font).
+             * Without this cleanup, every call stacks a new listener on top of the
+             * old one, causing the clock to advance multiple times per event.
              */
-            if (this._onTimeUpdate) this._videoElement.removeEventListener('timeupdate', this._onTimeUpdate);
-            if (this._onSeeking)    this._videoElement.removeEventListener('seeking', this._onSeeking);
-            if (this._onPlay)       this._videoElement.removeEventListener('play', this._onPlay);
-            if (this._onPause)      this._videoElement.removeEventListener('pause', this._onPause);
+            if (this._onSeeking) this._videoElement.removeEventListener('seeking', this._onSeeking);
+            if (this._onPlay)    this._videoElement.removeEventListener('play',    this._onPlay);
+            if (this._onPause)   this._videoElement.removeEventListener('pause',   this._onPause);
 
-            // Drive the ManualClock via HTML5 Video events.
-            // NOTE: All time updates go through this.tick() so the offset is applied.
-            this._onTimeUpdate = () => this.tick(this._videoElement.currentTime);
+            /*
+             * Time updates: SubtitleManager.tick() is the sole driver for both
+             * HTML5 and Tizen/AVPlay. ASSRenderer no longer registers its own
+             * 'timeupdate' listener — doing so caused a double-tick on every
+             * HTML5 timeupdate event (once from the internal listener, once from
+             * SubtitleManager), which could produce a subtitle frame rendered
+             * at a subtly wrong timestamp at the throttle boundary.
+             *
+             * The play/pause/seeking listeners remain here because they manage
+             * ManualClock state (play/pause/debounce) which SubtitleManager
+             * does not handle.
+             */
             this._onSeeking = () => {
                 /*
                  * Mark that we are in a seek burst. tick() will suppress individual
-                 * ticks and debounce into a single tick once the seek settles.
+                 * ticks and coalesce into a single tick once the seek settles.
                  * This prevents libjass from hammering the main thread during
-                 * rapid seeks (chapter jumps, scrubbing through the seekbar) at
-                 * the same moment the OSD is showing its opacity transition.
+                 * rapid seeks at the same moment the OSD opacity transition runs.
                  */
                 this._isSeeking = true;
                 if (this._seekDebounceTimer) clearTimeout(this._seekDebounceTimer);
@@ -894,12 +912,11 @@ export default class ASSRenderer {
                 if (this._clock) this._clock.pause();
             };
 
-            this._videoElement.addEventListener('timeupdate', this._onTimeUpdate);
             this._videoElement.addEventListener('seeking', this._onSeeking);
-            this._videoElement.addEventListener('play', this._onPlay);
-            this._videoElement.addEventListener('pause', this._onPause);
+            this._videoElement.addEventListener('play',    this._onPlay);
+            this._videoElement.addEventListener('pause',   this._onPause);
 
-            // Sync initial state
+            // Sync initial clock state with actual video play/pause state
             if (!this._videoElement.paused) {
                 this._clock.play();
             }

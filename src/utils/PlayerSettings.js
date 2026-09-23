@@ -28,8 +28,24 @@ const DEFAULTS = {
     // AUDIO SETTINGS
     // =========================================================================
 
-    // Maximum audio channels (-1 = all available)
+    // -------------------------------------------------------------------------
+    // MAXIMUM AUDIO CHANNELS (DIRECT PLAY LIMIT)
+    // -------------------------------------------------------------------------
+    // Governs the maximum audio channels allowed for native Direct Play (-1 = auto/all).
+    // Audio tracks exceeding this channel count (e.g. 7.1 when capped at 5.1)
+    // are rejected from Direct Play and routed to server transcoding or remuxing.
+    // -------------------------------------------------------------------------
     allowedAudioChannels: -1,
+
+    // -------------------------------------------------------------------------
+    // TRANSCODING MAXIMUM AUDIO CHANNELS
+    // -------------------------------------------------------------------------
+    // Governs the maximum output channel count when the server transcodes audio.
+    // Setting to -1 (auto) inherits from the allowedAudioChannels limit or device capability.
+    // Setting to a discrete value (e.g. 6 for 5.1 or 2 for Stereo) forces transcoded
+    // audio downmix independently of the Direct Play capability.
+    // -------------------------------------------------------------------------
+    transcodeMaxAudioChannels: -1,
 
     // Enable DTS passthrough (requires hardware support)
     enableDts: 'auto',
@@ -178,14 +194,16 @@ const DEFAULTS = {
        ASS SUBTITLE RENDERING ENGINE
        -------------------------------------------------------------------------
        Determines which engine is used to parse and render styled ASS/SSA cues:
-         'libjass'    — DOM-based native JS renderer. High performance on older,
-                        limited hardware, but doesn't support complex typesetting.
          'libass-wasm' — WASM-based libass port via SubtitlesOctopus. Extremely
-                         accurate styling and drawing support.
+                         accurate styling and drawing support. Default engine
+                         when WebAssembly is supported (Chromium 57+).
+         'libjass'    — DOM-based native JS renderer. High performance on older,
+                         limited hardware without WebAssembly support
+                         (e.g., Tizen 3.0/4.0 running Chrome 47/56, WebOS <= 4.0).
          'assjs'      — Lightweight DOM-based renderer (ass.js). Uses browser
-                        native font fallback. Experimental on Tizen AVPlay.
+                         native font fallback. Experimental on Tizen AVPlay.
        ------------------------------------------------------------------------- */
-    assRenderer: 'libjass',
+    assRenderer: platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass',
 
     // Enable extracting and loading fonts embedded in media containers
     subtitleAssLoadContainerFonts: true,
@@ -223,6 +241,18 @@ const DEFAULTS = {
 
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
+
+    /* -------------------------------------------------------------------------
+       OVERRIDE EMBEDDED SUBTITLE COLORS
+       -------------------------------------------------------------------------
+       When enabled (default = true), all embedded and external subtitle colors
+       (such as WebVTT <c.color...>, <c.yellow>, <font color=...>, and STYLE blocks)
+       are overridden with the user's configured subtitle text color (SDR/HDR).
+       When disabled (false), author-specified colors in the subtitle file are
+       honored, falling back to the user's configured subtitle color when no
+       color is specified.
+       ------------------------------------------------------------------------- */
+    subtitleOverrideColors: true,
 
     // Subtitle text color for SDR content
     subtitleTextColor: '#ffffff',
@@ -422,9 +452,9 @@ const DEFAULTS = {
      * for remote external subtitles that need to be fetched/parsed over HTTP),
      * but prevents audio/subtitle flashing and out-of-sync presentation.
      *
-     * Default: true (hold playback until subtitle cues and audio tracks are loaded).
+     * Default: Enabled on Tizen (platformInfo.isTizen), disabled on Web and WebOS.
      */
-    awaitTracksBeforePlayback: true,
+    awaitTracksBeforePlayback: platformInfo.isTizen,
 
     // Auto-chain mode: when both local AND remote trailers exist and this is
     // true, the TrailerDialog selection screen is skipped entirely. Instead,
@@ -482,8 +512,22 @@ const DEFAULTS = {
     // When enabled, pressing Back while controls are hidden (or activating exit)
     // presents a confirmation modal before stopping playback and leaving the player.
     confirmExitPlayer: false,
+
     // Remote timeline previews are applied only when OK is pressed.
     confirmSeekWithOK: false,
+
+    /*
+     * Pause Playback While Scrubbing Seek Bar
+     * -------------------------------------------------------------------------
+     * Temporarily pauses video/audio playback when the user starts scrubbing
+     * or seeking on the timeline (via directional remote keys or dragging the
+     * slider), and automatically resumes playback once seeking is confirmed
+     * or finished (if playback was active before seeking began).
+     *
+     *   true  (default) — Pauses playback while scrubbing/seeking timeline.
+     *   false           — Playback keeps playing uninterrupted during scrub.
+     */
+    pausePlaybackOnScrub: true,
 
     // Enable mouse/magic cursor support in the OSD (hover and click)
     // Disabled by default on Tizen due to cursor interaction bugs
@@ -526,6 +570,19 @@ const DEFAULTS = {
 
     // Keep focus on subtitle offset menu (prevent auto-hide)
     keepFocusOnSubtitleOffset: true,
+
+    /*
+     * Hide Seekbar Progress & Time When Unfocused
+     * -------------------------------------------------------------------------
+     * Anti-spoiler & minimalist OSD presentation mode.
+     * When set to true, the seekbar fill progress bar, thumb handle, and elapsed/remaining
+     * time indicators are masked with opacity 0 whenever the seekbar does not have focus.
+     * Navigating focus directly to the seekbar row (Row 2) restores visibility immediately.
+     *
+     * Note: This setting has no visual effect if osdFocusRestoreMode is set to 'seekbar',
+     * since the seekbar immediately regains focus whenever the OSD is revealed.
+     */
+    osdHideUnfocusedProgress: false,
 
     // Time display mode ('total', 'remaining')
     osdTimeDisplayMode: 'total',
@@ -655,6 +712,20 @@ export const PlayerSettings = {
             if (stored === 'true') return 'enable';
             if (stored === 'false') return 'disable';
         }
+
+        // =====================================================================
+        // ASS RENDERER HARDWARE CAPABILITY FALLBACK
+        // =====================================================================
+        // If libass-wasm was previously stored or selected, but the current
+        // device lacks WebAssembly execution capability (e.g. running on legacy
+        // Chromium < 57 engines such as Tizen 3.0/4.0 or WebOS <= 4.0),
+        // automatically fallback to libjass DOM rendering to prevent player crash.
+        // =====================================================================
+        if (key === 'assRenderer' && stored === 'libass-wasm' && !platformInfo.hasWasmSupport) {
+            log.info('Stored assRenderer is libass-wasm, but device lacks WebAssembly support; falling back to libjass');
+            return 'libjass';
+        }
+
         return stored;
     },
 

@@ -319,7 +319,8 @@ progress.card-progress::-webkit-progress-value {
     padding: 20px;
     background: #1a1a1a;
     /* Default */
-    border-radius: calc(var(--jf-border-radius) - 3px);
+    border-radius: inherit;
+    -webkit-border-radius: inherit;
     overflow: hidden;
     z-index: 1;
 }
@@ -374,7 +375,7 @@ progress.card-progress::-webkit-progress-value {
     -webkit-box-orient: vertical;
     overflow: hidden;
     /* Simplified shadow to avoid Tizen rendering artifacts */
-    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+    text-shadow: 0 2px 3px rgba(0, 0, 0, 0.7);
 }
 
 .landscape .media-fallback-name {
@@ -1058,6 +1059,34 @@ progress.card-progress::-webkit-progress-value {
     border-color: var(--jf-accent);
 }
 
+.track-badge.badge-sdh {
+    background: rgba(255, 193, 7, 0.18);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.4);
+}
+
+.track-badge.badge-forced {
+    background: rgba(235, 87, 87, 0.18);
+    color: #eb5757;
+    border-color: rgba(235, 87, 87, 0.4);
+}
+
+.track-badge.provider-badge {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--jf-text-primary, #ffffff);
+    border-color: rgba(255, 255, 255, 0.25);
+    text-transform: none;
+}
+
+.modal-option-btn.focused .track-badge.badge-sdh,
+.modal-option-btn.focused .track-badge.badge-forced,
+.modal-option-btn.focused .track-badge.provider-badge,
+.modal-option-btn.focused .track-badge.match-badge {
+    background: var(--jf-bg-dark, #000000) !important;
+    color: var(--jf-accent, #ffffff) !important;
+    border-color: var(--jf-accent, #ffffff) !important;
+}
+
 .track-badge {
     display: inline-block;
     vertical-align: middle;
@@ -1268,14 +1297,17 @@ progress.card-progress::-webkit-progress-value {
     color: white;
 }
 
-#btn-subtitle-search {
+#btn-subtitle-search,
+#player-sub-search-btn {
     margin: 0;
     height: auto;
     border-radius: var(--jf-border-radius);
 }
 
 #btn-subtitle-search:focus,
-#btn-subtitle-search.focused {
+#btn-subtitle-search.focused,
+#player-sub-search-btn:focus,
+#player-sub-search-btn.focused {
     background: var(--jf-accent) !important;
     /* High contrast text color calculated by ThemeUtils */
     color: var(--jf-primary-btn-color) !important;
@@ -1972,6 +2004,200 @@ html[data-layout-quirks="c26"] .media-fallback {
     -webkit-box-orient: vertical !important;
     -webkit-box-align: center !important;
     -webkit-box-pack: center !important;
+}
+
+/* ============================================================================
+   Favorite Languages & Modal Filter Pills (Flat, crisp, zero shadows/blurs)
+   ============================================================================ */
+
+/* Segmented Filter Pills at Top of Modals */
+.modal-filter-pills {
+    display: flex;
+    gap: 10px;
+    padding: 12px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Individual Filter Pill Button */
+.modal-filter-pill {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary, #aaa);
+    background: #242424;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: center;
+    outline: none;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Focused Filter Pill: High contrast inverted feedback */
+.modal-filter-pill:hover,
+.modal-filter-pill:focus,
+.modal-filter-pill.focused {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border-color: #ffffff !important;
+    transform: scale(1.04);
+    outline: none !important;
+    z-index: 3;
+}
+
+/* Active Filter Pill */
+.modal-filter-pill.active {
+    background: var(--jf-accent, #00a4dc);
+    color: #ffffff;
+    border-color: var(--jf-accent, #00a4dc);
+}
+
+/* Focused Active Filter Pill */
+.modal-filter-pill.active:focus,
+.modal-filter-pill.active.focused {
+    background: #ffffff !important;
+    color: var(--jf-accent, #0077aa) !important;
+    border-color: #ffffff !important;
+    transform: scale(1.04);
+}
+
+/* Modal Option Label Flex Layout */
+.modal-option-label {
+    flex: 1;
+    min-width: 0;
+    text-align: start;
+    white-space: normal;
+    text-overflow: ellipsis;
+}
+
+/* Modal Star Button */
+.modal-star-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    font-size: 1.35rem;
+    color: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: 12px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s ease, transform 0.15s ease;
+    user-select: none;
+}
+
+/* Star Active Gold Tone */
+.modal-star-btn.active {
+    color: #f1c40f;
+}
+
+/* Star Hover Expansion */
+.modal-star-btn:hover {
+    color: #f39c12;
+    transform: scale(1.15);
+}
+
+/* Star in Focused Row Highlight */
+.modal-option-btn:focus .modal-star-btn.active,
+.modal-option-btn.focused .modal-star-btn.active {
+    color: #ffffff;
+}
+
+/* Inactive Star in Focused Row */
+.modal-option-btn:focus .modal-star-btn:not(.active),
+.modal-option-btn.focused .modal-star-btn:not(.active) {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Favorite Languages Management Modal Container */
+.fav-languages-modal {
+    max-width: 720px;
+    width: 90vw;
+    background: #1a1a1a;
+    border: 1px solid #333333;
+}
+
+/* Search Header Box */
+.fav-lang-search-box {
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Real-Time Language Search Input */
+.fav-lang-search-input {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 1.15rem;
+    color: #ffffff;
+    background: #222222;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    outline: none;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Search Input Focused State */
+.fav-lang-search-input:focus,
+.fav-lang-search-input.focused {
+    background: #2a2a2a;
+    border-color: #ffffff;
+    outline: 2px solid var(--jf-accent, #00a4dc);
+    outline-offset: 2px;
+}
+
+/* Scrollable Full Language List */
+.fav-lang-list {
+    max-height: 440px;
+    overflow-y: auto;
+}
+
+/* Language Row Item */
+.fav-lang-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+/* Language Row Info Group */
+.fav-lang-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Inline Favorite Star Indicator */
+.fav-lang-star {
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+/* Star Active State */
+.fav-lang-star.active {
+    color: #f1c40f;
+}
+
+/* Selected Row Star */
+.fav-lang-row.selected .fav-lang-star {
+    color: #f1c40f;
+}
+
+/* Focused Row Active Star */
+.fav-lang-row.focused .fav-lang-star.active {
+    color: #ffffff;
+}
+
+/* Track Menu Toggle All Buttons */
+.track-toggle-all-btn,
+.details-track-toggle-btn {
+    margin-top: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2) !important;
+    color: var(--jf-accent, #00a4dc) !important;
+    font-weight: 600;
 }
 
 

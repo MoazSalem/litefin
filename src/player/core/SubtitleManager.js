@@ -192,6 +192,32 @@ export default class SubtitleManager {
         log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}, playMethod=${this._playMethod}`);
     }
 
+    /**
+     * ========================================================================
+     * Dynamic Stream Inventory Synchronization
+     * ========================================================================
+     * Updates the internal media streams list without resetting currently active
+     * subtitle cues, renderers, or timeline clocks.
+     * 
+     * This is invoked when external subtitles are downloaded or deleted during an
+     * active playback session, ensuring that subsequent track searches via
+     * _findSubtitleTrack() immediately recognize the newly attached streams.
+     * ========================================================================
+     * 
+     * @param {Array<Object>} mediaStreams - Fresh array of MediaStreams from the server
+     */
+    updateMediaStreams(mediaStreams) {
+        // Guard against null or undefined payloads
+        if (!Array.isArray(mediaStreams)) {
+            log.warn('updateMediaStreams called with non-array payload:', mediaStreams);
+            return;
+        }
+
+        // Update internal streams reference
+        this._mediaStreams = mediaStreams;
+        log.info(`Dynamic stream inventory updated: ${mediaStreams.length} total streams`);
+    }
+
     // ========================================================================
     // Primary Subtitle
     // ========================================================================
@@ -470,8 +496,10 @@ export default class SubtitleManager {
                 // DOM rendering of parsed text-based formats (VTT, SRT, etc.).
                 return 'DOM / Text';
             case DeliveryMethod.ASS_CANVAS: {
-                // ASS/SSA renderer engine: return 'libjass' or 'libass-wasm' directly.
-                const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+                // Determine ASS/SSA renderer engine: default to libass-wasm on platforms
+                // with WebAssembly support (Chromium 57+), or libjass on legacy platforms.
+                const defaultEngine = platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass';
+                const preferredEngine = PlayerSettings.get('assRenderer') || defaultEngine;
                 return preferredEngine;
             }
             case DeliveryMethod.PGS_BITMAP:
@@ -505,7 +533,8 @@ export default class SubtitleManager {
         if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
             // Sync the master style modifications toggle and preferred engine
             const enableModifications = PlayerSettings.get('enableAssStyleModifications') === true;
-            const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+            const defaultEngine = platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass';
+            const preferredEngine = PlayerSettings.get('assRenderer') || defaultEngine;
             this._assRenderer.setStyleConfig({ enableModifications, preferredEngine });
 
             const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
@@ -569,46 +598,65 @@ export default class SubtitleManager {
      * Resets all active subtitle cues and clears all visible screen overlays immediately.
      * 
      * Driven by the JellyfinPlayer seek pipeline to prevent stale/ghost cues from lingering on-screen.
+     * Unconditionally dispatches empty cues to wipe DOM and canvas overlays across all delivery modes
+     * (including EMBEDDED_NATIVE from Tizen AVPlay).
      */
     resetActiveCues() {
         // Log action with high priority for player tracing
         log.info('Resetting active subtitle cues on player seek');
-        let primaryChanged = false;
-        let secondaryChanged = false;
 
-        // Reset primary active cue tracking reference to prevent stale display
-        if (this._activePrimaryCue !== null) {
-            this._activePrimaryCue = null;
-            primaryChanged = true;
-        }
+        // Reset primary active cue tracking reference
+        this._activePrimaryCue = null;
         this._primaryActiveIndex = -1;
 
-        // Reset secondary active cue tracking reference to prevent stale display
-        if (this._activeSecondaryCue !== null) {
-            this._activeSecondaryCue = null;
-            secondaryChanged = true;
-        }
+        // Reset secondary active cue tracking reference
+        this._activeSecondaryCue = null;
         this._secondaryActiveIndex = -1;
 
-        // Force callback triggers with empty text to clear DOM text overlays immediately
-        if (primaryChanged) {
-            this._onPrimaryCue({ text: '' });
-        }
-        if (secondaryChanged) {
-            this._onSecondaryCue({ text: '' });
+        // Force callback triggers with empty text to clear DOM text overlays immediately.
+        // NOTE: We execute this unconditionally because EMBEDDED_NATIVE cues bypass
+        // _activePrimaryCue tracking in SubtitleManager and must still be wiped on seek.
+        this._onPrimaryCue({ text: '', duration: 0 });
+        this._onSecondaryCue({ text: '', duration: 0 });
+
+        // Clear ASS renderer canvas if active
+        if (this._assRenderer && typeof this._assRenderer.clear === 'function') {
+            try {
+                this._assRenderer.clear();
+            } catch (e) {
+                log.debug('Failed to clear ASS renderer:', e);
+            }
         }
 
-        // Clear ASS renderer canvas if active and currently selected as primary delivery
-        if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
-            // Ticks manual clock to -1 to clear libjass DOM overlays
-            this._assRenderer.clear();
+        // Clear PGS renderer canvas if active
+        if (this._pgsRenderer && typeof this._pgsRenderer.clear === 'function') {
+            try {
+                this._pgsRenderer.clear();
+            } catch (e) {
+                log.debug('Failed to clear PGS renderer:', e);
+            }
         }
+    }
 
-        // Clear PGS renderer canvas if active and currently selected as primary delivery
-        if (this._pgsRenderer && this._primaryDelivery === DeliveryMethod.PGS_BITMAP) {
-            // Renders timestamp -1 to wipe the OffscreenCanvas clean
-            this._pgsRenderer.clear();
-        }
+    /**
+     * Clear the cached active primary cue reference without firing an empty cue callback.
+     * Invoked when PlayerPage auto-clears the DOM overlay so that SubtitleManager's
+     * internal state remains strictly synchronized with the visual DOM layer.
+     */
+    clearActivePrimaryCue() {
+        // Invalidate primary cue reference so subsequent ticks can re-render if needed
+        this._activePrimaryCue = null;
+        this._primaryActiveIndex = -1;
+    }
+
+    /**
+     * Clear the cached active secondary cue reference without firing an empty cue callback.
+     * Keeps secondary subtitle tracking aligned with DOM overlay state.
+     */
+    clearActiveSecondaryCue() {
+        // Invalidate secondary cue reference
+        this._activeSecondaryCue = null;
+        this._secondaryActiveIndex = -1;
     }
 
     // ========================================================================
@@ -865,7 +913,9 @@ export default class SubtitleManager {
             }
 
             // Select and initialize ASS subtitle rendering backend with WASM feature gating
-            const preferredEngine = PlayerSettings.get('assRenderer') || 'libjass';
+            // Default to libass-wasm on platforms with WebAssembly capability (Chromium 57+)
+            const defaultEngine = platformInfo.hasWasmSupport ? 'libass-wasm' : 'libjass';
+            const preferredEngine = PlayerSettings.get('assRenderer') || defaultEngine;
             let TargetRendererClass;
             
             // Check if the user selected libass-wasm as the preferred renderer
@@ -1349,23 +1399,26 @@ export default class SubtitleManager {
         const adjustedTime = currentTimeSeconds - offset;
 
         // =====================================================================
-        // Optimized Stateful Search
-        // =====================================================================
-        // Use the last known index as a starting point. Since playback is
-        // usually sequential, we check the current index first, then the next,
-        // falling back to a full (but still prioritized) search only if the
-        // time has jumped (seeking).
+        // Optimized Stateful Search & Binary Search Fallback:
+        // For sequential playback, we first probe the current cached index (O(1)),
+        // followed immediately by the subsequent cue.
+        //
+        // When seeking, scrubbing, or jumping non-contiguously, sequential caching
+        // misses. Rather than doing a linear scan or leaving the index stuck,
+        // we execute a binary search across the sorted cues array (O(log N)).
+        // This guarantees instant, exact cue synchronization across all seek
+        // scenarios without index sticking or artificial delay.
         // =====================================================================
         let currentIndex = slot === 'primary' ? this._primaryActiveIndex : this._secondaryActiveIndex;
         let activeCue = null;
 
-        // 1. Check if the current cached cue is still valid
+        // 1. Fast O(1) probe: Check if the current cached cue is still valid
         if (currentIndex >= 0 && currentIndex < cues.length) {
             const cue = cues[currentIndex];
             if (adjustedTime >= cue.start && adjustedTime <= cue.end) {
                 activeCue = cue;
             } else if (adjustedTime > cue.end && currentIndex + 1 < cues.length) {
-                // 2. Not in current cue? Check if it's the very next one (common case)
+                // 2. Sequential forward progression: Check the very next cue
                 const nextCue = cues[currentIndex + 1];
                 if (adjustedTime >= nextCue.start && adjustedTime <= nextCue.end) {
                     activeCue = nextCue;
@@ -1374,20 +1427,29 @@ export default class SubtitleManager {
             }
         }
 
-        // 3. Fallback: Full search if not found by incrementing
+        // 3. Fallback: Binary search if sequential probe misses (seek, skip, or dialogue gap)
         if (!activeCue) {
-            // Priority search: usually we are moving forward or staying near where we were
-            // If the time jumped backward or significantly forward, we scan.
-            activeCue = cues.find((cue, idx) => {
-                if (adjustedTime >= cue.start && adjustedTime <= cue.end) {
-                    currentIndex = idx;
-                    return true;
+            let low = 0;
+            let high = cues.length - 1;
+            currentIndex = -1;
+
+            while (low <= high) {
+                const mid = (low + high) >> 1;
+                const midCue = cues[mid];
+
+                if (adjustedTime >= midCue.start && adjustedTime <= midCue.end) {
+                    activeCue = midCue;
+                    currentIndex = mid;
+                    break;
+                } else if (adjustedTime < midCue.start) {
+                    high = mid - 1;
+                } else {
+                    low = mid + 1;
                 }
-                return false;
-            });
+            }
         }
 
-        // Update cached index
+        // Synchronize cached index for next tick
         if (slot === 'primary') {
             this._primaryActiveIndex = currentIndex;
         } else {
@@ -1398,7 +1460,7 @@ export default class SubtitleManager {
         const currentActive = slot === 'primary' ? this._activePrimaryCue : this._activeSecondaryCue;
 
         if (activeCue) {
-            // Only emit if the cue actually changed (avoid redundant renders)
+            // Only emit if the cue actually changed (avoid redundant DOM repaints)
             if (currentActive !== activeCue) {
                 if (slot === 'primary') {
                     this._activePrimaryCue = activeCue;
@@ -1436,14 +1498,12 @@ export default class SubtitleManager {
                 callback({ text: '' });
             }
             
-            // If we are between cues, keep the last index so we can efficiently find the next one
-            // unless the time is before the start of our current range.
-            if (currentIndex >= 0 && currentIndex < cues.length) {
-               if (adjustedTime < cues[currentIndex].start) {
-                   // Time jumped backward before current cue? Reset to allow search from start next tick.
-                   if (slot === 'primary') this._primaryActiveIndex = -1;
-                   else this._secondaryActiveIndex = -1;
-               }
+            // Cleanly invalidate cached index during silence so subsequent seeks
+            // or dialogue transitions always query the timeline freshly.
+            if (slot === 'primary') {
+                this._primaryActiveIndex = -1;
+            } else {
+                this._secondaryActiveIndex = -1;
             }
         }
     }

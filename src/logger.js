@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * Backup Logger — Zero-Dependency Early Boot Diagnostic
+ * Logger — Zero-Dependency Early Boot Console Diagnostic & Safe Interceptor
  * ============================================================================
  * Loaded as the FIRST script in index.html. Runs before any ES module,
- * polyfill, or framework code. Compatible with Chromium 32 (Tizen 2.x).
+ * polyfill, or framework code. Compatible with Chromium 26/32/38 (Tizen 2.x/WebOS 1-3.x).
  *
  * What it does:
  *   1. Monkeypatches console.log/info/warn/error immediately with safe wrappers
@@ -12,10 +12,10 @@
  *      — so logs survive crashes, reboots, or the app being killed by the TV
  *
  * WHY THIS FIXES THE BOOT HANG:
- *   On Chromium 32 (Tizen 2.x), somewhere in the app startup a raw console.*
- *   call is made with a complex object or in a context where the native console
+ *   On older engines (Chromium 32 / Tizen 2.x / WebOS), somewhere in app startup
+ *   a raw console.* call is made with a complex object or in a context where native console
  *   throws. This wrapper catches those errors silently, allowing initialization
- *   to continue. The DebugOverlay (once loaded) calls window.__hideBackupLogger()
+ *   to continue. The DebugOverlay (once loaded) calls window.__hideLogger()
  *   to get this panel out of the way.
  * ============================================================================
  */
@@ -190,16 +190,16 @@
     };
 
     /* Write initialization info */
-    _write('INF', ['[BackupLogger] Active. UA=' + navigator.userAgent]);
+    _write('INF', ['[Logger] Active. UA=' + navigator.userAgent]);
 
     /* ---------------------------------------------------------------------- */
     /* GLOBAL API                                                               */
     /* Expose helper functions on window object                                 */
     /* ---------------------------------------------------------------------- */
-    window.__hideBackupLogger = function () {
+    window.__hideLogger = window.__hideBackupLogger = function () {
         panel.style.display = 'none';
     };
-    window.__showBackupLogger = function () {
+    window.__showLogger = window.__showBackupLogger = function () {
         panel.style.display = 'block';
     };
 })();

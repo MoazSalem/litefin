@@ -95,7 +95,11 @@ class SmartHubManager {
          * run (a real auth:login fired). Restoring a session at startup does NOT
          * set this, so a PIN-locked profile stays gated until the user enters it.
          */
-        this._unlocked = false;
+        /**
+         * @type {boolean} - True when media playback is actively running.
+         * Used to suspend background updates and IPC to prevent socket / CPU contention.
+         */
+        this._isPlaying = false;
     }
 
     // ========================================================================
@@ -161,7 +165,14 @@ class SmartHubManager {
             this._stopRefreshCycle();
         });
 
-        // ── Playback end — refresh tiles ────────────────────────────────
+        // ── Playback lifecycle — suspend background sync during playback ─
+        eventBus.on('player:play', () => {
+            this._isPlaying = true;
+        });
+        eventBus.on('player:playing', () => {
+            this._isPlaying = true;
+        });
+
         // ── Playback end / stop — refresh tiles ─────────────────────────
         // When the user finishes watching or stops an item, the Continue Watching
         // and Next Up data may have changed. We listen to both 'player:ended' (natural completion)
@@ -171,10 +182,11 @@ class SmartHubManager {
         // server has fully received, processed, and committed the playback stop report
         // before we query the fresh lists. This avoids fetching stale data due to network race conditions.
         const handlePlaybackFinished = () => {
+            this._isPlaying = false;
             if (this._cycleActive) {
                 log.info('Playback finished or stopped — scheduling Smart Hub preview refresh in 2s');
                 setTimeout(() => {
-                    if (this._cycleActive) {
+                    if (this._cycleActive && !this._isPlaying) {
                         this.update();
                     }
                 }, 2000);
@@ -257,23 +269,24 @@ class SmartHubManager {
      * @private
      */
     _navigateToItem(actionData) {
-        /* Establish /home as the Back-key destination before navigating
-         * to the content. Use replace:true so the router doesn't record
-         * an empty "previous page" entry before home. */
-        router.navigate('/home', { replace: true });
+        // Build the breadcrumb history array required by Samsung Return Key Policy.
+        // Deep linking directly to content must allow the user to press Return/Back
+        // to navigate back to the main homepage rather than exiting to the TV UI.
+        const breadcrumbHistory = ['/home'];
 
-        if (actionData.type === 'episode') {
-            /* For episodes, push the parent series into history so the
-             * user can navigate back up the series → season → episode
-             * hierarchy naturally via the Back key. */
-            if (actionData.seriesid) {
-                router.navigate(`/details/${actionData.seriesid}`);
-            }
-            router.navigate(`/details/${actionData.id}`);
-        } else {
-            /* Movies — navigate straight to the details page. */
-            router.navigate(`/details/${actionData.id}`);
+        // If the deep-linked target is a TV episode with an associated parent series ID,
+        // push the series details route into the breadcrumb hierarchy so Back key
+        // navigation naturally walks: episode -> series -> home -> exit.
+        if (actionData.type === 'episode' && actionData.seriesid) {
+            breadcrumbHistory.push(`/details/${actionData.seriesid}`);
         }
+
+        // Seed the router's internal navigation history stack with the breadcrumb trail.
+        // This ensures router.canGoBack() is true and router.back() correctly targets /home.
+        router.setHistory(breadcrumbHistory);
+
+        // Navigate directly to the requested content item details page
+        router.navigate(`/details/${actionData.id}`);
     }
 
     /**
@@ -297,6 +310,12 @@ class SmartHubManager {
         // Smart Hub updates require access token and user credentials to query the server
         if (!state.get('user:authenticated')) {
             log.debug('Not authenticated — skipping Smart Hub update');
+            return;
+        }
+
+        /* Skip if video playback is actively running to prevent network/IPC contention on TV NIC */
+        if (this._isPlaying) {
+            log.info('Video playback is actively running — deferring Smart Hub update');
             return;
         }
 

@@ -14,6 +14,19 @@
  */
 
 export default class LibassWasmRenderer {
+    /**
+     * =========================================================================
+     * Stub Capability Check
+     * =========================================================================
+     * Always returns false in ultra-legacy builds because WebAssembly dependencies
+     * and workers are excluded from the bundle.
+     *
+     * @returns {boolean} Always false.
+     */
+    static isSupported() {
+        return false;
+    }
+
     constructor({ container, video, width, height } = {}) {
         throw new Error(
             'LibassWasmRenderer is not supported on this platform ' +
@@ -30,5 +43,7 @@ export default class LibassWasmRenderer {
     hide() {}
     clearTrack() {}
     clear() {}
+    play() {}
+    pause() {}
     destroy() {}
 }

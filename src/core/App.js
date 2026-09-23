@@ -178,11 +178,14 @@ class App {
         // 4.6. Plugin Manager Initialization
         // ====================================================================
         // Initialize Plugin Manager if a user session was successfully restored.
-        // However, if we have multiple cached user profiles or the active profile
-        // is protected by a PIN, the app will route the user to the "Who's Watching"
-        // selection screen. In that scenario, we must defer initialization until
+        // On TV platforms (Tizen, WebOS), if multiple cached profiles exist or
+        // the active profile is PIN-locked, startup routes to the "Who's Watching"
+        // selection screen. In that scenario, we defer initialization until
         // a profile is explicitly selected and unlocked, preventing unauthorized
         // background API requests from firing on the selection screen.
+        // On Web browsers, we smartly re-initialize immediately on refresh/boot
+        // (unless actively sitting on the profiles selector) so plugins like MDBList,
+        // SyncPlay, and SkipIntro remain fully operational across page reloads.
         if (state.get('user:authenticated')) {
             // Count of saved user profiles on the server
             const sessionCount = state.get('user:sessionCount', 0);
@@ -193,11 +196,30 @@ class App {
             // Verify if the active user profile has a local PIN lock enabled
             const activeHasPin = activeUserId ? pinManager.hasPin(activeUserId) : false;
 
-            // Defer if user needs to go through profiles selection or PIN verification
-            if (sessionCount > 1 || activeHasPin) {
+            // Check if "Remember Last Active User" preference is enabled
+            const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
+            // Check if a one-time profile skip is armed (e.g., after user switch reload)
+            const skipProfilesOnce = storage.getItem('litefin:skip_profiles_once') === 'true';
+
+            // Check if running on standard web browser vs smart TV environment
+            const isWeb = platformInfo.isWeb;
+
+            // Inspect the initial hash route to determine target page
+            const initialPath = window.location.hash.slice(1) || '/';
+            const isProfilesRoute = initialPath === '/profiles';
+
+            // Defer plugin initialization on TVs if we are routing to the profiles screen or PIN gate.
+            // On Web browsers, re-initialize immediately on refresh/boot (unless explicitly on the /profiles screen
+            // with multiple users or PIN) so plugins remain active across web page reloads.
+            const shouldDefer = isWeb
+                ? (isProfilesRoute && (sessionCount > 1 || activeHasPin))
+                : (((sessionCount > 1 && !rememberLastUser) || activeHasPin) && !skipProfilesOnce);
+
+            if (shouldDefer) {
                 log.info('Deferring plugin manager initialization: profiles screen or PIN gate is active');
             } else {
-                log.info('No profile switcher active: initializing plugin manager immediately');
+                log.info('No profile switcher active or running on web: initializing plugin manager immediately');
                 pluginManager
                     .init({
                         api,
@@ -367,6 +389,9 @@ class App {
 
             this.sidebar.setMode('visible');
         }
+
+        // Invalidate sidebar cache so FocusManager recognizes newly revealed/hidden items
+        focusManager.invalidateCache('sidebar');
     }
 
     /**

@@ -556,6 +556,11 @@
     margin: 0;
 }
 
+[dir="rtl"] .modal-star-btn {
+    margin-left: 0;
+    margin-right: 12px;
+}
+
 [dir="rtl"] .identity-card {
     text-align: right !important;
 }
@@ -630,6 +635,34 @@
 [dir="rtl"] .hero-dot {
     margin-right: 0;
     margin-left: 12px;
+}
+
+[dir="rtl"] .hero-carousel-container.indicator-lines .hero-dot {
+    margin-right: 0;
+    margin-left: 8px;
+}
+
+[dir="rtl"] .hero-carousel-container.indicator-lines .hero-dot:last-child {
+    margin-left: 0;
+}
+
+[dir="rtl"] .hero-carousel-container.indicator-dots .hero-dot {
+    margin-right: 0;
+    margin-left: 10px;
+}
+
+[dir="rtl"] .hero-carousel-container.indicator-dots .hero-dot:last-child {
+    margin-left: 0;
+}
+
+[dir="rtl"] .hero-carousel-container.banner.indicator-lines .hero-indicators {
+    left: 40px;
+    right: 40px;
+}
+
+[dir="rtl"] .hero-carousel-container.banner.compact.indicator-lines .hero-indicators {
+    left: 30px;
+    right: 30px;
 }
 
 /* Seerr Media Type Badges */

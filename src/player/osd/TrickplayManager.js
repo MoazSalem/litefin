@@ -110,6 +110,10 @@ export class TrickplayManager {
 
         /* ------------------------------------------------------------------ */
         /* Look up trickplay data in the item's Trickplay map                  */
+        /* Supports Jellyfin 12+ Alternate Version Trickplay:                 */
+        /* 1. Prioritize active mediaSourceId (version-specific sprite tiles)  */
+        /* 2. Fall back to item.Id (primary video version)                    */
+        /* 3. Fall back to first available source in item.Trickplay           */
         /* ------------------------------------------------------------------ */
 
         const trickplayBySource = item.Trickplay;
@@ -119,9 +123,30 @@ export class TrickplayManager {
             return;
         }
 
-        const resolutions = trickplayBySource[mediaSourceId];
+        let targetSourceId = mediaSourceId;
+        let resolutions = (targetSourceId && typeof trickplayBySource[targetSourceId] === 'object')
+            ? trickplayBySource[targetSourceId]
+            : null;
+
+        // Fallback 1: Try primary item ID if active source has no trickplay
+        if (!resolutions && item.Id && typeof trickplayBySource[item.Id] === 'object') {
+            log.debug(`No trickplay resolutions for mediaSourceId ${mediaSourceId}; falling back to item.Id ${item.Id}`);
+            targetSourceId = item.Id;
+            resolutions = trickplayBySource[targetSourceId];
+        }
+
+        // Fallback 2: Try first available media source key in item.Trickplay
+        if (!resolutions) {
+            const availableSources = Object.keys(trickplayBySource);
+            if (availableSources.length > 0 && typeof trickplayBySource[availableSources[0]] === 'object') {
+                targetSourceId = availableSources[0];
+                resolutions = trickplayBySource[targetSourceId];
+                log.debug(`Falling back to first available trickplay source: ${targetSourceId}`);
+            }
+        }
+
         if (!resolutions || typeof resolutions !== 'object') {
-            log.debug(`No trickplay resolutions for mediaSourceId: ${mediaSourceId}`);
+            log.debug(`No valid trickplay resolutions for item ${item.Id} or source ${mediaSourceId}`);
             this._enabled = false;
             return;
         }
@@ -165,10 +190,10 @@ export class TrickplayManager {
             ...info,
             width: selectedWidth
         };
-        this._itemId      = item.Id;
-        this._mediaSourceId = mediaSourceId;
-        this._serverUrl   = serverUrl;
-        this._authToken   = authToken;
+        this._itemId        = item.Id;
+        this._mediaSourceId = targetSourceId || mediaSourceId || item.Id;
+        this._serverUrl     = serverUrl;
+        this._authToken     = authToken;
 
         log.info(
             `Trickplay ready: ${selectedWidth}×${info.Height}px tiles,`,
@@ -249,8 +274,9 @@ export class TrickplayManager {
          * and MediaSourceId to ensure we get the correct tiles for this stream.
          */
         // Sprite sheet URL — loaded via new Image(), so a query param is required for auth.
-        // Use ApiKey= (non-deprecated) instead of the old api_key=.
-        const url = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${thumbWidth}/${spriteSheetIdx}.jpg?${this._authParamKey}=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
+        // In Jellyfin 12+, mediaSourceId allows alternate version sprite sheets to be served.
+        const sourceParam = this._mediaSourceId ? `&mediaSourceId=${encodeURIComponent(this._mediaSourceId)}` : '';
+        const url = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${thumbWidth}/${spriteSheetIdx}.jpg?${this._authParamKey}=${this._authToken}&quality=20${sourceParam}`;
 
         /* Log only when the sheet changes (not on every frame) — avoids spam */
         if (spriteSheetIdx !== this._lastSpriteSheetIndex) {
@@ -306,8 +332,9 @@ export class TrickplayManager {
         const tilesPerSheet = this._trickplayInfo.TileWidth * this._trickplayInfo.TileHeight;
         if (index * tilesPerSheet >= this._trickplayInfo.ThumbnailCount) return;
 
-        // Pre-fetch URL also uses the dynamic authentication parameter key
-        const prefetchUrl = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${width}/${index}.jpg?${this._authParamKey}=${this._authToken}&quality=20&MediaSourceId=${this._mediaSourceId}`;
+        // Pre-fetch URL uses dynamic authentication and target mediaSourceId for alternate versions
+        const sourceParam = this._mediaSourceId ? `&mediaSourceId=${encodeURIComponent(this._mediaSourceId)}` : '';
+        const prefetchUrl = `${this._serverUrl}/Videos/${this._itemId}/Trickplay/${width}/${index}.jpg?${this._authParamKey}=${this._authToken}&quality=20${sourceParam}`;
         
         const img = new Image();
         img.src = prefetchUrl;

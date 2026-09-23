@@ -16,7 +16,7 @@ import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
 import FontLoader from '../../utils/FontLoader.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
-import { resolveBestAudioStream } from './JellyfinPlayer.js';
+import { resolveBestAudioStream, doesAudioTrackRequireDirectStream } from './JellyfinPlayer.js';
 
 const log = logger.create('PrewarmManager');
 
@@ -134,12 +134,30 @@ export class PrewarmManager {
 
             // Retrieve maximum streaming bitrate configured by user or default to 120Mbps
             const manualBitrate = PlayerSettings.get('maxBitrateInternet') || 120000000;
+
+            // Resolve target MediaSource object for track requirement analysis
+            const targetSource = targetMediaSourceId && item.MediaSources
+                ? item.MediaSources.find(m => m.Id === targetMediaSourceId)
+                : (item.MediaSources ? item.MediaSources[0] : null);
+
+            // Determine if the prewarmed audio track requires remuxing (DirectStream)
+            // on WebOS / HTML5 to prevent prewarming in DirectPlay and falling back to AC3
+            const needsRemux = targetSource && targetAudioIndex !== null && targetAudioIndex !== undefined &&
+                doesAudioTrackRequireDirectStream(targetSource, targetAudioIndex, backendType);
+
+            const prewarmPlaybackMode = needsRemux ? 'remux' : 'auto';
+
             // Build the device profile according to player capabilities and platform
             const deviceProfile = buildJellyfinProfile({
                 manualBitrate,
-                playbackMode: 'auto',
+                playbackMode: prewarmPlaybackMode,
                 backend: backendType
             });
+
+            // If remux is needed for this audio track, disable DirectPlay in profile
+            if (needsRemux) {
+                deviceProfile.DirectPlayProfiles = [];
+            }
 
             // Clone profile to prevent accidental external mutations
             const clonedProfile = JSON.parse(JSON.stringify(deviceProfile));

@@ -14,6 +14,7 @@ import { api } from '../../api/index.js';
 import { pluginManager } from '../../plugins/PluginManager.js';
 import { storage } from '../../utils/StorageService.js';
 import { detailsIcons } from '../../utils/Icons.js';
+import { getMdbProviderInfo } from '../../plugins/installed/mdblist-ratings/ratingsFormatter.js';
 
 export default class DescriptionModal extends BaseMenu {
 
@@ -157,19 +158,34 @@ export default class DescriptionModal extends BaseMenu {
 
                 let html = '';
                 const assetBase = `${api.serverUrl}/Plugins/MdbListRatings/Assets/`;
+                const features = data.features || null;
 
                 for (const rating of data.ratings) {
-                    if (rating.value === null || rating.value === undefined) continue;
+                    // Resolve normalized provider info and precision formatting
+                    const provider = getMdbProviderInfo(
+                        rating.source || rating.Source,
+                        rating.value !== undefined ? rating.value : rating.Value,
+                        rating.score !== undefined ? rating.score : rating.Score,
+                        features
+                    );
 
-                    const provider = this._getMdbProviderInfo(rating.source, rating.value);
-                    const formattedValue = provider.format ? provider.format(rating.value) : rating.value;
+                    // Skip if formatting failed or no display text
+                    if (!provider || !provider.formattedText) continue;
 
                     if (provider.assetName) {
                         const iconUrl = `${assetBase}${provider.assetName}`;
+                        // Include onerror fallback to hide broken image cleanly on older 10.xx servers
                         html += `
-                            <div class="description-modal__mdb-item">
-                                <img src="${iconUrl}" class="description-modal__mdb-icon" alt="" />
-                                <span class="description-modal__mdb-value">${formattedValue}</span>
+                            <div class="description-modal__mdb-item" title="${provider.displayName}: ${provider.formattedText}">
+                                <img src="${iconUrl}" class="description-modal__mdb-icon" alt="${provider.displayName}" onerror="this.onerror=null;this.style.display='none';" />
+                                <span class="description-modal__mdb-value">${provider.formattedText}</span>
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div class="description-modal__mdb-item" title="${provider.displayName}: ${provider.formattedText}">
+                                <span class="description-modal__mdb-icon star-emoji">⭐</span>
+                                <span class="description-modal__mdb-value">${provider.formattedText}</span>
                             </div>
                         `;
                     }
@@ -186,45 +202,11 @@ export default class DescriptionModal extends BaseMenu {
     }
 
     /**
-     * Helper to get provider info for MDBList ratings (reused from HeroCarousel logic).
+     * Helper to get provider info for MDBList ratings (backward-compatible delegate).
      * @private
      */
-    _getMdbProviderInfo(source, value) {
-        const s = source ? source.toLowerCase() : '';
-        const score = parseFloat(value);
-
-        if (s === 'imdb') {
-            return { assetName: 'IMDb.png' };
-        }
-        if (s === 'tomatoes') {
-            const assetName = score < 60 ? 'Rotten_Tomatoes_rotten.png' : 'Rotten_Tomatoes.png';
-            return { assetName, format: (v) => `${v}%` };
-        }
-        if (s === 'tomatoesaudience' || s === 'popcorn') {
-            const assetName =
-                score < 60 ? 'Rotten_Tomatoes_negative_audience.png' : 'Rotten_Tomatoes_positive_audience.png';
-            return { assetName, format: (v) => `${v}%` };
-        }
-        if (s === 'metacritic') {
-            return { assetName: 'Metacritic.png' };
-        }
-        if (s === 'trakt') {
-            return { assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
-        }
-        if (s === 'tmdb') {
-            return { 
-                assetName: 'TMDB.png', 
-                format: (v) => {
-                    const num = parseFloat(v);
-                    return (num > 10 ? num / 10 : num).toFixed(1);
-                }
-            };
-        }
-        if (s === 'letterboxd') {
-            return { assetName: 'letterboxd.png', format: (v) => parseFloat(v).toFixed(1) };
-        }
-
-        return { assetName: null };
+    _getMdbProviderInfo(source, value, score = null) {
+        return getMdbProviderInfo(source, value, score);
     }
 
     handleKey(key) {

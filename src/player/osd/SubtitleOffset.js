@@ -38,6 +38,9 @@ export default class SubtitleOffset extends BaseMenu {
             this.ignoreInputUntil = Date.now() + 300;
         } else {
             this.isVisible = false;
+            if (typeof this._cleanupOffsetDrag === 'function') {
+                this._cleanupOffsetDrag();
+            }
             if (this.$el) {
                 this.$el.classList.remove('visible');
             }
@@ -76,16 +79,109 @@ export default class SubtitleOffset extends BaseMenu {
             this.$el = temp.firstElementChild;
             overlays.appendChild(this.$el);
 
-            // Bind slider input for mouse/touch
+            // Prevent clicks inside the popup from bubbling to background video play/pause toggle
+            this.$el.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+
+            // Bind slider container and range input for smooth mouse/touch/pointer scrubbing
+            const sliderContainer = this.$el.querySelector('.osd-slider-container');
             const slider = this.$el.querySelector('#osdOffsetSlider');
+
+            /*
+             * Applies the calculated offset value, updates internal state,
+             * re-renders fill bar and text values, and notifies the player.
+             */
+            const applyOffsetValue = (val) => {
+                // Clamp between -30s and +30s and round to 1 decimal place
+                let clamped = Math.max(-30, Math.min(30, val));
+                clamped = Math.round(clamped * 10) / 10;
+                this.offset = clamped;
+
+                if (slider) {
+                    slider.value = clamped;
+                }
+
+                // Update visual track and label indicators
+                this.updateUI();
+
+                // Direct sync to active player subtitle pipeline
+                if (this.player?.setSubtitleOffset) {
+                    this.player.setSubtitleOffset(this.offset);
+                }
+            };
+
+            // Standard input and change event listeners on native range element
             if (slider) {
                 slider.addEventListener('input', (e) => {
-                    this.offset = parseFloat(e.target.value);
-                    this.updateUI();
-                    if (this.player?.setSubtitleOffset) {
-                        this.player.setSubtitleOffset(this.offset);
-                    }
+                    applyOffsetValue(parseFloat(e.target.value));
                 });
+                slider.addEventListener('change', (e) => {
+                    applyOffsetValue(parseFloat(e.target.value));
+                });
+            }
+
+            /*
+             * Dragging & Scrubbing support for mouse and magic cursor:
+             * Allows clicking or dragging anywhere within the 30px container height,
+             * avoiding the precision requirement of hitting the 8px native track.
+             */
+            if (sliderContainer && slider) {
+                const updateFromPointer = (e) => {
+                    const rect = sliderContainer.getBoundingClientRect();
+                    if (!rect.width) return;
+
+                    // Account for document text direction in RTL mode
+                    const isRTL = document.documentElement.dir === 'rtl';
+                    let fraction = (e.clientX - rect.left) / rect.width;
+                    if (isRTL) fraction = 1 - fraction;
+                    fraction = Math.max(0, Math.min(1, fraction));
+
+                    const min = parseFloat(slider.min || -30);
+                    const max = parseFloat(slider.max || 30);
+                    const val = min + fraction * (max - min);
+                    applyOffsetValue(val);
+                };
+
+                let isDragging = false;
+
+                const onPointerMove = (e) => {
+                    if (!isDragging) return;
+                    updateFromPointer(e);
+                };
+
+                const onPointerUp = () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        window.removeEventListener('pointermove', onPointerMove);
+                        window.removeEventListener('pointerup', onPointerUp);
+                        window.removeEventListener('mousemove', onPointerMove);
+                        window.removeEventListener('mouseup', onPointerUp);
+                    }
+                };
+
+                // Store cleanup reference for when the widget is hidden or unmounted
+                this._cleanupOffsetDrag = onPointerUp;
+
+                const onPointerDown = (e) => {
+                    // Only respond to primary mouse button
+                    if (e.button !== undefined && e.button !== 0) return;
+                    // Guard against TV remote synthetic enter clicks
+                    if (e.detail === 0 || (e.clientX === 0 && e.clientY === 0)) return;
+
+                    e.stopPropagation();
+                    isDragging = true;
+                    updateFromPointer(e);
+
+                    // Track global movement across the screen during drag
+                    window.addEventListener('pointermove', onPointerMove);
+                    window.addEventListener('pointerup', onPointerUp);
+                    window.addEventListener('mousemove', onPointerMove);
+                    window.addEventListener('mouseup', onPointerUp);
+                };
+
+                sliderContainer.addEventListener('pointerdown', onPointerDown);
+                sliderContainer.addEventListener('mousedown', onPointerDown);
             }
 
             // Bind close button

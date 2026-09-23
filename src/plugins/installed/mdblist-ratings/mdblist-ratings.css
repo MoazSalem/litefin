@@ -110,6 +110,35 @@
     height: 20px; /* Reduced to balance visual weight of the wide banner */
 }
 
+.icon-imdb-top250 img {
+    height: 26px;
+}
+
+.icon-simkl img {
+    height: 24px;
+}
+
+.icon-senscritique img {
+    height: 24px;
+}
+
+.icon-allocine img,
+.icon-allocine-users img {
+    height: 24px;
+}
+
+.icon-betaseries img {
+    height: 24px;
+}
+
+.icon-mdblist img {
+    height: 24px;
+}
+
+.icon-whatson img {
+    height: 24px;
+}
+
 .mdblist-value {
     letter-spacing: 0.3px;
     font-variant-numeric: tabular-nums;

@@ -630,7 +630,7 @@ class ScrollController {
 
         // Check for specific scrollable containers used in modals/filters/login grid
         const container = element.closest(
-            '.users-grid, .modal-options, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper'
+            '.users-grid, .modal-options, .modal-body, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper, .media-info-scrollable, .identify-results-list'
         );
 
         return container;
@@ -997,9 +997,12 @@ class ScrollController {
                             isModern &&
                             !track.__virtualRow.isLandscape &&
                             track.__virtualRow.cardType !== 'square' &&
-                            track.__virtualRow.cardType !== 'artist';
+                            track.__virtualRow.cardType !== 'artist' &&
+                            track.__virtualRow.cardType !== 'person';
 
-                        elementWidth = canExpand ? 600 : track.__virtualRow.itemWidth;
+                        elementWidth = canExpand
+                            ? Math.round(600 * (track.__virtualRow.modernMultiplier || 1.0))
+                            : track.__virtualRow.itemWidth;
                         trackWidth = track.__virtualRow.getTrackWidth();
                     } else {
                         if (isRtl) {

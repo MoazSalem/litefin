@@ -311,6 +311,26 @@ class Toast {
     }
 
     /**
+     * Show a success toast
+     * @param {string} message - Message to display
+     * @param {number} [duration=4000] - Auto-dismiss duration in ms
+     * @param {Object} [options] - Additional options
+     */
+    success(message, duration = 4000, options = {}) {
+        return this.show(message, duration, { ...options, type: 'success' });
+    }
+
+    /**
+     * Show an error toast
+     * @param {string} message - Message to display
+     * @param {number} [duration=5000] - Auto-dismiss duration in ms
+     * @param {Object} [options] - Additional options
+     */
+    error(message, duration = 5000, options = {}) {
+        return this.show(message, duration, { ...options, type: 'error' });
+    }
+
+    /**
      * Clear all toasts
      */
     clear() {

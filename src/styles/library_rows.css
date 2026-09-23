@@ -142,6 +142,98 @@
     width: 420px;
 }
 
+/* Modern Layouts: 24px Rounded Corners for Library Rows & Genre Grids */
+html[data-layout-media-rows="modern"] .library-row .media-card .card-image,
+html[data-layout-media-rows="expanded"] .library-row .media-card .card-image,
+html[data-layout-media-rows="modern-posters"] .library-row .media-card .card-image,
+html[data-layout-media-rows="modern"] .genre-grid-items .media-card .card-image,
+html[data-layout-media-rows="expanded"] .genre-grid-items .media-card .card-image,
+html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card .card-image {
+    border-radius: 24px !important;
+    -webkit-border-radius: 24px !important;
+    border: none !important;
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05)) !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+html[data-layout-media-rows="modern"] .library-row .media-card .card-image img,
+html[data-layout-media-rows="expanded"] .library-row .media-card .card-image img,
+html[data-layout-media-rows="modern-posters"] .library-row .media-card .card-image img,
+html[data-layout-media-rows="modern"] .genre-grid-items .media-card .card-image img,
+html[data-layout-media-rows="expanded"] .genre-grid-items .media-card .card-image img,
+html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card .card-image img,
+html[data-layout-media-rows="modern"] .library-row .media-card .media-fallback,
+html[data-layout-media-rows="expanded"] .library-row .media-card .media-fallback,
+html[data-layout-media-rows="modern-posters"] .library-row .media-card .media-fallback,
+html[data-layout-media-rows="modern"] .genre-grid-items .media-card .media-fallback,
+html[data-layout-media-rows="expanded"] .genre-grid-items .media-card .media-fallback,
+html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card .media-fallback {
+    border-radius: 24px !important;
+    -webkit-border-radius: 24px !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.library-row .media-card .media-fallback,
+.genre-grid-items .media-card .media-fallback {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+    z-index: 1 !important;
+}
+
+html[data-layout-media-rows="modern"] .library-row .media-card:focus .card-image,
+html[data-layout-media-rows="modern"] .library-row .media-card.focused .card-image,
+html[data-layout-media-rows="expanded"] .library-row .media-card:focus .card-image,
+html[data-layout-media-rows="expanded"] .library-row .media-card.focused .card-image,
+html[data-layout-media-rows="modern-posters"] .library-row .media-card:focus .card-image,
+html[data-layout-media-rows="modern-posters"] .library-row .media-card.focused .card-image,
+html[data-layout-media-rows="modern"] .genre-grid-items .media-card:focus .card-image,
+html[data-layout-media-rows="modern"] .genre-grid-items .media-card.focused .card-image,
+html[data-layout-media-rows="expanded"] .genre-grid-items .media-card:focus .card-image,
+html[data-layout-media-rows="expanded"] .genre-grid-items .media-card.focused .card-image,
+html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card:focus .card-image,
+html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card.focused .card-image {
+    border: none !important;
+    outline: none !important;
+}
+
+/* Modern Layouts: Library Rows Overlay Focus Ring */
+html[data-layout-media-rows="modern"] .library-row .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern"] .library-row .media-card.focused .card-image::after,
+html[data-layout-media-rows="expanded"] .library-row .media-card:focus .card-image::after,
+html[data-layout-media-rows="expanded"] .library-row .media-card.focused .card-image::after,
+html[data-layout-media-rows="modern-posters"] .library-row .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern-posters"] .library-row .media-card.focused .card-image::after,
+html[data-layout-media-rows="modern"] .genre-grid-items .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern"] .genre-grid-items .media-card.focused .card-image::after,
+html[data-layout-media-rows="expanded"] .genre-grid-items .media-card:focus .card-image::after,
+html[data-layout-media-rows="expanded"] .genre-grid-items .media-card.focused .card-image::after,
+html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card:focus .card-image::after,
+html[data-layout-media-rows="modern-posters"] .genre-grid-items .media-card.focused .card-image::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 24px;
+    -webkit-border-radius: 24px;
+    border: 4px solid var(--jf-focus-border-color, var(--jf-accent));
+    box-sizing: border-box;
+    z-index: 10;
+    pointer-events: none;
+}
+
 /* ================================================================
  * Genre Grids (Clean Standardized Grid)
  * ================================================================ */

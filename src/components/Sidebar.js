@@ -479,6 +479,8 @@ class Sidebar extends Component {
      */
     setMode(mode) {
         this.el.classList.toggle('hidden', mode === 'hidden');
+        // Invalidate FocusManager cache so switching to visible allows entering the sidebar
+        focusManager.invalidateCache('sidebar');
         // Re-evaluate alignment once visibility changes (resolving clientHeight 0 state)
         setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
@@ -978,14 +980,22 @@ class Sidebar extends Component {
                 btn.dataset.layoutId = `lib-${lib.Id}`;
 
                 // Detect if this library represents gaming / JellyEmu ROMs
-                // Jellyfin imports JellyEmu games under 'books', 'games', or generic collections
+                // Jellyfin imports JellyEmu games under 'games', or generic collections
                 // with keywords like "Game", "ROM", "Emulator", or "JellyEmu" in the name.
                 let iconCollectionType = lib.CollectionType;
                 const libNameLower = (lib.Name || '').toLowerCase();
+                const isMediaCol =
+                    lib.CollectionType === 'homevideos' ||
+                    lib.CollectionType === 'photos' ||
+                    lib.CollectionType === 'movies' ||
+                    lib.CollectionType === 'tvshows' ||
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'musicvideos';
+
                 const isGameLibrary =
-                    lib.CollectionType === 'games' ||
-                    lib.CollectionType === 'books' ||
-                    /game|rom|emulator|emulation|jellyemu/i.test(libNameLower);
+                    !isMediaCol &&
+                    (lib.CollectionType === 'games' ||
+                        /\b(games?|roms?|emulators?|emulation|jellyemu|retroarch|retrogames?)\b/i.test(libNameLower));
 
                 if (isGameLibrary) {
                     iconCollectionType = 'games';
@@ -1239,17 +1249,47 @@ class Sidebar extends Component {
         setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
 
+    /**
+     * ============================================================================
+     * COLLAPSED / EXPANDED SIDEBAR BACKGROUND ENGINE
+     * ============================================================================
+     * Evaluates active transparency, tinting, and color override preferences
+     * stored in local configuration for both collapsed and expanded states.
+     * 
+     * Special Rule: When on the Settings page, if the collapsed sidebar is set
+     * to 'transparent', it is overridden to solid theme background for visual
+     * consistency and surface alignment with the settings split-view sidebar.
+     * ============================================================================
+     */
     _updateTransparentCollapsed() {
+        // Retrieve configured background preferences with defaults
         const colorPref = storage.getItem('pref:collapsedSidebarColor') || 'transparent';
         const expandedColorPref = storage.getItem('pref:expandedSidebarColor') || 'theme';
-        this.el.classList.toggle('transparent-collapsed', colorPref === 'transparent');
+
+        // Check if current active route corresponds to the Settings screen
+        const isSettings = Boolean(
+            this.activePath === '/settings' ||
+            this.activePath?.startsWith('/settings') ||
+            (typeof window !== 'undefined' && window.location.hash.startsWith('#/settings'))
+        );
+
+        // If collapsed sidebar is transparent, override it in Settings to render solid theme bg
+        const isTransparentCollapsed = colorPref === 'transparent' && !isSettings;
+
+        // Apply collapsed style classes to element DOM
+        this.el.classList.toggle('transparent-collapsed', isTransparentCollapsed);
         this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');
         this.el.classList.toggle('tinted-semi-collapsed', colorPref === 'tinted-semi');
         this.el.classList.toggle('black-collapsed', colorPref === 'black');
+
+        // Apply expanded style classes to element DOM
         this.el.classList.toggle('transparent-expanded', expandedColorPref === 'transparent');
         this.el.classList.toggle('semi-transparent-expanded', expandedColorPref === 'semi');
         this.el.classList.toggle('tinted-semi-expanded', expandedColorPref === 'tinted-semi');
         this.el.classList.toggle('black-expanded', expandedColorPref === 'black');
+
+        // Apply in-settings state class to element DOM for modern layout overrides
+        this.el.classList.toggle('in-settings', isSettings);
     }
 
     _updateSidebarItemsAlign() {

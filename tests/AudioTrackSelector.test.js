@@ -55,7 +55,7 @@ function setup(settings = {}, caps = {}) {
             source.indexOf('// ============================================================================\n// Minimal EventEmitter')
         ).replace(/export /g, '')}
 
-        ({ isTrueHdSupported, isDtsSupported, isAudioTrackNativelyPlayable, resolveBestAudioStream });
+        ({ isTrueHdSupported, isDtsSupported, isAudioTrackNativelyPlayable, resolveBestAudioStream, doesAudioTrackRequireDirectStream });
     `;
 
     return vm.runInContext(code, context);
@@ -155,3 +155,186 @@ test('resolveBestAudioStream respects preferDirectPlayAudio=false', () => {
     const best = resolveBestAudioStream(mediaSource);
     assert.strictEqual(best.Index, 0, 'Should return default TrueHD track when setting is disabled');
 });
+
+test('resolveBestAudioStream selects DTS-HD MA over AC3 backup when TrueHD default is disabled and DTS is enabled', () => {
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        enableTrueHd: 'disable',
+        enableDts: 'enable'
+    });
+
+    const mediaSource = {
+        Id: 'ms-truehd-dts-ac3',
+        DefaultAudioStreamIndex: 0,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 1, Type: 'Audio', Codec: 'dts-hd ma', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 2, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 1, 'Should select DTS-HD MA (Index 1) instead of AC3 backup (Index 2)');
+    assert.strictEqual(best.Codec, 'dts-hd ma');
+});
+
+test('resolveBestAudioStream upgrades from AC3 compatibility track to DTS-HD MA in same language when DTS is enabled', () => {
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        enableDts: 'enable'
+    });
+
+    const mediaSource = {
+        Id: 'ms-dts-ac3-default',
+        DefaultAudioStreamIndex: 1,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'dts-hd ma', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: true } // Compatibility track flagged default by encoder
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 0, 'Should upgrade to DTS-HD MA (Index 0) instead of settling for default AC3 (Index 1)');
+});
+
+test('resolveBestAudioStream falls back to AC3 when DTS is disabled and default is DTS', () => {
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        enableDts: 'disable'
+    });
+
+    const mediaSource = {
+        Id: 'ms-dts-disabled',
+        DefaultAudioStreamIndex: 0,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: true },
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 1, 'Should fall back to AC3 (Index 1) when DTS is disabled');
+});
+
+test('doesAudioTrackRequireDirectStream: Avatar (DTS default track) plays DirectPlay without remux', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable',
+        enableTrueHd: 'disable'
+    });
+
+    const mediaSource = {
+        Id: 'avatar-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Requested track is Index 2 (DTS), which is container track 0 (physical default)
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos');
+    assert.strictEqual(requiresRemux, false, 'Default DTS track should play DirectPlay natively without remuxing');
+});
+
+test('doesAudioTrackRequireDirectStream: Edge of Tomorrow (non-default DTS track) requires DirectStream remux on WebOS', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable',
+        enableTrueHd: 'disable'
+    });
+
+    const mediaSource = {
+        Id: 'edge-of-tomorrow-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 4, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 5, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Requested track is Index 5 (DTS).
+    // Physical container default is Index 3 (first playable track since TrueHD is disabled).
+    // Because DTS is dropped from Chromium audioTracks, WebOS cannot switch in DirectPlay!
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 5, 'webos');
+    assert.strictEqual(requiresRemux, true, 'Non-default DTS track must require DirectStream remux to prevent AC3 downgrade');
+});
+
+test('doesAudioTrackRequireDirectStream: Multi-audio AC3 tracks do NOT require remux (native audioTracks supported)', () => {
+    const { doesAudioTrackRequireDirectStream } = setup();
+
+    const mediaSource = {
+        Id: 'multi-ac3-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: true },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'spa', IsDefault: false }
+        ]
+    };
+
+    // Requested track is Spanish AC3 (Index 3). AC3 is supported in Chromium audioTracks.
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 3, 'webos');
+    assert.strictEqual(requiresRemux, false, 'Standard AC3 tracks switch natively via HTML5 audioTracks without remuxing');
+});
+
+test('doesAudioTrackRequireDirectStream: Tizen AVPlay does NOT require remux (hardware demuxing)', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable'
+    });
+
+    const mediaSource = {
+        Id: 'tizen-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 5, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 5, 'avplay');
+    assert.strictEqual(requiresRemux, false, 'Tizen AVPlay uses native hardware demuxing and does not need remuxing');
+});
+
+test('isAudioTrackNativelyPlayable respects allowedAudioChannels setting', () => {
+    // -------------------------------------------------------------------------
+    // User configured max channels to 6 (5.1 surround)
+    // -------------------------------------------------------------------------
+    const { isAudioTrackNativelyPlayable } = setup({
+        allowedAudioChannels: 6
+    });
+
+    // 8 channels (7.1) should not be considered natively playable without transcode
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'eac3', Channels: 8 }), false);
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 8 }), false);
+
+    // 6 channels (5.1) and 2 channels (stereo) are within limits and natively playable
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'eac3', Channels: 6 }), true);
+    assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 2 }), true);
+});
+
+test('resolveBestAudioStream selects 5.1 track when default track is 7.1 and max channels is 5.1', () => {
+    // -------------------------------------------------------------------------
+    // When allowedAudioChannels is 6, resolveBestAudioStream should avoid the
+    // 7.1 track and auto-select the 5.1 track in the matching language
+    // -------------------------------------------------------------------------
+    const { resolveBestAudioStream } = setup({
+        preferDirectPlayAudio: true,
+        allowedAudioChannels: 6
+    });
+
+    const mediaSource = {
+        Id: 'source-71',
+        DefaultAudioStreamIndex: 0,
+        MediaStreams: [
+            { Index: 0, Type: 'Audio', Codec: 'eac3', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const best = resolveBestAudioStream(mediaSource);
+    assert.ok(best, 'Best audio stream should be resolved');
+    assert.strictEqual(best.Index, 1, 'Should select English AC3 5.1 instead of EAC3 7.1');
+});
+
+
+

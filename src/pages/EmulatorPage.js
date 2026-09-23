@@ -2,10 +2,10 @@
  * ============================================================================
  * Litefin Tizen - Emulator Page
  * ============================================================================
- * Full-screen standalone emulator host designed following Apple's Human
- * Interface Guidelines (HIG). Renders JellyEmu's backend session seamlessly,
+ * Full-screen standalone emulator host designed
+ * Renders JellyEmu's backend session seamlessly,
  * provides hardware-accelerated iframe containment, traps TV remote back events,
- * and displays an Apple TV-style frosted-glass pause/exit HUD with spring
+ * and display pause/exit HUD with spring
  * animations before allowing the user to return to Litefin.
  * ============================================================================
  */
@@ -33,7 +33,7 @@ class EmulatorPage extends Page {
 
     /**
      * Renders the base DOM hierarchy.
-     * Standalone full-screen container matching Apple Human Interface Guidelines:
+     * Standalone full-screen container matching:
      * ultra-smooth transitions, and translucent glass floating HUD.
      */
     render() {
@@ -47,7 +47,7 @@ class EmulatorPage extends Page {
                     allow="autoplay; fullscreen; gamepad *; xr-spatial-tracking; microphone"
                 ></iframe>
 
-                <!-- Apple TV Inspired Frosted Glass Pause / Exit Dialog -->
+                <!-- Pause / Exit Dialog -->
                 <div class="emulator-pause-overlay hidden" id="emulator-pause-overlay" aria-hidden="true">
                     <div class="emulator-pause-card" role="dialog" aria-modal="true">
                         <div class="emulator-pause-badge">
@@ -181,6 +181,7 @@ class EmulatorPage extends Page {
 
         // Set source and transfer focus to iframe
         if (this._iframe) {
+            this._applyViewportResolutionScaling();
             this._iframe.src = fullPlayUrl;
             this._iframe.onload = () => {
                 log.info('Emulator session loaded in iframe.');
@@ -191,6 +192,33 @@ class EmulatorPage extends Page {
 
         // Hide splash if ready
         setTimeout(() => this.markReady(), 200);
+    }
+
+    /**
+     * Optimizes internal rendering resolution for TV SoCs.
+     * Rendering at native 1080p or 4K forces WebAssembly to software-rasterize
+     * massive framebuffers. By locking the internal frame to 960x540 (or 640x360)
+     * and scaling up via GPU transform, we cut the pixel fill rate by 75%,
+     * allowing the emulator core to hit much higher frame rates.
+     * @private
+     */
+    _applyViewportResolutionScaling() {
+        if (!this._iframe) return;
+
+        const screenW = window.innerWidth || 1920;
+        const screenH = window.innerHeight || 1080;
+
+        // Target 960x540 (quarter of 1080p) or 640x360 for extreme speed
+        const targetInternalW = 960;
+        const targetInternalH = 540;
+
+        const scaleX = screenW / targetInternalW;
+        const scaleY = screenH / targetInternalH;
+
+        this._iframe.style.width = `${targetInternalW}px`;
+        this._iframe.style.height = `${targetInternalH}px`;
+        this._iframe.style.transform = `scale(${scaleX}, ${scaleY})`;
+        this._iframe.style.transformOrigin = 'center center';
     }
 
     /**
@@ -210,7 +238,6 @@ class EmulatorPage extends Page {
     /**
      * Traps the TV Remote Back key.
      * Instead of killing the application or losing uncommitted save states immediately,
-     * it reveals the sleek Apple TV-style pause modal.
      *
      * @returns {boolean} True if handled, preventing Router default navigation.
      */
@@ -227,7 +254,7 @@ class EmulatorPage extends Page {
     }
 
     /**
-     * Displays the Apple TV-style translucent frosted HUD.
+     * Displays the HUD.
      * @private
      */
     _showPauseMenu() {

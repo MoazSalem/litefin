@@ -4,6 +4,8 @@ import { i18n } from '../utils/i18n.js';
 import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
+import { languageManager } from '../utils/LanguageManager.js';
+import { escapeHtml } from '../utils/Utils.js';
 
 const log = logger.create('SubtitleEditor');
 
@@ -39,6 +41,9 @@ class SubtitleEditorModal {
                 this._reloadSubtitleStreams(itemId, detailsPage)
             ]);
             cultures = fetchedCultures || [];
+            if (cultures.length > 0) {
+                languageManager.registerCultures(cultures);
+            }
         } catch (e) {
             log.warn('Failed to load cultures or refresh streams', e);
         }
@@ -162,98 +167,237 @@ class SubtitleEditorModal {
                 const prevFocus = focusManager.getFocused();
                 const prevSection = focusManager.getActiveSection();
 
-                // Build options HTML
-                const optionsHtml = langOptions
-                    .map(
-                        (opt) => `
-                    <button class="modal-option-btn ${opt.value === currentLang ? 'selected' : ''}" 
-                            data-value="${opt.value}"
-                            tabindex="0">
-                        <span>${opt.label}</span>
-                        <div class="check-icon"></div>
-                    </button>
-                `
-                    )
-                    .join('');
+                let activeFilter = languageManager.hasFavorites() ? 'favorites' : 'all';
 
                 const subOverlay = document.createElement('div');
                 subOverlay.className = 'modal-overlay visible';
                 subOverlay.id = 'subtitle-lang-modal-overlay';
-
-                subOverlay.innerHTML = `
-                    <div class="settings-modal" role="dialog" aria-modal="true">
-                        <div class="modal-header">
-                            <h2>${i18n.t('LabelLanguage') || 'Language'}</h2>
-                        </div>
-                        <div class="modal-options">
-                            ${optionsHtml}
-                        </div>
-                        <div class="modal-actions">
-                            <button class="modal-action-btn" id="btn-lang-modal-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
-                        </div>
-                    </div>
-                `;
-
                 overlay.appendChild(subOverlay);
 
                 const closeLangModal = () => {
                     subOverlay.remove();
+                    focusManager.unregister('lang-modal-filter-pills');
                     focusManager.unregister('lang-modal-options');
                     focusManager.unregister('lang-modal-actions');
                     if (prevSection) focusManager.setActiveSection(prevSection, false);
                     if (prevFocus) focusManager.focusElement(prevFocus);
                 };
 
-                // Bind events
-                subOverlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
-                    btn.addEventListener('click', (e) => {
+                const renderLanguageModalContent = () => {
+                    let displayOptions = langOptions;
+                    if (activeFilter === 'favorites' && languageManager.hasFavorites()) {
+                        displayOptions = languageManager.filterOptions(langOptions);
+                    }
+
+                    const favoritesCount = langOptions.filter((o) => languageManager.isFavorite(o)).length;
+
+                    let filterPillsHtml = '';
+                    if (languageManager.hasFavorites()) {
+                        filterPillsHtml = `
+                            <div class="modal-filter-pills" id="sub-modal-lang-filter-pills">
+                                <button class="modal-filter-pill ${activeFilter === 'favorites' ? 'active' : ''}" data-filter="favorites" tabindex="0">
+                                    ★ ${i18n.t('FavoritesOnly') || 'Favorites'} (${favoritesCount})
+                                </button>
+                                <button class="modal-filter-pill ${activeFilter === 'all' ? 'active' : ''}" data-filter="all" tabindex="0">
+                                    ${i18n.t('AllLanguages') || 'All Languages'} (${langOptions.length})
+                                </button>
+                            </div>
+                        `;
+                    }
+
+                    // Build options HTML
+                    const optionsHtml = displayOptions.length === 0
+                        ? `
+                            <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
+                                ${i18n.t('NoOptionsAvailable') || 'No options available'}
+                            </div>
+                        `
+                        : displayOptions
+                            .map((opt) => {
+                                const isFav = languageManager.isFavorite(opt);
+                                return `
+                                    <button class="modal-option-btn ${opt.value === currentLang ? 'selected' : ''}" 
+                                            data-value="${opt.value}"
+                                            tabindex="0">
+                                        <span class="modal-option-label">${opt.label}</span>
+                                        <span class="modal-star-btn ${isFav ? 'active' : ''}" data-value="${opt.value}" title="Toggle Favorite" role="button" aria-label="Toggle Favorite">
+                                            ${isFav ? '★' : '☆'}
+                                        </span>
+                                    </button>
+                                `;
+                            })
+                            .join('');
+
+                    subOverlay.innerHTML = `
+                        <div class="settings-modal" role="dialog" aria-modal="true">
+                            <div class="modal-header">
+                                <h2>${i18n.t('LabelLanguage') || 'Language'}</h2>
+                            </div>
+                            ${filterPillsHtml}
+                            <div class="modal-options">
+                                ${optionsHtml}
+                            </div>
+                            <div class="modal-actions">
+                                <button class="modal-action-btn" id="btn-lang-modal-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
+                            </div>
+                        </div>
+                    `;
+
+                    // Bind events
+                    subOverlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+                        btn.addEventListener('click', (e) => {
+                            if (e.target.closest('.modal-star-btn')) {
+                                e.stopPropagation();
+                                const starBtn = e.target.closest('.modal-star-btn');
+                                const val = starBtn.dataset.value;
+                                const matchedOpt = langOptions.find((o) => o.value === val) || val;
+                                const isNowFav = languageManager.toggleFavorite(matchedOpt);
+
+                                if (activeFilter === 'all') {
+                                    // In "All Languages" view, update in-place without destroying DOM or losing scroll/focus
+                                    starBtn.classList.toggle('active', isNowFav);
+                                    starBtn.textContent = isNowFav ? '★' : '☆';
+
+                                    // Update the Favorites count badge on the pill
+                                    const favPill = subOverlay.querySelector('.modal-filter-pill[data-filter="favorites"]');
+                                    if (favPill) {
+                                        const newCount = langOptions.filter((o) => languageManager.isFavorite(o)).length;
+                                        favPill.textContent = `★ ${i18n.t('FavoritesOnly') || 'Favorites'} (${newCount})`;
+                                    }
+                                } else {
+                                    const currentIdx = Array.from(subOverlay.querySelectorAll('.modal-option-btn')).indexOf(btn);
+                                    renderLanguageModalContent();
+                                    const remainingOptions = subOverlay.querySelectorAll('.modal-option-btn');
+                                    if (remainingOptions.length > 0) {
+                                        const targetIdx = Math.min(currentIdx, remainingOptions.length - 1);
+                                        focusManager.setActiveSection('lang-modal-options');
+                                        focusManager.focusElement(remainingOptions[targetIdx]);
+                                    }
+                                }
+                                return;
+                            }
+                            e.stopPropagation();
+                            currentLang = btn.dataset.value;
+                            const newLabel = langOptions.find((o) => o.value === currentLang)?.label || currentLang;
+                            if (langBtn) {
+                                langBtn.dataset.value = currentLang;
+                                langBtn.querySelector('.btn-label').textContent = newLabel;
+                            }
+                            closeLangModal();
+                        });
+                    });
+
+                    // Bind filter pills
+                    subOverlay.querySelectorAll('.modal-filter-pill').forEach((pill) => {
+                        pill.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            activeFilter = pill.dataset.filter;
+                            renderLanguageModalContent();
+                        });
+                    });
+
+                    subOverlay.querySelector('#btn-lang-modal-cancel').addEventListener('click', (e) => {
                         e.stopPropagation();
-                        currentLang = btn.dataset.value;
-                        const newLabel = langOptions.find((o) => o.value === currentLang)?.label || currentLang;
-                        if (langBtn) {
-                            langBtn.dataset.value = currentLang;
-                            langBtn.querySelector('.btn-label').textContent = newLabel;
-                        }
                         closeLangModal();
                     });
-                });
 
-                subOverlay.querySelector('#btn-lang-modal-cancel').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    closeLangModal();
-                });
+                    // Focus Registration with Left/Right tab switching
+                    if (subOverlay.querySelector('#sub-modal-lang-filter-pills')) {
+                        detailsPage.registerFocusSection('lang-modal-filter-pills', subOverlay.querySelector('#sub-modal-lang-filter-pills'), {
+                            orientation: 'horizontal',
+                            leaveDown: 'lang-modal-options',
+                            onMove: (direction) => {
+                                const isRtl = document.documentElement.getAttribute('dir') === 'rtl';
+                                if (direction === 'left') {
+                                    const targetFilter = isRtl ? 'all' : 'favorites';
+                                    if (activeFilter !== targetFilter) {
+                                        activeFilter = targetFilter;
+                                        renderLanguageModalContent();
+                                        setTimeout(() => {
+                                            const pill = subOverlay.querySelector(`.modal-filter-pill[data-filter="${targetFilter}"]`);
+                                            if (pill) focusManager.focusElement(pill);
+                                        }, 50);
+                                        return true;
+                                    }
+                                } else if (direction === 'right') {
+                                    const targetFilter = isRtl ? 'favorites' : 'all';
+                                    if (activeFilter !== targetFilter) {
+                                        activeFilter = targetFilter;
+                                        renderLanguageModalContent();
+                                        setTimeout(() => {
+                                            const pill = subOverlay.querySelector(`.modal-filter-pill[data-filter="${targetFilter}"]`);
+                                            if (pill) focusManager.focusElement(pill);
+                                        }, 50);
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            }
+                        });
+                    }
+
+                    detailsPage.registerFocusSection('lang-modal-options', subOverlay.querySelector('.modal-options'), {
+                        orientation: 'vertical',
+                        leaveDown: 'lang-modal-actions',
+                        leaveUp: subOverlay.querySelector('#sub-modal-lang-filter-pills') ? 'lang-modal-filter-pills' : 'lang-modal-actions',
+                        enterTo: 'last-focused',
+                        onMove: (direction) => {
+                            if (languageManager.hasFavorites()) {
+                                const isRtl = document.documentElement.getAttribute('dir') === 'rtl';
+                                if (direction === 'left') {
+                                    const targetFilter = isRtl ? 'all' : 'favorites';
+                                    if (activeFilter !== targetFilter) {
+                                        activeFilter = targetFilter;
+                                        renderLanguageModalContent();
+                                        return true;
+                                    }
+                                } else if (direction === 'right') {
+                                    const targetFilter = isRtl ? 'favorites' : 'all';
+                                    if (activeFilter !== targetFilter) {
+                                        activeFilter = targetFilter;
+                                        renderLanguageModalContent();
+                                        return true;
+                                    }
+                                }
+                            }
+                            return false;
+                        }
+                    });
+
+                    detailsPage.registerFocusSection('lang-modal-actions', subOverlay.querySelector('.modal-actions'), {
+                        orientation: 'horizontal',
+                        leaveUp: 'lang-modal-options',
+                        onMove: (direction) => {
+                            if (direction === 'down') {
+                                focusManager.setActiveSection('lang-modal-options', true, null, { enterTo: 'first' });
+                                return true;
+                            }
+                            return false;
+                        }
+                    });
+
+                    if (displayOptions.length === 0) {
+                        focusManager.setActiveSection('lang-modal-actions');
+                        setTimeout(() => {
+                            const cancelBtn = subOverlay.querySelector('#btn-lang-modal-cancel');
+                            if (cancelBtn) focusManager.focusElement(cancelBtn);
+                        }, 50);
+                    } else {
+                        focusManager.setActiveSection('lang-modal-options');
+                        setTimeout(() => {
+                            const selected =
+                                subOverlay.querySelector('.modal-option-btn.selected') ||
+                                subOverlay.querySelector('.modal-option-btn');
+                            if (selected) focusManager.focusElement(selected);
+                        }, 50);
+                    }
+                };
 
                 subOverlay.addEventListener('click', (e) => {
                     if (e.target === subOverlay) closeLangModal();
                 });
 
-                // Focus Registration
-                detailsPage.registerFocusSection('lang-modal-options', subOverlay.querySelector('.modal-options'), {
-                    orientation: 'vertical',
-                    leaveDown: 'lang-modal-actions',
-                    leaveUp: 'lang-modal-actions',
-                    enterTo: 'last-focused'
-                });
-
-                detailsPage.registerFocusSection('lang-modal-actions', subOverlay.querySelector('.modal-actions'), {
-                    orientation: 'horizontal',
-                    leaveUp: 'lang-modal-options',
-                    onMove: (direction) => {
-                        if (direction === 'down') {
-                            focusManager.setActiveSection('lang-modal-options', true, null, { enterTo: 'first' });
-                            return true;
-                        }
-                        return false;
-                    }
-                });
-
-                focusManager.setActiveSection('lang-modal-options');
-                setTimeout(() => {
-                    const selected =
-                        subOverlay.querySelector('.modal-option-btn.selected') ||
-                        subOverlay.querySelector('.modal-option-btn');
-                    if (selected) focusManager.focusElement(selected);
-                }, 50);
+                renderLanguageModalContent();
             };
 
             // Bind lang select button
@@ -422,19 +566,49 @@ class SubtitleEditorModal {
                           const name = r.Name || `Result ${idx + 1}`;
                           const provider = r.ProviderName || '';
                           const format = (r.Format || '').toUpperCase();
-                          const downloads = r.DownloadCount != null ? `↓ ${r.DownloadCount}` : '';
-                          const frameRate = r.FrameRate ? `FPS: ${r.FrameRate}` : '';
-                          const isPerfectMatch = r.IsHashMatch;
+                          const downloads = r.DownloadCount != null ? `↓ ${r.DownloadCount.toLocaleString()}` : '';
+                          const frameRate = r.FrameRate ? `${r.FrameRate} fps` : '';
+                          const isPerfectMatch = !!r.IsHashMatch;
+
+                          // Hearing Impaired / SDH detection from API flags or filename tags
+                          const isHearingImpaired = !!(
+                              r.HearingImpaired ||
+                              r.IsHearingImpaired ||
+                              (r.ThreeLetterISOLanguageName && r.ThreeLetterISOLanguageName.toLowerCase().includes('hi')) ||
+                              (name && /\b(sdh|hearing impaired|hi)\b/i.test(name))
+                          );
+
+                          // Forced subtitle detection from API flags or filename tags
+                          const isForced = !!(
+                              r.IsForced ||
+                              r.Forced ||
+                              (name && /\bforced\b/i.test(name))
+                          );
+
+                          // Match rate percentage or badge calculation
+                          let matchBadge = '';
+                          if (isPerfectMatch) {
+                              matchBadge = `<span class="track-badge match-badge">★ 100% Match</span>`;
+                          } else if (typeof r.Score === 'number' && !isNaN(r.Score)) {
+                              const pct = r.Score <= 1 ? Math.round(r.Score * 100) : Math.round(r.Score);
+                              if (pct > 0) {
+                                  matchBadge = `<span class="track-badge match-badge">${pct}% Match</span>`;
+                              }
+                          } else if (typeof r.CommunityRating === 'number' && !isNaN(r.CommunityRating) && r.CommunityRating > 0) {
+                              matchBadge = `<span class="track-badge match-badge">★ ${r.CommunityRating.toFixed(1)}</span>`;
+                          }
 
                           return `
                     <button class="modal-option-btn subtitle-result-btn" data-id="${r.Id}" tabindex="0">
                         <div class="subtitle-result-info">
-                            <div class="track-label-text">${name}</div>
+                            <div class="track-label-text">${escapeHtml(name)}</div>
                             <div class="subtitle-result-meta">
-                                ${isPerfectMatch ? `<span class="track-badge match-badge">${i18n.t('PerfectMatch') || 'Perfect match'}</span>` : ''}
-                                ${provider ? `<span class="track-badge">${provider}</span>` : ''}
-                                ${format ? `<span class="track-badge">${format}</span>` : ''}
-                                ${frameRate ? `<span class="track-badge">${frameRate}</span>` : ''}
+                                ${matchBadge}
+                                ${isHearingImpaired ? `<span class="track-badge badge-sdh" title="${i18n.t('HearingImpaired') || 'Hearing Impaired'}">SDH</span>` : ''}
+                                ${isForced ? `<span class="track-badge badge-forced" title="${i18n.t('Forced') || 'Forced'}">Forced</span>` : ''}
+                                ${provider ? `<span class="track-badge provider-badge">${escapeHtml(provider)}</span>` : ''}
+                                ${format ? `<span class="track-badge">${escapeHtml(format)}</span>` : ''}
+                                ${frameRate ? `<span class="track-badge">${escapeHtml(frameRate)}</span>` : ''}
                                 ${downloads ? `<span class="track-badge">${downloads}</span>` : ''}
                             </div>
                         </div>
@@ -581,6 +755,8 @@ class SubtitleEditorModal {
             // Patch the existing MediaSources array rather than replacing the whole item
             if (fresh?.MediaSources && detailsPage._item) {
                 detailsPage._item.MediaSources = fresh.MediaSources;
+                // Re-reconcile in-memory track selections against updated streams so indices never drift
+                detailsPage._restoreSavedTrackSelections?.();
             }
         } catch (err) {
             log.warn('Failed to reload MediaStreams after subtitle change', err);

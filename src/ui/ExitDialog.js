@@ -49,11 +49,15 @@ class ExitDialog {
          * focus requests (such as asynchronous HomePage row render callbacks) while
          * a trap is active. This prevents the HomePage render pipeline from stealing
          * focus away from the exit dialog when the user rapidly presses Back.
+         *
+         * Initial Focus:
+         * We set defaultFocusSelector to '#exit-dialog-yes' so the user lands on the
+         * Exit ("Yes") button by default for quick app exit.
          * ------------------------------------------------------------------------
          */
         focusManager.pushTrap(this.overlay.querySelector('#exit-dialog-actions'), {
             orientation: 'horizontal',
-            enterTo: 'first' // Focus Cancel safely
+            defaultFocusSelector: '#exit-dialog-yes' // Focus Exit ("Yes") by default
         });
 
         this.overlay.querySelector('#exit-dialog-no').onclick = (e) => {

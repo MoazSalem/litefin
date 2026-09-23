@@ -23,6 +23,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import OSDController from '../player/osd/OSDController.js';
 import { JellyfinPlayer, resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
+import { MediaHelper } from '../player/core/MediaHelper.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -118,6 +119,17 @@ class PlayerPage extends Page {
         // Press-counter for the unlock gesture (3 rapid OK/Enter presses)
         this._unlockPressCount = 0;
         this._unlockLastPressTime = null;
+
+        // Auto-Recovery states for network dropouts / TV NIC driver resets
+        this._isAutoRecovering = false;
+        this._autoRecoveryTimer = null;
+        this._autoRecoveryPositionTicks = 0;
+        this._autoRecoveryAttempts = 0;
+
+        // Early Playback Stall Watchdog & Network event handlers
+        this._playbackStallTimer = null;
+        this._onNetworkOffline = null;
+        this._onNetworkOnline = null;
     }
 
     /**
@@ -193,11 +205,34 @@ class PlayerPage extends Page {
                         </div>
                     </div>
                 </div>
+
+                <!-- Reconnection HUD Overlay
+                <div id="reconnect-hud" class="reconnect-hud hidden">
+                    <div class="reconnect-card glass-panel">
+                        <div class="reconnect-spinner-wrap">
+                            <div class="reconnect-spinner"></div>
+                            <div class="reconnect-pulse"></div>
+                        </div>
+                        <div class="reconnect-details">
+                            <div class="reconnect-title">Connection Lost</div>
+                            <div class="reconnect-status" id="reconnect-status">Reconnecting in background...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
 
     async onInit() {
+        // Reset auto-recovery states for new playback session
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+        this._autoRecoveryPositionTicks = 0;
+        this._autoRecoveryAttempts = 0;
+
         // Reset state for new playback session.
         // CRITICAL: _cachedPlayMethod must be cleared here — if the previous item was
         // DirectPlay, the stale cache would bleed into the new session and cause incorrect
@@ -379,19 +414,27 @@ class PlayerPage extends Page {
             // Initialize the player
             await this._initPlayer();
 
-            // Listen for app close/hide events to report playback stopped
+            // Listen for app close events to report playback stopped
             this._onAppBeforeExit = () => this._handleAppExit();
             eventBus.on('app:beforeExit', this._onAppBeforeExit);
 
-            // Pause playback when app goes to background (e.g. user switches TV input).
-            // We do NOT stop the player or report stopped — the session stays alive so
-            // the user can resume when they return without losing their position.
+            // Listen for app background/suspend events
             this._onAppHidden = () => this._handleAppHidden();
             eventBus.on('app:hidden', this._onAppHidden);
-
-            // When returning to foreground the player is still paused and ready.
             this._onAppVisible = () => this._handleAppVisible();
             eventBus.on('app:visible', this._onAppVisible);
+
+            // ================================================================
+            // NETWORK RESILIENCE & OFFLINE EVENT HANDLERS
+            // ================================================================
+            // Detect network disconnection immediately rather than waiting
+            // 20-30s for the browser/demuxer socket timeouts.
+            this._onNetworkOffline = () => this._handleNetworkOffline();
+            this._onNetworkOnline = () => this._handleNetworkOnline();
+            eventBus.on('websocket:disconnected', this._onNetworkOffline);
+            eventBus.on('websocket:connected', this._onNetworkOnline);
+            window.addEventListener('offline', this._onNetworkOffline);
+            window.addEventListener('online', this._onNetworkOnline);
 
             // ================================================================
             // REMOTE CONTROL HANDLERS
@@ -410,8 +453,26 @@ class PlayerPage extends Page {
                 };
             };
 
+            /*
+             * ================================================================
+             * HARDWARE & NETWORK REMOTE PLAYBACK COMMANDS
+             * ================================================================
+             * When scrubbing the timeline in 'Confirm Seek with OK' mode,
+             * remote playback controls (Play, Pause, Play/Pause) serve as
+             * direct seek confirmation triggers in addition to the OK key.
+             * ================================================================
+             */
             this._onRemotePause = () => {
                 log.info('Remote: Pause');
+
+                // If user was preview scrubbing, commit the seek and remain paused
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Pause confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('pause');
+                    this._reportPlaybackProgress('pause');
+                    return;
+                }
+
                 if (this._player?.pause) {
                     this._player.pause();
                     // Report pause state to server
@@ -428,6 +489,15 @@ class PlayerPage extends Page {
 
             this._onRemotePlay = () => {
                 log.info('Remote: Play/Resume');
+
+                // If user was preview scrubbing, commit the seek and unpause playback
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Play confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('play');
+                    this._reportPlaybackProgress('unpause');
+                    return;
+                }
+
                 // Player library uses unpause() or togglePlay() - not play()
                 if (this._player?.unpause) {
                     this._player.unpause();
@@ -448,6 +518,15 @@ class PlayerPage extends Page {
 
             this._onRemotePlayPause = () => {
                 log.info('Remote: PlayPause');
+
+                // If user was preview scrubbing, commit the seek and resume playback
+                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                    log.info('Remote Play/Pause confirming pending timeline seek');
+                    this._osd.confirmPendingSeek('playPause');
+                    this._reportPlaybackProgress(this._player?.isPaused?.() ? 'pause' : 'unpause');
+                    return;
+                }
+
                 const wasPaused = this._player?.isPaused?.();
                 if (this._player?.togglePlay) {
                     this._player.togglePlay();
@@ -875,9 +954,18 @@ class PlayerPage extends Page {
         // Listen for player events
         // Note: 'ready' is not emitted by JellyfinPlayer, so we call it manually below
         // this._player.on('play', () => this._onPlaying()); // Handled by 'playing'
-        this._player.on('pause', () => this._onPaused());
-        this._player.on('ended', () => this._onEnded());
-        this._player.on('error', (err) => this._onPlayerError(err));
+        this._player.on('pause', () => {
+            this._clearPlaybackStallWatchdog();
+            this._onPaused();
+        });
+        this._player.on('ended', () => {
+            this._clearPlaybackStallWatchdog();
+            this._onEnded();
+        });
+        this._player.on('error', (err) => {
+            this._clearPlaybackStallWatchdog();
+            this._onPlayerError(err);
+        });
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
         this._player.on('secondarysubtitlechange', (data) => this._onSecondarySubtitleChange(data));
@@ -885,6 +973,9 @@ class PlayerPage extends Page {
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
         this._player.on('seek', (data) => {
+            this._clearPlaybackStallWatchdog();
+            this._clearSubtitle();
+            this._clearSecondarySubtitle();
             if (data && data.positionTicks !== undefined) {
                 // Synchronize seek target directly to resume position
                 if (typeof data.positionTicks === 'number') {
@@ -895,8 +986,11 @@ class PlayerPage extends Page {
                 this._reportPlaybackProgress('timeupdate');
             }
         });
-        // Waiting listener removed to prevent loading screen during seek/buffer
+        // Hook buffering/stalled events for proactive network dropout watchdog
+        this._player.on('waiting', () => this._onPlayerWaiting());
+        this._player.on('stalled', () => this._onPlayerWaiting());
         this._player.on('restarting', () => {
+            this._clearPlaybackStallWatchdog();
             log.info('Player restarting (quality change), showing loading');
             this._showLoading(true);
 
@@ -906,10 +1000,12 @@ class PlayerPage extends Page {
             // events from JellyfinPlayer.stop(), so no stop report is sent.
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
             if (mediaSource?.PlaySessionId && this._item && !this._item.isIntro) {
                 // Use sync XHR (isSync=true) to guarantee the stop signal
                 // reaches the server before the new session starts.
-                this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
+                this._reportPlaybackStopped(mediaSource, positionTicks, true, durationTicks).catch((err) => {
                     log.warn('Failed to report playback stopped during restart:', err);
                 });
             }
@@ -920,7 +1016,18 @@ class PlayerPage extends Page {
             this._hasReportedStart = false;
         });
 
+        // Mirror jellyfin-web: listen for playbackstart emitted by JellyfinPlayer
+        this._player.on('playbackstart', () => {
+            log.info('Player emitted playbackstart event');
+            if (!this._hasReportedStart) {
+                this._hasReportedStart = true;
+                this._isPaused = false;
+                this._reportPlaybackStart();
+            }
+        });
+
         this._player.on('playing', () => {
+            this._clearPlaybackStallWatchdog();
             this._showLoading(false);
             this._onPlaying();
         });
@@ -1056,6 +1163,32 @@ class PlayerPage extends Page {
 
         const item = this._item;
 
+        /*
+         * Defensive metadata backfill:
+         * When items are played from a minimal play queue (or remote sync), they
+         * may lack RunTimeTicks or MediaSources if the queue API didn't return them.
+         * We fetch full item details here so duration is guaranteed to be available
+         * for progress tracking, OSD timeline, and playback stop scrobbling.
+         */
+        if (item && !item.RunTimeTicks) {
+            try {
+                const fullItem = await api.getItem(item.Id, {
+                    Fields: 'RunTimeTicks,Chapters,MediaSources,Trickplay'
+                });
+                if (fullItem?.RunTimeTicks) {
+                    item.RunTimeTicks = fullItem.RunTimeTicks;
+                    if (!item.MediaSources?.length && fullItem.MediaSources?.length) {
+                        item.MediaSources = fullItem.MediaSources;
+                    }
+                    if (!item.Chapters?.length && fullItem.Chapters?.length) {
+                        item.Chapters = fullItem.Chapters;
+                    }
+                }
+            } catch (err) {
+                log.warn('Failed to backfill item metadata in _startPlayback:', err);
+            }
+        }
+
         // Reset version and track selections if the item has changed (e.g. queue advance/prev)
         if (this._playingItemId !== item.Id) {
             this._playingItemId = item.Id;
@@ -1094,24 +1227,41 @@ class PlayerPage extends Page {
         let savedSubtitleIndex =
             preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
 
+        // If preSelectedAudio was passed, verify against persisted item track memory
+        // to guard against index drift if external tracks were added/deleted before player launch
+        if (savedAudioIndex !== undefined && item?.Id) {
+            const savedItemAudio = storage.getItem(`track:audio:${item.Id}`);
+            if (savedItemAudio !== null && savedItemAudio !== undefined) {
+                const reconciledAudio = MediaHelper.resolveSavedTrack(mediaSource, 'Audio', savedItemAudio, item.Id);
+                if (reconciledAudio !== undefined && reconciledAudio !== savedAudioIndex) {
+                    log.warn(
+                        `[Track Memory] preSelectedAudio index ${savedAudioIndex} diverged from re-indexed track ${reconciledAudio}. Reconciling to index ${reconciledAudio}.`
+                    );
+                    savedAudioIndex = reconciledAudio;
+                }
+            }
+        }
+
         // =========================================================================
         // 2.1 Restore Item-Specific Track Memory
         // =========================================================================
         // If the user previously selected an audio or subtitle track specifically for
         // this media item (such as an audio commentary track or specific language),
         // we prioritize restoring it directly when resuming or continuing playback.
+        // Uses MediaHelper.resolveSavedTrack to ensure that if streams shifted due to
+        // newly downloaded external subtitles, the correct language track is selected.
         // =========================================================================
         if (savedAudioIndex === undefined && item?.Id) {
             const savedItemAudio = storage.getItem(`track:audio:${item.Id}`);
             if (savedItemAudio !== null && savedItemAudio !== undefined) {
-                const parsedIndex = Number(savedItemAudio);
-                const streamMatch = mediaSource?.MediaStreams?.find(
-                    (s) => s.Type === 'Audio' && s.Index === parsedIndex
-                );
-                if (streamMatch) {
-                    savedAudioIndex = parsedIndex;
+                const resolvedAudio = MediaHelper.resolveSavedTrack(mediaSource, 'Audio', savedItemAudio, item.Id);
+                if (resolvedAudio !== undefined) {
+                    savedAudioIndex = resolvedAudio;
+                    const streamMatch = mediaSource?.MediaStreams?.find(
+                        (s) => s.Type === 'Audio' && s.Index === savedAudioIndex
+                    );
                     log.info(
-                        `[Track Memory] Restored item-specific audio track: Index ${savedAudioIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                        `[Track Memory] Restored item-specific audio track: Index ${savedAudioIndex} (${streamMatch?.DisplayTitle || streamMatch?.Title || streamMatch?.Language})`
                     );
                 }
             }
@@ -1120,18 +1270,17 @@ class PlayerPage extends Page {
         if (savedSubtitleIndex === undefined && item?.Id) {
             const savedItemSubtitle = storage.getItem(`track:subtitle:${item.Id}`);
             if (savedItemSubtitle !== null && savedItemSubtitle !== undefined) {
-                const parsedSubIndex = Number(savedItemSubtitle);
-                if (parsedSubIndex === -1) {
-                    savedSubtitleIndex = -1;
-                    log.info(`[Track Memory] Restored item-specific subtitle track: Off (-1)`);
-                } else {
-                    const streamMatch = mediaSource?.MediaStreams?.find(
-                        (s) => s.Type === 'Subtitle' && s.Index === parsedSubIndex
-                    );
-                    if (streamMatch) {
-                        savedSubtitleIndex = parsedSubIndex;
+                const resolvedSubtitle = MediaHelper.resolveSavedTrack(mediaSource, 'Subtitle', savedItemSubtitle, item.Id);
+                if (resolvedSubtitle !== undefined) {
+                    savedSubtitleIndex = resolvedSubtitle;
+                    if (savedSubtitleIndex === -1) {
+                        log.info(`[Track Memory] Restored item-specific subtitle track: Off (-1)`);
+                    } else {
+                        const streamMatch = mediaSource?.MediaStreams?.find(
+                            (s) => s.Type === 'Subtitle' && s.Index === savedSubtitleIndex
+                        );
                         log.info(
-                            `[Track Memory] Restored item-specific subtitle track: Index ${savedSubtitleIndex} (${streamMatch.DisplayTitle || streamMatch.Title || streamMatch.Language})`
+                            `[Track Memory] Restored item-specific subtitle track: Index ${savedSubtitleIndex} (${streamMatch?.DisplayTitle || streamMatch?.Title || streamMatch?.Language})`
                         );
                     }
                 }
@@ -1306,9 +1455,21 @@ class PlayerPage extends Page {
             );
         }
 
-        // Report playback start to server
-        // Note: The player emits PLAYBACK_START event which could be used,
-        // but for now we'll rely on the player's internal logic or add reporting here if needed.
+        // ====================================================================
+        // Playback Start Reporting (Mirroring jellyfin-web onPlaybackStarted)
+        // ====================================================================
+        // Once this._player.play() resolves, the stream has been established
+        // and mediaSource metadata is resolved. Immediately send the playback
+        // start report to the server so that the active session is created
+        // and consecutive episode scrobbling/tracking (ani-sync / trakt) works.
+        // This guarantees start reporting even if the hardware decoder delays
+        // or suppresses the DOM 'playing' event on in-place track switches.
+        // ====================================================================
+        if (!this._hasReportedStart) {
+            this._hasReportedStart = true;
+            this._isPaused = false;
+            this._reportPlaybackStart();
+        }
 
         // Initialize OSD
         this._initOSD();
@@ -1472,14 +1633,22 @@ class PlayerPage extends Page {
             }
         }
 
-        // 2. Fetch Backdrop (Blurred Background)
-        // If Light Music Player is enabled, skip fetching and creating the backdrop texture completely
-        // to minimize network traffic and eliminate GPU load on low-spec TVs.
+        // 2. Backdrop & Ambient Background (Standard Heavy Blur vs. Ultra-Light BlurHash Mode)
+        // Check if the user has opted into the performance-friendly Light Music Player mode
         const isLightMusicPlayer = layoutManager.getLightMusicPlayer();
+        const isBlurHashDisabled = layoutManager.getDisableBlurhash();
         let backdropUrl = null;
 
+        // Manage dynamic BlurHash canvas for Light Music Player mode
+        let blurhashCanvas = overlay.querySelector('.audio-blurhash-canvas');
+
         if (!isLightMusicPlayer) {
-            // Try Backdrop, then fallback to the same Album Art we just found
+            // Remove any blurhash canvas if switching back to standard heavy blur player
+            if (blurhashCanvas) {
+                blurhashCanvas.remove();
+            }
+
+            // Standard Mode: Try Backdrop, then fallback to the same Album Art
             if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
                 backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
             } else if (
@@ -1492,7 +1661,66 @@ class PlayerPage extends Page {
                     quality: 80
                 });
             } else {
-                backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily
+                backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily by CSS
+            }
+        } else {
+            // Light Music Player Mode:
+            // Instead of downloading large backdrop assets and applying a continuous 150px CSS GPU blur filter,
+            // we decode the ultra-compact BlurHash at a tiny 64x36 resolution and let the GPU's bilinear interpolation
+            // upscale it naturally into a velvety ambient gradient with zero runtime GPU overhead.
+            let blurHash = null;
+
+            if (!isBlurHashDisabled && this._item?.ImageBlurHashes) {
+                // Priority 1: Check item's direct Backdrop BlurHash
+                if (this._item.ImageBlurHashes.Backdrop) {
+                    const keys = Object.keys(this._item.ImageBlurHashes.Backdrop);
+                    if (keys.length > 0) {
+                        blurHash = this._item.ImageBlurHashes.Backdrop[keys[0]];
+                    }
+                }
+                // Priority 2: Fall back to Primary Image BlurHash (e.g. Album Art)
+                if (!blurHash && this._item.ImageBlurHashes.Primary) {
+                    const keys = Object.keys(this._item.ImageBlurHashes.Primary);
+                    if (keys.length > 0) {
+                        blurHash = this._item.ImageBlurHashes.Primary[keys[0]];
+                    }
+                }
+            }
+
+            if (blurHash) {
+                // Create canvas if it doesn't exist yet
+                if (!blurhashCanvas) {
+                    blurhashCanvas = document.createElement('canvas');
+                    blurhashCanvas.className = 'audio-blurhash-canvas';
+
+                    // Place canvas behind the player center content and text
+                    const centerEl = overlay.querySelector('.audio-player-center');
+                    if (centerEl) {
+                        overlay.insertBefore(blurhashCanvas, centerEl);
+                    } else {
+                        overlay.appendChild(blurhashCanvas);
+                    }
+                }
+
+                // Decode BlurHash asynchronously to avoid blocking the main UI thread
+                import('../utils/BlurHashDecoder.js')
+                    .then(({ default: BlurHashDecoder }) => {
+                        // 64x36 is optimal for smooth bilinear gradient reproduction on 16:9 displays
+                        const pixels = BlurHashDecoder.decode(blurHash, 64, 36);
+                        if (pixels && blurhashCanvas) {
+                            blurhashCanvas.width = 64;
+                            blurhashCanvas.height = 36;
+                            const ctx = blurhashCanvas.getContext('2d');
+                            const imageData = ctx.createImageData(64, 36);
+                            imageData.data.set(pixels);
+                            ctx.putImageData(imageData, 0, 0);
+                            blurhashCanvas.style.opacity = '1';
+                        }
+                    })
+                    .catch((err) => log.error('Failed to decode audio BlurHash background', err));
+            } else if (blurhashCanvas) {
+                // No BlurHash found or BlurHash disabled — remove previous track's canvas
+                blurhashCanvas.remove();
             }
         }
 
@@ -1531,6 +1759,9 @@ class PlayerPage extends Page {
             AudioCodec: 'aac',
             MaxStreamingBitrate: 120000000,
             TranscodingMaxAudioChannels: (() => {
+                // Check dedicated transcode channel cap first, then direct play cap, then fallback 6 (5.1)
+                const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
+                if (userTransChannels && userTransChannels > 0) return userTransChannels;
                 const userChannels = PlayerSettings.get('allowedAudioChannels');
                 return (userChannels && userChannels > 0) ? userChannels : 6;
             })(),
@@ -1685,7 +1916,14 @@ class PlayerPage extends Page {
             // Send 'unpause' event when resuming from pause
             if (this._isPaused) {
                 this._reportPlaybackProgress('unpause');
+                // Ensure page-level pause tracker is reset to false
+                this._isPaused = false;
             }
+        }
+
+        // Always update the OSD play/pause button when playing starts or unpauses
+        if (this._osd) {
+            this._osd.updatePlayPauseButton();
         }
     }
 
@@ -1694,6 +1932,7 @@ class PlayerPage extends Page {
         eventBus.emit('player:paused', { item: this._item });
 
         this._isPaused = true;
+        this._clearPlaybackStallWatchdog();
         // Report paused state with explicit 'pause' event
         this._reportPlaybackProgress('pause');
 
@@ -1759,21 +1998,27 @@ class PlayerPage extends Page {
             this._isSwitching = true;
             this._showLoading(true);
 
-            // Report the stop of the current play session
+            // Report the stop of the current play session. Capture media source,
+            // position ticks, and total duration before calling stop(), as stop()
+            // tears down the player backend and clears internal duration caches.
+            const outgoingItem = this._item;
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
             // Notify plugins that the previous session ended before starting the same item again
             pluginManager.notifyPlayerStop();
 
             if (this._player?.stop) this._player.stop();
 
-            this._reportPlaybackStopped(mediaSource, positionTicks, false).then(() => {
+            this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem).then(() => {
                 // Settle and restart
                 setTimeout(async () => {
                     this._resumePosition = 0;
                     this._cachedMediaSource = null;
                     this._hasReportedStart = false;
+                    this._isPlaybackEnded = false;
                     this._lastReportTime = 0;
 
                     try {
@@ -1842,12 +2087,22 @@ class PlayerPage extends Page {
         this._showLoading(true);
 
         try {
-            const nextItem = playQueue.advance();
-            log.info('Advancing to next item:', nextItem.Name);
+            // Guard outgoing item reference before changing queue pointer
+            const outgoingItem = this._item;
 
-            // Capture current info before stopping
+            // When explicitly advancing to the next queue item, the user has finished
+            // with the current episode. Mark playback as ended so that the outgoing
+            // item is reported with full duration ticks, triggering completion on the
+            // server and scrobbling to ani-sync / trakt plugins.
+            this._isPlaybackEnded = true;
+
+            // Capture current info before stopping (player.stop clears internal state).
+            // We must grab durationTicks here while the backend and media source are still
+            // alive, otherwise duration drops to 0 after stop() and completion overrides fail.
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
             // Capture track preferences for next episode
             this._captureActiveTrackSelection();
@@ -1860,8 +2115,16 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            // Report stopped (async)
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+            // Report stopped (async) with captured duration and explicit outgoing item
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
+
+            // Now advance the queue cursor cleanly to the next item
+            const nextItem = playQueue.advance();
+            if (!nextItem) {
+                log.warn('_playNextItem: no next item available after queue advance');
+                return;
+            }
+            log.info('Advancing to next item:', nextItem.Name);
 
             // Give Tizen/Player a moment to settle
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1871,6 +2134,7 @@ class PlayerPage extends Page {
             this._resumePosition = 0;
             this._cachedMediaSource = null;
             this._hasReportedStart = false;
+            this._isPlaybackEnded = false;
             this._lastReportTime = 0;
 
             // Update OSD title
@@ -1979,9 +2243,16 @@ class PlayerPage extends Page {
                 this._showLoading(true);
 
                 try {
-                    // Capture position before stopping
+                    const outgoingItem = this._item;
                     const mediaSource = this._player?.getCurrentMediaSource?.();
                     const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+                    const durationTicks =
+                        this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
+
+                    // If user was near end of outgoing item, mark ended
+                    if (durationTicks > 0 && positionTicks >= durationTicks * 0.8) {
+                        this._isPlaybackEnded = true;
+                    }
 
                     // Notify plugins before switch
                     pluginManager.notifyPlayerStop();
@@ -1990,7 +2261,7 @@ class PlayerPage extends Page {
                         await this._player.stop();
                     }
 
-                    await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+                    await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
 
                     // Brief settle delay (same as _playNextItem)
                     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2000,6 +2271,7 @@ class PlayerPage extends Page {
                     this._resumePosition = startPositionTicks || 0;
                     this._cachedMediaSource = null;
                     this._hasReportedStart = false;
+                    this._isPlaybackEnded = false;
                     this._lastReportTime = 0;
 
                     if (this._osd) {
@@ -2042,11 +2314,14 @@ class PlayerPage extends Page {
 
             try {
                 const prevItem = playQueue.goBack();
+                const outgoingItem = this._item;
                 log.info('Going back to previous item:', prevItem.Name);
 
                 // Capture current info before stopping
                 const mediaSource = this._player?.getCurrentMediaSource?.();
                 const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+                const durationTicks =
+                    this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
 
                 // Capture track preferences for next episode
                 this._captureActiveTrackSelection();
@@ -2059,7 +2334,7 @@ class PlayerPage extends Page {
                     await this._player.stop();
                 }
 
-                await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+                await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
 
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -2067,6 +2342,7 @@ class PlayerPage extends Page {
                 this._resumePosition = 0;
                 this._cachedMediaSource = null;
                 this._hasReportedStart = false;
+                this._isPlaybackEnded = false;
                 this._lastReportTime = 0;
 
                 if (this._osd) {
@@ -2113,16 +2389,20 @@ class PlayerPage extends Page {
         // 1. Audio Track Capture
         const activeAudioIndex = this._player._currentAudioStreamIndex;
         if (activeAudioIndex !== undefined && activeAudioIndex !== -1) {
-            // Persist per-item selection so resuming this specific item restores the exact track
+            // Find the active audio stream object from the current media source inventory
+            const activeAudioTrack = mediaSource.MediaStreams.find(
+                (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
+            );
+
+            // Persist per-item selection so resuming this specific item restores the exact track.
+            // Uses MediaHelper.saveTrackMemory to record full stream metadata (language, title, codec, channels)
+            // ensuring resilience against server re-indexing or stream shifts when external subtitles are downloaded.
             if (this._item.Id) {
-                storage.setItem(`track:audio:${this._item.Id}`, String(activeAudioIndex));
-                log.info(`[Track Memory] Saved item audio index: ${this._item.Id} -> ${activeAudioIndex}`);
+                MediaHelper.saveTrackMemory(this._item.Id, 'Audio', activeAudioTrack || activeAudioIndex, mediaSource);
+                log.info(`[Track Memory] Saved item audio track: ${this._item.Id} -> index ${activeAudioIndex}`);
             }
 
             if (PlayerSettings.get('rememberTracksForSession') !== false) {
-                const activeAudioTrack = mediaSource.MediaStreams.find(
-                    (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
-                );
                 if (activeAudioTrack) {
                     // Save undetermined ('und') instead of 'none' if language is missing
                     // to distinguish undefined languages from disabled tracks.
@@ -2147,10 +2427,25 @@ class PlayerPage extends Page {
         if (hasSubtitles) {
             const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
             if (activeSubtitleIndex !== undefined) {
-                // Persist per-item selection so resuming this specific item restores the exact track
+                // Find stream object or treat index -1 as Subtitle Off
+                const activeSubtitleTrack =
+                    activeSubtitleIndex === -1
+                        ? -1
+                        : mediaSource.MediaStreams.find(
+                            (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
+                        );
+
+                // Persist per-item selection so resuming this specific item restores the exact track.
+                // Uses MediaHelper.saveTrackMemory to record metadata (language, title, external status)
+                // so subsequent playback accurately identifies the chosen subtitle even if stream indices shift.
                 if (this._item.Id) {
-                    storage.setItem(`track:subtitle:${this._item.Id}`, String(activeSubtitleIndex));
-                    log.info(`[Track Memory] Saved item subtitle index: ${this._item.Id} -> ${activeSubtitleIndex}`);
+                    MediaHelper.saveTrackMemory(
+                        this._item.Id,
+                        'Subtitle',
+                        activeSubtitleTrack !== undefined ? activeSubtitleTrack : activeSubtitleIndex,
+                        mediaSource
+                    );
+                    log.info(`[Track Memory] Saved item subtitle track: ${this._item.Id} -> index ${activeSubtitleIndex}`);
                 }
 
                 if (PlayerSettings.get('rememberTracksForSession') !== false) {
@@ -2161,10 +2456,7 @@ class PlayerPage extends Page {
                         log.info(`[Track Memory] Saved Subtitle: none`);
                     } else {
                         // Search for the stream details using the active stream index
-                        const activeSubtitleTrack = mediaSource.MediaStreams.find(
-                            (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                        );
-                        if (activeSubtitleTrack) {
+                        if (activeSubtitleTrack && typeof activeSubtitleTrack === 'object') {
                             // Use undetermined ('und') for tracks with empty/undefined language
                             // to prevent them from matching the 'none' check (which disables subtitles).
                             storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'und');
@@ -2219,9 +2511,27 @@ class PlayerPage extends Page {
         this._showLoading(true);
 
         try {
-            /* Capture current position before stopping. */
+            /*
+             * Capture current position, media source, and duration BEFORE calling
+             * stop(), because stop() clears internal player references and unloads
+             * media elements, causing subsequent duration queries to return 0.
+             */
+            const outgoingItem = this._item;
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
+
+            /*
+             * When the user manually advances to the next episode in the queue, or
+             * has watched >= 80% of the outgoing episode before manually selecting
+             * another item, mark playback as ended so the outgoing item triggers
+             * the completion override and scrobbles to ani-sync / trakt plugins.
+             */
+            const previousIndex = playQueue._queue?.findIndex((e) => e.Id === outgoingItem?.Id) ?? -1;
+            if (targetIndex === previousIndex + 1 || (durationTicks > 0 && positionTicks >= durationTicks * 0.8)) {
+                this._isPlaybackEnded = true;
+            }
 
             // Capture track preferences for next episode
             this._captureActiveTrackSelection();
@@ -2233,7 +2543,7 @@ class PlayerPage extends Page {
                 await this._player.stop();
             }
 
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks, outgoingItem);
 
             /* Brief settle delay — same as _playNextItem/_playPreviousItem. */
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2243,6 +2553,7 @@ class PlayerPage extends Page {
             this._resumePosition = 0;
             this._cachedMediaSource = null;
             this._hasReportedStart = false;
+            this._isPlaybackEnded = false;
             this._lastReportTime = 0;
 
             if (this._osd) {
@@ -2289,8 +2600,327 @@ class PlayerPage extends Page {
         }
 
         log.error('Player error:', error);
+
+        // ====================================================================
+        // NETWORK DISCONNECTION & TV NIC RESILIENCE AUTO-RECOVERY
+        // ====================================================================
+        // When high-bitrate streaming triggers an Ethernet NIC blackout (e.g.
+        // Tizen 100Mbps USB-to-Ethernet RX FIFO overflow) or when transient network
+        // dropouts occur, the connection goes down for 30-45s while the kernel resets
+        // the driver. Instead of fatally dumping the user back to the library or
+        // showing a hard error dialog, we engage background auto-recovery:
+        //   1. Save the exact current playback position tick.
+        //   2. Present frosted-glass Reconnection HUD.
+        //   3. Poll Tizen network status & Jellyfin ping until connectivity restores.
+        //   4. Seamlessly re-open and resume playback from the saved position tick.
+        // ====================================================================
+        const isNetwork = Boolean(
+            error?.isNetworkError ||
+            error?.code === 'PLAYER_ERROR_CONNECTION_FAILED' ||
+            error?.message === 'PLAYER_ERROR_CONNECTION_FAILED' ||
+            (typeof error?.message === 'string' && /connection|network|offline|PLAYER_ERROR_CONNECTION_FAILED|MEDIA_ERR_NETWORK/i.test(error.message))
+        );
+
+        const currentPosTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        if (isNetwork && !this._isAutoRecovering && (this._hasReportedStart || currentPosTicks > 0)) {
+            this._isSwitching = false;
+            this._startAutoRecovery(error);
+            return;
+        }
+
         this._isSwitching = false; // Reset lock on error
-        this._showError(error.message || 'Playback error');
+        this._showError(error?.message || 'Playback error');
+    }
+
+    /**
+     * ========================================================================
+     * Early Playback Stall Watchdog
+     * ========================================================================
+     * If the video element or AVPlayer enters a stalled/waiting buffering state,
+     * this watchdog checks network health after 3.5 seconds. If unreachable,
+     * it immediately trips Auto-Recovery rather than waiting ~30s for demuxer fatal.
+     * ========================================================================
+     * @private
+     */
+    _onPlayerWaiting() {
+        if (this._isAutoRecovering || this._isPaused || this._isExiting) return;
+
+        // Clear any active stall timer
+        this._clearPlaybackStallWatchdog();
+
+        // 3.5-second watchdog: if still stalled and network is failing, engage auto-recovery early
+        this._playbackStallTimer = setTimeout(async () => {
+            if (this._isAutoRecovering || this._isPaused || this._isExiting) return;
+
+            log.warn('[PlaybackWatchdog] Buffering stalled for 3.5s, checking network health...');
+
+            // If browser already reports offline or WebSocket disconnected, recover immediately
+            const isNavigatorOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+            const isWsDisconnected = typeof api !== 'undefined' && api.isWebSocketConnected === false;
+
+            if (isNavigatorOffline || isWsDisconnected) {
+                log.warn('[PlaybackWatchdog] Offline status confirmed during stall. Starting auto-recovery.');
+                this._startAutoRecovery({
+                    isNetworkError: true,
+                    message: 'Playback stalled while offline'
+                });
+                return;
+            }
+
+            // Otherwise, perform a quick 1.5s ping check to verify server availability
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const pingUrl = `${api.serverUrl}/System/Ping`;
+                const response = await fetch(pingUrl, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                log.info('[PlaybackWatchdog] Server ping succeeded during stall; waiting for stream buffer to resume.');
+            } catch (err) {
+                log.warn('[PlaybackWatchdog] Server ping check failed during stall:', err.message);
+                if (!this._isAutoRecovering && !this._isPaused && !this._isExiting) {
+                    this._startAutoRecovery({
+                        isNetworkError: true,
+                        message: 'Server unreachable during playback stall'
+                    });
+                }
+            }
+        }, 3500);
+    }
+
+    /**
+     * Clear the playback stall watchdog timer.
+     * @private
+     */
+    _clearPlaybackStallWatchdog() {
+        if (this._playbackStallTimer) {
+            clearTimeout(this._playbackStallTimer);
+            this._playbackStallTimer = null;
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Handle Network Dropout & WebSocket Disconnection Events
+     * ========================================================================
+     * When network connectivity drops, engaging auto-recovery immediately prevents
+     * the player from freezing for 20-30s while the browser/OS socket times out.
+     * ========================================================================
+     * @private
+     */
+    _handleNetworkOffline() {
+        log.warn('[AutoRecovery] Network offline event or WebSocket disconnect detected');
+        const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
+
+        // If actively playing or buffered and not already recovering or paused
+        if (!this._isAutoRecovering && !this._isPaused && !this._isExiting && (this._hasReportedStart || currentPosTicks > 0)) {
+            log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
+            this._startAutoRecovery({
+                isNetworkError: true,
+                message: 'Network offline / WebSocket disconnected'
+            });
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Handle Network Online Restoration Event
+     * ========================================================================
+     * Accelerates the reconnection check step when internet/WebSocket comes back.
+     * ========================================================================
+     * @private
+     */
+    _handleNetworkOnline() {
+        log.info('[AutoRecovery] Network online / WebSocket connected event received');
+        if (this._isAutoRecovering && this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+            this._pollForReconnection();
+        }
+    }
+
+    /**
+     * Show or hide the Reconnection HUD.
+     * @param {boolean} show - Whether to display or hide the HUD
+     * @param {string} [statusText] - Optional status message to show
+     * @private
+     */
+    _showReconnectHUD(show, statusText = '') {
+        const hud = this.$('#reconnect-hud');
+        if (!hud) return;
+
+        if (show) {
+            const statusEl = this.$('#reconnect-status');
+            if (statusEl && statusText) {
+                statusEl.textContent = statusText;
+            }
+            hud.classList.remove('hidden');
+        } else {
+            hud.classList.add('hidden');
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Resilient Auto-Recovery Pipeline for Network Drops & NIC Watchdog Resets
+     * ========================================================================
+     * Preserves the exact playback position, displays a non-intrusive frosted
+     * glass reconnection card, and polls for network recovery before auto-resuming.
+     * ========================================================================
+     * @param {Object|Error} error - The network error that triggered recovery
+     * @private
+     */
+    async _startAutoRecovery(error) {
+        if (this._isAutoRecovering) return;
+        this._isAutoRecovering = true;
+        this._autoRecoveryAttempts = 0;
+        this._clearPlaybackStallWatchdog();
+
+        // 1. Capture exact playback position before backend is torn down
+        const currentTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
+        // Rewind 2 seconds (20,000,000 ticks) so the viewer doesn't miss the interrupted scene
+        this._autoRecoveryPositionTicks = Math.max(0, currentTicks - 20000000);
+        log.info(
+            `[AutoRecovery] Network dropout detected (${error?.message || error}). Captured position: ${(this._autoRecoveryPositionTicks / 10000000).toFixed(1)}s`
+        );
+
+        // 2. Hide OSD and show Reconnection HUD
+        if (this._osd) this._osd.hide();
+        this._showReconnectHUD(true, 'Connection lost. Reconnecting to server...');
+
+        // 3. Stop backend player without scrobbling 'stopped' to preserve continue-watching state
+        try {
+            if (this._player?.stop) {
+                await this._player.stop();
+            }
+        } catch (stopErr) {
+            log.warn('[AutoRecovery] Backend stop during recovery:', stopErr);
+        }
+
+        // 4. Begin non-blocking polling check loop
+        this._pollForReconnection();
+    }
+
+    /**
+     * Poll for network restoration and Jellyfin server availability.
+     * Uses Tizen webapis.network gateway check alongside periodic /System/Ping calls.
+     * @private
+     */
+    _pollForReconnection() {
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+
+        const maxAttempts = 45; // 45 * 2s = 90s total recovery window
+        const pollInterval = 2000;
+
+        const checkStep = async () => {
+            if (!this._isAutoRecovering) return;
+
+            this._autoRecoveryAttempts++;
+            const statusEl = this.$('#reconnect-status');
+            if (statusEl) {
+                statusEl.textContent = `Reconnecting to server... (${this._autoRecoveryAttempts}/${maxAttempts})`;
+            }
+
+            log.info(`[AutoRecovery] Checking server connectivity (attempt ${this._autoRecoveryAttempts}/${maxAttempts})...`);
+
+            let isOnline = false;
+
+            // Ping Jellyfin server directly
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1800);
+                const pingUrl = `${api.serverUrl}/System/Ping`;
+                const response = await fetch(pingUrl, {
+                    method: 'GET',
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    isOnline = true;
+                }
+            } catch (pingErr) {
+                log.debug('[AutoRecovery] Server ping check failed:', pingErr.message);
+            }
+
+            if (isOnline) {
+                log.info('[AutoRecovery] Server connectivity restored! Auto-resuming playback...');
+                if (statusEl) {
+                    statusEl.textContent = 'Connection restored! Resuming playback...';
+                }
+                await new Promise((r) => setTimeout(r, 600));
+                this._finishAutoRecovery();
+                return;
+            }
+
+            if (this._autoRecoveryAttempts >= maxAttempts) {
+                log.warn('[AutoRecovery] Max recovery attempts reached. Presenting manual error screen.');
+                this._cancelAutoRecovery();
+                this._showError('Connection lost. Please check your network connection and try again.');
+                return;
+            }
+
+            this._autoRecoveryTimer = setTimeout(checkStep, pollInterval);
+        };
+
+        this._autoRecoveryTimer = setTimeout(checkStep, pollInterval);
+    }
+
+    /**
+     * Successfully recovered network: re-initialize player and resume from captured position.
+     * @private
+     */
+    async _finishAutoRecovery() {
+        this._showReconnectHUD(false);
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+
+        try {
+            this._showLoading(true);
+
+            // Re-assign resume position
+            this._resumePosition = this._autoRecoveryPositionTicks;
+            this._hasReportedStart = false;
+
+            // Re-initialize player instance
+            if (!this._player || this._player.isDestroyed) {
+                await this._initPlayer();
+            }
+
+            // Start playback from saved position
+            await this._startPlayback();
+            this._showLoading(false);
+        } catch (resumeErr) {
+            log.error('[AutoRecovery] Failed to resume playback after reconnect:', resumeErr);
+            this._showError('Failed to resume playback after reconnection.');
+        }
+    }
+
+    /**
+     * Cancel ongoing auto-recovery process and dismiss HUD.
+     * @private
+     */
+    _cancelAutoRecovery() {
+        this._isAutoRecovering = false;
+        if (this._autoRecoveryTimer) {
+            clearTimeout(this._autoRecoveryTimer);
+            this._autoRecoveryTimer = null;
+        }
+        this._showReconnectHUD(false);
     }
 
     _onTimeUpdate(positionTicks) {
@@ -2308,13 +2938,15 @@ class PlayerPage extends Page {
             this._resumePosition = ticks;
         }
 
-        // 1. Check primary subtitle sync — clear if cue end time has passed
-        if (this._subtitleEndTime !== null && ticks >= this._subtitleEndTime) {
+        // 1. Check primary subtitle sync — clear if cue end time has passed.
+        // Guard against clearing while seeking is in flight to prevent premature cue dismissal.
+        if (!this._player?.isSeeking && this._subtitleEndTime !== null && ticks >= this._subtitleEndTime) {
             this._clearSubtitle();
         }
 
-        // 2. Check secondary subtitle sync — clear if cue end time has passed
-        if (this._secondarySubtitleEndTime !== null && ticks >= this._secondarySubtitleEndTime) {
+        // 2. Check secondary subtitle sync — clear if cue end time has passed.
+        // Guard against clearing while seeking is in flight to prevent premature cue dismissal.
+        if (!this._player?.isSeeking && this._secondarySubtitleEndTime !== null && ticks >= this._secondarySubtitleEndTime) {
             this._clearSecondarySubtitle();
         }
 
@@ -2385,6 +3017,10 @@ class PlayerPage extends Page {
                 ItemId: this._item.Id,
                 PlaySessionId: mediaSource?.PlaySessionId || mediaSource?.LiveStreamId,
                 MediaSourceId: mediaSource?.Id,
+                PlaylistItemId:
+                    this._item.PlaylistItemId ||
+                    playQueue.getCurrentItem()?.PlaylistItemId ||
+                    playQueue.stampPlaylistItemId(this._item),
                 ...playerState,
 
                 // Include the full queue so the server can display "up next" in the
@@ -2405,6 +3041,14 @@ class PlayerPage extends Page {
         // timeout logic replaced by _onTimeUpdate check
 
         if (data && data.text && data.text.trim().length > 0) {
+            /* -------------------------------------------------------------
+               Retain a reference to the active primary cue data payload so that
+               real-time appearance adjustments (e.g. toggling subtitle color
+               override in the OSD SubtitleQuickSettings menu) can immediately
+               re-render and sanitize the current cue on screen.
+               ------------------------------------------------------------- */
+            this._currentSubtitleData = data;
+
             // Render subtitle
             // Cue text is external content (SRT/VTT/ASS from the server or a
             // sidecar file); SubtitleParser only strips ASS {...} tags, so it
@@ -2471,12 +3115,18 @@ class PlayerPage extends Page {
     }
 
     _clearSubtitle() {
+        this._currentSubtitleData = null;
         const overlay = document.getElementById('subtitle-overlay');
         if (overlay) {
             overlay.innerHTML = '';
             overlay.classList.add('hidden');
         }
         this._subtitleEndTime = null;
+
+        // Synchronize SubtitleManager's active cue state so that if playback re-enters
+        // or re-evaluates the same cue time range, SubtitleManager does not think the cue
+        // is still actively displayed in the DOM.
+        this._player?._subtitleManager?.clearActivePrimaryCue?.();
     }
 
     /**
@@ -2493,6 +3143,11 @@ class PlayerPage extends Page {
         if (!overlay) return;
 
         if (data && data.text && data.text.trim().length > 0) {
+            /* -------------------------------------------------------------
+               Retain secondary cue data for immediate real-time styling updates.
+               ------------------------------------------------------------- */
+            this._currentSecondarySubtitleData = data;
+
             // Render the secondary subtitle text (sanitized: escapes all HTML,
             // re-allows only bare i/b/u/em/strong styling tags)
             overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
@@ -2550,16 +3205,25 @@ class PlayerPage extends Page {
      * Clear the secondary subtitle overlay.
      */
     _clearSecondarySubtitle() {
+        this._currentSecondarySubtitleData = null;
         const overlay = document.getElementById('secondary-subtitle-overlay');
         if (overlay) {
             overlay.innerHTML = '';
             overlay.classList.add('hidden');
         }
         this._secondarySubtitleEndTime = null;
+
+        // Synchronize SubtitleManager's active cue state
+        this._player?._subtitleManager?.clearActiveSecondaryCue?.();
     }
 
     _onMediaStreamsChange(data) {
         if (!this._item || !this._player) return;
+
+        // Keep local item MediaSources synchronized with fresh player sources
+        if (this._player._currentItem?.MediaSources) {
+            this._item.MediaSources = this._player._currentItem.MediaSources;
+        }
 
         // =====================================================================
         // Immediate Track Selection Persistence
@@ -2615,6 +3279,15 @@ class PlayerPage extends Page {
         // Refresh primary overlay
         const overlay = document.getElementById('subtitle-overlay');
         if (overlay && !overlay.classList.contains('hidden')) {
+            /* -------------------------------------------------------------
+               Re-render the active primary cue through sanitizeSubtitleText
+               so that dynamic tag formatting adjustments (such as toggling
+               subtitleOverrideColors in the OSD) take effect immediately.
+               ------------------------------------------------------------- */
+            if (this._currentSubtitleData && this._currentSubtitleData.text) {
+                overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(this._currentSubtitleData.text)}</span>`;
+            }
+
             const span = overlay.querySelector('.subtitle-line');
             if (span) {
                 log.debug('Refreshing primary subtitle styles');
@@ -2642,6 +3315,13 @@ class PlayerPage extends Page {
         // Refresh secondary overlay (inherits primary appearance — always re-apply on any change)
         const secondaryOverlay = document.getElementById('secondary-subtitle-overlay');
         if (secondaryOverlay && !secondaryOverlay.classList.contains('hidden')) {
+            /* -------------------------------------------------------------
+               Re-render active secondary cue text through sanitizeSubtitleText.
+               ------------------------------------------------------------- */
+            if (this._currentSecondarySubtitleData && this._currentSecondarySubtitleData.text) {
+                secondaryOverlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(this._currentSecondarySubtitleData.text)}</span>`;
+            }
+
             const span = secondaryOverlay.querySelector('.subtitle-line');
             if (span) {
                 log.debug('Refreshing secondary subtitle styles');
@@ -2696,26 +3376,28 @@ class PlayerPage extends Page {
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
-            if (!playSessionId) {
-                log.warn('Skipping progress report - no PlaySessionId');
-                return;
-            }
-
             const info = {
                 ItemId: this._item.Id,
-                PlaySessionId: playSessionId,
+                PlaySessionId: playSessionId || undefined,
                 MediaSourceId: mediaSource?.Id,
+                PlaylistItemId:
+                    this._item.PlaylistItemId ||
+                    playQueue.getCurrentItem()?.PlaylistItemId ||
+                    playQueue.stampPlaylistItemId(this._item),
                 ...playerState,
                 IsPaused: isPaused,
-                EventName: eventName,
-
-                // Report the current queue state so the dashboard can reflect what's
-                // up next and remote control queue operations work correctly.
-                NowPlayingQueue: this._buildNowPlayingQueue()
+                EventName: eventName
             };
 
-            // Debug: Log progress reports for pause/unpause events
+            // ================================================================
+            // OPTIMIZED PROGRESS PAYLOAD:
+            // Only attach NowPlayingQueue on explicit state transitions (e.g. pause,
+            // unpause, track change), NOT on every routine 10-second timeupdate.
+            // This cuts megabytes of unnecessary JSON payload serialization and
+            // prevents bandwidth / connection congestion during active video playback.
+            // ================================================================
             if (eventName !== 'timeupdate') {
+                info.NowPlayingQueue = this._buildNowPlayingQueue();
                 log.info(`Reporting ${eventName}, IsPaused:`, isPaused);
             }
 
@@ -2776,6 +3458,16 @@ class PlayerPage extends Page {
             RepeatMode: playQueue.getRepeatMode(),
             ShuffleMode: playQueue.getShuffleMode() ? 'Shuffled' : 'Sorted'
         };
+
+        // Mirror jellyfin-web: state.PlayState.PlaylistItemId = self.getCurrentPlaylistItemId(player);
+        // This ensures the server always associates the active playstate with the exact queue entry.
+        const playlistItemId =
+            this._item?.PlaylistItemId ||
+            playQueue.getCurrentItem()?.PlaylistItemId ||
+            (this._item ? playQueue.stampPlaylistItemId(this._item) : null);
+        if (playlistItemId) {
+            state.PlaylistItemId = playlistItemId;
+        }
 
         // Only include stream indices if they are valid numbers (strings or undefined cause 400 errors)
         const audioIndex = Number(this._player?.getCurrentAudioStreamIndex?.());
@@ -2972,6 +3664,9 @@ class PlayerPage extends Page {
                 this._resumePosition = currentTicks;
             }
 
+            // Reset pause state so the retried playback session starts unpaused
+            this._isPaused = false;
+
             // Reset start report guard for the new playback session
             this._hasReportedStart = false;
 
@@ -2984,6 +3679,11 @@ class PlayerPage extends Page {
             // with _resumePosition cleanly preserved so the stream restores from where it failed.
             log.info(`Retrying playback from preserved resume position: ${this._resumePosition} ticks`);
             await this._startPlayback();
+
+            // Refresh OSD button state to show pause icon once playback resumes
+            if (this._osd) {
+                this._osd.updatePlayPauseButton();
+            }
 
             this._showLoading(false);
         } catch (error) {
@@ -3222,12 +3922,19 @@ class PlayerPage extends Page {
      * @param {number} [capturedPosition] - Pre-captured position ticks
      * @param {boolean} [isSync=false] - Whether to use synchronous XHR
      */
-    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = false) {
-        if (this._item?.isIntro) {
+    async _reportPlaybackStopped(
+        capturedMediaSource = null,
+        capturedPosition = null,
+        isSync = false,
+        capturedDuration = null,
+        itemOverride = null
+    ) {
+        const item = itemOverride || this._item;
+        if (item?.isIntro) {
             log.info('Skipping PlaybackStopped report for intro item');
             return;
         }
-        if (!this._item) return;
+        if (!item) return;
 
         // Skip reporting stopped completely if running in private/ghost mode
         if (this._isGhostMode) {
@@ -3244,37 +3951,42 @@ class PlayerPage extends Page {
             // from the player backend or the fallback parameters.
             let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
 
-            // If the video naturally completed (ended event was fired) or the user
-            // watched >= 90% of the content (defensive heuristic for WebOS where
-            // ended may not fire on certain 4K HEVC streams), override the reported
-            // position with the total duration ticks of the media. This prevents
-            // minor timing differences between player backend and server from
-            // leaving the item unmarked as watched and failing scrobble sync.
+            // If the video naturally completed (ended event was fired), advancing to
+            // the next item, or the user watched >= 80% of the content (accommodating
+            // anime ED / credit sequences that begin at 80-85% of total runtime, as well
+            // as defensive heuristics for WebOS/Tizen where ended may not fire), override
+            // the reported position with the total duration ticks of the media. This
+            // guarantees the server marks PlayedToCompletion = true and fires tracker sync
+            // (such as jellyfin-ani-sync or Trakt).
+            // We prioritize capturedDuration passed by the caller before player.stop() ran.
             const durationTicks =
-                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
-            const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.9);
+                capturedDuration ||
+                this._player?.getDurationTicks?.() ||
+                mediaSource?.RunTimeTicks ||
+                item?.RunTimeTicks ||
+                0;
+            const _isNearComplete = durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
             if (_isNearComplete) {
                 log.info(
                     `Overriding positionTicks with durationTicks (${durationTicks})` +
                     (this._isPlaybackEnded
-                        ? ' due to natural end of playback'
-                        : ' due to near-complete playback position')
+                        ? ' due to natural end of playback / next item transition'
+                        : ' due to near-complete playback position (>= 80%)')
                 );
                 rawPosition = durationTicks;
             }
 
             const positionTicks = Math.round(rawPosition);
 
-            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
-
-            if (!playSessionId) {
-                log.warn('Skipping stopped report - no PlaySessionId');
-                return;
-            }
+            // Capture PlaySessionId if available.
+            // Note: PlaySessionId is optional on the server for stop reporting because the
+            // server resolves the active session via HTTP Authorization / DeviceId if omitted.
+            // We must NOT abort if playSessionId is absent.
+            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId || undefined;
 
             // 2. Build report body
             const data = {
-                ItemId: this._item.Id,
+                ItemId: item.Id,
                 PlaySessionId: playSessionId,
                 MediaSourceId: mediaSource?.Id,
                 PositionTicks: positionTicks,
@@ -3299,22 +4011,23 @@ class PlayerPage extends Page {
                     const raw = this._cachedPlayMethod || this._player?._currentPlayMethod;
                     if (!raw) return mediaSource?.TranscodingUrl ? 'DirectStream' : 'DirectPlay';
                     return raw === 'Remux' ? 'DirectStream' : raw;
-                })()
+                })(),
+
+                // Mirror jellyfin-web addPlaylistToPlaybackReport:
+                // Always report the complete NowPlayingQueue so the server updates
+                // session queue state and synchronizes queue positions.
+                NowPlayingQueue: this._buildNowPlayingQueue()
             };
 
-            // 2.5 Inject SyncPlay tracking fields if active
+            // Inject PlaylistItemId for the stopped item (mirroring jellyfin-web)
             const spm = window.__syncPlayManager;
-            if (spm && spm.isEnabled) {
-                if (spm._currentPlaylistItemId) {
-                    data.PlaylistItemId = spm._currentPlaylistItemId;
-                }
-                const queue = spm.currentPlayQueue;
-                if (queue && queue.Playlist && queue.Playlist.length > 0) {
-                    data.NowPlayingQueue = queue.Playlist.map((item) => ({
-                        Id: item.ItemId,
-                        PlaylistItemId: item.PlaylistItemId
-                    }));
-                }
+            const stopPlaylistItemId =
+                (spm && spm.isEnabled && spm._currentPlaylistItemId) ||
+                item.PlaylistItemId ||
+                playQueue.getQueue()?.find((q) => q.Id === item.Id)?.PlaylistItemId ||
+                playQueue.stampPlaylistItemId(item);
+            if (stopPlaylistItemId) {
+                data.PlaylistItemId = stopPlaylistItemId;
             }
 
             // 2.6 Close Live Stream if applicable
@@ -3358,16 +4071,36 @@ class PlayerPage extends Page {
                 }
             } else {
                 log.info('Reporting playback stopped (async), position:', positionTicks);
-                await api.reportPlaybackStopped(data);
-            }
+                try {
+                    // Send stop report through standard API client request
+                    await api.reportPlaybackStopped(data);
+                } catch (asyncErr) {
+                    /*
+                     * If async stop reporting fails for any reason (e.g. transient network
+                     * glitch or TV webview micro-timeout during track transition), execute
+                     * an immediate synchronous XHR fallback. This guarantees the Jellyfin
+                     * server receives PlaybackStopped, marking the item as played and firing
+                     * plugin webhooks (jellyfin-ani-sync, Trakt, etc.) without dropping the event.
+                     */
+                    log.warn('Async stop report failed, executing synchronous XHR fallback:', asyncErr);
+                    try {
+                        const url = `${api.serverUrl}/Sessions/Playing/Stopped`;
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', url, false);
+                        xhr.setRequestHeader('Content-Type', 'application/json');
+                        xhr.setRequestHeader('Authorization', api.getAuthHeader());
 
-            // 4. Clear server-side resume point if playback completed naturally or
-            // the user watched >= 90% of the content (defensive heuristic).
-            if (_isNearComplete && this._item?.Id && !this._item.isIntro) {
-                log.info('Playback completed — deleting server resume point');
-                api.deletePlaybackProgress(this._item.Id).catch((err) => {
-                    log.warn('Failed to delete playback progress:', err);
-                });
+                        // Include Emby token header if connected to an Emby server
+                        if (api.isEmby() && api.accessToken) {
+                            xhr.setRequestHeader('X-Emby-Token', api.accessToken);
+                        }
+
+                        xhr.send(JSON.stringify(data));
+                        log.info('Synchronous XHR fallback stop report completed with status:', xhr.status);
+                    } catch (xhrFallbackErr) {
+                        log.error('Synchronous XHR fallback stop report also failed:', xhrFallbackErr);
+                    }
+                }
             }
         } catch (error) {
             log.warn('Failed to report playback stopped:', error);
@@ -3393,15 +4126,11 @@ class PlayerPage extends Page {
 
         log.info('App exit detected, reporting playback stopped');
 
-        // Capture info before it's too late
+        // Capture session info before stopping (stop clears internal player state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
         const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
-        const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
-
-        if (!playSessionId) {
-            log.warn('Skipping exit report - no PlaySessionId');
-            return;
-        }
+        const durationTicks =
+            this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
         // Stop the backend player immediately to free resources and tear down
         // the media pipeline (video element, HLS.js, AVPlay, WebOSPlayer, etc.)
@@ -3412,33 +4141,36 @@ class PlayerPage extends Page {
         }
 
         // Use centralized reporting which handles LiveStreamId close, full
-        // payload construction, isPlaybackEnded position override, keepalive,
-        // and deletePlaybackProgress for completed items.
+        // payload construction, isPlaybackEnded position override, and keepalive.
         // Use synchronous XHR (isSync=true) for the same reason as _stopAndExit
         // — the app context may be destroyed before an async fetch completes.
         if (this._item) {
-            this._reportPlaybackStopped(mediaSource, positionTicks, true).catch((err) => {
+            this._reportPlaybackStopped(mediaSource, positionTicks, true, durationTicks).catch((err) => {
                 log.warn('Failed to report on exit:', err);
             });
         }
     }
 
     /**
-     * Handle app going to background — pause playback and tell the server.
-     * The player and session remain alive so the user can resume on return.
-     * This is intentionally different from _handleAppExit() which fully stops
-     * the session (only used on actual app close via beforeunload).
+     * Handle app going to background — pause playback, optionally suspend AVPlay decoder,
+     * and report state to server. The player and session remain alive so the user can
+     * resume on return.
      */
     _handleAppHidden() {
-        // Don't pause if we're already in the process of stopping playback
+        // Exit early if page teardown is already underway or background setup has completed
         if (this._isExiting || this._backgroundPrepared) return;
 
         this._backgroundPrepared = true;
-
         log.info('App backgrounded, pausing playback');
-        this._resumePlaybackAfterProfileSelection = this._player?.isPaused
+
+        // Capture true playing state prior to pausing, ensuring we know whether playback
+        // was running or already paused by the viewer when app enters background.
+        const wasPlaying = this._player?.isPaused
             ? !this._player.isPaused()
             : !this._isPaused;
+        this._resumePlaybackAfterProfileSelection = wasPlaying;
+
+        // Determine if profile selection dialog should intercept on foreground resume
         const shouldGateProfileSelection =
             storage.getItem('pref:showProfilesOnResume') === 'true' &&
             state.get('user:sessionCount', 0) > 1;
@@ -3475,6 +4207,18 @@ class PlayerPage extends Page {
             }
         }
 
+        // Suspend the AVPlay decoder to release hardware resources back to the OS.
+        // We pass the pre-pause wasPlaying flag explicitly so TizenAVPlayer preserves
+        // true playback intent rather than seeing an artificial PAUSED state.
+        const backend = this._player?._backend;
+        if (typeof backend?.suspend === 'function') {
+            try {
+                backend.suspend(wasPlaying);
+            } catch (e) {
+                log.warn('Failed to suspend AVPlay:', e);
+            }
+        }
+
         // Prepare the takeover while the app is still hidden. webOS may paint the
         // video surface before the first foreground callback, so waiting until
         // app:visible would briefly expose the previous stream.
@@ -3484,17 +4228,78 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Handle app returning to foreground — the player is still paused and
-     * ready. We do NOT auto-resume; the user presses play to continue.
+     * Handle app returning to foreground — restore suspended decoder if needed.
+     * Restores hardware media plane and resumes playback if stream was active before suspend.
      */
-    _handleAppVisible() {
+    async _handleAppVisible() {
         if (this._isExiting) return;
 
+        // Reset background preparation guard when profile selection is inactive
         if (!this._resumeProfileSelectionActive) this._backgroundPrepared = false;
 
-        log.info('App foregrounded, player paused state preserved');
-        // The player remains paused. When the user presses play, the normal
-        // togglePlay/unpause flow resumes from the current position.
+        log.info('App foregrounded, checking decoder restoration state');
+
+        const backend = this._player?._backend;
+        if (backend && typeof backend.isSuspended === 'function' && backend.isSuspended()) {
+            const url = backend.getCurrentUrl?.();
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+
+            // All streams loaded in AVPlay have a playback URL (direct play, HLS, or Live TV).
+            // Do not gate on playSessionId so all stream types can be properly restored.
+            if (url) {
+                log.info('[AVPlay] Attempting decoder restoration from background state');
+                const { success, wasPlaying } = await backend.restore(url, 0);
+
+                if (success) {
+                    log.info('[AVPlay] Decoder successfully restored from background');
+
+                    // Resume playback immediately if user was watching before backgrounding
+                    // and profile selection modal is not currently holding the screen.
+                    if (wasPlaying && !this._resumeProfileSelectionActive) {
+                        try {
+                            this._isPaused = false;
+                            if (typeof this._player?.unpause === 'function') {
+                                this._player.unpause();
+                            } else if (typeof backend.unpause === 'function') {
+                                backend.unpause();
+                            }
+                            this._reportPlaybackProgress('unpause');
+                            if (this._osd) {
+                                this._osd.updatePlayPauseButton();
+                            }
+                        } catch (e) {
+                            log.warn('Failed to resume playback after AVPlay restore:', e);
+                        }
+                    }
+                } else {
+                    // Watchdog Recovery: If restoreAsync fails (e.g. Tizen OS evicted hardware surface
+                    // due to memory pressure while in background), perform seamless stream reload
+                    log.warn('[AVPlay] Decoder restore failed or surface evicted; triggering recovery watchdog');
+
+                    const savedMs = typeof backend.getSuspendedPositionMs === 'function'
+                        ? backend.getSuspendedPositionMs()
+                        : 0;
+                    const savedTicks = savedMs > 0
+                        ? savedMs * 10000
+                        : (this._player?.getCurrentPositionTicks?.() || 0);
+
+                    log.info(`[RestoreWatchdog] Seamlessly reloading stream from ${(savedTicks / 10000000).toFixed(1)}s`);
+
+                    this._resumePosition = savedTicks;
+                    this._showLoading(true);
+                    try {
+                        await this._startPlayback();
+                    } catch (err) {
+                        log.error('[RestoreWatchdog] Playback recovery failed:', err);
+                        this._reportPlaybackStopped(mediaSource, savedTicks, false);
+                    } finally {
+                        this._showLoading(false);
+                    }
+                }
+            } else {
+                log.warn('[AVPlay] Decoder suspended but URL is missing, cannot restore');
+            }
+        }
     }
 
     // ========================================================================
@@ -3507,6 +4312,14 @@ class PlayerPage extends Page {
         if (this._isScreenLocked) {
             this._showLockIndicator();
             return;
+        }
+
+        // If auto-recovery is in progress, cancel it and exit cleanly
+        if (this._isAutoRecovering) {
+            log.info('Canceling active auto-recovery on user Back navigation');
+            this._cancelAutoRecovery();
+            this._stopAndExit();
+            return true;
         }
 
         // ====================================================================
@@ -3568,6 +4381,8 @@ class PlayerPage extends Page {
         // Capture session info BEFORE stopping (stop clears internal state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
         const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        const durationTicks =
+            this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
         try {
             // Notify plugins that playback is ending — they clean up OSD widgets
@@ -3589,7 +4404,7 @@ class PlayerPage extends Page {
             // falls back to async fetch (keepalive), awaiting ensures the fetch has a
             // chance to complete before the page context is destroyed.
             try {
-                await this._reportPlaybackStopped(mediaSource, positionTicks, true);
+                await this._reportPlaybackStopped(mediaSource, positionTicks, true, durationTicks);
             } catch (err) {
                 log.warn('Background stop report failed:', err);
             }
@@ -3926,6 +4741,9 @@ class PlayerPage extends Page {
         this._backgroundPrepared = false;
         log.info('destroy() called');
 
+        // Cancel any pending auto-recovery timers
+        this._cancelAutoRecovery();
+
         // Stop pause reporting heartbeat timer
         this._stopPauseReportTimer();
 
@@ -3942,13 +4760,26 @@ class PlayerPage extends Page {
             this._subtitleTimeout = null;
         }
 
-        // Remove app exit listener
+        // Clear stall watchdog timer
+        this._clearPlaybackStallWatchdog();
+
+        // Remove network offline/online listeners
+        if (this._onNetworkOffline) {
+            eventBus.off('websocket:disconnected', this._onNetworkOffline);
+            window.removeEventListener('offline', this._onNetworkOffline);
+            this._onNetworkOffline = null;
+        }
+        if (this._onNetworkOnline) {
+            eventBus.off('websocket:connected', this._onNetworkOnline);
+            window.removeEventListener('online', this._onNetworkOnline);
+            this._onNetworkOnline = null;
+        }
+
+        // Remove app lifecycle listeners
         if (this._onAppBeforeExit) {
             eventBus.off('app:beforeExit', this._onAppBeforeExit);
             this._onAppBeforeExit = null;
         }
-
-        // Remove background/foreground listeners
         if (this._onAppHidden) {
             eventBus.off('app:hidden', this._onAppHidden);
             this._onAppHidden = null;
@@ -4023,6 +4854,10 @@ class PlayerPage extends Page {
 
         // Restore global clock visibility when leaving playback
         globalClock.setVisibility(true);
+
+        // Defensive: ensure FocusManager key handling is fully resumed and sidebar cache is fresh
+        focusManager.resume();
+        focusManager.invalidateCache('sidebar');
 
         log.info('destroy() complete');
         super.destroy();
@@ -4168,12 +5003,14 @@ class PlayerPage extends Page {
 
         // Stop current playback cleanly
         if (this._player?.stop) {
-            // Capture current info for reporting
+            // Capture current info for reporting before stopping
             const mediaSource = this._player.getCurrentMediaSource();
             const positionTicks = this._player.getCurrentPositionTicks();
+            const durationTicks =
+                this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
             await this._player.stop();
-            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
         }
 
         // Briefly settle hardware to prevent decoder state overlaps

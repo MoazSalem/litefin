@@ -375,12 +375,77 @@ export class HtmlVideoPlayer {
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut: 20000,
                 fragLoadingTimeOut: 20000,
-                // Increase initial buffer goal for stability (matching Tizen's 6s goal)
-                maxBufferSize: 60 * 1000 * 1000, // 60MB roughly
+                maxBufferSize: 60 * 1000 * 1000,
                 enableWorker: true
             });
 
-            // HLS.js events
+            let bufferReady = false;
+            let initialBufferTimer = null;
+            let resolved = false;
+
+            const resolveOnce = (value) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                resolve(value);
+            };
+
+            const rejectOnce = (reason) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(initialBufferTimer);
+                hls.off(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+                reject(reason);
+            };
+
+            const startPlayback = () => {
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise.then(() => resolveOnce()).catch((err) => {
+                        if (err.name === 'NotAllowedError') {
+                            log.warn('Autoplay blocked — retrying muted (remote launch).');
+                            video.muted = true;
+                            const retryPromise = video.play();
+                            if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
+                                retryPromise.then(() => {
+                                    this._scheduleUnmuteOnInteraction(video);
+                                    resolveOnce();
+                                }).catch((retryErr) => rejectOnce(retryErr));
+                            } else {
+                                this._scheduleUnmuteOnInteraction(video);
+                                resolveOnce();
+                            }
+                        } else {
+                            rejectOnce(err);
+                        }
+                    });
+                } else {
+                    resolveOnce();
+                }
+            };
+
+            // Buffer-readiness gate: defer play() until the first segment is buffered.
+            // This prevents a black stall on HLS streams where the manifest is parsed
+            // before any media data is available for playback.
+            const onBufferAppended = () => {
+                if (bufferReady) return;
+                bufferReady = true;
+                clearTimeout(initialBufferTimer);
+                log.info('HLS.js: initial segment buffered, starting playback');
+                startPlayback();
+            };
+
+            // 3s fallback: if no segment arrives, force play anyway
+            initialBufferTimer = setTimeout(() => {
+                if (!bufferReady) {
+                    log.warn('HLS.js: initial buffer timeout (3s) — forcing play');
+                    bufferReady = true;
+                    startPlayback();
+                }
+            }, 3000);
+
+            // Apply track selection and set up the buffer gate once manifest is parsed
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('HLS manifest parsed');
 
@@ -403,9 +468,8 @@ export class HtmlVideoPlayer {
                 }
 
                 if (options.subtitleStreamIndex !== undefined) {
-                    // HLS.js subtitle tracks
                     if (options.subtitleStreamIndex === -1) {
-                        hls.subtitleTrack = -1; // Disabled
+                        hls.subtitleTrack = -1;
                     } else if (options.subtitleStreamIndex < hls.subtitleTracks.length) {
                         hls.subtitleTrack = options.subtitleStreamIndex;
                         log.debug('Set HLS subtitle track:', options.subtitleStreamIndex);
@@ -414,79 +478,33 @@ export class HtmlVideoPlayer {
 
                 if (options.autoPlay === false) {
                     log.info('HLS.js path: Skipping initial play() due to autoPlay=false');
-                    resolve();
-                } else {
-                    const playPromise = video.play();
-                    if (playPromise !== undefined && typeof playPromise.then === 'function') {
-                        playPromise.then(resolve).catch((err) => {
-                            if (err.name === 'NotAllowedError') {
-                                log.warn('Autoplay blocked — retrying muted (remote launch).');
-                                video.muted = true;
-                                const retryPromise = video.play();
-                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
-                                    retryPromise.then(() => {
-                                        this._scheduleUnmuteOnInteraction(video);
-                                        resolve();
-                                    }).catch(reject);
-                                } else {
-                                    this._scheduleUnmuteOnInteraction(video);
-                                    resolve();
-                                }
-                            } else {
-                                reject(err);
-                            }
-                        });
-                    } else {
-                        resolve();
-                    }
+                    resolveOnce();
                 }
+                // Otherwise BUFFER_APPENDED or timeout will call startPlayback()
             });
 
             // ================================================================
             // LEVEL_UPDATED — fired every time the manifest playlist is
             // fetched and parsed (live: every ~4s; VOD: once at the end).
-            //
-            // When details.live === false the server has appended #EXT-X-ENDLIST
-            // to the manifest, which means the Jellyfin transcoder has finished
-            // encoding the entire file. At that point details.totalduration is
-            // the accurate total, and we can lock in the OSD to the right value.
-            //
-            // We store it on the HLS player instance and dispatch a synthetic
-            // durationchange on the video element so JellyfinPlayer's existing
-            // durationchange handler picks it up automatically.
             // ================================================================
             hls.on(Hls.Events.LEVEL_UPDATED, (event, data) => {
                 const details = data?.details;
                 if (!details) return;
 
                 if (!details.live && details.totalduration > 0) {
-                    // Manifest is complete — store duration for JellyfinPlayer to read
                     log.info(`[HLS] Manifest complete (EXT-X-ENDLIST). Total duration: ${details.totalduration.toFixed(1)}s`);
                     this._hlsManifestDuration = details.totalduration;
-
-                    // Dispatch durationchange on the video element so the OSD
-                    // refreshes without needing a separate polling mechanism.
                     video.dispatchEvent(new Event('durationchange'));
                 }
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
-                // Filter out benign buffer stall errors
                 if (data.details === 'bufferStalledError' && !data.fatal) {
                     log.warn('HLS buffer low (non-fatal):', data.buffer);
                     return;
                 }
 
                 if (!data.fatal) {
-                    // ============================================================
-                    // Non-fatal fragment load error — the most common cause is
-                    // seeking ahead of the Jellyfin transcoder: segment N hasn't
-                    // been encoded yet, so the server returns an empty response.
-                    //
-                    // Immediately calling startLoad() would hammer the server.
-                    // Wait 2 seconds so the transcoder has time to produce the
-                    // next segment, then tell HLS.js to retry loading.
-                    // ============================================================
                     if (data.details === 'fragLoadError') {
                         log.warn('[HLS] Non-fatal fragLoadError — waiting 2s for transcoder, then retrying');
                         setTimeout(() => {
@@ -496,8 +514,6 @@ export class HtmlVideoPlayer {
                         }, 2000);
                         return;
                     }
-
-                    // All other non-fatal errors — log but let HLS.js handle automatically
                     log.warn('HLS non-fatal error:', data);
                     return;
                 }
@@ -517,21 +533,22 @@ export class HtmlVideoPlayer {
                         default:
                             log.error('Fatal HLS error, cannot recover');
                             hls.destroy();
-                            reject(new Error('HLS playback failed'));
+                            rejectOnce(new Error('HLS playback failed'));
                             break;
                     }
                 }
             });
 
-            // Load source
+            // Listen for the first segment buffered — triggers play()
+            hls.on(Hls.Events.BUFFER_APPENDED, onBufferAppended);
+
             log.debug('HLS Loading source:', options.url);
             hls.loadSource(options.url);
             hls.attachMedia(video);
 
             this._hlsPlayer = hls;
-            this._hlsManifestDuration = null; // Reset for this session
+            this._hlsManifestDuration = null;
 
-            // Failsafe timeout
             setTimeout(() => {
                 if (!this._started && !this._videoElement?.paused) {
                     log.warn('No playback start detected after 10s');
@@ -547,6 +564,11 @@ export class HtmlVideoPlayer {
     async _playNative(video, options) {
         log.info('Using native playback');
 
+        // Ensure HLS manifest exists before assigning source
+        if (options.url && options.url.includes('.m3u8')) {
+            await MediaHelper.pollHlsManifest(options.url);
+        }
+
         // Set cross-origin if needed
         const crossOrigin = MediaHelper.getCrossOriginValue(options.mediaSource);
         if (crossOrigin) {
@@ -554,17 +576,13 @@ export class HtmlVideoPlayer {
         }
 
         // ====================================================================
-        // MEDIA FRAGMENT INJECTION:
-        // We append the media fragment `#t=seconds` to the stream URL.
-        // This instructs standard HTML5 engines to begin loading and buffering
-        // segments from the target seek position natively.
+        // PROGRESSIVE STREAM URL SETUP:
+        // Use clean stream URL without media fragments (#t=).
+        // Resume positioning is handled reliably by _applyPlaybackResume
+        // after loadedmetadata, avoiding concurrent Range request storms.
         // ====================================================================
-        let url = options.url;
+        const url = options.url;
         const resumeSeconds = (options.playerStartPositionTicks || 0) / 10000000;
-        if (resumeSeconds > 0) {
-            log.info(`HtmlVideoPlayer: Appending media fragment #t=${resumeSeconds} for native seek`);
-            url += `#t=${resumeSeconds}`;
-        }
 
         // ====================================================================
         // RESUME SEEK TIMING FIX:
@@ -850,8 +868,17 @@ export class HtmlVideoPlayer {
             video.currentTime = Math.max(0, targetSeconds);
         }
 
-        // Manual timeupdate for paused state (native event is delayed or absent on many browsers)
-        this.onEvent({ type: 'timeupdate', data: { time: targetSeconds } });
+        // ---------------------------------------------------------------------
+        // Defer timeupdate to native demuxer arrival:
+        // Do NOT fire a synthetic timeupdate here with targetSeconds. In HLS
+        // (especially with transcoded audio and direct-streamed video), the
+        // underlying browser demuxer lands on the nearest GOP keyframe, which
+        // may differ by 1–5 seconds from targetSeconds. Emitting a synthetic
+        // timeupdate prematurely causes SubtitleManager and the UI clock to desync
+        // before the presentation time is settled.
+        // The authoritative timeupdate will fire from _onSeeked once the hardware
+        // demuxer completes repositioning.
+        // ---------------------------------------------------------------------
 
         // ---------------------------------------------------------------------
         // DirectPlay Seek Verification Guard:
@@ -1543,24 +1570,30 @@ export class HtmlVideoPlayer {
 
         // Ignore errors if we don't have a source and no HLS player is active.
         // This commonly happens during stop/cleanup when src is removed.
-        if (!video.src && !this._hlsPlayer) {
+        if (!video.src && !this._hlsPlayer && (!video.firstChild || !video.firstChild.src)) {
             log.debug('Ignoring error event on empty source during cleanup');
             return;
         }
 
-        const errorCode = video.error?.code || 0;
-        const errorMessage = video.error?.message || 'Unknown error';
-
-        log.error(`Error ${errorCode}: ${errorMessage}`);
+        const formatted = MediaHelper.formatMediaError(video.error);
+        log.error(`HtmlVideoPlayer: Error ${formatted.code} (${formatted.name}): ${formatted.message}`);
 
         // Try HLS.js recovery for decode errors
-        if (errorCode === 3 && this._hlsPlayer) {
+        if (formatted.code === 3 && this._hlsPlayer) {
             log.info('Attempting HLS.js media error recovery');
             this._hlsPlayer.recoverMediaError();
             return;
         }
 
-        this.onEvent({ type: 'error', data: { code: errorCode, message: errorMessage } });
+        const isNetworkError = formatted.code === 2 || /network|connection|pipeline_error_network/i.test(formatted.message);
+
+        this.onEvent({
+            type: 'error',
+            data: {
+                ...formatted,
+                isNetworkError
+            }
+        });
     }
 
     /** @private */
@@ -1619,6 +1652,26 @@ export class HtmlVideoPlayer {
     /** @private */
     _onSeeked() {
         const video = this._videoElement;
+
+        // ---------------------------------------------------------------------
+        // Demuxer Landed Confirmation:
+        // Dispatch the official 'seeked' event so orchestrator clears seeking lock.
+        // ---------------------------------------------------------------------
+        this.onEvent({ type: 'seeked' });
+
+        // ---------------------------------------------------------------------
+        // Accurate Post-Seek Presentation Timestamp:
+        // Emit a timeupdate using the media element's true landed currentTime.
+        // In HLS (particularly with transcoded audio and direct-streamed video),
+        // the hardware demuxer snaps to the nearest GOP keyframe. Reporting
+        // the actual position ensures subtitles and the OSD timeline stay
+        // strictly synchronized with the hardware video presentation clock.
+        // ---------------------------------------------------------------------
+        this.onEvent({
+            type: 'timeupdate',
+            data: { time: this.getCurrentTime() }
+        });
+
         if (video && !video.paused) {
             // Re-use _onPlaying logic for seeked-playing transition
             this._onPlaying();
@@ -1630,10 +1683,38 @@ export class HtmlVideoPlayer {
     _startStallCheck() {
         this._clearStallCheck();
         
+        // Immediate check if navigator is already explicitly offline
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            log.warn('Playback stalled while navigator is offline — emitting network error early');
+            this.onEvent({
+                type: 'error',
+                data: {
+                    code: 2,
+                    message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                    isNetworkError: true
+                }
+            });
+            return;
+        }
+
         // If we stay in waiting/stalled for too long on Tizen, try to kick it
         this._stallTimer = setTimeout(() => {
             if (this._videoElement && !this._videoElement.paused && this._started) {
-                log.warn('Playback still stalled after 5s - attempting recovery kick');
+                log.warn('Playback still stalled after 3.5s - attempting recovery kick');
+                
+                // If navigator turned offline during stall, fire network error immediately
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    this.onEvent({
+                        type: 'error',
+                        data: {
+                            code: 2,
+                            message: 'MEDIA_ERR_NETWORK: Playback stalled while offline',
+                            isNetworkError: true
+                        }
+                    });
+                    return;
+                }
+
                 try {
                     // Small jump to trigger buffer re-evaluation
                     this._videoElement.currentTime += 0.01;
@@ -1641,7 +1722,7 @@ export class HtmlVideoPlayer {
                     log.error('Stall recovery kick failed:', e);
                 }
             }
-        }, 5000);
+        }, 3500);
     }
 
     /** @private */

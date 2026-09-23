@@ -29,6 +29,7 @@ import './styles/player-osd.css';
 import './styles/upnext.css';
 import './styles/player-modals.css'; /* Chapters & Queue modal panels */
 import './styles/syncplay-menu.css'; /* SyncPlay group-selection overlay */
+import './styles/admin-modals.css'; /* Admin Identify & Image Editor modals */
 import './styles/settings.css';
 import './styles/lock-overlay.css';
 import './styles/season.css';

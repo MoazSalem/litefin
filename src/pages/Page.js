@@ -176,6 +176,18 @@ class Page extends Component {
     }
 
     /**
+     * Unregister a focus section
+     * @param {string} name - Section identifier
+     */
+    unregisterFocusSection(name) {
+        focusManager.unregister(name);
+        const idx = this._focusSections.indexOf(name);
+        if (idx !== -1) {
+            this._focusSections.splice(idx, 1);
+        }
+    }
+
+    /**
      * Set the active focus section
      * @param {...any} args - Arguments passed to focusManager.setActiveSection
      */

@@ -22,6 +22,7 @@ import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('PersonPage');
@@ -86,8 +87,8 @@ class PersonPage extends Page {
 
                             <!-- Bio -->
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6" id="person-bio" tabindex="-1"></div>
-                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
+                                <div class="overview-text ${getOverviewClampClass()}" id="person-bio" tabindex="-1"></div>
+                                <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}" style="display: none;">${getOverviewButtonText()}</button>
                             </div>
 
                             <!-- Actions (Favorite, Seerr) -->
@@ -514,15 +515,17 @@ class PersonPage extends Page {
             // Assign biography overview content safely
             bioEl.innerHTML = p.Overview || '';
             bioEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
-            // Initially ensure standard clamp class is applied
-            bioEl.classList.add('line-clamp-6');
+            // Apply user-configured overview max lines clamp class
+            const clampClass = getOverviewClampClass();
+            bioEl.className = `overview-text ${clampClass}`;
         }
 
         // Reset "See More" button state visually and structurally
         const seeMoreBtn = this.$('.see-more-btn');
         if (seeMoreBtn) {
             seeMoreBtn.style.display = 'none';
-            seeMoreBtn.textContent = i18n.t('ShowMore');
+            seeMoreBtn.textContent = getOverviewButtonText();
+            seeMoreBtn.setAttribute('data-i18n', shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore');
         }
 
         // Force visibility immediately (bypass CSS transition issues)
@@ -555,9 +558,17 @@ class PersonPage extends Page {
         // Safety check to ensure elements exist in the DOM
         if (!bioEl || !seeMoreBtn) return;
 
-        // Compare scroll height against client layout height to detect overflow
-        if (bioEl.scrollHeight > bioEl.clientHeight) {
-            // Show the "Show More" button to the user
+        const alwaysShow = shouldAlwaysShowOverviewButton();
+        const hasText = Boolean(bioEl.textContent && bioEl.textContent.trim().length > 0);
+        const isTruncated = bioEl.scrollHeight > bioEl.clientHeight + 2;
+
+        // Dynamically update button label & i18n attribute
+        seeMoreBtn.textContent = getOverviewButtonText();
+        seeMoreBtn.setAttribute('data-i18n', alwaysShow ? 'DetailedView' : 'ShowMore');
+
+        // Compare scroll height against client layout height to detect overflow OR check always-show pref
+        if ((alwaysShow && hasText) || isTruncated) {
+            // Show the "Show More" / "Detailed View" button to the user
             seeMoreBtn.style.display = 'block';
 
             // Register a dedicated vertical focus section for the see more button
@@ -1221,7 +1232,7 @@ class PersonPage extends Page {
         if (actionsContainer) {
             actionsContainer.addEventListener('mouseover', (e) => {
                 const btn = e.target.closest('.btn, button');
-                if (btn) this._onFocusChangedForTooltip(btn);
+                if (btn) this._onFocusChangedForTooltip?.(btn);
             });
 
             actionsContainer.addEventListener('mouseout', (e) => {
@@ -1230,37 +1241,44 @@ class PersonPage extends Page {
                 if (!related || !actionsContainer.contains(related)) {
                     const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
                     if (activeInActions) {
-                        this._onFocusChangedForTooltip(document.activeElement);
+                        this._onFocusChangedForTooltip?.(document.activeElement);
                     } else if (bar) {
                         bar.classList.remove('visible');
                     }
                 } else {
                     const newBtn = related.closest('.btn, button');
                     if (newBtn) {
-                        this._onFocusChangedForTooltip(newBtn);
+                        this._onFocusChangedForTooltip?.(newBtn);
                     }
                 }
             });
         }
 
         // Initial evaluation for already focused button on page load
+        this._tooltipTimers = [];
         const updateInitial = () => {
+            if (typeof this._onFocusChangedForTooltip !== 'function') return;
             const actionsContainer = this.$('#person-fav-actions');
             const favBtn = this._favBtn?.el || this.$('.favorite-btn');
             const targetEl = (document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement))
                 ? document.activeElement
                 : favBtn;
             if (targetEl) {
-                this._onFocusChangedForTooltip(targetEl);
+                this._onFocusChangedForTooltip?.(targetEl);
             }
         };
         updateInitial();
         requestAnimationFrame(updateInitial);
-        setTimeout(updateInitial, 150);
-        setTimeout(updateInitial, 400);
+        this._tooltipTimers.push(setTimeout(updateInitial, 150));
+        this._tooltipTimers.push(setTimeout(updateInitial, 400));
     }
 
     destroy() {
+        if (this._tooltipTimers) {
+            this._tooltipTimers.forEach((t) => clearTimeout(t));
+            this._tooltipTimers = null;
+        }
+
         if (this._onFocusChangedForTooltip) {
             eventBus.off('focus:changed', this._onFocusChangedForTooltip);
             this._onFocusChangedForTooltip = null;

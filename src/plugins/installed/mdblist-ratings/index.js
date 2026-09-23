@@ -10,12 +10,13 @@
 import './mdblist-ratings.css';
 import { shouldShowScore } from '../../../utils/visibility.js';
 import { storage } from '../../../utils/StorageService.js';
+import { getMdbProviderInfo, formatRatingValue } from './ratingsFormatter.js';
 
 export default {
     id: 'mdblist-ratings',
     name: 'MDBList Ratings',
     description: 'Displays comprehensive ratings (IMDB, RT, etc.) from MDBList.',
-    version: '1.4.0',
+    version: '1.5.0',
     serverDependency: 'mdblist-ratings',
     defaultEnabled: false,
 
@@ -75,11 +76,11 @@ export default {
      * @param {string} itemId - Jellyfin item ID
      * @param {string} [imdbId] - Optional IMDb ID if already known
      * @param {boolean} [includeAwards=true] - Whether to fetch awards metadata
-     * @returns {Promise<{ ratings: Array, badges: Array, imdbId: string }>}
+     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, imdbId: string }>}
      */
     async getItemMetadata(itemId, imdbId = null, includeAwards = true) {
         try {
-            // 1. Try to get IDs and ratings from MDBList cache
+            // 1. Try to get IDs, ratings, and features from MDBList cache
             const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
 
             // 2. Resolve IMDb ID only if awards are requested (to avoid wasteful fallback API calls)
@@ -115,11 +116,12 @@ export default {
             return {
                 ratings: data && data.hasCache ? data.ratings || [] : [],
                 badges: awards || [],
+                features: data?.whatsonFeatures || data?.whatson_features || null,
                 imdbId: finalImdbId
             };
         } catch (err) {
             this.log.warn(`MDBList Plugin metadata fetch failed for ${itemId}:`, err);
-            return { ratings: [], badges: [], imdbId };
+            return { ratings: [], badges: [], features: null, imdbId };
         }
     },
 
@@ -133,7 +135,7 @@ export default {
         const itemId = match[1];
 
         try {
-            // Use the new public method to get metadata
+            // Use the public method to get metadata
             const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
             const metadata = await this.getItemMetadata(itemId, null, userWantsAwards);
 
@@ -143,7 +145,7 @@ export default {
                     // Render Ratings Row (Respect Score Visibility / Mystery Mode)
                     const item = api.getCurrentItem();
                     if (metadata.ratings.length > 0 && shouldShowScore(item)) {
-                        this._renderRatingsRow(pageEl, metadata.ratings);
+                        this._renderRatingsRow(pageEl, metadata.ratings, metadata.features);
                     }
 
                     // Render Awards Row
@@ -175,8 +177,7 @@ export default {
                 this._observer.disconnect();
                 this._observer = null;
             }
-            // Rows are in the page lifecycle, so they'll be destroyed with the page,
-            // but we can help by removing them if they are persisted in a cached view.
+            // Rows are in the page lifecycle, so they'll be destroyed with the page
         }
     },
 
@@ -206,7 +207,14 @@ export default {
         }
     },
 
-    _renderRatingsRow(pageEl, ratings) {
+    /**
+     * Renders all resolved ratings on the Details page.
+     *
+     * @param {HTMLElement} pageEl - Container page element
+     * @param {Array} ratings - Array of rating objects
+     * @param {Object} [features] - Extra metadata features (e.g. IMDb Top 250)
+     */
+    _renderRatingsRow(pageEl, ratings, features = null) {
         const metaRow = pageEl.querySelector('.details-meta-row');
         if (!metaRow) return;
 
@@ -226,26 +234,33 @@ export default {
         let html = '<div class="mdblist-ratings-row" tabindex="-1">';
 
         for (const rating of ratings) {
-            if (rating.value === null || rating.value === undefined) continue;
+            // Resolve formatted provider info using centralized formatter
+            const provider = getMdbProviderInfo(
+                rating.source || rating.Source,
+                rating.value !== undefined ? rating.value : rating.Value,
+                rating.score !== undefined ? rating.score : rating.Score,
+                features
+            );
 
-            const provider = this._getProviderInfo(rating.source, rating.value);
-            const formattedValue = provider.format ? provider.format(rating.value) : rating.value;
+            // Skip if formatting failed
+            if (!provider || !provider.formattedText) continue;
 
             // Determine if we use an <img> or an emoji fallback
             let iconHtml = '';
             if (provider.assetName) {
                 const iconUrl = `${assetBase}${provider.assetName}`;
-                iconHtml = `<img src="${iconUrl}" class="mdblist-rating-icon" alt="${rating.source}" />`;
+                // Include onerror handler to fall back to a clean star emoji if the server lacks the asset (e.g. older 10.xx plugin)
+                iconHtml = `<img src="${iconUrl}" class="mdblist-rating-icon" alt="${provider.displayName}" onerror="this.onerror=null;this.parentElement.innerHTML='<span class=\\'mdblist-rating-icon star-emoji\\'>⭐</span>';" />`;
             } else {
                 iconHtml = `<span class="mdblist-rating-icon star-emoji">⭐</span>`;
             }
 
             html += `
-                <div class="mdblist-item">
+                <div class="mdblist-item" title="${provider.displayName}: ${provider.formattedText}">
                     <span class="provider-icon ${provider.className}">
                         ${iconHtml}
                     </span>
-                    <span class="mdblist-value">${formattedValue}</span>
+                    <span class="mdblist-value">${provider.formattedText}</span>
                 </div>
             `;
         }
@@ -266,70 +281,11 @@ export default {
         });
     },
 
-    _getProviderInfo(source, value) {
-        const s = source ? source.toLowerCase() : '';
-        const score = parseFloat(value);
-
-        if (s === 'imdb') {
-            return { className: 'icon-imdb', assetName: 'IMDb.png' };
-        }
-        if (s === 'tomatoes') {
-            const assetName = score < 60 ? 'Rotten_Tomatoes_rotten.png' : 'Rotten_Tomatoes.png';
-            return { className: 'icon-rt', assetName, format: (v) => `${v}%` };
-        }
-        if (s === 'tomatoesaudience' || s === 'popcorn') {
-            const assetName =
-                score < 60 ? 'Rotten_Tomatoes_negative_audience.png' : 'Rotten_Tomatoes_positive_audience.png';
-            return { className: 'icon-rt-aud', assetName, format: (v) => `${v}%` };
-        }
-        if (s === 'metacritic') {
-            return { className: 'icon-metacritic', assetName: 'Metacritic.png' };
-        }
-        if (s === 'metacriticuser') {
-            // Server plugin uses the same icon for metacritic and metacriticuser
-            return { className: 'icon-metacritic-user', assetName: 'Metacritic.png' };
-        }
-        if (s === 'metacriticms') {
-            return { className: 'icon-metacritic-ms', assetName: 'metacriticms.png' };
-        }
-        if (s === 'letterboxd') {
-            return {
-                className: 'icon-letterboxd',
-                assetName: 'letterboxd.png',
-                format: (v) => parseFloat(v).toFixed(1)
-            };
-        }
-        if (s === 'trakt') {
-            return { className: 'icon-trakt', assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
-        }
-        if (s === 'tmdb') {
-            return {
-                className: 'icon-tmdb',
-                assetName: 'TMDB.png',
-                format: (v) => {
-                    const num = parseFloat(v);
-                    // MDBList sometimes returns TMDB as out of 100 (e.g. 82) and sometimes out of 10 (e.g. 8)
-                    return (num > 10 ? num / 10 : num).toFixed(1);
-                }
-            };
-        }
-        if (s === 'kinopoisk') {
-            return { className: 'icon-kinopoisk', assetName: 'kinopoisk.png' };
-        }
-        if (s === 'myanimelist' || s === 'mal') {
-            return { className: 'icon-mal', assetName: 'mal.png' };
-        }
-        if (s === 'anilist') {
-            return { className: 'icon-anilist', assetName: 'anilist.png' };
-        }
-        if (s === 'tvmaze') {
-            return { className: 'icon-tvmaze', assetName: 'tvmaze.png' };
-        }
-        if (s === 'rogerebert') {
-            return { className: 'icon-rogerebert', assetName: 'Roger_Ebert.png' };
-        }
-
-        return { className: 'icon-default', assetName: null }; // Uses fallback emoji
+    /**
+     * Backward-compatible helper method pointing to shared formatter.
+     */
+    _getProviderInfo(source, value, score = null) {
+        return getMdbProviderInfo(source, value, score);
     },
 
     _renderAwardsRow(pageEl, badges) {

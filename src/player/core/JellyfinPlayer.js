@@ -24,6 +24,7 @@ import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { api } from '../../api/index.js';
 import { storage } from '../../utils/StorageService.js';
 import { prewarmManager } from './PrewarmManager.js';
+import { languageManager } from '../../utils/LanguageManager.js';
 
 const log = logger.create('JellyfinPlayer');
 
@@ -69,6 +70,18 @@ export const isDtsSupported = () => {
 export function isAudioTrackNativelyPlayable(track) {
     if (!track || !track.Codec) return true;
     const codec = track.Codec.toLowerCase();
+
+    // =========================================================================
+    // Maximum Audio Channels Setting Validation
+    // =========================================================================
+    // When the user configures a maximum channel constraint (e.g. 5.1 / 6 channels),
+    // any audio track exceeding this channel count (e.g. 7.1 / 8 channels) requires
+    // server-side transcoding/downmixing and is not natively playable without processing.
+    // =========================================================================
+    const allowedChannels = PlayerSettings.get('allowedAudioChannels');
+    if (allowedChannels && allowedChannels > 0 && typeof track.Channels === 'number' && track.Channels > allowedChannels) {
+        return false;
+    }
 
     // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
     if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
@@ -156,15 +169,57 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
             : null) ||
         audioStreams[0];
 
+    // Codec fidelity tier scoring (higher is preferred for direct play)
+    // Lossless and premium discrete surround passthrough formats are ranked
+    // at the highest tiers when the hardware and user settings permit native decoding.
+    const getCodecScore = (codec) => {
+        const c = (codec || '').toLowerCase();
+        // Lossless / High-definition master audio formats (when hardware/settings support them)
+        if (c === 'truehd') return 95;
+        if (c.includes('dts-hd') || c.includes('dtshd') || c.includes('dts-ma') || c.includes('dts-x') || c.includes('dtsx')) return 90;
+        if (c === 'flac' || c === 'alac') return 80;
+        // Discrete surround core formats
+        if (c.includes('dts') || c === 'dca') return 70;
+        // High quality Dolby Digital Plus (enhanced AC3)
+        if (c === 'eac3') return 50;
+        // Standard Dolby Digital (legacy AC3)
+        if (c === 'ac3') return 40;
+        // Modern efficient opus format
+        if (c === 'opus') return 35;
+        // Universal AAC stereo / surround standard
+        if (c === 'aac') return 30;
+        // Legacy MP3 format
+        if (c === 'mp3') return 20;
+        return 10;                  // Other
+    };
+
     // Check if the auto-select DirectPlay audio track setting is enabled
     const preferDirectPlay = PlayerSettings.get('preferDirectPlayAudio') !== false;
     if (!preferDirectPlay) {
         return standardDefaultTrack;
     }
 
-    // If the standard default track is already natively playable without transcode, keep it!
-    if (standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack)) {
-        return standardDefaultTrack;
+    // Check whether the standard default track is natively playable on current device
+    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack);
+
+    // If the default track is natively playable, verify whether it is a low-tier compatibility track
+    // (such as AC3, AAC, or MP3) while a superior high-fidelity track (such as DTS, DTS-HD MA, or TrueHD)
+    // is also natively playable in the same language. If a premium passthrough track is supported,
+    // we must not blindly lock onto the lossy compatibility track.
+    if (isDefaultPlayable) {
+        const defaultScore = getCodecScore(standardDefaultTrack.Codec);
+        const hasPremiumAlternative = audioStreams.some((t) => {
+            if (t.Index === standardDefaultTrack.Index) return false;
+            if (!isAudioTrackNativelyPlayable(t)) return false;
+            const tLang = (t.Language || 'und').toLowerCase();
+            const defLang = (standardDefaultTrack.Language || 'und').toLowerCase();
+            if (tLang !== defLang && defLang !== 'und' && tLang !== 'und') return false;
+            return getCodecScore(t.Codec) >= 70 && getCodecScore(t.Codec) > defaultScore;
+        });
+
+        if (!hasPremiumAlternative) {
+            return standardDefaultTrack;
+        }
     }
 
     // Filter candidate streams that can be played natively on the current device
@@ -193,17 +248,6 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
             candidates = sameLangPlayable;
         }
     }
-
-    // Codec fidelity tier scoring (higher is preferred for direct play)
-    const getCodecScore = (codec) => {
-        const c = (codec || '').toLowerCase();
-        if (c === 'eac3') return 50; // High quality Dolby Digital Plus
-        if (c === 'ac3') return 40;  // Standard Dolby Digital
-        if (c === 'opus') return 35; // Efficient modern format
-        if (c === 'aac') return 30;  // Universal standard
-        if (c === 'mp3') return 20;  // Legacy MP3
-        return 10;                  // Other
-    };
 
     // Calculate score for each candidate to find the best track
     const scoredCandidates = candidates.map((track) => {
@@ -257,6 +301,86 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
     );
 
     return bestTrack;
+}
+
+/**
+ * Determine whether playing a specific audio track requires server DirectStream (remux)
+ * rather than raw DirectPlay (Static=true).
+ *
+ * In progressive DirectPlay (Static=true), Jellyfin serves the raw media container directly
+ * from disk and ignores any AudioStreamIndex parameter in the URL. The TV's hardware demuxer
+ * automatically starts decoding the container's designated default audio track (or the first
+ * decodable stream in the file).
+ *
+ * On WebOS and HTML5, the browser's video.audioTracks API allows switching tracks without remuxing,
+ * BUT Chromium's media demuxer silently drops passthrough / bitstream audio formats (DTS,
+ * DTS-HD MA, TrueHD, FLAC, ALAC) from the audioTracks collection.
+ *
+ * Therefore:
+ * 1. If the requested track IS the container's physical default track, DirectPlay works natively
+ *    in hardware (e.g. Avatar with DTS-HD MA as Track 0).
+ * 2. If the requested track is NOT the container default, and its codec is a passthrough or
+ *    dropped format, DirectPlay will NEVER play that track (it will stay stuck on the container default,
+ *    downgrading the user to a lossy compatibility track like AC3).
+ *    Such tracks MUST be remuxed (DirectStream) so the server isolates the target audio track.
+ *
+ * @param {Object} mediaSource - Jellyfin MediaSource object
+ * @param {number|string} audioStreamIndex - Stream Index to evaluate
+ * @param {string} backendType - Active backend ('webos', 'html5', 'avplay', etc.)
+ * @returns {boolean} True if the track requires DirectStream (remux)
+ */
+export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex, backendType) {
+    // Guard check: Ensure mediaSource and MediaStreams exist
+    if (!mediaSource || !Array.isArray(mediaSource.MediaStreams)) {
+        return false;
+    }
+
+    // Tizen AVPlay uses Samsung's native multimedia engine with hardware track demuxing
+    if (backendType === 'avplay') {
+        return false;
+    }
+
+    // Filter candidate streams to Audio type
+    const audioStreams = mediaSource.MediaStreams.filter((s) => s.Type === 'Audio');
+    if (audioStreams.length <= 1) {
+        return false;
+    }
+
+    // Parse requested audio stream index
+    const reqIndex = Number(audioStreamIndex);
+    const targetStream = audioStreams.find((s) => s.Index === reqIndex);
+    if (!targetStream) {
+        return false;
+    }
+
+    // Determine the container's actual physical default audio track.
+    // NOTE: We deliberately do NOT use mediaSource.DefaultAudioStreamIndex here because
+    // the Jellyfin server dynamically sets that property to whatever AudioStreamIndex
+    // was requested in the PlaybackInfo call, rather than the file's container default.
+    const defaultStream = audioStreams.find((s) => s.IsDefault && isAudioTrackNativelyPlayable(s));
+    const playableStreams = audioStreams.filter((s) => isAudioTrackNativelyPlayable(s));
+    const containerHardwareDefault = defaultStream || playableStreams[0] || audioStreams[0];
+
+    // If the requested track is the physical default track, it plays natively in hardware DirectPlay
+    if (containerHardwareDefault && targetStream.Index === containerHardwareDefault.Index) {
+        return false;
+    }
+
+    // Check if target codec is omitted from Chromium's native video.audioTracks collection
+    const codec = (targetStream.Codec || '').toLowerCase();
+    const isPassthroughOrDropped =
+        codec.includes('dts') ||
+        codec === 'dca' ||
+        codec === 'truehd' ||
+        codec === 'flac' ||
+        codec === 'alac';
+
+    // If omitted from audioTracks, WebOS / HTML5 cannot switch to it in DirectPlay mode
+    if (isPassthroughOrDropped) {
+        return true;
+    }
+
+    return false;
 }
 
 
@@ -426,9 +550,24 @@ export class JellyfinPlayer extends EventEmitter {
         this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
         this._pendingStartPositionTicks = null; // Target position before first frame
         this._isSeeking = false; // Track seeking state to suppress loading screens during seek
+        this._seekFailsafeTimeout = null; // Failsafe timer to clear _isSeeking if seeked event is lost
 
         // Secondary subtitle stream index (kept here for OSD queries)
         this._currentSecondarySubtitleStreamIndex = -1;
+
+        // ────────────────────────────────────────────────────────────────────
+        // Remux Stuck Watchdog
+        // ────────────────────────────────────────────────────────────────────
+        // Detects when falling back from a DirectPlay seek failure to Remux causes
+        // the client hardware decoder (e.g., WebOS MediaPipeline) to freeze on
+        // mid-GOP fMP4 stream segments lacking keyframe reference frames.
+        // If forward media progression does not occur within the evaluation window,
+        // this watchdog automatically escalates playback from 'remux' to 'transcode'.
+        // ────────────────────────────────────────────────────────────────────
+        this._remuxWatchdogTimeout = null;
+        this._remuxWatchdogActive = false;
+        this._remuxWatchdogTargetTicks = null;
+        this._remuxWatchdogInitialTime = null;
 
         // ====================================================================
         // Subtitle Manager — centralized subtitle orchestration
@@ -599,10 +738,44 @@ export class JellyfinPlayer extends EventEmitter {
      */
     _handleBackendEvent(event) {
         // Clear seeking flag on relevant events
+        // Only clear _isSeeking on explicit SEEKED or PLAYING events, never on TIME_UPDATE.
+        // Clearing on TIME_UPDATE causes premature un-gating of subtitle ticking before
+        // the hardware demuxer has settled on the post-seek keyframe PTS.
         if (event.type === PlayerEvent.SEEKED || 
-            event.type === PlayerEvent.PLAYING || 
-            (event.type === PlayerEvent.TIME_UPDATE && this._isSeeking)) {
+            event.type === PlayerEvent.PLAYING) {
             this._isSeeking = false;
+            const clearTimer = typeof clearTimeout !== 'undefined'
+                ? clearTimeout
+                : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+            if (clearTimer && this._seekFailsafeTimeout) {
+                clearTimer(this._seekFailsafeTimeout);
+                this._seekFailsafeTimeout = null;
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Remux Playback Health Monitor
+        // ---------------------------------------------------------------------
+        // When recovering from seek failures via Remux, check if playback is actively
+        // advancing. If time progresses forward by >= 0.3s, hardware decoding has
+        // successfully engaged with valid reference frames, so we can disarm the watchdog.
+        // ---------------------------------------------------------------------
+        if (this._remuxWatchdogActive && event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
+            const rawTime = event.data.time;
+            if (this._remuxWatchdogInitialTime === null) {
+                // Record baseline presentation time upon the first timeupdate
+                this._remuxWatchdogInitialTime = rawTime;
+            } else if (rawTime > this._remuxWatchdogInitialTime + 0.3) {
+                // Playhead is moving forward smoothly; decoder is healthy
+                log.info(`[JellyfinPlayer] Remux stream verified advancing at ${rawTime.toFixed(2)}s — disarming stuck watchdog.`);
+                this._clearRemuxStuckWatchdog();
+            }
+        }
+
+        // If the user manually pauses playback, disarm the watchdog to prevent false escalations
+        if (this._remuxWatchdogActive && event.type === PlayerEvent.PAUSE) {
+            log.info('[JellyfinPlayer] Playback paused during remux evaluation; disarming stuck watchdog.');
+            this._clearRemuxStuckWatchdog();
         }
 
         // Intercept events if we are waiting for the initial Transcode Seek
@@ -636,20 +809,35 @@ export class JellyfinPlayer extends EventEmitter {
         // before the player has actually jumped to the resume position.
         if (this._pendingStartPositionTicks !== null) {
             const targetSec = this._pendingStartPositionTicks / 10000000;
-            const currentTime = event.data?.time || 0;
+            // Account for any active transcoding offset so transcoded segments calculate target position accurately
+            const offsetSec = (this._transcodingOffsetTicks || 0) / 10000000;
+            const effectiveCurrentTime = (event.data?.time || 0) + offsetSec;
 
-            if (event.type === PlayerEvent.TIME_UPDATE && currentTime > 0) {
+            if (event.type === PlayerEvent.TIME_UPDATE && (event.data?.time || 0) > 0) {
                 // Check if we have arrived near our target resume position (within 15s GOP keyframe tolerance)
-                if (Math.abs(currentTime - targetSec) < 15 || currentTime >= (targetSec - 15)) {
+                if (Math.abs(effectiveCurrentTime - targetSec) < 15 || effectiveCurrentTime >= (targetSec - 15)) {
                     this._pendingStartPositionTicks = null;
-                    log.info(`Resume verified at ${currentTime}s. Dismissing loading screen.`);
+                    log.info(`Resume verified at ${effectiveCurrentTime}s. Dismissing loading screen.`);
+
+                    // Synchronize logical paused state — playback has safely engaged at the target position
+                    this._isPaused = false;
+                    this._subtitleManager?.play();
+
+                    // Emit PLAY followed by PLAYING so OSD and higher layers reflect active playback immediately
+                    this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                     // allow timeupdate to proceed below
                 } else if (Date.now() - (this._resumeWaitStartTime || 0) > 15000) {
                     // Fallback: 15 seconds have passed, seek likely failed or is taking too long.
                     // Release the spinner so we don't hold the UI hostage forever.
                     this._pendingStartPositionTicks = null;
-                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${currentTime}s but expected ${targetSec}s. Dismissing screen.`);
+                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s. Dismissing screen.`);
+
+                    // Restore active playing state even upon fallback
+                    this._isPaused = false;
+                    this._subtitleManager?.play();
+
+                    this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                 } else {
                     // Still waiting to reach target time. Suppress early timeupdates.
@@ -672,18 +860,36 @@ export class JellyfinPlayer extends EventEmitter {
             this._subtitleManager?.play();
         }
 
-        // Handle timeupdate — tick the SubtitleManager to update cues
+        // =====================================================================
+        // SUBTITLE SYNC & ABSOLUTE CLOCK TICKING:
+        // Handle timeupdate from backend player and tick SubtitleManager.
+        //
+        // Crucial timeline synchronization note:
+        // event.data.time reflects the backend player's stream-relative position in seconds.
+        // When audio or video is transcoded, or remuxed to HLS with an offset, the stream
+        // decoder starts at presentation time 0s, but external subtitles (and PlayerPage's
+        // cue cleanup checks) live on the absolute media timeline.
+        //
+        // We add (this._transcodingOffsetTicks / 10000000) to event.data.time to convert
+        // the stream position into absolute media seconds. This prevents subtitle desync
+        // when audio is transcoded, across initial resume offsets, and during scrubbing/seeks.
+        // =====================================================================
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
+            const offsetSeconds = (this._transcodingOffsetTicks || 0) / 10000000;
+            const absoluteTimeSeconds = event.data.time + offsetSeconds;
+
             try {
-                // SubtitleManager handles both primary and secondary subtitle ticking
-                if (this._subtitleManager) {
-                    this._subtitleManager.tick(event.data.time);
+                // Tick SubtitleManager using absolute media timeline seconds.
+                // Suppress cue ticking while seeking is actively in flight to prevent premature cue display
+                // before the demuxer lands on the keyframe PTS.
+                if (this._subtitleManager && !this._isSeeking) {
+                    this._subtitleManager.tick(absoluteTimeSeconds);
                 }
             } catch (e) {
                 console.error('Error ticking subtitle manager:', e.message || e, e.stack);
             }
             
-            // Re-emit normalized timeupdate with absolute ticks
+            // Re-emit normalized timeupdate with absolute ticks for UI/OSD and playback reporting
             this.emit(PlayerEvent.TIME_UPDATE, this.getCurrentPositionTicks());
             return;
         }
@@ -832,8 +1038,16 @@ export class JellyfinPlayer extends EventEmitter {
                         await this.stop();
                         await new Promise(resolve => setTimeout(resolve, 500));
                         await this.play(restartOptions);
+
+                        // -------------------------------------------------------------
+                        // Arm stuck-detection watchdog once remux stream is initiated.
+                        // If the hardware decoder hangs on mid-GOP stream copy, the
+                        // watchdog will detect lack of progress and escalate to transcode.
+                        // -------------------------------------------------------------
+                        this._armRemuxStuckWatchdog(effectiveTicks);
                     } catch (e) {
                         log.error('resumeseekfailed restart failed:', e);
+                        this._clearRemuxStuckWatchdog();
                     } finally {
                         this._isRestarting = false;
                     }
@@ -844,6 +1058,115 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Re-emit events from backend
         this.emit(event.type, event.data);
+    }
+
+    // ========================================================================
+    // Remux Stuck Watchdog & Transcode Escalation
+    // ========================================================================
+
+    /**
+     * Arm the remux stuck-detection watchdog after falling back from DirectPlay seek failure.
+     *
+     * Why this is needed:
+     * When seeking in DirectPlay fails (e.g. on MKV over HTTP on webOS), we restart in
+     * 'remux' mode. However, if the stream has a long GOP and FFmpeg stream-copies mid-GOP
+     * (-codec:v copy), the first HLS segment starts on a non-IDR (P/B) frame without
+     * preceding reference frames. On hardware decoders (such as LG webOS MediaPipeline),
+     * this causes an indefinite decoder freeze: currentTime never advances, and the
+     * loading spinner never dismisses.
+     *
+     * This watchdog grants remuxing 8 seconds to decode frames and advance. If time
+     * ticks forward by at least 0.3s, the watchdog clears. If 8 seconds elapse without
+     * progression, it escalates playback to 'transcode', which forces a clean IDR
+     * keyframe and unblocks the decoder immediately.
+     *
+     * @private
+     * @param {number} targetTicks - Target resume position in ticks
+     */
+    _armRemuxStuckWatchdog(targetTicks) {
+        // Disarm any preexisting watchdog timer first
+        this._clearRemuxStuckWatchdog();
+
+        this._remuxWatchdogActive = true;
+        this._remuxWatchdogTargetTicks = targetTicks;
+        this._remuxWatchdogInitialTime = null;
+
+        log.info(`[JellyfinPlayer] Armed remux stuck watchdog (8s timeout) at ${(targetTicks / 10000000).toFixed(2)}s`);
+
+        const timerFn = typeof setTimeout !== 'undefined'
+            ? setTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.setTimeout : null);
+
+        if (!timerFn) return;
+
+        // Schedule stuck evaluation window (8 seconds)
+        this._remuxWatchdogTimeout = timerFn(() => {
+            this._handleRemuxWatchdogTimeout();
+        }, 8000);
+    }
+
+    /**
+     * Clear and disarm the remux stuck watchdog.
+     * @private
+     */
+    _clearRemuxStuckWatchdog() {
+        if (this._remuxWatchdogTimeout) {
+            const clearTimer = typeof clearTimeout !== 'undefined'
+                ? clearTimeout
+                : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+            if (clearTimer) {
+                clearTimer(this._remuxWatchdogTimeout);
+            }
+            this._remuxWatchdogTimeout = null;
+        }
+        this._remuxWatchdogActive = false;
+        this._remuxWatchdogTargetTicks = null;
+        this._remuxWatchdogInitialTime = null;
+    }
+
+    /**
+     * Handler invoked when the remux stuck watchdog times out without time progression.
+     * Automatically escalates playback from 'remux' to 'transcode' to break decoder freeze.
+     * @private
+     */
+    _handleRemuxWatchdogTimeout() {
+        // Guard against stale triggers if watchdog was already cleared or player is stopping
+        if (!this._remuxWatchdogActive || this._isRestarting || !this._currentPlayOptions) {
+            return;
+        }
+
+        const targetTicks = this._remuxWatchdogTargetTicks || this.getCurrentPositionTicks();
+        log.warn(`[JellyfinPlayer] Remux playback stuck after fallback (decoder frozen at ${(targetTicks / 10000000).toFixed(2)}s). Escalating to transcode.`);
+
+        // Disarm watchdog so we don't re-trigger or cascade
+        this._clearRemuxStuckWatchdog();
+
+        // Build transcode restart configuration preserving stream selections
+        const transcodeOptions = {
+            ...this._currentPlayOptions,
+            startPositionTicks: targetTicks,
+            playbackMode: 'transcode'
+        };
+
+        this._currentPlayOptions = transcodeOptions;
+        this._lastPlayOptions = transcodeOptions;
+        this._isRestarting = true;
+
+        this.emit(PlayerEvent.RESTARTING);
+
+        (async () => {
+            try {
+                // Teardown backend session cleanly before transcode re-initialization
+                await this.stop();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                // Start playback in full transcode mode
+                await this.play(transcodeOptions);
+            } catch (e) {
+                log.error('[JellyfinPlayer] Transcode escalation restart failed:', e);
+            } finally {
+                this._isRestarting = false;
+            }
+        })();
     }
 
     // ========================================================================
@@ -907,6 +1230,13 @@ export class JellyfinPlayer extends EventEmitter {
                 }
             }
 
+            // Locate active MediaSource for track requirement evaluation
+            let activeMs = null;
+            if (options.item && options.item.MediaSources) {
+                const fallbackSource = options.item.MediaSources[0];
+                activeMs = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
+            }
+
             let isCustomAudioTrack = false;
             let isFirstAudioTrack = true;
             if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
@@ -914,18 +1244,15 @@ export class JellyfinPlayer extends EventEmitter {
                 let defaultIndex = undefined;
                 let firstAudioIndex = undefined;
 
-                if (options.item && options.item.MediaSources) {
-                    const fallbackSource = options.item.MediaSources[0];
-                    const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
-                    if (ms) {
-                        const audioStreams = (ms.MediaStreams || []).filter(s => s.Type === 'Audio');
-                        const defaultAudioStream = audioStreams.find(s => s.IsDefault) ||
-                            (ms.DefaultAudioStreamIndex !== undefined && ms.DefaultAudioStreamIndex !== null ? audioStreams.find(s => s.Index === ms.DefaultAudioStreamIndex) : null) ||
-                            audioStreams[0];
-                        defaultIndex = defaultAudioStream ? defaultAudioStream.Index : ms.DefaultAudioStreamIndex;
-                        if (audioStreams.length > 0) {
-                            firstAudioIndex = audioStreams[0].Index;
-                        }
+                if (activeMs) {
+                    const audioStreams = (activeMs.MediaStreams || []).filter(s => s.Type === 'Audio');
+                    // Find actual container default without using the dynamically echoed DefaultAudioStreamIndex
+                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s)) ||
+                        audioStreams.find(s => isAudioTrackNativelyPlayable(s)) ||
+                        audioStreams[0];
+                    defaultIndex = defaultAudioStream ? defaultAudioStream.Index : undefined;
+                    if (audioStreams.length > 0) {
+                        firstAudioIndex = audioStreams[0].Index;
                     }
                 }
                 
@@ -937,13 +1264,21 @@ export class JellyfinPlayer extends EventEmitter {
                 log.info(`[AudioSelection] Requested: ${reqIndex}, Default: ${defaultIndex}, First: ${firstAudioIndex}, Custom: ${isCustomAudioTrack}, IsFirst: ${isFirstAudioTrack}`);
             }
 
+            // Determine if the requested audio track requires server remuxing (DirectStream)
+            // This catches non-default passthrough tracks (DTS, TrueHD, FLAC) on WebOS/HTML5
+            // that Chromium cannot switch natively in progressive DirectPlay.
+            const trackRequiresDirectStream = activeMs && options.audioStreamIndex !== undefined && options.audioStreamIndex !== null
+                ? doesAudioTrackRequireDirectStream(activeMs, options.audioStreamIndex, this._backendType)
+                : false;
+
             const needsDirectStreamForAudio = options._forceDirectStream ||
+                trackRequiresDirectStream ||
                 (isHtml5Backend && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
             // Determine effective playback mode for profiling
             let profilePlaybackMode = this._playbackMode;
             if (needsDirectStreamForAudio && (profilePlaybackMode === 'auto' || profilePlaybackMode === 'directPlay')) {
-                log.info('HTML5 audio track selection: Upgrading profile mode to "remux" to ensure video Direct Stream.');
+                log.info('Audio track selection requires remux: Upgrading profile mode to "remux" to ensure video Direct Stream.');
                 profilePlaybackMode = 'remux';
             }
 
@@ -1447,16 +1782,15 @@ export class JellyfinPlayer extends EventEmitter {
             // Start Position & Resume Offset Handling
             // -------------------------------------------------------------------------
             // We pass the intended startPositionTicks directly to MediaHelper.buildStreamUrl.
-            // For server-managed streams (Transcode/Remux), the server starts ffmpeg
-            // directly at the requested StartTimeTicks (-ss <seconds>).
+            // In HLS streaming (whether Transcode, DirectStream, or Remux), the server's HLS playlist
+            // covers the entire media timeline from 0s. The player backend (Hls.js, webOS native,
+            // or Tizen AVPlay) directly seeks to playerStartPositionTicks.
             //
             // MediaHelper handles timeline mapping cleanly:
-            //   - Transcode: transcodingOffsetTicks = startPositionTicks, playerStartPositionTicks = 0
-            //   - Remux/DirectStream: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
-            //   - DirectPlay: transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
-            //
-            // This completely eliminates the zero-start stall trap where a client-side seek
-            // was issued into an ungenerated HLS stream on hardware TV players (webOS/Tizen).
+            //   - HLS (Transcode / DirectStream / Remux / DirectPlay):
+            //       transcodingOffsetTicks = 0, playerStartPositionTicks = startPositionTicks
+            //   - Progressive Transcode (!isHls):
+            //       transcodingOffsetTicks = startPositionTicks, playerStartPositionTicks = 0
             // -------------------------------------------------------------------------
             const originalStartPositionTicks = options.startPositionTicks || 0;
             const effectiveStartPositionTicks = originalStartPositionTicks;
@@ -1706,9 +2040,15 @@ export class JellyfinPlayer extends EventEmitter {
      * Resume playback
      */
     unpause() {
+        // Immediately mark state as unpaused so togglePlay and UI stay in sync
+        this._isPaused = false;
+        this._subtitleManager?.play();
+
+        // Notify listeners that playback has been resumed
         this.emit(PlayerEvent.PLAY);
+
+        // Instruct active hardware backend to unpause
         this._backend?.unpause();
-        // State update and event emission handled by _handleBackendEvent
     }
 
     /**
@@ -1735,6 +2075,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Only clear state if NOT restarting
         if (!this._isRestarting) {
+            this._clearRemuxStuckWatchdog();
             this._currentItem = null;
             this._currentMediaSource = null;
             this._currentPlayOptions = null;
@@ -1742,6 +2083,14 @@ export class JellyfinPlayer extends EventEmitter {
         
         this._isPlaying = false;
         this._isPaused = false;
+        this._isSeeking = false;
+        const clearTimer = typeof clearTimeout !== 'undefined'
+            ? clearTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+        if (clearTimer && this._seekFailsafeTimeout) {
+            clearTimer(this._seekFailsafeTimeout);
+            this._seekFailsafeTimeout = null;
+        }
 
         // Only emit stop events if we are NOT restarting
         if (!this._isRestarting) {
@@ -1765,6 +2114,25 @@ export class JellyfinPlayer extends EventEmitter {
         // High-Priority State Update: Indicate that seeking is actively occurring
         this._isSeeking = true;
         this._seekTargetTicks = positionTicks;
+
+        // Failsafe seeking timer: If neither SEEKED nor PLAYING fires within 5 seconds
+        // (e.g. edge-case decoder stalls on some TV firmware), ensure _isSeeking resets.
+        const clearTimer = typeof clearTimeout !== 'undefined'
+            ? clearTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.clearTimeout : null);
+        if (clearTimer && this._seekFailsafeTimeout) {
+            clearTimer(this._seekFailsafeTimeout);
+            this._seekFailsafeTimeout = null;
+        }
+        const setTimer = typeof setTimeout !== 'undefined'
+            ? setTimeout
+            : (typeof globalThis !== 'undefined' ? globalThis.setTimeout : null);
+        if (setTimer) {
+            this._seekFailsafeTimeout = setTimer(() => {
+                this._isSeeking = false;
+                this._seekFailsafeTimeout = null;
+            }, 5000);
+        }
 
         // INSTANT SUBTITLE WIPE:
         // Clear all active subtitles instantly when seeking. This prevents the currently
@@ -2218,6 +2586,349 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
+    }
+
+    /**
+     * ========================================================================
+     * Download and Apply Subtitle Stream During Playback
+     * ========================================================================
+     * Downloads a remote subtitle provider result from the Jellyfin server,
+     * refreshes the item's MediaStreams inventory, reconciles track indices to
+     * prevent stream-shifting desync, and immediately activates the new subtitle
+     * track in the active video session.
+     * ========================================================================
+     * 
+     * @param {string} subtitleId - The remote subtitle result identifier
+     * @returns {Promise<{success: boolean, track: Object, error?: Error}>}
+     */
+    /**
+     * Download a remote subtitle from Jellyfin server, poll for updated streams,
+     * reconcile shifted audio/subtitle indices, and activate the new subtitle track.
+     *
+     * @param {string} subtitleId - The remote subtitle result identifier
+     * @param {Object} [subtitleInfo={}] - Optional metadata of the downloaded subtitle { language, name, format }
+     * @returns {Promise<{success: boolean, track: Object, error?: Error}>}
+     */
+    async downloadAndApplySubtitle(subtitleId) {
+        const subtitleInfo = arguments[1] || {};
+        if (!this._currentItem?.Id || !subtitleId) {
+            log.warn('downloadAndApplySubtitle aborted: missing item or subtitleId');
+            return { success: false, error: new Error('Missing item or subtitleId') };
+        }
+
+        const itemId = this._currentItem.Id;
+        log.info(`[Subtitle Downloader] Initiating download: item=${itemId}, subId=${subtitleId}`);
+
+        // ====================================================================
+        // Step 1: Snapshot Existing Tracks and Pre-Download State
+        // ====================================================================
+        // Query server to get an accurate baseline of currently existing streams
+        // (including any previously downloaded external subtitles).
+        let baseItem = null;
+        try {
+            baseItem = await api.getItem(itemId, { Fields: 'MediaStreams,MediaSources' });
+        } catch (err) {
+            log.warn('[Subtitle Downloader] Failed to fetch pre-download streams baseline:', err);
+        }
+
+        const currentSource = this._currentMediaSource || this._currentItem?.MediaSources?.[0];
+        const baseSource = baseItem?.MediaSources?.find((ms) => ms.Id === currentSource?.Id) ||
+                           baseItem?.MediaSources?.[0] ||
+                           currentSource;
+        const baselineStreams = baseSource?.MediaStreams || baseItem?.MediaStreams || currentSource?.MediaStreams || [];
+
+        // Snapshot existing audio track identity
+        const activeAudioStream = baselineStreams.find(
+            (s) => s.Type === 'Audio' && s.Index === this._currentAudioStreamIndex
+        );
+        const audioSnapshot = activeAudioStream ? {
+            language: (activeAudioStream.Language || 'und').toLowerCase(),
+            title: activeAudioStream.DisplayTitle || activeAudioStream.Title || 'none',
+            codec: (activeAudioStream.Codec || '').toLowerCase(),
+            channels: activeAudioStream.Channels || null,
+            index: activeAudioStream.Index
+        } : null;
+
+        // Snapshot existing subtitle fingerprints and indices
+        const baselineSubtitles = baselineStreams.filter((s) => s.Type === 'Subtitle');
+        const previousSubtitleIndices = new Set(baselineSubtitles.map((s) => s.Index));
+        const previousSubtitleFingerprints = new Set(
+            baselineSubtitles.map((s) => s.Path || s.DeliveryUrl || `${s.Index}:${(s.Language || '').toLowerCase()}:${(s.Codec || '').toLowerCase()}:${s.IsExternal}`)
+        );
+
+        // ====================================================================
+        // Step 2: Trigger Server-Side Subtitle Download
+        // ====================================================================
+        try {
+            await api.downloadSubtitle(itemId, subtitleId);
+            log.info(`[Subtitle Downloader] Server download requested for: ${subtitleId}`);
+        } catch (downloadErr) {
+            log.error('[Subtitle Downloader] Download API request failed:', downloadErr);
+            throw downloadErr;
+        }
+
+        // ====================================================================
+        // Step 3: Poll / Refresh MediaStreams Metadata
+        // ====================================================================
+        // Server writes file to disk and refreshes item streams. We poll up to
+        // 6 times (with 400ms delay) until a new subtitle stream is detected.
+        let freshItem = null;
+        let freshStreams = [];
+        let freshSource = null;
+        let newSubtitleTrack = null;
+
+        const targetNormLang = subtitleInfo?.language ? languageManager.normalizeLanguage(subtitleInfo.language)?.code : null;
+
+        for (let attempt = 0; attempt < 6; attempt++) {
+            if (attempt > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 400));
+            }
+
+            try {
+                freshItem = await api.getItem(itemId, { Fields: 'MediaStreams,MediaSources' });
+                freshSource = freshItem?.MediaSources?.find((ms) => ms.Id === currentSource?.Id) ||
+                              freshItem?.MediaSources?.[0];
+                freshStreams = freshSource?.MediaStreams || freshItem?.MediaStreams || [];
+
+                // Look for subtitle streams not present in the pre-download baseline
+                const candidateNewSubs = freshStreams.filter((s) => {
+                    if (s.Type !== 'Subtitle') return false;
+                    const fp = s.Path || s.DeliveryUrl || `${s.Index}:${(s.Language || '').toLowerCase()}:${(s.Codec || '').toLowerCase()}:${s.IsExternal}`;
+                    return !previousSubtitleFingerprints.has(fp) && (!previousSubtitleIndices.has(s.Index) || s.IsExternal);
+                });
+
+                if (candidateNewSubs.length > 0) {
+                    // Filter candidates that are external subtitles
+                    const externalCandidates = candidateNewSubs.filter((s) => s.IsExternal);
+                    const pool = externalCandidates.length > 0 ? externalCandidates : candidateNewSubs;
+
+                    // If language was provided, find candidate matching target language (searching from latest)
+                    let matchedTrack = null;
+                    if (targetNormLang) {
+                        matchedTrack = [...pool].reverse().find((s) => {
+                            const trackNorm = languageManager.normalizeLanguage(s.Language)?.code;
+                            return trackNorm === targetNormLang || (s.Language || '').toLowerCase().startsWith(targetNormLang.slice(0, 2));
+                        });
+                    }
+
+                    // Newly downloaded external subtitles are appended by Jellyfin at the END of external streams.
+                    // Always pick the newest/last matching stream, NEVER the first!
+                    newSubtitleTrack = matchedTrack || pool[pool.length - 1];
+                    log.info(`[Subtitle Downloader] New subtitle stream detected at attempt ${attempt + 1}: index=${newSubtitleTrack.Index} (${newSubtitleTrack.DisplayTitle || newSubtitleTrack.Language})`);
+                    break;
+                }
+            } catch (fetchErr) {
+                log.warn(`[Subtitle Downloader] Fetching updated streams failed (attempt ${attempt + 1}):`, fetchErr);
+            }
+        }
+
+        // Fallback: If no newly created stream detected, take the latest external subtitle stream matching language
+        if (!newSubtitleTrack && freshStreams.length > 0) {
+            const externalSubs = freshStreams.filter((s) => s.Type === 'Subtitle' && s.IsExternal);
+            if (externalSubs.length > 0) {
+                let matchedFallback = null;
+                if (targetNormLang) {
+                    matchedFallback = [...externalSubs].reverse().find((s) => {
+                        const trackNorm = languageManager.normalizeLanguage(s.Language)?.code;
+                        return trackNorm === targetNormLang || (s.Language || '').toLowerCase().startsWith(targetNormLang.slice(0, 2));
+                    });
+                }
+                newSubtitleTrack = matchedFallback || externalSubs[externalSubs.length - 1];
+                log.info(`[Subtitle Downloader] Falling back to latest external subtitle track: index=${newSubtitleTrack.Index}`);
+            }
+        }
+
+        // ====================================================================
+        // Step 4: Update In-Memory MediaSources and MediaStreams
+        // ====================================================================
+        const updatedStreams = freshSource?.MediaStreams || freshItem?.MediaStreams || freshStreams;
+        if (freshItem?.MediaSources) {
+            this._currentItem.MediaSources = freshItem.MediaSources;
+        }
+        if (this._currentMediaSource && updatedStreams.length > 0) {
+            this._currentMediaSource.MediaStreams = updatedStreams;
+        }
+        if (this._currentItem && updatedStreams.length > 0) {
+            this._currentItem.MediaStreams = updatedStreams;
+        }
+        // Update SubtitleManager's stream registry
+        this._subtitleManager.updateMediaStreams(updatedStreams);
+
+        // ====================================================================
+        // Step 5: Reconcile Audio Stream Index
+        // ====================================================================
+        // If stream indices shifted on the server, reconcile audio track so
+        // that playback doesn't point to an invalid or swapped stream.
+        if (audioSnapshot && freshSource) {
+            const candidateAudios = freshSource.MediaStreams.filter((s) => s.Type === 'Audio');
+            const exactIndexMatch = candidateAudios.find((s) => s.Index === audioSnapshot.index);
+
+            // Verify if stream at the same index still has matching identity
+            const isSameTrack = exactIndexMatch &&
+                (exactIndexMatch.Language || 'und').toLowerCase() === audioSnapshot.language &&
+                (!audioSnapshot.codec || (exactIndexMatch.Codec || '').toLowerCase() === audioSnapshot.codec);
+
+            if (!isSameTrack) {
+                // Audio track shifted! Find the matching stream in fresh inventory
+                const matchedAudio = candidateAudios.find(
+                    (s) => (s.Language || 'und').toLowerCase() === audioSnapshot.language &&
+                           (s.Codec || '').toLowerCase() === audioSnapshot.codec
+                ) || candidateAudios.find(
+                    (s) => (s.Language || 'und').toLowerCase() === audioSnapshot.language
+                );
+
+                if (matchedAudio && matchedAudio.Index !== this._currentAudioStreamIndex) {
+                    log.warn(`[Subtitle Downloader] Reconciling shifted audio stream index: ${this._currentAudioStreamIndex} -> ${matchedAudio.Index}`);
+                    this._currentAudioStreamIndex = matchedAudio.Index;
+                    MediaHelper.saveTrackMemory(itemId, 'Audio', matchedAudio, freshSource);
+                }
+            }
+        }
+
+        // ====================================================================
+        // Step 6: Apply and Activate the New Subtitle Track
+        // ====================================================================
+        if (newSubtitleTrack) {
+            log.info(`[Subtitle Downloader] Applying new subtitle track: index=${newSubtitleTrack.Index}`);
+            
+            // Invalidate prewarm cache so next plays fetch fresh metadata
+            prewarmManager.invalidateCache();
+
+            // Set new subtitle stream on the player
+            await this.setSubtitleStreamIndex(newSubtitleTrack.Index);
+
+            // Persist to track memory
+            MediaHelper.saveTrackMemory(itemId, 'Subtitle', newSubtitleTrack, this._currentMediaSource || freshSource);
+            storage.setItem('session:lastSubtitleLang', newSubtitleTrack.Language || 'und');
+            storage.setItem(
+                'session:lastSubtitleTitle',
+                newSubtitleTrack.DisplayTitle || newSubtitleTrack.Title || 'none'
+            );
+
+            // Emit streams change to update OSD and subscribers
+            this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, {
+                subtitleStreamIndex: newSubtitleTrack.Index,
+                audioStreamIndex: this._currentAudioStreamIndex
+            });
+
+            return { success: true, track: newSubtitleTrack };
+        } else {
+            log.warn('[Subtitle Downloader] Download completed but could not resolve target subtitle stream');
+            return { success: false, error: new Error('Could not resolve new subtitle stream') };
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Delete and Reconcile Subtitle Stream During Active Playback
+     * ========================================================================
+     * Requests the Jellyfin server to delete a local external subtitle track,
+     * pulls fresh stream metadata, cleans up active rendering references if the
+     * deleted track was in use, and re-reconciles shifted track indices.
+     * ========================================================================
+     *
+     * @param {number} streamIndex - Server MediaStream index of subtitle to delete
+     * @returns {Promise<{success: boolean, error?: Error}>}
+     */
+    async deleteAndReconcileSubtitle(streamIndex) {
+        // Validate that an active playback item exists and stream index was specified
+        if (!this._currentItem?.Id || streamIndex === undefined || streamIndex === null) {
+            log.warn('deleteAndReconcileSubtitle aborted: missing item or streamIndex');
+            return { success: false, error: new Error('Missing item or streamIndex') };
+        }
+
+        const itemId = this._currentItem.Id;
+        log.info(`[Subtitle Editor] Initiating server deletion: item=${itemId}, streamIndex=${streamIndex}`);
+
+        // ====================================================================
+        // Step 1: Delete Subtitle File on Jellyfin Server
+        // ====================================================================
+        try {
+            await api.deleteSubtitle(itemId, streamIndex);
+            log.info(`[Subtitle Editor] Subtitle stream ${streamIndex} deleted on server`);
+        } catch (deleteErr) {
+            log.error('[Subtitle Editor] Server deletion request failed:', deleteErr);
+            throw deleteErr;
+        }
+
+        // ====================================================================
+        // Step 2: Query Server for Updated Stream Inventory
+        // ====================================================================
+        // Subtitle deletion causes stream indices above the deleted index to shift.
+        // Query fresh inventory to capture the newly indexed state.
+        let freshItem = null;
+        try {
+            freshItem = await api.getItem(itemId, { Fields: 'MediaStreams,MediaSources' });
+        } catch (fetchErr) {
+            log.warn('[Subtitle Editor] Failed to fetch updated streams after deletion:', fetchErr);
+        }
+
+        const currentSource = this._currentMediaSource || this._currentItem?.MediaSources?.[0];
+        const freshSource = freshItem?.MediaSources?.find((ms) => ms.Id === currentSource?.Id) ||
+                            freshItem?.MediaSources?.[0];
+        const freshStreams = freshSource?.MediaStreams || freshItem?.MediaStreams || [];
+
+        // ====================================================================
+        // Step 3: Synchronize In-Memory MediaSource and Subtitle Registry
+        // ====================================================================
+        if (freshItem?.MediaSources) {
+            this._currentItem.MediaSources = freshItem.MediaSources;
+        }
+        if (this._currentMediaSource && freshStreams.length > 0) {
+            this._currentMediaSource.MediaStreams = freshStreams;
+        }
+        if (this._currentItem && freshStreams.length > 0) {
+            this._currentItem.MediaStreams = freshStreams;
+        }
+        // Notify SubtitleManager of updated stream list so renderer has current metadata
+        this._subtitleManager.updateMediaStreams(freshStreams);
+
+        // Clear prewarm cache so upcoming play sessions fetch refreshed descriptors
+        prewarmManager.invalidateCache();
+
+        // ====================================================================
+        // Step 4: Reconcile Active Playback Track Selections
+        // ====================================================================
+        // If the deleted track was currently rendering on screen, immediately turn off
+        if (this._currentSubtitleStreamIndex === streamIndex) {
+            log.info(`[Subtitle Editor] Active subtitle ${streamIndex} was deleted; disabling subtitles`);
+            await this.setSubtitleStreamIndex(-1);
+            MediaHelper.saveTrackMemory(itemId, 'Subtitle', { Index: -1 }, this._currentMediaSource || freshSource);
+        } else if (this._currentSubtitleStreamIndex !== -1) {
+            // Check if active subtitle stream shifted or no longer exists
+            const stillPresent = freshStreams.some(
+                (s) => s.Type === 'Subtitle' && s.Index === this._currentSubtitleStreamIndex
+            );
+            if (!stillPresent) {
+                log.warn(`[Subtitle Editor] Active subtitle index ${this._currentSubtitleStreamIndex} invalidated by shift; disabling`);
+                await this.setSubtitleStreamIndex(-1);
+            }
+        }
+
+        // Check if audio track index shifted due to stream re-indexing on server
+        if (this._currentAudioStreamIndex !== undefined && this._currentAudioStreamIndex !== null) {
+            const audioStillValid = freshStreams.some(
+                (s) => s.Type === 'Audio' && s.Index === this._currentAudioStreamIndex
+            );
+            if (!audioStillValid) {
+                const fallbackAudio = freshStreams.find((s) => s.Type === 'Audio');
+                if (fallbackAudio) {
+                    log.warn(`[Subtitle Editor] Reconciling shifted audio stream: ${this._currentAudioStreamIndex} -> ${fallbackAudio.Index}`);
+                    this._currentAudioStreamIndex = fallbackAudio.Index;
+                    MediaHelper.saveTrackMemory(itemId, 'Audio', fallbackAudio, freshSource);
+                }
+            }
+        }
+
+        // ====================================================================
+        // Step 5: Broadcast Track State to OSD and Subscribers
+        // ====================================================================
+        this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, {
+            subtitleStreamIndex: this._currentSubtitleStreamIndex,
+            audioStreamIndex: this._currentAudioStreamIndex
+        });
+
+        return { success: true };
     }
 
     /**
@@ -2705,9 +3416,14 @@ export class JellyfinPlayer extends EventEmitter {
 
     /**
      * Check if paused
+     * Queries the underlying backend hardware state if available to prevent state desync
      * @returns {boolean}
      */
     isPaused() {
+        // Consult backend as the ultimate source of truth when running
+        if (this._backend && typeof this._backend.isPaused === 'function') {
+            return this._backend.isPaused();
+        }
         return this._isPaused;
     }
 
@@ -2840,6 +3556,10 @@ export class JellyfinPlayer extends EventEmitter {
                     if (isAudioCodecError && (this._playbackMode === 'auto' || this._playbackMode === 'directPlay')) {
                         log.warn(
                             '[Prewarm] Prewarmed PlaybackInfo forced transcode for AudioCodecNotSupported. Discarding in favor of fresh direct-play request.'
+                        );
+                    } else if (deviceProfile?.DirectPlayProfiles?.length === 0 && firstSource.SupportsDirectPlay) {
+                        log.info(
+                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
                         );
                     } else {
                         return prewarmedData;

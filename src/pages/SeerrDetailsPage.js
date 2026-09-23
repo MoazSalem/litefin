@@ -29,6 +29,7 @@ import { lazyLoader } from '../utils/LazyLoader.js';
 import { router } from '../core/Router.js';
 import { state } from '../core/StateManager.js';
 import { eventBus } from '../core/EventBus.js';
+import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrDetailsPage');
@@ -101,8 +102,8 @@ class SeerrDetailsPage extends Page {
                                 </div>
                             </section>
                             <div class="details-overview">
-                                <div class="overview-text line-clamp-6" id="overview-text" tabindex="-1"></div>
-                                <button class="see-more-btn" tabindex="0">${i18n.t('ShowMore')}</button>
+                                <div class="overview-text ${getOverviewClampClass()}" id="overview-text" tabindex="-1"></div>
+                                <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}">${getOverviewButtonText()}</button>
                             </div>
                         </div>
                     </div>
@@ -316,6 +317,8 @@ class SeerrDetailsPage extends Page {
         }
 
         overviewEl.textContent = item.Overview || '';
+        const clampClass = getOverviewClampClass();
+        overviewEl.className = `overview-text ${clampClass}`;
 
         if (item._detailImageUrl) {
             const poster = document.createElement('img');
@@ -362,6 +365,41 @@ class SeerrDetailsPage extends Page {
                 } else if (type === 'networks' || type === 'network') {
                     if (id) {
                         router.navigate(`/library/seerr?seerrType=network&networkId=${id}&name=${encodeURIComponent(name)}`);
+                    }
+                } else if (
+                    type === 'productionteam' ||
+                    type === 'production_team' ||
+                    type === 'directors' ||
+                    type === 'director' ||
+                    type === 'writers' ||
+                    type === 'writer' ||
+                    type === 'crew' ||
+                    type === 'person'
+                ) {
+                    // Navigate directly to the Seerr person details page for the selected crew/team member
+                    let personId = id;
+
+                    // Fallback: If person ID was missing on the chip element, look it up in normalized crew data
+                    if (!personId && this._item) {
+                        const rawCrew =
+                            this._item.ProductionTeam ||
+                            (this._item.credits && this._item.credits.crew) ||
+                            this._item.crew ||
+                            [];
+
+                        const found = rawCrew.find((m) => {
+                            const memberName = typeof m === 'string' ? m : (m && (m.Name || m.name));
+                            return memberName && memberName.trim().toLowerCase() === (name || '').trim().toLowerCase();
+                        });
+
+                        if (found && (found.Id || found.id)) {
+                            personId = found.Id || found.id;
+                        }
+                    }
+
+                    if (personId) {
+                        log.info(`Navigating to Seerr person details page for crew member: personId=${personId}, name=${name}`);
+                        router.navigate(`/seerr/person/${personId}`);
                     }
                 }
             }
@@ -504,9 +542,15 @@ class SeerrDetailsPage extends Page {
         const seeMoreBtn = this.$('.see-more-btn');
         if (!overviewEl || !seeMoreBtn) return;
 
+        const alwaysShow = shouldAlwaysShowOverviewButton();
+        const hasText = Boolean(overviewEl.textContent && overviewEl.textContent.trim().length > 0);
         const isTruncated = overviewEl.scrollHeight > overviewEl.clientHeight + 2;
-        seeMoreBtn.classList.toggle('hidden', !isTruncated);
-        seeMoreBtn.tabIndex = isTruncated ? 0 : -1;
+        const shouldShow = (alwaysShow && hasText) || isTruncated;
+
+        seeMoreBtn.textContent = getOverviewButtonText();
+        seeMoreBtn.setAttribute('data-i18n', alwaysShow ? 'DetailedView' : 'ShowMore');
+        seeMoreBtn.classList.toggle('hidden', !shouldShow);
+        seeMoreBtn.tabIndex = shouldShow ? 0 : -1;
         this._registerFocus();
     }
 
@@ -648,6 +692,7 @@ class SeerrDetailsPage extends Page {
             listId,
             items,
             isLandscape = false,
+            cardType,
             renderCard,
             focusSectionName,
             onClick
@@ -667,6 +712,7 @@ class SeerrDetailsPage extends Page {
             visibleCount: 10,
             initialWindow: Math.min(20, items.length),
             focusSectionId: focusSectionName,
+            cardType: cardType,
             renderCard: renderCard
         });
 
@@ -741,6 +787,7 @@ class SeerrDetailsPage extends Page {
                 listId: 'seerr-people-row',
                 items: this._item.Cast,
                 isLandscape: false,
+                cardType: 'person',
                 renderCard: (person) => CardRenderer.createCardHtml(person, { type: 'person' }),
                 focusSectionName: 'seerr-details-people',
                 onClick: (card, person) => {
@@ -1147,7 +1194,7 @@ class SeerrDetailsPage extends Page {
         if (actionsContainer) {
             actionsContainer.addEventListener('mouseover', (e) => {
                 const btn = e.target.closest('.btn, button');
-                if (btn) this._onFocusChangedForTooltip(btn);
+                if (btn) this._onFocusChangedForTooltip?.(btn);
             });
 
             actionsContainer.addEventListener('mouseout', (e) => {
@@ -1155,32 +1202,34 @@ class SeerrDetailsPage extends Page {
                 if (!related || !actionsContainer.contains(related)) {
                     const activeInActions = document.activeElement && actionsContainer.contains(document.activeElement);
                     if (activeInActions) {
-                        this._onFocusChangedForTooltip(document.activeElement);
+                        this._onFocusChangedForTooltip?.(document.activeElement);
                     } else {
                         tooltipBar.classList.remove('visible');
                     }
                 } else {
                     const newBtn = related.closest('.btn, button');
                     if (newBtn) {
-                        this._onFocusChangedForTooltip(newBtn);
+                        this._onFocusChangedForTooltip?.(newBtn);
                     }
                 }
             });
         }
 
+        this._tooltipTimers = [];
         const updateInitial = () => {
+            if (typeof this._onFocusChangedForTooltip !== 'function') return;
             const actionsContainer = this.$('#actions');
             const targetEl = (document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement))
                 ? document.activeElement
                 : this.$('#actions .btn-action:not(.hidden)');
             if (targetEl) {
-                this._onFocusChangedForTooltip(targetEl);
+                this._onFocusChangedForTooltip?.(targetEl);
             }
         };
         updateInitial();
         requestAnimationFrame(updateInitial);
-        setTimeout(updateInitial, 150);
-        setTimeout(updateInitial, 400);
+        this._tooltipTimers.push(setTimeout(updateInitial, 150));
+        this._tooltipTimers.push(setTimeout(updateInitial, 400));
     }
 
     _renderStatus() {
@@ -1256,6 +1305,11 @@ class SeerrDetailsPage extends Page {
     }
 
     destroy() {
+        if (this._tooltipTimers) {
+            this._tooltipTimers.forEach((t) => clearTimeout(t));
+            this._tooltipTimers = null;
+        }
+
         if (this._onFocusChangedForTooltip) {
             eventBus.off('focus:changed', this._onFocusChangedForTooltip);
             this._onFocusChangedForTooltip = null;

@@ -397,11 +397,27 @@ export function buildJellyfinProfile(options = {}) {
 
     // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
     const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
-    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : caps.maxAudioChannels;
+    // When DTS or TrueHD passthrough is enabled, TV/eARC soundbar systems support full 7.1 (8-channel)
+    // audio bitstreams. Defaulting to 6 channels causes Jellyfin server's CodecProfiles condition
+    // (AudioChannels <= 6) to reject DirectPlay for 7.1 tracks with AudioChannelsNotSupported,
+    // forcing unnecessary server transcoding to a 5.1 AC3 compatibility track.
+    const defaultMaxChannels = (enableDts || enableTrueHd) ? 8 : caps.maxAudioChannels;
+    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : defaultMaxChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
     const maxAudioChannelsStr = String(maxAudioChannels);
+
+    // -------------------------------------------------------------------------
+    // Transcode Maximum Audio Channels Resolution
+    // -------------------------------------------------------------------------
+    // Dictates the maximum audio channels emitted during server transcode.
+    // If not set explicitly (-1 / auto), falls back to Direct Play channel cap.
+    // -------------------------------------------------------------------------
+    const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
+    const transMaxAudioChannels = (userTransChannels && userTransChannels > 0)
+        ? userTransChannels
+        : maxAudioChannels;
 
     // -------------------------------------------------------------------------
     // fMP4 HLS preference resolution
@@ -461,7 +477,7 @@ export function buildJellyfinProfile(options = {}) {
     if (caps.webosVersion >= 4) {
         audioCodecs.push('opus');
     }
-    if (enableDts) audioCodecs.push('dts', 'dca');
+    if (enableDts) audioCodecs.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     if (enableTrueHd) audioCodecs.push('truehd');
 
     const audioCodecString = audioCodecs.join(',');
@@ -533,11 +549,12 @@ export function buildJellyfinProfile(options = {}) {
         /*
          * Native WebOS DirectPlay for TS and M2TS containers:
          *
-         * Only the native WebOS backend (WebOSPlayer) direct-plays progressive TS/M2TS
-         * streams natively over HTTP. The fallback HTML5 backend (Hls.js) lacks progressive
-         * TS demuxing in standard browsers and continues to rely on HLS.
+         * Only the native WebOS backend (WebOSPlayer) on WebOS 5+ direct-plays progressive TS/M2TS
+         * streams natively over HTTP. Older WebOS 3/4 hardware demuxers crash with decode errors
+         * on raw HTTP progressive TS streams and require HLS packaging instead.
+         * The fallback HTML5 backend (Hls.js) lacks progressive TS demuxing in standard browsers.
          */
-        if (!isHtml5) {
+        if (!isHtml5 && caps.webosVersion >= 5) {
             // Build supported video codecs list for MPEG-TS container
             const tsVideoCodecs = ['h264', 'vc1'];
             if (enableHEVC) tsVideoCodecs.push('hevc');
@@ -659,7 +676,7 @@ export function buildJellyfinProfile(options = {}) {
     // to eARC exactly like the native LG media player does for local files.
     // ---------------------------------------------------------------------------
     const directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3', 'flac'];
-    if (enableDts) directAudioCodecsArr.push('dts', 'dca');
+    if (enableDts) directAudioCodecsArr.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
     if (enableTrueHd) directAudioCodecsArr.push('truehd');
     const directAudioCodecs = directAudioCodecsArr.join(',');
 
@@ -721,7 +738,7 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
-            MaxAudioChannels: maxAudioChannels,
+            MaxAudioChannels: transMaxAudioChannels,
             // ---------------------------------------------------------------------
             // Segment sizing: fixed at 6 seconds for all TS content.
             //
@@ -784,7 +801,7 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: mkvVideoCodecs.join(','),
             Context: 'Static',
             CopyTimestamps: true,
-            MaxAudioChannels: maxAudioChannels
+            MaxAudioChannels: transMaxAudioChannels
         },
         {
             Container: 'mp4',
@@ -810,7 +827,7 @@ export function buildJellyfinProfile(options = {}) {
                 VideoCodec: transVideoCodecs,
                 Context: 'Streaming',
                 Protocol: 'hls',
-                MaxAudioChannels: maxAudioChannels,
+                MaxAudioChannels: transMaxAudioChannels,
                 MinSegments: 1,
                 SegmentLength: isHtml5
                     ? PlayerSettings.get('html5SegmentLength') || 2
@@ -914,6 +931,27 @@ export function buildJellyfinProfile(options = {}) {
                     : [])
             ]
         },
+        // ---------------------------------------------------------------------
+        // Video Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
+        // Enforce maximum audio channels on audio streams inside video files
+        // (MKV, MP4, TS, etc.) so Jellyfin evaluates server-side transcode/downmix.
+        // ---------------------------------------------------------------------
+        {
+            Type: 'VideoAudio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    // ProfileCondition.Value must be a string in Jellyfin's schema
+                    Value: maxAudioChannelsStr,
+                    IsRequired: false
+                }
+            ]
+        },
+        // ---------------------------------------------------------------------
+        // Standalone Audio Channel Cap Condition
+        // ---------------------------------------------------------------------
         {
             Type: 'Audio',
             Conditions: [
