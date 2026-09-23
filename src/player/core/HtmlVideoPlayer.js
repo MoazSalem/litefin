@@ -91,6 +91,12 @@ export class HtmlVideoPlayer {
         // Audio normalization (Web Audio API)
         this._audioContext = null;
         this._gainNode = null;
+
+        // ====================================================================
+        // Audio Suppression State (Resume Playback):
+        // Prevents brief audio bursts from timestamp 0:00 when resuming playback.
+        // ====================================================================
+        this._resumeAudioSuppressed = false;
     }
 
     // ========================================================================
@@ -204,6 +210,23 @@ export class HtmlVideoPlayer {
         this._previousOffset = 0;
 
         const video = this._ensureVideoElement();
+
+        // ====================================================================
+        // Temporarily Mute Audio When Resuming Playback:
+        // When resuming media from a non-zero start timestamp, HTML5 video decoders
+        // (and HLS.js pipeline initializations) may decode the first audio frames
+        // from timestamp 0:00 for a split second before the seek completes or before
+        // the target HLS segment is buffered.
+        // If the stream is resuming and not already user-muted, temporarily mute
+        // the video element to prevent this audio burst leak. Audio is safely
+        // unmuted once the playback reaches the 'playing' state.
+        // ====================================================================
+        const isLive = options.item?.Type === 'TvChannel' || options.mediaSource?.LiveStreamId;
+        const resumeSeconds = isLive ? 0 : (options.playerStartPositionTicks || 0) / 10000000;
+        if (resumeSeconds > 0 && !video.muted) {
+            video.muted = true;
+            this._resumeAudioSuppressed = true;
+        }
 
         // Destroy any existing HLS player
         this._destroyHlsPlayer();
@@ -751,6 +774,16 @@ export class HtmlVideoPlayer {
         this._destroyHlsPlayer();
 
         const video = this._videoElement;
+
+        // ====================================================================
+        // Clean Up Resume Audio Suppression:
+        // If playback was stopped or cancelled before the playing event unmuted,
+        // restore muted status so future playback is not muted unintentionally.
+        // ====================================================================
+        if (this._resumeAudioSuppressed && video) {
+            video.muted = false;
+        }
+        this._resumeAudioSuppressed = false;
 
         if (video) {
             // Unbind events before clearing src to prevent error events from firing
@@ -1575,6 +1608,16 @@ export class HtmlVideoPlayer {
 
     /** @private */
     _onPlaying() {
+        // ====================================================================
+        // Unmute After Safe Resume:
+        // Resume playback has transitioned to the active 'playing' state at the
+        // target timestamp. Restore unmuted audio if it was suppressed for resume.
+        // ====================================================================
+        if (this._resumeAudioSuppressed) {
+            this._resumeAudioSuppressed = false;
+            this.setMuted(false);
+        }
+
         if (!this._started) {
             this._started = true;
             log.info('Playback started');

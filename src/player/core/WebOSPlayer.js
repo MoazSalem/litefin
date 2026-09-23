@@ -135,6 +135,7 @@ export class WebOSPlayer {
         this._robustSeekTarget   = null;
         this._robustSeekPending  = false;
         this._cancelRobustResume = false;
+        this._resumeAudioSuppressed = false;
 
         // ---- Audio normalization (Web Audio API) ----
         this._audioContext = null;
@@ -287,6 +288,12 @@ export class WebOSPlayer {
         this._cancelRobustResume = false;
 
         const video = this._ensureVideoElement();
+
+        // Temporarily mute audio when resuming
+        if (this._robustSeekTarget > 0 && !video.muted) {
+            video.muted = true;
+            this._resumeAudioSuppressed = true;
+        }
 
         // Tear down any active Hls.js session before starting fresh
         this._destroyHlsPlayer();
@@ -1163,6 +1170,13 @@ export class WebOSPlayer {
         this._destroyHlsPlayer();
 
         const video = this._videoElement;
+
+        if (this._resumeAudioSuppressed && video) {
+            video.muted = false;
+        }
+
+        this._resumeAudioSuppressed = false;
+
         if (video) {
             // Remove events BEFORE clearing src to stop spurious error events
             this._unbindEvents(video);
@@ -2082,6 +2096,12 @@ export class WebOSPlayer {
 
         if (this._robustSeekPending) {
             return; // suppress playing event until retry loop finishes
+        }
+
+        // Resume is now confirmed safe. Unmute audio.
+        if (this._resumeAudioSuppressed) {
+            this._resumeAudioSuppressed = false;
+            this.setMuted(false);
         }
 
         if (!this._started) {
