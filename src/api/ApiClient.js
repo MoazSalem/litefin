@@ -639,20 +639,21 @@ export class ApiClient {
             log.error(`Server rejected request (400 Bad Request): ${message}`);
         }
 
-        // Handle specific status codes
+        // Handle specific status codes if no specific server message was provided
+        const isGenericMessage = message === `HTTP ${response.status}`;
         switch (response.status) {
             case 401:
                 eventBus.emit('api:unauthorized');
-                message = 'Authentication required';
+                if (isGenericMessage) message = 'Authentication required';
                 break;
             case 403:
-                message = 'Access denied';
+                if (isGenericMessage) message = 'Access denied';
                 break;
             case 404:
-                message = 'Not found';
+                if (isGenericMessage) message = 'Not found';
                 break;
             case 500:
-                message = 'Server error';
+                if (isGenericMessage) message = 'Server error';
                 break;
         }
 
