@@ -597,10 +597,15 @@ class HomePage extends Page {
                         // Request a combined list of items limited by user's homeRowLimit setting
                         const response = await api.getMergedRows({ limit: homeRowLimit });
 
+                        // Filter out container items (such as Season or Series) defensively so only playable items display
+                        const validItems = (response?.Items || []).filter(
+                            (item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder
+                        );
+
                         // If we got valid items back, return them immediately
-                        if (response && response.Items && response.Items.length > 0) {
+                        if (validItems.length > 0) {
                             log.info('Successfully fetched merged items from server-side Litefin plugin');
-                            return response.Items;
+                            return validItems;
                         }
                     } catch (err) {
                         // Fall back to client-side merge if the plugin is not installed or returns an error
@@ -637,11 +642,13 @@ class HomePage extends Page {
                     // Extract items list safely and tag them with a transient _isResume flag.
                     // This flag enables the sorting comparator to distinguish between resume items
                     // (which should sort by direct pause dates) and next-up items (which should
-                    // sort by show activity dates).
-                    const resumeItems = (resumeRes?.Items || []).map((item) => ({
-                        ...item,
-                        _isResume: true
-                    }));
+                    // sort by show activity dates). We also filter out any container items (Seasons/Series).
+                    const resumeItems = (resumeRes?.Items || [])
+                        .filter((item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder)
+                        .map((item) => ({
+                            ...item,
+                            _isResume: true
+                        }));
 
                     const nextUpItems = (nextUpRes?.Items || [])
                         .filter((item) => {
@@ -786,7 +793,11 @@ class HomePage extends Page {
                 contextType: 'resume',
                 fetchFn: async () => {
                     const res = await api.getResumeItems({ Limit: homeRowLimit });
-                    return res?.Items?.length > 0 ? res.Items : null;
+                    // Filter out container items (such as Season or Series) defensively
+                    const validItems = (res?.Items || []).filter(
+                        (item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder
+                    );
+                    return validItems.length > 0 ? validItems : null;
                 }
             });
 

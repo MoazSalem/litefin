@@ -906,7 +906,10 @@ export class ApiClient {
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
-            MediaTypes: 'Video'
+            MediaTypes: 'Video',
+            // Restrict to playable video items to prevent container folders (e.g. Seasons/Series)
+            // from being returned on Jellyfin 12+ where folder rollup marks them as resumable.
+            IncludeItemTypes: 'Movie,Episode,Video'
         };
 
         /*

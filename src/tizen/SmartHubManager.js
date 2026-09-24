@@ -334,8 +334,14 @@ class SmartHubManager {
                 log.info('Attempting to fetch pre-merged continue/next-up items from Litefin plugin');
                 const response = await api.getMergedRows({ limit: 10 });
                 if (response && response.Items && response.Items.length > 0) {
-                    log.info('Successfully fetched merged items from server-side Litefin plugin');
-                    mergedItems = response.Items.slice(0, 10);
+                    // Filter out container items defensively
+                    const validPluginItems = response.Items.filter(
+                        (item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder
+                    );
+                    if (validPluginItems.length > 0) {
+                        log.info('Successfully fetched merged items from server-side Litefin plugin');
+                        mergedItems = validPluginItems.slice(0, 10);
+                    }
                 }
             } catch (err) {
                 // Plugin is not installed or returned an error; fallback to client-side logic
@@ -377,11 +383,14 @@ class SmartHubManager {
                     })()
                 ]);
 
-                // Map items and tag them so we can distinguish them during sorting
-                const resumeItems = (resumeRes?.Items || []).map((item) => ({
-                    ...item,
-                    _isResume: true
-                }));
+                // Map items and tag them so we can distinguish them during sorting.
+                // Filter out any container items (Seasons/Series) to ensure only playable media displays.
+                const resumeItems = (resumeRes?.Items || [])
+                    .filter((item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder)
+                    .map((item) => ({
+                        ...item,
+                        _isResume: true
+                    }));
 
                 const nextUpItems = (nextUpRes?.Items || [])
                     .filter((item) => {
