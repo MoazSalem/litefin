@@ -1541,5 +1541,14 @@
     "YearLabel": "Anno: {0}",
     "YearValue": "{0} anno",
     "Yes": "Sì",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "WatchProvidersTitle": "Dove guardarlo",
+    "WatchProvidersSubscription": "In abbonamento",
+    "WatchProvidersBuy": "Acquistabile",
+    "WatchProvidersEmpty": "Disponibilità non indicata per questo Paese.",
+    "WatchProvidersRegion": "Paese per la disponibilità streaming",
+    "WatchProvidersRegionDescription": "Scegli il Paese per i servizi di streaming mostrati nelle schede di film e serie.",
+    "WatchProvidersCountriesError": "Impossibile caricare i Paesi. Riprova.",
+    "ShowWatchProviders": "Mostra i servizi di streaming",
+    "ShowWatchProvidersDescription": "Mostra dove guardare film e serie nelle schede Seerr e Jellyfin. Disattivato di default."
 }

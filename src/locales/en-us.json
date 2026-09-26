@@ -1679,5 +1679,14 @@
     "ErrorUpdatingImageOrder": "Failed to update image order",
     "ButtonDownload": "Download",
     "UpdateImage": "Update Image",
-    "ImageDownloadedSuccessfully": "Artwork downloaded successfully"
+    "ImageDownloadedSuccessfully": "Artwork downloaded successfully",
+    "WatchProvidersTitle": "Where to watch",
+    "WatchProvidersSubscription": "Subscription",
+    "WatchProvidersBuy": "Buy",
+    "WatchProvidersEmpty": "Availability not listed for this country.",
+    "WatchProvidersRegion": "Streaming availability country",
+    "WatchProvidersRegionDescription": "Choose the country used to show streaming services on movie and series details.",
+    "WatchProvidersCountriesError": "Unable to load countries. Please try again.",
+    "ShowWatchProviders": "Show streaming services",
+    "ShowWatchProvidersDescription": "Show where to watch movies and series on Seerr and Jellyfin details pages. Disabled by default."
 }

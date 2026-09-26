@@ -19,6 +19,7 @@ import { imageCache } from '../utils/ImageCache.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import { seerr } from '../api/seerrClient.js';
+import { renderWatchProviders, watchProviderRegion, watchProviderTarget } from '../utils/WatchProviders.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import { IdentifyModal } from '../components/IdentifyModal.js';
 import { ImageEditorModal } from '../components/ImageEditorModal.js';
@@ -237,6 +238,7 @@ class DetailsPage extends Page {
                             </section>
 
                             <!-- Overview -->
+                            <div id="watch-providers-container" class="hidden"></div>
                             <div class="details-overview">
                                 <div class="overview-text ${getOverviewClampClass()}" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}">${getOverviewButtonText()}</button>
@@ -746,6 +748,7 @@ class DetailsPage extends Page {
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
+            void this._loadWatchProviders();
             this._updateTrailerButton();
 
             // 6. Immediately re-fetch and render visual artwork (poster & backdrop)
@@ -764,7 +767,43 @@ class DetailsPage extends Page {
         }
     }
 
+    async _loadWatchProviders() {
+        const container = this.$('#watch-providers-container');
+        if (!container) return;
+
+        const requestId = (this._watchProvidersRequestId || 0) + 1;
+        this._watchProvidersRequestId = requestId;
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        if (storage.getItem('pref:showWatchProviders') !== 'true') return;
+        const target = watchProviderTarget(this._item);
+        if (!target) return;
+        const isCurrent = () =>
+            !this._isDestroyed &&
+            this._watchProvidersRequestId === requestId &&
+            storage.getItem('pref:showWatchProviders') === 'true';
+        try {
+            if (!(await seerr.isAvailable()) || !isCurrent()) return;
+            const details = await seerr.details(target.mediaType, target.tmdbId);
+            if (!isCurrent()) return;
+            container.innerHTML = renderWatchProviders(
+                details.WatchProviders,
+                watchProviderRegion(storage.getItem('pref:watchProviderRegion')),
+                (key) => i18n.t(key),
+                i18n.currentLang
+            );
+            container.classList.remove('hidden');
+        } catch (err) {
+            // Availability is optional; playback and Jellyfin metadata remain usable.
+            log.warn('Unable to load streaming availability', err);
+        }
+    }
+
     async _loadDetails() {
+        // Invalidate optional metadata before starting a different item load.
+        this._watchProvidersRequestId = (this._watchProvidersRequestId || 0) + 1;
+        const providersContainer = this.$('#watch-providers-container');
+        if (providersContainer) providersContainer.classList.add('hidden');
         this.setLoading(true);
         this._hasEnteredEpisodesGrid = false;
 
@@ -840,6 +879,7 @@ class DetailsPage extends Page {
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
+            void this._loadWatchProviders();
             this._updateTrailerButton();
 
             // Load adjacent episode navigation buttons if the active media item is an Episode

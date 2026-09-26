@@ -22,6 +22,23 @@ Litefin has evolved through over 300 technical milestones. Below is a categorize
 - **Screensaver**: Dimming and title-hide after inactivity, ported from Jellyfin Web with TV optimizations.
 - **Server Discovery**: 3-tier automatic discovery (webOS Luna Service → Tizen HTTP Service → subnet HTTP scan) plus manual connection. Background service for Tizen.
 
+## Streaming Availability (Where to Watch)
+
+The **Where to watch** section lists streaming services for a movie or series in the selected country, with service names and logos grouped under **Subscription** and **Buy**. It is available on both Seerr catalogue details and Jellyfin movie/series details.
+
+This feature is **disabled by default**. To enable it:
+
+1. Configure Seerr in the Litefin Jellyfin server plugin.
+2. Open **Settings → Layout** in Litefin and enable **Show streaming services**.
+3. Set **Streaming availability country** to the country whose catalogues you want to see. The initial selection is **Italy**.
+4. Open a movie or series details page to view its listed services.
+
+Country names are displayed in full. Older TVs without native country-name localization use bundled Italian or English names.
+
+Jellyfin movies and series need a valid TMDB identifier for availability lookup. Availability loads in the background; if Seerr is unavailable or the identifier is missing, the section stays hidden on Jellyfin details. When Seerr returns no providers for the selected country, the section shows **Availability not listed for this country**. This does not establish that the title is unavailable everywhere.
+
+The service logos are informational and do not launch external apps. Turning **Show streaming services** off hides the section on subsequent details-page visits and skips the extra availability lookup for Jellyfin items.
+
 ## Player Enhancements (OSD)
 
 - **Modular OSD Design**: Multi-layer interface with 19 OSD submodules supporting advanced controls.
