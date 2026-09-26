@@ -171,7 +171,8 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                     { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
                     { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
-                    { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
+                    { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' },
+                    { value: 'manrope', label: i18n.t('FontManrope') || 'Manrope' }
                 ]
             },
             {
@@ -452,7 +453,8 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                     { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
                     { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
-                    { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
+                    { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' },
+                    { value: 'manrope', label: i18n.t('FontManrope') || 'Manrope' }
                 ]
             },
             {
