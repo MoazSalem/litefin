@@ -628,7 +628,49 @@ class ScrollController {
     getScrollContainer(element) {
         if (!element) return null;
 
+        // ---------------------------------------------------------------------
+        // 1. ISOLATE SUB-LIBRARIES MENU FROM SIDEBAR CONTAINER
+        // ---------------------------------------------------------------------
+        // In modern collapsed layouts, #sidebar-sub-libraries renders as a separate
+        // floating popover menu beside the sidebar rail. In normal expanded layout,
+        // it expands as an accordion. In both modes, navigating within this menu
+        // must NEVER scroll .sidebar-content or push the sidebar items upward.
+        // If the popover itself has reached its max-height and overflows, we scroll
+        // the popover itself directly, keeping the sidebar completely stationary.
+        // ---------------------------------------------------------------------
+        const subLibs = element.closest('#sidebar-sub-libraries');
+        if (subLibs) {
+            // Check if #sidebar-sub-libraries is actively overflowing with auto/scroll styles
+            const hasPopoverScroll = subLibs.scrollHeight > subLibs.clientHeight &&
+                window.getComputedStyle(subLibs).overflowY !== 'visible';
+            return hasPopoverScroll ? subLibs : null;
+        }
+
+        // ---------------------------------------------------------------------
+        // 2. COLLAPSED SIDEBAR RAIL WITH LIBRARY ICONS
+        // ---------------------------------------------------------------------
+        // When the user has enabled 'pref:showCollapsedLibraryIcons', all individual
+        // libraries are promoted to direct rail shortcuts. Because the collapsed rail
+        // may exceed screen height, we enable vertical smooth scrolling on the rail.
+        // In normal mode (without this pref), the sidebar rail items fit on screen
+        // and .sidebar-content must never scroll.
+        // ---------------------------------------------------------------------
+        const sidebar = element.closest('.sidebar');
+        const showCollapsedLibIcons = storage.getItem('pref:showCollapsedLibraryIcons') === 'true' ||
+            (sidebar && sidebar.classList.contains('show-lib-icons-collapsed'));
+
+        if (showCollapsedLibIcons) {
+            const sidebarContent = element.closest('.sidebar-content');
+            if (sidebarContent) {
+                return sidebarContent;
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // 3. GENERIC SCROLLABLE CONTAINERS
+        // ---------------------------------------------------------------------
         // Check for specific scrollable containers used in modals/filters/login grid
+        // ---------------------------------------------------------------------
         const container = element.closest(
             '.users-grid, .modal-options, .modal-body, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper, .media-info-scrollable, .identify-results-list'
         );
@@ -1158,15 +1200,20 @@ class ScrollController {
                     }
                 }
 
-                // Comfort margins for top and bottom visibility
-                const topMargin = GENERIC_SCROLL_MARGIN;
-                let bottomMargin = GENERIC_SCROLL_MARGIN;
+                // Comfort margins for top and bottom visibility.
+                // For the sidebar rail, 24px top and 32px bottom margin provides optimal viewing room
+                // and prevents items from colliding with rounded capsule curves on TV displays.
+                // For the floating sub-libraries popover, 12px padding keeps items comfortably within the popup.
+                const isSidebar = activePageContent.classList.contains('sidebar-content');
+                const isSubLibs = activePageContent.id === 'sidebar-sub-libraries';
+                const topMargin = isSidebar ? 24 : (isSubLibs ? 12 : GENERIC_SCROLL_MARGIN);
+                let bottomMargin = isSidebar ? 32 : (isSubLibs ? 12 : GENERIC_SCROLL_MARGIN);
 
                 let finalScrollTop = activeTarget;
 
                 // Apply custom scroll offset from section config
                 const customOffset = config?.scrollOffsetTop || 0;
-                let effectiveTopMargin = Math.max(topMargin, customOffset);
+                let effectiveTopMargin = (isSidebar || isSubLibs) ? topMargin : Math.max(topMargin, customOffset);
 
                 // PREVENT JITTER: If the element and its margins don't completely fit in the viewport
                 // together, the top and bottom edge guards will fight each other on every horizontal move.

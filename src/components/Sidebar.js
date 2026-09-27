@@ -66,6 +66,10 @@ class Sidebar extends Component {
                     <span class="logo-text">Litefin</span>
                 </div>
 
+                <!-- Floating Island Stationary Capsule Track -->
+                <!-- Renders the fixed background capsule for floating-island layout during scrolling -->
+                <div class="floating-island-pill" id="floating-island-pill"></div>
+
                 <!-- Scrollable Sidebar Content -->
                 <div class="sidebar-content">
                     <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
@@ -207,10 +211,26 @@ class Sidebar extends Component {
         this.el.classList.toggle('show-lib-icons-collapsed', showLibIcons);
 
         this._onShowLibIconsChanged = (newValue) => {
+            // Determine boolean state from incoming event payload or storage
             const enabled = newValue === true || newValue === 'true';
             this.el.classList.toggle('show-lib-icons-collapsed', enabled);
-            // Re-apply DOM layout to refresh cache
+
+            // In normal mode, ensure sidebar content remains anchored to the top
+            const scrollContainer = this.el.querySelector('.sidebar-content');
+            if (scrollContainer && !enabled) {
+                scrollContainer.scrollTop = 0;
+            }
+
+            // Re-apply full DOM layout tree to reposition library elements into rail or sub-container
             this._applySidebarLayout();
+            this._updateActiveState();
+
+            // Invalidate FocusManager cache so D-pad navigation picks up the reordered items immediately
+            focusManager.resetDOMCache();
+            focusManager.invalidateCache('sidebar');
+
+            // Re-evaluate sidebar item alignment with updated element heights
+            setTimeout(() => this._updateSidebarItemsAlign(), 0);
         };
         eventBus.on('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
 
@@ -635,9 +655,37 @@ class Sidebar extends Component {
                 const focusedItem = this.el.querySelector('.focused');
                 const hasFocus = !!focusedItem;
 
-                if (focusedItem) {
-                    // Automatically scroll the sidebar container so the newly focused item is in view
-                    focusedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // ---------------------------------------------------------------------
+                // RAIL SCROLLING & SUB-LIBRARIES ISOLATION
+                // ---------------------------------------------------------------------
+                // Only allow scrolling the sidebar container when 'showCollapsedLibraryIcons'
+                // is active and focus is directly on a rail item. In normal mode, or when
+                // navigating within #sidebar-sub-libraries (accordion or floating popover),
+                // the sidebar container must NEVER scroll or push upward.
+                // ---------------------------------------------------------------------
+                const showLibIcons = storage.getItem('pref:showCollapsedLibraryIcons') === 'true' ||
+                    this.el.classList.contains('show-lib-icons-collapsed');
+                const scrollContainer = this.el.querySelector('.sidebar-content');
+
+                if (scrollContainer && !showLibIcons) {
+                    // In normal mode, guarantee sidebar content stays anchored to top
+                    if (scrollContainer.scrollTop !== 0) {
+                        scrollContainer.scrollTop = 0;
+                    }
+                } else if (focusedItem && showLibIcons && !focusedItem.closest('#sidebar-sub-libraries')) {
+                    // Ensure the focused item inside the collapsed rail is visible
+                    if (scrollContainer && scrollContainer.contains(focusedItem)) {
+                        const containerHeight = scrollContainer.clientHeight;
+                        const itemTop = focusedItem.offsetTop;
+                        const itemHeight = focusedItem.offsetHeight || 72;
+                        const currentScroll = scrollContainer.scrollTop;
+
+                        if (itemTop < currentScroll) {
+                            scrollContainer.scrollTop = itemTop;
+                        } else if (itemTop + itemHeight > currentScroll + containerHeight) {
+                            scrollContainer.scrollTop = itemTop + itemHeight - containerHeight;
+                        }
+                    }
                 }
 
                 // Update indicator FIRST while transition is still disabled (collapsed state)
@@ -947,6 +995,7 @@ class Sidebar extends Component {
             sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach((el) => el.remove());
 
             const isModern = !layoutManager.isClassicSidebarLayout();
+            const showCollapsedLibIcons = storage.getItem('pref:showCollapsedLibraryIcons') === 'true';
             const hideHeader = storage.getItem('pref:hideSidebarLibraryHeader') === 'true';
 
             if (!isModern && items.length > 0 && !hideHeader) {
@@ -962,10 +1011,14 @@ class Sidebar extends Component {
             items.forEach((lib) => {
                 const btn = document.createElement('button');
                 btn.className = 'sidebar-item library-item';
-                const canFocus = isModern ? (this.expanded && this.librariesExpanded) : true;
+
+                // In modern layouts without collapsed icons, focus is gated by expansion state.
+                // When collapsed library icons are enabled (or in classic mode), library buttons
+                // are always focusable direct children.
+                const canFocus = (isModern && !showCollapsedLibIcons) ? (this.expanded && this.librariesExpanded) : true;
                 btn.tabIndex = canFocus ? 0 : -1;
 
-                if (isModern && !this.librariesExpanded) {
+                if (isModern && !showCollapsedLibIcons && !this.librariesExpanded) {
                     btn.classList.add('hidden');
                     btn.style.display = 'none';
                 }
@@ -1015,7 +1068,9 @@ class Sidebar extends Component {
                     router.navigate(buttonPath);
                 });
 
-                if (isModern && subContainer) {
+                // When showCollapsedLibIcons is enabled, append to sidebarContent directly;
+                // otherwise nest inside subContainer accordion for modern layout.
+                if (isModern && !showCollapsedLibIcons && subContainer) {
                     subContainer.appendChild(btn);
                 } else {
                     sidebarContent.appendChild(btn);
@@ -1073,8 +1128,19 @@ class Sidebar extends Component {
             subLibs.removeAttribute('hidden');
             subLibs.style.display = 'flex';
 
-            // Calculate vertical positioning beside the libraries button inside .sidebar-content
-            const topOffset = typeof libBtn.offsetTop === 'number' ? libBtn.offsetTop : 150;
+            // Guarantee sidebar-content is never scrolled in normal mode
+            const scrollContainer = this.el.querySelector('.sidebar-content');
+            if (scrollContainer && scrollContainer.scrollTop !== 0) {
+                scrollContainer.scrollTop = 0;
+            }
+
+            // Calculate vertical positioning beside the libraries button
+            // Using getBoundingClientRect provides rock-solid positioning relative to root sidebar
+            const libRect = libBtn.getBoundingClientRect();
+            const sidebarRect = this.el.getBoundingClientRect();
+            const topOffset = (libRect && sidebarRect && libRect.top > 0)
+                ? (libRect.top - sidebarRect.top)
+                : (typeof libBtn.offsetTop === 'number' ? libBtn.offsetTop : 150);
             subLibs.style.top = `${Math.max(10, topOffset - 6)}px`;
 
             childBtns.forEach((btn) => {
@@ -1340,11 +1406,12 @@ class Sidebar extends Component {
             }
         });
 
-        // In Modern mode, if any library is active, highlight the parent Libraries toggle button as active too
+        // In Modern mode, if any library is active, highlight the parent Libraries toggle button as active too (when not showing collapsed icons)
         const libToggle = this.el.querySelector('#sidebar-libraries');
+        const showCollapsedLibIcons = storage.getItem('pref:showCollapsedLibraryIcons') === 'true';
         if (libToggle) {
-            libToggle.classList.toggle('active', isModern && hasActiveLibrary);
-            if (isModern) {
+            libToggle.classList.toggle('active', isModern && hasActiveLibrary && !showCollapsedLibIcons);
+            if (isModern && !showCollapsedLibIcons) {
                 if (layoutManager.isModernCollapsedSidebarLayout()) {
                     if (this.floatingLibrariesOpen) {
                         this._toggleFloatingLibraries(false);
@@ -1485,12 +1552,26 @@ class Sidebar extends Component {
 
         /* ── 2. Ask the manager to order and annotate items ────────────────── */
         const ordered = sidebarLayoutManager.applyLayout(allItems);
+        const showCollapsedLibIcons = storage.getItem('pref:showCollapsedLibraryIcons') === 'true';
 
         /* ── 3. Re-insert items and apply visibility ───────────────────────── */
         if (isModern) {
-            // Modern Mode: Single expandable item + nested sub-libraries container + pinned footer
+            // Modern Mode: Single expandable item + nested sub-libraries container (or individual collapsed items if showCollapsedLibIcons) + pinned footer
             if (librariesToggleBtn) {
-                librariesToggleBtn.style.display = '';
+                if (showCollapsedLibIcons) {
+                    librariesToggleBtn.style.display = 'none';
+                    librariesToggleBtn.classList.add('hidden');
+                    librariesToggleBtn.tabIndex = -1;
+                } else {
+                    librariesToggleBtn.style.display = '';
+                    librariesToggleBtn.classList.remove('hidden');
+                }
+            }
+
+            if (subLibrariesContainer && showCollapsedLibIcons) {
+                subLibrariesContainer.style.display = 'none';
+                subLibrariesContainer.classList.add('hidden');
+                subLibrariesContainer.setAttribute('hidden', '');
             }
 
             ordered.forEach(({ id, el, hidden }) => {
@@ -1501,19 +1582,35 @@ class Sidebar extends Component {
                     return;
                 }
 
+                if (id === 'librariesContainer' && showCollapsedLibIcons) {
+                    // Suppress generic libraries toggle accordion button when showing individual collapsed library shortcuts
+                    el.style.display = 'none';
+                    el.classList.add('hidden');
+                    el.tabIndex = -1;
+                    return;
+                }
+
                 if (id.startsWith('lib-')) {
-                    // Place child library inside the sub-libraries container
-                    const canFocus = this.expanded && this.librariesExpanded;
-                    el.tabIndex = canFocus ? 0 : -1;
-                    if (isModern && !this.librariesExpanded) {
-                        el.classList.add('hidden');
-                        el.style.display = 'none';
-                    } else {
+                    if (showCollapsedLibIcons) {
+                        // Place library directly as a first-class collapsed sidebar rail item
+                        el.tabIndex = hidden ? -1 : 0;
                         el.classList.toggle('hidden', !!hidden);
                         el.style.display = hidden ? 'none' : '';
-                    }
-                    if (subLibrariesContainer) {
-                        subLibrariesContainer.appendChild(el);
+                        sidebarContent.appendChild(el);
+                    } else {
+                        // Place child library inside the sub-libraries container accordion / popover
+                        const canFocus = this.expanded && this.librariesExpanded;
+                        el.tabIndex = canFocus ? 0 : -1;
+                        if (!this.librariesExpanded) {
+                            el.classList.add('hidden');
+                            el.style.display = 'none';
+                        } else {
+                            el.classList.toggle('hidden', !!hidden);
+                            el.style.display = hidden ? 'none' : '';
+                        }
+                        if (subLibrariesContainer) {
+                            subLibrariesContainer.appendChild(el);
+                        }
                     }
                     return;
                 }
@@ -1539,7 +1636,7 @@ class Sidebar extends Component {
                 sidebarContent.appendChild(el);
 
                 // If this is the modern libraries container, place sub-libraries container right after it
-                if (id === 'librariesContainer' && subLibrariesContainer) {
+                if (id === 'librariesContainer' && subLibrariesContainer && !showCollapsedLibIcons) {
                     if (shouldHide) {
                         subLibrariesContainer.style.display = 'none';
                         subLibrariesContainer.classList.add('hidden');
@@ -1559,6 +1656,14 @@ class Sidebar extends Component {
                 if (id === 'librariesContainer') {
                     // Suppress modern toggle in classic mode
                     el.style.display = 'none';
+                    return;
+                }
+
+                if (id.startsWith('lib-')) {
+                    el.tabIndex = hidden ? -1 : 0;
+                    el.classList.toggle('hidden', !!hidden);
+                    el.style.display = hidden ? 'none' : '';
+                    sidebarContent.appendChild(el);
                     return;
                 }
 
@@ -1583,6 +1688,9 @@ class Sidebar extends Component {
 
         // Invalidate the focus cache so the updated DOM structure is re-scanned
         focusManager.invalidateCache('sidebar');
+
+        // Re-evaluate sidebar vertical alignment (center vs top) once DOM reflow settles
+        setTimeout(() => this._updateSidebarItemsAlign(), 0);
     }
 
     /**

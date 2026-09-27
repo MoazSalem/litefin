@@ -32,9 +32,11 @@
     right: 0;
 }
 
-/* Hover reveal logic for RTL - matching the specificity and logic of the main sheet */
+/* Hover / Focus reveal logic for RTL - matching the specificity and logic of the main sheet */
 [dir="rtl"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-[dir="rtl"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
+[dir="rtl"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
+[dir="rtl"] body.sidebar-mode-hidden .sidebar.has-focus,
+[dir="rtl"] body.sidebar-mode-hidden .sidebar:focus-within {
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
 }
@@ -148,7 +150,7 @@
     right: 0;
 }
 
-[dir="rtl"] body.sidebar-mode-hidden .sidebar:not(.expanded) {
+[dir="rtl"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus):not(:focus-within) {
     transform: translate3d(100%, 0, 0);
 }
 

@@ -204,19 +204,22 @@ body.sidebar-mode-collapsed .sidebar-focus-indicator {
 }
 
 /* Sidebar Mode: Always Hidden - Completely off-screen by default */
-body.sidebar-mode-hidden .sidebar:not(.expanded) {
+body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus):not(:focus-within) {
     -webkit-transform: translate3d(-100%, 0, 0);
     transform: translate3d(-100%, 0, 0);
 }
 
 /* 
- * Magic Cursor Reveal: Even if hidden, hovering the trigger zone or the 
- * sidebar itself (once it starts peaking) will slide it fully into view.
+ * Magic Cursor / Focus Reveal: Even if hidden, hovering the trigger zone,
+ * hovering the sidebar itself, or focusing any element inside the sidebar
+ * will smoothly slide it fully into view.
  * We use high specificity here to override the hidden state without !important,
  * and only target non-expanded state to prevent animation re-triggering.
  */
 body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
+body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
+body.sidebar-mode-hidden .sidebar.has-focus,
+body.sidebar-mode-hidden .sidebar:focus-within {
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
 }
@@ -669,6 +672,7 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 }
 
 /* Navigation & Libraries Container */
+/* Kept without position: relative so floating submenus anchor to root sidebar */
 .sidebar-content {
     display: flex;
     flex-direction: column;
@@ -676,6 +680,14 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.sidebar-content::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .sidebar.align-center .sidebar-content {
