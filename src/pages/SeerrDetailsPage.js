@@ -13,6 +13,7 @@ import SeerrRequestModal from '../components/SeerrRequestModal.js';
 import { RichMetadataTable } from '../components/RichMetadataTable.js';
 import { api } from '../api/ApiClient.js';
 import { seerr } from '../api/seerrClient.js';
+import { renderWatchProviders, watchProviderRegion } from '../utils/WatchProviders.js';
 import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -101,6 +102,7 @@ class SeerrDetailsPage extends Page {
                                     <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
                                 </div>
                             </section>
+                            <div id="watch-providers-container" class="hidden"></div>
                             <div class="details-overview">
                                 <div class="overview-text ${getOverviewClampClass()}" id="overview-text" tabindex="-1"></div>
                                 <button class="see-more-btn" tabindex="0" data-i18n="${shouldAlwaysShowOverviewButton() ? 'DetailedView' : 'ShowMore'}">${getOverviewButtonText()}</button>
@@ -245,6 +247,20 @@ class SeerrDetailsPage extends Page {
     }
 
     _renderDetails() {
+        const providersContainer = this.$('#watch-providers-container');
+        if (providersContainer) {
+            const showProviders = storage.getItem('pref:showWatchProviders') === 'true';
+            providersContainer.classList.toggle('hidden', !showProviders);
+            providersContainer.innerHTML = showProviders
+                ? renderWatchProviders(
+                      this._item.WatchProviders,
+                      watchProviderRegion(storage.getItem('pref:watchProviderRegion')),
+                      (key) => i18n.t(key),
+                      i18n.currentLang
+                  )
+                : '';
+        }
+
         const item = this._item;
         const runtimeMinutes = item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : 0;
         const runtime = runtimeMinutes
@@ -1305,6 +1321,7 @@ class SeerrDetailsPage extends Page {
     }
 
     destroy() {
+
         if (this._tooltipTimers) {
             this._tooltipTimers.forEach((t) => clearTimeout(t));
             this._tooltipTimers = null;

@@ -2235,3 +2235,49 @@ html[data-layout-quirks="c26"] .episode-row-overview {
 }
 
 
+
+/* Streaming availability is informational; playback retains its normal focus order. */
+.watch-providers {
+    margin: 1rem 0;
+    color: var(--jf-text-primary);
+}
+
+.watch-providers h2 {
+    font-size: 1.2rem;
+    margin: 0 0 0.6rem;
+}
+
+.watch-provider-group h3 {
+    font-size: 1rem;
+    font-weight: normal;
+    color: var(--jf-text-secondary);
+    margin: 0 0 0.4rem;
+}
+
+.watch-provider-list {
+    display: flex;
+    flex-wrap: wrap;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.watch-provider {
+    display: flex;
+    align-items: center;
+    margin: 0 1rem 0.5rem 0;
+    font-size: 1rem;
+}
+
+.watch-provider img {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-right: 0.5rem;
+    border-radius: var(--jf-border-radius);
+}
+
+.watch-providers-empty {
+    color: var(--jf-text-secondary);
+    font-size: 0.85rem;
+    margin: 0.3rem 0;
+}

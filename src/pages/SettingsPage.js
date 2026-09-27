@@ -30,12 +30,13 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
-import { settingsIcons, setIconStyle, getSupportedStyles, getLibraryIcon } from '../utils/Icons.js';
+import { settingsIcons, setIconStyle, getSupportedStyles } from '../utils/Icons.js';
 import { toast } from '../ui/Toast.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
 import { seerr } from '../api/seerrClient.js';
 import { escapeHtml } from '../utils/Utils.js';
+import { watchProviderRegion, watchProviderRegionName } from '../utils/WatchProviders.js';
 import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('SettingsPage');
@@ -2352,6 +2353,38 @@ class SettingsPage extends Page {
                                 id="toggle-hide-similar-section" 
                                 tabindex="0">
                         </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('ShowWatchProviders')}</span>
+                        <span class="setting-description">${i18n.t('ShowWatchProvidersDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showWatchProviders') === 'true' ? 'active' : ''}"
+                            id="toggle-show-watch-providers" tabindex="0" role="switch"
+                            aria-label="${i18n.t('ShowWatchProviders')}"
+                            aria-checked="${storage.getItem('pref:showWatchProviders') === 'true'}"></button>
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="Seerr">${i18n.t('Seerr') || 'Seerr'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('WatchProvidersRegion')}</span>
+                        <span class="setting-description">${i18n.t('WatchProvidersRegionDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                'watch-provider-region-select',
+                [watchProviderRegion(storage.getItem('pref:watchProviderRegion'))].map((value) => ({
+                    value,
+                    label: watchProviderRegionName(value, i18n.currentLang)
+                })),
+                watchProviderRegion(storage.getItem('pref:watchProviderRegion'))
+            )}
                     </div>
                 </div>
             </div>
@@ -9662,6 +9695,7 @@ class SettingsPage extends Page {
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
             'details-overview-max-lines-select': { key: 'pref:detailsOverviewMaxLines', type: 'local' },
+            'watch-provider-region-select': { key: 'pref:watchProviderRegion', type: 'local' },
             'details-layout-select': { key: 'pref:detailsLayout', type: 'local' },
             'season-episode-details-layout-select': { key: 'pref:seasonEpisodeDetailsLayout', type: 'local' },
             'episode-layout-select': { key: 'pref:episodeLayout', type: 'local' },
@@ -9709,7 +9743,27 @@ class SettingsPage extends Page {
                 const title =
                     btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || i18n.t('SelectOption');
 
-                if (id === 'trending-movies-collection-select' || id === 'trending-series-collection-select') {
+                if (id === 'watch-provider-region-select') {
+                    btn.classList.add('disabled');
+                    try {
+                        const countries = await api.get('/Localization/Countries');
+                        options = countries
+                            .filter((country) => country && /^[A-Z]{2}$/.test(country.TwoLetterISORegionName))
+                            .map((country) => ({
+                                value: country.TwoLetterISORegionName,
+                                label: watchProviderRegionName(country.TwoLetterISORegionName, i18n.currentLang)
+                            }))
+                            .sort((a, b) => a.label.localeCompare(b.label));
+                        if (!options.length) throw new Error('No countries returned');
+                        btn.dataset.options = JSON.stringify(options);
+                    } catch (err) {
+                        log.warn('Unable to load streaming availability countries', err);
+                        toast.error(i18n.t('WatchProvidersCountriesError'));
+                        return;
+                    } finally {
+                        btn.classList.remove('disabled');
+                    }
+                } else if (id === 'trending-movies-collection-select' || id === 'trending-series-collection-select') {
                     btn.classList.add('disabled');
                     try {
                         const collectionsRes = await api.getItems({
@@ -10367,6 +10421,16 @@ class SettingsPage extends Page {
                 layoutManager.setHideUnfocusedBorders(newValue);
                 hideUnfocusedBordersToggle.classList.toggle('active', newValue);
                 log.info(`Hide Unfocused Borders set to: ${newValue}`);
+            });
+        }
+
+        const showWatchProvidersToggle = this.$('#toggle-show-watch-providers');
+        if (showWatchProvidersToggle) {
+            showWatchProvidersToggle.addEventListener('click', () => {
+                const enabled = storage.getItem('pref:showWatchProviders') !== 'true';
+                storage.setItem('pref:showWatchProviders', String(enabled));
+                showWatchProvidersToggle.classList.toggle('active', enabled);
+                showWatchProvidersToggle.setAttribute('aria-checked', String(enabled));
             });
         }
 

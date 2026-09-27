@@ -163,6 +163,7 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             ? `${TMDB_POSTER_DETAIL_BASE}${result.posterPath}`
             : (result.profilePath ? `${TMDB_POSTER_DETAIL_BASE}${result.profilePath}` : ''),
         _backdropUrl: result.backdropPath ? `${TMDB_BACKDROP_BASE}${result.backdropPath}` : '',
+        WatchProviders: Array.isArray(result.watchProviders) ? result.watchProviders : [],
         _seerrStatus: (result.mediaInfo && result.mediaInfo.status) || SEERR_STATUS.NOT_REQUESTED,
         _jellyfinMediaId: (() => {
             const info = result.mediaInfo || {};
