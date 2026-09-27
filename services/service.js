@@ -377,16 +377,42 @@ function sendWolPacket(macAddress) {
                 return reject(new Error('Invalid MAC address length (must be 12 hex characters)'));
             }
 
-            // Allocate buffer: 6 bytes of 0xFF prefix + 16 * 6 bytes of MAC
+            /*
+             * Parse hexadecimal byte pairs into a raw byte array.
+             * ----------------------------------------------------------------
+             * On older Node.js runtimes (such as Node v4.x - v5.9 on Tizen 3.0
+             * or legacy Tizen web runtimes), Buffer inherited from Uint8Array,
+             * so `Buffer.from` was actually `Uint8Array.from(source, mapFn)`.
+             * Passing 'hex' as the second argument causes Uint8Array.from to
+             * treat 'hex' as a map function, throwing "hex is not a function".
+             *
+             * Parsing each pair manually into integers (0-255) ensures 100%
+             * cross-runtime compatibility without depending on encoding helpers.
+             * ----------------------------------------------------------------
+             */
+            var macBytes = [];
+            for (var k = 0; k < 6; k++) {
+                // Extract 2 hex characters and parse into a byte
+                macBytes.push(parseInt(cleanMac.substr(k * 2, 2), 16));
+            }
+
+            // Allocate 102-byte buffer: 6 bytes prefix (0xFF) + 16 * 6 bytes target MAC
             var buf = typeof Buffer.alloc === 'function' ? Buffer.alloc(102) : new Buffer(102);
+
+            // Populate the 6-byte synchronization stream with 0xFF
             for (var i = 0; i < 6; i++) {
                 buf[i] = 0xff;
             }
 
-            // Populate the rest of the buffer with 16 copies of the target MAC address
-            var macBuffer = typeof Buffer.from === 'function' ? Buffer.from(cleanMac, 'hex') : new Buffer(cleanMac, 'hex');
+            /*
+             * Write 16 repetitions of the target 6-byte MAC sequence
+             * into the buffer payload starting at offset index 6.
+             */
             for (var j = 0; j < 16; j++) {
-                macBuffer.copy(buf, 6 + j * 6);
+                for (var b = 0; b < 6; b++) {
+                    // Direct index assignment works across every Node.js/TypedArray engine
+                    buf[6 + j * 6 + b] = macBytes[b];
+                }
             }
 
             // Create temporary UDP socket
