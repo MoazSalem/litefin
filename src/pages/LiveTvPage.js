@@ -396,7 +396,7 @@ class LiveTvPage extends Page {
         if (!this._isMounted) return;
 
         if (programs.Items && programs.Items.length > 0) {
-            this._createRow(rowsContainer, i18n.t('OnNow'), programs.Items, {
+            this._createRow(rowsContainer, i18n.t('HeaderOnNow'), programs.Items, {
                 id: 'on-now',
                 isLandscape: true,
                 cardType: 'thumb',

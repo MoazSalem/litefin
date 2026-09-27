@@ -63,6 +63,14 @@ class LayoutManager {
          */
         this._sidebarLayout = 'modern-collapsed';
 
+        /*
+         * Active Alphabet Selector Position ('top' or 'right').
+         * Configures placement and orientation of the library alphabet quick-jump index:
+         * - 'top': Classic horizontal ribbon placed inside the library header row.
+         * - 'right': Sleek Apple tvOS-style vertical floating pill docked to the right edge.
+         */
+        this._alphaPickerPosition = 'top';
+
         // Current theme mode
         // Black (OLED) is the default — zero compositing, pure black pixels, maximum performance.
         this._themeMode = THEME_MODES.BLACK;
@@ -256,7 +264,12 @@ class LayoutManager {
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
         // Initialize sidebar layout without triggering duplicate persistence
+        // Load user-selected alphabet quick-jump position ('top' or 'right')
+        const savedAlphaPickerPosition = storage.getItem('pref:alphaPickerPosition') || 'top';
+
         this.setSidebarLayout(savedSidebarLayout, false);
+        // Initialize alphabet selector position without re-persisting
+        this.setAlphaPickerPosition(savedAlphaPickerPosition, false);
         this.setThemeMode(initialMode, false);
         this.setThemeColor(savedThemeColor, false);
         // Apply lighter background configuration without extra persistence cycle
@@ -379,6 +392,48 @@ class LayoutManager {
             storage.setItem('pref:loginPageLayout', layout);
         }
         eventBus.emit('loginPageLayout:changed', { layout });
+    }
+
+    /**
+     * Get Alphabet Selector Position preference.
+     * Indicates whether the library quick-jump index renders horizontally
+     * in the header or vertically on the right edge.
+     *
+     * @returns {string} 'top' or 'right'
+     * @public
+     */
+    getAlphaPickerPosition() {
+        return this._alphaPickerPosition;
+    }
+
+    /**
+     * Set Alphabet Selector Position preference.
+     * Updates root HTML attribute and state to toggle between top horizontal
+     * and right vertical layouts.
+     *
+     * @param {string} position - 'top' or 'right'
+     * @param {boolean} [save=true] - Whether to persist to storage
+     * @public
+     */
+    setAlphaPickerPosition(position, save = true) {
+        // Enforce valid setting values with fallback to default 'top'
+        const validPosition = position === 'right' ? 'right' : 'top';
+        this._alphaPickerPosition = validPosition;
+
+        // Apply attribute on root html element for instant global CSS styling
+        document.documentElement.setAttribute('data-alpha-picker-position', validPosition);
+
+        // Update state manager for reactive components
+        state.set('pref:alphaPickerPosition', validPosition, true);
+
+        // Persist preference to local storage when requested
+        if (save) {
+            storage.setItem('pref:alphaPickerPosition', validPosition);
+        }
+
+        // Broadcast change event for active views like LibraryPage
+        log.info(`Alphabet Selector Position set to: ${validPosition}`);
+        eventBus.emit('alphaPickerPosition:changed', { position: validPosition });
     }
 
     /**

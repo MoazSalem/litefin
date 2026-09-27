@@ -10,6 +10,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { imageService } from '../utils/ImageService.js';
@@ -424,6 +425,8 @@ class LibraryPage extends Page {
             i18n.translateDOM(this.el);
             this._bindEvents();
 
+            // Alphabet selector position updates are bound centrally in _bindEvents()
+
             // =========================================================================
             // FAVORITES TITLE DECORATION (CACHE)
             // =========================================================================
@@ -727,6 +730,15 @@ class LibraryPage extends Page {
         this.$('#btn-view-mode')?.addEventListener('click', this._handleViewMode.bind(this));
         this.$('#btn-quick-reset')?.addEventListener('click', this._handleResetFilters.bind(this));
         this.$('#alpha-picker')?.addEventListener('click', this._handleAlphaClick.bind(this));
+
+        // Listen for dynamic alphabet selector position updates from settings
+        if (!this._onAlphaPickerPositionChanged) {
+            this._onAlphaPickerPositionChanged = () => {
+                this._renderAlphaPicker();
+                this._updateNavigation();
+            };
+            eventBus.on('alphaPickerPosition:changed', this._onAlphaPickerPositionChanged);
+        }
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
         this.$('#btn-prev-top')?.addEventListener('click', () => this._handlePageChange(-1));
@@ -879,6 +891,12 @@ class LibraryPage extends Page {
 
     destroy() {
         super.destroy();
+
+        // Clean up alphabet selector position listener
+        if (this._onAlphaPickerPositionChanged) {
+            eventBus.off('alphaPickerPosition:changed', this._onAlphaPickerPositionChanged);
+            this._onAlphaPickerPositionChanged = null;
+        }
         this.$('#library-tabs')?.removeEventListener('click', this._onTabClick);
         this.$('#alpha-picker')?.removeEventListener('click', this._onAlphaClick);
 
@@ -2309,9 +2327,27 @@ class LibraryPage extends Page {
         // Always show Alpha Picker as requested
         const showPicker = true;
         const container = this.$('#alpha-picker-container');
+        const isRightPos = layoutManager.getAlphaPickerPosition() === 'right';
 
         if (container) {
             container.style.visibility = 'visible';
+
+            // Docking hierarchy management:
+            // When right-docked, reparent container directly to this.el (.library-page)
+            // outside .library-scroll-container (.page-content). This completely detaches
+            // it from the scroll container and any contain/transform stacking contexts,
+            // locking the vertical rail fixed to the screen while the library scrolls underneath.
+            // When top-positioned, return it to .library-header so it flows in normal document order.
+            if (isRightPos) {
+                if (this.el && container.parentElement !== this.el) {
+                    this.el.appendChild(container);
+                }
+            } else {
+                const header = this.$('#library-header');
+                if (header && container.parentElement !== header) {
+                    header.appendChild(container);
+                }
+            }
         }
 
         if (!showPicker) return;
@@ -2332,13 +2368,28 @@ class LibraryPage extends Page {
             })
             .join('');
 
-        focusManager.register('alpha-picker', this.$('#alpha-picker'), {
-            orientation: 'horizontal',
-            leaveUp: 'library-controls',
-            leaveDown: 'library-grid',
-            leaveLeft: 'sidebar',
-            enterTo: 'active-element' // Focus the selected char
-        });
+        // Configure focus registration depending on user-configured position
+        if (isRightPos) {
+            // Vertical orientation on the right edge: Up/Down traverses letters, Left jumps back to grid
+            focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                orientation: 'vertical',
+                leaveUp: 'library-controls',
+                leaveDown: null,
+                leaveLeft: 'library-grid',
+                leaveRight: null,
+                enterTo: 'active-element'
+            });
+        } else {
+            // Traditional horizontal orientation in the header: Left/Right traverses letters, Down jumps to grid
+            focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                orientation: 'horizontal',
+                leaveUp: 'library-controls',
+                leaveDown: 'library-grid',
+                leaveLeft: 'sidebar',
+                leaveRight: null,
+                enterTo: 'active-element' // Focus the selected char
+            });
+        }
     }
 
     async _enrichCollectionItems(items, collectionType) {
@@ -2519,19 +2570,22 @@ class LibraryPage extends Page {
             }
 
             if (shouldShowControls) {
-                // Register Empty State Button for focus
+                // Register Empty State Button for focus with position awareness
+                const isRightPosEmpty = layoutManager.getAlphaPickerPosition() === 'right';
                 focusManager.register('empty-state-btn', this.$('#empty-state'), {
-                    leaveUp: 'alpha-picker', // Default to alpha picker
+                    leaveUp: isRightPosEmpty ? 'library-controls' : 'alpha-picker',
                     leaveLeft: 'sidebar',
+                    leaveRight: isRightPosEmpty && shouldShowControls ? 'alpha-picker' : null,
                     selector: '#btn-reset-filters'
                 });
 
-                // Link Alpha Picker/Controls DOWN to Empty State Button
+                // Link Alpha Picker/Controls to Empty State Button
                 const alphaConfig = focusManager.getSectionConfig('alpha-picker');
                 if (alphaConfig) {
                     focusManager.register('alpha-picker', this.$('#alpha-picker'), {
                         ...alphaConfig,
-                        leaveDown: 'empty-state-btn'
+                        leaveDown: isRightPosEmpty ? null : 'empty-state-btn',
+                        leaveLeft: isRightPosEmpty ? 'empty-state-btn' : 'sidebar'
                     });
                 }
 
@@ -2689,26 +2743,46 @@ class LibraryPage extends Page {
         const isAlphaVisible =
             isMovieMain || isTVMain || isMusicMain || isEpisodes || isCollections || isFolderMain || this._isSubView();
 
-        // Update Alpha Picker navigation to point to grid
+        // Update Alpha Picker navigation to point to grid based on current orientation
+        const isRightPosNav = layoutManager.getAlphaPickerPosition() === 'right';
         if (isAlphaVisible) {
-            focusManager.register('alpha-picker', this.$('#alpha-picker'), {
-                orientation: 'horizontal',
-                leaveUp: 'library-controls',
-                leaveDown: 'library-grid',
-                leaveLeft: 'sidebar',
-                enterTo: 'active-element'
-            });
+            if (isRightPosNav) {
+                focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                    orientation: 'vertical',
+                    leaveUp: 'library-controls',
+                    leaveDown: null,
+                    leaveLeft: 'library-grid',
+                    leaveRight: null,
+                    enterTo: 'active-element'
+                });
+            } else {
+                focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                    orientation: 'horizontal',
+                    leaveUp: 'library-controls',
+                    leaveDown: 'library-grid',
+                    leaveLeft: 'sidebar',
+                    leaveRight: null,
+                    enterTo: 'active-element'
+                });
+            }
         }
 
         // Re-register focus for grid items
         const currentColumns = this.state.viewMode === 'list' ? 1 : columns;
 
+        // When alpha selector is on the right, pressing UP goes straight to controls
+        let gridLeaveUp = 'library-controls';
+        if (!isRightPosNav && isAlphaVisible) {
+            gridLeaveUp = 'alpha-picker';
+        }
+
         focusManager.register('library-grid', grid, {
             orientation: 'grid',
             columns: currentColumns,
-            leaveUp: isAlphaVisible ? 'alpha-picker' : 'library-controls',
+            leaveUp: gridLeaveUp,
             leaveDown: 'library-pagination',
             leaveLeft: 'sidebar',
+            leaveRight: isRightPosNav && isAlphaVisible ? 'alpha-picker' : null,
             selector: '.media-card',
             scrollOffsetTop: 100,
 
@@ -2862,11 +2936,18 @@ class LibraryPage extends Page {
         });
 
         const hasTabs = this.$('#library-tabs')?.style.display !== 'none';
+        // When alpha selector is on the right, controls point DOWN to grid and RIGHT to alpha-picker
+        let controlsLeaveDownNav = 'library-grid';
+        if (!isRightPosNav && isAlphaVisible) {
+            controlsLeaveDownNav = 'alpha-picker';
+        }
+
         this.registerFocusSection('library-controls', this.$('#library-controls'), {
             orientation: 'horizontal',
             leaveUp: hasTabs ? 'library-tabs' : null,
-            leaveDown: isAlphaVisible ? 'alpha-picker' : 'library-grid',
+            leaveDown: controlsLeaveDownNav,
             leaveLeft: 'sidebar',
+            leaveRight: isRightPosNav && isAlphaVisible ? 'alpha-picker' : null,
             selector: 'button'
         });
 
@@ -3684,15 +3765,28 @@ class LibraryPage extends Page {
             });
         });
 
-        // Update Alpha Picker
+        // Update Alpha Picker for rows layout
         if (rows.length > 0) {
-            this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
-                orientation: 'horizontal',
-                leaveUp: this._isSubView() ? null : 'library-controls',
-                leaveDown: 'row-0',
-                leaveLeft: 'sidebar',
-                enterTo: 'active-element'
-            });
+            const isRightPosRows = layoutManager.getAlphaPickerPosition() === 'right';
+            if (isRightPosRows) {
+                this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
+                    orientation: 'vertical',
+                    leaveUp: this._isSubView() ? null : 'library-controls',
+                    leaveDown: null,
+                    leaveLeft: 'row-0',
+                    leaveRight: null,
+                    enterTo: 'active-element'
+                });
+            } else {
+                this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
+                    orientation: 'horizontal',
+                    leaveUp: this._isSubView() ? null : 'library-controls',
+                    leaveDown: 'row-0',
+                    leaveLeft: 'sidebar',
+                    leaveRight: null,
+                    enterTo: 'active-element'
+                });
+            }
 
             // Update library-controls to point to first row
             this.registerFocusSection('library-controls', this.$('#library-controls'), {
@@ -3700,6 +3794,7 @@ class LibraryPage extends Page {
                 leaveUp: this._isSubView() ? null : 'library-tabs',
                 leaveDown: 'row-0', // Direct to first row for Genres view
                 leaveLeft: 'sidebar',
+                leaveRight: isRightPosRows ? 'alpha-picker' : null,
                 selector: 'button'
             });
 
@@ -5549,13 +5644,16 @@ class LibraryPage extends Page {
             }
         }
 
+        // Check active alphabet selector layout placement
+        const isRightPosHeader = layoutManager.getAlphaPickerPosition() === 'right';
+
         // 2. Configure Controls (if visible)
         if (controls && isControlsVisible) {
             const controlsConfig = focusManager.getSectionConfig('library-controls');
             if (controlsConfig) {
-                // Determine what's below controls... if alpha isn't there, are we on a horizontal row page or a grid page?
+                // When alpha is on the right, controls jump directly DOWN to grid/rows
                 let controlsLeaveDown = 'library-grid';
-                if (isAlphaVisible) {
+                if (!isRightPosHeader && isAlphaVisible) {
                     controlsLeaveDown = 'alpha-picker';
                 } else if (
                     viewType === 'Genres' ||
@@ -5569,7 +5667,8 @@ class LibraryPage extends Page {
                 this.registerFocusSection('library-controls', controls, {
                     ...controlsConfig,
                     leaveUp: isTabsVisible ? 'library-tabs' : 'sidebar', // sidebar if top
-                    leaveDown: controlsLeaveDown
+                    leaveDown: controlsLeaveDown,
+                    leaveRight: isRightPosHeader && isAlphaVisible ? 'alpha-picker' : null
                 });
             }
         }
@@ -5588,11 +5687,27 @@ class LibraryPage extends Page {
                     alphaLeaveDown = 'row-0';
                 }
 
-                this.registerFocusSection('alpha-picker', alphaPicker, {
-                    ...alphaConfig,
-                    leaveUp: isControlsVisible ? 'library-controls' : isTabsVisible ? 'library-tabs' : 'sidebar',
-                    leaveDown: alphaLeaveDown
-                });
+                if (isRightPosHeader) {
+                    // Vertical right side configuration: Left jumps to grid, Up jumps to controls
+                    this.registerFocusSection('alpha-picker', alphaPicker, {
+                        ...alphaConfig,
+                        orientation: 'vertical',
+                        leaveUp: isControlsVisible ? 'library-controls' : isTabsVisible ? 'library-tabs' : 'sidebar',
+                        leaveDown: null,
+                        leaveLeft: alphaLeaveDown,
+                        leaveRight: null
+                    });
+                } else {
+                    // Standard horizontal header configuration
+                    this.registerFocusSection('alpha-picker', alphaPicker, {
+                        ...alphaConfig,
+                        orientation: 'horizontal',
+                        leaveUp: isControlsVisible ? 'library-controls' : isTabsVisible ? 'library-tabs' : 'sidebar',
+                        leaveDown: alphaLeaveDown,
+                        leaveLeft: 'sidebar',
+                        leaveRight: null
+                    });
+                }
             }
         }
 
@@ -5600,14 +5715,15 @@ class LibraryPage extends Page {
         const gridConfig = focusManager.getSectionConfig('library-grid');
         if (gridConfig) {
             let gridLeaveUp = 'sidebar'; // Fallback to sidebar if isolated
-            if (isAlphaVisible) gridLeaveUp = 'alpha-picker';
+            if (!isRightPosHeader && isAlphaVisible) gridLeaveUp = 'alpha-picker';
             else if (isControlsVisible) gridLeaveUp = 'library-controls';
             else if (isTabsVisible) gridLeaveUp = 'library-tabs';
 
             this.registerFocusSection('library-grid', this.$('#library-grid'), {
                 ...gridConfig,
                 leaveUp: gridLeaveUp,
-                leaveDown: gridConfig.leaveDown || 'library-pagination'
+                leaveDown: gridConfig.leaveDown || 'library-pagination',
+                leaveRight: isRightPosHeader && isAlphaVisible ? 'alpha-picker' : null
             });
 
             // Re-register pagination here too — ensures it's always wired

@@ -8,6 +8,7 @@
     height: 100vh;
     box-sizing: border-box;
     overflow: hidden;
+    position: relative;
 }
 
 /* --- Scroll Container --- */
@@ -1176,6 +1177,167 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     border: 2px solid var(--jf-btn-primary-focus-border) !important;
     /* Promote only the one focused button to its own compositor layer */
     will-change: transform;
+}
+
+/*
+ * =============================================================================
+ * ── RIGHT-SIDE VERTICAL ALPHABET SELECTOR (APPLE HIG SPECIFICATION) ─────────
+ * =============================================================================
+ * Floating right-docked vertical alphabetical index. Conforms to Apple's Human
+ * Interface Guidelines for tvOS/macOS auxiliary navigation rails:
+ * - Floating glassmorphism pill with dynamic backdrop-filter blur and subtle border
+ * - Fixed screen docking, keeping quick-jump accessible while browsing long grids
+ * - Spring-damper physics curve for tactile focus transitions
+ * - Dynamic safety buffers on content and headers to prevent card occlusion
+ * =============================================================================
+ */
+
+html[data-alpha-picker-position="right"] .alpha-picker-container {
+    /* Fixed right docking vertically centered on the viewport */
+    position: fixed !important;
+    top: 50% !important;
+    right: 20px !important;
+    transform: translateY(-50%) !important;
+    -webkit-transform: translateY(-50%) !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: 96vh !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: 100 !important;
+    pointer-events: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+html[data-alpha-picker-position="right"] .alpha-picker {
+    /* Vertical columnar stack with all letters visible */
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: 96vh !important;
+    overflow: visible !important;
+    /* Apple glassmorphism frosted aesthetic */
+    background: rgba(18, 18, 22, 0.75) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 28px !important;
+    -webkit-border-radius: 28px !important;
+    padding: 8px 4px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+}
+
+html[data-alpha-picker-position="right"] .alpha-btn {
+    /* Compact vertical pill sizing calibrated for TV viewports (Apple HIG) */
+    flex-shrink: 0 !important;
+    width: 30px !important;
+    height: 30px !important;
+    height: 3.1vh !important;
+    min-height: 20px !important;
+    max-height: 32px !important;
+    margin: 1px 0 !important;
+    padding: 0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    text-align: center !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 15px !important;
+    -webkit-border-radius: 15px !important;
+    /* Signature Apple spring animation curve */
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.18s ease,
+                color 0.18s ease,
+                box-shadow 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+html[data-alpha-picker-position="right"] .alpha-btn.active {
+    /* Active filter letter highlight with subtle glow */
+    color: var(--jf-btn-primary-bg, #6b6ede) !important;
+    font-weight: 800 !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    transform: scale(1.18) !important;
+    -webkit-transform: scale(1.18) !important;
+}
+
+html[data-alpha-picker-position="right"] .alpha-btn:focus,
+html[data-alpha-picker-position="right"] .alpha-btn.focused,
+html[data-alpha-picker-position="right"] .alpha-btn:hover {
+    /* Tactile pop out to the left towards the content with luminous border */
+    outline: none !important;
+    color: var(--jf-btn-primary-focus-color) !important;
+    background-color: var(--jf-btn-primary-focus-bg) !important;
+    border: 2px solid var(--jf-btn-primary-focus-border) !important;
+    transform: scale(1.35) translateX(-4px) !important;
+    -webkit-transform: scale(1.35) translateX(-4px) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55), 0 0 12px var(--jf-btn-primary-focus-border, rgba(255, 255, 255, 0.5)) !important;
+    z-index: 10 !important;
+    will-change: transform;
+}
+
+/*
+ * Safe Right Margins for Library Content when Right-Side Selector is active.
+ * Ensures media cards, header controls, and pagination have ample breathing room.
+ */
+html[data-alpha-picker-position="right"] .library-page .library-header,
+html[data-alpha-picker-position="right"] .library-page .library-content,
+html[data-alpha-picker-position="right"] .library-page .library-pagination {
+    padding-right: 80px !important;
+}
+
+/*
+ * RTL (Right-to-Left) Localization Mirroring
+ * On Arabic / Hebrew layouts, mirror the vertical dock to the left side of the screen.
+ */
+[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-picker-container,
+html[dir="rtl"][data-alpha-picker-position="right"] .alpha-picker-container {
+    right: auto !important;
+    left: 20px !important;
+}
+
+[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-btn:focus,
+[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-btn.focused,
+[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-btn:hover,
+html[dir="rtl"][data-alpha-picker-position="right"] .alpha-btn:focus,
+html[dir="rtl"][data-alpha-picker-position="right"] .alpha-btn.focused,
+html[dir="rtl"][data-alpha-picker-position="right"] .alpha-btn:hover {
+    transform: scale(1.35) translateX(4px) !important;
+    -webkit-transform: scale(1.35) translateX(4px) !important;
+}
+
+[dir="rtl"] html[data-alpha-picker-position="right"] .library-page .library-header,
+[dir="rtl"] html[data-alpha-picker-position="right"] .library-page .library-content,
+[dir="rtl"] html[data-alpha-picker-position="right"] .library-page .library-pagination,
+html[dir="rtl"][data-alpha-picker-position="right"] .library-page .library-header,
+html[dir="rtl"][data-alpha-picker-position="right"] .library-page .library-content,
+html[dir="rtl"][data-alpha-picker-position="right"] .library-page .library-pagination {
+    padding-right: 50px !important;
+    padding-left: 80px !important;
+}
+
+/*
+ * Ultra-Legacy Low VRAM Overrides (Tizen 2.x/3.x / WebKit <538)
+ */
+html[data-layout-tier="ultra-legacy"][data-alpha-picker-position="right"] .alpha-picker {
+    background: rgba(20, 20, 24, 0.95) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+html[data-layout-tier="ultra-legacy"][data-alpha-picker-position="right"] .alpha-btn {
+    display: block !important;
+    height: 30px !important;
+    width: 30px !important;
+    line-height: 30px !important;
 }
 
 /* --- Pagination Footer --- */

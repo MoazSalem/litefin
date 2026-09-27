@@ -1505,7 +1505,7 @@ class SettingsPage extends Page {
         )}
                     </div>
                 </div>
-             
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="OsdLayout">${i18n.t('OsdLayout') || 'OSD Layout'}</span>
@@ -1639,6 +1639,25 @@ class SettingsPage extends Page {
         )}
                     </div>
                 </div>
+
+                <!-- Alphabet Selector Placement preference for Library view -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelAlphaPickerPosition">${i18n.t('LabelAlphaPickerPosition') || 'Alphabet Selector Position'}</span>
+                        <span class="setting-description" data-i18n="AlphaPickerPositionDescription">${i18n.t('AlphaPickerPositionDescription') || 'Choose the layout and placement of the alphabet quick-jump selector in library views.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'alpha-picker-position-select',
+            [
+                { value: 'top', label: i18n.t('OptionAlphaPickerTop') || 'Top (Horizontal)' },
+                { value: 'right', label: i18n.t('OptionAlphaPickerRight') || 'Right Side (Vertical)' }
+            ],
+            layoutManager.getAlphaPickerPosition() || 'top'
+        )}
+                    </div>
+                </div>
+             
 
                 <!-- Player OSD Section -->
                 <h3 class="setting-section-title" data-i18n="PlayerOSD">${i18n.t('PlayerOSD')}</h3>
@@ -9571,6 +9590,7 @@ class SettingsPage extends Page {
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
             'media-rows-layout-select': { key: 'pref:mediaRowsLayout', type: 'local', triggerEvent: true },
             'login-page-layout-select': { key: 'pref:loginPageLayout', type: 'local', triggerEvent: true },
+            'alpha-picker-position-select': { key: 'pref:alphaPickerPosition', type: 'local', triggerEvent: true },
             'sidebar-layout-select': { key: 'pref:sidebarLayoutMode', type: 'local', triggerEvent: true },
             'classic-card-size-scale-select': {
                 key: (() => {
