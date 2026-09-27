@@ -496,35 +496,55 @@ export function buildJellyfinProfile(options = {}) {
 
     const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
 
+    // =========================================================================
+    // Transcode Target Codec Resolution
+    // =========================================================================
+    // Jellyfin server's StreamBuilder evaluates TranscodingProfiles using a
+    // priority-based search. When higher-ranking codecs (e.g. EAC3) are present
+    // in TranscodingProfiles alongside AAC, the server will select EAC3 whenever
+    // the source audio has EAC3 or exceeds AAC's channel conditions in CodecProfiles.
+    //
+    // Therefore, when the user explicitly requests 'prefer_aac' or 'prefer_ac3',
+    // conflicting higher-priority codecs must NOT be advertised in TranscodingProfiles.
+    // =========================================================================
     if (preferredTranscodeCodec === 'auto') {
-        // EAC3 in HLS/TS produces no audio on Tizen < 6 AVPlay (silent playback).
+        // Auto (Prefer E-AC3): EAC3 in HLS/TS produces no audio on Tizen < 6 AVPlay (silent playback).
         // The HTML5 backend handles it fine, and Tizen 6+ AVPlay decodes it natively.
         if (caps.eac3 && (isHtml5 || caps.tizenVersion >= 6)) transAudioCodecsArr.push('eac3');
         if (caps.ac3) transAudioCodecsArr.push('ac3');
         if (supportsMp2) transAudioCodecsArr.push('mp2');
-        transAudioCodecsArr.push('aac');
+        transAudioCodecsArr.push('aac', 'mp3');
     } else if (preferredTranscodeCodec === 'prefer_ac3') {
+        // Prefer AC3 (with AAC fallback): Target AC3 first; fall back to AAC/MP3 if needed.
+        // EAC3 is strictly excluded so the server never upgrades to E-AC3 on multichannel sources.
         if (caps.ac3) transAudioCodecsArr.push('ac3');
-        if (caps.eac3) transAudioCodecsArr.push('eac3');
+        transAudioCodecsArr.push('aac', 'mp3');
         if (supportsMp2) transAudioCodecsArr.push('mp2');
-        transAudioCodecsArr.push('aac');
     } else if (preferredTranscodeCodec === 'prefer_aac') {
-        transAudioCodecsArr.push('aac');
-        if (caps.eac3) transAudioCodecsArr.push('eac3');
-        if (caps.ac3) transAudioCodecsArr.push('ac3');
+        // Prefer AAC: Target AAC first; fall back to MP3/MP2 if needed.
+        // EAC3 and AC3 are strictly excluded so the server honors the user's AAC preference.
+        transAudioCodecsArr.push('aac', 'mp3');
         if (supportsMp2) transAudioCodecsArr.push('mp2');
     } else if (preferredTranscodeCodec === 'force_eac3') {
+        // Force/Only E-AC3
         transAudioCodecsArr.push('eac3');
     } else if (preferredTranscodeCodec === 'force_ac3') {
+        // Force/Only AC3
         transAudioCodecsArr.push('ac3');
+    } else if (preferredTranscodeCodec === 'force_aac') {
+        // Force/Only AAC
+        transAudioCodecsArr.push('aac');
     } else if (preferredTranscodeCodec === 'force_mp3') {
+        // Force/Only MP3
         transAudioCodecsArr.push('mp3');
     } else {
+        // Universal fallback
         transAudioCodecsArr.push('aac');
     }
 
-    if (enableDts) transAudioCodecsArr.push('dts', 'dca', 'dtshd', 'dts-hd', 'dts-ma', 'dts-x');
-    if (enableTrueHd) transAudioCodecsArr.push('truehd');
+    // NOTE: DTS and TrueHD are deliberately NOT added to transAudioCodecsArr.
+    // HLS segments cannot carry TrueHD or DTS over AVPlay, and ffmpeg cannot encode to them.
+    // Passthrough for TrueHD and DTS is handled exclusively via DirectPlay (baseAudioCodecs).
 
     const directAudioCodecsArr = [];
     if (caps.eac3) directAudioCodecsArr.push('eac3');

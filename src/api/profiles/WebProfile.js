@@ -396,32 +396,48 @@ export function buildJellyfinProfile(options = {}) {
     const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'auto';
     const transAudioCodecsArr = [];
 
+    // =========================================================================
+    // Transcode Target Codec Resolution
+    // =========================================================================
+    // Jellyfin server's StreamBuilder evaluates TranscodingProfiles using a
+    // priority-based search. When higher-ranking codecs (e.g. EAC3) are present
+    // in TranscodingProfiles alongside AAC, the server will select EAC3 whenever
+    // the source audio has EAC3 or exceeds AAC's channel conditions in CodecProfiles.
+    //
+    // Therefore, when the user explicitly requests 'prefer_aac' or 'prefer_ac3',
+    // conflicting higher-priority codecs must NOT be advertised in TranscodingProfiles.
+    // =========================================================================
     if (preferredTranscodeCodec === 'auto') {
-        // Auto (Prefer E-AC3)
+        // Auto (Prefer E-AC3) -> E-AC3 first, then AC3, then AAC/MP3 fallback
         if (caps.eac3) transAudioCodecsArr.push('eac3');
         if (caps.ac3) transAudioCodecsArr.push('ac3');
-        transAudioCodecsArr.push('aac');
+        transAudioCodecsArr.push('aac', 'mp3');
         if (enableMp2) transAudioCodecsArr.push('mp2');
     } else if (preferredTranscodeCodec === 'prefer_ac3') {
-        // Prefer AC3
+        // Prefer AC3 (with AAC fallback) -> AC3 first, then AAC/MP3 fallback.
+        // EAC3 is strictly excluded so the server never upgrades to E-AC3.
         if (caps.ac3) transAudioCodecsArr.push('ac3');
-        if (caps.eac3) transAudioCodecsArr.push('eac3');
-        transAudioCodecsArr.push('aac');
+        transAudioCodecsArr.push('aac', 'mp3');
         if (enableMp2) transAudioCodecsArr.push('mp2');
     } else if (preferredTranscodeCodec === 'prefer_aac') {
-        // Prefer AAC
-        transAudioCodecsArr.push('aac');
+        // Prefer AAC -> AAC first, then MP3/MP2 fallback.
+        // EAC3 and AC3 are strictly excluded so the server honors the user's AAC preference.
+        transAudioCodecsArr.push('aac', 'mp3');
         if (enableMp2) transAudioCodecsArr.push('mp2');
-        if (caps.eac3) transAudioCodecsArr.push('eac3');
-        if (caps.ac3) transAudioCodecsArr.push('ac3');
     } else if (preferredTranscodeCodec === 'force_eac3') {
-        // Only E-AC3
+        // Force/Only E-AC3
         transAudioCodecsArr.push('eac3');
     } else if (preferredTranscodeCodec === 'force_ac3') {
-        // Only AC3
+        // Force/Only AC3
         transAudioCodecsArr.push('ac3');
+    } else if (preferredTranscodeCodec === 'force_aac') {
+        // Force/Only AAC
+        transAudioCodecsArr.push('aac');
+    } else if (preferredTranscodeCodec === 'force_mp3') {
+        // Force/Only MP3
+        transAudioCodecsArr.push('mp3');
     } else {
-        // Only AAC (force_aac)
+        // Universal fallback
         transAudioCodecsArr.push('aac');
     }
 

@@ -105,7 +105,7 @@ const DEFAULTS = {
     //   'prefer_ac3'  — Prefer AC3: uses AC3 first, with AAC fallback.
     //   'prefer_aac'  — Prefer AAC.
     //   'force_eac3'  — Force/Only E-AC3.
-    //   force_ac3'   — Force/Only AC3.
+    //   'force_ac3'   — Force/Only AC3.
     //   'force_aac'   — Force/Only AAC.
     //   'force_mp3'   — Force/Only MP3.
     //
