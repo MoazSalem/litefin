@@ -124,6 +124,10 @@ class AuthManager {
         this._onUnauthorized = this._onUnauthorized.bind(this);
         this._onWebosDeviceInfo = this._onWebosDeviceInfo.bind(this);
 
+        // Track active login/probe lifecycle to prevent candidate credential
+        // failures (such as empty-password checks) from invalidating existing sessions.
+        this._isLoggingIn = false;
+
         // Listen for unauthorized events from API
         eventBus.on('api:unauthorized', this._onUnauthorized);
         eventBus.on('webos:deviceInfoReady', this._onWebosDeviceInfo);
@@ -545,31 +549,51 @@ class AuthManager {
      *
      * @param {string} username - Jellyfin username (case-insensitive on most servers)
      * @param {string} [password=''] - Password; empty string for passwordless users
+     * @param {Object} [options={}] - Optional request configurations (e.g. silent probe)
      * @returns {Promise<Object>} Authentication result from the server
      */
-    async login(username, password = '') {
-        log.info(`Logging in as "${username}"`);
+    async login(username, password = '', options = {}) {
+        // Emit debug log for silent probes and info log for interactive user sign-ins
+        if (!options.silent) {
+            log.info(`Logging in as "${username}"`);
+        } else {
+            log.debug(`Silent probe login as "${username}"`);
+        }
 
         // Save in-memory credentials so we can restore them if this login fails
         // (prevents the app from being half-logged-out on a wrong password)
         const prevToken = api.accessToken;
         const prevUserId = api.userId;
 
+        // Arm the authentication guard flag to shield existing stored sessions
+        // from unexpected session invalidation events while probing credentials.
+        this._isLoggingIn = true;
+
         try {
             // Clear in-memory token so ApiClient doesn't send a stale one in the header
             api.setAuth(null, null);
 
-            // Call the Jellyfin authenticate endpoint
-            const result = await api.post('/Users/AuthenticateByName', {
-                Username: username,
-                Pw: password,
-                // Newer Jellyfin versions (10.9+) strictly validate IAuthenticationRequest
-                // parameters in the POST body rather than relying on the Auth header
-                App: api.clientName,
-                Device: api.deviceName,
-                DeviceId: api.deviceId,
-                Version: api.clientVersion
-            });
+            // Call the Jellyfin authenticate endpoint.
+            // Explicitly mark the request with suppressUnauthorized so candidate credential
+            // failures do not cascade into global session expiry events.
+            const result = await api.post(
+                '/Users/AuthenticateByName',
+                {
+                    Username: username,
+                    Pw: password,
+                    // Newer Jellyfin versions (10.9+) strictly validate IAuthenticationRequest
+                    // parameters in the POST body rather than relying on the Auth header
+                    App: api.clientName,
+                    Device: api.deviceName,
+                    DeviceId: api.deviceId,
+                    Version: api.clientVersion
+                },
+                {
+                    suppressUnauthorized: true,
+                    silent: Boolean(options.silent),
+                    warnOnError: Boolean(options.silent || options.warnOnError)
+                }
+            );
 
             // Unpack response
             const accessToken = result.AccessToken || result.accessToken;
@@ -617,7 +641,12 @@ class AuthManager {
 
             return result;
         } catch (error) {
-            log.error('Login request failed:', error);
+            // Log as error for interactive failures, debug for silent candidate probes
+            if (!options.silent) {
+                log.error('Login request failed:', error);
+            } else {
+                log.debug('Silent login probe failed (password required):', error.message || error);
+            }
 
             // Restore previous in-memory credentials on failure
             if (prevToken && prevUserId) {
@@ -626,6 +655,9 @@ class AuthManager {
             }
 
             throw error;
+        } finally {
+            // Always disarm the authentication guard flag once the request completes
+            this._isLoggingIn = false;
         }
     }
 
@@ -640,13 +672,14 @@ class AuthManager {
      *
      * @param {Object} user - User object from getPublicUsers()
      * @param {string} [password=''] - Password (or empty string for passwordless)
+     * @param {Object} [options={}] - Additional request configurations
      * @returns {Promise<Object>} Authentication result
      */
-    async loginWithUser(user, password = '') {
+    async loginWithUser(user, password = '', options = {}) {
         // On legacy servers HasPassword correctly indicates whether a password
         // is needed; on JF12+ it's always true so we just pass through as-is.
         const pw = api.isJF12Plus() ? password : (user.HasPassword ? password : '');
-        return this.login(user.Name, pw);
+        return this.login(user.Name, pw, options);
     }
 
     /**
@@ -654,14 +687,28 @@ class AuthManager {
      * Follows the exact same session-persistence path as login().
      *
      * @param {string} secret - Authorized Quick Connect secret
+     * @param {Object} [options={}] - Additional request configurations
      * @returns {Promise<Object>} Authentication result (same shape as login())
      */
-    async loginWithQuickConnect(secret) {
+    async loginWithQuickConnect(secret, options = {}) {
         log.info('Completing login via Quick Connect...');
 
+        // Preserve current active credentials to prevent accidental partial sign-out
+        const prevToken = api.accessToken;
+        const prevUserId = api.userId;
+
+        // Guard active session against spurious session-expiry events during secret exchange
+        this._isLoggingIn = true;
+
         try {
+            // Clear in-memory token while negotiating secret exchange
+            api.setAuth(null, null);
+
             // Exchange the authorized secret for a real access token
-            const result = await api.authenticateWithQuickConnect(secret);
+            const result = await api.authenticateWithQuickConnect(secret, {
+                suppressUnauthorized: true,
+                ...options
+            });
 
             const accessToken = result.AccessToken || result.accessToken;
             const user = result.User || result.user;
@@ -708,7 +755,17 @@ class AuthManager {
             return result;
         } catch (error) {
             log.error('Quick Connect login failed:', error);
+
+            // Restore in-memory credentials if exchange failed
+            if (prevToken && prevUserId) {
+                log.info('Restoring previous in-memory credentials after failed Quick Connect login');
+                api.setAuth(prevToken, prevUserId);
+            }
+
             throw error;
+        } finally {
+            // Release login guard
+            this._isLoggingIn = false;
         }
     }
 
@@ -1063,6 +1120,28 @@ class AuthManager {
      * @private
      */
     _onUnauthorized() {
+        // ====================================================================
+        // Guard 1: Active Login / Candidate Probe Shield
+        // ====================================================================
+        // If a login attempt or empty-password probe is currently in flight,
+        // a 401 error signifies that the candidate credentials were rejected,
+        // NOT that our currently signed-in profile has expired. Never evict here.
+        if (this._isLoggingIn) {
+            log.debug('Ignoring 401 unauthorized event during active login attempt');
+            return;
+        }
+
+        // ====================================================================
+        // Guard 2: Missing Session Token Shield
+        // ====================================================================
+        // A session can only legitimately expire if ApiClient was actually
+        // configured with an active session token when the rejection occurred.
+        // If no token was loaded into memory, no active session was on the wire.
+        if (!api.accessToken) {
+            log.debug('Ignoring 401 unauthorized event — no active session token present in ApiClient');
+            return;
+        }
+
         log.warn('Unauthorized — session expired');
 
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);

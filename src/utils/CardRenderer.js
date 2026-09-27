@@ -904,41 +904,40 @@ class CardRenderer {
         if (type === 'person') {
             subtitleText = i18n.ensureBiDi(item.Role || item.Type);
         } else if (item.Type === 'Episode') {
+            // Format season and episode index codes (e.g. S01E05)
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
             const episodeCode = `S${s}E${e}`;
-            const swapEpisodeTitles = storage.getItem('pref:swapEpisodeTitles') === 'true';
 
-            if (swapEpisodeTitles) {
-                if (contextType === 'season-grid') {
-                    titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
-                    subtitleText = '';
+            // Check if episode title swap setting is enabled (defaults to true across rows and grids)
+            const swapEpisodeTitles = storage.getItem('pref:swapEpisodeTitles') !== 'false';
+            const isEpisodeSwap = swapEpisodeTitles || contextType === 'season-grid';
+
+            if (isEpisodeSwap) {
+                // Swapped mode: Episode title is primary, Series name is secondary subtitle
+                if (useEpisodeBadges) {
+                    // Badge displays episode number (e.g. S01E01), so title is simply the episode name
+                    titleText = i18n.ensureBiDi(item.Name);
                 } else {
-                    if (useEpisodeBadges) {
-                        titleText = i18n.ensureBiDi(item.Name);
-                    } else {
-                        titleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name}`);
-                    }
-                    subtitleText = i18n.ensureBiDi(item.SeriesName || '');
+                    // No badge visible: prepend episode code to title
+                    titleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name}`);
                 }
+                // Show series name as subtitle
+                subtitleText = i18n.ensureBiDi(item.SeriesName || '');
             } else {
+                // Standard mode (e.g. Home screen Next Up / Continue Watching rows)
                 if (isLandscape) {
-                    if (contextType === 'season-grid') {
-                        titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
-                        subtitleText = '';
+                    // Next Up Style: Series name is primary title so user knows which show it belongs to
+                    titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
+
+                    // Episode name / index code becomes subtitle
+                    if (useEpisodeBadges) {
+                        subtitleText = i18n.ensureBiDi(item.Name);
                     } else {
-                        // Next Up Style (Keep Series Name)
-                        titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
-                        // If useEpisodeBadges is true, Episode code is in the badge, just show name.
-                        // If useEpisodeBadges is false, Show "SxxExx - Name".
-                        if (useEpisodeBadges) {
-                            subtitleText = i18n.ensureBiDi(item.Name);
-                        } else {
-                            subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
-                        }
+                        subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
                     }
                 } else {
-                    // Poster Style: Episode code in badge if useEpisodeBadges is true
+                    // Poster Style: Episode code in badge if useEpisodeBadges is true, otherwise in subtitle
                     if (useEpisodeBadges) {
                         subtitleText = '';
                     } else {

@@ -495,7 +495,7 @@ export class ApiClient {
                 if (options.warnOnError && response) {
                     response._suppressErrorLog = true;
                 }
-                const error = await this._handleError(response);
+                const error = await this._handleError(response, endpoint, options);
                 throw error;
             }
 
@@ -607,8 +607,11 @@ export class ApiClient {
     /**
      * Handle error responses
      * @private
+     * @param {Response} response - The fetch Response object
+     * @param {string} [endpoint=''] - Target API route
+     * @param {Object} [options={}] - Request options passed to request()
      */
-    async _handleError(response) {
+    async _handleError(response, endpoint = '', options = {}) {
         let message = `HTTP ${response.status}`;
 
         // Try to parse the server's error description from the response body.
@@ -642,10 +645,43 @@ export class ApiClient {
         // Handle specific status codes if no specific server message was provided
         const isGenericMessage = message === `HTTP ${response.status}`;
         switch (response.status) {
-            case 401:
-                eventBus.emit('api:unauthorized');
+            case 401: {
+                // =============================================================
+                // UNAUTHORIZED / SESSION EXPIRY RESOLUTION
+                // =============================================================
+                // Determine whether this 401 indicates that an active authenticated
+                // session has expired or been revoked, as opposed to an authentication
+                // credential attempt (e.g. login or silent probe) that failed.
+                //
+                // An authentication failure on /Users/AuthenticateByName or
+                // /Users/AuthenticateWithQuickConnect indicates incorrect/missing
+                // credentials for the account being tested, NOT that the current
+                // active session expired. Emitting 'api:unauthorized' during a login
+                // attempt would mistakenly evict the previously signed-in user.
+                // =============================================================
+                const isAuthEndpoint =
+                    endpoint.includes('/Users/AuthenticateByName') ||
+                    endpoint.includes('/Users/AuthenticateWithQuickConnect');
+
+                // Session expiration should only fire if:
+                // 1. Not explicitly suppressed by the caller (e.g. probe or login attempt)
+                // 2. Not marked as a silent operation
+                // 3. Not an authentication credential endpoint
+                // 4. An active session token was actually transmitted with the request
+                const shouldEmitUnauthorized =
+                    !options.suppressUnauthorized &&
+                    !options.silent &&
+                    !isAuthEndpoint &&
+                    Boolean(this._accessToken);
+
+                // Broadcast session invalidation only when an active token was rejected
+                if (shouldEmitUnauthorized) {
+                    eventBus.emit('api:unauthorized');
+                }
+
                 if (isGenericMessage) message = 'Authentication required';
                 break;
+            }
             case 403:
                 if (isGenericMessage) message = 'Access denied';
                 break;
@@ -767,15 +803,23 @@ export class ApiClient {
      * Returns the same shape as /Users/AuthenticateByName (AccessToken, User, etc.)
      *
      * @param {string} secret - The authorized Secret from the Quick Connect flow
+     * @param {Object} [options={}] - Additional request options
      */
-    async authenticateWithQuickConnect(secret) {
-        return this.post('/Users/AuthenticateWithQuickConnect', {
-            Secret: secret,
-            App: this.clientName,
-            Device: this.deviceName,
-            DeviceId: this.deviceId,
-            Version: this.clientVersion
-        });
+    async authenticateWithQuickConnect(secret, options = {}) {
+        return this.post(
+            '/Users/AuthenticateWithQuickConnect',
+            {
+                Secret: secret,
+                App: this.clientName,
+                Device: this.deviceName,
+                DeviceId: this.deviceId,
+                Version: this.clientVersion
+            },
+            {
+                suppressUnauthorized: true,
+                ...options
+            }
+        );
     }
 
     /**

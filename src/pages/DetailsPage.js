@@ -3765,7 +3765,8 @@ class DetailsPage extends Page {
                     id: 'season-episodes-grid',
                     items: this._episodes,
                     type: 'episode',
-                    contextType: 'details',
+                    // Pass 'season-grid' context so CardRenderer renders episode titles as primary
+                    contextType: 'season-grid',
                     limit: 60,
                     moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
                     isLandscape: true,

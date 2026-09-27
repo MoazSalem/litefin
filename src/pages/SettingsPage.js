@@ -1874,7 +1874,8 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="SwapEpisodeTitlesDescription">${i18n.t('SwapEpisodeTitlesDescription') || 'Display the episode name as the card title and the show name as the subtitle.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:swapEpisodeTitles') === 'true' ? 'active' : ''}" 
+                         <!-- Toggle switch for swapping episode title & subtitle (defaults to enabled/active) -->
+                         <button class="toggle-switch ${storage.getItem('pref:swapEpisodeTitles') !== 'false' ? 'active' : ''}" 
                                  id="toggle-swap-episode-titles" 
                                  tabindex="0">
                         </button>
@@ -7293,13 +7294,15 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Swap Episode Titles
+        // Toggle Swap Episode Titles (defaults to true)
         const swapEpisodeTitlesBtn = this.$('#toggle-swap-episode-titles');
         if (swapEpisodeTitlesBtn) {
             swapEpisodeTitlesBtn.addEventListener('click', () => {
-                const isEnabled = storage.getItem('pref:swapEpisodeTitles') === 'true';
+                // Check if currently enabled (default is true if not explicitly 'false')
+                const isEnabled = storage.getItem('pref:swapEpisodeTitles') !== 'false';
                 const newValue = !isEnabled;
-                storage.setItem('pref:swapEpisodeTitles', newValue);
+                // Store updated preference
+                storage.setItem('pref:swapEpisodeTitles', newValue.toString());
                 swapEpisodeTitlesBtn.classList.toggle('active', newValue);
                 log.info(`Swap Episode Titles set to: ${newValue}`);
             });

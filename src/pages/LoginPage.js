@@ -1135,90 +1135,109 @@ class LoginPage extends Page {
             this._selectedUser = user;
 
             /*
-             * Passwordless user detection — version-aware.
+             * Passwordless user detection & authentication:
              *
-             * JF 10.10 / 10.11: Server reliably sets HasPassword=false for users
-             *   with no password, so we can trust the explicit === false check.
+             * 1. Explicit HasPassword === false:
+             *    On pre-JF12 servers (and any server accurately returning HasPassword=false),
+             *    the account definitely has no password. Log in directly without prompting.
              *
-             * JF 12+: HasPassword is hard-coded to `true` in UserDto and never
-             *   reflects the real state, so the === false check is permanently dead.
-             *   Instead we speculatively attempt a silent empty-password login; if
-             *   the server accepts it we navigate home immediately.  If it returns
-             *   a 401 we catch the error silently and fall through to the password
-             *   form — the user never sees the transient loading flash.
+             * 2. Jellyfin 12+ silent empty-password probe:
+             *    Jellyfin 12+ hard-codes HasPassword to `true` on public user listings.
+             *    We speculatively execute a silent empty-password login. If accepted,
+             *    we navigate immediately. If rejected with 401, we fall through to
+             *    the password entry form without flashing an error state.
              */
-            const isPasswordless =
-                // Old-server explicit signal — still trustworthy on pre-12 builds
-                user.HasPassword === false ||
-                // JF12+: try a silent empty-password login to detect passwordless users
-                (api.isJF12Plus() && await (async () => {
-                    try {
-                        this._showState(STATE.LOADING);
-                        cancelDiscovery();
-                        await auth.login(user.Name, '');
-                        // Success — user has no password, navigate away now
-                        if (this._isAddUserMode) {
-                            router.navigate('/profiles', { replace: true });
-                        } else {
-                            router.navigate('/home', { replace: true });
-                        }
-                        return true; // signal passwordless succeeded
-                    } catch (_silentErr) {
-                        // 401 / auth failure — user does have a password, show the form
-                        log.debug(`User "${user.Name}" requires a password (silent probe rejected)`);
-                        return false;
-                    }
-                })());
+            if (user.HasPassword === false) {
+                log.info(`User "${user.Name}" has no password, logging in directly`);
 
-            if (!isPasswordless) {
-                // Password required — show the password entry form
-                log.info(`LoginPage: User "${user.Name}" requires password`);
+                // Update UI state and halt any pending network server discovery
+                this._showState(STATE.LOADING);
+                cancelDiscovery();
 
-                // Update password section with user info
-                const userEl = this.$('#selected-user');
-                const nameEl = userEl?.querySelector('.login-user-name, .user-name');
-                if (nameEl) {
-                    nameEl.textContent = user.Name;
+                // Authenticate with an empty password string
+                await auth.login(user.Name, '');
+
+                // Route appropriately depending on whether we are adding a profile or initial login
+                if (this._isAddUserMode) {
+                    router.navigate('/profiles', { replace: true });
+                } else {
+                    router.navigate('/home', { replace: true });
                 }
-
-                const img = userEl?.querySelector('.login-user-avatar, .user-avatar');
-                const placeholder = userEl?.querySelector('.user-avatar-placeholder');
-
-                if (placeholder) {
-                    placeholder.textContent = user.Name.charAt(0).toUpperCase();
-                }
-
-                if (img) {
-                    if (user.PrimaryImageTag) {
-                        const params = imageService.getParams('avatar');
-                        img.src = api.getUserImageUrl(user.Id, {
-                            maxWidth: params.maxWidth,
-                            quality: params.quality
-                        });
-                        img.classList.remove('hidden');
-                        placeholder?.classList.add('hidden');
-                    } else {
-                        img.src = '';
-                        img.classList.add('hidden');
-                        placeholder?.classList.remove('hidden');
-                    }
-                }
-
-                // Clear password input
-                this._passwordInput.value = '';
-
-                // Show password section
-                this._showState(STATE.PASSWORD);
-                this.setActiveSection('login-password');
-
-                // Focus password input
-                setTimeout(() => {
-                    if (this._passwordInput) {
-                        this._passwordInput.readOnly = true;
-                        this._passwordInput.focus();
-                    }
-                }, 100);
+                return;
             }
+
+            // Probe Jellyfin 12+ servers for passwordless accounts masked as HasPassword: true
+            if (api.isJF12Plus()) {
+                try {
+                    // Show loading indicator during candidate authentication probe
+                    this._showState(STATE.LOADING);
+                    cancelDiscovery();
+
+                    // Execute empty-password login attempt silently.
+                    // Passing silent: true ensures the probe does not log errors or
+                    // trigger session expiry for any currently authenticated profile.
+                    await auth.login(user.Name, '', { silent: true });
+
+                    // Login succeeded — account is passwordless, navigate away
+                    if (this._isAddUserMode) {
+                        router.navigate('/profiles', { replace: true });
+                    } else {
+                        router.navigate('/home', { replace: true });
+                    }
+                    return;
+                } catch (_silentErr) {
+                    // Candidate empty-password probe rejected — account requires a password
+                    log.debug(`User "${user.Name}" requires a password (silent probe rejected)`);
+                }
+            }
+
+            // Password required — show the password entry form
+            log.info(`LoginPage: User "${user.Name}" requires password`);
+
+            // Update password section with user info
+            const userEl = this.$('#selected-user');
+            const nameEl = userEl?.querySelector('.login-user-name, .user-name');
+            if (nameEl) {
+                nameEl.textContent = user.Name;
+            }
+
+            const img = userEl?.querySelector('.login-user-avatar, .user-avatar');
+            const placeholder = userEl?.querySelector('.user-avatar-placeholder');
+
+            if (placeholder) {
+                placeholder.textContent = user.Name.charAt(0).toUpperCase();
+            }
+
+            if (img) {
+                if (user.PrimaryImageTag) {
+                    const params = imageService.getParams('avatar');
+                    img.src = api.getUserImageUrl(user.Id, {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
+                    img.classList.remove('hidden');
+                    placeholder?.classList.add('hidden');
+                } else {
+                    img.src = '';
+                    img.classList.add('hidden');
+                    placeholder?.classList.remove('hidden');
+                }
+            }
+
+            // Clear password input
+            this._passwordInput.value = '';
+
+            // Show password section
+            this._showState(STATE.PASSWORD);
+            this.setActiveSection('login-password');
+
+            // Focus password input
+            setTimeout(() => {
+                if (this._passwordInput) {
+                    this._passwordInput.readOnly = true;
+                    this._passwordInput.focus();
+                }
+            }, 100);
         } catch (error) {
             log.error('_selectUser error:', error);
             this._showState(STATE.USERS);
