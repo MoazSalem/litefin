@@ -915,14 +915,25 @@ export function buildJellyfinProfile(options = {}) {
             : [])
     ];
 
-    // CodecProfile for AAC: limit to stereo channels for DirectPlay qualification.
-    // This tells Jellyfin: "only DirectPlay an AAC source if it has ≤2 channels".
-    // On Tizen < 6, multichannel AAC in HLS/TS crashes AVPlay, so we exclude those from
-    // DirectPlay. Tizen 6+ uses fMP4 which handles 5.1 AAC reliably.
+    // =========================================================================
+    // CodecProfile for AAC:
+    // Samsung Smart TVs natively decode AAC up to 5.1 (6 channels) across all
+    // progressive containers (MKV, MP4, etc.) on all Tizen versions.
     //
-    // NOTE: This does NOT control the output channel count of transcodes — that is governed
-    // solely by MaxAudioChannels in the TranscodingProfile, which we've already set correctly.
-    // This CodecProfile only affects DirectPlay/DirectStream path decisions.
+    // Previously, capping AAC at 2 channels here on Tizen < 6 caused Jellyfin to
+    // reject DirectPlay for all AAC 5.1 media with AudioCodecNotSupported /
+    // AudioChannelsNotSupported, forcing server-side audio transcoding and breaking
+    // prewarm cache for standard 5.1 movie/series releases.
+    //
+    // Hardware constraints:
+    // 1. Samsung hardware decoders support up to 6 channels (5.1) for AAC.
+    //    For 7.1 AAC tracks, hardware decoding is unsupported, so we clamp the
+    //    permitted AAC channel cap to at most 6 (even if 7.1 TrueHD/DTS is enabled).
+    // 2. If the user explicitly configured allowedAudioChannels (e.g. 2 for stereo),
+    //    maxAudioChannels will respect that preference.
+    // =========================================================================
+    const maxAacChannelsStr = String(Math.min(maxAudioChannels, 6));
+
     codecProfiles.push(
         {
             Type: 'VideoAudio',
@@ -931,9 +942,8 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'LessThanEqual',
                     Property: 'AudioChannels',
-                    // Permit DirectPlay of AAC only if channel count is within safe limits.
-                    // ProfileCondition.Value must always be a string in Jellyfin's schema.
-                    Value: caps.tizenVersion >= 6 ? maxAudioChannelsStr : '2',
+                    // Permit DirectPlay of AAC up to 6 channels (5.1) across progressive containers
+                    Value: maxAacChannelsStr,
                     IsRequired: false
                 }
             ]
@@ -945,14 +955,39 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'LessThanEqual',
                     Property: 'AudioChannels',
-                    // Permit DirectPlay of AAC only if channel count is within safe limits.
-                    // ProfileCondition.Value must always be a string in Jellyfin's schema.
-                    Value: caps.tizenVersion >= 6 ? maxAudioChannelsStr : '2',
+                    // Standalone music and audiobooks in AAC format
+                    Value: maxAacChannelsStr,
                     IsRequired: false
                 }
             ]
         }
     );
+
+    // =========================================================================
+    // MPEG-TS Container Restriction for Legacy Tizen (< 6.0)
+    // =========================================================================
+    // On Tizen < 6 AVPlay, multichannel (5.1+) AAC inside MPEG-TS transport
+    // streams can trigger PLAYER_ERROR_NOT_SUPPORTED_FORMAT in the hardware TS
+    // demuxer due to LATM/ADTS framing incompatibilities in the PMT.
+    // We restrict AAC to stereo specifically when packaged inside ts/mpegts
+    // containers on legacy AVPlay. Standard progressive containers (MKV, MP4)
+    // decode AAC 5.1 natively and are unaffected.
+    // =========================================================================
+    if (!isHtml5 && caps.tizenVersion < 6) {
+        codecProfiles.push({
+            Type: 'VideoAudio',
+            Container: 'ts,mpegts',
+            Codec: 'aac',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    Value: '2',
+                    IsRequired: false
+                }
+            ]
+        });
+    }
 
     // Explicitly force transcoding of DTS/TrueHD tracks if the user
     // has disabled passthrough for them.
