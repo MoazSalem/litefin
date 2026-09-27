@@ -591,6 +591,10 @@ html[data-ui-font="atkinson"] {
     --jf-font-family: 'Atkinson Hyperlegible', sans-serif;
 }
 
+html[data-ui-font="manrope"] {
+    --jf-font-family: 'Manrope', sans-serif;
+}
+
 /* 
  * ============================================================================
  * Poiret One & Zen Kaku Gothic New UI Font overrides

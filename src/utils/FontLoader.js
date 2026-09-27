@@ -39,6 +39,7 @@ class FontLoader {
             baloo: 'Baloo Bhaijaan 2',
             opendyslexic: 'OpenDyslexic',
             atkinson: 'Atkinson Hyperlegible',
+            manrope: 'Manrope',
             'poiret-one': 'Poiret One',
             'zen-kaku-gothic-new': 'Zen Kaku Gothic New',
             'fallback-font': 'Jellyfin Fallback Font'

@@ -54,7 +54,8 @@ function getAvailableFonts() {
         'proxima nova': getAbsoluteUrl('assets/fonts/ProximaNova.woff2'),
         'baloo bhaijaan 2': getAbsoluteUrl('assets/fonts/BalooBhaijaan2.woff2'),
         'opendyslexic': getAbsoluteUrl('assets/fonts/OpenDyslexic.woff2'),
-        'atkinson hyperlegible': getAbsoluteUrl('assets/fonts/Atkinson-Hyperlegible.woff2')
+        'atkinson hyperlegible': getAbsoluteUrl('assets/fonts/Atkinson-Hyperlegible.woff2'),
+        'manrope': getAbsoluteUrl('assets/fonts/Manrope.woff2')
     };
     return _availableFonts;
 }

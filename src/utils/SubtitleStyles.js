@@ -274,6 +274,9 @@ export function getTextStyles(isHdr = false) {
         case 'atkinson':
             styles.push({ className: 'font-atkinson' });
             break;
+        case 'manrope':
+            styles.push({ className: 'font-manrope' });
+            break;
         case 'fallback-font':
             styles.push({ className: 'font-fallback-font' });
             break;
@@ -463,6 +466,7 @@ const fontClasses = [
     'font-zen-kaku-gothic-new',
     'font-opendyslexic',
     'font-atkinson',
+    'font-manrope',
     'font-fallback-font',
     'font-default'
 ];
@@ -560,6 +564,8 @@ export default {
                 return 'font-opendyslexic';
             case 'atkinson':
                 return 'font-atkinson';
+            case 'manrope':
+                return 'font-manrope';
             case 'fallback-font':
                 return 'font-fallback-font';
             default:
@@ -611,6 +617,8 @@ export default {
                 return 'OpenDyslexic';
             case 'atkinson':
                 return 'Atkinson Hyperlegible';
+            case 'manrope':
+                return 'Manrope';
             case 'fallback-font':
                 return 'Jellyfin Fallback Font';
             default:

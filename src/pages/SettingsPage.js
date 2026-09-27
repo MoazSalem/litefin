@@ -576,7 +576,8 @@ class SettingsPage extends Page {
                     label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New'
                 },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
-                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
+                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' },
+                { value: 'manrope', label: i18n.t('FontManrope') || 'Manrope' }
             ],
             layoutManager.getUiFont()
         )}
@@ -4606,7 +4607,8 @@ class SettingsPage extends Page {
                     label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New'
                 },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
-                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
+                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' },
+                { value: 'manrope', label: i18n.t('FontManrope') || 'Manrope' }
             ],
             PlayerSettings.get('subtitleFont')
         )}
@@ -4996,6 +4998,7 @@ class SettingsPage extends Page {
                 },
                 { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
                 { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' },
+                { value: 'manrope', label: i18n.t('FontManrope') || 'Manrope' },
                 {
                     value: 'fallback-font',
                     label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font'

@@ -194,6 +194,15 @@
     font-display: swap;
 }
 
+/* Manrope - Geometric sans-serif */
+@font-face {
+    font-family: 'Manrope';
+    src: url('../assets/fonts/Manrope.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ============================================================================
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
@@ -235,6 +244,7 @@
 .font-zen-kaku-gothic-new { font-family: 'Zen Kaku Gothic New', sans-serif; }
 .font-opendyslexic { font-family: 'OpenDyslexic', sans-serif; }
 .font-atkinson { font-family: 'Atkinson Hyperlegible', sans-serif; }
+.font-manrope { font-family: 'Manrope', sans-serif; }
 .font-fallback-font { font-family: 'Jellyfin Fallback Font', sans-serif; }
 
 .font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', 'LG Smart UI', Roboto, Helvetica, Arial, sans-serif; }
