@@ -2032,3 +2032,54 @@ html[data-layout-tier="ultra-legacy"] .library-row {
     text-align: center;
     line-height: 1.2;
 }
+
+/*
+ * =============================================================================
+ * INFINITE SCROLL LOADER
+ * =============================================================================
+ * Subtle activity indicator displayed at the bottom of the grid while the next
+ * batch of media cards streams asynchronously from the server.
+ * - Minimalist glassmorphic container with fluid opacity transitions
+ * - Smooth CSS spinning indicator calibrated for 60fps TV compositors
+ * =============================================================================
+ */
+.infinite-scroll-loader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 30px 20px 50px 20px;
+    width: 100%;
+    box-sizing: border-box;
+    transition: opacity 0.25s ease;
+}
+
+.infinite-scroll-loader.hidden {
+    display: none !important;
+}
+
+.infinite-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    border-top-color: var(--jf-btn-primary-bg, #6b6ede);
+    border-radius: 50%;
+    -webkit-border-radius: 50%;
+    animation: infinite-spin 0.8s linear infinite;
+    -webkit-animation: infinite-spin 0.8s linear infinite;
+}
+
+@keyframes infinite-spin {
+    to { transform: rotate(360deg); }
+}
+
+@-webkit-keyframes infinite-spin {
+    to { -webkit-transform: rotate(360deg); }
+}
+
+.infinite-loader-text {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6));
+    letter-spacing: 0.02em;
+}

@@ -5232,7 +5232,8 @@ class SettingsPage extends Page {
                 { value: 50, label: '50' },
                 { value: 75, label: '75' },
                 { value: 100, label: '100' },
-                { value: 150, label: '150' }
+                { value: 150, label: '150' },
+                { value: 'unlimited', label: i18n.t('OptionUnlimited') || 'Unlimited (Infinite Scroll)' }
             ],
             storage.getItem('pref:libraryPageSize') || 100
         )}
@@ -9724,7 +9725,7 @@ class SettingsPage extends Page {
             'episode-layout-select': { key: 'pref:episodeLayout', type: 'local' },
             'show-dates-select': { key: 'pref:showDates', type: 'local' },
             'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
-            'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
+            'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local', triggerEvent: true },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-carousel-indicator-style-select': { key: 'pref:heroCarouselIndicatorStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },

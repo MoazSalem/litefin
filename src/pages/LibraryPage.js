@@ -55,7 +55,8 @@ class LibraryPage extends Page {
 
             // Pagination
             startIndex: 0,
-            limit: parseInt(storage.getItem('pref:libraryPageSize') || 100, 10),
+            isInfinite: storage.getItem('pref:libraryPageSize') === 'unlimited',
+            limit: storage.getItem('pref:libraryPageSize') === 'unlimited' ? 100 : parseInt(storage.getItem('pref:libraryPageSize') || 100, 10),
             totalRecordCount: 0,
 
             // Data Cache
@@ -213,6 +214,12 @@ class LibraryPage extends Page {
                     <main class="library-content" id="library-content">
                         <div class="library-grid" id="library-grid">
                             <!-- VirtualGrid / CardRenderer items here -->
+                        </div>
+                        
+                        <!-- Infinite Scroll Loader -->
+                        <div class="infinite-scroll-loader hidden" id="infinite-scroll-loader">
+                            <div class="infinite-spinner"></div>
+                            <span class="infinite-loader-text" data-i18n="LoadingMore">${i18n.t('LoadingMore') || 'Loading more items...'}</span>
                         </div>
                         
                         <!-- Empty State -->
@@ -739,6 +746,18 @@ class LibraryPage extends Page {
             };
             eventBus.on('alphaPickerPosition:changed', this._onAlphaPickerPositionChanged);
         }
+
+        // Listen for dynamic library page size / unlimited infinite pagination changes
+        if (!this._onLibraryPageSizeChanged) {
+            this._onLibraryPageSizeChanged = (newSize) => {
+                const isInfinite = newSize === 'unlimited';
+                this.state.isInfinite = isInfinite;
+                this.state.limit = isInfinite ? 100 : (parseInt(newSize, 10) || 100);
+                this.state.startIndex = 0;
+                this._loadItems();
+            };
+            eventBus.on('pref:libraryPageSize:changed', this._onLibraryPageSizeChanged);
+        }
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
         this.$('#btn-prev-top')?.addEventListener('click', () => this._handlePageChange(-1));
@@ -896,6 +915,10 @@ class LibraryPage extends Page {
         if (this._onAlphaPickerPositionChanged) {
             eventBus.off('alphaPickerPosition:changed', this._onAlphaPickerPositionChanged);
             this._onAlphaPickerPositionChanged = null;
+        }
+        if (this._onLibraryPageSizeChanged) {
+            eventBus.off('pref:libraryPageSize:changed', this._onLibraryPageSizeChanged);
+            this._onLibraryPageSizeChanged = null;
         }
         this.$('#library-tabs')?.removeEventListener('click', this._onTabClick);
         this.$('#alpha-picker')?.removeEventListener('click', this._onAlphaClick);
@@ -1100,6 +1123,19 @@ class LibraryPage extends Page {
                 items = [];
             }
 
+            this._lastFetchContext = {
+                viewType: 'seerr',
+                isSeerr: true,
+                seerrType,
+                mediaType,
+                keywordId,
+                genreId,
+                language,
+                certification,
+                studioId,
+                networkId,
+                seerrSortBy
+            };
             this.state.items = items || [];
             this.state.limit = 100;
             this.state.totalRecordCount = items.totalResults || (items.totalPages ? items.totalPages * 100 : (items.length ? (seerrPage + 1) * 100 : 0));
@@ -1176,6 +1212,15 @@ class LibraryPage extends Page {
             grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode, shouldHideLabels);
         }
 
+        // Check infinite pagination preference (unlimited setting)
+        const isInfinite = storage.getItem('pref:libraryPageSize') === 'unlimited';
+        this.state.isInfinite = isInfinite;
+        if (isInfinite) {
+            this.state.limit = 100;
+        } else if (!this.state.limit || this.state.limit < 1) {
+            this.state.limit = parseInt(storage.getItem('pref:libraryPageSize') || 100, 10);
+        }
+
         // Align limit to grid columns so the last rendered row is always full.
         // Avoids visual partial-row gaps when navigating the grid via D-pad.
         const effectiveLimitCols = (isLandscape && this.state.viewMode !== 'thumb')
@@ -1204,6 +1249,13 @@ class LibraryPage extends Page {
                 Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
+            };
+
+            // Store active query context for infinite scroll batch fetching
+            this._lastFetchContext = {
+                viewType: capturedViewType,
+                params,
+                isSeerr: false
             };
 
             // Only set ParentId if it's not the virtual 'all' library
@@ -1937,6 +1989,23 @@ class LibraryPage extends Page {
     }
 
     _updatePaginationUI() {
+        if (this.state.isInfinite) {
+            const footer = this.$('#library-pagination');
+            if (footer) footer.style.display = 'none';
+
+            const btnPrevTop = this.$('#btn-prev-top');
+            const btnNextTop = this.$('#btn-next-top');
+            if (btnPrevTop) btnPrevTop.style.display = 'none';
+            if (btnNextTop) btnNextTop.style.display = 'none';
+
+            const countIndicator = this.$('#count-indicator');
+            if (countIndicator) {
+                const total = this.state.totalRecordCount || this.state.items.length;
+                countIndicator.textContent = i18n.t('ListPaging', [1, this.state.items.length, total]);
+            }
+            return;
+        }
+
         const { startIndex, limit, totalRecordCount } = this.state;
         const pageParam = this.params.page ? parseInt(this.params.page, 10) : null;
         const currentPage = (!isNaN(pageParam) && pageParam > 0) ? pageParam : (Math.floor(startIndex / (limit || 1)) + 1);
@@ -2652,8 +2721,8 @@ class LibraryPage extends Page {
         this.$('#empty-state').classList.add('hidden');
 
         // Update Count
-        const start = this.state.startIndex + 1;
-        const end = Math.min(this.state.startIndex + this.state.limit, this.state.totalRecordCount);
+        const start = this.state.isInfinite ? 1 : this.state.startIndex + 1;
+        const end = this.state.isInfinite ? this.state.items.length : Math.min(this.state.startIndex + this.state.limit, this.state.totalRecordCount);
         this.$('#count-indicator').textContent = i18n.t('ListPaging', [start, end, this.state.totalRecordCount]);
 
         // Resolve card type based on the active view mode and library/tab context.
@@ -2780,7 +2849,7 @@ class LibraryPage extends Page {
             orientation: 'grid',
             columns: currentColumns,
             leaveUp: gridLeaveUp,
-            leaveDown: 'library-pagination',
+            leaveDown: (this.state.isInfinite && this.state.items.length < this.state.totalRecordCount) ? null : (this.state.isInfinite ? null : 'library-pagination'),
             leaveLeft: 'sidebar',
             leaveRight: isRightPosNav && isAlphaVisible ? 'alpha-picker' : null,
             selector: '.media-card',
@@ -3287,6 +3356,12 @@ class LibraryPage extends Page {
                     if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
                         this._appendGridChunk(grid, this.state.items, currentColumns);
                     }
+
+                    // Proactively stream next batch when approaching end of loaded array
+                    const prefetchThreshold = this.state.items.length - (currentColumns * 3);
+                    if (this.state.isInfinite && itemIndex >= prefetchThreshold && this.state.items.length < this.state.totalRecordCount) {
+                        this._loadNextInfiniteBatch();
+                    }
                 } else {
                     const lookBehindItems = currentColumns === 1 ? 6 : currentColumns * 2;
                     const prependThreshold = this.state.gridWindowStart + lookBehindItems;
@@ -3341,6 +3416,8 @@ class LibraryPage extends Page {
             if ((isScrollingDown || distanceFromBottom <= containerHeight) && distanceFromBottom <= containerHeight * 1.5) {
                 if (this.state.gridWindowEnd < this.state.items.length) {
                     this._appendGridChunk(grid, this.state.items, currentColumns);
+                } else if (this.state.isInfinite && this.state.items.length < this.state.totalRecordCount) {
+                    this._loadNextInfiniteBatch();
                 }
             }
 
@@ -3999,6 +4076,138 @@ class LibraryPage extends Page {
         if (scrollContainer) scrollContainer.scrollTop = 0;
     }
 
+    /**
+     * =========================================================================
+     * INFINITE SCROLL BATCH FETCHER
+     * =========================================================================
+     * Requests the subsequent slice of items from the server using the identical
+     * active query parameters (filters, sorting, parent collection) as the initial load.
+     * @param {number} startIndex - Starting offset
+     * @param {number} limit - Number of items to fetch
+     * @returns {Promise<Array>} Array of item objects
+     * =========================================================================
+     */
+    async _fetchItemsBatch(startIndex, limit) {
+        if (!this._lastFetchContext) return [];
+        const ctx = this._lastFetchContext;
+
+        if (ctx.isSeerr) {
+            const seerrPage = Math.floor(startIndex / 100) + 1;
+            let items = [];
+            try {
+                if (ctx.seerrType === 'keyword' || ctx.seerrType === 'tag' || ctx.keywordId) {
+                    items = ctx.mediaType === 'tv'
+                        ? await seerr.discoverTv(seerrPage, { keywords: ctx.keywordId, genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy })
+                        : await seerr.discoverMovies(seerrPage, { keywords: ctx.keywordId, genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy });
+                } else if (ctx.genreId || ctx.language || ctx.certification || ctx.seerrType === 'genre') {
+                    items = ctx.mediaType === 'tv'
+                        ? await seerr.discoverTv(seerrPage, { genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy })
+                        : await seerr.discoverMovies(seerrPage, { genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy });
+                } else if (ctx.seerrType === 'studio' || ctx.studioId) {
+                    items = await seerr.moviesByStudio(ctx.studioId, seerrPage);
+                } else if (ctx.seerrType === 'network' || ctx.networkId) {
+                    items = await seerr.tvByNetwork(ctx.networkId, seerrPage);
+                } else {
+                    items = ctx.mediaType === 'tv'
+                        ? await seerr.discoverTv(seerrPage, { language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy })
+                        : await seerr.discoverMovies(seerrPage, { language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy });
+                }
+            } catch (err) {
+                log.warn('Failed to load Seerr batch', err);
+                items = [];
+            }
+            return items || [];
+        }
+
+        const batchParams = {
+            ...ctx.params,
+            StartIndex: startIndex,
+            Limit: limit
+        };
+
+        let result = null;
+        try {
+            if (ctx.viewType === 'AlbumArtists') {
+                result = await api.getAlbumArtists(batchParams);
+            } else if (ctx.viewType === 'Artists') {
+                result = await api.getMusicArtists(batchParams);
+            } else {
+                result = await api.getItems(batchParams);
+            }
+        } catch (err) {
+            log.warn('Failed to load next items batch', err);
+            return [];
+        }
+
+        return result?.Items || [];
+    }
+
+    /**
+     * =========================================================================
+     * LOAD NEXT INFINITE SCROLL BATCH
+     * =========================================================================
+     * Triggered proactively when the user scrolls near the end of the currently
+     * loaded media items. Streams the next chunk, enriches metadata if needed,
+     * appends the new DOM cards, and invalidates focus cache for seamless traversal.
+     * =========================================================================
+     */
+    async _loadNextInfiniteBatch() {
+        if (this._isLoadingMore || this._isDestroyed) return;
+        if (!this.state.isInfinite) return;
+        if (this.state.totalRecordCount > 0 && this.state.items.length >= this.state.totalRecordCount) return;
+
+        this._isLoadingMore = true;
+        this._showInfiniteLoading(true);
+
+        try {
+            const startIndex = this.state.items.length;
+            const batchSize = this.state.limit || 100;
+            const nextItems = await this._fetchItemsBatch(startIndex, batchSize);
+
+            if (!this._isDestroyed && nextItems && nextItems.length > 0) {
+                this.state.items = this.state.items.concat(nextItems);
+
+                const collectionType = this.state.libraryInfo?.CollectionType;
+                if ((collectionType === 'playlists' || collectionType === 'boxsets') && nextItems.length > 0) {
+                    await this._enrichCollectionItems(nextItems, collectionType);
+                }
+
+                const grid = this.$('#library-grid');
+                if (grid) {
+                    const columns = this.state._gridColumns || 7;
+                    this._appendGridChunk(grid, this.state.items, columns);
+                    focusManager.invalidateCache('library-grid');
+                }
+
+                const countIndicator = this.$('#count-indicator');
+                if (countIndicator) {
+                    const total = this.state.totalRecordCount || this.state.items.length;
+                    countIndicator.textContent = i18n.t('ListPaging', [1, this.state.items.length, total]);
+                }
+            }
+        } catch (err) {
+            log.warn('Error loading next infinite batch', err);
+        } finally {
+            this._isLoadingMore = false;
+            this._showInfiniteLoading(false);
+        }
+    }
+
+    /**
+     * Toggles visibility of the subtle activity indicator at the bottom of the grid.
+     * @param {boolean} show
+     */
+    _showInfiniteLoading(show) {
+        const loader = this.$('#infinite-scroll-loader');
+        if (loader) {
+            if (show) {
+                loader.classList.remove('hidden');
+            } else {
+                loader.classList.add('hidden');
+            }
+        }
+    }
+
     _handleGridClick(e, cardElement) {
         const card = cardElement || e.target.closest('.media-card');
         if (!card) return;
@@ -4069,6 +4278,7 @@ class LibraryPage extends Page {
     }
 
     async _handlePageChange(direction) {
+        if (this.state.isInfinite) return;
         // ====================================================================
         // RELIABLE PAGE-BASED PAGINATION
         // ====================================================================
@@ -5722,7 +5932,7 @@ class LibraryPage extends Page {
             this.registerFocusSection('library-grid', this.$('#library-grid'), {
                 ...gridConfig,
                 leaveUp: gridLeaveUp,
-                leaveDown: gridConfig.leaveDown || 'library-pagination',
+                leaveDown: (this.state.isInfinite && this.state.items.length < this.state.totalRecordCount) ? null : (this.state.isInfinite ? null : (gridConfig.leaveDown || 'library-pagination')),
                 leaveRight: isRightPosHeader && isAlphaVisible ? 'alpha-picker' : null
             });
 

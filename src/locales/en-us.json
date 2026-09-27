@@ -1576,6 +1576,8 @@
     "UHD8K": "8K",
     "Ultra": "Ultra",
     "Unfavorite": "Unfavorite",
+    "OptionUnlimited": "Unlimited (Infinite Scroll)",
+    "LoadingMore": "Loading more items...",
     "Unlimited": "Unlimited",
     "UnlockMyMediaOrder": "Unlock My Media Order",
     "UnlockMyMediaOrderDescription": "Allow \"My Media\" to be moved from the top position. WARNING: This may cause focus layout breaks on older devices.",
