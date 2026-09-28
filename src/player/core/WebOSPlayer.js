@@ -119,6 +119,12 @@ export class WebOSPlayer {
         // ---- Bound event handlers (stored so we can removeEventListener cleanly) ----
         this._boundHandlers = {};
 
+        // ---- Aspect ratio mode ('auto' | 'zoom' | 'stretch') ----
+        this._aspectMode = 'auto';
+
+        /** @type {ResizeObserver|null} Refits the video box when the container resizes */
+        this._containerObserver = null;
+
         // ---- Timeupdate throttle —— only emit at ~250 ms intervals ----
         this._lastTimeUpdateTicks = 0;
 
@@ -195,6 +201,12 @@ export class WebOSPlayer {
 
         this._bindEvents(video);
 
+        // The container narrows when lyrics are shown, so the box has to follow it
+        if (typeof ResizeObserver !== 'undefined' && !this._containerObserver) {
+            this._containerObserver = new ResizeObserver(() => this._fitVideoBox());
+            this._containerObserver.observe(this.container);
+        }
+
         return video;
     }
 
@@ -218,6 +230,8 @@ export class WebOSPlayer {
             seeked:        this._onSeeked.bind(this),
             volumechange:  this._onVolumeChange.bind(this),
             loadedmetadata: this._onLoadedMetadata.bind(this),
+            // Fires when the intrinsic size changes, e.g. an HLS variant switch
+            resize:        this._fitVideoBox.bind(this),
             // 'progress' = buffered range updates — useful for stall detection
             progress:      this._onProgress.bind(this)
         };
@@ -1875,6 +1889,7 @@ export class WebOSPlayer {
      * @param {'auto'|'zoom'|'stretch'} mode
      */
     setAspectRatio(mode) {
+        this._aspectMode = mode || 'auto';
         if (!this._videoElement) return;
 
         const fitMap = {
@@ -1886,6 +1901,41 @@ export class WebOSPlayer {
         const objectFit = fitMap[mode] || 'contain';
         log.info('WebOSPlayer: Aspect ratio', mode, '→', objectFit);
         this._videoElement.style.objectFit = objectFit;
+        this._fitVideoBox();
+    }
+
+    /**
+     * Size the <video> box itself to the stream's aspect ratio in 'auto' mode.
+     *
+     * webOS draws the video on a hardware plane whose window is taken from the
+     * element's layout box. object-fit does not change that box, so a
+     * 100% x 100% element stretches every non-16:9 stream to the full panel
+     * (a 3840x1604 source drawn into 3840x2160 on webOS 10.3.1). Letterboxing
+     * the box itself is what keeps the geometry.
+     * @private
+     */
+    _fitVideoBox() {
+        const video = this._videoElement;
+        if (!video) return;
+
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const cw = this.container ? this.container.clientWidth : 0;
+        const ch = this.container ? this.container.clientHeight : 0;
+        const style = video.style;
+
+        if (this._aspectMode !== 'auto' || !vw || !vh || !cw || !ch) {
+            style.position = style.top = style.left = style.right = style.bottom = '';
+            style.margin = style.width = style.height = '';
+            return;
+        }
+
+        const scale = Math.min(cw / vw, ch / vh);
+        style.position = 'absolute';
+        style.top = style.left = style.right = style.bottom = '0';
+        style.margin = 'auto';
+        style.width = Math.round(vw * scale) + 'px';
+        style.height = Math.round(vh * scale) + 'px';
     }
 
     // ========================================================================
@@ -2193,6 +2243,7 @@ export class WebOSPlayer {
     /** @private */
     _onLoadedMetadata() {
         log.debug('WebOSPlayer: Metadata loaded, duration:', this.getDuration());
+        this._fitVideoBox();
         this.onEvent({ type: 'loadedmetadata', data: { duration: this.getDuration() } });
     }
 
@@ -2478,6 +2529,11 @@ export class WebOSPlayer {
     destroy() {
         this.stop();
         this._destroyHlsPlayer();
+
+        if (this._containerObserver) {
+            this._containerObserver.disconnect();
+            this._containerObserver = null;
+        }
 
         if (this._videoElement) {
             this._unbindEvents(this._videoElement);
