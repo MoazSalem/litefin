@@ -58,6 +58,16 @@
     margin-left: 16px;
 }
 
+[dir="rtl"] .theme-color-swatch-badge {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .theme-color-modal-header-preview .preview-dot {
+    margin-right: 0;
+    margin-left: 10px;
+}
+
 [dir="rtl"] .sidebar.hidden {
     transform: translate3d(100%, 0, 0);
 }
@@ -672,3 +682,38 @@
     left: auto;
     right: 10px;
 }
+
+/* ========================================================================= */
+/* Details Page Technical Badges RTL Flipping                                */
+/* ========================================================================= */
+[dir="rtl"] .tech-pill {
+    margin-right: 0;
+    margin-left: 10px;
+}
+
+[dir="rtl"] .tech-pill:last-child {
+    margin-left: 0;
+}
+
+[dir="rtl"] .tech-pill-icon {
+    margin-right: 0;
+    margin-left: 6px;
+}
+
+/* ========================================================================= */
+/* Image Editor Modal RTL Flipping                                           */
+/* ========================================================================= */
+[dir="rtl"] .image-tab-btn {
+    margin-right: 0;
+    margin-left: 8px;
+}
+
+[dir="rtl"] .image-tab-btn:last-child {
+    margin-left: 0;
+}
+
+[dir="rtl"] .image-card {
+    margin-right: 0;
+    margin-left: 14px;
+}
+

@@ -628,14 +628,16 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 16px;
+    /* Margin-bottom adjusted to 8px to account for tech-pill vertical margins */
+    margin-bottom: 8px;
 }
 
 .tech-pill {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    /* Physical margin provides bulletproof spacing across all layout tiers (including ultra-legacy) */
+    margin-right: 10px;
+    margin-bottom: 8px;
     padding: 4px 12px;
     border-radius: var(--jf-border-radius, 8px);
     background: rgba(255, 255, 255, 0.09);
@@ -646,6 +648,10 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
     letter-spacing: 0.02em;
     line-height: 1.4;
     transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tech-pill:last-child {
+    margin-right: 0;
 }
 
 .tech-pill-res {
@@ -689,6 +695,8 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
     justify-content: center;
     width: 16px;
     height: 16px;
+    /* Physical margin provides spacing between icon and badge label text across all tiers */
+    margin-right: 6px;
     flex-shrink: 0;
 }
 

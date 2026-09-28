@@ -1055,7 +1055,6 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
 }
 
 .theme-color-swatch-badge {
@@ -1065,6 +1064,8 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     border: 2px solid rgba(255, 255, 255, 0.4);
     box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
     flex-shrink: 0;
+    /* Physical margin provides bulletproof spacing across both modern and legacy/ultra-legacy tiers */
+    margin-right: 12px;
     -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1091,7 +1092,6 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 .theme-color-modal-header-preview {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
     padding: 6px 16px;
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1109,6 +1109,9 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     border: 2px solid rgba(255, 255, 255, 0.6);
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
     display: inline-block;
+    flex-shrink: 0;
+    /* Explicit margin ensures reliable spacing on engines lacking flexbox gap support */
+    margin-right: 10px;
 }
 
 .theme-color-modal-grid-container {
@@ -1187,15 +1190,49 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     pointer-events: none;
 }
 
-/* Legacy / ultra-legacy layout support (Tizen 3.0/4.0 and Tizen 2.x) */
+/* 
+ * ============================================================================
+ * Legacy & Ultra-Legacy Layout Tier: Theme Color Selection Grid Engine
+ * ============================================================================
+ * Targets Tizen 3.0 / 4.0 (legacy: Chrome 47-56) and Tizen 2.x (ultra-legacy: Chrome <47).
+ * When CSS Grid (display: grid) is unavailable or disabled, this fallback relies
+ * on centered inline-block geometry with strict dimensional bounding.
+ *
+ * Mathematical Geometry Alignment:
+ * The palette contains 50 colors organized into 5 tonal categories of 10 items each.
+ * FocusManager registers 'modal-color-grid' with { orientation: 'grid', columns: 10 }.
+ * To prevent directional desynchronization, the visual rendering must produce
+ * exactly 10 columns per line:
+ *
+ * - Each circular swatch (.color-option) has a fixed footprint of 44px (border-box).
+ * - Margin is set to 8px on all sides (16px spacing between buttons and between rows,
+ *   matching the modern gap: 16px specification).
+ * - Total per-item horizontal space: 44px + (8px * 2) = 60px.
+ * - 10 items on a row require: 10 * 60px = 600px.
+ * - An 11th item requires: 11 * 60px = 660px.
+ * - By clamping container width to 616px:
+ *     1. 10 items fit comfortably with 16px buffer to absorb subpixel jitter/rounding.
+ *     2. An 11th item can never fit (660px > 616px), strictly forcing a line break.
+ *     3. font-size: 0 eliminates inter-element whitespace gaps between button tags.
+ *     4. text-align: center aligns the row symmetrically with 8px residual margin.
+ *     5. margin: 0 auto centers the entire 10-column block within the modal.
+ * ============================================================================
+ */
 html[data-layout-tier="legacy"] .theme-color-modal-grid,
 html[data-layout-tier="ultra-legacy"] .theme-color-modal-grid {
     display: block;
+    /* Strict dimensional width bounding to enforce 10-column wrapping */
+    width: 616px;
+    max-width: 100%;
     text-align: center;
+    /* Collapse whitespace gaps between inline-block child elements */
     font-size: 0;
     margin: 0 auto;
+    padding: 10px 0;
+    box-sizing: border-box;
 }
 
+/* Centering indicator tick / dot for active color option in ultra-legacy */
 html[data-layout-tier="ultra-legacy"] .color-option.active::after {
     top: 50%;
     left: 50%;
@@ -1205,13 +1242,17 @@ html[data-layout-tier="ultra-legacy"] .color-option.active::after {
     -webkit-transform: none;
 }
 
+/* Swatch buttons formatted as inline-blocks with 16px effective spacing */
 html[data-layout-tier="legacy"] .color-option,
 html[data-layout-tier="ultra-legacy"] .color-option {
     display: inline-block;
     vertical-align: top;
-    margin: 6px;
+    /* 8px margin produces 16px horizontal and vertical inter-item clearance */
+    margin: 8px;
+    /* Restore standard text scaling context within individual buttons */
     font-size: 1rem;
 }
+
 
 
 /*

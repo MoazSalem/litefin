@@ -880,6 +880,10 @@ class LayoutManager {
         document.documentElement.setAttribute('data-rounded-corners', enabled ? 'true' : 'false');
         if (save) storage.setItem('litefin:roundedCorners', enabled ? 'true' : 'false');
         eventBus.emit('roundedCorners:changed', { enabled });
+        // Re-apply ponyfill so Chromium 47 legacy engines pick up updated border-radius variables
+        if (cssVarsPolyfill && typeof cssVarsPolyfill.update === 'function') {
+            cssVarsPolyfill.update();
+        }
     }
 
     getBadgeStyle() {

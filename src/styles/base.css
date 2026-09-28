@@ -61,10 +61,186 @@
     --jf-border-radius-lg: 4px;
 }
 
-/* Global Rounded Corners */
+/* Global Rounded Corners (Modern CSS Variables) */
 html[data-rounded-corners="true"] {
     --jf-border-radius: 12px;
     --jf-border-radius-lg: 16px;
+}
+
+/*
+ * ============================================================================
+ * Ultra-Legacy Rounded Corners Engine (Chrome <47 / Tizen 2.x / WebOS 1.x)
+ * ============================================================================
+ * Ancient layout engines lack CSS custom property (var()) support.
+ * Properties relying exclusively on var(--jf-border-radius) drop to 0px.
+ * The rules below map standard UI elements directly to static pixel values
+ * following the exact --jf-border-radius (12px) and --jf-border-radius-lg (16px)
+ * allocations defined across modern styles.
+ * ============================================================================
+ */
+
+/* Ultra-Legacy: Rounded Corners Enabled (data-rounded-corners="true") - Large (16px, matching --jf-border-radius-lg) */
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .media-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .card-image,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .card-image img,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .card-image-wrap,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .media-fallback,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .settings-modal,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .modal-content,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .modal-options,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .modal-option-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .dialog-option,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .dialog-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .dialog-content,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .dialog-container,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .quick-menu-item,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .subtitle-result-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .track-option,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .image-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .setting-item,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .setting-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .custom-select-trigger,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .modal-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .profile-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .server-item,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .library-controls,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .control-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .library-tab-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .filter-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .sort-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .pagination-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .search-container,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .search-input,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .details-poster,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .details-banner,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .season-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .episode-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .cast-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .hero-banner-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .quick-menu-dialog,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .upnext-dialog,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .syncplay-modal,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .syncplay-container,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .see-more-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .meta-chip,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .played-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .count-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .details-actions .btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .play-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .resume-btn {
+    border-radius: 16px;
+    -webkit-border-radius: 16px;
+}
+
+/* Ultra-Legacy: Rounded Corners Enabled (data-rounded-corners="true") - Standard (12px, matching --jf-border-radius) */
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .settings-menu-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .details-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .meta-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .identity-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .search-tag,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .upnext-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .syncplay-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .syncplay-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .btn-primary,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .btn-secondary,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .player-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .tab-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .filter-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .filter-chip,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .toast,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .tech-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .meta-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .episode-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .quality-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .game-card-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .seerr-type-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .details-rich-meta,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .action-btn-tooltip-text,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .image-card-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .image-tab-btn {
+    border-radius: 12px;
+    -webkit-border-radius: 12px;
+}
+
+/* Ultra-Legacy: Rounded Corners Disabled (data-rounded-corners="false") - Subtle (4px, matching base default) */
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .media-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .card-image,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .card-image img,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .card-image-wrap,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .media-fallback,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .settings-modal,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .modal-content,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .modal-options,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .modal-option-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .dialog-option,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .dialog-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .dialog-content,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .dialog-container,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .quick-menu-item,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .subtitle-result-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .track-option,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .image-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .setting-item,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .setting-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .settings-menu-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .custom-select-trigger,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .modal-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .profile-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .server-item,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .library-controls,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .control-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .library-tab-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .filter-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .sort-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .pagination-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .search-container,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .details-poster,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .details-banner,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .season-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .episode-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .cast-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .hero-banner-card,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .quick-menu-dialog,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .upnext-dialog,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .syncplay-modal,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .syncplay-container,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .details-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .btn-primary,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .btn-secondary,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .player-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .search-input,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .tab-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .filter-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .filter-chip,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .meta-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .search-tag,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .upnext-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .syncplay-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .syncplay-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .tech-pill,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .meta-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .see-more-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .meta-chip,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .played-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .count-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .episode-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .quality-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .game-card-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .seerr-type-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .details-rich-meta,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .action-btn-tooltip-text,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .image-card-action-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .image-tab-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .details-actions .btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .play-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .resume-btn,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .toast {
+    border-radius: 4px;
+    -webkit-border-radius: 4px;
 }
 
 /* 
