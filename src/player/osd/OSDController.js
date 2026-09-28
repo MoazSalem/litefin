@@ -1774,11 +1774,17 @@ export default class OSDController extends Component {
 
         /*
          * ========================================================================
-         * MULTI-KEY SEEK CONFIRMATION COMMIT
+         * MULTI-KEY SEEK CONFIRMATION COMMIT (EXPLICIT & HIDDEN NORMAL MODE)
          * ========================================================================
          * When timeline preview seeking is active on the seekbar (Row 2), users
          * can confirm the jump using either OK/Enter, or dedicated media playback
          * buttons (Play, Pause, Play/Pause).
+         *
+         * In explicit confirmation mode ('confirmSeekWithOK'), this commits the scrub.
+         * In default / normal mode, this functions as a "hidden confirm": when
+         * users press OK while debounced seeking is active, it immediately commits
+         * the jump to targetTicks rather than toggling play/pause at the old position
+         * (which previously caused playback to resume while seeking was still pending).
          *
          * Behavior:
          *   - 'play' / 'playPause': Jumps to target and forces playback to resume.
@@ -1786,7 +1792,7 @@ export default class OSDController extends Component {
          *   - 'enter': Jumps to target and restores the initial playback state.
          * ========================================================================
          */
-        if (this._seekRequiresConfirmation && isConfirmSeekKey && this._currentFocusRow === 2) {
+        if (this.hasPendingSeekConfirmation() && isConfirmSeekKey && this._currentFocusRow === 2) {
             return this.confirmPendingSeek(key, e);
         }
 
@@ -2455,11 +2461,15 @@ export default class OSDController extends Component {
 
 
     /**
-     * Check if a timeline seek confirmation preview session is currently active.
-     * @returns {boolean} True if the user is scrubbing and waiting for confirmation
+     * Check if a timeline seek scrub session is active and awaiting confirmation or commit.
+     * In explicit confirmation mode ('confirmSeekWithOK'), this remains active until confirmed.
+     * In normal/default mode, this remains true while the debounce timer is running, allowing
+     * OK or Play/Pause to act as a hidden confirm to seek immediately without playback collision.
+     * 
+     * @returns {boolean} True if the user is scrubbing and has an uncommitted seek target
      */
     hasPendingSeekConfirmation() {
-        return Boolean(this._seekRequiresConfirmation && this._seekTargetTicks !== null);
+        return Boolean(this._seekTargetTicks !== null);
     }
 
     /**
@@ -2512,13 +2522,24 @@ export default class OSDController extends Component {
     // ===================================
 
     _executeAction(action) {
+        /*
+         * Check if a seek scrub or debounce session is pending confirmation.
+         * If togglePlay is received (e.g. from an Enter press on Play/Pause),
+         * commit the pending seek immediately instead of toggling playback
+         * state at the pre-seek timestamp.
+         *
+         * For continuous skip actions (rewind / fastForward), preserve the
+         * active scrub session so repeated clicks accumulate rather than reset.
+         */
         if (this.hasPendingSeekConfirmation()) {
             if (action === 'togglePlay') {
                 this.confirmPendingSeek('playPause');
                 return;
             }
-            this._clearSeekState();
-            this._updateState();
+            if (action !== 'fastForward' && action !== 'rewind') {
+                this._clearSeekState();
+                this._updateState();
+            }
         }
         // ====================================================================
         // ACTIVE TRACK SWITCH GUARD

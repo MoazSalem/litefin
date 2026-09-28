@@ -233,6 +233,57 @@ test('disabled confirmSeek preserves 800ms debounce, pauses during scrub, and un
     assert.equal(osd._player.isPaused(), false);
 });
 
+/*
+ * ============================================================================
+ * HIDDEN CONFIRM-TO-SEEK TESTS (DEFAULT / UNCONFIRMED SEEK MODE)
+ * ============================================================================
+ * Verifies that in default mode (confirmSeekWithOK = false), pressing OK (enter)
+ * while a debounced seek is actively scrubbed acts as a hidden confirmation.
+ * This commits the target position immediately, clears the pending debounce timer,
+ * and restores playback to its pre-scrub state (playing or paused), absorbing
+ * repeated OK bounces rather than accidentally toggling play/pause at the old position.
+ * ============================================================================
+ */
+for (const paused of [false, true]) {
+    test(`disabled confirmSeek: OK key acts as hidden confirm during debounced seek (paused=${paused})`, () => {
+        // Initialize OSD controller with confirmSeekWithOK disabled
+        const { osd, seeks, advance } = setup(false, paused);
+
+        // Step forward 10s to start debounced seek session
+        osd.handleInput('right');
+        assert.equal(osd._seekTargetTicks, 110 * 10000000);
+        assert.deepEqual(seeks, []);
+
+        // Scrubbing pauses playback when pausePlaybackOnScrub is enabled
+        assert.equal(osd._player.isPaused(), true);
+
+        // Advance 250ms into the 800ms debounce interval
+        advance(250);
+
+        // User hits OK (Enter key) — acts as hidden confirm to commit immediately
+        osd.handleInput('enter');
+
+        // Confirm jump executed immediately to target position
+        assert.deepEqual(seeks, [110 * 10000000]);
+
+        // Playback state matches pre-scrub state without ghost toggles
+        assert.equal(osd._player.isPaused(), paused);
+        assert.equal(osd._seekTargetTicks, null);
+
+        // Subsequent rapid OK presses in confirmation burst window are absorbed
+        for (let i = 0; i < 5; i++) {
+            advance(100);
+            osd.handleInput('enter');
+        }
+        assert.equal(osd._player.isPaused(), paused);
+        assert.deepEqual(seeks, [110 * 10000000]);
+
+        // Ensure original 800ms timer was cleared and doesn't seek twice
+        advance(1000);
+        assert.deepEqual(seeks, [110 * 10000000]);
+    });
+}
+
 test('pausePlaybackOnScrub=false leaves playback unpaused throughout seek scrub', () => {
     const { osd, seeks, advance, settings } = setup(false);
     settings.pausePlaybackOnScrub = false;
