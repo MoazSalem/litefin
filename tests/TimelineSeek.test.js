@@ -20,6 +20,7 @@ function setup(enabled = true, paused = false) {
     const settings = {
         confirmSeekWithOK: enabled,
         pausePlaybackOnScrub: true,
+        resetSeekSpeedOnDirectionChange: false,
         skipBackLength: 5000,
         skipForwardLength: 10000
     };
@@ -456,6 +457,16 @@ test('preference defaults off, persists as a boolean and can be reset', () => {
     // Reset back to default (true)
     settings.reset('pausePlaybackOnScrub');
     assert.equal(settings.get('pausePlaybackOnScrub'), true);
+
+    // Default resetSeekSpeedOnDirectionChange is off (false)
+    assert.equal(settings.get('resetSeekSpeedOnDirectionChange'), false);
+    // Test setting to enabled
+    settings.set('resetSeekSpeedOnDirectionChange', true);
+    assert.equal(saved.get('player:resetSeekSpeedOnDirectionChange'), 'true');
+    assert.equal(settings.get('resetSeekSpeedOnDirectionChange'), true);
+    // Reset back to default (false)
+    settings.reset('resetSeekSpeedOnDirectionChange');
+    assert.equal(settings.get('resetSeekSpeedOnDirectionChange'), false);
 });
 
 for (const hasRepeatMetadata of [true, false]) {
@@ -509,6 +520,41 @@ test('changing direction resets the multiplier immediately', () => {
     const target = osd._seekTargetTicks;
     osd.handleInput('left', arrowEvent(true));
     assert.equal(osd._seekTargetTicks, target - 5 * 10000000);
+});
+
+test('default mode: reversing direction preserves accelerated speed when resetSeekSpeedOnDirectionChange is false', () => {
+    // With confirmSeekWithOK disabled and resetSeekSpeedOnDirectionChange false (default)
+    const { osd, advance } = setup(false);
+    // Seek forward repeatedly with time advance to trigger speed acceleration (>=2s reaches 2x)
+    for (let i = 0; i < 25; i++) {
+        osd.handleInput('right');
+        advance(100);
+    }
+    const targetBeforeReverse = osd._seekTargetTicks;
+    // Reversing direction to left retains the 2x multiplier: -5s * 2 = -10s
+    osd.handleInput('left');
+    assert.equal(osd._seekTargetTicks, targetBeforeReverse - 10 * 10000000);
+});
+
+test('default mode: reversing direction resets speed to 1x when resetSeekSpeedOnDirectionChange is true', () => {
+    // With confirmSeekWithOK disabled and resetSeekSpeedOnDirectionChange enabled
+    const { osd, advance, settings } = setup(false);
+    settings.resetSeekSpeedOnDirectionChange = true;
+
+    // Seek forward repeatedly with time advance to trigger speed acceleration (>=2s reaches 2x)
+    for (let i = 0; i < 25; i++) {
+        osd.handleInput('right');
+        advance(100);
+    }
+    const targetBeforeReverse = osd._seekTargetTicks;
+    // Reversing direction to left immediately resets acceleration back to 1x: -5s * 1 = -5s
+    osd.handleInput('left');
+    assert.equal(osd._seekTargetTicks, targetBeforeReverse - 5 * 10000000);
+
+    // Continuing in the new direction stays at 1x until hold interval builds up again
+    advance(100);
+    osd.handleInput('left');
+    assert.equal(osd._seekTargetTicks, targetBeforeReverse - 10 * 10000000);
 });
 
 for (const paused of [true, false]) {

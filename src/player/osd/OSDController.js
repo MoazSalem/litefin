@@ -84,6 +84,7 @@ export default class OSDController extends Component {
         this._seekHeldDirection = null;
         this._seekHoldElapsed = 0;
         this._seekResumePlayback = false;
+        this._seekDirection = null;
 
         // Focus & Track State
         // Row -1: Overlays (persistent widgets)
@@ -2832,9 +2833,33 @@ export default class OSDController extends Component {
 
     _performDebouncedSeek(offsetTicks, requireConfirmation = false, held = false) {
         try {
+            if (isNaN(offsetTicks)) return;
             if (this._seekRequiresConfirmation !== requireConfirmation) this._clearSeekState();
             this._seekRequiresConfirmation = requireConfirmation;
             const now = Date.now();
+
+            /*
+             * ====================================================================
+             * SEEK DIRECTION REVERSAL & ACCELERATION RESET
+             * ====================================================================
+             * Check if the user has changed direction during the active scrub session
+             * (e.g., from forward to backward or vice versa). When the user preference
+             * 'resetSeekSpeedOnDirectionChange' is enabled, immediately reset the
+             * scrub start time and hold elapsed metrics so the speed multiplier
+             * drops back to 1x. This gives the user precision control when overshooting
+             * a scene without abruptly jumping backwards at high speed multipliers (up to 10x).
+             * ====================================================================
+             */
+            const currentDirection = offsetTicks < 0 ? 'left' : 'right';
+            if (this._seekDirection && this._seekDirection !== currentDirection) {
+                if (PlayerSettings.get('resetSeekSpeedOnDirectionChange')) {
+                    log.info(`Seek direction changed from ${this._seekDirection} to ${currentDirection} — resetting acceleration to 1x`);
+                    this._seekStartTime = now;
+                    this._seekHoldElapsed = 0;
+                    this._seekLastInputTime = now;
+                }
+            }
+            this._seekDirection = currentDirection;
             if (requireConfirmation) {
                 // Native repeat proves this is still the same physical hold, even
                 // if rendering or image decoding delayed delivery past the idle
@@ -3410,6 +3435,7 @@ export default class OSDController extends Component {
         this._seekRequiresConfirmation = false;
         this._seekLastInputTime = null;
         this._seekConfirmTime = null;
+        this._seekDirection = null;
         if (this._seekDebounceTimer) {
             clearTimeout(this._seekDebounceTimer);
             this._seekDebounceTimer = null;

@@ -529,6 +529,20 @@ const DEFAULTS = {
      */
     pausePlaybackOnScrub: true,
 
+    /*
+     * Reset Seek Speed on Direction Change
+     * -------------------------------------------------------------------------
+     * When scrubbing the timeline, seek speed accelerates progressively (up to 10x)
+     * as directional inputs continue. Enabling this option resets the acceleration
+     * multiplier back to 1x whenever the user reverses seek direction (e.g. overshoots
+     * and taps the opposite arrow key), allowing fine-grained adjustments without
+     * large jumps.
+     *
+     *   true  — Resets seek speed multiplier back to 1x on direction reversal.
+     *   false (default) — Preserves current accelerated seek speed across direction changes.
+     */
+    resetSeekSpeedOnDirectionChange: false,
+
     // Enable mouse/magic cursor support in the OSD (hover and click)
     // Disabled by default on Tizen due to cursor interaction bugs
     enableMagicCursor: !platformInfo.isTizen,

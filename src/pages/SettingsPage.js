@@ -3424,6 +3424,17 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="ResetSeekSpeedOnDirectionChange">${i18n.t('ResetSeekSpeedOnDirectionChange') || 'Reset seek speed on direction change'}</span>
+                        <span class="setting-description" data-i18n="ResetSeekSpeedOnDirectionChangeDescription">${i18n.t('ResetSeekSpeedOnDirectionChangeDescription') || 'Reset accelerated seek speed back to 1x when reversing direction during timeline scrubbing.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('resetSeekSpeedOnDirectionChange') ? 'active' : ''}"
+                                id="toggle-reset-seek-speed-on-direction-change" tabindex="0"></button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelAudioLanguagePreference">${i18n.t('LabelAudioLanguagePreference')}</span>
                         <span class="setting-description" data-i18n="PreferredAudioLanguageDescription">${i18n.t('PreferredAudioLanguageDescription')}</span>
                     </div>
@@ -10488,6 +10499,17 @@ class SettingsPage extends Page {
                 PlayerSettings.set('pausePlaybackOnScrub', enabled);
                 pauseOnScrubToggle.classList.toggle('active', enabled);
                 log.info(`Pause Playback On Scrub set to: ${enabled}`);
+            });
+        }
+
+        // Toggle Switch for Reset Seek Speed on Direction Change
+        const resetSeekSpeedToggle = this.$('#toggle-reset-seek-speed-on-direction-change');
+        if (resetSeekSpeedToggle) {
+            resetSeekSpeedToggle.addEventListener('click', () => {
+                const enabled = !PlayerSettings.get('resetSeekSpeedOnDirectionChange');
+                PlayerSettings.set('resetSeekSpeedOnDirectionChange', enabled);
+                resetSeekSpeedToggle.classList.toggle('active', enabled);
+                log.info(`Reset Seek Speed on Direction Change set to: ${enabled}`);
             });
         }
 

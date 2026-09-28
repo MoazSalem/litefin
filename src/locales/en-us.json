@@ -1259,6 +1259,8 @@
     "RequirePinDescription": "Ask for this profile's PIN before it can be selected on the sign-in screen.",
     "RequiresPlugin": "Requires",
     "ResetProgress": "Reset Progress",
+    "ResetSeekSpeedOnDirectionChange": "Reset seek speed on direction change",
+    "ResetSeekSpeedOnDirectionChangeDescription": "Reset accelerated seek speed back to 1x when reversing direction during timeline scrubbing.",
     "ResetUserToGlobalWarning": "This will permanently discard all custom preferences for this profile and copy the current global settings. The app will reload to apply the changes. Do you want to continue?",
     "Resolution": "Resolution",
     "ResolutionValue": "{0}x{1} ({2})",
