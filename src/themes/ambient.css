@@ -55,9 +55,6 @@
     /* Primary buttons (Play/Resume) */
     --jf-primary-btn-bg: var(--jf-accent);
     --jf-primary-btn-color: var(--jf-accent-content-color);
-
-    /* Sidebar background: completely transparent in Ambient Glow mode to let glows bleed through */
-    --sidebar-bg: transparent;
 }
 
 /*
@@ -131,30 +128,17 @@
  * ============================================================================
  * Optimized specifically for low-overhead Smart TV graphic pipelines. 
  * Completely avoids expensive GPU blur filters (backdrop-filter) and heavy 
- * box shadows. The sidebar background is kept fully transparent across all states
- * (default, collapsed, expanded, and hovered) to let the underlying dynamic ambient
- * atmospheric gradients and canvas glows bleed through unimpeded.
+ * box shadows. The sidebar background is kept fully transparent when collapsed
+ * to let the underlying dynamic ambient atmospheric gradients bleed through.
+ * When the navigation sidebar expands, it renders a gorgeous, solid linear gradient
+ * that dynamically blends a soft hint of the accent color with the deep charcoal theme foundation.
  */
 
-[data-theme-mode="ambient"] .sidebar,
-[data-theme-mode="ambient"] .sidebar.expanded,
-[data-theme-mode="ambient"] .sidebar:hover,
-[data-theme-mode="ambient"] .sidebar.transparent-collapsed,
-[data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded,
-[data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
-[data-theme-mode="ambient"] .sidebar.transparent-expanded,
-[data-theme-mode="ambient"] .sidebar.transparent-expanded.expanded,
-[data-theme-mode="ambient"] .sidebar.transparent-expanded:hover,
-html[data-theme-mode="ambient"] .sidebar,
-html[data-theme-mode="ambient"] .sidebar.expanded,
-html[data-theme-mode="ambient"] .sidebar:hover,
-html[data-theme-mode="ambient"] .sidebar.transparent-collapsed,
-html[data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded,
-html[data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
-html[data-theme-mode="ambient"] .sidebar.transparent-expanded,
-html[data-theme-mode="ambient"] .sidebar.transparent-expanded.expanded,
-html[data-theme-mode="ambient"] .sidebar.transparent-expanded:hover {
-    /* 1. Fully transparent background across all states to maximize ambient bleeding */
+[data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover),
+[data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover),
+html[data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover),
+html[data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    /* 1. Fully transparent background when collapsed in normal mode to maximize ambient bleeding */
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
@@ -166,6 +150,22 @@ html[data-theme-mode="ambient"] .sidebar.transparent-expanded:hover {
     
     /* 3. Keeps rendering thread locked for fast GPU translations */
     will-change: transform;
+}
+
+/* 
+ * Themed expanded sidebar in Ambient mode and revealed sidebars in Always Hidden mode:
+ * Restores the rich, seamless solid gradient when expanded across all layouts that expand 
+ * (Classic & Modern Sidebar) and for Modern Collapsed layout when revealed in Always Hidden mode.
+ * Layered over base color #0a0b0c so background elements never bleed through behind icons.
+ */
+[data-theme-mode="ambient"] body.sidebar-mode-hidden .sidebar:not(.transparent-expanded),
+html[data-theme-mode="ambient"] body.sidebar-mode-hidden .sidebar:not(.transparent-expanded),
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) [data-theme-mode="ambient"] .sidebar.expanded,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) [data-theme-mode="ambient"] .sidebar:hover,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"])[data-theme-mode="ambient"] .sidebar.expanded,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"])[data-theme-mode="ambient"] .sidebar:hover {
+    background: linear-gradient(135deg, rgba(var(--jf-accent-rgb), 0) 0%, rgba(var(--jf-accent-rgb), 0.2) 50%, rgba(5, 5, 6, 0.99) 150%), #0a0b0c !important;
+    box-shadow: none !important;
 }
 
 /* User preference overrides for ambient theme mode */

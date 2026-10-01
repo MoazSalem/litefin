@@ -629,16 +629,17 @@ html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-labe
  * In Chromium <47, visibility: hidden alone can trigger repaint ghosts
  * when items are positioned absolute. Strictly enforce display: none
  * while unhovered/unfocused so they remain completely invisible.
+ * Note: items inside #sidebar-sub-libraries are excluded as their titles must always render.
  */
-html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(:focus):not(.focused):not(:hover) .item-text,
+html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(#sidebar-sub-libraries *):not(:focus):not(.focused):not(:hover) .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(:focus):not(.focused):not(:hover) .sidebar-user-name,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:not(:focus):not(.focused):not(:hover) .sidebar-syncplay-label,
 html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header:not(:focus):not(.focused):not(:hover) .logo-tooltip,
-html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(:focus):not(.focused):not(:hover) .item-text,
+html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(#sidebar-sub-libraries *):not(:focus):not(.focused):not(:hover) .item-text,
 html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(:focus):not(.focused):not(:hover) .sidebar-user-name,
 html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(:focus):not(.focused):not(:hover) .sidebar-syncplay-label,
 html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header:not(:focus):not(.focused):not(:hover) .logo-tooltip,
-html[data-layout-sidebar="floating-island"] .sidebar-item:not(:focus):not(.focused):not(:hover) .item-text,
+html[data-layout-sidebar="floating-island"] .sidebar-item:not(#sidebar-sub-libraries *):not(:focus):not(.focused):not(:hover) .item-text,
 html[data-layout-sidebar="floating-island"] .sidebar-item:not(:focus):not(.focused):not(:hover) .sidebar-user-name,
 html[data-layout-sidebar="floating-island"] .sidebar-item:not(:focus):not(.focused):not(:hover) .sidebar-syncplay-label,
 html[data-layout-sidebar="floating-island"] #sidebar-logo-header:not(:focus):not(.focused):not(:hover) .logo-tooltip {
@@ -861,6 +862,8 @@ html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.a
 html[data-layout-sidebar="modern-collapsed"] .sidebar,
 html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
 html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
+html[data-layout-sidebar="modern"] .sidebar.expanded,
+html[data-layout-sidebar="modern"] .sidebar:hover,
 html[data-layout-sidebar="floating-buttons"] .sidebar,
 html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
 html[data-layout-sidebar="floating-buttons"] .sidebar.expanded,
@@ -873,19 +876,27 @@ html[data-layout-sidebar="floating-island"] .sidebar.expanded {
     box-shadow: none !important;
 }
 
-/* Ambient Glow mode: keep modern-collapsed and modern layouts completely transparent */
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar,
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar:hover,
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.expanded,
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.transparent-collapsed,
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded,
-html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar,
-html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar:hover,
-html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.expanded,
-html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.transparent-collapsed,
-html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
-html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded {
+/* In Always Hidden mode, revealed modern-collapsed sidebar adopts solid theme background */
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar {
+    background-color: #101010 !important;
+    background-color: var(--sidebar-bg, #101010) !important;
+}
+
+[data-theme-mode="ambient"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body.sidebar-mode-hidden .sidebar {
+    background: linear-gradient(135deg, rgba(var(--jf-accent-rgb), 0) 0%, rgba(var(--jf-accent-rgb), 0.2) 50%, rgba(5, 5, 6, 0.99) 150%), #0a0b0c !important;
+    box-shadow: none !important;
+}
+
+/* Ambient Glow mode: keep modern-collapsed and unexpanded modern layouts completely transparent in normal mode */
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:hover,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.expanded,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
+html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover),
+html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency allowing ambient background mesh to show through */
     background: transparent !important;
     background-color: transparent !important;
@@ -894,30 +905,29 @@ html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.transpare
     border-right-color: transparent !important;
 }
 
-/* Maintain transparent collapsed background gradient on hover for non-ambient themes */
-html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed,
-html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed:hover,
-html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed.expanded {
+/* Maintain transparent collapsed background gradient on hover for non-ambient themes in normal mode */
+html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded {
     background: -webkit-linear-gradient(left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
     background: linear-gradient(to right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
     box-shadow: none !important;
     border-right-color: transparent !important;
 }
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed.expanded {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded {
     background: -webkit-linear-gradient(right, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
     background: linear-gradient(to left, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0) 100%) !important;
     border-left-color: transparent !important;
 }
 
 /* RTL Ambient Glow mode overrides */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.transparent-collapsed,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded,
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.transparent-collapsed,
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded {
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
+[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover),
+[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency for RTL layouts */
     background: transparent !important;
     background-color: transparent !important;
@@ -1149,7 +1159,9 @@ html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item
 /* Library text reset inside popover */
 html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-text,
 html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-text,
-html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-text {
+html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-text,
+#sidebar-sub-libraries .library-item .item-text {
+    display: inline-block !important;
     position: static !important;
     left: auto !important;
     top: auto !important;
@@ -1159,7 +1171,7 @@ html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item
     visibility: visible !important;
     font-size: 1.05rem !important;
     font-weight: 500 !important;
-    color: inherit !important;
+    color: rgba(255, 255, 255, 0.9) !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;

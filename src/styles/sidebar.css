@@ -144,22 +144,14 @@ body.sidebar-mode-collapsed .sidebar.black-collapsed:hover {
 }
 
 /* 
- * Ambient Theme Specific Overrides: Ensure sidebar background is fully transparent
- * across all navigation layouts and visibility modes, letting atmospheric glows bleed through.
+ * Ambient Theme Specific Overrides: Ensure unexpanded sidebar is fully transparent
+ * letting atmospheric glows bleed through, while allowing expanded state to follow theme.
  */
-html[data-theme-mode="ambient"] .sidebar,
-html[data-theme-mode="ambient"] .sidebar.expanded,
-html[data-theme-mode="ambient"] .sidebar:hover,
-html[data-theme-mode="ambient"] .sidebar.transparent-collapsed,
-html[data-theme-mode="ambient"] .sidebar.transparent-collapsed.expanded,
-html[data-theme-mode="ambient"] .sidebar.transparent-collapsed:hover,
-html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar,
-html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.expanded,
-html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar:hover,
-html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed,
-html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed.expanded,
-html[data-theme-mode="ambient"] body.sidebar-mode-collapsed .sidebar.transparent-collapsed:hover {
-    /* Pure transparency for ambient glow backdrop penetration */
+html[data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover),
+html[data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover),
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed:not(.sidebar-mode-hidden) .sidebar,
+html[data-theme-mode="ambient"] body.sidebar-mode-collapsed:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed {
+    /* Pure transparency for ambient glow backdrop penetration when collapsed in normal mode */
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
@@ -645,7 +637,7 @@ html[data-layout-tier="ultra-legacy"] .item-icon svg {
  * when only opacity: 0 and visibility: hidden are set. Force display: none
  * while unexpanded to guarantee zero visual leakage over page content.
  */
-html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .item-text,
+html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .sidebar-item:not(#sidebar-sub-libraries *) .item-text,
 html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .logo-text,
 html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) #section-header,
 html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .sidebar-section-header {
@@ -727,7 +719,8 @@ html[data-layout-tier="ultra-legacy"] .sidebar:hover .item-text {
  * Force display: none on collapsed labels across older WebKit and legacy GPU layers
  * to eradicate ghosting, bleed-through, and clipping artifacts.
  */
-.sidebar:not(.expanded):not(:hover) .item-text,
+.sidebar:not(.expanded):not(:hover) .sidebar-item:not(#sidebar-sub-libraries *) .item-text,
+.sidebar:not(.expanded):not(:hover) > .item-text,
 .sidebar:not(.expanded):not(:hover) .sidebar-user-name,
 .sidebar:not(.expanded):not(:hover) .sidebar-syncplay-label {
     display: none !important;

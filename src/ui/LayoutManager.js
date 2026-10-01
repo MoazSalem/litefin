@@ -690,8 +690,7 @@ class LayoutManager {
             --jf-card-bg: rgba(255, 255, 255, 0.045);
             --jf-card-bg-hover: rgba(255, 255, 255, 0.1);
             --jf-divider: rgba(255, 255, 255, 0.06);
-            --jf-navbar-bg: rgba(7, 8, 9, 0.85);
-            --sidebar-bg: transparent;`;
+            --jf-navbar-bg: rgba(7, 8, 9, 0.85);`;
         } else if (this._themeMode === THEME_MODES.BLACK) {
             dynamicCss += `
             --jf-background: #000000;
