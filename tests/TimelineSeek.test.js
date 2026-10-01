@@ -58,6 +58,7 @@ function setup(enabled = true, paused = false) {
     const tooltip = { classList: { add() {}, remove() {} }, style: {} };
     Object.assign(osd, {
         _seekTargetTicks: null,
+        _seekInitialPos: null,
         _seekStartTime: null,
         _seekDebounceTimer: null,
         _seekRequiresConfirmation: false,
@@ -906,5 +907,39 @@ test('OSDController: consecutive confirmed seeks preserve resume intent across c
     // Playback successfully resumed
     assert.equal(osd._seekPendingResume, false);
     assert.equal(osd._player.isPaused(), false);
+});
+
+test('Stealth layout: seeking uses debounced scrub pipeline with scrub pause and HUD without waking OSD', () => {
+    const { osd, advance, settings } = setup(false, false);
+    settings.osdLayout = 'hidden';
+    osd._isOsdVisible = false;
+
+    let hudCalls = [];
+    osd.showStealthHud = (action, param) => {
+        hudCalls.push({ action, param });
+    };
+
+    let showCalled = false;
+    osd.show = () => {
+        showCalled = true;
+    };
+
+    // Trigger Left arrow navigation in stealth layout while playing at 100s
+    osd.handleInput('left', arrowEvent(false));
+
+    // Must pause playback during scrub session
+    assert.equal(osd._player.isPaused(), true, 'Playback must pause on scrub start');
+    assert.equal(showCalled, false, 'Stealth seek must not wake Layer 1 OSD');
+    assert.equal(hudCalls.length, 1);
+    assert.equal(hudCalls[0].action, 'seekBack');
+    assert.equal(hudCalls[0].param, 5); // 5000ms skipBackLength = 5s
+
+    // Verify seek has not been committed yet (debounced)
+    assert.equal(osd._seekTargetTicks, 95 * 10000000);
+
+    // After 800ms debounce expires, seek is committed to player and playback is restored
+    advance(800);
+    assert.equal(osd._seekTargetTicks, null, 'Seek session state must be cleared after commit');
+    assert.equal(osd._player.isPaused(), false, 'Playback must resume after seek commit');
 });
 

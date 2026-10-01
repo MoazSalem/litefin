@@ -867,21 +867,27 @@ class PlayerPage extends Page {
                     this._showLockIndicator();
                     return;
                 }
-                if (this._player) {
-                    // Resolve user-configured skip backward duration (defaults to 10s)
+                /*
+                 * ====================================================================
+                 * UNIFIED DEBOUNCED REWIND DELEGATION
+                 * ====================================================================
+                 * Route hardware rewind keys through OSDController (_executeAction)
+                 * so seeking is managed by the debounced scrub pipeline. This ensures:
+                 * 1. Active playback is cleanly paused during the scrub window.
+                 * 2. Rapid remote presses are debounced into a single request.
+                 * 3. Hardware seek completion ('seeked' event) is awaited before
+                 *    unpausing, eliminating single-frame stutter and audio blips.
+                 * 4. Stealth layout displays the minimal HUD badge without waking OSD.
+                 * ====================================================================
+                 */
+                if (this._osd) {
+                    this._osd._executeAction('rewind');
+                } else if (this._player) {
+                    // Fallback to direct player relative seek if OSD controller is unavailable
                     const skipBackMs = PlayerSettings.get('skipBackLength') || 10000;
                     const skipBackSec = Math.round(skipBackMs / 1000);
-                    log.info(`Hardware Remote: Rewind (${skipBackSec}s)`);
+                    log.info(`Hardware Remote: Rewind fallback (${skipBackSec}s)`);
                     this._player.seekRelative(-skipBackMs);
-
-                    // Show transient HUD in stealth layout, otherwise standard OSD
-                    if (this._osd) {
-                        if (PlayerSettings.get('osdLayout') === 'hidden' && !this._osd.isOsdVisible) {
-                            this._osd.showStealthHud('seekBack', skipBackSec);
-                        } else {
-                            this._osd.show();
-                        }
-                    }
                 }
             });
 
@@ -890,21 +896,22 @@ class PlayerPage extends Page {
                     this._showLockIndicator();
                     return;
                 }
-                if (this._player) {
-                    // Resolve user-configured skip forward duration (defaults to 30s)
+                /*
+                 * ====================================================================
+                 * UNIFIED DEBOUNCED FAST-FORWARD DELEGATION
+                 * ====================================================================
+                 * Route hardware fast-forward keys through OSDController (_executeAction)
+                 * to ensure synchronized scrub pause and hardware seek gating.
+                 * ====================================================================
+                 */
+                if (this._osd) {
+                    this._osd._executeAction('fastForward');
+                } else if (this._player) {
+                    // Fallback to direct player relative seek if OSD controller is unavailable
                     const skipForwardMs = PlayerSettings.get('skipForwardLength') || 30000;
                     const skipForwardSec = Math.round(skipForwardMs / 1000);
-                    log.info(`Hardware Remote: FastForward (${skipForwardSec}s)`);
+                    log.info(`Hardware Remote: FastForward fallback (${skipForwardSec}s)`);
                     this._player.seekRelative(skipForwardMs);
-
-                    // Show transient HUD in stealth layout, otherwise standard OSD
-                    if (this._osd) {
-                        if (PlayerSettings.get('osdLayout') === 'hidden' && !this._osd.isOsdVisible) {
-                            this._osd.showStealthHud('seekForward', skipForwardSec);
-                        } else {
-                            this._osd.show();
-                        }
-                    }
                 }
             });
 
@@ -1521,10 +1528,14 @@ class PlayerPage extends Page {
                     onNext: () => this._onRemoteNext(),
                     onPrevious: () => this._onRemotePrevious(),
                     onSeekForward: () => {
-                        if (this._player) this._player.seekRelative(30000);
+                        // Route seeking through debounced OSD controller if present
+                        if (this._osd) this._osd._executeAction('fastForward');
+                        else if (this._player) this._player.seekRelative(30000);
                     },
                     onSeekBackward: () => {
-                        if (this._player) this._player.seekRelative(-10000);
+                        // Route seeking through debounced OSD controller if present
+                        if (this._osd) this._osd._executeAction('rewind');
+                        else if (this._player) this._player.seekRelative(-10000);
                     }
                 }
             );

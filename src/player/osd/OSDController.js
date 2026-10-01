@@ -75,6 +75,7 @@ export default class OSDController extends Component {
 
         // Seek Session
         this._seekTargetTicks = null;
+        this._seekInitialPos = null;
         this._seekStartTime = null;
         this._seekDebounceTimer = null;
         this._seekRequiresConfirmation = false;
@@ -2474,24 +2475,28 @@ export default class OSDController extends Component {
         if (wasHidden) {
             /*
              * ====================================================================
-             * STEALTH / ANTI-SPOILER NAVIGATION INTERCEPTION
+             * STEALTH LAYOUT REMOTE NAVIGATION (Layer 1 Hidden)
              * ====================================================================
-             * In stealth mode, actions must not reveal Layer 1.
-             * - Left / Right: seeks 10s directly and displays transient HUD.
-             * - Down: starts / maintains 2-second hold tracking.
+             * In the stealth layout, directional keys should not wake up Layer 1:
+             * - Left / Right: routes through the unified debounced seek pipeline
+             *   (_performDebouncedSeek) so playback is cleanly paused during scrub,
+             *   inputs are debounced (800ms), and the hardware seek resumption
+             *   gate is honored (no stray frames or audio during demuxing).
+             * - Down: starts / maintains 2-second hold tracking to reveal OSD.
              * - Up: suppressed while hidden so Layer 1 stays invisible.
              * ====================================================================
              */
             if (PlayerSettings.get('osdLayout') === 'hidden') {
                 if (direction === 'left' || direction === 'right') {
+                    // Resolve user-configured skip backward or forward duration in seconds
                     const stepSeconds = (PlayerSettings.get(direction === 'left' ? 'skipBackLength' : 'skipForwardLength') || 10000) / 1000;
+                    // Convert seconds into 100-nanosecond ticks with negative sign for rewind
                     const offsetTicks = (stepSeconds * 10000000) * (direction === 'left' ? -1 : 1);
-                    const currentPos = (this._player.getCurrentPositionTicks && this._player.getCurrentPositionTicks()) || 0;
-                    const targetPos = Math.max(0, currentPos + offsetTicks);
-                    if (this._player?.seek) {
-                        this._player.seek(targetPos);
-                    }
-                    this.showStealthHud(direction === 'left' ? 'seekBack' : 'seekForward', stepSeconds);
+                    // Determine if this is a sustained key hold from remote repeat events
+                    const held = e?.repeat === true && this._seekHeldDirection === direction;
+                    this._seekHeldDirection = direction;
+                    // Execute through debounced seeking pipeline without requiring manual OK confirmation
+                    this._performDebouncedSeek(offsetTicks, false, held);
                     return true;
                 }
                 if (direction === 'down') {
@@ -3063,14 +3068,20 @@ export default class OSDController extends Component {
                 const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack;
                 const requireConfirm = PlayerSettings.get('confirmSeekWithOK') === true;
                 this._performDebouncedSeek(-skipBackMs * 10000, requireConfirm);
-                this.resetAutoHide();
+                // Only reset auto-hide timer if the OSD is currently displayed to the user
+                if (PlayerSettings.get('osdLayout') !== 'hidden' || this._isOsdVisible) {
+                    this.resetAutoHide();
+                }
                 break;
             }
             case 'fastForward': {
                 const skipFwdMs = PlayerSettings.get('skipForwardLength') || this._config.seekStepForward;
                 const requireConfirm = PlayerSettings.get('confirmSeekWithOK') === true;
                 this._performDebouncedSeek(skipFwdMs * 10000, requireConfirm);
-                this.resetAutoHide();
+                // Only reset auto-hide timer if the OSD is currently displayed to the user
+                if (PlayerSettings.get('osdLayout') !== 'hidden' || this._isOsdVisible) {
+                    this.resetAutoHide();
+                }
                 break;
             }
             case 'previousTrack': this.emit('previous'); break;
@@ -3294,12 +3305,18 @@ export default class OSDController extends Component {
                 }
             }
             this._seekLastInputTime = now;
-            this.show();
-            this.resetAutoHide();
+
+            // In stealth layout when OSD is hidden, keep Layer 1 controls fully tucked away
+            const isStealthHidden = PlayerSettings.get('osdLayout') === 'hidden' && !this._isOsdVisible;
+            if (!isStealthHidden) {
+                this.show();
+                this.resetAutoHide();
+            }
 
             if (this._seekTargetTicks === null) {
                 const startPos = (this._player.getCurrentPositionTicks && this._player.getCurrentPositionTicks()) || 0;
                 this._seekTargetTicks = startPos;
+                this._seekInitialPos = startPos;
                 this._seekStartTime = Date.now();
 
                 /*
@@ -3386,7 +3403,14 @@ export default class OSDController extends Component {
             if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
             const tooltip = this._cachedTooltipEl;
 
-            if (tooltip) {
+            if (isStealthHidden) {
+                // In stealth mode with hidden OSD, present transient HUD badge with net scrub offset
+                const initial = this._seekInitialPos !== null ? this._seekInitialPos : (this._player.getCurrentPositionTicks?.() || 0);
+                const netOffsetTicks = this._seekTargetTicks - initial;
+                const netOffsetSec = Math.max(1, Math.round(Math.abs(netOffsetTicks) / 10000000));
+                const hudAction = netOffsetTicks < 0 ? 'seekBack' : 'seekForward';
+                this.showStealthHud(hudAction, netOffsetSec);
+            } else if (tooltip) {
                 const speedIndicator = speedMultiplier > 1 ? ` (${speedMultiplier}x)` : '';
                 const forceHours = duration >= 3600 * 10000000;
                 const timeText = this._formatTime(this._seekTargetTicks, forceHours) + speedIndicator;
@@ -3430,6 +3454,7 @@ export default class OSDController extends Component {
                 } finally {
                     // Reset internal seek tracking properties
                     this._seekTargetTicks = null;
+                    this._seekInitialPos = null;
                     this._seekStartTime = null;
                     this._seekDebounceTimer = null;
                     this._isDraggingSeekbar = false;
@@ -4037,6 +4062,7 @@ export default class OSDController extends Component {
             this._seekDebounceTimer = null;
         }
         this._seekTargetTicks = null;
+        this._seekInitialPos = null;
         this._seekStartTime = null;
         this._isDraggingSeekbar = false;
         this._osdSliderRowEl?.classList.remove('dragging');
