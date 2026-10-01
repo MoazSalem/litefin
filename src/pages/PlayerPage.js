@@ -25,6 +25,7 @@ import OSDController from '../player/osd/OSDController.js';
 import { JellyfinPlayer, resolveBestAudioStream } from '../player/core/JellyfinPlayer.js';
 import { MediaHelper } from '../player/core/MediaHelper.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
+import { updateSubtitlePosition } from '../utils/SubtitlePosition.js';
 import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { storage } from '../utils/StorageService.js';
@@ -3161,6 +3162,7 @@ class PlayerPage extends Page {
                         // Re-apply styles after font is loaded to trigger repaint
                         if (loaded) {
                             SubtitleStyles.applyStyles(span, styles);
+                            this._updateSubtitlePosition();
                         }
                     });
                 }
@@ -3169,6 +3171,7 @@ class PlayerPage extends Page {
             // Apply container styles (position)
             const windowStyles = SubtitleStyles.getWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
+            this._updateSubtitlePosition();
 
             // =====================================================================
             // Set end time for sync clearing (used by _onTimeUpdate to auto-clear
@@ -3196,6 +3199,11 @@ class PlayerPage extends Page {
             // Clear subtitle
             this._clearSubtitle();
         }
+    }
+
+    /** Recalculate clearance after cue, appearance, font, or OSD changes. */
+    _updateSubtitlePosition(visible = this._osd?.isVisible || false) {
+        updateSubtitlePosition(this.el, visible);
     }
 
     _clearSubtitle() {
@@ -3255,6 +3263,7 @@ class PlayerPage extends Page {
                         // Re-apply after font loads to trigger repaint
                         if (loaded) {
                             SubtitleStyles.applyStyles(span, styles);
+                            this._updateSubtitlePosition();
                         }
                     });
                 }
@@ -3263,6 +3272,7 @@ class PlayerPage extends Page {
             // Apply secondary window/position styles (independent from primary position)
             const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
+            this._updateSubtitlePosition();
 
             // =====================================================================
             // Track when this cue ends so _onTimeUpdate can clear it.
@@ -3383,6 +3393,7 @@ class PlayerPage extends Page {
                 // Re-apply container styles (position/window)
                 const windowStyles = SubtitleStyles.getWindowStyles();
                 SubtitleStyles.applyStyles(overlay, windowStyles);
+                this._updateSubtitlePosition();
 
                 // Handle font loading if changed by user settings
                 const fontId = SubtitleStyles.getCurrentFontId();
@@ -3390,6 +3401,7 @@ class PlayerPage extends Page {
                     FontLoader.loadFont(fontId, true).then((loaded) => {
                         if (loaded) {
                             SubtitleStyles.applyStyles(span, styles);
+                            this._updateSubtitlePosition();
                         }
                     });
                 }
@@ -3416,12 +3428,14 @@ class PlayerPage extends Page {
 
                 const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
                 SubtitleStyles.applyStyles(secondaryOverlay, windowStyles);
+                this._updateSubtitlePosition();
 
                 const fontId = SubtitleStyles.getCurrentFontId();
                 if (fontId) {
                     FontLoader.loadFont(fontId, true).then((loaded) => {
                         if (loaded) {
                             SubtitleStyles.applyStyles(span, styles);
+                            this._updateSubtitlePosition();
                         }
                     });
                 }
