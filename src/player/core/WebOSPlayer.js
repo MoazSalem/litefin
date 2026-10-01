@@ -141,7 +141,19 @@ export class WebOSPlayer {
         this._robustSeekTarget   = null;
         this._robustSeekPending  = false;
         this._cancelRobustResume = false;
+
+        // ====================================================================
+        // Audio Suppression State (Resume Playback):
+        // Prevents brief audio bursts from timestamp 0:00 when resuming playback.
+        // ====================================================================
         this._resumeAudioSuppressed = false;
+
+        // ====================================================================
+        // Video Suppression State (Resume Playback):
+        // Prevents stale or pre-resume video frames (such as timestamp 0:00)
+        // from flashing on screen before the resume seek to target completes.
+        // ====================================================================
+        this._resumeVideoSuppressed = false;
 
         // ---- Audio normalization (Web Audio API) ----
         this._audioContext = null;
@@ -303,10 +315,22 @@ export class WebOSPlayer {
 
         const video = this._ensureVideoElement();
 
-        // Temporarily mute audio when resuming
-        if (this._robustSeekTarget > 0 && !video.muted) {
-            video.muted = true;
-            this._resumeAudioSuppressed = true;
+        // ====================================================================
+        // Audio & Video Suppression for Seamless Resume:
+        // When resuming playback from a non-zero position, native TV decoders
+        // and Chromium pipelines decode the initial keyframe at timestamp 0:00
+        // for a few frames before the seek to resumeSeconds takes effect.
+        // Mute audio and suppress visual presentation until the target GOP keyframe
+        // is reached, preventing the random 0:00 frame and audio burst from leaking.
+        // ====================================================================
+        if (this._robustSeekTarget > 0) {
+            // Mute audio if not already muted by the user
+            if (!video.muted) {
+                video.muted = true;
+                this._resumeAudioSuppressed = true;
+            }
+            // Suppress video element visibility until the seek completes
+            this._suppressVideoForResume(video);
         }
 
         // Tear down any active Hls.js session before starting fresh
@@ -656,6 +680,8 @@ export class WebOSPlayer {
             };
 
             const startPlayback = () => {
+                // Restore visual presentation once Hls.js is ready to render playback
+                this._restoreVideoAfterResume(video);
                 const playPromise = video.play();
                 if (playPromise !== undefined && typeof playPromise.then === 'function') {
                     playPromise
@@ -1052,8 +1078,11 @@ export class WebOSPlayer {
              try {
                  const currentPos = video.currentTime || 0;
                  const drift = Math.abs(currentPos - resumeSeconds);
-                 if (drift < 15 || currentPos >= (resumeSeconds - 15)) {
+                 // Ensure currentPos is genuinely advanced (> 0.5s) to avoid false positive when at 0:00
+                 if (currentPos > 0.5 && (drift < 15 || currentPos >= (resumeSeconds - 15))) {
                      log.info('WebOSPlayer: Media fragment already positioned the playhead — skipping explicit seek.');
+                     // Media fragment landed natively at resume point; reveal video surface
+                     this._restoreVideoAfterResume(video);
                      this._doPlayWithResume(video, options, resolve, reject);
                      return;
                  }
@@ -1077,6 +1106,9 @@ export class WebOSPlayer {
                  if (seekTimeout) clearTimeout(seekTimeout);
                  seekCompleted = true;
                  log.debug('WebOSPlayer: Explicit seek completed');
+                 // The native seek completed and the actual target resume frame is decoded;
+                 // safely restore video element visibility before kicking playback.
+                 this._restoreVideoAfterResume(video);
                  this._doPlayWithResume(video, options, resolve, reject);
              };
 
@@ -1095,10 +1127,14 @@ export class WebOSPlayer {
                  video.removeEventListener('seeked', onSeeked);
                  if (!seekCompleted) {
                      log.warn('WebOSPlayer: Explicit seek timed out (3s) — starting playback from current position');
+                     // Ensure video visibility is restored even if seek timed out
+                     this._restoreVideoAfterResume(video);
                      this._doPlayWithResume(video, options, resolve, reject);
                  }
              }, 3000);
          } else {
+             // No resume seek required; ensure video surface is visible
+             this._restoreVideoAfterResume(video);
              this._doPlayWithResume(video, options, resolve, reject);
          }
      }
@@ -1141,6 +1177,41 @@ export class WebOSPlayer {
         document.addEventListener('keydown', unmute, { capture: true, once: true });
         document.addEventListener('click',   unmute, { capture: true, once: true });
         log.info('WebOSPlayer: Unmute scheduled on next user interaction');
+    }
+
+    /**
+     * Suppress video element presentation during resume seek operations.
+     * Prevents stale pre-seek or timestamp 0:00 video frames from rendering
+     * onto the screen before the decoder finishes seeking to the resume target.
+     *
+     * @private
+     * @param {HTMLVideoElement} video - The HTML5 video element
+     */
+    _suppressVideoForResume(video) {
+        if (!video) return;
+        this._resumeVideoSuppressed = true;
+        // Apply both zero opacity and hidden visibility for robust compositor handling
+        video.style.opacity = '0';
+        video.style.visibility = 'hidden';
+        log.debug('WebOSPlayer: Suppressed video visibility for resume');
+    }
+
+    /**
+     * Restore video element presentation once the resume position is landed.
+     * Re-reveals the video element displaying the confirmed target resume frame.
+     *
+     * @private
+     * @param {HTMLVideoElement} [video] - The HTML5 video element (optional, defaults to _videoElement)
+     */
+    _restoreVideoAfterResume(video) {
+        if (!this._resumeVideoSuppressed) return;
+        this._resumeVideoSuppressed = false;
+        const targetVideo = video || this._videoElement;
+        if (targetVideo) {
+            targetVideo.style.opacity = '';
+            targetVideo.style.visibility = '';
+            log.debug('WebOSPlayer: Restored video visibility after resume landing');
+        }
     }
 
     /**
@@ -1221,6 +1292,12 @@ export class WebOSPlayer {
         }
 
         this._resumeAudioSuppressed = false;
+
+        // Restore video element presentation if stopped while resume was in flight
+        if (this._resumeVideoSuppressed && video) {
+            this._restoreVideoAfterResume(video);
+        }
+        this._resumeVideoSuppressed = false;
 
         if (video) {
             // Remove events BEFORE clearing src to stop spurious error events
@@ -2183,6 +2260,11 @@ export class WebOSPlayer {
         if (this._resumeAudioSuppressed) {
             this._resumeAudioSuppressed = false;
             this.setMuted(false);
+        }
+
+        // Resume is confirmed safe. Ensure video element presentation is fully restored.
+        if (this._resumeVideoSuppressed) {
+            this._restoreVideoAfterResume(this._videoElement);
         }
 
         if (!this._started) {

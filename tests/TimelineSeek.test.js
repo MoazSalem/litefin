@@ -818,6 +818,21 @@ test('Hardware player backends (Tizen, WebOS, HTML5) implement isSeeking and pos
     );
 });
 
+test('WebOSPlayer and HtmlVideoPlayer implement resume video presentation suppression to prevent frame 0 flash', () => {
+    const webosSource = readFileSync(new URL('../src/player/core/WebOSPlayer.js', import.meta.url), 'utf8');
+    const htmlSource = readFileSync(new URL('../src/player/core/HtmlVideoPlayer.js', import.meta.url), 'utf8');
+
+    // 1. WebOSPlayer must suppress and restore video presentation for resume
+    assert.ok(webosSource.includes('_resumeVideoSuppressed'), 'WebOSPlayer must track resume video suppression state');
+    assert.ok(webosSource.includes('_suppressVideoForResume'), 'WebOSPlayer must implement _suppressVideoForResume');
+    assert.ok(webosSource.includes('_restoreVideoAfterResume'), 'WebOSPlayer must implement _restoreVideoAfterResume');
+
+    // 2. HtmlVideoPlayer must suppress and restore video presentation for resume
+    assert.ok(htmlSource.includes('_resumeVideoSuppressed'), 'HtmlVideoPlayer must track resume video suppression state');
+    assert.ok(htmlSource.includes('_suppressVideoForResume'), 'HtmlVideoPlayer must implement _suppressVideoForResume');
+    assert.ok(htmlSource.includes('_restoreVideoAfterResume'), 'HtmlVideoPlayer must implement _restoreVideoAfterResume');
+});
+
 test('OSDController: consecutive debounced seeks preserve resume intent and unpause on final landing', () => {
     const { osd, advance } = setup(false, false);
     let isSeekingInHardware = false;
