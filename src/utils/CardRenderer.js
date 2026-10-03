@@ -54,10 +54,20 @@ class CardRenderer {
 
         // 3. Fallback: Check if container or Path has known ROM extensions or Book type with game-like tags
         if (item.Type === 'Book') {
-            if (Array.isArray(item.Tags) && item.Tags.some((t) => /^(NES|SNES|GBA|GBC|GB|N64|PSX|Genesis|MegaDrive|GameGear|MAME|Arcade|Atari|NeoGeo|JellyEmu)$/i.test(t))) {
+            if (
+                Array.isArray(item.Tags) &&
+                item.Tags.some((t) =>
+                    /^(NES|SNES|GBA|GBC|GB|N64|PSX|Genesis|MegaDrive|GameGear|MAME|Arcade|Atari|NeoGeo|JellyEmu)$/i.test(
+                        t
+                    )
+                )
+            ) {
                 return true;
             }
-            if (item.Path && /\.(nes|sfc|smc|gba|gbc|gb|z64|n64|v64|iso|bin|cue|chd|md|gen|gg|zip|7z)$/i.test(item.Path)) {
+            if (
+                item.Path &&
+                /\.(nes|sfc|smc|gba|gbc|gb|z64|n64|v64|iso|bin|cue|chd|md|gen|gg|zip|7z)$/i.test(item.Path)
+            ) {
                 return true;
             }
         }
@@ -76,10 +86,30 @@ class CardRenderer {
 
         // Known console names / abbreviations to detect
         const knownPlatforms = [
-            'NES', 'SNES', 'GBA', 'GBC', 'GB', 'N64', 'NDS', '3DS',
-            'PSX', 'PS1', 'PS2', 'PSP', 'Genesis', 'MegaDrive',
-            'MasterSystem', 'GameGear', 'Dreamcast', 'Saturn',
-            'Arcade', 'MAME', 'NeoGeo', 'Atari2600', 'Atari7800', 'Wonderswan'
+            'NES',
+            'SNES',
+            'GBA',
+            'GBC',
+            'GB',
+            'N64',
+            'NDS',
+            '3DS',
+            'PSX',
+            'PS1',
+            'PS2',
+            'PSP',
+            'Genesis',
+            'MegaDrive',
+            'MasterSystem',
+            'GameGear',
+            'Dreamcast',
+            'Saturn',
+            'Arcade',
+            'MAME',
+            'NeoGeo',
+            'Atari2600',
+            'Atari7800',
+            'Wonderswan'
         ];
 
         if (Array.isArray(item.Tags)) {
@@ -190,7 +220,8 @@ class CardRenderer {
                     const codec = videoStream.Codec || '';
 
                     // Build a unified inspection string across all item and stream metadata fields
-                    const checkString = `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${title} ${codec}`.toLowerCase();
+                    const checkString =
+                        `${itemRange} ${videoRange} ${videoRangeType} ${profile} ${title} ${codec}`.toLowerCase();
 
                     /*
                      * 1. Detect HDR10+ specific signaling
@@ -429,7 +460,12 @@ class CardRenderer {
                     tag: item.ImageTags.Primary
                 });
             }
-        } else if (isExpanded && !isGrid && !isLandscape && (type === 'poster' || type === 'movie' || type === 'series' || type === 'season')) {
+        } else if (
+            isExpanded &&
+            !isGrid &&
+            !isLandscape &&
+            (type === 'poster' || type === 'movie' || type === 'series' || type === 'season')
+        ) {
             // =================================================================
             // 💎 Expanded Posters Layout (Ultra-Lightweight Static Widescreen)
             // =================================================================
@@ -442,7 +478,8 @@ class CardRenderer {
             const hasThumb = item.ImageTags && item.ImageTags.Thumb;
             const hasBackdrop = item.BackdropImageTags && item.BackdropImageTags.length > 0;
             const hasParentBackdrop = item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0;
-            const hasSeriesBackdrop = item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0;
+            const hasSeriesBackdrop =
+                item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0;
 
             const resolveThumb = () => {
                 if (hasThumb) {
@@ -636,7 +673,7 @@ class CardRenderer {
             }
         } else {
             // Portrait (Poster) Preference
-            if (type === 'season') {
+            if (type === 'season' || item.Type === 'Season') {
                 // Season: Own Primary -> Series Primary
                 const params = imageService.getParams('poster', contextType);
                 if (item.ImageTags && item.ImageTags.Primary) {
@@ -794,7 +831,12 @@ class CardRenderer {
         const hideProgressBar = storage.getItem('pref:hideProgressBar') === 'true';
 
         // Only construct and mount the progress element if playback progress exists and user hasn't hidden it
-        if (!hideProgressBar && !CardRenderer.isGame(item) && item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
+        if (
+            !hideProgressBar &&
+            !CardRenderer.isGame(item) &&
+            item.UserData?.PlaybackPositionTicks &&
+            item.RunTimeTicks
+        ) {
             // Calculate playback percentage completed
             const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
             progressHtml = `
@@ -869,7 +911,9 @@ class CardRenderer {
             !item._isGenreCard &&
             !item._isStudioCard &&
             !item._isNetworkCard &&
-            (item._seerrStatus !== undefined || item._mediaType !== undefined || (item.Id && String(item.Id).startsWith('tmdb-')));
+            (item._seerrStatus !== undefined ||
+                item._mediaType !== undefined ||
+                (item.Id && String(item.Id).startsWith('tmdb-')));
         if (isSeerrItem) {
             const mediaType = item._mediaType || (item.Type === 'Series' ? 'tv' : 'movie');
             if (mediaType === 'tv' || item.Type === 'Series') {
@@ -904,40 +948,41 @@ class CardRenderer {
         if (type === 'person') {
             subtitleText = i18n.ensureBiDi(item.Role || item.Type);
         } else if (item.Type === 'Episode') {
-            // Format season and episode index codes (e.g. S01E05)
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
             const episodeCode = `S${s}E${e}`;
+            const swapEpisodeTitles = storage.getItem('pref:swapEpisodeTitles') === 'true';
 
-            // Check if episode title swap setting is enabled (defaults to true across rows and grids)
-            const swapEpisodeTitles = storage.getItem('pref:swapEpisodeTitles') !== 'false';
-            const isEpisodeSwap = swapEpisodeTitles || contextType === 'season-grid';
-
-            if (isEpisodeSwap) {
-                // Swapped mode: Episode title is primary, Series name is secondary subtitle
-                if (useEpisodeBadges) {
-                    // Badge displays episode number (e.g. S01E01), so title is simply the episode name
-                    titleText = i18n.ensureBiDi(item.Name);
+            if (swapEpisodeTitles) {
+                if (contextType === 'season-grid') {
+                    titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
+                    subtitleText = '';
                 } else {
-                    // No badge visible: prepend episode code to title
-                    titleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name}`);
-                }
-                // Show series name as subtitle
-                subtitleText = i18n.ensureBiDi(item.SeriesName || '');
-            } else {
-                // Standard mode (e.g. Home screen Next Up / Continue Watching rows)
-                if (isLandscape) {
-                    // Next Up Style: Series name is primary title so user knows which show it belongs to
-                    titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
-
-                    // Episode name / index code becomes subtitle
                     if (useEpisodeBadges) {
-                        subtitleText = i18n.ensureBiDi(item.Name);
+                        titleText = i18n.ensureBiDi(item.Name);
                     } else {
-                        subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                        titleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name}`);
+                    }
+                    subtitleText = i18n.ensureBiDi(item.SeriesName || '');
+                }
+            } else {
+                if (isLandscape) {
+                    if (contextType === 'season-grid') {
+                        titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
+                        subtitleText = '';
+                    } else {
+                        // Next Up Style (Keep Series Name)
+                        titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
+                        // If useEpisodeBadges is true, Episode code is in the badge, just show name.
+                        // If useEpisodeBadges is false, Show "SxxExx - Name".
+                        if (useEpisodeBadges) {
+                            subtitleText = i18n.ensureBiDi(item.Name);
+                        } else {
+                            subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                        }
                     }
                 } else {
-                    // Poster Style: Episode code in badge if useEpisodeBadges is true, otherwise in subtitle
+                    // Poster Style: Episode code in badge if useEpisodeBadges is true
                     if (useEpisodeBadges) {
                         subtitleText = '';
                     } else {
@@ -945,11 +990,20 @@ class CardRenderer {
                     }
                 }
             }
-        } else if (type === 'season') {
-            if (item.IndexNumber === 0) {
-                titleText = i18n.t('Specials');
+        } else if (type === 'season' || item.Type === 'Season') {
+            if (contextType === 'season-grid') {
+                if (item.IndexNumber === 0) {
+                    titleText = i18n.t('Specials');
+                } else {
+                    titleText = i18n.t('SeasonValue', [item.IndexNumber]);
+                }
             } else {
-                titleText = i18n.t('SeasonValue', [item.IndexNumber]);
+                titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
+                subtitleText = i18n.ensureBiDi(
+                    item.IndexNumber === 0
+                        ? i18n.t('Specials')
+                        : item.Name || (item.IndexNumber ? i18n.t('SeasonValue', [item.IndexNumber]) : '')
+                );
             }
         } else if (item.Type === 'TvChannel') {
             titleText = i18n.ensureBiDi(item.Number ? `${item.Number} - ${item.Name}` : item.Name);
@@ -1077,7 +1131,8 @@ class CardRenderer {
             const hasThumb = item.ImageTags && item.ImageTags.Thumb;
             const hasBackdrop = item.BackdropImageTags && item.BackdropImageTags.length > 0;
             const hasParentBackdrop = item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0;
-            const hasSeriesBackdrop = item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0;
+            const hasSeriesBackdrop =
+                item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0;
 
             const resolveThumb = () => {
                 if (hasThumb) {
@@ -1141,7 +1196,7 @@ class CardRenderer {
             if (thumbUrl) {
                 // Return image tag with data-thumb-src. The image is downloaded eagerly
                 // on-demand when the card receives focus to preserve precious memory.
-                thumbPart = `<img data-thumb-src="${thumbUrl}" class="thumb-layer" alt="" crossorigin="anonymous" />`;
+                thumbPart = `<img data-thumb-src="${thumbUrl}" class="thumb-layer" alt="" />`;
             }
         }
 
@@ -1160,7 +1215,7 @@ class CardRenderer {
                 ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>`
                 : '';
         const imagePart = imageUrl
-            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" crossorigin="anonymous" />`
+            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${escapeHtml(item.Name)}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
             : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials, isLibrary: type === 'library' })}`;
         const finalContextType = contextType || item.Type;
 
@@ -1171,8 +1226,7 @@ class CardRenderer {
         // - Hide if dynamic library thumb mode is enabled (which has text centered on the card with a tint)
         // - Hide if Expanding layout (in-artwork inside labels)
         // For Modern, Expanded, Modern Posters, and Classic layouts, outside label is shown below card unless hideLibraryLabelsPref is true
-        const isHiddenLibraryLabel =
-            type === 'library' && (isDynamicThumb || isExpanding || hideLibraryLabelsPref);
+        const isHiddenLibraryLabel = type === 'library' && (isDynamicThumb || isExpanding || hideLibraryLabelsPref);
 
         // --- 5. Optional Meta Row (list view) ---
         // showMeta injects an additional row with rating + year + runtime for
@@ -1215,17 +1269,28 @@ class CardRenderer {
         // 3. In Classic layout ('classic'):
         //    - Standard outside labels underneath cards.
         // ====================================================================
-        const isSquare = type === 'square' || type === 'artist' || ((isExpanded || isModernPosters) && type === 'person');
+        const isSquare =
+            type === 'square' || type === 'artist' || ((isExpanded || isModernPosters) && type === 'person');
         // In vertical 2D grids (!isGrid is false), we disable inside integrated labels
         // and force standard outside labels to keep the entire grid uniform and clean.
         // In Modern ('modern'), Modern Cards ('expanded') & Modern Posters ('modern-posters'), titles and subtitles render cleanly outside below cards.
         // In Expanding Posters ('expanding'), landscape, square, and expanding cards render inside overlay labels.
         const renderInside = isExpanding && (isLandscape || isSquare || canExpand) && !isGrid;
-        const renderOutside = (!isExpanding && !isExpanded) || isExpanded || isModernPosters || isModern || isGrid || (isExpanding && !isLandscape && !isSquare);
+        const renderOutside =
+            (!isExpanding && !isExpanded) ||
+            isExpanded ||
+            isModernPosters ||
+            isModern ||
+            isGrid ||
+            (isExpanding && !isLandscape && !isSquare);
 
         // Final visibility logic (Classic vs Modern vs Expanded)
         // For library cards, inside .card-info is bypassed in favor of clean native artwork or .card-overlay-label on dynamic thumbs
-        const showInside = renderInside && type !== 'library' && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
+        const showInside =
+            renderInside &&
+            type !== 'library' &&
+            !isHiddenLibraryLabel &&
+            (options.showMeta || cardLabelStyle !== 'hidden');
         const showOutside = renderOutside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
         const expansionClass = canExpand ? ' has-expansion' : '';
 
@@ -1243,49 +1308,53 @@ class CardRenderer {
         `;
 
         const html = `
-            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" data-media-type="${item._mediaType || ''}" data-tmdb-id="${item._tmdbId || ''}" tabindex="0">
+            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-series-id="${item.SeriesId || ''}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" data-media-type="${item._mediaType || ''}" data-tmdb-id="${item._tmdbId || ''}" tabindex="0">
                 <div class="card-image">
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
                     ${!options.showMeta ? badgeContainer : ''}
-                    ${showInside
-                ? `
+                    ${
+                        showInside
+                            ? `
                     <div class="card-info inside">
-                        ${options.showMeta
-                    ? `
+                        ${
+                            options.showMeta
+                                ? `
                         <div class="card-title-row">
                             <div class="card-title"><span>${titleText}</span></div>
                             ${badgeContainer}
                         </div>
                         `
-                    : `<div class="card-title"><span>${titleText}</span></div>`
-                }
+                                : `<div class="card-title"><span>${titleText}</span></div>`
+                        }
                         ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                         ${metaHtml}
                     </div>
                     `
-                : ''
-            }
+                            : ''
+                    }
                 </div>
-                ${showOutside
-                ? `
+                ${
+                    showOutside
+                        ? `
                 <div class="card-info">
-                    ${options.showMeta
-                    ? `
+                    ${
+                        options.showMeta
+                            ? `
                     <div class="card-title-row">
                         <div class="card-title"><span>${titleText}</span></div>
                         ${badgeContainer}
                     </div>
                     `
-                    : `<div class="card-title"><span>${titleText}</span></div>`
-                }
+                            : `<div class="card-title"><span>${titleText}</span></div>`
+                    }
                     ${subtitleText ? `<div class="card-subtitle"><span>${subtitleText}</span></div>` : ''}
                     ${metaHtml}
                 </div>
                 `
-                : ''
-            }
+                        : ''
+                }
             </button>
         `;
 
@@ -1328,7 +1397,8 @@ class CardRenderer {
         const hideInitials = options.hideInitials || false;
         const isLibrary = options.isLibrary || item.Type === 'CollectionFolder' || item.CollectionType !== undefined;
         const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
-        const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded' || mediaLayout === 'modern-posters';
+        const isModernOrExpanded =
+            mediaLayout === 'modern' || mediaLayout === 'expanded' || mediaLayout === 'modern-posters';
         const isGameItem = CardRenderer.isGame(item);
         const gameIconSvg = isGameItem ? getStaticIcon('detailsIcons', 'gamepad', 'outlined') : '';
 
@@ -1383,7 +1453,10 @@ class CardRenderer {
             const isModern = mediaLayout === 'modern';
             const isExpanded = mediaLayout === 'expanded';
             const isModernPosters = mediaLayout === 'modern-posters';
-            const isSquare = viewMode === 'square' || viewMode === 'artist' || ((isExpanded || isModernPosters) && viewMode === 'person');
+            const isSquare =
+                viewMode === 'square' ||
+                viewMode === 'artist' ||
+                ((isExpanded || isModernPosters) && viewMode === 'person');
             const isIntegratedModern =
                 isModern && (isLandscape || viewMode === 'thumb' || viewMode === 'banner' || isSquare);
             const isPortraitModern = isModern && !isLandscape && !isSquare;
@@ -1393,14 +1466,15 @@ class CardRenderer {
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
-                    ${!skeletonHideLabels
-                        ? `
+                    ${
+                        !skeletonHideLabels
+                            ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
                         ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>` : ''}
                     </div>
                     `
-                        : ''
+                            : ''
                     }
                 </div>
             `;
