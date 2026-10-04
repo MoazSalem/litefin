@@ -2545,7 +2545,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item" id="setting-custom-collections">
+                <div class="setting-item" id="setting-custom-collections" style="display: ${storage.getItem('pref:enableCollectionRows') === 'true' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelCustomCollectionRows">${i18n.t('LabelCustomCollectionRows')}</span>
                         <span class="setting-description" data-i18n="LabelCustomCollectionRowsDesc">${i18n.t('LabelCustomCollectionRowsDesc')}</span>
@@ -7167,9 +7167,11 @@ class SettingsPage extends Page {
         const moviesColItem = this.$('#trending-movies-collection-item');
         const seriesColItem = this.$('#trending-series-collection-item');
         const colNameItem = this.$('#trending-collection-name-item');
+        const customColsItem = this.$('#setting-custom-collections');
 
         if (enableCollectionRowsBtn) {
             enableCollectionRowsBtn.addEventListener('click', () => {
+                // Determine the next toggle state based on persistent storage
                 const isCurrentlyEnabled = storage.getItem('pref:enableCollectionRows') === 'true';
                 const newValue = !isCurrentlyEnabled;
                 storage.setItem('pref:enableCollectionRows', newValue.toString());
@@ -7195,15 +7197,17 @@ class SettingsPage extends Page {
                         if (labelSpan) labelSpan.innerText = i18n.t('Disabled') || 'Disabled';
                     }
 
-                    // Hide the 3 items
+                    // Hide dependent collection settings items
                     if (moviesColItem) moviesColItem.style.display = 'none';
                     if (seriesColItem) seriesColItem.style.display = 'none';
                     if (colNameItem) colNameItem.style.display = 'none';
+                    if (customColsItem) customColsItem.style.display = 'none';
                 } else {
-                    // Show the 3 items back
+                    // Show dependent collection settings items when enabled
                     if (moviesColItem) moviesColItem.style.display = '';
                     if (seriesColItem) seriesColItem.style.display = '';
                     if (colNameItem) colNameItem.style.display = '';
+                    if (customColsItem) customColsItem.style.display = '';
                 }
 
                 log.info(`Enable Collection Rows set to: ${newValue}`);
@@ -11843,7 +11847,7 @@ class SettingsPage extends Page {
                         });
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
 
             // Reconcile with saved layout
             const layoutVars = homeLayoutManager.buildSettingsLayout(descriptors);
