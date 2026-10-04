@@ -151,17 +151,25 @@ export function isAudioTrackNativelyPlayable(track) {
  * @returns {Object|null} The resolved best audio MediaStream object, or null
  */
 export function resolveBestAudioStream(mediaSource, targetLang) {
+    // -------------------------------------------------------------------------
+    // 1. MediaSource & Stream Validation
+    // -------------------------------------------------------------------------
     if (!mediaSource || !Array.isArray(mediaSource.MediaStreams)) {
         return null;
     }
 
-    // Filter candidate streams to Audio type
+    // Filter candidate streams strictly to Audio type
     const audioStreams = mediaSource.MediaStreams.filter((s) => s.Type === 'Audio');
     if (audioStreams.length === 0) {
         return null;
     }
 
-    // Identify standard default track from container or Jellyfin metadata
+    // -------------------------------------------------------------------------
+    // 2. Identify Baseline Default Track from Metadata / Container
+    // -------------------------------------------------------------------------
+    // Identify standard default track specified by container disposition or Jellyfin server metadata.
+    // This serves as the fallback when no user language preference is configured or when the
+    // media container lacks tracks matching the requested preference.
     const standardDefaultTrack =
         audioStreams.find((s) => s.IsDefault) ||
         (mediaSource.DefaultAudioStreamIndex !== undefined && mediaSource.DefaultAudioStreamIndex !== null
@@ -169,12 +177,15 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
             : null) ||
         audioStreams[0];
 
-    // Codec fidelity tier scoring (higher is preferred for direct play)
+    // -------------------------------------------------------------------------
+    // 3. Codec Fidelity Tier Scoring
+    // -------------------------------------------------------------------------
+    // Codec fidelity tier scoring (higher score represents superior fidelity for playback).
     // Lossless and premium discrete surround passthrough formats are ranked
-    // at the highest tiers when the hardware and user settings permit native decoding.
+    // at the highest tiers when hardware capabilities and user settings permit native decoding.
     const getCodecScore = (codec) => {
         const c = (codec || '').toLowerCase();
-        // Lossless / High-definition master audio formats (when hardware/settings support them)
+        // Lossless / High-definition master audio formats
         if (c === 'truehd') return 95;
         if (c.includes('dts-hd') || c.includes('dtshd') || c.includes('dts-ma') || c.includes('dts-x') || c.includes('dtsx')) return 90;
         if (c === 'flac' || c === 'alac') return 80;
@@ -190,73 +201,20 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
         if (c === 'aac') return 30;
         // Legacy MP3 format
         if (c === 'mp3') return 20;
-        return 10;                  // Other
+        return 10; // Other / unknown
     };
 
-    // Check if the auto-select DirectPlay audio track setting is enabled
-    const preferDirectPlay = PlayerSettings.get('preferDirectPlayAudio') !== false;
-    if (!preferDirectPlay) {
-        return standardDefaultTrack;
-    }
-
-    // Check whether the standard default track is natively playable on current device
-    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack);
-
-    // If the default track is natively playable, verify whether it is a low-tier compatibility track
-    // (such as AC3, AAC, or MP3) while a superior high-fidelity track (such as DTS, DTS-HD MA, or TrueHD)
-    // is also natively playable in the same language. If a premium passthrough track is supported,
-    // we must not blindly lock onto the lossy compatibility track.
-    if (isDefaultPlayable) {
-        const defaultScore = getCodecScore(standardDefaultTrack.Codec);
-        const hasPremiumAlternative = audioStreams.some((t) => {
-            if (t.Index === standardDefaultTrack.Index) return false;
-            if (!isAudioTrackNativelyPlayable(t)) return false;
-            const tLang = (t.Language || 'und').toLowerCase();
-            const defLang = (standardDefaultTrack.Language || 'und').toLowerCase();
-            if (tLang !== defLang && defLang !== 'und' && tLang !== 'und') return false;
-            return getCodecScore(t.Codec) >= 70 && getCodecScore(t.Codec) > defaultScore;
-        });
-
-        if (!hasPremiumAlternative) {
-            return standardDefaultTrack;
-        }
-    }
-
-    // Filter candidate streams that can be played natively on the current device
-    const playableTracks = audioStreams.filter((t) => isAudioTrackNativelyPlayable(t));
-
-    // If no tracks can be played natively without transcoding, we must keep the standard default
-    if (playableTracks.length === 0) {
-        return standardDefaultTrack;
-    }
-
-    // Determine target language: prefer explicit parameter, then user pref, then standard default language
-    const userPrefLang = storage.getItem('pref:audioLang');
-    const effectiveLang = (targetLang && targetLang !== 'Default' && targetLang !== 'none')
-        ? targetLang
-        : (userPrefLang && userPrefLang !== 'Default' && userPrefLang !== 'none')
-            ? userPrefLang
-            : (standardDefaultTrack?.Language || 'und');
-
-    // Attempt to isolate candidate playable tracks matching the target language
-    let candidates = playableTracks;
-    if (effectiveLang && effectiveLang !== 'und') {
-        const sameLangPlayable = playableTracks.filter(
-            (t) => (t.Language || '').toLowerCase() === effectiveLang.toLowerCase()
-        );
-        if (sameLangPlayable.length > 0) {
-            candidates = sameLangPlayable;
-        }
-    }
-
-    // Calculate score for each candidate to find the best track
-    const scoredCandidates = candidates.map((track) => {
+    // -------------------------------------------------------------------------
+    // 4. Candidate Scoring Helper
+    // -------------------------------------------------------------------------
+    // Evaluates an individual audio track's quality attributes including channel count,
+    // codec tier, default flags, and bitrate while heavily penalizing commentary/visual descriptions.
+    const scoreTrack = (track) => {
         let score = 0;
-
         const title = (track.Title || '').toLowerCase();
         const displayTitle = (track.DisplayTitle || '').toLowerCase();
 
-        // Severely penalize commentary or descriptive audio tracks
+        // Severely penalize commentary or descriptive audio tracks for main feature viewing
         const isCommentary =
             title.includes('commentary') ||
             displayTitle.includes('commentary') ||
@@ -268,17 +226,17 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
             displayTitle.includes('visually impaired');
 
         if (!isCommentary && !isDescriptive) {
-            score += 1000; // Major boost for main feature audio
+            score += 1000; // Primary boost for main feature audio track
         }
 
-        // Favor higher channel count (e.g. 5.1 / 6ch or 7.1 / 8ch over 2.0 / 2ch stereo)
+        // Favor higher channel count (e.g. 7.1 / 8ch or 5.1 / 6ch over 2.0 / 2ch stereo)
         const channels = Number(track.Channels) || 2;
         score += channels * 20;
 
         // Reward codec fidelity tier
         score += getCodecScore(track.Codec);
 
-        // Small bonus if the candidate is marked as default in its language group
+        // Small bonus if the candidate is marked as default
         if (track.IsDefault) {
             score += 5;
         }
@@ -287,20 +245,148 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
         const bitrate = Number(track.BitRate) || 0;
         score += Math.min(bitrate / 100000, 10);
 
-        return { track, score };
-    });
+        return score;
+    };
 
-    // Sort candidates descending by score
-    scoredCandidates.sort((a, b) => b.score - a.score);
+    // Helper to sort a list of candidate tracks descending by score and pick the top one
+    const pickBestTrack = (tracks) => {
+        if (!tracks || tracks.length === 0) return null;
+        if (tracks.length === 1) return tracks[0];
+        const scored = tracks.map((track) => ({ track, score: scoreTrack(track) }));
+        scored.sort((a, b) => b.score - a.score);
+        return scored[0].track;
+    };
 
-    const bestTrack = scoredCandidates[0]?.track || standardDefaultTrack;
-    log.info(
-        `[AudioTrackSelector] Selected best DirectPlay audio track: Index ${bestTrack.Index} ` +
-        `(${bestTrack.Codec}, ${bestTrack.Channels || 2}ch, ${bestTrack.Language || 'und'}) ` +
-        `replacing transcode-inducing default track: Index ${standardDefaultTrack?.Index} (${standardDefaultTrack?.Codec})`
+    // -------------------------------------------------------------------------
+    // 5. Robust Language Matching Helper
+    // -------------------------------------------------------------------------
+    // Matches media stream languages across 2-letter ISO, 3-letter ISO, and regional prefixes
+    // using the centralized LanguageManager cache.
+    const isLanguageMatch = (trackLang, targetLanguage) => {
+        if (!trackLang || !targetLanguage) return false;
+        const cleanTrack = String(trackLang).trim().toLowerCase();
+        const cleanTarget = String(targetLanguage).trim().toLowerCase();
+        if (cleanTrack === cleanTarget) return true;
+
+        // Compare normalized ISO codes via languageManager
+        if (typeof languageManager?.normalizeLanguage === 'function') {
+            const normTrack = languageManager.normalizeLanguage(cleanTrack);
+            const normTarget = languageManager.normalizeLanguage(cleanTarget);
+            if (normTrack && normTarget) {
+                if (normTrack.code && normTarget.code && normTrack.code.toLowerCase() === normTarget.code.toLowerCase()) {
+                    return true;
+                }
+                if (normTrack.twoLetter && normTarget.twoLetter && normTrack.twoLetter.toLowerCase() === normTarget.twoLetter.toLowerCase()) {
+                    return true;
+                }
+            }
+        }
+
+        // Fallback prefix check for regional locale tags (e.g. 'en-US' matching 'en')
+        if (cleanTrack.length >= 2 && cleanTarget.length >= 2 && cleanTrack.slice(0, 2) === cleanTarget.slice(0, 2)) {
+            return true;
+        }
+
+        return false;
+    };
+
+    // -------------------------------------------------------------------------
+    // 6. User Preferences & Settings Resolution
+    // -------------------------------------------------------------------------
+    // Check if the auto-select DirectPlay audio track setting is enabled (default: true)
+    const preferDirectPlay = PlayerSettings.get('preferDirectPlayAudio') !== false;
+
+    // Check user preferred audio language from explicit argument or local persistent storage
+    const userPrefLang = storage.getItem('pref:audioLang');
+    const explicitTargetLang = (targetLang && targetLang !== 'Default' && targetLang !== 'none') ? targetLang : null;
+    const preferredLanguage = explicitTargetLang || (userPrefLang && userPrefLang !== 'Default' && userPrefLang !== 'none' ? userPrefLang : null);
+
+    // -------------------------------------------------------------------------
+    // 7. Branch A: Preferred Audio Language is Configured
+    // -------------------------------------------------------------------------
+    // When a preferred language is explicitly configured by the user, ignore the container's
+    // default track if it is in another language. Then combine with DirectPlay optimization:
+    // search for natively playable tracks within the preferred language pool.
+    if (preferredLanguage) {
+        const preferredTracks = audioStreams.filter((t) => isLanguageMatch(t.Language, preferredLanguage));
+
+        if (preferredTracks.length > 0) {
+            let chosenTrack = null;
+
+            if (preferDirectPlay) {
+                // Filter candidate preferred tracks that can DirectPlay natively without server transcoding
+                const playablePreferred = preferredTracks.filter((t) => isAudioTrackNativelyPlayable(t));
+
+                if (playablePreferred.length > 0) {
+                    // Pick the highest quality DirectPlay track matching the preferred language
+                    chosenTrack = pickBestTrack(playablePreferred);
+                } else {
+                    // None of the preferred language tracks can DirectPlay natively on this device.
+                    // CRITICAL: Do NOT jump to a foreign language just to DirectPlay. Stay in the
+                    // user's requested language and select the highest quality stream for transcoding/remux.
+                    chosenTrack = pickBestTrack(preferredTracks);
+                }
+            } else {
+                // DirectPlay preference disabled; pick the highest fidelity track in the preferred language
+                chosenTrack = pickBestTrack(preferredTracks);
+            }
+
+            if (chosenTrack) {
+                log.info(
+                    `[AudioTrackSelector] Selected audio track Index ${chosenTrack.Index} ` +
+                    `(${chosenTrack.Codec}, ${chosenTrack.Channels || 2}ch, ${chosenTrack.Language || 'und'}) ` +
+                    `matching preferred language '${preferredLanguage}' (container default was Index ${standardDefaultTrack?.Index})`
+                );
+                return chosenTrack;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. Branch B: Default Language or Fallback (No Preferred Language Match)
+    // -------------------------------------------------------------------------
+    // If no preferred language is set (or the file contains no tracks matching the preference),
+    // respect the container default track's language and optimize for DirectPlay within that group.
+    if (!preferDirectPlay) {
+        return standardDefaultTrack;
+    }
+
+    const defaultLang = standardDefaultTrack?.Language || 'und';
+    const sameLangTracks = audioStreams.filter(
+        (t) => isLanguageMatch(t.Language, defaultLang) || (defaultLang === 'und' && (!t.Language || t.Language === 'und'))
     );
+    const sameLangPlayable = sameLangTracks.filter((t) => isAudioTrackNativelyPlayable(t));
 
-    return bestTrack;
+    // If the default track is natively playable, check if a superior high-fidelity track
+    // (such as DTS-HD MA or TrueHD) is also natively playable in the same language.
+    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack);
+    if (isDefaultPlayable) {
+        if (sameLangPlayable.length > 1) {
+            const bestPlayable = pickBestTrack(sameLangPlayable);
+            if (bestPlayable && scoreTrack(bestPlayable) > scoreTrack(standardDefaultTrack)) {
+                log.info(
+                    `[AudioTrackSelector] Upgraded playable default track Index ${standardDefaultTrack.Index} ` +
+                    `to higher-fidelity playable track Index ${bestPlayable.Index} (${bestPlayable.Codec}, ${bestPlayable.Channels || 2}ch)`
+                );
+                return bestPlayable;
+            }
+        }
+        return standardDefaultTrack;
+    }
+
+    // If the default track requires transcoding, try to find an alternative natively playable track
+    // in the exact same language (e.g. AC3/AAC compatibility track alongside TrueHD master).
+    if (sameLangPlayable.length > 0) {
+        const bestPlayable = pickBestTrack(sameLangPlayable);
+        log.info(
+            `[AudioTrackSelector] Selected compatible DirectPlay track Index ${bestPlayable.Index} ` +
+            `(${bestPlayable.Codec}, ${bestPlayable.Channels || 2}ch) in place of transcode-inducing default Index ${standardDefaultTrack?.Index}`
+        );
+        return bestPlayable;
+    }
+
+    // Fall back to standard default track if no playable alternatives exist in the same language
+    return standardDefaultTrack;
 }
 
 /**
