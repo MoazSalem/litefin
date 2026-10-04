@@ -101,6 +101,9 @@ export class TizenAVPlayer {
         this._volume = MediaHelper.getSavedVolume() * 100;
         this._isMuted = false;
 
+        // Aspect ratio mode ('auto' | 'stretch')
+        this._aspectRatio = options.aspectRatio || 'auto';
+
         // Position tracking
         this._positionTimer = null;
 
@@ -232,17 +235,19 @@ export class TizenAVPlayer {
     // ========================================================================
 
     /**
-     * Create video display area
+     * Create video display area and commit initial raster layout.
+     * Preserves the active aspect ratio mode across player initialization.
      * @private
      */
     _createDisplay() {
         if (!this._avplay) return;
 
-        // Get container dimensions for display rect
+        // Container element dimensions in current DOM coordinate space
         const rect = this.container.getBoundingClientRect();
         log.debug('_createDisplay rect:', rect);
 
         try {
+            // Commit container rectangle boundaries to hardware video plane
             this._avplay.setDisplayRect(
                 Math.round(rect.left),
                 Math.round(rect.top),
@@ -250,8 +255,8 @@ export class TizenAVPlayer {
                 Math.round(rect.height)
             );
 
-            // Use LETTER_BOX to preserve aspect ratio
-            this._avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX');
+            // Re-apply active aspect ratio mode (defaults to LETTER_BOX)
+            this.setAspectRatio(this._aspectRatio || 'auto');
 
             // NOTE: Do NOT call tizen.tvwindow.show() here. That API is for TV tuner/HDMI input,
             // not for AVPlay. Calling it can cause the video plane to render above HTML elements.
@@ -261,24 +266,29 @@ export class TizenAVPlayer {
     }
 
     /**
-     * Set aspect ratio mode
-     * @param {string} mode - 'auto', 'zoom', 'stretch'
+     * Set aspect ratio mode on Samsung Tizen AVPlay.
+     * Maps user-selected mode to hardware-supported display method constants.
+     *
+     * @param {string} mode - 'auto' | 'stretch'
      */
     setAspectRatio(mode) {
+        // Track the current mode locally
+        this._aspectRatio = mode || 'auto';
         if (!this._avplay) return;
 
         try {
-            let displayMethod = 'PLAYER_DISPLAY_MODE_LETTER_BOX'; // Default/Auto
+            // Default to letterbox display mode
+            let displayMethod = 'PLAYER_DISPLAY_MODE_LETTER_BOX';
 
             switch (mode) {
-                case 'zoom':
-                    displayMethod = 'PLAYER_DISPLAY_MODE_CROPPED_FULL';
-                    break;
                 case 'stretch':
+                    // Force video raster to fill the entire hardware rectangle
                     displayMethod = 'PLAYER_DISPLAY_MODE_FULL_SCREEN';
                     break;
+                case 'zoom':
                 case 'auto':
                 default:
+                    // Maintain native DAR/PAR with standard letterbox/pillarbox bars
                     displayMethod = 'PLAYER_DISPLAY_MODE_LETTER_BOX';
                     break;
             }
@@ -288,6 +298,14 @@ export class TizenAVPlayer {
         } catch (e) {
             log.error('Failed to set aspect ratio:', e);
         }
+    }
+
+    /**
+     * Get current aspect ratio mode
+     * @returns {string} 'auto' | 'stretch'
+     */
+    getAspectRatio() {
+        return this._aspectRatio || 'auto';
     }
 
     // ========================================================================

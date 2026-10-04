@@ -2,6 +2,7 @@ import BaseMenu from './BaseMenu.js';
 import { osdIcons } from '../../utils/Icons.js';
 import { logger } from '../../utils/Logger.js';
 import { i18n } from '../../utils/i18n.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 const log = logger.create('AspectRatioMenu');
 
@@ -9,22 +10,48 @@ export default class AspectRatioMenu extends BaseMenu {
     constructor(osdController) {
         super(osdController);
         this.isModal = true;
+
         // ====================================================================
         // Menu Option Definitions
         // ====================================================================
-        // We define the supported aspect ratios here. Notice we now reference the 
-        // unified osdIcons.aspectRatio and osdIcons.zoomIn properties directly.
-        // The display transition between outline and filled states is handled 
-        // dynamically via CSS rules rather than code-level string swaps.
-        this.options = [
+        // On Samsung Tizen TVs, AVPlay's hardware video plane does not support
+        // a native crop/zoom mode. We dynamically omit 'zoom' on Tizen so only
+        // supported options (Auto and Stretch) are displayed in the OSD menu.
+        this.options = this._getSupportedOptions();
+    }
+
+    /**
+     * Determine supported aspect ratio options based on active device platform.
+     * Samsung Tizen's AVPlay video plane does not support a native zoom/crop mode,
+     * so Zoom is excluded on Tizen to present only supported options (Auto and Stretch).
+     *
+     * @private
+     * @returns {Array<{id: string, label: string, key: string}>}
+     */
+    _getSupportedOptions() {
+        // Detect Tizen via centralized platformInfo or active Samsung TV globals
+        const isTizen = platformInfo.isTizen || (typeof window !== 'undefined' && Boolean(window.tizen || window.webapis?.avplay));
+
+        const baseOptions = [
             { id: 'auto', label: i18n.t('Auto'), key: 'Auto' },
             { id: 'zoom', label: i18n.t('Zoom'), key: 'Zoom' },
-            { id: 'stretch', label: i18n.t('Stretch'), key: 'Stretch' } // Reusing icon for now
+            { id: 'stretch', label: i18n.t('Stretch'), key: 'Stretch' }
         ];
+
+        // On Samsung Tizen TVs, hide Zoom entirely
+        if (isTizen) {
+            return baseOptions.filter(opt => opt.id !== 'zoom');
+        }
+
+        return baseOptions;
     }
 
     open() {
         this.focusIndex = 0;
+
+        // Refresh options in case device platform or player backend has updated
+        this.options = this._getSupportedOptions();
+
         // Pre-select current aspect ratio
         const current = this.osd.player.getAspectRatio();
         const index = this.options.findIndex(opt => opt.id === current);

@@ -4,7 +4,7 @@
   "useLocalFile": true,
   "name": "Litefin",
   "title": "Litefin",
-  "appVersion": "1.9.22",
+  "appVersion": "1.9.25",
   "icon": "./assets/icon.png",
   "minWidth": 1400,
   "minHeight": 720,
