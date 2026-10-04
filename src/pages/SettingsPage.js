@@ -2545,6 +2545,20 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="setting-custom-collections" style="display: ${storage.getItem('pref:enableCollectionRows') === 'true' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelCustomCollectionRows">${i18n.t('LabelCustomCollectionRows')}</span>
+                        <span class="setting-description" data-i18n="LabelCustomCollectionRowsDesc">${i18n.t('LabelCustomCollectionRowsDesc')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="setting-action-btn select-btn" id="btn-manage-custom-collections" tabindex="0" data-focusable="true">
+                            <span class="btn-label" id="custom-collections-count-label">
+                                ${this._getCustomCollectionsLabel()}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="PreferEpisodeImages">${i18n.t('PreferEpisodeImages') || 'Prefer Episode Images'}</span>
@@ -7153,9 +7167,11 @@ class SettingsPage extends Page {
         const moviesColItem = this.$('#trending-movies-collection-item');
         const seriesColItem = this.$('#trending-series-collection-item');
         const colNameItem = this.$('#trending-collection-name-item');
+        const customColsItem = this.$('#setting-custom-collections');
 
         if (enableCollectionRowsBtn) {
             enableCollectionRowsBtn.addEventListener('click', () => {
+                // Determine the next toggle state based on persistent storage
                 const isCurrentlyEnabled = storage.getItem('pref:enableCollectionRows') === 'true';
                 const newValue = !isCurrentlyEnabled;
                 storage.setItem('pref:enableCollectionRows', newValue.toString());
@@ -7181,15 +7197,17 @@ class SettingsPage extends Page {
                         if (labelSpan) labelSpan.innerText = i18n.t('Disabled') || 'Disabled';
                     }
 
-                    // Hide the 3 items
+                    // Hide dependent collection settings items
                     if (moviesColItem) moviesColItem.style.display = 'none';
                     if (seriesColItem) seriesColItem.style.display = 'none';
                     if (colNameItem) colNameItem.style.display = 'none';
+                    if (customColsItem) customColsItem.style.display = 'none';
                 } else {
-                    // Show the 3 items back
+                    // Show dependent collection settings items when enabled
                     if (moviesColItem) moviesColItem.style.display = '';
                     if (seriesColItem) seriesColItem.style.display = '';
                     if (colNameItem) colNameItem.style.display = '';
+                    if (customColsItem) customColsItem.style.display = '';
                 }
 
                 log.info(`Enable Collection Rows set to: ${newValue}`);
@@ -7197,6 +7215,13 @@ class SettingsPage extends Page {
                 // Refresh the home layout ordering manager if present
                 this._setupHomeLayoutUI();
                 focusManager.invalidateCache('settings-content');
+            });
+        }
+
+        const manageCustomColsBtn = this.$('#btn-manage-custom-collections');
+        if (manageCustomColsBtn) {
+            manageCustomColsBtn.addEventListener('click', () => {
+                this._showCustomCollectionsModal();
             });
         }
 
@@ -11806,6 +11831,24 @@ class SettingsPage extends Page {
                 });
             });
 
+            // Add custom collection descriptors
+            try {
+                const rawCustom = storage.getItem('pref:customCollectionRows');
+                if (rawCustom) {
+                    const customList = JSON.parse(rawCustom);
+                    if (Array.isArray(customList)) {
+                        customList.forEach((c) => {
+                            if (c && c.id) {
+                                descriptors.push({
+                                    id: `collection-${c.id}`,
+                                    title: c.name || 'Collection'
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch (e) { }
+
             // Reconcile with saved layout
             const layoutVars = homeLayoutManager.buildSettingsLayout(descriptors);
 
@@ -11916,6 +11959,270 @@ class SettingsPage extends Page {
             log.error('Failed to load layouts', e);
             container.innerHTML = `<span class="setting-description">Error loading layouts.</span>`;
         }
+    }
+
+    /**
+     * Helper to get the human-readable summary of custom collections selected
+     * @returns {string}
+     */
+    _getCustomCollectionsLabel() {
+        try {
+            const raw = storage.getItem('pref:customCollectionRows');
+            const list = raw ? JSON.parse(raw) : [];
+            const count = Array.isArray(list) ? list.length : 0;
+            return count > 0
+                ? i18n.t('CollectionsSelected', [count])
+                : i18n.t('NoCollectionsSelected') || 'None Selected';
+        } catch (_) {
+            return i18n.t('NoCollectionsSelected') || 'None Selected';
+        }
+    }
+
+    async _showCustomCollectionsModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Save focus context
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
+        // Parse selected collections from storage
+        let selectedCols = [];
+        try {
+            const raw = storage.getItem('pref:customCollectionRows');
+            selectedCols = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(selectedCols)) selectedCols = [];
+        } catch (_) {
+            selectedCols = [];
+        }
+
+        const selectedMap = new Map();
+        selectedCols.forEach((c) => {
+            if (c && c.id) selectedMap.set(c.id, { id: c.id, name: c.name || '' });
+        });
+
+        // Show loading state in overlay
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+        overlay.innerHTML = `
+            <div class="settings-modal custom-collections-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2 data-i18n="ManageCollections">${i18n.t('ManageCollections') || 'Manage Collections'}</h2>
+                </div>
+                <div class="modal-loading-spinner" style="padding: 40px; text-align: center; color: var(--jf-text-secondary);">
+                    ${i18n.t('Loading') || 'Loading...'}
+                </div>
+            </div>
+        `;
+
+        let collections = [];
+        try {
+            const res = await api.getItems({
+                IncludeItemTypes: 'BoxSet,Playlist',
+                Recursive: true,
+                EnableTotalRecordCount: false
+            });
+            collections = res?.Items || [];
+            collections.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+        } catch (err) {
+            log.error('Failed to fetch collections for custom rows modal', err);
+        }
+
+        // If overlay was closed while fetching
+        if (!overlay.classList.contains('visible')) return;
+
+        let searchQuery = '';
+
+        const saveSelection = () => {
+            const arrayToSave = Array.from(selectedMap.values());
+            storage.setItem('pref:customCollectionRows', JSON.stringify(arrayToSave));
+            const countLabel = this.$('#custom-collections-count-label');
+            if (countLabel) {
+                countLabel.innerText = this._getCustomCollectionsLabel();
+            }
+        };
+
+        const renderModal = () => {
+            const filteredCols = searchQuery
+                ? collections.filter((c) => (c.Name || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                : collections;
+
+            const colRowsHtml = filteredCols
+                .map((c) => {
+                    const isSelected = selectedMap.has(c.Id);
+                    return `
+                    <button class="modal-option-btn check-btn ${isSelected ? 'selected' : ''}" data-id="${c.Id}" data-name="${escapeHtml(c.Name || '')}" tabindex="0">
+                        <div class="checkbox-box"><span class="check-mark">&#10003;</span></div>
+                        <span class="modal-option-label">${escapeHtml(c.Name || '')}</span>
+                    </button>
+                `;
+                })
+                .join('');
+
+            overlay.innerHTML = `
+                <div class="settings-modal custom-collections-modal" role="dialog" aria-modal="true">
+                    <div class="modal-header">
+                        <h2 data-i18n="ManageCollections">${i18n.t('ManageCollections') || 'Manage Collections'}</h2>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="fav-lang-search-box">
+                        <input type="text" id="custom-col-search-input" class="fav-lang-search-input" 
+                               placeholder="${i18n.t('Search') || 'Search...'}" 
+                               value="${escapeHtml(searchQuery)}" tabindex="0" />
+                    </div>
+
+                    <!-- Collections List -->
+                    <div class="modal-options custom-col-list" id="custom-col-list" style="max-height: 50vh; overflow-y: auto;">
+                        ${colRowsHtml || `<div class="modal-no-options" data-i18n="NoCollectionsFound">${i18n.t('NoCollectionsFound') || 'No collections or playlists found'}</div>`}
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="modal-action-btn" id="btn-custom-col-clear" tabindex="0" data-i18n="ClearAll">${i18n.t('ClearAll') || 'Clear All'}</button>
+                        <button class="modal-action-btn primary" id="btn-custom-col-done" tabindex="0" data-i18n="Done">${i18n.t('Done') || 'Done'}</button>
+                    </div>
+                </div>
+            `;
+
+            // Bind checkbox row clicks
+            overlay.querySelectorAll('.custom-col-list .check-btn').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = btn.dataset.id;
+                    const name = btn.dataset.name;
+                    if (selectedMap.has(id)) {
+                        selectedMap.delete(id);
+                        btn.classList.remove('selected');
+                    } else {
+                        selectedMap.set(id, { id, name });
+                        btn.classList.add('selected');
+                    }
+                    saveSelection();
+                });
+            });
+
+            // Bind search input
+            const searchInput = overlay.querySelector('#custom-col-search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    searchQuery = e.target.value;
+                    renderModal();
+                    const updatedInput = overlay.querySelector('#custom-col-search-input');
+                    if (updatedInput) {
+                        updatedInput.focus();
+                        updatedInput.setSelectionRange(updatedInput.value.length, updatedInput.value.length);
+                    }
+                });
+            }
+
+            // Bind Clear All
+            const clearBtn = overlay.querySelector('#btn-custom-col-clear');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectedMap.clear();
+                    overlay
+                        .querySelectorAll('.custom-col-list .check-btn')
+                        .forEach((b) => b.classList.remove('selected'));
+                    saveSelection();
+                });
+            }
+
+            // Bind Done
+            const doneBtn = overlay.querySelector('#btn-custom-col-done');
+            if (doneBtn) {
+                doneBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this._closeCustomCollectionsModal();
+                });
+            }
+
+            // Allow exiting modal by clicking the backdrop outside dialog
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    e.stopPropagation();
+                    this._closeCustomCollectionsModal();
+                }
+            };
+
+            // Register Focus Sections: Search -> List -> Actions
+            this.registerFocusSection('custom-col-search', overlay.querySelector('.fav-lang-search-box'), {
+                orientation: 'horizontal',
+                leaveDown: 'custom-col-list'
+            });
+
+            this.registerFocusSection('custom-col-list', overlay.querySelector('#custom-col-list'), {
+                orientation: 'vertical',
+                leaveUp: 'custom-col-search',
+                leaveDown: 'custom-col-actions'
+            });
+
+            this.registerFocusSection('custom-col-actions', overlay.querySelector('.modal-actions'), {
+                orientation: 'horizontal',
+                leaveUp: 'custom-col-list'
+            });
+
+            // Initial focus
+            const firstOption = overlay.querySelector('#custom-col-list .check-btn');
+            if (firstOption) {
+                focusManager.setActiveSection('custom-col-list');
+                setTimeout(() => {
+                    focusManager.focusElement(firstOption);
+                }, 50);
+            } else {
+                focusManager.setActiveSection('custom-col-search');
+                setTimeout(() => {
+                    const searchEl = overlay.querySelector('#custom-col-search-input');
+                    if (searchEl) focusManager.focusElement(searchEl);
+                }, 50);
+            }
+        };
+
+        renderModal();
+    }
+
+    _closeCustomCollectionsModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay || !overlay.classList.contains('visible')) return;
+
+        overlay.onclick = null;
+        overlay.classList.remove('visible');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = '';
+
+        this.unregisterFocusSection('custom-col-search');
+        this.unregisterFocusSection('custom-col-list');
+        this.unregisterFocusSection('custom-col-actions');
+        focusManager.unregister('custom-col-search');
+        focusManager.unregister('custom-col-list');
+        focusManager.unregister('custom-col-actions');
+
+        const countLabel = this.$('#custom-collections-count-label');
+        if (countLabel) {
+            countLabel.innerText = this._getCustomCollectionsLabel();
+        }
+
+        // Re-render Home Layout UI to immediately reflect newly selected/deselected custom collection rows
+        this._setupHomeLayoutUI();
+        focusManager.invalidateCache('settings-content');
+
+        // Restore active section and focus
+        const targetSection = this._prevSection || 'settings-display';
+        focusManager.setActiveSection(targetSection, false);
+
+        if (this._prevFocus && document.contains(this._prevFocus)) {
+            focusManager.focusElement(this._prevFocus);
+        } else {
+            const manageBtn = this.$('#btn-manage-custom-collections');
+            if (manageBtn) {
+                focusManager.focusElement(manageBtn);
+            } else {
+                focusManager.focusFirstInActiveSection();
+            }
+        }
+
+        this._prevFocus = null;
+        this._prevSection = null;
     }
 
     _setupFocus() {
@@ -12222,6 +12529,11 @@ class SettingsPage extends Page {
             // Check if Favorite Languages modal is open
             if (overlay.querySelector('.fav-languages-modal')) {
                 this._closeFavoriteLanguagesModal();
+                return true;
+            }
+            // Check if Custom Collections modal is open
+            if (overlay.querySelector('.custom-collections-modal')) {
+                this._closeCustomCollectionsModal();
                 return true;
             }
             this._closeSelectionModal();

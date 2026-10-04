@@ -449,7 +449,7 @@ class HomePage extends Page {
 
             const storedName = storage.getItem(nameKey);
             // If user selected a specific collection and custom name is requested, use its stored name immediately
-            let title =
+            const title =
                 useTrendingColName && settingVal !== 'auto' && settingVal !== 'top-rated' && storedName
                     ? storedName
                     : i18n.t(defaultTitleKey);
@@ -471,16 +471,31 @@ class HomePage extends Page {
                                     .getPlaylistItems(settingVal, { Limit: homeRowLimit })
                                     .catch(() => null);
                                 items = plRes?.Items;
-                            } catch (_) { }
+                            } catch (_) {}
 
                             if (!items || items.length === 0) {
-                                const boxRes = await api.getItems({
-                                    ParentId: settingVal,
-                                    Limit: homeRowLimit,
-                                    Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
-                                    Recursive: true
-                                });
+                                let boxRes = await api
+                                    .getItems({
+                                        ParentId: settingVal,
+                                        Limit: homeRowLimit,
+                                        IncludeItemTypes: type,
+                                        Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                        Recursive: true
+                                    })
+                                    .catch(() => null);
                                 items = boxRes?.Items;
+
+                                if (!items || items.length === 0) {
+                                    boxRes = await api
+                                        .getItems({
+                                            ParentId: settingVal,
+                                            Limit: homeRowLimit,
+                                            Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                            Recursive: true
+                                        })
+                                        .catch(() => null);
+                                    items = boxRes?.Items;
+                                }
                             }
 
                             if (items && items.length > 0) {
@@ -496,11 +511,11 @@ class HomePage extends Page {
                                 type === 'Movie'
                                     ? [/filmes?\s*em\s*alta/i, /em\s*alta/i, /trending.*movies?/i, /trending/i]
                                     : [
-                                        /s[eé]ries?\s*em\s*alta/i,
-                                        /tv.*trending/i,
-                                        /trending.*shows?/i,
-                                        /trending.*series/i
-                                    ];
+                                          /s[eé]ries?\s*em\s*alta/i,
+                                          /tv.*trending/i,
+                                          /trending.*shows?/i,
+                                          /trending.*series/i
+                                      ];
 
                             let smartCollection = null;
                             for (const pattern of keywords) {
@@ -517,18 +532,35 @@ class HomePage extends Page {
 
                                 let items = null;
                                 if (smartCollection.Type === 'Playlist') {
-                                    const plRes = await api.getPlaylistItems(smartCollection.Id, {
-                                        Limit: homeRowLimit
-                                    });
+                                    const plRes = await api
+                                        .getPlaylistItems(smartCollection.Id, {
+                                            Limit: homeRowLimit
+                                        })
+                                        .catch(() => null);
                                     items = plRes?.Items;
                                 } else {
-                                    const boxRes = await api.getItems({
-                                        ParentId: smartCollection.Id,
-                                        Limit: homeRowLimit,
-                                        Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
-                                        Recursive: true
-                                    });
+                                    let boxRes = await api
+                                        .getItems({
+                                            ParentId: smartCollection.Id,
+                                            Limit: homeRowLimit,
+                                            IncludeItemTypes: type,
+                                            Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                            Recursive: true
+                                        })
+                                        .catch(() => null);
                                     items = boxRes?.Items;
+
+                                    if (!items || items.length === 0) {
+                                        boxRes = await api
+                                            .getItems({
+                                                ParentId: smartCollection.Id,
+                                                Limit: homeRowLimit,
+                                                Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                                Recursive: true
+                                            })
+                                            .catch(() => null);
+                                        items = boxRes?.Items;
+                                    }
                                 }
 
                                 if (items && items.length > 0) {
@@ -581,6 +613,68 @@ class HomePage extends Page {
             'HeaderTrendingSeries'
         );
 
+        // ── Additional Custom Collection Rows ─────────────────────────────
+        const customColRaw = storage.getItem('pref:customCollectionRows');
+        let customCollections = [];
+        if (customColRaw && storage.getItem('pref:enableCollectionRows') === 'true') {
+            try {
+                customCollections = JSON.parse(customColRaw);
+                if (!Array.isArray(customCollections)) customCollections = [];
+            } catch (_) {
+                customCollections = [];
+            }
+        }
+
+        const customCollectionDescriptors = customCollections.map((col) => {
+            return {
+                id: `collection-${col.id}`,
+                title: col.name,
+                priority: 1,
+                layout: 'portrait',
+                cardType: 'poster',
+                contextType: 'collection',
+                fetchFn: async () => {
+                    try {
+                        let items = null;
+                        try {
+                            const plRes = await api.getPlaylistItems(col.id, { Limit: homeRowLimit }).catch(() => null);
+                            items = plRes?.Items;
+                        } catch (_) {}
+
+                        if (!items || items.length === 0) {
+                            const boxRes = await api
+                                .getItems({
+                                    ParentId: col.id,
+                                    Limit: homeRowLimit,
+                                    IncludeItemTypes: 'Movie,Series',
+                                    Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                    Recursive: true
+                                })
+                                .catch(() => null);
+                            items = boxRes?.Items;
+
+                            if (!items || items.length === 0) {
+                                const fallbackRes = await api
+                                    .getItems({
+                                        ParentId: col.id,
+                                        Limit: homeRowLimit,
+                                        Fields: 'PrimaryImageAspectRatio,CanFilter,UserData',
+                                        Recursive: true
+                                    })
+                                    .catch(() => null);
+                                items = fallbackRes?.Items;
+                            }
+                        }
+
+                        return items?.length > 0 ? items : null;
+                    } catch (err) {
+                        log.warn(`Failed to fetch custom collection ${col.name}:`, err);
+                        return null;
+                    }
+                }
+            };
+        });
+
         if (mergeResumeNextUp) {
             descriptors.push({
                 id: 'resume',
@@ -597,15 +691,10 @@ class HomePage extends Page {
                         // Request a combined list of items limited by user's homeRowLimit setting
                         const response = await api.getMergedRows({ limit: homeRowLimit });
 
-                        // Filter out container items (such as Season or Series) defensively so only playable items display
-                        const validItems = (response?.Items || []).filter(
-                            (item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder
-                        );
-
                         // If we got valid items back, return them immediately
-                        if (validItems.length > 0) {
+                        if (response && response.Items && response.Items.length > 0) {
                             log.info('Successfully fetched merged items from server-side Litefin plugin');
-                            return validItems;
+                            return response.Items;
                         }
                     } catch (err) {
                         // Fall back to client-side merge if the plugin is not installed or returns an error
@@ -642,13 +731,11 @@ class HomePage extends Page {
                     // Extract items list safely and tag them with a transient _isResume flag.
                     // This flag enables the sorting comparator to distinguish between resume items
                     // (which should sort by direct pause dates) and next-up items (which should
-                    // sort by show activity dates). We also filter out any container items (Seasons/Series).
-                    const resumeItems = (resumeRes?.Items || [])
-                        .filter((item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder)
-                        .map((item) => ({
-                            ...item,
-                            _isResume: true
-                        }));
+                    // sort by show activity dates).
+                    const resumeItems = (resumeRes?.Items || []).map((item) => ({
+                        ...item,
+                        _isResume: true
+                    }));
 
                     const nextUpItems = (nextUpRes?.Items || [])
                         .filter((item) => {
@@ -782,6 +869,9 @@ class HomePage extends Page {
             if (trendingSeriesDesc) {
                 descriptors.push(trendingSeriesDesc);
             }
+            if (customCollectionDescriptors.length > 0) {
+                descriptors.push(...customCollectionDescriptors);
+            }
         } else {
             // Priority 1: Continue Watching (Separate)
             descriptors.push({
@@ -793,11 +883,7 @@ class HomePage extends Page {
                 contextType: 'resume',
                 fetchFn: async () => {
                     const res = await api.getResumeItems({ Limit: homeRowLimit });
-                    // Filter out container items (such as Season or Series) defensively
-                    const validItems = (res?.Items || []).filter(
-                        (item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder
-                    );
-                    return validItems.length > 0 ? validItems : null;
+                    return res?.Items?.length > 0 ? res.Items : null;
                 }
             });
 
@@ -807,6 +893,9 @@ class HomePage extends Page {
             }
             if (trendingSeriesDesc) {
                 descriptors.push(trendingSeriesDesc);
+            }
+            if (customCollectionDescriptors.length > 0) {
+                descriptors.push(...customCollectionDescriptors);
             }
 
             // Priority 1: Next Up (Separate)
@@ -871,14 +960,14 @@ class HomePage extends Page {
                     lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
                         ? 'landscape'
                         : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
-                            ? 'square'
-                            : 'portrait',
+                          ? 'square'
+                          : 'portrait',
                 cardType:
                     lib.CollectionType === 'musicvideos' || lib.CollectionType === 'homevideos'
                         ? 'thumb'
                         : lib.CollectionType === 'music' || lib.CollectionType === 'livetv'
-                            ? 'square'
-                            : 'poster',
+                          ? 'square'
+                          : 'poster',
                 contextType: 'latest',
                 fetchFn: async function () {
                     if (this._preFetchedItems) {
@@ -913,7 +1002,12 @@ class HomePage extends Page {
             for (const desc of descriptors) {
                 // The "My Media" row uses library folder cards that must remain as static landscape cards
                 // Square rows (music, livetv, etc.) remain square
-                if (desc.id !== 'my-media' && desc.layout !== 'square' && desc.cardType !== 'library' && desc.cardType !== 'square') {
+                if (
+                    desc.id !== 'my-media' &&
+                    desc.layout !== 'square' &&
+                    desc.cardType !== 'library' &&
+                    desc.cardType !== 'square'
+                ) {
                     desc.layout = 'portrait';
                     desc.cardType = 'poster';
                 }
@@ -1287,7 +1381,7 @@ class HomePage extends Page {
             // The skeleton-shimmer class is stripped so these are just dark
             // rectangles — no animated shimmer. BlurHash provides the loading
             // state once live cards render.
-            const skeletonCardCount = (landscape || isExpanded) ? 5 : 8;
+            const skeletonCardCount = landscape || isExpanded ? 5 : 8;
             const rawHtml = CardRenderer.createSkeletonHtml(
                 skeletonCardCount,
                 landscape,
@@ -2062,6 +2156,8 @@ class HomePage extends Page {
                     itemType === 'AlbumArtist'
                 ) {
                     router.navigate(`/person/${card.dataset.itemId}`);
+                } else if (itemType === 'Season' && card.dataset.seriesId) {
+                    router.navigate(`/details/${card.dataset.seriesId}`);
                 } else {
                     router.navigate(`/details/${card.dataset.itemId}`);
                 }
@@ -2211,7 +2307,8 @@ class HomePage extends Page {
         if (topRow) {
             const topRowId = topRow.getAttribute('data-row-id');
             const topRowConfig = focusManager.getSectionConfig(`home-row-${topRowId}`);
-            const hasHero = storage.getItem('pref:heroCarousel') !== 'false' && focusManager.getSectionConfig('home-hero');
+            const hasHero =
+                storage.getItem('pref:heroCarousel') !== 'false' && focusManager.getSectionConfig('home-hero');
 
             // Wire the topmost row to navigate Up into the hero section
             if (topRowConfig) {

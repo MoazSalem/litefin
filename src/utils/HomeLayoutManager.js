@@ -92,12 +92,18 @@ class HomeLayoutManager {
                     ...desc,
                     _userOrder: config.order
                 });
-            } else if (desc.id === 'trending' || desc.id === 'trending-series') {
-                // If trending row is not yet in saved preferences, default its position
+            } else if (desc.id === 'trending' || desc.id === 'trending-series' || desc.id.startsWith('collection-')) {
+                // If trending or custom collection row is not yet in saved preferences, default its position
                 // right after 'resume' so it doesn't get pushed to the bottom behind all libraries
                 const resumeConfig = layoutMap.get('resume');
-                const offset = desc.id === 'trending' ? 0.5 : 0.6;
-                const defaultOrder = resumeConfig ? resumeConfig.order + offset : (desc.id === 'trending' ? 1.5 : 1.6);
+                const offset = desc.id === 'trending' ? 0.5 : desc.id === 'trending-series' ? 0.6 : 0.7;
+                const defaultOrder = resumeConfig
+                    ? resumeConfig.order + offset
+                    : desc.id === 'trending'
+                      ? 1.5
+                      : desc.id === 'trending-series'
+                        ? 1.6
+                        : 1.7;
                 processedDescriptors.push({
                     ...desc,
                     _userOrder: defaultOrder
