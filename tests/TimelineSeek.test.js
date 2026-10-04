@@ -21,6 +21,7 @@ function setup(enabled = true, paused = false) {
         confirmSeekWithOK: enabled,
         pausePlaybackOnScrub: true,
         resetSeekSpeedOnDirectionChange: false,
+        enableSeekAcceleration: true,
         skipBackLength: 5000,
         skipForwardLength: 10000
     };
@@ -468,6 +469,16 @@ test('preference defaults off, persists as a boolean and can be reset', () => {
     // Reset back to default (false)
     settings.reset('resetSeekSpeedOnDirectionChange');
     assert.equal(settings.get('resetSeekSpeedOnDirectionChange'), false);
+
+    // Default enableSeekAcceleration is on (true)
+    assert.equal(settings.get('enableSeekAcceleration'), true);
+    // Test setting to disabled
+    settings.set('enableSeekAcceleration', false);
+    assert.equal(saved.get('player:enableSeekAcceleration'), 'false');
+    assert.equal(settings.get('enableSeekAcceleration'), false);
+    // Reset back to default (true)
+    settings.reset('enableSeekAcceleration');
+    assert.equal(settings.get('enableSeekAcceleration'), true);
 });
 
 for (const hasRepeatMetadata of [true, false]) {
@@ -556,6 +567,50 @@ test('default mode: reversing direction resets speed to 1x when resetSeekSpeedOn
     advance(100);
     osd.handleInput('left');
     assert.equal(osd._seekTargetTicks, targetBeforeReverse - 10 * 10000000);
+});
+
+test('enableSeekAcceleration=false locks seek speed to 1x during hold (confirm mode)', () => {
+    // Setup in explicit confirmation mode with acceleration disabled
+    const { osd, advance, settings } = setup(true);
+    settings.enableSeekAcceleration = false;
+
+    // Trigger initial seek step (10s)
+    osd.handleInput('right', arrowEvent(false));
+
+    // Sustained hold for 5 seconds (50 repeats of 100ms) - past 4.5s 10x threshold
+    for (let i = 0; i < 50; i++) {
+        advance(100);
+        const previousTarget = osd._seekTargetTicks;
+        osd.handleInput('right', arrowEvent(true));
+
+        // Step size must strictly remain 10 seconds without acceleration scaling
+        assert.equal(osd._seekTargetTicks - previousTarget, 10 * 10000000);
+
+        // Tooltip text must never append an accelerated multiplier badge like (2x) or (10x)
+        assert.doesNotMatch(osd._cachedTooltipTextEl.textContent, /\([0-9]+x\)/);
+    }
+});
+
+test('enableSeekAcceleration=false locks seek speed to 1x during continuous seek (debounce mode)', () => {
+    // Setup in debounced automatic mode with acceleration disabled
+    const { osd, advance, settings } = setup(false);
+    settings.enableSeekAcceleration = false;
+
+    // Trigger initial seek step
+    osd.handleInput('right');
+
+    // Repeated seeking over 15 seconds (150 steps of 100ms) - past 12s 10x threshold
+    for (let i = 0; i < 150; i++) {
+        advance(100);
+        const previousTarget = osd._seekTargetTicks;
+        osd.handleInput('right');
+
+        // Step size must strictly remain 10 seconds without acceleration scaling
+        assert.equal(osd._seekTargetTicks - previousTarget, 10 * 10000000);
+
+        // Tooltip text must never append an accelerated multiplier badge
+        assert.doesNotMatch(osd._cachedTooltipTextEl.textContent, /\([0-9]+x\)/);
+    }
 });
 
 for (const paused of [true, false]) {

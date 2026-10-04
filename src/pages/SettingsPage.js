@@ -3441,6 +3441,17 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableSeekAcceleration">${i18n.t('EnableSeekAcceleration') || 'Accelerate seek speed'}</span>
+                        <span class="setting-description" data-i18n="EnableSeekAccelerationDescription">${i18n.t('EnableSeekAccelerationDescription') || 'Gradually increase seek speed (up to 10x) when holding directional buttons on the timeline.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableSeekAcceleration') ? 'active' : ''}"
+                                id="toggle-enable-seek-acceleration" tabindex="0"></button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ResetSeekSpeedOnDirectionChange">${i18n.t('ResetSeekSpeedOnDirectionChange') || 'Reset seek speed on direction change'}</span>
                         <span class="setting-description" data-i18n="ResetSeekSpeedOnDirectionChangeDescription">${i18n.t('ResetSeekSpeedOnDirectionChangeDescription') || 'Reset accelerated seek speed back to 1x when reversing direction during timeline scrubbing.'}</span>
                     </div>
@@ -10669,6 +10680,21 @@ class SettingsPage extends Page {
                 PlayerSettings.set('pausePlaybackOnScrub', enabled);
                 pauseOnScrubToggle.classList.toggle('active', enabled);
                 log.info(`Pause Playback On Scrub set to: ${enabled}`);
+            });
+        }
+
+        // Toggle Switch for Enable Seek Acceleration
+        // Governs progressive timeline scrubbing acceleration (up to 10x)
+        const enableSeekAccelerationToggle = this.$('#toggle-enable-seek-acceleration');
+        if (enableSeekAccelerationToggle) {
+            enableSeekAccelerationToggle.addEventListener('click', () => {
+                // Invert current boolean preference in PlayerSettings
+                const enabled = !PlayerSettings.get('enableSeekAcceleration');
+                PlayerSettings.set('enableSeekAcceleration', enabled);
+
+                // Update visual active class on toggle switch
+                enableSeekAccelerationToggle.classList.toggle('active', enabled);
+                log.info(`Enable Seek Acceleration set to: ${enabled}`);
             });
         }
 

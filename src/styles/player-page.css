@@ -348,7 +348,6 @@ html[data-light-music-player="true"] .audio-subtitle {
     -webkit-justify-content: center;
     justify-content: center;
     box-sizing: border-box;
-    /* Apple tvOS inspired spring physics for interactive focus transitions */
     -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }

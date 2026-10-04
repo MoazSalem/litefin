@@ -552,6 +552,19 @@ const DEFAULTS = {
     pausePlaybackOnScrub: true,
 
     /*
+     * Seek Speed Acceleration (Ramp Up)
+     * -------------------------------------------------------------------------
+     * When holding or repeating seek actions on the timeline, progressively
+     * accelerate the seek speed multiplier (2x, 3x, 4x, 5x, 10x) based on elapsed
+     * duration to allow rapid navigation across long media. When disabled,
+     * seeking maintains a steady 1x skip pace regardless of duration.
+     *
+     *   true  (default) — Accelerates seek speed progressively (up to 10x).
+     *   false           — Keeps a constant 1x seek speed without acceleration.
+     */
+    enableSeekAcceleration: true,
+
+    /*
      * Reset Seek Speed on Direction Change
      * -------------------------------------------------------------------------
      * When scrubbing the timeline, seek speed accelerates progressively (up to 10x)

@@ -3357,29 +3357,36 @@ export default class OSDController extends Component {
             }
 
             /*
-             * ── SEEK ACCELERATION LOGIC ───────────────────────────────────────
-             * The longer the user holds the seek button, the faster we skip.
-             * This provides fine-grained control for short skips and massive
-             * throughput for traversing long movies.
+             * ── SEEK ACCELERATION & RAMP LOGIC ────────────────────────────────
+             * The longer directional input is sustained, the faster the timeline
+             * skips (graduating across 2x, 3x, 4x, 5x, and 10x multipliers).
+             *
+             * Governed by user preference 'enableSeekAcceleration' (enabled by default).
+             * When disabled, the multiplier remains fixed at 1x so each step maintains
+             * uniform linear progress.
              */
             const seekDuration = requireConfirmation
                 ? this._seekHoldElapsed / 1000
                 : (Date.now() - this._seekStartTime) / 1000;
             let speedMultiplier = 1;
 
-            if (requireConfirmation) {
-                if (seekDuration >= 4.5) speedMultiplier = 10;
-                else if (seekDuration >= 3) speedMultiplier = 5;
-                else if (seekDuration >= 2.25) speedMultiplier = 4;
-                else if (seekDuration >= 1.5) speedMultiplier = 3;
-                else if (seekDuration >= 0.75) speedMultiplier = 2;
-            } else {
-                // Preserve the original ramp for automatic and quick seeking.
-                if (seekDuration >= 12) speedMultiplier = 10;
-                else if (seekDuration >= 8) speedMultiplier = 5;
-                else if (seekDuration >= 6) speedMultiplier = 4;
-                else if (seekDuration >= 4) speedMultiplier = 3;
-                else if (seekDuration >= 2) speedMultiplier = 2;
+            // Evaluate if progressive acceleration is permitted by player settings
+            if (PlayerSettings.get('enableSeekAcceleration')) {
+                if (requireConfirmation) {
+                    // Confirmation mode: shorter hold thresholds for responsive ramping
+                    if (seekDuration >= 4.5) speedMultiplier = 10;
+                    else if (seekDuration >= 3) speedMultiplier = 5;
+                    else if (seekDuration >= 2.25) speedMultiplier = 4;
+                    else if (seekDuration >= 1.5) speedMultiplier = 3;
+                    else if (seekDuration >= 0.75) speedMultiplier = 2;
+                } else {
+                    // Debounce mode: standard ramp intervals for automatic seeking
+                    if (seekDuration >= 12) speedMultiplier = 10;
+                    else if (seekDuration >= 8) speedMultiplier = 5;
+                    else if (seekDuration >= 6) speedMultiplier = 4;
+                    else if (seekDuration >= 4) speedMultiplier = 3;
+                    else if (seekDuration >= 2) speedMultiplier = 2;
+                }
             }
 
             if (isNaN(offsetTicks)) return;
