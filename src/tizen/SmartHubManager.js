@@ -394,6 +394,9 @@ class SmartHubManager {
 
                 const nextUpItems = (nextUpRes?.Items || [])
                     .filter((item) => {
+                        // Defensive guard: Drop non-playable container folders (e.g. Season/Series)
+                        if (!item || item.Type === 'Season' || item.Type === 'Series' || item.IsFolder) return false;
+
                         // Filter out next-up items that have already been partially played,
                         // as they will already be included in the continue watching list.
                         const position = item.UserData?.PlaybackPositionTicks || 0;

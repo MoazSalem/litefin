@@ -739,6 +739,9 @@ class HomePage extends Page {
 
                     const nextUpItems = (nextUpRes?.Items || [])
                         .filter((item) => {
+                            // Defensive guard: Drop non-playable container folders (e.g. Season/Series)
+                            if (!item || item.Type === 'Season' || item.Type === 'Series' || item.IsFolder) return false;
+
                             // Filter out next-up items that have already been partially played,
                             // as those are already accounted for in the continue watching row list.
                             const position = item.UserData?.PlaybackPositionTicks || 0;
@@ -921,6 +924,9 @@ class HomePage extends Page {
                     if (!res?.Items?.length) return null;
 
                     const filtered = res.Items.filter((item) => {
+                        // Defensive guard: Drop non-playable container folders (e.g. Season/Series)
+                        if (!item || item.Type === 'Season' || item.Type === 'Series' || item.IsFolder) return false;
+
                         const position = item.UserData?.PlaybackPositionTicks || 0;
                         return position === 0;
                     });
