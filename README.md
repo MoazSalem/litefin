@@ -7,8 +7,8 @@
 [![GitHub all releases](https://img.shields.io/github/downloads/MoazSalem/litefin/total?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
 [![GitHub Repo stars](https://img.shields.io/github/stars/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/stargazers)
 [![GitHub license](https://img.shields.io/github/license/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/blob/release/LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/issues)
 [![Discord Link](https://img.shields.io/discord/1498618592902647818?color=blue&label=discord&logo=discord&style=flat-square)](https://discord.gg/N3VpazBtTx)
+[![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/moazsalem)
 
 Litefin is an open-source Tizen and webOS Client for Jellyfin written from scratch, designed to provide a premium experience with excellent performance to Jellyfin media browsing and playback (and Emby to a degree), even on legacy hardware. It features a robust player backend specifc to each platform, advanced subtitle support, and a highly optimized UI engine for smooth browsing.
 
