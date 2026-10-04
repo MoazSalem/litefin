@@ -1725,15 +1725,35 @@ export class ApiClient {
                     this.getItemFilters2(params)
                 ]);
 
-                // Safely unpack responses
+                // Safely unpack responses from both filter queries
                 const legacy = legacyRes.status === 'fulfilled' && legacyRes.value ? legacyRes.value : {};
                 const v2 = v2Res.status === 'fulfilled' && v2Res.value ? v2Res.value : {};
 
-                // Return combined filter structure
+                // ------------------------------------------------------------------
+                // Extract clean genre name strings from both v2 (NameGuidPair) and legacy (string)
+                // Using clean names ensures uniform filtering across Jellyfin 10.x through 12.0+
+                // ------------------------------------------------------------------
+                const v2GenreNames = Array.isArray(v2.Genres)
+                    ? v2.Genres.map((g) => (typeof g === 'object' && g ? (g.Name || g.name || '') : g)).filter(Boolean)
+                    : [];
+                const legacyGenreNames = Array.isArray(legacy.Genres)
+                    ? legacy.Genres.map((g) => (typeof g === 'object' && g ? (g.Name || g.name || '') : g)).filter(Boolean)
+                    : [];
+
+                // Deduplicate genres while preserving encounter order
+                const combinedGenres = Array.from(new Set([...legacyGenreNames, ...v2GenreNames]));
+
+                // Deduplicate tag names from both legacy and modern sources
+                const v2Tags = Array.isArray(v2.Tags) ? v2.Tags : [];
+                const legacyTags = Array.isArray(legacy.Tags) ? legacy.Tags : [];
+                const combinedTags = Array.from(new Set([...legacyTags, ...v2Tags]));
+
+                // Return combined, normalized filter structure
                 return {
-                    // Prefer v2 Genres (contains Name & Id pairs) if present, else legacy string names
-                    Genres: (v2.Genres && v2.Genres.length > 0) ? v2.Genres : (legacy.Genres || []),
-                    Tags: (v2.Tags && v2.Tags.length > 0) ? v2.Tags : (legacy.Tags || []),
+                    // List of genre names ready for UI display and pipe-delimited item queries
+                    Genres: combinedGenres.length > 0 ? combinedGenres : (legacy.Genres || []),
+                    // Deduplicated tags available across items in the library
+                    Tags: combinedTags.length > 0 ? combinedTags : (legacy.Tags || []),
                     // Ratings and Years only exist on the legacy endpoint
                     OfficialRatings: legacy.OfficialRatings || [],
                     Years: legacy.Years || [],

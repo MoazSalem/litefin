@@ -1489,23 +1489,45 @@ class LibraryPage extends Page {
                 // Multi-Value Query Filters (Genres, Years, Ratings, Tags, Languages)
                 // ------------------------------------------------------------------
                 if (f.Genres) {
-                    // Check if the genre filter string contains GUIDs (JF12 Filters2) or raw names (pre-12)
-                    const firstGenre = f.Genres.split(',')[0];
-                    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firstGenre);
-                    if (isGuid) {
-                        // Pass exact GUIDs when provided by modern Jellyfin 12+ API
-                        params.GenreIds = f.Genres;
-                    } else {
-                        // Fall back to genre names on legacy servers to prevent 400 Bad Request
-                        params.Genres = f.Genres;
+                    // Pipe-delimited genre names are accepted universally across Jellyfin 10.x - 12.0+
+                    // (bound via PipeDelimitedCollectionModelBinder directly to InternalItemsQuery.Genres).
+                    // Split on either pipe or legacy comma to handle current and previously stored filters.
+                    const genreList = (f.Genres.includes('|') ? f.Genres.split('|') : f.Genres.split(','))
+                        .map((g) => g.trim())
+                        .filter(Boolean);
+
+                    // Filter out any stale raw GUIDs that were stored during early JF12 test sessions
+                    const validGenres = genreList.filter(
+                        (g) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(g)
+                    );
+
+                    // Only attach parameter if valid genre names remain after sanitization
+                    if (validGenres.length > 0) {
+                        params.Genres = validGenres.join('|');
                     }
                 }
                 if (f.Years) params.Years = f.Years;
-                if (f.OfficialRatings) params.OfficialRatings = f.OfficialRatings;
-                if (f.Tags) params.Tags = f.Tags;
+                if (f.OfficialRatings) {
+                    // Pipe-delimited parental ratings as expected by Jellyfin's PipeDelimitedCollectionModelBinder
+                    const ratingsList = (f.OfficialRatings.includes('|') ? f.OfficialRatings.split('|') : f.OfficialRatings.split(','))
+                        .map((r) => r.trim())
+                        .filter(Boolean);
+                    if (ratingsList.length > 0) {
+                        params.OfficialRatings = ratingsList.join('|');
+                    }
+                }
+                if (f.Tags) {
+                    // Pipe-delimited tag names as expected by Jellyfin's PipeDelimitedCollectionModelBinder
+                    const tagsList = (f.Tags.includes('|') ? f.Tags.split('|') : f.Tags.split(','))
+                        .map((t) => t.trim())
+                        .filter(Boolean);
+                    if (tagsList.length > 0) {
+                        params.Tags = tagsList.join('|');
+                    }
+                }
                 if (f.Studios) params.StudioIds = f.Studios;
 
-                // Jellyfin 12+ Audio & Subtitle Language track filters
+                // Jellyfin 12+ Audio & Subtitle Language track filters (Comma-delimited collection binder)
                 if (f.AudioLanguages) params.AudioLanguages = f.AudioLanguages;
                 if (f.SubtitleLanguages) params.SubtitleLanguages = f.SubtitleLanguages;
             }
@@ -2283,7 +2305,17 @@ class LibraryPage extends Page {
         if (savedFilters) {
             try {
                 // Parse the JSON string back into a filters object
-                this.state.filters = JSON.parse(savedFilters);
+                const parsed = JSON.parse(savedFilters);
+
+                // Sanitize any stale GUID-based genre strings stored from previous test sessions
+                if (parsed.Genres) {
+                    const firstGenre = parsed.Genres.split(/[,|]/)[0]?.trim();
+                    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(firstGenre)) {
+                        delete parsed.Genres;
+                    }
+                }
+
+                this.state.filters = parsed;
                 log.info(
                     `[Filters] Rehydrated persisted filters for library ${this.state.libraryId}:`,
                     this.state.filters
@@ -5697,19 +5729,22 @@ class LibraryPage extends Page {
         const isMusic = this.state.libraryInfo?.CollectionType === 'music';
 
         // ------------------------------------------------------------------
-        // Parse Genres: Supports both legacy string arrays and JF12 Name/Id objects
+        // Parse Genres: Supports both plain string arrays and modern Name/Id objects
+        // In all cases, map value to the Genre Name string for library queries
         // ------------------------------------------------------------------
         const genreItems = Array.isArray(data?.Genres)
             ? data.Genres.map((g) => {
                 if (typeof g === 'object' && g !== null) {
+                    // Extract name string, accommodating both PascalCase and camelCase keys
+                    const name = g.Name || g.name || g.label || g.value || '';
                     return {
-                        label: g.label || g.Name || '',
-                        value: g.value || g.Id || g.Name || '',
+                        label: name,
+                        value: name,
                         type: g.type || 'multi'
                     };
                 }
                 return { label: g, value: g, type: 'multi' };
-            })
+            }).filter((item) => Boolean(item.label && item.value))
             : [];
 
         // ------------------------------------------------------------------
@@ -5791,18 +5826,21 @@ class LibraryPage extends Page {
                     title: 'Genres',
                     id: 'sec-genres',
                     itemKey: 'Genres', // Key in state
+                    separator: '|', // Pipe-delimited collection required by Jellyfin backend
                     items: genreItems
                 },
                 {
                     title: 'HeaderParentalRatings',
                     id: 'sec-ratings',
                     itemKey: 'OfficialRatings',
+                    separator: '|', // Pipe-delimited collection required by Jellyfin backend
                     items: (data?.OfficialRatings || []).map((r) => ({ label: r, value: r, type: 'multi' }))
                 },
                 {
                     title: 'Tags',
                     id: 'sec-tags',
                     itemKey: 'Tags',
+                    separator: '|', // Pipe-delimited collection required by Jellyfin backend
                     items: (data?.Tags || []).map((t) => ({ label: t, value: t, type: 'multi' }))
                 },
                 {
@@ -5949,8 +5987,8 @@ class LibraryPage extends Page {
                         } else {
                             const stored = this.state.filters[section.itemKey];
                             if (stored) {
-                                const sep = section.separator || (section.itemKey === 'language' || section.itemKey === 'certification' ? '|' : ',');
-                                const arr = stored.split(sep);
+                                // Match against both pipe and legacy comma delimiters for backwards compatibility
+                                const arr = stored.split(/[|,]/).map((s) => s.trim());
                                 checked = arr.includes(item.value);
                             }
                         }
@@ -6072,7 +6110,10 @@ class LibraryPage extends Page {
             } else {
                 const section = validSections.find((s) => s.itemKey === key || s.id === this.state.activeFilterSection);
                 const sep = section?.separator || (key === 'language' || key === 'certification' ? '|' : ',');
-                let current = this.state.filters[key] ? this.state.filters[key].split(sep).filter(Boolean) : [];
+                // Split existing stored selections handling either pipe or comma delimiters
+                let current = this.state.filters[key]
+                    ? this.state.filters[key].split(/[|,]/).map((s) => s.trim()).filter(Boolean)
+                    : [];
                 if (!isSelected) current.push(val);
                 else current = current.filter((v) => v !== val);
 
