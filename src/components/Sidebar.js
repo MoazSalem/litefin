@@ -1419,11 +1419,8 @@ class Sidebar extends Component {
             (typeof window !== 'undefined' && window.location.hash.startsWith('#/settings'))
         );
 
-        // If collapsed sidebar is transparent, override it in Settings to render solid theme bg
-        const isTransparentCollapsed = colorPref === 'transparent' && !isSettings;
-
         // Apply collapsed style classes to element DOM
-        this.el.classList.toggle('transparent-collapsed', isTransparentCollapsed);
+        this.el.classList.toggle('transparent-collapsed', colorPref === 'transparent');
         this.el.classList.toggle('semi-transparent-collapsed', colorPref === 'semi');
         this.el.classList.toggle('tinted-semi-collapsed', colorPref === 'tinted-semi');
         this.el.classList.toggle('black-collapsed', colorPref === 'black');

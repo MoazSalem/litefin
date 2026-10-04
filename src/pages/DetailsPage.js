@@ -2964,12 +2964,16 @@ class DetailsPage extends Page {
 
         // Find or create tagline element
         let taglineEl = this.$('.details-tagline');
-        if (!taglineEl && tagline) {
+        const overviewContainer = this.$('.details-overview');
+        if (!taglineEl && tagline && overviewContainer) {
             taglineEl = document.createElement('p');
             taglineEl.className = 'details-tagline';
-            // Insert before the overview text
-            const overviewContainer = this.$('.details-overview');
-            overviewContainer.insertBefore(taglineEl, overviewEl);
+            // Insert before the overview text when available, otherwise append
+            if (overviewEl) {
+                overviewContainer.insertBefore(taglineEl, overviewEl);
+            } else {
+                overviewContainer.appendChild(taglineEl);
+            }
         }
 
         if (taglineEl) {
@@ -2977,19 +2981,28 @@ class DetailsPage extends Page {
             taglineEl.style.display = tagline ? 'block' : 'none';
         }
 
-        overviewEl.innerHTML = item.Overview || '';
-        overviewEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
+        if (overviewEl) {
+            overviewEl.innerHTML = item.Overview || '';
+            overviewEl.querySelectorAll('a').forEach((anchor) => anchor.setAttribute('tabindex', '-1'));
 
-        // Reset overview element styling with user-selected line clamp setting
-        const clampClass = getOverviewClampClass();
-        overviewEl.className = `overview-text ${clampClass}`;
-        this.$('.see-more-btn').style.display = 'none';
+            // Reset overview element styling with user-selected line clamp setting
+            const clampClass = getOverviewClampClass();
+            overviewEl.className = `overview-text ${clampClass}`;
+        }
+
+        const seeMoreBtn = this.$('.see-more-btn');
+        if (seeMoreBtn) {
+            seeMoreBtn.style.display = 'none';
+        }
 
         // Reveal columns
-        requestAnimationFrame(() => {
-            this.$('.details-info-col').classList.add('visible');
-            this._checkOverviewTruncation();
-        });
+        const detailsInfoCol = this.$('.details-info-col');
+        if (detailsInfoCol) {
+            requestAnimationFrame(() => {
+                detailsInfoCol.classList.add('visible');
+                this._checkOverviewTruncation();
+            });
+        }
 
         // Update buttons based on state
         this._updateButtons();

@@ -1186,15 +1186,19 @@ class FocusManager {
         if (this._suspended) return;
         if (this._focusedElement) {
             try {
-                // Dispatch click
-                this._focusedElement.click();
+                // Keep local reference in case click handler clears or mutates focus state
+                const targetElement = this._focusedElement;
+
+                // Dispatch click on the focused target
+                targetElement.click();
 
                 // Native focus is required to invoke the TV OS virtual keyboard (IME) on text fields
-                if (this._focusedElement.tagName === 'INPUT' || this._focusedElement.tagName === 'TEXTAREA') {
-                    this._focusedElement.focus();
+                if (targetElement.tagName === 'INPUT' || targetElement.tagName === 'TEXTAREA') {
+                    targetElement.focus();
                 }
 
-                eventBus.emit('focus:activated', this._focusedElement);
+                // Emit activation event with original target
+                eventBus.emit('focus:activated', targetElement);
             } catch (err) {
                 log.warn('FocusManager._activate error:', err);
             }

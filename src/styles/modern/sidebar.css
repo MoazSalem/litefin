@@ -888,14 +888,14 @@ html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body.sid
     box-shadow: none !important;
 }
 
-/* Ambient Glow mode: keep modern-collapsed and unexpanded modern layouts completely transparent in normal mode */
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar,
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:hover,
-html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.expanded,
+/* Ambient Glow mode: keep modern-collapsed and unexpanded modern layouts completely transparent in normal mode when following theme */
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:hover:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
+html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.expanded:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
 html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
 html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
 html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
-html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover),
+html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover):not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
 html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency allowing ambient background mesh to show through */
     background: transparent !important;
@@ -926,7 +926,7 @@ html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sid
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
 [dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover),
+[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover):not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
 [dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency for RTL layouts */
     background: transparent !important;
@@ -936,8 +936,28 @@ html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sid
     border-left-color: transparent !important;
 }
 
-
 /* Maintain custom color backgrounds across collapsed modes */
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed:hover,
+html[data-layout-sidebar="modern-collapsed"] .sidebar.transparent-collapsed.expanded,
+html[data-layout-sidebar="floating-buttons"] .sidebar.transparent-collapsed,
+html[data-layout-sidebar="floating-buttons"] .sidebar.transparent-collapsed:hover,
+html[data-layout-sidebar="floating-buttons"] .sidebar.transparent-collapsed.expanded,
+html[data-layout-sidebar="floating-island"] .sidebar.transparent-collapsed,
+html[data-layout-sidebar="floating-island"] .sidebar.transparent-collapsed:hover,
+html[data-layout-sidebar="floating-island"] .sidebar.transparent-collapsed.expanded,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.transparent-collapsed,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.transparent-collapsed,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.transparent-expanded,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.transparent-expanded,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.transparent-expanded {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
 html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed,
 html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed:hover,
 html[data-layout-sidebar="modern-collapsed"] .sidebar.semi-transparent-collapsed.expanded,
@@ -946,8 +966,15 @@ html[data-layout-sidebar="floating-buttons"] .sidebar.semi-transparent-collapsed
 html[data-layout-sidebar="floating-buttons"] .sidebar.semi-transparent-collapsed.expanded,
 html[data-layout-sidebar="floating-island"] .sidebar.semi-transparent-collapsed,
 html[data-layout-sidebar="floating-island"] .sidebar.semi-transparent-collapsed:hover,
-html[data-layout-sidebar="floating-island"] .sidebar.semi-transparent-collapsed.expanded {
+html[data-layout-sidebar="floating-island"] .sidebar.semi-transparent-collapsed.expanded,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.semi-transparent-collapsed,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.semi-transparent-collapsed,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.semi-transparent-collapsed,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.semi-transparent-expanded,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.semi-transparent-expanded,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.semi-transparent-expanded {
     background: rgba(16, 16, 16, 0.4) !important;
+    background-color: rgba(16, 16, 16, 0.4) !important;
     background-image: none !important;
 }
 
@@ -959,8 +986,15 @@ html[data-layout-sidebar="floating-buttons"] .sidebar.tinted-semi-collapsed:hove
 html[data-layout-sidebar="floating-buttons"] .sidebar.tinted-semi-collapsed.expanded,
 html[data-layout-sidebar="floating-island"] .sidebar.tinted-semi-collapsed,
 html[data-layout-sidebar="floating-island"] .sidebar.tinted-semi-collapsed:hover,
-html[data-layout-sidebar="floating-island"] .sidebar.tinted-semi-collapsed.expanded {
+html[data-layout-sidebar="floating-island"] .sidebar.tinted-semi-collapsed.expanded,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.tinted-semi-collapsed,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.tinted-semi-collapsed,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.tinted-semi-collapsed,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.tinted-semi-expanded,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.tinted-semi-expanded,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.tinted-semi-expanded {
     background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.85) !important;
+    background-color: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.85) !important;
     background-image: none !important;
 }
 
@@ -972,8 +1006,15 @@ html[data-layout-sidebar="floating-buttons"] .sidebar.black-collapsed:hover,
 html[data-layout-sidebar="floating-buttons"] .sidebar.black-collapsed.expanded,
 html[data-layout-sidebar="floating-island"] .sidebar.black-collapsed,
 html[data-layout-sidebar="floating-island"] .sidebar.black-collapsed:hover,
-html[data-layout-sidebar="floating-island"] .sidebar.black-collapsed.expanded {
+html[data-layout-sidebar="floating-island"] .sidebar.black-collapsed.expanded,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.black-collapsed,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.black-collapsed,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.black-collapsed,
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.black-expanded,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.black-expanded,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.black-expanded {
     background: #000000 !important;
+    background-color: #000000 !important;
     background-image: none !important;
 }
 
@@ -1270,9 +1311,9 @@ html[data-layout-sidebar="floating-buttons"] .sidebar.expanded {
  * the solid theme sidebar background, aligning seamlessly with the split view.
  * ============================================================================
  */
-html[data-layout-sidebar="floating-buttons"] .sidebar.in-settings,
-html[data-layout-sidebar="floating-buttons"] .sidebar.in-settings:hover,
-html[data-layout-sidebar="floating-buttons"] .sidebar.in-settings.expanded {
+html[data-layout-sidebar="floating-buttons"] .sidebar.in-settings:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded),
+html[data-layout-sidebar="floating-buttons"] .sidebar.in-settings:hover:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded),
+html[data-layout-sidebar="floating-buttons"] .sidebar.in-settings.expanded:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded) {
     background: var(--sidebar-bg, var(--jf-background-alt, #101010)) !important;
     background-color: var(--sidebar-bg, var(--jf-background-alt, #101010)) !important;
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1)) !important;
@@ -1385,9 +1426,9 @@ html[data-layout-sidebar="floating-island"] .sidebar.expanded {
  * the solid theme sidebar background, aligning seamlessly with the split view.
  * ============================================================================
  */
-html[data-layout-sidebar="floating-island"] .sidebar.in-settings,
-html[data-layout-sidebar="floating-island"] .sidebar.in-settings:hover,
-html[data-layout-sidebar="floating-island"] .sidebar.in-settings.expanded {
+html[data-layout-sidebar="floating-island"] .sidebar.in-settings:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded),
+html[data-layout-sidebar="floating-island"] .sidebar.in-settings:hover:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded),
+html[data-layout-sidebar="floating-island"] .sidebar.in-settings.expanded:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded) {
     background: var(--sidebar-bg, var(--jf-background-alt, #101010)) !important;
     background-color: var(--sidebar-bg, var(--jf-background-alt, #101010)) !important;
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1)) !important;
@@ -1397,9 +1438,9 @@ html[data-layout-sidebar="floating-island"] .sidebar.in-settings.expanded {
  * Ambient Glow Theme Settings Override:
  * Keeps navigation sidebar transparent alongside the transparent settings split view.
  */
-html[data-theme-mode="ambient"] .sidebar.in-settings,
-html[data-theme-mode="ambient"] .sidebar.in-settings:hover,
-html[data-theme-mode="ambient"] .sidebar.in-settings.expanded {
+html[data-theme-mode="ambient"] .sidebar.in-settings:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded),
+html[data-theme-mode="ambient"] .sidebar.in-settings:hover:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded),
+html[data-theme-mode="ambient"] .sidebar.in-settings.expanded:not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed):not(.transparent-collapsed):not(.black-expanded):not(.semi-transparent-expanded):not(.tinted-semi-expanded):not(.transparent-expanded) {
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
