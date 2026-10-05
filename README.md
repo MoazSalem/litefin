@@ -10,7 +10,7 @@
 [![Discord Link](https://img.shields.io/discord/1498618592902647818?color=blue&label=discord&logo=discord&style=flat-square)](https://discord.gg/N3VpazBtTx)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/moazsalem)
 
-Litefin is an open-source Tizen and webOS Client for Jellyfin written from scratch, designed to provide a premium experience with excellent performance to Jellyfin media browsing and playback (and Emby to a degree), even on legacy hardware. It features a robust player backend specifc to each platform, advanced subtitle support, and a highly optimized UI engine for smooth browsing.
+Litefin is an open-source Tizen and webOS Client for Jellyfin written from scratch, designed to provide a premium experience with excellent performance to Jellyfin media browsing and playback (and Emby to a degree), even on legacy hardware. It features a robust player backend specific to each platform, advanced subtitle support, and a highly optimized UI engine for smooth browsing.
 
 Enable more features by installing the [**Litefin Plugin**](https://github.com/MoazSalem/litefin-plugin) on your Jellyfin server as well.
 
@@ -192,6 +192,13 @@ If Litefin is useful to you, please consider supporting the development:
           <img src="https://github.com/TheColin21.png?s=100" width="80" alt="TheColin21" />
           <br />
           <b>Colin P</b>
+        </a>
+      </td>
+       <td align="center" width="160">
+        <a href="https://github.com/cozyportal">
+          <img src="https://github.com/cozyportal.png?s=100" width="80" alt="cozyportal" />
+          <br />
+          <b>cozyportal</b>
         </a>
       </td>
      </tr>
