@@ -523,10 +523,25 @@ class App {
                         pluginManager.destroy();
                         router.reset('/profiles');
                     }
-                } else if (!currentPath.startsWith('/player')) {
-                    // Preserve the original Litefin behaviour when profile selection
-                    // is not required.
-                    router.reload();
+                } else {
+                    /* =========================================================================
+                     * Optional Route Reload on Resume (Performance Preference)
+                     * =========================================================================
+                     * Enabled by default on TV platforms (Tizen and webOS) where backgrounding
+                     * or screen suspend can desynchronize WebSocket connections and stale DOM
+                     * data, but disabled by default on web/desktop to preserve in-memory
+                     * DOM elements, lazy-loaded datasets, and scroll positions without resets.
+                     * If the user manually toggles the setting, their stored preference is respected.
+                     * Media playback views (/player) are always spared to avoid interruptions.
+                     * ========================================================================= */
+                    const isTv = platformInfo.isTizen || platformInfo.isWebOS;
+                    const savedReload = storage.getItem('pref:reloadOnResume');
+                    const reloadOnResume = savedReload !== null ? savedReload === 'true' : isTv;
+
+                    if (reloadOnResume && !currentPath.startsWith('/player')) {
+                        log.info(`Reloading active route on resume per performance preference (platform TV: ${isTv})`);
+                        router.reload();
+                    }
                 }
             }
         });

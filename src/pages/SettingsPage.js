@@ -5234,12 +5234,40 @@ class SettingsPage extends Page {
      * =========================================================================
      */
     _renderPerformanceTab() {
+        /*
+         * =========================================================================
+         * Platform Defaults: TV (Tizen/webOS) vs Web/Desktop
+         * =========================================================================
+         * On smart TVs (Tizen/webOS), waking from sleep or foregrounding often desyncs
+         * long-lived socket connections, making reload on resume enabled by default.
+         * On web/desktop browsers, keeping it off by default preserves in-memory DOM
+         * trees, scroll offsets, and lazy-loaded items without jarring page refreshes.
+         * If the user explicitly sets the preference, their saved choice takes precedence.
+         * =========================================================================
+         */
+        const isTv = platformInfo.isTizen || platformInfo.isWebOS;
+        const savedReloadPref = storage.getItem('pref:reloadOnResume');
+        const reloadOnResumeEnabled = savedReloadPref !== null ? savedReloadPref === 'true' : isTv;
+
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Performance">${i18n.t('Performance') || 'Performance'}</h2>
                 <p class="content-subtitle" data-i18n="PerformanceTabDescription">
                     ${i18n.t('PerformanceTabDescription') || 'Optimize memory usage, scrolling animations, cache policies, and rendering speed.'}
                 </p>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelReloadOnResume">${i18n.t('LabelReloadOnResume') || 'Reload Page on Resume'}</span>
+                        <span class="setting-description" data-i18n="ReloadOnResumeDescription">${i18n.t('ReloadOnResumeDescription') || 'Automatically reload the active view when returning from background or waking from sleep. Keep disabled to preserve loaded lists and scroll position.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${reloadOnResumeEnabled ? 'active' : ''}"
+                                id="toggle-reload-on-resume"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -7788,6 +7816,26 @@ class SettingsPage extends Page {
                 storage.setItem('pref:disableLibraryCache', newValue.toString());
                 libraryCacheBtn.classList.toggle('active', newValue);
                 log.info(`Disable library cache set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Reload Page on Resume (Performance Tab)
+        // Persists preference to local storage and updates the tactile toggle switch state
+        const reloadOnResumeBtn = this.$('#toggle-reload-on-resume');
+        if (reloadOnResumeBtn) {
+            reloadOnResumeBtn.addEventListener('click', () => {
+                // Determine current state considering platform default (enabled on TV, disabled on Web)
+                const isTv = platformInfo.isTizen || platformInfo.isWebOS;
+                const saved = storage.getItem('pref:reloadOnResume');
+                const isCurrentlyEnabled = saved !== null ? saved === 'true' : isTv;
+                const newValue = !isCurrentlyEnabled;
+
+                // Persist new value to local storage service
+                storage.setItem('pref:reloadOnResume', newValue.toString());
+
+                // Update visual switch state on the toggle button
+                reloadOnResumeBtn.classList.toggle('active', newValue);
+                log.info(`Reload Page on Resume set to: ${newValue}`);
             });
         }
 

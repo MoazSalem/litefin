@@ -410,7 +410,19 @@ class LibraryPage extends Page {
         const cacheKey = this._getCacheKey();
 
         // State Rehydration Check
-        const savedState = state.get(cacheKey);
+        // Priority 1: Check memory state cache for full rehydration
+        let savedState = state.get(cacheKey);
+
+        // Priority 2: Fallback to items restored via navigation history
+        // If the route was restored or re-entered and items were preserved in state,
+        // construct a synthetic savedState so the page rehydrates instead of dropping lazy-loaded items
+        if (!savedState && this.state.items && this.state.items.length > 0) {
+            savedState = {
+                stateData: this.state,
+                focusSectionId: this._pendingNavState?.focusSectionName || 'library-grid',
+                focusItemId: null
+            };
+        }
 
         if (savedState) {
             // Merge cached state properties
@@ -830,6 +842,34 @@ class LibraryPage extends Page {
             };
             eventBus.on('pref:alphaPickerScrollMode:changed', this._onAlphaPickerScrollModeChanged);
         }
+
+        // =========================================================================
+        // BACKGROUND AND SCREEN SLEEP LIFECYCLE HANDLERS
+        // =========================================================================
+        // When the TV turns off the screen or the app is sent to the background,
+        // save the full library state (including all lazy-loaded batches and active focus)
+        // so that returning does not leave the collection incomplete.
+        if (!this._onAppHidden) {
+            this._onAppHidden = () => {
+                const focused = focusManager.getFocused();
+                const sectionId = focusManager.getSectionForElement(focused);
+                const focusItemId = focused?.dataset?.itemId || focused?.id || null;
+                this._saveState(sectionId, focusItemId);
+            };
+            eventBus.on('app:hidden', this._onAppHidden);
+        }
+
+        // Re-affirm active focus when returning to foreground / waking from sleep
+        if (!this._onAppVisible) {
+            this._onAppVisible = () => {
+                const current = focusManager.getFocused();
+                if (!current || !document.contains(current)) {
+                    this._setupFocus();
+                }
+            };
+            eventBus.on('app:visible', this._onAppVisible);
+        }
+
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
         this.$('#btn-prev-top')?.addEventListener('click', () => this._handlePageChange(-1));
@@ -939,9 +979,16 @@ class LibraryPage extends Page {
 
     /**
      * Get page state for navigation history.
-     * Saves filters, sort, pagination, tab selection, view mode, and grid sizing config.
+     * Saves filters, sort, pagination, tab selection, view mode, grid sizing config,
+     * and loaded items for seamless infinite scroll restoration.
      */
     getNavigationState() {
+        // Persist full library state into state manager cache prior to navigation
+        const focused = focusManager.getFocused();
+        const sectionId = focusManager.getSectionForElement(focused);
+        const focusItemId = focused?.dataset?.itemId || focused?.id || null;
+        this._saveState(sectionId, focusItemId);
+
         return {
             viewType: this.state.viewType,
             sortBy: this.state.sortBy,
@@ -952,7 +999,10 @@ class LibraryPage extends Page {
             limit: this.state.limit,
             viewMode: this.state.viewMode,
             gridMode: this.state.gridMode,
-            gridColumns: this.state.gridColumns
+            gridColumns: this.state.gridColumns,
+            // Preserve loaded media items and total count across router navigation
+            items: this.state.items ? [...this.state.items] : null,
+            totalRecordCount: this.state.totalRecordCount
         };
     }
 
@@ -979,6 +1029,12 @@ class LibraryPage extends Page {
             gridColumns: savedState.gridColumns || this.state.gridColumns
         });
 
+        // Restore loaded item collection if preserved in navigation state
+        if (savedState.items && savedState.items.length > 0) {
+            this.state.items = savedState.items;
+            this.state.totalRecordCount = savedState.totalRecordCount || savedState.items.length;
+        }
+
         log.info('Navigation state restored:', savedState);
     }
 
@@ -999,6 +1055,17 @@ class LibraryPage extends Page {
             eventBus.off('pref:alphaPickerScrollMode:changed', this._onAlphaPickerScrollModeChanged);
             this._onAlphaPickerScrollModeChanged = null;
         }
+
+        // Clean up background and sleep listeners
+        if (this._onAppHidden) {
+            eventBus.off('app:hidden', this._onAppHidden);
+            this._onAppHidden = null;
+        }
+        if (this._onAppVisible) {
+            eventBus.off('app:visible', this._onAppVisible);
+            this._onAppVisible = null;
+        }
+
         this.$('#library-tabs')?.removeEventListener('click', this._onTabClick);
         this.$('#alpha-picker')?.removeEventListener('click', this._onAlphaClick);
 
@@ -4584,27 +4651,47 @@ class LibraryPage extends Page {
      * =========================================================================
      * GET ITEM SORT CHAR
      * =========================================================================
-     * Extracts the normalized first comparison character from an item.
-     * Uses SortName first; if unavailable, removes leading articles ("The ", "A ", "An ")
-     * and quotation/bracket punctuation to match server-side alphabetical sorting.
+     * Extracts the normalized first comparison character from an item for alphabet
+     * rail indexing and quick-jump positioning.
+     *
+     * Jellyfin Server Collation Rules:
+     * - Uses server-calculated SortName first (which preserves special characters
+     *   such as brackets, parentheses, and punctuation at the start of titles).
+     * - If SortName was not returned, strips common leading articles ("The ", "A ", "An ")
+     *   from Name as a client-side fallback.
+     * - Leading non-alphabetic characters (e.g. parentheses "(T)Raumschiff", brackets
+     *   "[REC]", punctuation, numbers) are NOT stripped: in Jellyfin's ascending collation
+     *   they sort before 'A' and belong to the '#' bucket.
      *
      * @param {Object} item - Media item object
-     * @returns {string} Normalized uppercase character or ''
+     * @returns {string} Normalized uppercase character ('A'-'Z' or '#')
      * =========================================================================
      */
     _getItemSortChar(item) {
         if (!item) return '';
+
+        // Prioritize server-calculated SortName, falling back to Name
         let name = (item.SortName || item.Name || '').trim();
-        // If SortName was not provided by API, strip common English leading articles
+
+        // If SortName was not provided by the API, strip common English leading articles
         if (!item.SortName && name) {
             const match = name.match(/^(the|a|an)\s+/i);
             if (match) {
                 name = name.slice(match[0].length).trim();
             }
         }
-        // Remove leading quotes, brackets, or punctuation
-        name = name.replace(/^["'‘“«\[(]+/, '').trim();
-        return name.charAt(0).toUpperCase();
+
+        if (!name) return '#';
+
+        // Extract first character and strip combining diacritics/accents (e.g., 'É' -> 'E')
+        const firstChar = name.charAt(0).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+
+        // Any non-alphabetic character (numbers, brackets, punctuation, symbols) belongs to '#'
+        if (firstChar < 'A' || firstChar > 'Z') {
+            return '#';
+        }
+
+        return firstChar;
     }
 
     /**
@@ -4623,9 +4710,10 @@ class LibraryPage extends Page {
         if (!items || !items.length) return -1;
 
         if (char === '#') {
+            // Locate the first item categorized under '#' (numbers, symbols, brackets)
             const idx = items.findIndex((item) => {
                 const firstChar = this._getItemSortChar(item);
-                return firstChar && (firstChar < 'A' || firstChar > 'Z');
+                return firstChar === '#' || (firstChar && (firstChar < 'A' || firstChar > 'Z'));
             });
             return idx !== -1 ? idx : 0;
         }
@@ -4641,7 +4729,7 @@ class LibraryPage extends Page {
         // 2. Nearest successor match: first item starting with a letter greater than target
         const nextIdx = items.findIndex((item) => {
             const firstChar = this._getItemSortChar(item);
-            return firstChar >= 'A' && firstChar > targetChar;
+            return firstChar >= 'A' && firstChar <= 'Z' && firstChar > targetChar;
         });
 
         return nextIdx;
