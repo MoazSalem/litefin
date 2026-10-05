@@ -691,10 +691,16 @@ class HomePage extends Page {
                         // Request a combined list of items limited by user's homeRowLimit setting
                         const response = await api.getMergedRows({ limit: homeRowLimit });
 
-                        // If we got valid items back, return them immediately
-                        if (response && response.Items && response.Items.length > 0) {
+                        // Verify that response contains valid items and no corrupted zero IDs
+                        // Older or misconfigured server plugins can return Id: "0", which causes broken routes.
+                        const hasCorruptIds = response?.Items?.some((i) => !i.Id || i.Id === '0');
+                        if (response && response.Items && response.Items.length > 0 && !hasCorruptIds) {
                             log.info('Successfully fetched merged items from server-side Litefin plugin');
                             return response.Items;
+                        }
+
+                        if (hasCorruptIds) {
+                            log.warn('Litefin plugin returned items with zero or missing IDs; falling back to client merge.');
                         }
                     } catch (err) {
                         // Fall back to client-side merge if the plugin is not installed or returns an error
@@ -2447,7 +2453,11 @@ class HomePage extends Page {
 
             // Try single-pass fetch via Litefin Plugin endpoint
             const pluginHero = await api.getHomeHero({ limit, ignoreWatched });
-            if (pluginHero && Array.isArray(pluginHero.Items) && pluginHero.Items.length > 0) {
+
+            // Validate that the plugin response is non-empty and does not contain invalid zero IDs
+            // If the server-side plugin returns Id: "0", fall back immediately to native item queries.
+            const hasInvalidIds = pluginHero?.Items?.some((item) => !item.Id || item.Id === '0');
+            if (pluginHero && Array.isArray(pluginHero.Items) && pluginHero.Items.length > 0 && !hasInvalidIds) {
                 items = pluginHero.Items;
             } else if (ignoreWatched) {
                 // Fallback: Fetch unplayed movies (IsUnplayed works correctly for Movies)

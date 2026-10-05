@@ -25,7 +25,8 @@ const log = logger.create('HeroCarousel');
 
 class HeroCarousel {
     constructor(options = {}) {
-        this._items = options.items || [];
+        // Filter out items lacking valid IDs to prevent broken image requests and routing errors
+        this._items = (options.items || []).filter((item) => item && item.Id && item.Id !== '0');
         this._currentIndex = 0;
         this._timer = null;
         this._container = null;
@@ -123,10 +124,25 @@ class HeroCarousel {
         // Get optimized image parameters from ImageService based on style
         const params = imageService.getParams(`hero-${carouselStyle}`);
 
-        const backdropUrl = api.getImageUrl(item.Id, 'Backdrop', {
+        // Resolve backdrop tag and source item ID (supports both item and parent series backdrops)
+        const backdropTag =
+            item.BackdropImageTags && item.BackdropImageTags.length > 0
+                ? item.BackdropImageTags[0]
+                : item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0
+                    ? item.ParentBackdropImageTags[0]
+                    : item.ImageTags?.Backdrop;
+
+        // Fall back to parent backdrop ID when the child item lacks its own artwork
+        const backdropItemId =
+            item.BackdropImageTags && item.BackdropImageTags.length > 0
+                ? item.Id
+                : item.ParentBackdropItemId || item.Id;
+
+        // Compile optimized backdrop URL with tag query for HTTP cache validation
+        const backdropUrl = api.getImageUrl(backdropItemId, 'Backdrop', {
             maxWidth: params.maxWidth,
             quality: params.quality,
-            tag: item.ImageTags?.Backdrop
+            tag: backdropTag
         });
 
         // Get Logo URL (prefer Logo, then ParentLogo)
