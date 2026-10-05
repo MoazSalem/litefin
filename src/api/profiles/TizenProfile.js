@@ -676,6 +676,25 @@ export function buildJellyfinProfile(options = {}) {
 
     const transcodingProfiles = [];
 
+    // -------------------------------------------------------------------------
+    // Direct Stream / Remux Video Detection
+    // -------------------------------------------------------------------------
+    // When video is passed through without re-encoding (remux or audio-only transcode),
+    // FFmpeg is in stream-copy mode (-c:v copy) and CANNOT cut segments on arbitrary
+    // non-keyframes. If the client forces a short SegmentLength (e.g. 2s or 6s), the server
+    // generates an HLS playlist declaring fixed durations while FFmpeg produces GOP-aligned
+    // segments. This mismatch causes buffer holes, continuous bufferSeekOverHole events,
+    // and severe audio/video desynchronization.
+    // By leaving SegmentLength undefined during remux/copy, Jellyfin server
+    // dynamically falls back to its adaptive keyframe-aligned cuts.
+    // -------------------------------------------------------------------------
+    const isVideoDirectStream = playbackMode === 'remux' || playbackMode === 'transcodeAudio';
+    const effectiveSegmentLength = isVideoDirectStream
+        ? undefined
+        : (isHtml5
+            ? PlayerSettings.get('html5SegmentLength') || 2
+            : PlayerSettings.get('tizenSegmentLength') || 6);
+
     // 1. Primary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
     for (const audioCodec of transAudioCodecsArr) {
         transcodingProfiles.push({
@@ -702,13 +721,15 @@ export function buildJellyfinProfile(options = {}) {
             // Tizen 5.x: capped at 2 channels (stereo AAC only); Tizen 6+: full surround (AC3/EAC3)
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: transMaxAudioChannels,
+            // Use 1 segment minimum on HTML5 to accelerate playback startup and reduce initial stall risk
             MinSegments: isHtml5 ? 1 : 2,
-            SegmentLength: isHtml5
-                ? PlayerSettings.get('html5SegmentLength') || 2
-                : PlayerSettings.get('tizenSegmentLength') || 6,
-            // BreakOnNonKeyFrames with fMP4 must be false — fMP4 segments must align to IDR
-            // frames. For TS we keep the original behaviour (false for AVPlay, true for HTML5).
-            BreakOnNonKeyFrames: forceFmp4Hls ? false : isHtml5 ? playbackMode !== 'remux' : false,
+            // SegmentLength must be undefined when stream-copying video to avoid GOP/manifest drift
+            SegmentLength: effectiveSegmentLength,
+            // BreakOnNonKeyFrames MUST be true for HTML5/HLS.js (matching official jellyfin-web).
+            // Setting it to false causes Jellyfin server to append -noaccurate_seek and omit
+            // -copypriorss:a:0 0 in FFmpeg, which breaks audio/video synchronization.
+            // On native AVPlay, keep false to ensure strict hardware GOP compliance.
+            BreakOnNonKeyFrames: isHtml5 ? true : false,
             // VBR AAC in MPEG-TS uses LATM framing (stream type 0x11 in the PMT).
             // Tizen 5.0 AVPlay's HLS parser expects standard ADTS framing (0x0F) and
             // immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it sees LATM in the PMT.
@@ -789,11 +810,10 @@ export function buildJellyfinProfile(options = {}) {
                 // which fMP4 HLS handles without issue.
                 MaxAudioChannels: transMaxAudioChannels,
                 MinSegments: isHtml5 ? 1 : 2,
-                SegmentLength: isHtml5
-                    ? PlayerSettings.get('html5SegmentLength') || 2
-                    : PlayerSettings.get('tizenSegmentLength') || 6,
-                // fMP4 segments MUST align to IDR boundaries — never cut on subtitle cue points.
-                BreakOnNonKeyFrames: false,
+                SegmentLength: effectiveSegmentLength,
+                // BreakOnNonKeyFrames with fMP4: must be true for HTML5/HLS.js so Jellyfin
+                // maintains accurate seek timestamps and copypriorss audio sync.
+                BreakOnNonKeyFrames: isHtml5 ? true : false,
                 EnableAudioVbrEncoding: isHtml5 ? !PlayerSettings.get('disableVbrAudio') : false
             });
         }

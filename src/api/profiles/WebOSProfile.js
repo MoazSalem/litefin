@@ -723,6 +723,25 @@ export function buildJellyfinProfile(options = {}) {
 
     const transcodingProfiles = [];
 
+    // -------------------------------------------------------------------------
+    // Direct Stream / Remux Video Detection
+    // -------------------------------------------------------------------------
+    // When video is passed through without re-encoding (remux or audio-only transcode),
+    // FFmpeg is in stream-copy mode (-c:v copy) and CANNOT cut segments on arbitrary
+    // non-keyframes. If the client forces a short SegmentLength (e.g. 2s or 6s), the server
+    // generates an HLS playlist declaring fixed durations while FFmpeg produces GOP-aligned
+    // segments. This mismatch causes buffer holes, continuous bufferSeekOverHole events,
+    // and severe audio/video desynchronization.
+    // By leaving SegmentLength undefined during remux/copy, Jellyfin server
+    // dynamically falls back to its adaptive keyframe-aligned cuts.
+    // -------------------------------------------------------------------------
+    const isVideoDirectStream = playbackMode === 'remux' || playbackMode === 'transcodeAudio';
+    const effectiveSegmentLength = isVideoDirectStream
+        ? undefined
+        : (isHtml5
+            ? PlayerSettings.get('html5SegmentLength') || 2
+            : PlayerSettings.get('webosSegmentLength') || 6);
+
     // Primary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
     for (const audioCodec of transAudioCodecsArr) {
         transcodingProfiles.push({
@@ -737,7 +756,7 @@ export function buildJellyfinProfile(options = {}) {
              *     container and required for legacy WebOS 4/5 systems.
              *
              * Segment sizing strategy:
-             *   webos  (native) — larger segments (4s) reduce HTTP round-trips and
+             *   webos  (native) — larger segments (6s) reduce HTTP round-trips and
              *            give the hardware decoder more headroom.
              *   html5  (Hls.js) — smaller segments (2s) enable faster startup and
              *            allow Hls.js to recover from network blips more quickly.
@@ -751,27 +770,16 @@ export function buildJellyfinProfile(options = {}) {
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: transMaxAudioChannels,
             // ---------------------------------------------------------------------
-            // Segment sizing: fixed at 6 seconds for all TS content.
-            //
-            // This matches the official jellyfin-webos client behaviour and ensures
-            // that each HLS chunk stays at a manageable ~72 MB at 96 Mbps (4K HEVC),
-            // which the LG hardware decoder and RAM bus can handle without stalling.
-            //
-            // A previous version used 10 s for "DV content" but the detection was
-            // based on settings (enableDolbyVision && enableHEVC) rather than actual
-            // stream metadata, so it incorrectly applied to all HDR10/HDR10+ content
-            // as well — causing the slideshow / slowmo playback reports.
+            // Segment sizing: left undefined during video copy to align with GOPs.
+            // When re-encoding, defaults to 2s for HTML5 / 6s for native WebOS.
             // ---------------------------------------------------------------------
-            SegmentLength: isHtml5
-                ? PlayerSettings.get('html5SegmentLength') || 2
-                : PlayerSettings.get('webosSegmentLength') || 6,
-            // Force IDR-aligned segment cuts for all TS content, not only DOVI.
-            // The WebOS decoder produces visible macroblocking artifacts when split
-            // mid-GOP, and the resulting non-IDR boundaries also trigger additional
-            // 'waiting' events. BreakOnNonKeyFrames is never safe on this platform.
-            // Exception: fMP4 is already forced-IDR by the muxer; and remux mode
-            // passes the stream through as-is so we must not override it either.
-            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false, // always false for TS on WebOS
+            MinSegments: isHtml5 ? 1 : 2,
+            SegmentLength: effectiveSegmentLength,
+            // BreakOnNonKeyFrames MUST be true for HTML5/HLS.js (matching official jellyfin-web).
+            // Setting it to false causes Jellyfin server to append -noaccurate_seek and omit
+            // -copypriorss:a:0 0 in FFmpeg, which breaks audio/video synchronization.
+            // On native WebOS media pipeline, keep false to ensure strict hardware GOP compliance.
+            BreakOnNonKeyFrames: isHtml5 ? true : false,
             EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
         });
     }
@@ -839,12 +847,10 @@ export function buildJellyfinProfile(options = {}) {
                 Context: 'Streaming',
                 Protocol: 'hls',
                 MaxAudioChannels: transMaxAudioChannels,
-                MinSegments: 1,
-                SegmentLength: isHtml5
-                    ? PlayerSettings.get('html5SegmentLength') || 2
-                    : PlayerSettings.get('webosSegmentLength') || 6,
-                // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
-                BreakOnNonKeyFrames: false,
+                MinSegments: isHtml5 ? 1 : 2,
+                SegmentLength: effectiveSegmentLength,
+                // BreakOnNonKeyFrames with fMP4: must be true for HTML5/HLS.js
+                BreakOnNonKeyFrames: isHtml5 ? true : false,
                 EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
             });
         }

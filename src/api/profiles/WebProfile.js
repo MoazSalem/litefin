@@ -474,38 +474,97 @@ export function buildJellyfinProfile(options = {}) {
 
     const transcodingProfiles = [];
 
-    // Primary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
+    // -------------------------------------------------------------------------
+    // Direct Stream / Remux Video Detection
+    // -------------------------------------------------------------------------
+    // When video is passed through without re-encoding (remux or audio-only transcode),
+    // FFmpeg is in stream-copy mode (-c:v copy) and CANNOT cut segments on arbitrary
+    // non-keyframes. If the client forces a short SegmentLength (e.g. 2s), the server
+    // generates an HLS playlist declaring 2s durations while FFmpeg produces 10s GOP
+    // segments. This mismatch causes massive 7-8s buffer holes, continuous
+    // bufferSeekOverHole events, and severe audio/video desynchronization.
+    // By leaving SegmentLength undefined during remux/copy, Jellyfin server
+    // dynamically falls back to its adaptive 6s default that aligns with keyframes.
+    // -------------------------------------------------------------------------
+    const isVideoDirectStream = playbackMode === 'remux' || playbackMode === 'transcodeAudio';
+    const effectiveSegmentLength = isVideoDirectStream
+        ? undefined
+        : String(PlayerSettings.get('html5SegmentLength') || 2);
+
+    // -------------------------------------------------------------------------
+    // fMP4 HLS Preference Resolution (Aligned with TizenProfile & WebOSProfile)
+    // -------------------------------------------------------------------------
+    // enableFmp4HlsContainer = master switch from PlayerSettings (defaults false).
+    // forceFmp4HlsContainer  = promotes fMP4 to primary HLS container.
+    //
+    // Technical Rationale:
+    // In DirectStream / video-copy remuxing (-c:v copy), FFmpeg's fMP4 segmenter
+    // creates GOP-boundary buffer holes (~140ms) and introduces a cumulative
+    // timeline drift between fMP4 tfdt decode timestamps and external subtitle cues.
+    // MPEG-TS preserves continuous 90kHz presentation timestamps without boundary
+    // holes, ensuring perfect subtitle sync and smooth resume transitions.
+    // -------------------------------------------------------------------------
+    const enableFmp4Hls = PlayerSettings.get('enableFmp4HlsContainer');
+    const forceFmp4Hls = enableFmp4Hls && PlayerSettings.get('forceFmp4HlsContainer');
+    const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
+
+    // 1. Primary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
     for (const audioCodec of transAudioCodecsArr) {
         transcodingProfiles.push({
-            Container: 'mp4',
+            Container: primaryHlsContainer,
             Type: 'Video',
             AudioCodec: audioCodec,
-            VideoCodec: broadTransVideo,
+            // When forced fMP4, include AV1/VP9; for MPEG-TS, restrict to TS-safe codecs
+            VideoCodec: forceFmp4Hls ? broadTransVideo : transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: transMaxAudioChannels,
-            MinSegments: '2',
-            SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
-            BreakOnNonKeyFrames: playbackMode !== 'remux',
+            // Use 1 segment minimum to accelerate playback startup and reduce initial stall risk
+            MinSegments: '1',
+            // Omitted for video copy mode to allow adaptive keyframe-aligned cuts
+            SegmentLength: effectiveSegmentLength,
+            // BreakOnNonKeyFrames MUST be true for HTML5/HLS.js (matching official jellyfin-web)
+            BreakOnNonKeyFrames: true,
             EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
         });
     }
 
-    // Secondary HLS video transcoding profile (one for each codec in transAudioCodecsArr)
-    for (const audioCodec of transAudioCodecsArr) {
-        transcodingProfiles.push({
-            Container: 'ts',
-            Type: 'Video',
-            AudioCodec: audioCodec,
-            VideoCodec: transVideoCodecs,
-            Context: 'Streaming',
-            Protocol: 'hls',
-            MaxAudioChannels: transMaxAudioChannels,
-            MinSegments: '2',
-            SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
-            BreakOnNonKeyFrames: playbackMode !== 'remux',
-            EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
-        });
+    // 2. Secondary HLS video transcoding profile (fallback container)
+    // If primary was TS, push fMP4 (mp4) secondary so modern web codecs (AV1, VP9)
+    // can still be played via HLS direct stream when requested.
+    if (!forceFmp4Hls) {
+        for (const audioCodec of transAudioCodecsArr) {
+            transcodingProfiles.push({
+                Container: 'mp4',
+                Type: 'Video',
+                AudioCodec: audioCodec,
+                VideoCodec: broadTransVideo,
+                Context: 'Streaming',
+                Protocol: 'hls',
+                MaxAudioChannels: transMaxAudioChannels,
+                MinSegments: '1',
+                SegmentLength: effectiveSegmentLength,
+                BreakOnNonKeyFrames: true,
+                EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
+            });
+        }
+    } else {
+        // If fMP4 was primary, keep MPEG-TS as secondary fallback
+        for (const audioCodec of transAudioCodecsArr) {
+            transcodingProfiles.push({
+                Container: 'ts',
+                Type: 'Video',
+                AudioCodec: audioCodec,
+                VideoCodec: transVideoCodecs,
+                Context: 'Streaming',
+                Protocol: 'hls',
+                MaxAudioChannels: transMaxAudioChannels,
+                MinSegments: '1',
+                SegmentLength: effectiveSegmentLength,
+                BreakOnNonKeyFrames: true,
+                EnableAudioVbrEncoding: !PlayerSettings.get('disableVbrAudio')
+            });
+        }
     }
 
     // Pure Audio transcoding profiles

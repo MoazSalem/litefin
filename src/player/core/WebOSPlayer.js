@@ -648,20 +648,41 @@ export class WebOSPlayer {
         return new Promise((resolve, reject) => {
             log.info('WebOSPlayer: Hls.js loading', options.url);
 
+            // -------------------------------------------------------------------------
+            // HLS.js Buffer Configuration & Stall Prevention
+            // -------------------------------------------------------------------------
+            // Browsers/emulators impose strict MSE memory quotas. Retaining 60-120s of
+            // forward buffer at high bitrates triggers quota exceeded exceptions and stalls.
+            // Align with jellyfin-web MSE defaults (30s buffer / 60s max).
+            // -------------------------------------------------------------------------
+            const configuredMaxBuffer = PlayerSettings.get('html5MaxBufferLength');
+            const maxBufferLength = configuredMaxBuffer !== undefined && configuredMaxBuffer !== null
+                ? Number(configuredMaxBuffer)
+                : 30;
+            const configuredMaxMaxBuffer = PlayerSettings.get('html5MaxMaxBufferLength');
+            const maxMaxBufferLength = configuredMaxMaxBuffer !== undefined && configuredMaxMaxBuffer !== null
+                ? Number(configuredMaxMaxBuffer)
+                : 60;
+
             const hls = new Hls({
                 startPosition:         (options.playerStartPositionTicks || 0) / 10000000,
-                maxBufferLength:       60,
-                maxMaxBufferLength:    120,
+                maxBufferLength:       maxBufferLength,
+                maxMaxBufferLength:    maxMaxBufferLength,
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut:    20000,
                 fragLoadingTimeOut:     20000,
                 maxBufferSize:          60 * 1000 * 1000,
-                enableWorker:           true
+                enableWorker:           true,
+                // Rely on standard Hls.js hole handling (matching official jellyfin-web baseline).
+                // Do not force high maxBufferHole or aggressive watchdog nudging: setting maxBufferHole
+                // triggers premature _trySkipBufferHole seeks whenever the forward buffer drops below the
+                // threshold, making the player skip back and forth and causing subtitle desync.
             });
 
             let bufferReady = false;
             let initialBufferTimer = null;
             let resolved = false;
+            let appendedSegmentsCount = 0;
 
             const resolveOnce = (value) => {
                 if (resolved) return;
@@ -692,12 +713,51 @@ export class WebOSPlayer {
                 }
             };
 
-            // Buffer-readiness gate: defer play() until the first segment is buffered.
+            // Calculate target resume position in seconds
+            const resumeSeconds = (options.playerStartPositionTicks || 0) / 10000000;
+
+            // -----------------------------------------------------------------
+            // Buffer-Readiness Gate with Resume Stabilization:
+            // Defer play() until initial media data is buffered.
+            // On resume (resumeSeconds > 0), the playhead may land near the end
+            // of a segment (e.g. 200ms before segment boundary). If play() starts
+            // immediately with < 1.0s of buffer, the decoder starves before the
+            // next segment loads, causing an instant bufferSeekOverHole jump.
+            // We inspect the native video.buffered TimeRanges directly to ensure
+            // at least 1.0s of forward cushion exists (or wait for segment #2).
+            // -----------------------------------------------------------------
             const onBufferAppended = () => {
                 if (bufferReady) return;
+                appendedSegmentsCount++;
+
+                // If resuming, calculate forward buffer cushion from the native video element
+                if (resumeSeconds > 0 && video) {
+                    let forwardBuffer = 0;
+                    const checkPos = (video.currentTime > 0) ? video.currentTime : resumeSeconds;
+                    const ranges = video.buffered;
+
+                    // Locate the buffered range covering our current resume target position
+                    if (ranges && ranges.length > 0) {
+                        for (let i = 0; i < ranges.length; i++) {
+                            // Allow a small 0.5s tolerance for GOP boundary rounding
+                            if (checkPos >= ranges.start(i) - 0.5 && checkPos <= ranges.end(i)) {
+                                forwardBuffer = ranges.end(i) - checkPos;
+                                break;
+                            }
+                        }
+                    }
+
+                    // If forward cushion is thin (< 1.0s) and we haven't buffered segment #2 yet, wait
+                    if (forwardBuffer < 1.0 && appendedSegmentsCount < 2) {
+                        log.info(`WebOSPlayer: HLS.js segment #${appendedSegmentsCount} appended, forward buffer ${forwardBuffer.toFixed(2)}s < 1.0s — waiting for next segment to stabilize resume`);
+                        return;
+                    }
+                }
+
+                // Buffer is now healthy and stabilized for smooth playback engagement
                 bufferReady = true;
                 clearTimeout(initialBufferTimer);
-                log.info('WebOSPlayer: Hls.js initial segment buffered, starting playback');
+                log.info(`WebOSPlayer: HLS.js initial buffer ready (${appendedSegmentsCount} segment(s)), starting playback`);
                 startPlayback();
             };
 
