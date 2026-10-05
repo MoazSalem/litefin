@@ -16,7 +16,7 @@ import { i18n } from '../../utils/i18n.js';
 import { toast } from '../../ui/Toast.js';
 import { storage } from '../../utils/StorageService.js';
 import { languageManager } from '../../utils/LanguageManager.js';
-import { escapeHtml } from '../../utils/Utils.js';
+import { escapeHtml, parseSubtitleMetadata } from '../../utils/Utils.js';
 import { logger } from '../../utils/Logger.js';
 
 const log = logger.create('SubtitleDownloadModal');
@@ -334,60 +334,42 @@ export default class SubtitleDownloadModal extends BaseMenu {
             return;
         }
 
-        // Generate rich markup for subtitle cards matching SubtitleEditorModal details
+        // Generate rich markup for subtitle cards and Bazarr search status placeholders
+        let downloadableIndex = 0;
         const resultsHtml = this._results
-            .map((r, idx) => {
-                const name = r.Name || `Result ${idx + 1}`;
-                const provider = r.ProviderName || '';
-                const format = (r.Format || '').toUpperCase();
-                // Format download count with localized commas (e.g. 30,983)
-                const downloads = r.DownloadCount != null ? `↓ ${r.DownloadCount.toLocaleString()}` : '';
-                const frameRate = r.FrameRate ? `${r.FrameRate} fps` : '';
-                const isPerfectMatch = !!r.IsHashMatch;
+            .map((r) => {
+                const meta = parseSubtitleMetadata(r);
 
-                // Hearing Impaired / SDH detection from API flags or filename tags
-                const isHearingImpaired = !!(
-                    r.HearingImpaired ||
-                    r.IsHearingImpaired ||
-                    (r.ThreeLetterISOLanguageName && r.ThreeLetterISOLanguageName.toLowerCase().includes('hi')) ||
-                    (name && /\b(sdh|hearing impaired|hi)\b/i.test(name))
-                );
-
-                // Forced subtitle detection from API flags or filename tags
-                const isForced = !!(
-                    r.IsForced ||
-                    r.Forced ||
-                    (name && /\bforced\b/i.test(name))
-                );
-
-                // Match rate percentage or badge calculation
-                let matchBadge = '';
-                if (isPerfectMatch) {
-                    // Perfect hash match badge
-                    matchBadge = `<span class="track-badge match-badge">★ 100% Match</span>`;
-                } else if (typeof r.Score === 'number' && !isNaN(r.Score)) {
-                    // Numerical score percentage badge
-                    const pct = r.Score <= 1 ? Math.round(r.Score * 100) : Math.round(r.Score);
-                    if (pct > 0) {
-                        matchBadge = `<span class="track-badge match-badge">${pct}% Match</span>`;
-                    }
-                } else if (typeof r.CommunityRating === 'number' && !isNaN(r.CommunityRating) && r.CommunityRating > 0) {
-                    // Star rating badge
-                    matchBadge = `<span class="track-badge match-badge">★ ${r.CommunityRating.toFixed(1)}</span>`;
+                // Render in-progress or failed async background search status cards (e.g. Bazarr)
+                if (meta.isPlaceholder) {
+                    return `
+                        <div class="subtitle-placeholder-card">
+                            <div class="subtitle-placeholder-header">
+                                <div class="loading-spinner-small"></div>
+                                <span>${escapeHtml(meta.name)}</span>
+                            </div>
+                            <div class="subtitle-placeholder-desc">
+                                ${escapeHtml(meta.placeholderComment)}
+                            </div>
+                        </div>
+                    `;
                 }
 
+                const currentBtnIndex = downloadableIndex++;
                 return `
-                    <button class="modal-option-btn subtitle-result-btn" data-id="${r.Id}" data-index="${idx}" tabindex="0">
+                    <button class="modal-option-btn subtitle-result-btn" data-id="${meta.id}" data-index="${currentBtnIndex}" tabindex="0">
                         <div class="subtitle-result-info">
-                            <div class="track-label-text">${escapeHtml(name)}</div>
+                            <div class="track-label-text">${escapeHtml(meta.name)}</div>
                             <div class="subtitle-result-meta">
-                                ${matchBadge}
-                                ${isHearingImpaired ? `<span class="track-badge badge-sdh" title="${i18n.t('HearingImpaired') || 'Hearing Impaired'}">SDH</span>` : ''}
-                                ${isForced ? `<span class="track-badge badge-forced" title="${i18n.t('Forced') || 'Forced'}">Forced</span>` : ''}
-                                ${provider ? `<span class="track-badge provider-badge">${escapeHtml(provider)}</span>` : ''}
-                                ${format ? `<span class="track-badge">${escapeHtml(format)}</span>` : ''}
-                                ${frameRate ? `<span class="track-badge">${escapeHtml(frameRate)}</span>` : ''}
-                                ${downloads ? `<span class="track-badge">${downloads}</span>` : ''}
+                                ${meta.matchBadge}
+                                ${meta.isHearingImpaired ? `<span class="track-badge badge-sdh" title="${i18n.t('HearingImpaired') || 'Hearing Impaired'}">SDH</span>` : ''}
+                                ${meta.isForced ? `<span class="track-badge badge-forced" title="${i18n.t('Forced') || 'Forced'}">Forced</span>` : ''}
+                                ${meta.isAiTranslated ? `<span class="track-badge badge-ai" title="${i18n.t('AITranslated') || 'AI / Machine Translated'}">${meta.isMachineTranslated ? 'MT' : 'AI'}</span>` : ''}
+                                ${meta.displayProvider ? `<span class="track-badge provider-badge">${escapeHtml(meta.displayProvider)}</span>` : ''}
+                                ${meta.format ? `<span class="track-badge">${escapeHtml(meta.format)}</span>` : ''}
+                                ${meta.frameRate ? `<span class="track-badge">${escapeHtml(meta.frameRate)}</span>` : ''}
+                                ${meta.downloads ? `<span class="track-badge">${meta.downloads}</span>` : ''}
+                                ${meta.uploader ? `<span class="track-badge uploader-badge">👤 ${escapeHtml(meta.uploader)}</span>` : ''}
                             </div>
                         </div>
                     </button>
@@ -409,10 +391,14 @@ export default class SubtitleDownloadModal extends BaseMenu {
             });
         });
 
-        // Only shift focus to results if explicitly requested (e.g. from a direct search)
-        if (autoFocus) {
+        // Only shift focus to results if explicitly requested and downloadable items exist
+        if (autoFocus && downloadableIndex > 0) {
             this._activeSection = 'results';
             this._resultFocusIndex = 0;
+            this.updateFocus();
+        } else if (autoFocus && downloadableIndex === 0) {
+            // Stay in search row if only placeholders were returned
+            this._activeSection = 'search-row';
             this.updateFocus();
         }
     }
@@ -424,7 +410,7 @@ export default class SubtitleDownloadModal extends BaseMenu {
      * @private
      */
     async _downloadSubtitle(subtitleId, btn) {
-        if (this._isDownloading || !this.player) return;
+        if (this._isDownloading || !this.player || !subtitleId || subtitleId.startsWith('placeholder_')) return;
         this._isDownloading = true;
 
         // Provide immediate visual feedback

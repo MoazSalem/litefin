@@ -1071,6 +1071,13 @@ progress.card-progress::-webkit-progress-value {
     border-color: rgba(235, 87, 87, 0.4);
 }
 
+.track-badge.badge-ai,
+.track-badge.badge-mt {
+    background: rgba(168, 85, 247, 0.18);
+    color: #c084fc;
+    border-color: rgba(168, 85, 247, 0.4);
+}
+
 .track-badge.provider-badge {
     background: rgba(255, 255, 255, 0.15);
     color: var(--jf-text-primary, #ffffff);
@@ -1078,13 +1085,50 @@ progress.card-progress::-webkit-progress-value {
     text-transform: none;
 }
 
+.track-badge.uploader-badge {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--jf-text-secondary, #bbbbbb);
+    border-color: rgba(255, 255, 255, 0.18);
+    text-transform: none;
+    font-weight: 500;
+}
+
 .modal-option-btn.focused .track-badge.badge-sdh,
 .modal-option-btn.focused .track-badge.badge-forced,
+.modal-option-btn.focused .track-badge.badge-ai,
+.modal-option-btn.focused .track-badge.badge-mt,
 .modal-option-btn.focused .track-badge.provider-badge,
+.modal-option-btn.focused .track-badge.uploader-badge,
 .modal-option-btn.focused .track-badge.match-badge {
     background: var(--jf-bg-dark, #000000) !important;
     color: var(--jf-accent, #ffffff) !important;
     border-color: var(--jf-accent, #ffffff) !important;
+}
+
+.subtitle-placeholder-card {
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: var(--jf-border-radius);
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.subtitle-placeholder-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--jf-text-primary);
+}
+
+.subtitle-placeholder-desc {
+    font-size: 0.9rem;
+    color: var(--jf-text-secondary);
+    line-height: 1.4;
 }
 
 .track-badge {

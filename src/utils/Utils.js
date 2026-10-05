@@ -340,3 +340,251 @@ export function getOverviewButtonText() {
     // Default standard label when truncated
     return i18n.t('ShowMore') || 'Show more';
 }
+
+/**
+ * ============================================================================
+ * Subtitle Provider Name Normalizer
+ * ============================================================================
+ * Converts internal provider keys from SubBuzz, Bazarr, and Jellyfin plugins
+ * into user-friendly branded provider names.
+ *
+ * @param {string} name - Raw provider identifier
+ * @returns {string} Formatted display provider name
+ */
+export function formatProviderName(name) {
+    if (!name) return '';
+    const clean = String(name).trim();
+    const lower = clean.toLowerCase().replace(/[\s._-]+/g, '');
+
+    switch (lower) {
+        case 'opensubtitles':
+        case 'opensubtitlescom':
+        case 'opensubtitlesorg':
+            return 'OpenSubtitles';
+        case 'subsource':
+        case 'subsourcenet':
+            return 'SubSource';
+        case 'subdl':
+        case 'subdlcom':
+            return 'SubDL';
+        case 'yifysubtitles':
+        case 'yify':
+            return 'YIFY Subtitles';
+        case 'addic7ed':
+        case 'addic7edcom':
+            return 'Addic7ed';
+        case 'subf2m':
+        case 'subf2mco':
+            return 'Subf2m';
+        case 'subssabbz':
+            return 'Subs.sab.bz';
+        case 'subsunacsnet':
+            return 'Subsunacs.net';
+        case 'subscene':
+        case 'subscenecom':
+            return 'Subscene';
+        case 'podnapisi':
+        case 'podnapisinet':
+            return 'Podnapisi';
+        case 'titulky':
+        case 'titulkycom':
+            return 'Titulky';
+        case 'supersubtitles':
+            return 'SuperSubtitles';
+        default:
+            return clean;
+    }
+}
+
+/**
+ * ============================================================================
+ * Remote Subtitle Metadata Parser
+ * ============================================================================
+ * Deeply extracts, decodes, and normalizes rich subtitle properties returned by
+ * Jellyfin native providers, SubBuzz multi-provider plugin, and Bazarr plugin:
+ * - Real underlying sub-providers (e.g., SubSource, SubDL, OpenSubtitles)
+ * - AI & Machine translation badges ([AI], [MT], os-auto, etc.)
+ * - Hearing Impaired / SDH detection across flags, filenames, and provider IDs
+ * - Forced subtitle flags across filenames, flags, and provider IDs
+ * - Match percentage scores extracted from numeric fields or provider comments
+ * - Uploader / author credits
+ * - Formatted download counts with thousands separators
+ * - Clean titles stripped of HTML markup and duplicated bracket tags
+ * - Status placeholders (e.g., Bazarr background search in progress)
+ *
+ * @param {Object} r - RemoteSubtitleInfo item
+ * @returns {Object} Structured metadata for UI rendering
+ */
+export function parseSubtitleMetadata(r) {
+    if (!r) return {};
+
+    // Detect Bazarr async search placeholders
+    const isPlaceholder = !!(r.Id && String(r.Id).startsWith('placeholder_'));
+    const rawName = r.Name || '';
+    const rawComment = r.Comment || '';
+    const rawProvider = r.ProviderName || '';
+
+    // Strip HTML tags from title (SubBuzz supports SubtitleInfoWithHtml)
+    let cleanName = rawName.replace(/<[^>]*>/g, '').trim();
+
+    // Parse ID parts if Bazarr formatted: (movie|episode)|id|provider|HI|Forced|subtitle
+    const idParts = (r.Id && typeof r.Id === 'string') ? r.Id.split('|') : [];
+    const isBazarrId = (idParts[0] === 'movie' || idParts[0] === 'episode') && idParts.length >= 6;
+    const bazarrHi = isBazarrId && idParts[3]?.toLowerCase() === 'true';
+    const bazarrForced = isBazarrId && idParts[4]?.toLowerCase() === 'true';
+
+    // Hearing Impaired / SDH detection across all provider sources
+    const isHearingImpaired = !!(
+        r.HearingImpaired ||
+        r.IsHearingImpaired ||
+        bazarrHi ||
+        (r.ThreeLetterISOLanguageName && r.ThreeLetterISOLanguageName.toLowerCase().includes('hi')) ||
+        /\b(sdh|hearing impaired|hi)\b/i.test(cleanName) ||
+        /\b(sdh|hearing impaired|hi)\b/i.test(rawComment)
+    );
+
+    // Forced subtitle detection
+    const isForced = !!(
+        r.Forced ||
+        r.IsForced ||
+        bazarrForced ||
+        /\bforced\b/i.test(cleanName) ||
+        /\bforced\b/i.test(rawComment)
+    );
+
+    // AI & Machine Translation detection (SubBuzz tags and os-auto uploaders)
+    const isAiTranslated = !!(
+        r.AiTranslated ||
+        r.MachineTranslated ||
+        /\b(?:ai|machine)[ -]?translated\b/i.test(rawComment) ||
+        /\[(?:AI|MT)\]/i.test(rawName) ||
+        /\b(os-auto)\b/i.test(r.Author || '') ||
+        /\b(os-auto)\b/i.test(rawComment)
+    );
+
+    const isMachineTranslated = !!(
+        r.MachineTranslated ||
+        /\bmachine[ -]?translated\b/i.test(rawComment) ||
+        /\[MT\]/i.test(rawName)
+    );
+
+    // Strip duplicate badge tags from the title now that we render them as badges
+    cleanName = cleanName.replace(/^(\[(?:Forced|HI\/SDH|SDH|HI|AI|MT)\]\s*)+/i, '').trim();
+    if (!cleanName) cleanName = rawName;
+
+    // Sub-provider and uploader extraction
+    let displayProvider = rawProvider;
+    let uploader = r.Author || '';
+
+    if (rawProvider && rawProvider.toLowerCase() === 'bazarr') {
+        // Bazarr ID pattern: "movie|123|provider|..." or "episode|456|provider|..."
+        const idParts = (r.Id || '').split('|');
+        let subProvider = '';
+        if (idParts.length >= 3 && (idParts[0] === 'movie' || idParts[0] === 'episode')) {
+            subProvider = idParts[2];
+        }
+
+        // Bazarr Comment format: "{provider} - Score: XX% - by {uploader}"
+        const commentParts = rawComment.split(' - ');
+        if (!subProvider && commentParts.length > 0 && commentParts[0]) {
+            subProvider = commentParts[0].trim();
+        }
+
+        // Extract uploader from Bazarr comment if present
+        const uploaderMatch = rawComment.match(/by\s+([^\s\-<]+)/i);
+        if (uploaderMatch) {
+            uploader = uploaderMatch[1].trim();
+        }
+
+        if (subProvider) {
+            displayProvider = formatProviderName(subProvider);
+        } else {
+            displayProvider = 'Bazarr';
+        }
+    } else if (rawProvider && rawProvider.toLowerCase().includes('subbuzz')) {
+        // SubBuzz sub-provider resolution
+        let subProvider = r.SubBuzzProviderName || '';
+
+        // Check if ID is prefixed by provider key
+        if (!subProvider && r.Id) {
+            const knownSubbuzz = [
+                'Addic7ed', 'OpenSubtitlesCom', 'Subf2m', 'SubDl',
+                'SubSource', 'SubsSabBz', 'SubsUnacsNet', 'YifySubtitles', 'Subscene'
+            ];
+            const found = knownSubbuzz.find((p) => r.Id.startsWith(p));
+            if (found) subProvider = found;
+        }
+
+        // Extract from comment header "[Provider]" or "<b>[Provider]</b>"
+        if (!subProvider) {
+            const commentMatch = rawComment.match(/\[([a-zA-Z0-9_.\-]+)\]/);
+            if (commentMatch) {
+                subProvider = commentMatch[1];
+            }
+        }
+
+        if (subProvider) {
+            displayProvider = formatProviderName(subProvider);
+        } else {
+            displayProvider = 'SubBuzz';
+        }
+    } else if (displayProvider) {
+        displayProvider = formatProviderName(displayProvider);
+    }
+
+    // Match score and hash match resolution
+    let score = null;
+    let isPerfectMatch = !!r.IsHashMatch;
+
+    if (typeof r.Score === 'number' && !isNaN(r.Score)) {
+        score = r.Score <= 1 ? Math.round(r.Score * 100) : Math.round(r.Score);
+    }
+
+    // Parse score from comment if not present on top-level object
+    if (score === null && rawComment) {
+        const scoreMatch = rawComment.match(/Score:\s*([\d\.]+)%?/i);
+        if (scoreMatch) {
+            const parsedScore = parseFloat(scoreMatch[1]);
+            if (!isNaN(parsedScore)) {
+                score = parsedScore <= 1 ? Math.round(parsedScore * 100) : Math.round(parsedScore);
+            }
+        }
+    }
+
+    if (score !== null && score >= 100) {
+        isPerfectMatch = true;
+    }
+
+    let matchBadge = '';
+    if (isPerfectMatch) {
+        matchBadge = `<span class="track-badge match-badge">★ 100% Match</span>`;
+    } else if (score !== null && score > 0) {
+        matchBadge = `<span class="track-badge match-badge">${score}% Match</span>`;
+    } else if (typeof r.CommunityRating === 'number' && !isNaN(r.CommunityRating) && r.CommunityRating > 0) {
+        matchBadge = `<span class="track-badge match-badge">★ ${r.CommunityRating.toFixed(1)}</span>`;
+    }
+
+    // Format & framerate & download counts
+    const format = (r.Format || '').toUpperCase();
+    const frameRate = r.FrameRate ? `${r.FrameRate} fps` : '';
+    const downloads = r.DownloadCount != null ? `↓ ${r.DownloadCount.toLocaleString()}` : '';
+
+    return {
+        id: r.Id,
+        isPlaceholder,
+        placeholderComment: rawComment,
+        name: cleanName,
+        displayProvider,
+        uploader,
+        format,
+        frameRate,
+        downloads,
+        isHearingImpaired,
+        isForced,
+        isAiTranslated,
+        isMachineTranslated,
+        isPerfectMatch,
+        score,
+        matchBadge
+    };
+}
