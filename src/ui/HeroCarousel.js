@@ -34,6 +34,12 @@ class HeroCarousel {
         this._autoScrollInterval = savedInterval ? parseInt(savedInterval, 10) : 8000; // Default 8s
         this._hideTimeoutId = null;
 
+        // Viewport visibility and progressive preloading state tracking
+        this._isVisible = true;
+        this._intersectionObserver = null;
+        this._preloadTimeoutId = null;
+        this._preloadIdleId = null;
+
         // Bindings
         this._handleFocus = this._handleFocus.bind(this);
         this._handleBlur = this._handleBlur.bind(this);
@@ -140,7 +146,13 @@ class HeroCarousel {
                 quality: logoParams.quality,
                 tag: logoTag
             });
-            const logoSrc = `src="${logoUrl}"`;
+            // -----------------------------------------------------------------
+            // Progressive asset loading:
+            // The active slide (index 0) loads its logo immediately via src.
+            // Inactive slides store the URL in data-src to prevent the browser
+            // from making 5-10 concurrent high-res image requests on mount.
+            // -----------------------------------------------------------------
+            const logoSrc = isActive ? `src="${logoUrl}"` : `data-src="${logoUrl}"`;
             logoHtml = `<div class="hero-logo-container"><img ${logoSrc} alt="" class="hero-logo"></div>`;
         } else {
             logoHtml = `<h1 class="hero-item-title">${escapeHtml(i18n.ensureBiDi(item.Name))}</h1>`;
@@ -186,10 +198,21 @@ class HeroCarousel {
             }
         }
 
+        // ---------------------------------------------------------------------
+        // Lazy Backdrop & BlurHash Texture Allocation
+        // ---------------------------------------------------------------------
+        // TV chipsets have limited GPU texture memory. If all 5-10 slides mount
+        // with inline background-image, the browser decodes every full-screen
+        // 1820px backdrop at once, starving the main thread during page load.
+        // We set background-image exclusively for the active slide (index 0).
+        // Inactive slides store the URL in data-backdrop and load just-in-time.
+        // ---------------------------------------------------------------------
+        const backdropStyle = isActive ? ` style="background-image: url('${backdropUrl}')"` : '';
+
         return `
             <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}"${!isActive ? ' style="visibility:hidden"' : ''}>
-                <div class="hero-backdrop" data-backdrop="${backdropUrl}" style="background-image: url('${backdropUrl}')">
-                    ${blurHash ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
+                <div class="hero-backdrop" data-backdrop="${backdropUrl}"${backdropStyle}>
+                    ${blurHash && isActive ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
                 </div>
                 <div class="hero-content">
                     ${logoHtml}
@@ -439,9 +462,60 @@ class HeroCarousel {
             img.src = url;
         });
 
-        // Preload all remaining slides so that every item in the carousel is ready
-        for (let i = 1; i < this._items.length; i++) {
-            this._preloadSlide(i);
+        // ---------------------------------------------------------------------
+        // Viewport Visibility Observer (Off-screen CPU/GPU Suspension)
+        // ---------------------------------------------------------------------
+        // When the user scrolls down into content rows on the home page, the
+        // carousel is no longer visible. Running background auto-scroll transitions
+        // and crossfade animations off-screen steals CPU/GPU cycles and causes
+        // frame drops during vertical row navigation. We suspend the timer when
+        // off-screen and resume instantly when scrolled back into view.
+        // ---------------------------------------------------------------------
+        if ('IntersectionObserver' in window) {
+            this._intersectionObserver = new IntersectionObserver(
+                (entries) => {
+                    for (let i = 0; i < entries.length; i++) {
+                        const entry = entries[i];
+                        const isVisible = entry.isIntersecting && entry.intersectionRatio > 0.15;
+                        if (this._isVisible !== isVisible) {
+                            this._isVisible = isVisible;
+                            if (!isVisible) {
+                                log.debug('Hero carousel off-screen; suspending timer');
+                                this._stopAutoScroll();
+                            } else if (!this._timer && !this._isFocused) {
+                                log.debug('Hero carousel visible; resuming timer');
+                                this._startAutoScroll();
+                            }
+                        }
+                    }
+                },
+                { threshold: [0, 0.15] }
+            );
+            this._intersectionObserver.observe(this._container);
+        }
+
+        // ---------------------------------------------------------------------
+        // Deferred Single-Slide Preload Window
+        // ---------------------------------------------------------------------
+        // Rather than eager-loading all 5-10 slides at mount time, we only preload
+        // the immediate next slide (index 1) after an idle interval. Subsequent
+        // slides are preloaded progressively during transitions.
+        // ---------------------------------------------------------------------
+        if (this._items.length > 1) {
+            if ('requestIdleCallback' in window) {
+                this._preloadIdleId = window.requestIdleCallback(
+                    () => {
+                        this._preloadSlide(1);
+                        this._preloadIdleId = null;
+                    },
+                    { timeout: 2500 }
+                );
+            } else {
+                this._preloadTimeoutId = setTimeout(() => {
+                    this._preloadSlide(1);
+                    this._preloadTimeoutId = null;
+                }, 1200);
+            }
         }
     }
 
@@ -464,6 +538,18 @@ class HeroCarousel {
         if (this._hideTimeoutId) {
             clearTimeout(this._hideTimeoutId);
             this._hideTimeoutId = null;
+        }
+        if (this._preloadTimeoutId) {
+            clearTimeout(this._preloadTimeoutId);
+            this._preloadTimeoutId = null;
+        }
+        if (this._preloadIdleId && 'cancelIdleCallback' in window) {
+            window.cancelIdleCallback(this._preloadIdleId);
+            this._preloadIdleId = null;
+        }
+        if (this._intersectionObserver) {
+            this._intersectionObserver.disconnect();
+            this._intersectionObserver = null;
         }
         if (this._onFocusChanged) {
             eventBus.off('focus:changed', this._onFocusChanged);
@@ -505,6 +591,9 @@ class HeroCarousel {
     _startAutoScroll() {
         this._stopAutoScroll();
         if (this._items.length <= 1) return;
+
+        // Bypassed if carousel is currently suspended off-screen
+        if (this._isVisible === false) return;
 
         // Reset the visual progress bar to stay in sync with the JS timer
         // ONLY if animations are enabled AND we are using the 'progress' indicator style.
@@ -620,6 +709,28 @@ class HeroCarousel {
         const logo = item.querySelector('.hero-logo');
         if (logo && logo.dataset.src && !logo.src) {
             logo.src = logo.dataset.src;
+
+            // Recalculate natural aspect ratio container height once deferred logo loads
+            const adjustLogoHeight = () => {
+                const container = logo.closest('.hero-logo-container');
+                if (container) {
+                    const aspect = logo.naturalWidth / logo.naturalHeight || 1;
+                    const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+                    const maxW = 400; // max-width of .hero-logo in CSS
+                    const maxHeight = isCompact ? 110 : 130;
+                    const minHeight = isCompact ? 50 : 60;
+
+                    const targetHeight = maxW / aspect;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                    container.style.height = `${containerHeight}px`;
+                }
+            };
+
+            if (logo.complete) {
+                adjustLogoHeight();
+            } else {
+                logo.onload = adjustLogoHeight;
+            }
         }
     }
 
@@ -683,15 +794,21 @@ class HeroCarousel {
         dots[this._currentIndex].classList.add('active');
 
         // After the opacity transition completes, hide the previous slide
-        // from GPU compositing to free memory (30-35MB per slide)
+        // and demote GPU compositing layers to release texture caches
         if (this._hideTimeoutId) clearTimeout(this._hideTimeoutId);
         this._hideTimeoutId = setTimeout(() => {
             prevItem.style.visibility = 'hidden';
             prevItem.style.willChange = 'auto';
             const prevContent = prevItem.querySelector('.hero-content');
             if (prevContent) prevContent.style.willChange = 'auto';
-            // Keep the loaded backdrop image in memory; visibility: hidden already
-            // releases GPU layer compositing overhead cleanly.
+            const prevBackdrop = prevItem.querySelector('.hero-backdrop');
+            if (prevBackdrop) prevBackdrop.style.willChange = 'auto';
+
+            // Clean up will-change on active item now that transition is settled
+            nextItem.style.willChange = 'auto';
+            if (nextContent) nextContent.style.willChange = 'auto';
+            if (nextBackdrop) nextBackdrop.style.willChange = 'auto';
+
             this._hideTimeoutId = null;
         }, 1050); // Just after the 1000ms opacity transition
 

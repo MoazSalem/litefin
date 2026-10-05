@@ -543,42 +543,80 @@
 
 /* ============================================================================
    Dot progress animation
+   ============================================================================
+   PERFORMANCE CRITICAL (TV SoCs / Tizen / webOS):
+   Animating 'width' is NOT a GPU-composited property; it forces continuous style
+   recalculations and layout reflows on every single frame (60fps) for 8 seconds.
+   On low-power smart TV chipsets, this saturates the main thread and introduces
+   severe input latency or dropped frames when navigating or scrolling.
+
+   By animating transform: scaleX() from 0 to 1 with transform-origin: left,
+   the animation runs entirely on the GPU compositor thread with ZERO CPU layout
+   reflows, looking 100% visually identical down to the pixel.
    ============================================================================ */
 
 @-webkit-keyframes heroProgress {
-    from { width: 0; }
-    to   { width: 100%; }
+    /* Scale from 0 to full width on compositor layer */
+    from {
+        -webkit-transform: scaleX(0);
+        transform: scaleX(0);
+    }
+    to {
+        -webkit-transform: scaleX(1);
+        transform: scaleX(1);
+    }
 }
 
 @keyframes heroProgress {
-    from { width: 0; }
-    to   { width: 100%; }
+    /* Hardware accelerated scale on GPU */
+    from {
+        -webkit-transform: scaleX(0);
+        transform: scaleX(0);
+    }
+    to {
+        -webkit-transform: scaleX(1);
+        transform: scaleX(1);
+    }
 }
 
 .hero-dot-progress {
     position: absolute;
     top: 0;
     left: 0;
+    /* Full width container, transformed via scaleX */
+    width: 100%;
     height: 100%;
     background: var(--jf-accent);
     border-radius: 4px;
-    width: 0;
-    /* Pre-promote so width animation runs on GPU */
-    will-change: width;
+    /* Anchor scaling to left edge for LTR layouts */
+    -webkit-transform-origin: left center;
+    transform-origin: left center;
+    -webkit-transform: scaleX(0);
+    transform: scaleX(0);
+    /* Promote to GPU composite layer for hardware-accelerated transform */
+    will-change: transform;
+}
+
+/* RTL layout support: anchor scaling to the right edge */
+[dir="rtl"] .hero-dot-progress {
+    -webkit-transform-origin: right center;
+    transform-origin: right center;
 }
 
 .hero-dot.active .hero-dot-progress {
+    /* Apply smooth linear fill over the active interval duration */
     -webkit-animation: heroProgress var(--indicator-duration, 8s) linear;
     animation: heroProgress var(--indicator-duration, 8s) linear;
 }
 
 /* 
  * Disabled Indicator Animation
- * When the setting is off, the progress bar is simply shown at 100% width
+ * When the setting is off, the progress bar is simply shown at 100% scale
  * instantly for the active slide.
  */
 .hero-carousel-container.no-indicator-animation .hero-dot.active .hero-dot-progress {
-    width: 100%;
+    -webkit-transform: scaleX(1);
+    transform: scaleX(1);
     -webkit-animation: none !important;
     animation: none !important;
 }
