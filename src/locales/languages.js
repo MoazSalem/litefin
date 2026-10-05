@@ -111,6 +111,11 @@ export const availableLanguages = [
         "completeness": 95.41
     },
     {
+        "value": "zh-tw",
+        "label": "中文（台灣）",
+        "completeness": 99.53
+    },
+    {
         "value": "ja",
         "label": "日本語",
         "completeness": 95.41
@@ -518,11 +523,6 @@ export const availableLanguages = [
     {
         "value": "zh-hk",
         "label": "中文（中國香港特別行政區）",
-        "completeness": 16.1
-    },
-    {
-        "value": "zh-tw",
-        "label": "中文（台灣）",
         "completeness": 16.1
     }
 ];
