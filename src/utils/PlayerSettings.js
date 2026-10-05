@@ -437,8 +437,20 @@ const DEFAULTS = {
     // PLAYBACK SETTINGS
     // =========================================================================
 
-    // Trailer playback mode ('internal_proxy', 'internal_iframe', 'external')
-    trailerPlaybackMode: 'internal_proxy',
+    /*
+     * Trailer Playback Mode
+     * -------------------------------------------------------------------------
+     * Governs how remote and online trailers are streamed and displayed:
+     *   - 'internal_proxy'  : Internal Player (New) - streams media through native player/proxy
+     *   - 'internal_iframe' : Internal Player (Legacy Iframe) - embeds video in an overlay iframe
+     *   - 'external'        : External App - opens native platform YouTube app or browser
+     *
+     * Defaults to 'internal_proxy' (New) on native TV platforms (Tizen and webOS)
+     * for seamless TV remote control and hardware acceleration, while defaulting to
+     * 'internal_iframe' (Legacy Iframe) on Web/Desktop browsers for maximum desktop
+     * compatibility without requiring background proxy services.
+     */
+    trailerPlaybackMode: (platformInfo.isTizen || platformInfo.isWebOS) ? 'internal_proxy' : 'internal_iframe',
 
     /*
      * Await Tracks Before Playback

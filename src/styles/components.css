@@ -1724,8 +1724,12 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
     z-index: 1; /* Behind OSD */
 }
 
-/* Trailer iframe overrides to remove any inherited margins */
+/* Trailer iframe & host container overrides to ensure 100% full-viewport sizing */
+.trailer-iframe-container #yt-player-host,
 .trailer-iframe-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     display: block;

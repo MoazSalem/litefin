@@ -417,7 +417,9 @@ export class TrailerPlayer extends Component {
 
     _initYouTubePlayer(videoId) {
         const container = this._overlay.querySelector('#trailerIframeContainer');
-        container.innerHTML = '<div id="yt-player-host"></div>';
+        /* Ensure host container has explicit full viewport geometry before YT instantiation
+           so YouTube does not measure 0px height and default to low resolution streams */
+        container.innerHTML = '<div id="yt-player-host" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>';
 
         const createPlayer = () => this._createYTPlayer(videoId);
 
@@ -493,6 +495,7 @@ export class TrailerPlayer extends Component {
             enablejsapi: '0', // Explicitly off — we're in fallback, not using the API
             fs: '1', // Allow fullscreen from native controls
             iv_load_policy: '3',
+            vq: 'hd1080', // High definition quality parameter hint
             origin: 'https://www.youtube.com',
             host: 'https://www.youtube.com'
         };
@@ -506,7 +509,8 @@ export class TrailerPlayer extends Component {
         iframe.width = '100%';
         iframe.height = '100%';
         iframe.setAttribute('frameborder', '0');
-        iframe.allow = 'autoplay; encrypted-media; fullscreen';
+        // Include full capabilities (encrypted-media is required by Chrome for Widevine HD streams)
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen';
         iframe.allowFullscreen = true;
 
         const revealIframe = () => {
@@ -542,7 +546,13 @@ export class TrailerPlayer extends Component {
              • autoplay removed — unreliable inside sandboxed iframes on TV; we call
                                   playVideo() explicitly in the onReady callback instead
              • disablekb removed — this was blocking API command delivery on Tizen/WebOS */
+        /* Explicitly request 100% viewport dimensions on the player instance.
+           Without explicit width & height, YouTube's API defaults to 640x360
+           attributes, causing YouTube's adaptive streaming ladder to lock onto
+           low-definition (144p-360p) streams. */
         this._ytPlayer = new window.YT.Player('yt-player-host', {
+            width: '100%',
+            height: '100%',
             videoId: videoId,
             playerVars: {
                 controls: 0, // Hide native YT UI; we draw our own OSD
@@ -553,6 +563,7 @@ export class TrailerPlayer extends Component {
                 fs: 0, // No native fullscreen button
                 playsinline: 1, // Inline playback, don't hijack full screen
                 iv_load_policy: 3, // No video annotations
+                vq: 'hd1080', // Target 1080p resolution hint
                 // origin + host are the primary fix for error 153 (embed denied).
                 // Using youtube.com (not nocookie) matches what YouTube validates against.
                 origin: 'https://www.youtube.com',
@@ -561,6 +572,7 @@ export class TrailerPlayer extends Component {
             events: {
                 onReady: (e) => this._onYTReady(e),
                 onStateChange: (e) => this._onYTStateChange(e),
+                onPlaybackQualityChange: (e) => this._onYTQualityChange(e),
                 onError: (e) => this._onYTError(e)
             }
         });
@@ -583,6 +595,21 @@ export class TrailerPlayer extends Component {
     }
 
     _onYTReady(event) {
+        // Enforce maximum available resolution immediately upon API readiness
+        this._requestHighestQuality(event.target);
+
+        // Ensure the generated iframe element has complete capability permissions
+        // (encrypted-media is strictly required by Chromium for HD adaptive streaming)
+        try {
+            const iframe = event.target.getIframe?.() || this._overlay.querySelector('#trailerIframeContainer iframe');
+            if (iframe) {
+                iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+                iframe.setAttribute('allowfullscreen', 'true');
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+            }
+        } catch (e) {}
+
         event.target.playVideo();
         this._startProgressUpdate();
 
@@ -590,6 +617,7 @@ export class TrailerPlayer extends Component {
         // Reveal the player once the API confirms it is loaded.
         setTimeout(() => {
             this._hideLoading();
+            this._requestHighestQuality(event.target);
         }, 500);
 
         // Try to get real YouTube title immediately once ready
@@ -602,12 +630,15 @@ export class TrailerPlayer extends Component {
     }
 
     _onYTStateChange(event) {
-        // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
+        // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0, BUFFERING = 3
         if (event.data === 1) {
             // Playing state active - display filled pause design
             this._isPlaying = true;
             this._playPauseBtn.innerHTML = osdIcons.pause;
             this._hideLoading();
+
+            // Re-apply highest quality request as soon as buffering finishes
+            this._requestHighestQuality(event.target);
 
             // Try again on play in case data was delayed
             try {
@@ -616,6 +647,9 @@ export class TrailerPlayer extends Component {
                     this._titleEl.textContent = data.title;
                 }
             } catch (e) {}
+        } else if (event.data === 3) {
+            // Buffering state: prime stream quality before frames are decoded
+            this._requestHighestQuality(event.target);
         } else if (event.data === 2) {
             // Paused state active - display filled play design
             this._isPlaying = false;
@@ -624,6 +658,38 @@ export class TrailerPlayer extends Component {
             // Ended
             this._executeAction('next'); // Auto-advance to next trailer
         }
+    }
+
+    /**
+     * Request highest available playback quality from YouTube.
+     * Evaluates available quality tiers from the player (e.g. hd1080, hd720)
+     * and signals the target resolution to avoid defaulting to 144p/360p.
+     *
+     * @param {Object} [player] - YouTube Player instance
+     */
+    _requestHighestQuality(player = this._ytPlayer) {
+        if (!player) return;
+        try {
+            if (typeof player.setPlaybackQuality === 'function') {
+                const levels = typeof player.getAvailableQualityLevels === 'function'
+                    ? player.getAvailableQualityLevels()
+                    : null;
+
+                if (Array.isArray(levels) && levels.length > 0) {
+                    const preferred = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720'];
+                    const target = preferred.find((p) => levels.includes(p)) || levels[0];
+                    if (target && target !== 'auto') {
+                        player.setPlaybackQuality(target);
+                    }
+                } else {
+                    player.setPlaybackQuality('hd1080');
+                }
+            }
+        } catch (e) {}
+    }
+
+    _onYTQualityChange(event) {
+        console.log('[TrailerPlayer] YouTube playback quality updated:', event?.data);
     }
 
     _startProgressUpdate() {

@@ -540,7 +540,7 @@ class SeerrDetailsPage extends Page {
 
     _showRemoteTrailerPlayer() {
         themeSongPlayer.stopInstant();
-        const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+        const mode = PlayerSettings.get('trailerPlaybackMode');
         const trailers = (this._item && this._item.RemoteTrailers) || [];
         if (!trailers.length) return;
 

@@ -4427,7 +4427,7 @@ class SettingsPage extends Page {
                             },
                             { value: 'external', label: i18n.t('ExternalApp') || 'External App' }
                         ],
-                        PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy'
+                        PlayerSettings.get('trailerPlaybackMode')
                     )}
                     </div>
                 </div>

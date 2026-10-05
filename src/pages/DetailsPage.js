@@ -6043,7 +6043,7 @@ class DetailsPage extends Page {
         // Fallback Crawler Activation: Force remote trailers flag for standard media
         // if the node proxy is enabled, since the crawler can fetch them dynamically.
         const isStandardMedia = ['Movie', 'Series', 'Season'].includes(item.Type);
-        const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+        const mode = PlayerSettings.get('trailerPlaybackMode');
         const isProxyEnabled = mode === 'internal_proxy' && PlayerSettings.get('enableBackgroundService') !== false;
 
         if (!this._hasRemoteTrailers && isStandardMedia && isProxyEnabled) {
@@ -6387,7 +6387,7 @@ class DetailsPage extends Page {
         // --------------------------------------------------------------------
         themeSongPlayer.stopInstant();
 
-        const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+        const mode = PlayerSettings.get('trailerPlaybackMode');
 
         let trailers = this._item.RemoteTrailers || [];
         if (this._isProxyFallback && trailers.length === 0) {
