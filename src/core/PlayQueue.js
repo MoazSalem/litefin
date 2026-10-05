@@ -889,16 +889,51 @@ class PlayQueue {
                 ParentId: parentId,
                 Recursive: true,
                 IncludeItemTypes: 'Audio',
-                SortBy: sortBy,
+                SortBy: (this._contextType === 'music' || currentItem.Type === 'Audio')
+                    ? 'ParentIndexNumber,IndexNumber,SortName'
+                    : sortBy,
                 SortOrder: 'Ascending',
                 Limit: 100,
                 Fields: 'RunTimeTicks'
             })
         ]);
 
+        let audios = audioResponse.Items || [];
+
+        // Fallback for virtual music albums or artist collections where tracks
+        // are linked by AlbumId or ArtistIds rather than folder-level ParentId
+        if (audios.length === 0 && (this._contextType === 'music' || currentItem.Type === 'Audio')) {
+            const albumAudioRes = await api.getItems({
+                AlbumIds: parentId,
+                Recursive: true,
+                IncludeItemTypes: 'Audio',
+                SortBy: 'ParentIndexNumber,IndexNumber,SortName',
+                SortOrder: 'Ascending',
+                Limit: 100,
+                Fields: 'RunTimeTicks'
+            });
+
+            if (albumAudioRes?.Items?.length > 0) {
+                audios = albumAudioRes.Items;
+            } else {
+                // Check if the container is an Artist
+                const artistAudioRes = await api.getItems({
+                    ArtistIds: parentId,
+                    Recursive: true,
+                    IncludeItemTypes: 'Audio',
+                    SortBy: 'ParentIndexNumber,IndexNumber,SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 100,
+                    Fields: 'RunTimeTicks'
+                });
+                if (artistAudioRes?.Items?.length > 0) {
+                    audios = artistAudioRes.Items;
+                }
+            }
+        }
+
         const movies = moviesResponse.Items || [];
         const episodes = episodesResponse.Items || [];
-        const audios = audioResponse.Items || [];
 
         // Combine: Movies first, then Episodes, then Audio, and stamp each with a PlaylistItemId
         this._queue = [...movies, ...episodes, ...audios];

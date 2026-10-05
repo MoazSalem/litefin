@@ -1476,15 +1476,28 @@ class DetailsPage extends Page {
         if (this._item.Type !== 'MusicAlbum') return;
 
         try {
-            const response = await api.getItems({
-                ParentId: this._itemId,
+            // In Jellyfin, music album tracks are indexed by their AlbumId.
+            // We first query via AlbumIds which succeeds regardless of folder layout.
+            let response = await api.getItems({
+                AlbumIds: this._itemId,
                 IncludeItemTypes: 'Audio',
                 Recursive: true,
                 Fields: 'UserData,RunTimeTicks',
                 SortBy: 'ParentIndexNumber,IndexNumber,SortName'
             });
 
-            const songs = response.Items || [];
+            // If virtual album query yields no results, fallback to folder hierarchy (ParentId)
+            if (!response?.Items?.length) {
+                response = await api.getItems({
+                    ParentId: this._itemId,
+                    IncludeItemTypes: 'Audio',
+                    Recursive: true,
+                    Fields: 'UserData,RunTimeTicks',
+                    SortBy: 'ParentIndexNumber,IndexNumber,SortName'
+                });
+            }
+
+            const songs = response?.Items || [];
             if (songs.length > 0) {
                 this._renderAlbumSongs(songs);
             }

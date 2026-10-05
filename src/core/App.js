@@ -638,19 +638,122 @@ class App {
 
                 let itemToPlay = item;
 
-                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, BoxSet without movies/episodes),
-                // the API cannot play it directly. We must resolve it to the first playable audio track.
-                if (item && ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Artist', 'Person'].includes(item.Type)) {
+                // ================================================================
+                // Audio Container Resolution (Albums, Artists, Genres, Playlists)
+                // ================================================================
+                // Containers cannot be played directly by the video/audio engine; they
+                // must resolve to their first constituent track. In Jellyfin:
+                // - MusicAlbum tracks are linked by AlbumId (not necessarily ParentId)
+                // - MusicArtist tracks are linked by ArtistIds
+                // - MusicGenre tracks are linked by GenreIds
+                // - Person tracks are linked by PersonIds/ArtistIds
+                // - Folders are linked by physical ParentId
+                if (item && ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Artist', 'Person', 'Folder'].includes(item.Type)) {
                     try {
-                        const tracks = await api.getItems({
-                            ParentId: item.Id,
-                            Recursive: true,
-                            IncludeItemTypes: 'Audio',
-                            Limit: 1,
-                            SortBy: 'SortName',
-                            SortOrder: 'Ascending'
-                        });
-                        if (tracks.Items && tracks.Items.length > 0) {
+                        let tracks = null;
+                        // For music albums and collections, sort by disc and track number first
+                        const albumTrackSort = 'ParentIndexNumber,IndexNumber,SortName';
+
+                        // Case 1: MusicAlbum container — primary query via AlbumIds
+                        if (item.Type === 'MusicAlbum') {
+                            tracks = await api.getItems({
+                                AlbumIds: item.Id,
+                                IncludeItemTypes: 'Audio',
+                                Limit: 1,
+                                SortBy: albumTrackSort,
+                                SortOrder: 'Ascending'
+                            });
+
+                            // Fallback to ParentId if virtual album mapping is empty
+                            if (!tracks?.Items?.length) {
+                                tracks = await api.getItems({
+                                    ParentId: item.Id,
+                                    Recursive: true,
+                                    IncludeItemTypes: 'Audio',
+                                    Limit: 1,
+                                    SortBy: albumTrackSort,
+                                    SortOrder: 'Ascending'
+                                });
+                            }
+                        }
+                        // Case 2: MusicArtist or Artist container — query via ArtistIds
+                        else if (item.Type === 'MusicArtist' || item.Type === 'Artist') {
+                            tracks = await api.getItems({
+                                ArtistIds: item.Id,
+                                IncludeItemTypes: 'Audio',
+                                Limit: 1,
+                                SortBy: albumTrackSort,
+                                SortOrder: 'Ascending'
+                            });
+
+                            // Fallback to ParentId if artist is folder-based
+                            if (!tracks?.Items?.length) {
+                                tracks = await api.getItems({
+                                    ParentId: item.Id,
+                                    Recursive: true,
+                                    IncludeItemTypes: 'Audio',
+                                    Limit: 1,
+                                    SortBy: 'SortName',
+                                    SortOrder: 'Ascending'
+                                });
+                            }
+                        }
+                        // Case 3: MusicGenre container — query via GenreIds
+                        else if (item.Type === 'MusicGenre') {
+                            tracks = await api.getItems({
+                                GenreIds: item.Id,
+                                IncludeItemTypes: 'Audio',
+                                Limit: 1,
+                                SortBy: albumTrackSort,
+                                SortOrder: 'Ascending'
+                            });
+
+                            // Fallback to ParentId
+                            if (!tracks?.Items?.length) {
+                                tracks = await api.getItems({
+                                    ParentId: item.Id,
+                                    Recursive: true,
+                                    IncludeItemTypes: 'Audio',
+                                    Limit: 1,
+                                    SortBy: 'SortName',
+                                    SortOrder: 'Ascending'
+                                });
+                            }
+                        }
+                        // Case 4: Person (contributor/performer) container — query via PersonIds or ArtistIds
+                        else if (item.Type === 'Person') {
+                            tracks = await api.getItems({
+                                PersonIds: item.Id,
+                                IncludeItemTypes: 'Audio',
+                                Limit: 1,
+                                SortBy: albumTrackSort,
+                                SortOrder: 'Ascending'
+                            });
+
+                            if (!tracks?.Items?.length) {
+                                tracks = await api.getItems({
+                                    ArtistIds: item.Id,
+                                    IncludeItemTypes: 'Audio',
+                                    Limit: 1,
+                                    SortBy: albumTrackSort,
+                                    SortOrder: 'Ascending'
+                                });
+                            }
+                        }
+                        // Case 5: Folder or generic directory container
+                        else {
+                            tracks = await api.getItems({
+                                ParentId: item.Id,
+                                Recursive: true,
+                                IncludeItemTypes: 'Audio',
+                                Limit: 1,
+                                SortBy: albumTrackSort,
+                                SortOrder: 'Ascending'
+                            });
+                        }
+
+                        // Verify that at least one playable audio track was resolved
+                        if (tracks?.Items && tracks.Items.length > 0) {
                             itemToPlay = tracks.Items[0];
                             itemToPlay.contextType = 'music';
                             itemToPlay.contextId = item.Id;
