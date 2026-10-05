@@ -2461,16 +2461,47 @@ export class JellyfinPlayer extends EventEmitter {
 
             const currentTicks = this.getCurrentPositionTicks();
             
-            // Check if the requested index is the original default track
-            let isCustomAudioTrack = true;
+            // ────────────────────────────────────────────────────────────────
+            // Determine if the requested audio track requires server remuxing
+            // ────────────────────────────────────────────────────────────────
+            // In progressive DirectPlay (HTML5 / Chromium), the native media
+            // element cannot switch audio tracks in a multi-audio container and
+            // always decodes the container's physical default / first audio stream.
+            //
+            // If the user requests that physical default / first track, DirectPlay
+            // works natively without server remuxing.
+            //
+            // NOTE: We deliberately do NOT compare against ms.DefaultAudioStreamIndex
+            // because Jellyfin dynamically overwrites DefaultAudioStreamIndex with
+            // whatever track was requested in the previous PlaybackInfo call!
+            // ────────────────────────────────────────────────────────────────
+            let isCustomAudioTrack = false;
+            let isFirstAudioTrack = true;
+            let trackRequiresDirectStream = false;
+
             if (this._currentItem && this._currentItem.MediaSources) {
-                const msId = this._currentPlayOptions.mediaSourceId;
+                const msId = this._currentPlayOptions?.mediaSourceId;
                 const fallbackSource = this._currentItem.MediaSources[0];
                 const ms = this._currentItem.MediaSources.find(m => m.Id === msId) || fallbackSource;
-                if (ms && index === ms.DefaultAudioStreamIndex) {
-                    isCustomAudioTrack = false;
+
+                if (ms && Array.isArray(ms.MediaStreams)) {
+                    const audioStreams = ms.MediaStreams.filter(s => s.Type === 'Audio');
+                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s)) ||
+                        audioStreams.find(s => isAudioTrackNativelyPlayable(s)) ||
+                        audioStreams[0];
+                    const defaultIndex = defaultAudioStream ? defaultAudioStream.Index : undefined;
+                    const firstAudioIndex = audioStreams.length > 0 ? audioStreams[0].Index : undefined;
+
+                    const reqIndex = Number(index);
+                    isCustomAudioTrack = (defaultIndex !== undefined && reqIndex !== Number(defaultIndex));
+                    isFirstAudioTrack = (firstAudioIndex !== undefined && reqIndex === Number(firstAudioIndex));
+
+                    trackRequiresDirectStream = doesAudioTrackRequireDirectStream(ms, reqIndex, this._backendType);
                 }
             }
+
+            const needsDirectStreamForAudio = trackRequiresDirectStream ||
+                (this._backendType !== 'tizen' && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
             // ────────────────────────────────────────────────────────────────
             // Calculate Restart Playback Mode
@@ -2478,17 +2509,19 @@ export class JellyfinPlayer extends EventEmitter {
             // - If the user's initial mode was explicitly a forced mode
             //   ('transcode' or 'remux'), we preserve it.
             // - Otherwise, we default to 'auto' to let the server decide.
-            // - If the target codec is unsupported, we MUST force 'auto'
-            //   so that CodecProfiles are sent to the server for transcode.
-            // - If the target codec is supported, we revert to the user's
-            //   initial playback mode (which allows going back to DirectPlay).
+            // - If the target codec is unsupported or audio requires remux,
+            //   we ensure 'auto' mode so CodecProfiles / DirectStream profiles
+            //   are evaluated by the server.
+            // - If the target track can DirectPlay natively, we revert to the
+            //   user's initial playback mode (allowing return to DirectPlay).
             // ────────────────────────────────────────────────────────────────
             const baseMode = (this._initialPlaybackMode === 'transcode' || this._initialPlaybackMode === 'remux')
                 ? this._initialPlaybackMode
                 : 'auto';
             const restartPlaybackMode = baseMode === 'transcode' ? 'transcode'
-                : !isTargetCodecSupported ? 'auto'
+                : (!isTargetCodecSupported || needsDirectStreamForAudio) ? 'auto'
                 : baseMode;
+
             const restartOptions = {
                 ...this._currentPlayOptions,
                 audioStreamIndex: index,
@@ -2496,7 +2529,7 @@ export class JellyfinPlayer extends EventEmitter {
                 secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
                 startPositionTicks: currentTicks,
                 playbackMode: restartPlaybackMode,
-                _forceDirectStream: this._backendType !== 'tizen' && !supportsNativeAudio && isCustomAudioTrack
+                _forceDirectStream: needsDirectStreamForAudio
             };
 
             // Persist so future restarts (bitrate change, etc.) carry the right track
