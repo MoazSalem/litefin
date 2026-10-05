@@ -1063,9 +1063,12 @@ export class JellyfinPlayer extends EventEmitter {
             if (this._currentPlayOptions && !this._audioRestartInProgress) {
                 const currentTicks = this.getCurrentPositionTicks();
 
+                // Build clean restart options carrying active audio and subtitle tracks
                 const restartOptions = {
                     ...this._currentPlayOptions,
                     audioStreamIndex:   targetIndex,
+                    subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                    secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
                     startPositionTicks: currentTicks,
                     // MUST use 'remux' here — not 'directPlay'.
                     //
@@ -1126,8 +1129,12 @@ export class JellyfinPlayer extends EventEmitter {
                 's. Restarting with Remux at target', (effectiveTicks / 10000000).toFixed(2), 's');
 
             if (this._currentPlayOptions && !this._isRestarting) {
+                // Build restart options preserving active audio and subtitle selections
                 const restartOptions = {
                     ...this._currentPlayOptions,
+                    audioStreamIndex: this._currentAudioStreamIndex,
+                    subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                    secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
                     startPositionTicks: effectiveTicks,
                     playbackMode: 'remux'
                 };
@@ -1246,9 +1253,12 @@ export class JellyfinPlayer extends EventEmitter {
         // Disarm watchdog so we don't re-trigger or cascade
         this._clearRemuxStuckWatchdog();
 
-        // Build transcode restart configuration preserving stream selections
+        // Build transcode restart configuration preserving active stream selections
         const transcodeOptions = {
             ...this._currentPlayOptions,
+            audioStreamIndex: this._currentAudioStreamIndex,
+            subtitleStreamIndex: this._currentSubtitleStreamIndex,
+            secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
             startPositionTicks: targetTicks,
             playbackMode: 'transcode'
         };
@@ -1871,9 +1881,13 @@ export class JellyfinPlayer extends EventEmitter {
                 playMethod:    this._currentPlayMethod
             });
 
-            // Initialize current stream indices
+            // Initialize current stream indices from options
             this._currentAudioStreamIndex = options.audioStreamIndex;
             this._currentSubtitleStreamIndex = options.subtitleStreamIndex;
+            if (options.secondarySubtitleStreamIndex !== undefined) {
+                // Preserve secondary subtitle index if supplied in restart options
+                this._currentSecondarySubtitleStreamIndex = options.secondarySubtitleStreamIndex;
+            }
 
             // If not provided, resolve best DirectPlay audio track from MediaSource
             if (this._currentAudioStreamIndex === undefined && mediaSource.MediaStreams) {
@@ -2397,6 +2411,21 @@ export class JellyfinPlayer extends EventEmitter {
 
         this._currentAudioStreamIndex = index;
 
+        // =====================================================================
+        // Play Options Synchronization (Audio Track)
+        // =====================================================================
+        // Persist the updated audio index into active play options immediately.
+        // This ensures that any subsequent playback restart (e.g. subtitle burn-in
+        // transition, transcode escalation, or bitrate adjustments) carries this
+        // track forward rather than reverting to the container's default stream.
+        // =====================================================================
+        if (this._currentPlayOptions) {
+            this._currentPlayOptions.audioStreamIndex = index;
+        }
+        if (this._lastPlayOptions) {
+            this._lastPlayOptions.audioStreamIndex = index;
+        }
+
         // Determine if target track codec is natively supported by current hardware backend
         let isTargetCodecSupported = true;
         if (this._backendType === 'tizen' || this._backendType === 'webos' || this._backendType === 'html5') {
@@ -2463,6 +2492,8 @@ export class JellyfinPlayer extends EventEmitter {
             const restartOptions = {
                 ...this._currentPlayOptions,
                 audioStreamIndex: index,
+                subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
                 startPositionTicks: currentTicks,
                 playbackMode: restartPlaybackMode,
                 _forceDirectStream: this._backendType !== 'tizen' && !supportsNativeAudio && isCustomAudioTrack
@@ -2553,6 +2584,22 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         this._currentSubtitleStreamIndex = index;
+
+        // =====================================================================
+        // Play Options Synchronization (Primary Subtitle Track)
+        // =====================================================================
+        // Persist the updated subtitle index into active play options immediately.
+        // If a subsequent event triggers a session restart (such as switching audio
+        // tracks which forces a server-side remux, or manual bitrate adjustments),
+        // the restart options will inherit this active subtitle track instead of
+        // reverting to the item's initial or default subtitle stream.
+        // =====================================================================
+        if (this._currentPlayOptions) {
+            this._currentPlayOptions.subtitleStreamIndex = index;
+        }
+        if (this._lastPlayOptions) {
+            this._lastPlayOptions.subtitleStreamIndex = index;
+        }
 
         // =====================================================================
         // Burn-in restart: if the server is baking the subtitle into the video,
@@ -3148,6 +3195,19 @@ export class JellyfinPlayer extends EventEmitter {
 
         log.info('Setting secondary subtitle index:', index);
         this._currentSecondarySubtitleStreamIndex = index;
+
+        // =====================================================================
+        // Play Options Synchronization (Secondary Subtitle Track)
+        // =====================================================================
+        // Keep active play options in sync so secondary subtitle selections are
+        // preserved across audio track switches, transcode escalation, or bitrate changes.
+        // =====================================================================
+        if (this._currentPlayOptions) {
+            this._currentPlayOptions.secondarySubtitleStreamIndex = index;
+        }
+        if (this._lastPlayOptions) {
+            this._lastPlayOptions.secondarySubtitleStreamIndex = index;
+        }
 
         // Delegate to SubtitleManager — it handles fetch, parse, and cue ticking
         await this._subtitleManager.setSecondaryTrack(index);
@@ -3957,6 +4017,9 @@ export class JellyfinPlayer extends EventEmitter {
         // This is more robust than seeking from 0 for HLS
         const playOptions = {
             ...this._currentPlayOptions,
+            audioStreamIndex: this._currentAudioStreamIndex,
+            subtitleStreamIndex: this._currentSubtitleStreamIndex,
+            secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
             startPositionTicks: currentTicks,
             playbackMode: this._playbackMode
         };
@@ -4031,6 +4094,9 @@ export class JellyfinPlayer extends EventEmitter {
                 const currentTicks = this.getCurrentPositionTicks();
                 const newOptions = {
                     ...this._lastPlayOptions,
+                    audioStreamIndex: this._currentAudioStreamIndex,
+                    subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                    secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
                     startPositionTicks: currentTicks,
                     playbackMode: mode
                 };
