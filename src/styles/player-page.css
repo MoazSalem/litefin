@@ -524,6 +524,17 @@ html[data-light-music-player="true"] .audio-subtitle {
     text-align: center;
     z-index: 40;
     pointer-events: none;
+
+    /*
+     * Hardware-accelerated GPU spring transition physics:
+     * Fluid cubic-bezier(0.16, 1, 0.3, 1) transition curves with transform-origin
+     * anchored at bottom center. Promotes layer to GPU compositor.
+     */
+    -webkit-transform-origin: bottom center;
+    transform-origin: bottom center;
+    -webkit-transition: -webkit-transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
 }
 
 .subtitle-line {
@@ -534,16 +545,74 @@ html[data-light-music-player="true"] .audio-subtitle {
     border-radius: var(--jf-border-radius);
     line-height: 1.4;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+
+    /* Smooth padding and font-size transitions for responsive compact scaling */
+    -webkit-transition: padding 0.38s cubic-bezier(0.16, 1, 0.3, 1), font-size 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: padding 0.38s cubic-bezier(0.16, 1, 0.3, 1), font-size 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Secondary Subtitle (Top) */
 .subtitle-overlay.secondary {
     bottom: auto;
     top: 10%;
+    -webkit-transform-origin: top center;
+    transform-origin: top center;
 }
 
 .subtitle-overlay.secondary .subtitle-line {
     opacity: 0.9;
+}
+
+/* ==========================================================================
+ * DYNAMIC TEXT SUBTITLE SHIFTING
+ * ==========================================================================
+ * Elevates the text subtitle frame smoothly above the bottom OSD controls bar
+ * whenever playback controls are invoked by remote or pointer.
+ *
+ * Graphic, PGS, and ASS subtitles intentionally retain their authored coordinates
+ * and do not shift to avoid disrupting complex positioning tags and typesetting.
+ * (A separate dedicated toggle for ASS subtitles will be implemented in the future.)
+ *
+ * Dual-Subtitle Scenario:
+ * When both primary (bottom) and secondary (top) subtitles are active,
+ * both frames scale to a compact 88% footprint to preserve clear sightlines.
+ * ========================================================================== */
+
+/* Single Subtitle: Primary bottom text subtitle elevates above controls */
+.player-page.osd-active:not(.osd-dodging-disabled) .subtitle-overlay:not(.secondary),
+.player-container.osd-active:not(.osd-dodging-disabled) ~ .subtitle-overlay:not(.secondary) {
+    -webkit-transform: translateY(-13.5vh) !important;
+    transform: translateY(-13.5vh) !important;
+}
+
+/* Dual Subtitles Active: Bottom Subtitle (elevated + compact scale) */
+.player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-overlay:not(.secondary),
+.player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) ~ .subtitle-overlay:not(.secondary) {
+    -webkit-transform: translateY(-12.5vh) scale(0.88) !important;
+    transform: translateY(-12.5vh) scale(0.88) !important;
+}
+
+/* Dual Subtitles Active: Top Subtitle (compact scale in-place at top, no vertical translation) */
+.player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-overlay.secondary,
+.player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) ~ .subtitle-overlay.secondary {
+    -webkit-transform: scale(0.88) !important;
+    transform: scale(0.88) !important;
+}
+
+/* Secondary Subtitle baseline: Always stationary at top of screen without vertical translation */
+.subtitle-overlay.secondary,
+.player-page .subtitle-overlay.secondary,
+.player-container ~ .subtitle-overlay.secondary {
+    bottom: auto !important;
+    top: 10% !important;
+    -webkit-transform-origin: top center;
+    transform-origin: top center;
+}
+
+/* Dual Subtitles Active: Compact padding to minimize screen obstruction */
+.player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-line,
+.player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-line {
+    padding: 6px 13px !important;
 }
 
 /* ==========================================================================
@@ -614,12 +683,38 @@ html[data-layout-tier="ultra-legacy"] .subtitle-overlay {
     z-index: 50 !important;
     pointer-events: none !important;
     text-align: center !important;
+    -webkit-transform-origin: bottom center !important;
+    transform-origin: bottom center !important;
+    -webkit-transition: -webkit-transform 0.38s ease !important;
+    transition: transform 0.38s ease !important;
 }
 
 html[data-layout-tier="ultra-legacy"] .subtitle-overlay.secondary {
     /* Secondary subtitles sit at the top */
     bottom: auto !important;
     top: 10% !important;
+    -webkit-transform-origin: top center !important;
+    transform-origin: top center !important;
+    -webkit-transform: none !important;
+    transform: none !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .player-page.osd-active:not(.osd-dodging-disabled) .subtitle-overlay:not(.secondary),
+html[data-layout-tier="ultra-legacy"] .player-container.osd-active:not(.osd-dodging-disabled) ~ .subtitle-overlay:not(.secondary) {
+    -webkit-transform: translateY(-13.5vh) !important;
+    transform: translateY(-13.5vh) !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-overlay:not(.secondary),
+html[data-layout-tier="ultra-legacy"] .player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) ~ .subtitle-overlay:not(.secondary) {
+    -webkit-transform: translateY(-12.5vh) scale(0.88) !important;
+    transform: translateY(-12.5vh) scale(0.88) !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-overlay.secondary,
+html[data-layout-tier="ultra-legacy"] .player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) ~ .subtitle-overlay.secondary {
+    -webkit-transform: scale(0.88) !important;
+    transform: scale(0.88) !important;
 }
 
 html[data-layout-tier="ultra-legacy"] .subtitle-line {

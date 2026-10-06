@@ -193,6 +193,8 @@
     "LabelSubtitlePlaybackMode": "Subtitle mode",
     "LabelSubtitleRenderer": "Subtitle renderer",
     "LabelSubtitleVerticalPosition": "Vertical position",
+    "LabelSubtitleOsdDodging": "Shift Text Subtitles Above Controls",
+    "SubtitleOsdDodgingDescription": "Automatically elevate text subtitles above playback controls when on-screen display is visible.",
     "LabelTextColor": "Text color",
     "LabelTextColorHdr": "HDR Text Color",
     "LabelTextColorSdr": "SDR Text Color",

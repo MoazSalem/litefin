@@ -446,6 +446,20 @@ export default class OSDController extends Component {
         this._clearSeekState(false);
         document.removeEventListener('keyup', this._onSeekKeyUp, true);
 
+        /*
+         * Clean up active OSD state from page and container on destruction.
+         * Ensures subtitles never get trapped in an elevated state if the player
+         * page unloads while OSD controls are visible.
+         */
+        const pageEl = this._playerPage?.el || document.querySelector('.player-page');
+        if (pageEl) {
+            pageEl.classList.remove('osd-active');
+        }
+        const playerContainer = document.getElementById('player-container');
+        if (playerContainer) {
+            playerContainer.classList.remove('osd-active');
+        }
+
         // Cancel any pending 2-second stealth hold or active transient HUD
         this._cancelDownHold();
         if (this._stealthHudTimeout) {
@@ -1296,6 +1310,25 @@ export default class OSDController extends Component {
         if (this._osdEl) this._osdEl.classList.remove('osd-is-hidden');
         this._isOsdVisible = true;
 
+        /*
+         * ====================================================================
+         * DYNAMIC SUBTITLE DODGING (SMART SHIFT)
+         * ====================================================================
+         * When OSD controls become visible, elevate the player page and
+         * container state by adding the 'osd-active' class. This triggers smooth,
+         * hardware-accelerated spring animations that shift bottom text subtitles
+         * upward above the controls bar and seekbar, avoiding any visual overlap.
+         * ====================================================================
+         */
+        const pageEl = this._playerPage?.el || document.querySelector('.player-page');
+        if (pageEl) {
+            pageEl.classList.add('osd-active');
+        }
+        const playerContainer = document.getElementById('player-container');
+        if (playerContainer) {
+            playerContainer.classList.add('osd-active');
+        }
+
         // Start background polling when OSD becomes visible
         this._startUpdates();
 
@@ -1639,6 +1672,23 @@ export default class OSDController extends Component {
         if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
+
+        /*
+         * ====================================================================
+         * SUBTITLE RESTORE ON OSD HIDE
+         * ====================================================================
+         * Remove the 'osd-active' class so subtitles smoothly glide back down
+         * to their baseline positions using fluid spring easing curves.
+         * ====================================================================
+         */
+        const pageEl = this._playerPage?.el || document.querySelector('.player-page');
+        if (pageEl) {
+            pageEl.classList.remove('osd-active');
+        }
+        const playerContainer = document.getElementById('player-container');
+        if (playerContainer) {
+            playerContainer.classList.remove('osd-active');
+        }
 
         // Clear Magic Cursor hover when hiding
         this._clearMagicHover();

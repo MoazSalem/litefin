@@ -1647,9 +1647,22 @@ body.lyrics-active .subtitle-overlay {
 .osd-header, 
 .osd-controls, 
 .player-container, 
-.loading-backdrop-layer,
-.subtitle-overlay {
+.loading-backdrop-layer {
+    -webkit-transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.subtitle-overlay {
+    -webkit-transition: 
+        width 0.4s cubic-bezier(0.25, 1, 0.5, 1), 
+        left 0.4s cubic-bezier(0.25, 1, 0.5, 1),
+        -webkit-transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: 
+        width 0.4s cubic-bezier(0.25, 1, 0.5, 1), 
+        left 0.4s cubic-bezier(0.25, 1, 0.5, 1),
+        -webkit-transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .osd-modal-header {

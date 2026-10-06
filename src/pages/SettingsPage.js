@@ -4787,6 +4787,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Subtitle OSD Dodging (Smart Shift) Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSubtitleOsdDodging">${i18n.t('LabelSubtitleOsdDodging')}</span>
+                        <span class="setting-description" data-i18n="SubtitleOsdDodgingDescription">${i18n.t('SubtitleOsdDodgingDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('subtitleOsdDodging') !== false ? 'active' : ''}" 
+                                id="subtitle-osd-dodging-toggle" 
+                                data-setting="subtitleOsdDodging"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelTextWeight">${i18n.t('LabelTextWeight')}</span>
@@ -8389,6 +8404,30 @@ class SettingsPage extends Page {
 
                 // Invalidate focus cache so the newly visible items can be focused
                 focusManager.invalidateCache();
+            });
+        }
+
+        /*
+         * ====================================================================
+         * SUBTITLE OSD DODGING TOGGLE (SMART SHIFT)
+         * ====================================================================
+         * Manages user preference to dynamically elevate text subtitles above
+         * on-screen display controls whenever playback actions or navigation occur.
+         * Default state is enabled (true).
+         * ====================================================================
+         */
+        const osdDodgingBtn = this.$('#subtitle-osd-dodging-toggle');
+        if (osdDodgingBtn) {
+            osdDodgingBtn.addEventListener('click', () => {
+                // Read current preference state (defaults to true if unset)
+                const currentValue = PlayerSettings.get('subtitleOsdDodging') !== false;
+                const newValue = !currentValue;
+
+                // Persist new toggle state in PlayerSettings
+                PlayerSettings.set('subtitleOsdDodging', newValue);
+
+                // Update visual active state on toggle switch button
+                osdDodgingBtn.classList.toggle('active', newValue);
             });
         }
 
