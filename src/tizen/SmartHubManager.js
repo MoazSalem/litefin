@@ -327,12 +327,29 @@ class SmartHubManager {
             let mergedItems = [];
 
             // ─── Phase 1: Try server-side Litefin plugin first ─────────────────
+            // ─── Phase 1: Server-side pre-merged row fetching ──────────────────
+            // Parse configured Next Up max days filter from preferences, defaulting to 365
+            const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+            const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+            const mergedParams = { limit: 10 };
+
+            // Compute cutoff timestamp if a positive days limit constraint is defined
+            let cutoffIso = null;
+            if (daysLimit > 0) {
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - daysLimit);
+                cutoffIso = cutoff.toISOString();
+                // Supply cutoff to server companion plugin query parameters
+                mergedParams.nextUpDateCutoff = cutoffIso;
+                mergedParams.NextUpDateCutoff = cutoffIso;
+            }
+
             // Query the custom endpoint provided by our Litefin plugin.
             // When using the plugin, we fetch up to 10 pre-merged, deduplicated,
             // and chronologically sorted items directly from the server.
             try {
                 log.info('Attempting to fetch pre-merged continue/next-up items from Litefin plugin');
-                const response = await api.getMergedRows({ limit: 10 });
+                const response = await api.getMergedRows(mergedParams);
                 if (response && response.Items && response.Items.length > 0) {
                     // Filter out container items defensively
                     const validPluginItems = response.Items.filter(
@@ -363,9 +380,6 @@ class SmartHubManager {
                         EnableTotalRecordCount: false
                     }),
                     (async () => {
-                        // Extract Next Up max days filter from preferences, defaults to 365
-                        const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
-                        const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                         const params = {
                             Limit: 5,
                             ImageTypeLimit: 1,
@@ -374,10 +388,8 @@ class SmartHubManager {
                         };
 
                         // Apply the cutoff date constraint if configured
-                        if (daysLimit > 0) {
-                            const cutoff = new Date();
-                            cutoff.setDate(cutoff.getDate() - daysLimit);
-                            params.NextUpDateCutoff = cutoff.toISOString();
+                        if (cutoffIso) {
+                            params.NextUpDateCutoff = cutoffIso;
                         }
                         return api.getNextUp(params);
                     })()

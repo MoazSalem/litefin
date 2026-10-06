@@ -684,12 +684,33 @@ class HomePage extends Page {
                 cardType: 'resume',
                 contextType: 'resume',
                 fetchFn: async () => {
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 0: Preference Parsing & Cutoff Computation
+                    // ──────────────────────────────────────────────────────────
+                    // Retrieve configured maximum inactivity cutoff limit for Next Up items.
+                    // If configured, shows whose parent series have been inactive longer than
+                    // this period must not be surfaced in the merged dashboard row.
+                    const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                    const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+                    const mergedParams = { limit: homeRowLimit };
+
+                    // Calculate cutoff threshold timestamp if a positive limit is enforced
+                    let cutoffIso = null;
+                    if (daysLimit > 0) {
+                        const cutoff = new Date();
+                        cutoff.setDate(cutoff.getDate() - daysLimit);
+                        cutoffIso = cutoff.toISOString();
+                        // Provide both casing formats to support Jellyfin and companion plugin routing conventions
+                        mergedParams.nextUpDateCutoff = cutoffIso;
+                        mergedParams.NextUpDateCutoff = cutoffIso;
+                    }
+
                     // Try to query the custom server-side merged endpoint first to speed up load times
                     try {
                         log.info('Attempting to fetch pre-merged continue/next-up rows from Litefin plugin');
 
-                        // Request a combined list of items limited by user's homeRowLimit setting
-                        const response = await api.getMergedRows({ limit: homeRowLimit });
+                        // Request a combined list of items limited by user's homeRowLimit setting and date cutoff
+                        const response = await api.getMergedRows(mergedParams);
 
                         // Verify that response contains valid items and no corrupted zero IDs
                         // Older or misconfigured server plugins can return Id: "0", which causes broken routes.
@@ -719,16 +740,11 @@ class HomePage extends Page {
                     const [resumeRes, nextUpRes] = await Promise.all([
                         api.getResumeItems({ Limit: homeRowLimit }),
                         (async () => {
-                            // Extract maximum cutoff days limit for Next Up items from local storage.
-                            const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
-                            const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                             const params = { Limit: homeRowLimit };
 
                             // If a valid cutoff constraint is present, pass it along as an ISO date string.
-                            if (daysLimit > 0) {
-                                const cutoff = new Date();
-                                cutoff.setDate(cutoff.getDate() - daysLimit);
-                                params.NextUpDateCutoff = cutoff.toISOString();
+                            if (cutoffIso) {
+                                params.NextUpDateCutoff = cutoffIso;
                             }
                             return api.getNextUp(params);
                         })()
