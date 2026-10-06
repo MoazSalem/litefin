@@ -730,13 +730,20 @@ export class JellyfinPlayer extends EventEmitter {
         };
 
         // ----------------------------------------------------------------
-        // Explicit override: 'movi' → always use MoviVideoPlayer
+        // Explicit override: 'movi' → use MoviVideoPlayer if WebCodecs available
         // ----------------------------------------------------------------
         if (backendSetting === 'movi') {
-            log.info('Using MoviPlayer backend (forced by setting)');
-            this._backendType = 'movi';
-            this._backend    = new MoviVideoPlayer(sharedOptions);
-            return;
+            if (platformInfo.hasWebCodecsSupport) {
+                log.info('Using MoviPlayer backend (forced by setting)');
+                this._backendType = 'movi';
+                this._backend    = new MoviVideoPlayer(sharedOptions);
+                return;
+            } else {
+                log.warn('Forced movi backend requested, but WebCodecs is not supported — falling back to HTML5');
+                this._backendType = 'html5';
+                this._backend    = new HtmlVideoPlayer(sharedOptions);
+                return;
+            }
         }
 
         // ----------------------------------------------------------------
@@ -795,19 +802,20 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         // ----------------------------------------------------------------
-        // Auto-detect: Desktop platform → default to MoviVideoPlayer.
+        // Auto-detect: Desktop platform with WebCodecs support → MoviVideoPlayer.
         // Provides full MKV container demuxing, WebCodecs hardware decoding,
         // and multi-audio decoding (AC-3, E-AC-3, TrueHD, DTS) natively.
+        // If on web and WebCodecs is missing, falls through to HTML5.
         // ----------------------------------------------------------------
-        if (platformInfo.isDesktop) {
-            log.info('Desktop platform detected — defaulting to MoviPlayer backend');
+        if (platformInfo.isDesktop && platformInfo.hasWebCodecsSupport) {
+            log.info('Desktop platform with WebCodecs detected — defaulting to MoviPlayer backend');
             this._backendType = 'movi';
             this._backend    = new MoviVideoPlayer(sharedOptions);
             return;
         }
 
         // ----------------------------------------------------------------
-        // Fallback: stock HTML5 video (standard browser, Tizen without AVPlay)
+        // Fallback: stock HTML5 video (standard browser, Tizen without AVPlay, or Web without WebCodecs)
         // ----------------------------------------------------------------
         log.info('Using HTML5 Video backend (fallback)');
         this._backendType = 'html5';

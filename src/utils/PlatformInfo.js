@@ -320,6 +320,43 @@ class PlatformInfo {
         this._hasWasmSupport = false;
         return false;
     }
+
+    /**
+     * =========================================================================
+     * WebCodecs API Capability Detection
+     * =========================================================================
+     * Runtime capability check for the W3C WebCodecs API (VideoDecoder & VideoFrame).
+     * MoviPlayer relies on WebCodecs for hardware-accelerated video frame decoding
+     * and WASM demuxing.
+     *
+     * WebCodecs is available in modern Chromium (Chrome 94+) and modern Safari (15.4+),
+     * but is unsupported on Smart TVs (Samsung Tizen / LG webOS) and older browsers.
+     *
+     * When WebCodecs is missing in web/desktop environments, playback gracefully
+     * falls back to the native HTML5 player (HtmlVideoPlayer).
+     *
+     * @returns {boolean} True if WebCodecs VideoDecoder and VideoFrame are available.
+     */
+    get hasWebCodecsSupport() {
+        // Return cached evaluation if already executed
+        if (this._hasWebCodecsSupport !== undefined) {
+            return this._hasWebCodecsSupport;
+        }
+
+        try {
+            // WebCodecs requires both global VideoDecoder and VideoFrame constructors
+            const hasVideoDecoder = typeof window !== 'undefined' && typeof window.VideoDecoder === 'function';
+            const hasVideoFrame = typeof window !== 'undefined' && typeof window.VideoFrame === 'function';
+
+            // Cache positive result only when both essential constructors exist
+            this._hasWebCodecsSupport = Boolean(hasVideoDecoder && hasVideoFrame);
+        } catch (_) {
+            // Trapped evaluation failure indicates lack of WebCodecs support
+            this._hasWebCodecsSupport = false;
+        }
+
+        return this._hasWebCodecsSupport;
+    }
 }
 
 export const platformInfo = new PlatformInfo();

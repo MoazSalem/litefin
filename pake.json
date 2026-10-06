@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tw93/Pake/main/schema/pake.schema.json",
-  "url": "./dist/modern/index.html",
+  "url": "./dist/desktop/index.html",
   "useLocalFile": true,
   "name": "Litefin",
   "title": "Litefin",
@@ -16,6 +16,6 @@
   "hideWindowDecorations": false,
   "hideTitleBar": false,
   "alwaysOnTop": false,
-  "fullscreen": true,
+  "fullscreen": false,
   "maximize": false
 }

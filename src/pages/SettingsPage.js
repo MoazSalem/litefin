@@ -3319,17 +3319,38 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${(() => {
+                // Initialize default options array with the Auto (Recommended) option
                 const options = [
-                    { value: 'auto', label: i18n.t('AutoRecommended') },
-                    { value: 'movi', label: i18n.t('BackendMovi') || 'Movi Player (Desktop MKV/WebCodecs)' },
-                    { value: 'html5', label: i18n.t('BackendWeb') }
+                    { value: 'auto', label: i18n.t('AutoRecommended') }
                 ];
+
+                // Check WebCodecs API support: only show Movi Player if hardware-accelerated
+                // WebCodecs frame decoding is supported on the current runtime.
+                // On TVs or web browsers without WebCodecs, Movi Player is hidden.
+                if (platformInfo.hasWebCodecsSupport) {
+                    options.push({
+                        value: 'movi',
+                        label: i18n.t('BackendMovi') || 'Movi Player (Desktop MKV/WebCodecs)'
+                    });
+                }
+
+                // Native HTML5 browser video backend is universally available
+                options.push({ value: 'html5', label: i18n.t('BackendWeb') });
+
+                // Add platform-specific native hardware player backends
                 if (platformInfo.isTizen) {
                     options.push({ value: 'avplay', label: i18n.t('BackendTizen') });
                 } else if (platformInfo.isWebOS) {
                     options.push({ value: 'webos', label: i18n.t('BackendWebOS') });
                 }
-                return this._renderDropdown('player-backend-select', options, currentBackend);
+
+                // If currently stored backend setting is 'movi' but WebCodecs is not supported,
+                // fallback display value to 'html5' to prevent invalid dropdown selection state
+                const effectiveBackend = (currentBackend === 'movi' && !platformInfo.hasWebCodecsSupport)
+                    ? 'html5'
+                    : currentBackend;
+
+                return this._renderDropdown('player-backend-select', options, effectiveBackend);
             })()}
                     </div>
                 </div>
