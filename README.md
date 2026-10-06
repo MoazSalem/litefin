@@ -1,18 +1,18 @@
 <h1 align="center">Litefin</h1>
-<h3 align="center">Jellyfin Client for Tizen and webOS Smart TVs</h3>
+<h3 align="center">Jellyfin and Emby Client for Tizen and webOS Smart TVs</h3>
 
 ![Litefin Banner](./documentations/previews/banner.png)
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/MoazSalem/litefin?color=blue&label=version&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
-[![GitHub all releases](https://img.shields.io/github/downloads/MoazSalem/litefin/total?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
-[![GitHub Repo stars](https://img.shields.io/github/stars/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/stargazers)
-[![GitHub license](https://img.shields.io/github/license/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/blob/release/LICENSE)
-[![Discord Link](https://img.shields.io/discord/1498618592902647818?color=blue&label=discord&logo=discord&style=flat-square)](https://discord.gg/N3VpazBtTx)
+[![GitHub license](https://img.shields.io/github/license/MoazSalem/litefin?color=orange&label=License)](https://github.com/MoazSalem/litefin/blob/release/LICENSE)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/MoazSalem/litefin?color=blue&label=Version&logo=github)](https://github.com/MoazSalem/litefin/releases)
+[![GitHub all releases](https://img.shields.io/github/downloads/MoazSalem/litefin/total?label=Downloads)](https://github.com/MoazSalem/litefin/releases)
+[![Discord Link](https://img.shields.io/discord/1498618592902647818?color=5865F2&label=Discord&logo=discord&logoColor=white)](https://discord.gg/N3VpazBtTx)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/moazsalem)
+[![GitHub Repo stars](https://img.shields.io/github/stars/MoazSalem/litefin)](https://github.com/MoazSalem/litefin/stargazers)
 
-Litefin is an open-source Tizen and webOS Client for Jellyfin written from scratch, designed to provide a premium experience with excellent performance to Jellyfin media browsing and playback (and Emby to a degree), even on legacy hardware. It features a robust player backend specific to each platform, advanced subtitle support, and a highly optimized UI engine for smooth browsing.
+Litefin is an open-source Tizen and webOS Client for Jellyfin written from scratch, designed to provide a premium experience with excellent performance for Jellyfin media browsing and playback (and Emby to a degree), even on legacy hardware. It features a robust player backend specific to each platform, advanced subtitle support, and a highly optimized UI engine for smooth browsing.
 
-Enable more features by installing the [**Litefin Plugin**](https://github.com/MoazSalem/litefin-plugin) on your Jellyfin server as well.
+Extend Litefin features by installing the **Litefin Plugin** on your [**Jellyfin**](https://github.com/MoazSalem/litefin-plugin) or [**Emby**](https://github.com/MoazSalem/litefin-plugin-emby) servers.
 
 <img width="1920" height="1080" alt="Screenshot 2026-09-30 194946" src="https://github.com/user-attachments/assets/6ef405e1-e530-4b1e-a747-2a681576e827" />
 
@@ -20,7 +20,7 @@ Enable more features by installing the [**Litefin Plugin**](https://github.com/M
 
 - **Fast Native Performance**: Built in pure vanilla JavaScript with zero heavy framework overhead, custom virtualized scrolling (`VirtualCardRow`, `VirtualGrid`), and aggressive DOM recycling tailored for low-RAM TV hardware.
 - **Hardware-Accelerated Triple Playback Engine**:
-  - **Native Players**: Native Avplay and Native webOS video player integration with hardware-level buffer tuning and zero-latency seek queues.
+  - **Native Players**: Native Avplay and webOS video player integration with hardware-level buffer tuning and zero-latency seek queues.
   - **Universal Fallback**: Optimized HTML5 video player backend with auto-failover.
 - **Subtitle Engine**:
   - Full SSA/ASS styling and positioning via `@jellyfin/libass-wasm` (compiled to WebAssembly) with custom font support and low-VRAM modes.
@@ -33,7 +33,7 @@ Enable more features by installing the [**Litefin Plugin**](https://github.com/M
   - Synchronized scrolling lyrics for music playback, Now Playing queue management, and interactive Up Next auto-play countdowns.
   - High-performance Trickplay thumbnail previews while seeking.
 - **Integrations & Plugins**:
-  - **Jellyseerr / Overseerr**: Native discovery page, trending carousels, full search, per-season requests, and TMDB-backed "Where to Watch" streaming availability.
+  - **Seerr(Jellyseerr / Overseerr)**: Native discovery page, trending carousels, full search, per-season requests, and TMDB-backed "Where to Watch" streaming availability (Requires Litefin Plugin).
   - **Intro Skipper**: Automatic detection and instant skipping of TV show intros and recaps.
   - **SyncPlay**: Real-time synchronized group viewing over WebSockets.
   - **MDBList**: Multi-source community ratings (IMDb, Rotten Tomatoes, Metacritic, Trakt, TMDB, Letterboxd) directly on cards and banners.
@@ -91,12 +91,12 @@ The easiest way to install on a Samsung TV is with the **Apps2Samsung** installe
 2. Use [**Apps2Samsung**](https://github.com/Apps2Samsung/Apps2Samsung) to sideload the `.wgt` to your TV.
 3. (Optional) Install and Configure [**Litefin Plugin**](https://github.com/MoazSalem/litefin-plugin) on your Jellyfin server.
 
-### LG web-OS TVs
+### LG webOS TVs
 
 Litefin can be installed on LG TVs using the **Homebrew Channel**:
 
 1. Install the [**Homebrew Channel**](https://github.com/webosbrew/webos-homebrew-channel) on your LG TV by following the instructions in its repository.
-2. Either install through the Homebrew Channel UI or Download the latest `.ipk` for your hardware from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
+2. Either install through the Homebrew Channel UI or download the latest `.ipk` for your hardware from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
 3. Open the Homebrew Channel on your TV and use the **Package Manager** to sideload the `.ipk` file.
 4. (Optional) Install and Configure [**Litefin Plugin**](https://github.com/MoazSalem/litefin-plugin) on your Jellyfin server.
 
