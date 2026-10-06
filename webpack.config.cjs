@@ -93,6 +93,13 @@ function getPlugins(tier, options = {}) {
                 noErrorOnMissing: true
             }
         );
+
+        // Copy movi-player WASM binary for modern build tier (desktop releases)
+        patterns.push({
+            from: 'node_modules/movi-player/dist/movi.wasm',
+            to: 'wasm/movi.wasm',
+            noErrorOnMissing: true
+        });
     }
 
     return [
