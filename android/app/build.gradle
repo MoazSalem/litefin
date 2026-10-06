@@ -1,0 +1,56 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.litefin.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.litefin.app"
+        // The app targets Android 5.0+ — the WebView asset-loader + ES6 modern
+        // bundle both require API 21+, and system WebView is evergreen on 5.0+.
+        minSdk 21
+        // Android 15 (Galaxy S24 Ultra ships 14/15)
+        targetSdk 35
+        versionCode 1
+        versionName "1.9.28"
+    }
+
+    signingConfigs {
+        release {
+            // Local debug-style keystore generated at build time by the gulp
+            // packaging task (android/release.keystore). This is a local test
+            // signing config, not a Play Store distribution key.
+            storeFile file('release.keystore')
+            storePassword 'litefin'
+            keyAlias 'litefin'
+            keyPassword 'litefin'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/DEPENDENCIES', 'META-INF/NOTICE', 'META-INF/LICENSE']
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

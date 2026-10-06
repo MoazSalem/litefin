@@ -1457,8 +1457,10 @@ html[data-badge-style="dark"] .game-card-badge {
 /* 
  * By default on TV Platforms we hide the cursor unless the Magic Remote 
  * (pointer mode) is active. The web platform (PC browsers) always shows it.
+ * Android is excluded: touch/tap is the primary pointer there and hiding the
+ * cursor would be wrong on phones/tablets.
  */
-html:not([data-platform="web"]) body:not(.webos-cursor-active) {
+html:not([data-platform="web"]):not([data-platform="android"]) body:not(.webos-cursor-active) {
     cursor: none !important;
 }
 

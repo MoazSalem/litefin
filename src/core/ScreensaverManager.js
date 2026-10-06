@@ -11,6 +11,7 @@ import { eventBus } from './EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { androidAdapter } from '../android/AndroidAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { auth } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
@@ -70,7 +71,7 @@ class ScreensaverManager {
              * reportInput() resets the OS-level idle counter, giving the user a
              * full delay period before the screensaver can appear again.
              */
-            const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
+            const platformAdapter = platformInfo.isWebOS ? webosAdapter : platformInfo.isAndroid ? androidAdapter : tizenAdapter;
             platformAdapter.reportInput?.();
         });
         eventBus.on('auth:logout', () => {
@@ -117,7 +118,7 @@ class ScreensaverManager {
         // If currently playing video, never show screensaver
         if (this._isVideoPlaying) return;
 
-        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
+        const platformAdapter = platformInfo.isWebOS ? webosAdapter : platformInfo.isAndroid ? androidAdapter : tizenAdapter;
         const minIdleTimeMs = this._delaySeconds * 1000;
 
         if (platformAdapter.idleTime >= minIdleTimeMs) {
@@ -182,7 +183,7 @@ class ScreensaverManager {
         document.body.classList.remove('screensaver-active');
 
         // Reset tracking to prevent immediate re-triggering
-        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
+        const platformAdapter = platformInfo.isWebOS ? webosAdapter : platformInfo.isAndroid ? androidAdapter : tizenAdapter;
         platformAdapter.reportInput?.();
 
         // Let plugin clean up DOM/Animation

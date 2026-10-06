@@ -109,6 +109,12 @@ class PlatformInfo {
             else if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(navigator.userAgent)) {
                 this._platform = 'webos';
             }
+            // Android check — the native shell injects window.AndroidBridge before the
+            // bundle runs. Checking the bridge (not the UA) avoids misdetecting Chrome
+            // on an Android phone browsing the deployed web app.
+            else if (typeof window.AndroidBridge !== 'undefined') {
+                this._platform = 'android';
+            }
             // Default
             else {
                 this._platform = 'web';
@@ -183,12 +189,21 @@ class PlatformInfo {
         return this._platform === 'webos';
     }
 
+    /**
+     * True when running inside the Android WebView host application.
+     * The native Android shell injects window.AndroidBridge before the bundle
+     * executes (see android/app/src/main/java/.../LitefinBridge.java).
+     */
+    get isAndroid() {
+        return this._platform === 'android';
+    }
+
     /** @returns {boolean} True if running in a standard web browser */
     get isWeb() {
         return this._platform === 'web';
     }
 
-    /** @returns {string} The raw platform string ('tizen', 'webos', 'web') */
+    /** @returns {string} The raw platform string ('tizen', 'webos', 'web', 'android') */
     get platformString() {
         return this._platform;
     }

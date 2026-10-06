@@ -1,0 +1,10 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# Generated signing key (recreated by the packaging task when missing)
+app/release.keystore
+
+# Web bundle copied in by the packaging task (from dist/modern)
+app/src/main/assets/webapp/

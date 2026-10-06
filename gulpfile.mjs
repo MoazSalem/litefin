@@ -718,6 +718,100 @@ const buildLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy);
 const buildUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy);
 const buildDebug = gulp.series(syncVersion, webpackDebug);
 
+// ============================================================================
+// Android (WebView shell) build + package
+// ============================================================================
+// Produces dist/Litefin-<version>.apk by:
+//   1. Building the modern web bundle (webpack modern tier)
+//   2. Copying it into android/app/src/main/assets/webapp/
+//   3. Running gradle assembleRelease (requires JDK 17+ and ANDROID_HOME)
+// ============================================================================
+
+const ANDROID_ASSETS = 'android/app/src/main/assets/webapp';
+
+async function cleanAndroidAssets() {
+    console.info('Cleaning Android web assets...');
+    await del(ANDROID_ASSETS);
+}
+
+async function copyWebToAndroid() {
+    console.info('Copying modern web bundle into Android assets...');
+    cpSync('dist/modern', ANDROID_ASSETS, { recursive: true });
+    console.info('Web bundle copied to', ANDROID_ASSETS);
+}
+
+async function gradleAssembleRelease() {
+    // Auto-generate the local test-signing keystore when missing so a fresh
+    // checkout can build the APK without manual keytool steps. This is NOT a
+    // Play Store distribution key — just a stable local debug-style identity.
+    const keystorePath = 'android/app/release.keystore';
+    if (!existsSync(keystorePath)) {
+        console.info('Generating local signing keystore...');
+        const keytool = process.env.JAVA_HOME
+            ? path.join(process.env.JAVA_HOME, 'bin', process.platform === 'win32' ? 'keytool.exe' : 'keytool')
+            : 'keytool';
+        const dname = 'CN=Litefin, OU=Litefin, O=Litefin, L=Local, ST=Local, C=US';
+        await execAsync(
+            `"${keytool}" -genkeypair -v -keystore ${keystorePath} -alias litefin -keyalg RSA -keysize 2048 -validity 10950 -storepass litefin -keypass litefin -dname "${dname}"`
+        );
+    }
+
+    console.info('Building APK with Gradle (assembleRelease)...');
+    // Locate the Gradle launcher script:
+    //   1. GRADLE_BIN env var (explicit path to gradle/gradle.bat)
+    //   2. GRADLE_HOME env var (Gradle installation root)
+    //   3. Well-known local install: C:/android-sdk/gradle/gradle-8.9
+    //   4. Plain 'gradle' on PATH as a last resort
+    const isWin = process.platform === 'win32';
+    const launcher = isWin ? 'gradle.bat' : 'gradle';
+    const candidates = [];
+    if (process.env.GRADLE_BIN) candidates.push(process.env.GRADLE_BIN);
+    if (process.env.GRADLE_HOME) candidates.push(path.join(process.env.GRADLE_HOME, 'bin', launcher));
+    candidates.push(path.join('C:/android-sdk/gradle', 'gradle-8.9', 'bin', launcher));
+    candidates.push(launcher);
+
+    let cmd = null;
+    for (const candidate of candidates) {
+        if (candidate === launcher) {
+            // PATH lookup — assume available and let exec fail if not
+            cmd = launcher;
+            break;
+        }
+        if (existsSync(candidate)) {
+            cmd = candidate;
+            break;
+        }
+    }
+
+    try {
+        await execAsync(`"${cmd}" assembleRelease --no-daemon`, { cwd: 'android' });
+    } catch (e) {
+        throw new Error('Gradle assembleRelease failed: ' + (e.message || e));
+    }
+    console.info('Gradle build complete');
+}
+
+async function copyApkToDist() {
+    const src = 'android/app/build/outputs/apk/release/app-release.apk';
+    if (!existsSync(src)) {
+        throw new Error('Expected APK not found at ' + src);
+    }
+    mkdirSync('dist', { recursive: true });
+    const out = `dist/Litefin-${version}.apk`;
+    copyFileSync(src, out);
+    console.info(`APK copied to ${out}`);
+}
+
+const buildPackageAndroid = gulp.series(
+    syncVersion,
+    cleanDist,
+    webpackModern,
+    cleanAndroidAssets,
+    copyWebToAndroid,
+    gradleAssembleRelease,
+    copyApkToDist
+);
+
 export {
     clean,
     cleanDist,
@@ -770,6 +864,8 @@ export {
     buildPackageCombinedLegacy,
     buildPackageCombinedUltraLegacy,
     buildPackageCombinedUltraLegacyNoService,
+    // Android (WebView shell)
+    buildPackageAndroid,
     // Build only
     build,
     buildModern,
