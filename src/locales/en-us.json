@@ -478,6 +478,7 @@
     "BackdropHideTextDescription": "Do not show any text over the backdrop screensaver images",
     "BackdropIncludeMusic": "Include music library",
     "BackdropIncludeMusicDescription": "Show backdrops from music artists in the screensaver",
+    "BackendMovi": "Movi Player (Desktop MKV/WebCodecs)",
     "BackendTizen": "Tizen Native (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
     "BackendWebOS": "LG Native (webOS Player)",

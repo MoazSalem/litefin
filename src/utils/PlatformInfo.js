@@ -188,6 +188,55 @@ class PlatformInfo {
         return this._platform === 'web';
     }
 
+    /**
+     * =========================================================================
+     * Desktop Environment Detection
+     * =========================================================================
+     * Evaluates whether the application is currently running in a desktop
+     * operating system environment (packaged via Pake/Tauri, Electron, or a
+     * desktop browser). Excludes TV runtimes (Tizen, webOS) and mobile devices.
+     *
+     * Used to default to high-performance, container-capable player backends
+     * (such as MoviPlayer via WebCodecs and WASM) on desktop machines.
+     * =========================================================================
+     * @returns {boolean} True if running on a desktop platform.
+     */
+    get isDesktop() {
+        // Quick exit for dedicated Smart TV platforms
+        if (this.isTizen || this.isWebOS) {
+            return false;
+        }
+
+        // Check for dedicated desktop application shell wrappers (Pake / Tauri)
+        if (typeof window !== 'undefined') {
+            if (window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__) {
+                return true;
+            }
+            // Check for Electron runtime wrapper
+            if (window.process?.versions?.electron || /Electron/i.test(navigator?.userAgent || '')) {
+                return true;
+            }
+        }
+
+        // User Agent parsing for desktop operating systems
+        if (typeof navigator !== 'undefined' && navigator.userAgent) {
+            const ua = navigator.userAgent;
+
+            // Reject any explicit mobile or television indicators
+            if (/Mobile|Android|iPhone|iPad|iPod|Tizen|Web[O0]S|SmartTV/i.test(ua)) {
+                return false;
+            }
+
+            // Identify desktop operating systems (Windows, macOS, Linux, ChromeOS)
+            if (/Win32|Win64|Windows|Macintosh|Mac OS X|Linux|CrOS/i.test(ua)) {
+                return true;
+            }
+        }
+
+        // Default to true for standard web when not identified as a TV
+        return this.isWeb;
+    }
+
     /** @returns {string} The raw platform string ('tizen', 'webos', 'web') */
     get platformString() {
         return this._platform;

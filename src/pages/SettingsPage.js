@@ -3321,6 +3321,7 @@ class SettingsPage extends Page {
                         ${(() => {
                 const options = [
                     { value: 'auto', label: i18n.t('AutoRecommended') },
+                    { value: 'movi', label: i18n.t('BackendMovi') || 'Movi Player (Desktop MKV/WebCodecs)' },
                     { value: 'html5', label: i18n.t('BackendWeb') }
                 ];
                 if (platformInfo.isTizen) {

@@ -358,7 +358,8 @@ const DEFAULTS = {
     // Enable Instant Playback (pre-fetches PlaybackInfo & item details in background)
     enablePrewarm: true,
 
-    // Player backend ('auto', 'avplay', 'webos', 'html5')
+    // Player backend ('auto', 'movi', 'avplay', 'webos', 'html5')
+    // On desktop environments, 'auto' resolves to 'movi' for native MKV/WebCodecs support.
     playerBackend: 'auto',
 
     /*
