@@ -82,11 +82,126 @@ class AndroidAdapter {
             log.warn('Failed to register back hook:', e);
         }
 
+        // Physical-keyboard support (emulator, DeX, keyboards/remotes on phones).
+        this._setupKeyboardHandler();
+
+        // Scale the TV-sized UI down to phone screens (see _applyDisplayScale).
+        this._injectLandscapeRescueCSS();
+        this._applyDisplayScale();
+
         // Notify the shell that the web app finished booting (hides the
         // native splash window on devices where it is shown).
         this._notifyReady();
 
         log.info('AndroidAdapter initialized');
+    }
+
+    /**
+     * =========================================================================
+     * Landscape hero rescue (scaled devices only)
+     * =========================================================================
+     * The immersive home hero anchors its text to the bottom of a tall TV
+     * canvas using fixed-pixel padding (470px) and pulls the home rows up with
+     * fixed-pixel negative margins (-300px..-550px) — tuned for 1080p TV
+     * heights. On a landscape phone the effective canvas is far shorter, so
+     * those fixed offsets push the title/metadata ABOVE the top of the screen
+     * (title measured at y=-82 in the field).
+     *
+     * Fix: when the adapter is actually down-scaling the document (zoom < 1,
+     * signalled via html[data-litefin-scaled] in _applyDisplayScale), relax
+     * those fixed offsets in LANDSCAPE only so the hero text block and rows sit
+     * back in the visible area. Portrait is untouched (media query doesn't
+     * match), and unscaled viewports (tablets/desktop-size, zoom = 1) keep the
+     * stock layout because the attribute is only set while scaling.
+     * @private
+     */
+    _injectLandscapeRescueCSS() {
+        try {
+            const style = document.createElement('style');
+            style.id = 'litefin-landscape-rescue';
+            style.textContent = [
+                '@media (orientation: landscape) {',
+                '    html[data-litefin-scaled] .home-rows {',
+                '        margin-top: -160px !important;',
+                '    }',
+                '    html[data-litefin-scaled] .hero-carousel-container .hero-item {',
+                '        padding-bottom: 180px !important;',
+                '    }',
+                '}'
+            ].join('\n');
+            document.head.appendChild(style);
+        } catch (e) {
+            log.warn('Failed to inject landscape rescue CSS:', e);
+        }
+    }
+
+    /**
+     * =========================================================================
+     * Display Scaling (Android phones/tablets)
+     * =========================================================================
+     * Litefin's layout is authored for a ~1600-1920px TV viewport. Phone
+     * WebViews report the raw CSS viewport (e.g. 915px landscape on a
+     * high-density panel), which makes the TV layout render enormous and
+     * cropped.
+     *
+     * We scale the whole document with CSS `zoom` (NOT transform: scale,
+     * which does not re-flow layout and leaves dead bands) so the app lays
+     * out at its native 16:9 design width and the WebView scales it to fit.
+     * Because zoom re-flows, 100vh/100% containers keep filling the screen
+     * exactly and focus/scroll geometry stays consistent.
+     *
+     * - Design width 1600 so a landscape phone renders the full TV layout
+     *   at a comfortable physical size on dense panels.
+     * - Always fit the full design WIDTH (portrait included — the classic
+     *   "desktop site on a phone" view). Never zoom IN beyond 1x (desktop-
+     *   size viewports keep the stock layout). Physical size stays legible
+     *   because phone panels are high-density (scale x DPR ~ 0.7+).
+     * - Re-applied on resize so rotation re-fits automatically.
+     * @private
+     */
+    _applyDisplayScale() {
+        const DESIGN_WIDTH = 1600;
+        const MIN_SCALE = 0.15; // Safety floor only; portrait lands ~0.26 on phones
+
+        const apply = () => {
+            try {
+                const scale = Math.min(1, Math.max(MIN_SCALE, window.innerWidth / DESIGN_WIDTH));
+                if (scale >= 1) {
+                    document.documentElement.style.removeProperty('zoom');
+                    // Unscaled viewport: keep the stock layout entirely,
+                    // including the landscape hero rescue offsets.
+                    document.documentElement.removeAttribute('data-litefin-scaled');
+                } else {
+                    document.documentElement.style.setProperty('zoom', String(scale));
+                    // Signal the appended rescue CSS that we are actively
+                    // down-scaling the TV layout (see _injectLandscapeRescueCSS).
+                    document.documentElement.setAttribute('data-litefin-scaled', '1');
+                }
+
+                /*
+                 * #app is styled `width: 100vw; height: 100vh` in base.css. Viewport
+                 * units do NOT scale with CSS zoom, so #app (and anything sized with
+                 * vw/vh) would stay at the raw viewport size while the rest of the
+                 * document scales — clipping the layout. Pin #app to the effective
+                 * design-space dimensions so the whole tree lays out consistently.
+                 */
+                const appEl = document.getElementById('app');
+                if (appEl && scale < 1) {
+                    appEl.style.width = `${Math.round(window.innerWidth / scale)}px`;
+                    appEl.style.height = `${Math.round(window.innerHeight / scale)}px`;
+                } else if (appEl) {
+                    appEl.style.removeProperty('width');
+                    appEl.style.removeProperty('height');
+                }
+
+                log.debug(`Display scale: ${scale.toFixed(3)} (viewport ${window.innerWidth}x${window.innerHeight})`);
+            } catch (e) {
+                log.warn('Failed to apply display scale:', e);
+            }
+        };
+
+        apply();
+        window.addEventListener('resize', apply, { passive: true });
     }
 
     /**
@@ -163,6 +278,129 @@ class AndroidAdapter {
     handleBackButton(payload = {}) {
         log.debug('Hardware back pressed');
         eventBus.emit('key:back', { source: 'android-bridge', ...payload });
+    }
+
+    /**
+     * =========================================================================
+     * Physical Keyboard Support
+     * =========================================================================
+     * Map a physical keyboard (emulator host keyboard, DeX, USB/Bluetooth
+     * keyboards) onto the same eventBus key events the TV remotes produce so
+     * Litefin is fully drivable without touch. Mirrors TizenAdapter's key
+     * mapping, with desktop-browser fallback semantics for Back (Escape /
+     * Backspace) so the emulator's keyboard behaves like the web build.
+     *
+     * Keys that arrive while typing in an input/textarea are left untouched
+     * (except Escape, which always cancels via key:back).
+     * @private
+     */
+    _setupKeyboardHandler() {
+        // Web-standard keyCodes (KeyboardEvent.keyCode legacy values).
+        const KEY = {
+            ENTER: 13,
+            ESCAPE: 27,
+            BACKSPACE: 8,
+            LEFT: 37,
+            UP: 38,
+            RIGHT: 39,
+            DOWN: 40,
+            SPACE: 32,
+            PAGE_UP: 33,
+            PAGE_DOWN: 34,
+            MEDIA_PLAY: 179,
+            MEDIA_PAUSE: 19,
+            MEDIA_STOP: 178,
+            MEDIA_REWIND: 227,
+            MEDIA_FAST_FORWARD: 228
+        };
+
+        document.addEventListener(
+            'keydown',
+            (e) => {
+                const keyCode = e.keyCode;
+
+                // Never swallow keystrokes while the user is typing in a text
+                // field — the app's own input handling must receive them.
+                // (Escape still cancels dialogs via key:back, as on web.)
+                const active = document.activeElement;
+                const isTextInput =
+                    active &&
+                    ((active.tagName === 'INPUT' && active.type !== 'range') || active.tagName === 'TEXTAREA');
+
+                switch (keyCode) {
+                    case KEY.ENTER:
+                        if (!isTextInput) e.preventDefault();
+                        eventBus.emit('key:enter', e);
+                        break;
+                    case KEY.LEFT:
+                        if (!isTextInput) e.preventDefault();
+                        eventBus.emit('key:left', e);
+                        break;
+                    case KEY.UP:
+                        if (!isTextInput) e.preventDefault();
+                        eventBus.emit('key:up', e);
+                        break;
+                    case KEY.RIGHT:
+                        if (!isTextInput) e.preventDefault();
+                        eventBus.emit('key:right', e);
+                        break;
+                    case KEY.DOWN:
+                        if (!isTextInput) e.preventDefault();
+                        eventBus.emit('key:down', e);
+                        break;
+                    case KEY.SPACE:
+                        // Player play/pause (TizenAdapter semantics) — only when
+                        // a text field is not focused.
+                        if (!isTextInput) {
+                            if (window.location.hash.startsWith('#/player')) {
+                                e.preventDefault();
+                                eventBus.emit('key:playPause', e);
+                            }
+                        }
+                        break;
+                    case KEY.PAGE_UP:
+                        eventBus.emit('key:channelUp', e);
+                        break;
+                    case KEY.PAGE_DOWN:
+                        eventBus.emit('key:channelDown', e);
+                        break;
+                    case KEY.MEDIA_PLAY:
+                        e.preventDefault();
+                        eventBus.emit('key:play', e);
+                        break;
+                    case KEY.MEDIA_PAUSE:
+                        e.preventDefault();
+                        eventBus.emit('key:pause', e);
+                        break;
+                    case KEY.MEDIA_STOP:
+                        e.preventDefault();
+                        eventBus.emit('key:stop', e);
+                        break;
+                    case KEY.MEDIA_REWIND:
+                        e.preventDefault();
+                        eventBus.emit('key:rewind', e);
+                        break;
+                    case KEY.MEDIA_FAST_FORWARD:
+                        e.preventDefault();
+                        eventBus.emit('key:fastForward', e);
+                        break;
+                    case KEY.ESCAPE:
+                    case KEY.BACKSPACE:
+                        // Desktop-style Back: Escape always; Backspace only when
+                        // not editing text (so text deletion still works).
+                        if (keyCode === KEY.ESCAPE || !isTextInput) {
+                            e.preventDefault();
+                            this.handleBackButton();
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            },
+            { capture: true }
+        );
+
+        log.info('Physical keyboard handler active (arrows/Enter/Escape/media keys)');
     }
 
     get isAndroid() {
