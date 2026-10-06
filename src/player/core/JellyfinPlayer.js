@@ -15,6 +15,7 @@
 import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
 import { TizenAVPlayer } from './TizenAVPlayer.js';
 import { WebOSPlayer } from './WebOSPlayer.js';
+import { MoviVideoPlayer } from './MoviVideoPlayer.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { MediaHelper } from './MediaHelper.js';
 import { buildJellyfinProfile, getDeviceCapabilities } from '../../api/DeviceProfile.js';
@@ -421,8 +422,8 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
         return false;
     }
 
-    // Tizen AVPlay uses Samsung's native multimedia engine with hardware track demuxing
-    if (backendType === 'avplay') {
+    // Tizen AVPlay and MoviPlayer both demux multi-audio tracks natively in hardware/WASM
+    if (backendType === 'avplay' || backendType === 'movi') {
         return false;
     }
 
@@ -729,6 +730,16 @@ export class JellyfinPlayer extends EventEmitter {
         };
 
         // ----------------------------------------------------------------
+        // Explicit override: 'movi' → always use MoviVideoPlayer
+        // ----------------------------------------------------------------
+        if (backendSetting === 'movi') {
+            log.info('Using MoviPlayer backend (forced by setting)');
+            this._backendType = 'movi';
+            this._backend    = new MoviVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
         // Explicit override: 'avplay' → always try TizenAVPlayer
         // ----------------------------------------------------------------
         if (backendSetting === 'avplay') {
@@ -784,7 +795,19 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         // ----------------------------------------------------------------
-        // Fallback: stock HTML5 video (desktop browser, Tizen without AVPlay)
+        // Auto-detect: Desktop platform → default to MoviVideoPlayer.
+        // Provides full MKV container demuxing, WebCodecs hardware decoding,
+        // and multi-audio decoding (AC-3, E-AC-3, TrueHD, DTS) natively.
+        // ----------------------------------------------------------------
+        if (platformInfo.isDesktop) {
+            log.info('Desktop platform detected — defaulting to MoviPlayer backend');
+            this._backendType = 'movi';
+            this._backend    = new MoviVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // Fallback: stock HTML5 video (standard browser, Tizen without AVPlay)
         // ----------------------------------------------------------------
         log.info('Using HTML5 Video backend (fallback)');
         this._backendType = 'html5';
@@ -2459,7 +2482,7 @@ export class JellyfinPlayer extends EventEmitter {
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                               this._currentPlayMethod === 'DirectStream' ||
                               this._currentPlayMethod === 'Remux';
-        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && !supportsNativeAudio);
+        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && this._backendType !== 'movi' && !supportsNativeAudio);
 
         log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart} isTargetCodecSupported=${isTargetCodecSupported}`);
 
@@ -2508,7 +2531,7 @@ export class JellyfinPlayer extends EventEmitter {
             }
 
             const needsDirectStreamForAudio = trackRequiresDirectStream ||
-                (this._backendType !== 'tizen' && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
+                (this._backendType !== 'tizen' && this._backendType !== 'movi' && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
             // ────────────────────────────────────────────────────────────────
             // Calculate Restart Playback Mode
@@ -3578,6 +3601,20 @@ export class JellyfinPlayer extends EventEmitter {
      */
     getCurrentPositionMs() {
         return (this._backend?.getCurrentTime() ?? 0) * 1000;
+    }
+
+    /**
+     * ========================================================================
+     * Start / Resume Position Getter
+     * ========================================================================
+     * Retrieve the initial start or resume position ticks configured for this
+     * playback session. Used by PlayerPage and OSDController to compute watch
+     * time thresholds and safeguard against overwriting resume positions.
+     * ========================================================================
+     * @returns {number} Start position in 100-nanosecond ticks
+     */
+    getStartPositionTicks() {
+        return this._pendingStartPositionTicks || this._startPositionTicks || 0;
     }
 
     /**
