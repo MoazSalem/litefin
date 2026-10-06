@@ -242,17 +242,33 @@ function _buildMinimalProfile(caps) {
 export function buildJellyfinProfile(options = {}) {
     const manualBitrateOverride = typeof options === 'number' ? options : options.manualBitrate;
     const playbackMode = typeof options === 'object' ? options.playbackMode || 'auto' : 'auto';
+    const backend = typeof options === 'object' ? options.backend : null;
+    const isMovi = backend === 'movi';
 
     const caps = getDeviceCapabilities();
 
+    // When running under the MoviPlayer backend, WebCodecs and software WASM fallbacks
+    // (dav1d for AV1, de265 for HEVC) provide universal format support out of the box.
     const hevcSetting = PlayerSettings.get('enableHEVC');
-    const enableHEVC = hevcSetting === 'enable' ? true : hevcSetting === 'disable' ? false : caps.hevc;
+    const enableHEVC = hevcSetting === 'enable'
+        ? true
+        : hevcSetting === 'disable'
+            ? false
+            : (isMovi ? true : caps.hevc);
 
     const av1Setting = PlayerSettings.get('enableAV1');
-    const enableAV1 = av1Setting === 'enable' ? true : av1Setting === 'disable' ? false : caps.av1;
+    const enableAV1 = av1Setting === 'enable'
+        ? true
+        : av1Setting === 'disable'
+            ? false
+            : (isMovi ? true : caps.av1);
 
     const vp9Setting = PlayerSettings.get('enableVP9');
-    const enableVP9 = vp9Setting === 'enable' ? true : vp9Setting === 'disable' ? false : caps.vp9;
+    const enableVP9 = vp9Setting === 'enable'
+        ? true
+        : vp9Setting === 'disable'
+            ? false
+            : (isMovi ? true : caps.vp9);
 
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
     const hdrSetting = PlayerSettings.get('enableHDR');
@@ -275,19 +291,27 @@ export function buildJellyfinProfile(options = {}) {
             (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
     }
 
-
+    // High-fidelity audio codecs (DTS, TrueHD) decoded natively via Movi's WASM audio decoders
     const dtsSetting = PlayerSettings.get('enableDts');
-    const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
+    const enableDts = dtsSetting === 'enable'
+        ? true
+        : dtsSetting === 'disable'
+            ? false
+            : (isMovi ? true : caps.dts);
 
     const trueHdSetting = PlayerSettings.get('enableTrueHd');
-    const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
+    const enableTrueHd = trueHdSetting === 'enable'
+        ? true
+        : trueHdSetting === 'disable'
+            ? false
+            : (isMovi ? true : caps.truehd);
 
     const mp2Setting = PlayerSettings.get('enableMp2') || 'auto';
     const enableMp2 = mp2Setting === 'enable' ? true : mp2Setting === 'disable' ? false : caps.mp2;
 
     const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
     // When DTS or TrueHD passthrough is enabled, systems support full 7.1 (8-channel) audio.
-    const defaultMaxChannels = (enableDts || enableTrueHd) ? 8 : caps.maxAudioChannels;
+    const defaultMaxChannels = (enableDts || enableTrueHd || isMovi) ? 8 : caps.maxAudioChannels;
     const maxAudioChannels = String((userMaxChannels && userMaxChannels > 0) ? userMaxChannels : defaultMaxChannels);
 
     // -------------------------------------------------------------------------
@@ -303,8 +327,8 @@ export function buildJellyfinProfile(options = {}) {
     // Standard web audio. Place EAC3 and AC3 first so they are preferred
     // over AAC in the DirectPlay lists when supported or force-enabled.
     const audioCodecs = [];
-    if (caps.eac3) audioCodecs.push('eac3');
-    if (caps.ac3) audioCodecs.push('ac3');
+    if (caps.eac3 || isMovi) audioCodecs.push('eac3');
+    if (caps.ac3 || isMovi) audioCodecs.push('ac3');
     audioCodecs.push('aac', 'mp3');
     if (enableMp2) audioCodecs.push('mp2');
     audioCodecs.push('flac', 'opus', 'vorbis', 'pcm', 'wav');
@@ -331,6 +355,17 @@ export function buildJellyfinProfile(options = {}) {
     // transcodeVideo / transcodeAudio both bypass direct play entirely.
     if (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
         playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') {
+        // MoviPlayer backend handles MKV containers directly via libavformat WASM demuxer.
+        // Advertise MKV first with all supported video and audio codecs to unlock direct play!
+        if (isMovi) {
+            directPlayProfiles.push({
+                Container: 'mkv,mp4,m4v,mov,webm,ts',
+                Type: 'Video',
+                VideoCodec: generalVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+        }
+
         // MP4 / M4V / MOV
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
@@ -339,13 +374,15 @@ export function buildJellyfinProfile(options = {}) {
             AudioCodec: audioCodecString
         });
 
-        // MKV is technically playable by some browsers but generally safer to assume MP4/WEBM
-        directPlayProfiles.push({
-            Container: 'mkv',
-            Type: 'Video',
-            VideoCodec: generalVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        });
+        // MKV profile for standard web fallback
+        if (!isMovi) {
+            directPlayProfiles.push({
+                Container: 'mkv',
+                Type: 'Video',
+                VideoCodec: generalVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+        }
 
         if (webmVideoCodecs.length > 0) {
             directPlayProfiles.push({
@@ -738,7 +775,9 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     return {
-        Name: `Litefin Web (HTML5)${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
+        Name: isMovi
+            ? `Litefin Desktop (MoviPlayer)${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`
+            : `Litefin Web (HTML5)${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
         MaxStreamingBitrate: maxBitrate,
         MaxStaticBitrate: maxBitrate,
         MaxStaticMusicBitrate: 40000000,

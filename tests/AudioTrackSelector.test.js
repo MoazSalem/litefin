@@ -295,6 +295,24 @@ test('doesAudioTrackRequireDirectStream: Tizen AVPlay does NOT require remux (ha
     assert.strictEqual(requiresRemux, false, 'Tizen AVPlay uses native hardware demuxing and does not need remuxing');
 });
 
+test('doesAudioTrackRequireDirectStream: Movi backend does NOT require remux (WASM demuxing)', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable'
+    });
+
+    const mediaSource = {
+        Id: 'movi-source',
+        MediaStreams: [
+            { Index: 2, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 5, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    const requiresRemux = doesAudioTrackRequireDirectStream(mediaSource, 5, 'movi');
+    assert.strictEqual(requiresRemux, false, 'Movi backend uses internal WASM demuxing and does not need remuxing');
+});
+
 test('isAudioTrackNativelyPlayable respects allowedAudioChannels setting', () => {
     // -------------------------------------------------------------------------
     // User configured max channels to 6 (5.1 surround)
