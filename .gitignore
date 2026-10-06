@@ -51,3 +51,6 @@ knowledge.md
 *.ipk
 /graphify-out
 .codegraph/
+
+# Codebuff / Freebuff agent workspace (session state, screenshots)
+.freebuff/
