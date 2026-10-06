@@ -336,7 +336,12 @@ export class WebOSPlayer {
         // Tear down any active Hls.js session before starting fresh
         this._destroyHlsPlayer();
 
+        // Detect whether the incoming stream is HLS (transcode, remux, or raw m3u8)
         const isHlsStream = options.isHls || (options.url && options.url.includes('.m3u8'));
+        // Persist HLS stream flag on the player instance for seeking and recovery logic
+        this._isHls = isHlsStream;
+        // Reset fallback guard so new stream playback can attempt clean Hls.js recovery if needed
+        this._hlsFallbackAttempted = false;
 
         if (isHlsStream && this._shouldUseNativeHls()) {
             /* ----------------------------------------------------------------
@@ -444,6 +449,25 @@ export class WebOSPlayer {
      * @returns {boolean}
      */
     _shouldUseNativeHls() {
+        // Query TV hardware capabilities and webOS major version
+        const caps = getDeviceCapabilities();
+        const webosVersion = caps?.webosVersion || 1;
+
+        // ---------------------------------------------------------------------
+        // WEBOS VERSION COMPATIBILITY GATE:
+        // On older webOS (< 5, including webOS 3 and 4.x), media fragments (#t=)
+        // are strictly disabled because older demuxers crash with MEDIA_ERR_DECODE.
+        // Furthermore, the native webOS 3/4 HLS pipeline silently discards or snaps back
+        // programmatic seeks into unbuffered HLS chunks at startup.
+        // If Hls.js is supported (MSE is available), prefer Hls.js MSE on webOS < 5
+        // so resume seeks land reliably at the target position instead of restarting from 0:00.
+        // ---------------------------------------------------------------------
+        if (webosVersion < 5 && Hls.isSupported()) {
+            log.info(`WebOSPlayer: webOS ${webosVersion} (< 5) detected — preferring Hls.js MSE pipeline for reliable resume seek`);
+            return false;
+        }
+
+        // Test native browser HLS MIME support for webOS 5+ hardware decoding
         const video = document.createElement('video');
         const nativeHls = !!(
             video.canPlayType('application/x-mpegURL').replace(/no/, '') ||
@@ -1094,7 +1118,23 @@ export class WebOSPlayer {
                     this._robustSeekPending = false;
                     this._robustSeekTarget = null;
 
-                    // Emit event so JellyfinPlayer can restart with Remux mode
+                    // ---------------------------------------------------------
+                    // SEAMLESS HLS.JS FALLBACK ON NATIVE HLS SEEK FAILURE:
+                    // If native HLS seeking failed to land (common on older hardware or
+                    // exotic streams), seamlessly hand off to Hls.js MSE pipeline.
+                    // Hls.js manages segments via MediaSource without relying on native #t=.
+                    // ---------------------------------------------------------
+                    if (this._isHls && Hls.isSupported() && !this._hlsFallbackAttempted) {
+                        log.info('WebOSPlayer: Native HLS seek failed — attempting seamless fallback to Hls.js MSE pipeline');
+                        this._hlsFallbackAttempted = true;
+                        this._destroyHlsPlayer();
+                        this._playWithHlsJs(video, this._currentPlayOptions).catch(err => {
+                            log.error('WebOSPlayer: Hls.js fallback failed', err);
+                        });
+                        return;
+                    }
+
+                    // Emit event so JellyfinPlayer can handle the failure cleanly
                     this.onEvent({
                         type: 'resumeseekfailed',
                         data: { targetPositionTicks: Math.round(time * 10000000) }
@@ -1191,7 +1231,7 @@ export class WebOSPlayer {
                      this._restoreVideoAfterResume(video);
                      this._doPlayWithResume(video, options, resolve, reject);
                  }
-             }, 3000);
+             }, 3500);
          } else {
              // No resume seek required; ensure video surface is visible
              this._restoreVideoAfterResume(video);

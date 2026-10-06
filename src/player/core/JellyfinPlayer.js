@@ -932,11 +932,15 @@ export class JellyfinPlayer extends EventEmitter {
                     this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                     // allow timeupdate to proceed below
-                } else if (Date.now() - (this._resumeWaitStartTime || 0) > 15000) {
-                    // Fallback: 15 seconds have passed, seek likely failed or is taking too long.
-                    // Release the spinner so we don't hold the UI hostage forever.
+                } else if (Date.now() - (this._resumeWaitStartTime || 0) > 3500 || 
+                           (effectiveCurrentTime >= 2.0 && effectiveCurrentTime < (targetSec - 15))) {
+                    // Fallback: 3.5s elapsed without landing near target, OR the decoder has
+                    // already started advancing forward past 2.0s while still far from target.
+                    // The resume seek was lost or discarded by the underlying platform demuxer.
+                    // Release the pending start lock immediately so the OSD seekbar, timeline,
+                    // and SubtitleManager track the real decoder position instead of freezing for 15 seconds.
                     this._pendingStartPositionTicks = null;
-                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s. Dismissing screen.`);
+                    log.warn(`Resume fallback: decoder playing at ${effectiveCurrentTime}s but expected ${targetSec}s. Syncing UI to decoder.`);
 
                     // Restore active playing state even upon fallback
                     this._isPaused = false;
@@ -1121,6 +1125,8 @@ export class JellyfinPlayer extends EventEmitter {
         // the backend emits resumeseekfailed. We restart playback in Remux mode
         // so the server streams from the target position, making the seek reliable.
         if (event.type === 'resumeseekfailed') {
+            // Clear pending start position lock immediately so UI doesn't remain trapped
+            this._pendingStartPositionTicks = null;
             const targetTicks = event.data?.targetPositionTicks;
             const currentPosTicks = this.getCurrentPositionTicks();
             const effectiveTicks = targetTicks || currentPosTicks;
@@ -2233,6 +2239,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Only clear state if NOT restarting
         if (!this._isRestarting) {
+            this._pendingStartPositionTicks = null;
             this._clearRemuxStuckWatchdog();
             this._currentItem = null;
             this._currentMediaSource = null;
