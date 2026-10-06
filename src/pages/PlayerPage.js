@@ -982,7 +982,7 @@ class PlayerPage extends Page {
 
         if (playerBackend === 'avplay') {
             useTizenPlayer = true;
-        } else if (playerBackend === 'html5') {
+        } else if (playerBackend === 'html5' || playerBackend === 'movi' || playerBackend === 'webos') {
             useTizenPlayer = false;
         }
 
@@ -1457,6 +1457,9 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
+            // Reset player error latch for the new playback attempt
+            this._hasPlayerError = false;
+
             // Build player options. If a specific media source version was pre-selected
             // on the details screen (e.g. 720p vs 1080p), ensure we pass the target
             // mediaSourceId down as a fallback even if the client-side metadata matching
@@ -1504,6 +1507,18 @@ class PlayerPage extends Page {
                     autoPlay: syncPlayManager.wantsAutoPlay()
                 });
             } else {
+                /*
+                 * -------------------------------------------------------------
+                 * Playback Startup Failure Protection
+                 * -------------------------------------------------------------
+                 * If the backend player failed to initialize (e.g. un-upgraded
+                 * custom element, demuxer failure, codec incompatibility), latch
+                 * _hasPlayerError so routine progress or stop reports do NOT fire
+                 * and zero out the user's saved resume position.
+                 * -------------------------------------------------------------
+                 */
+                this._hasPlayerError = true;
+                log.error('_startPlayback: Player play failed:', err);
                 throw err;
             }
         }
@@ -1877,7 +1892,14 @@ class PlayerPage extends Page {
             return;
         }
 
-        const osdContainer = this.$('#osd-overlay');
+        /*
+         * -----------------------------------------------------------------
+         * Query OSD Mounting Target Element
+         * -----------------------------------------------------------------
+         * Locate the #osd-overlay container within the component or the DOM.
+         * -----------------------------------------------------------------
+         */
+        const osdContainer = this.$('#osd-overlay') || document.getElementById('osd-overlay');
         if (!osdContainer) {
             log.error('OSD container #osd-overlay not found');
             return;
@@ -2693,6 +2715,9 @@ class PlayerPage extends Page {
             this._resumePosition = currentTicks;
             log.info(`Captured current position for retry: ${this._resumePosition} ticks`);
         }
+
+        // Latch player error status to halt ongoing progress / stopped server synchronization
+        this._hasPlayerError = true;
 
         log.error('Player error:', error);
 
@@ -3522,6 +3547,20 @@ class PlayerPage extends Page {
     async _reportPlaybackProgress(eventName = 'timeupdate', manualPositionTicks = null) {
         if (!this._player || !this._item) return;
 
+        /*
+         * ---------------------------------------------------------------------
+         * Error & Premature Progress Guard
+         * ---------------------------------------------------------------------
+         * Never report progress if playback has not yet confirmed start on the
+         * server, or if the player entered a fatal error state. Doing so would
+         * report position 0 ticks to the server, erasing the user's progress.
+         * ---------------------------------------------------------------------
+         */
+        if (!this._hasReportedStart || this._hasPlayerError) {
+            log.info('Skipping progress report: playback not started or in error state');
+            return;
+        }
+
         // Skip reporting progress completely if running in private/ghost mode
         if (this._isGhostMode) {
             return;
@@ -3584,10 +3623,23 @@ class PlayerPage extends Page {
      */
     _getPlayerState(manualPositionTicks = null) {
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks =
+        let positionTicks =
             manualPositionTicks !== null && manualPositionTicks !== undefined
                 ? manualPositionTicks
                 : this._player?.getCurrentPositionTicks?.() || 0;
+
+        /*
+         * ---------------------------------------------------------------------
+         * Resume Position Preservation Guard
+         * ---------------------------------------------------------------------
+         * If the current position evaluates to 0 ticks, but we arrived into the
+         * player with a valid saved resume position, preserve this._resumePosition.
+         * Prevents transient initialization ticks from overwriting saved progress.
+         * ---------------------------------------------------------------------
+         */
+        if ((!positionTicks || positionTicks === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+            positionTicks = this._resumePosition;
+        }
 
         // Cache the play method if it exists, so we survive player instance recreation during audio track switches.
         if (this._player?._currentPlayMethod) {
@@ -4111,6 +4163,21 @@ class PlayerPage extends Page {
             return;
         }
 
+        /*
+         * ---------------------------------------------------------------------
+         * Active Session Guard
+         * ---------------------------------------------------------------------
+         * If playback never successfully started reporting to the server (e.g.
+         * decoder failed immediately, or user closed the player on an error screen),
+         * DO NOT send PlaybackStopped. There is no active session on the server,
+         * and sending 0 ticks would clobber the user's saved resume position!
+         * ---------------------------------------------------------------------
+         */
+        if (!this._hasReportedStart) {
+            log.info('Skipping PlaybackStopped report: playback never successfully started');
+            return;
+        }
+
         try {
             // 1. Capture data
             const mediaSource =
@@ -4119,6 +4186,19 @@ class PlayerPage extends Page {
             // Ensure position is a rounded integer. We grab the reported position
             // from the player backend or the fallback parameters.
             let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+
+            /*
+             * -----------------------------------------------------------------
+             * Resume Safeguard on Stop
+             * -----------------------------------------------------------------
+             * If the backend stopped at 0 (or failed before first frame rendered)
+             * but a valid resume position was held, preserve the resume position.
+             * -----------------------------------------------------------------
+             */
+            if ((!rawPosition || rawPosition === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+                log.info(`Preserving initial resume position (${this._resumePosition} ticks) instead of 0 ticks on stop`);
+                rawPosition = this._resumePosition;
+            }
 
             // If the video naturally completed (ended event was fired), advancing to
             // the next item, or the user watched >= 80% of the content (accommodating
@@ -4301,7 +4381,13 @@ class PlayerPage extends Page {
 
         // Capture session info before stopping (stop clears internal player state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        let positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+        // Preserve resume position if player never progressed past 0
+        if ((!positionTicks || positionTicks === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+            positionTicks = this._resumePosition;
+        }
+
         const durationTicks =
             this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
@@ -4553,7 +4639,13 @@ class PlayerPage extends Page {
 
         // Capture session info BEFORE stopping (stop clears internal state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        let positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+        // Preserve resume position if player never progressed past 0
+        if ((!positionTicks || positionTicks === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+            positionTicks = this._resumePosition;
+        }
+
         const durationTicks =
             this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 

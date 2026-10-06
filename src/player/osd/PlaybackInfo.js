@@ -107,9 +107,19 @@ export default class PlaybackInfo extends BaseMenu {
         const mediaSource = this.player.getCurrentMediaSource();
         const playMethod = mediaSource ? MediaHelper.getPlayMethod(mediaSource) : 'DirectPlay';
         
-        // Use actual backend type if available, otherwise fall back to config
+        /*
+         * -----------------------------------------------------------------
+         * Resolve Active Backend Display Label
+         * -----------------------------------------------------------------
+         * Check the exact backendType exposed by JellyfinPlayer. If 'movi' is
+         * active (Desktop WebCodecs/WASM player), display 'Movi Player' instead
+         * of falling back to 'Html Player'.
+         * -----------------------------------------------------------------
+         */
         let playerType = i18n.t('Unknown');
-        if (this.player.backendType === 'webos' || platformInfo.isWebOS) {
+        if (this.player.backendType === 'movi') {
+            playerType = 'Movi Player';
+        } else if (this.player.backendType === 'webos' || platformInfo.isWebOS) {
             playerType = 'WebOS Player';
         } else if (this.player.backendType === 'tizen') {
             playerType = 'Tizen AVPlayer';
@@ -148,12 +158,18 @@ export default class PlaybackInfo extends BaseMenu {
         if (!this.player.useTizenPlayer) {
             const video = this.player._backend?._videoElement; 
             if (video) {
-                videoRes = `${video.videoWidth}x${video.videoHeight}`;
+                if (video.videoWidth && video.videoHeight) {
+                    videoRes = `${video.videoWidth}x${video.videoHeight}`;
+                } else if (videoStream) {
+                    videoRes = `${videoStream.Width || videoStream.width || '?' }x${videoStream.Height || videoStream.height || '?'}`;
+                }
                 if (video.getVideoPlaybackQuality) {
                     const quality = video.getVideoPlaybackQuality();
                     droppedFrames = quality.droppedVideoFrames;
                     corruptedFrames = quality.corruptedVideoFrames || 0;
                 }
+            } else if (videoStream) {
+                videoRes = `${videoStream.Width || videoStream.width || '?' }x${videoStream.Height || videoStream.height || '?'}`;
             }
         } else {
             if (videoStream) {
