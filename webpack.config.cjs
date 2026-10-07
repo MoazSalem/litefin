@@ -698,6 +698,16 @@ const desktopConfig = {
         clean: true
     },
 
+    // Development server configuration for testing the desktop tier in browsers
+    devServer: {
+        static: {
+            directory: path.resolve(__dirname, 'dist/desktop')
+        },
+        compress: true,
+        port: 8080,
+        hot: true
+    },
+
     optimization: {
         splitChunks: { chunks: 'all', maxSize: 250000 },
         minimizer: ['...', new CssMinimizerPlugin()]

@@ -68,7 +68,7 @@ export const isDtsSupported = () => {
  * @param {Object} track - Jellyfin MediaStream object for an audio track
  * @returns {boolean} true if the track direct plays natively; false if it requires transcoding
  */
-export function isAudioTrackNativelyPlayable(track) {
+export function isAudioTrackNativelyPlayable(track, backendType = null) {
     if (!track || !track.Codec) return true;
     const codec = track.Codec.toLowerCase();
 
@@ -84,18 +84,28 @@ export function isAudioTrackNativelyPlayable(track) {
         return false;
     }
 
-    // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
-    if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+    // Determine if current backend is movi (passed explicitly or inferred from settings/platform)
+    const isMovi =
+        backendType === 'movi' ||
+        PlayerSettings.get('playerBackend') === 'movi' ||
+        PlayerSettings.get('preferredPlayerBackend') === 'movi' ||
+        platformInfo.isDesktop;
+
+    // FLAC / ALAC in video containers: unsupported on standard HTML5 players when enableFlacInVideo is disabled,
+    // but fully supported on MoviPlayer via WASM demuxer and decoder
+    if ((codec === 'flac' || codec === 'alac') && !isMovi && !PlayerSettings.get('enableFlacInVideo')) {
         return false;
     }
 
-    // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
-    if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
+    // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled,
+    // unless MoviPlayer is active, which decodes DTS multi-channel in software WASM
+    if ((codec.includes('dts') || codec === 'dca') && !isMovi && !isDtsSupported()) {
         return false;
     }
 
-    // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled
-    if (codec === 'truehd' && !isTrueHdSupported()) {
+    // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled,
+    // unless MoviPlayer is active, which decodes TrueHD / MLP lossless streams in software WASM
+    if (codec === 'truehd' && !isMovi && !isTrueHdSupported()) {
         return false;
     }
 
@@ -149,9 +159,10 @@ export function isAudioTrackNativelyPlayable(track) {
  *
  * @param {Object} mediaSource - Jellyfin MediaSource object containing MediaStreams
  * @param {string} [targetLang] - Optional language ISO code override
+ * @param {string} [backendType] - Active player backend type (e.g. 'movi', 'avplay', 'webos', 'html5')
  * @returns {Object|null} The resolved best audio MediaStream object, or null
  */
-export function resolveBestAudioStream(mediaSource, targetLang) {
+export function resolveBestAudioStream(mediaSource, targetLang, backendType = null) {
     // -------------------------------------------------------------------------
     // 1. MediaSource & Stream Validation
     // -------------------------------------------------------------------------
@@ -316,7 +327,7 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
 
             if (preferDirectPlay) {
                 // Filter candidate preferred tracks that can DirectPlay natively without server transcoding
-                const playablePreferred = preferredTracks.filter((t) => isAudioTrackNativelyPlayable(t));
+                const playablePreferred = preferredTracks.filter((t) => isAudioTrackNativelyPlayable(t, backendType));
 
                 if (playablePreferred.length > 0) {
                     // Pick the highest quality DirectPlay track matching the preferred language
@@ -356,11 +367,11 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
     const sameLangTracks = audioStreams.filter(
         (t) => isLanguageMatch(t.Language, defaultLang) || (defaultLang === 'und' && (!t.Language || t.Language === 'und'))
     );
-    const sameLangPlayable = sameLangTracks.filter((t) => isAudioTrackNativelyPlayable(t));
+    const sameLangPlayable = sameLangTracks.filter((t) => isAudioTrackNativelyPlayable(t, backendType));
 
     // If the default track is natively playable, check if a superior high-fidelity track
     // (such as DTS-HD MA or TrueHD) is also natively playable in the same language.
-    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack);
+    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack, backendType);
     if (isDefaultPlayable) {
         if (sameLangPlayable.length > 1) {
             const bestPlayable = pickBestTrack(sameLangPlayable);
@@ -444,8 +455,8 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     // NOTE: We deliberately do NOT use mediaSource.DefaultAudioStreamIndex here because
     // the Jellyfin server dynamically sets that property to whatever AudioStreamIndex
     // was requested in the PlaybackInfo call, rather than the file's container default.
-    const defaultStream = audioStreams.find((s) => s.IsDefault && isAudioTrackNativelyPlayable(s));
-    const playableStreams = audioStreams.filter((s) => isAudioTrackNativelyPlayable(s));
+    const defaultStream = audioStreams.find((s) => s.IsDefault && isAudioTrackNativelyPlayable(s, backendType));
+    const playableStreams = audioStreams.filter((s) => isAudioTrackNativelyPlayable(s, backendType));
     const containerHardwareDefault = defaultStream || playableStreams[0] || audioStreams[0];
 
     // If the requested track is the physical default track, it plays natively in hardware DirectPlay
@@ -1205,6 +1216,11 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+        // Log backend errors with backend context before forwarding to UI layer
+        if (event.type === PlayerEvent.ERROR) {
+            log.error(`[JellyfinPlayer] Error event received from ${this._backendType} backend:`, event.data);
+        }
+
         // Re-emit events from backend
         this.emit(event.type, event.data);
     }
@@ -1374,7 +1390,7 @@ export class JellyfinPlayer extends EventEmitter {
                 const fallbackSource = options.item.MediaSources[0];
                 const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                 if (ms) {
-                    const bestAudioStream = resolveBestAudioStream(ms);
+                    const bestAudioStream = resolveBestAudioStream(ms, null, this._backendType);
                     if (bestAudioStream) {
                         options.audioStreamIndex = bestAudioStream.Index;
                         log.info(`[AudioSelection] Auto-resolved DirectPlay audio stream index: ${options.audioStreamIndex} (${bestAudioStream.Codec})`);
@@ -1399,8 +1415,8 @@ export class JellyfinPlayer extends EventEmitter {
                 if (activeMs) {
                     const audioStreams = (activeMs.MediaStreams || []).filter(s => s.Type === 'Audio');
                     // Find actual container default without using the dynamically echoed DefaultAudioStreamIndex
-                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s)) ||
-                        audioStreams.find(s => isAudioTrackNativelyPlayable(s)) ||
+                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s, this._backendType)) ||
+                        audioStreams.find(s => isAudioTrackNativelyPlayable(s, this._backendType)) ||
                         audioStreams[0];
                     defaultIndex = defaultAudioStream ? defaultAudioStream.Index : undefined;
                     if (audioStreams.length > 0) {
@@ -1928,7 +1944,7 @@ export class JellyfinPlayer extends EventEmitter {
 
             // If not provided, resolve best DirectPlay audio track from MediaSource
             if (this._currentAudioStreamIndex === undefined && mediaSource.MediaStreams) {
-                const bestStream = resolveBestAudioStream(mediaSource);
+                const bestStream = resolveBestAudioStream(mediaSource, null, this._backendType);
                 if (bestStream) {
                     this._currentAudioStreamIndex = bestStream.Index;
                 } else {
@@ -1978,6 +1994,7 @@ export class JellyfinPlayer extends EventEmitter {
                 playSessionId: playbackInfo.PlaySessionId,
                 authToken: this.authToken,
                 deviceProfile: deviceProfile,
+                backendType: this._backendType,
                 // Pass audioStreamIndex so it's included in manually-built fallback URLs.
                 // When TranscodingUrl is present (the normal case), the server already
                 // has this baked in and this param is unused.
@@ -2471,7 +2488,7 @@ export class JellyfinPlayer extends EventEmitter {
             const targetTrack = AudioTracks.find(t => t.Index === index);
 
             if (targetTrack) {
-                isTargetCodecSupported = isAudioTrackNativelyPlayable(targetTrack);
+                isTargetCodecSupported = isAudioTrackNativelyPlayable(targetTrack, this._backendType);
             }
         }
 
@@ -2524,8 +2541,8 @@ export class JellyfinPlayer extends EventEmitter {
 
                 if (ms && Array.isArray(ms.MediaStreams)) {
                     const audioStreams = ms.MediaStreams.filter(s => s.Type === 'Audio');
-                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s)) ||
-                        audioStreams.find(s => isAudioTrackNativelyPlayable(s)) ||
+                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s, this._backendType)) ||
+                        audioStreams.find(s => isAudioTrackNativelyPlayable(s, this._backendType)) ||
                         audioStreams[0];
                     const defaultIndex = defaultAudioStream ? defaultAudioStream.Index : undefined;
                     const firstAudioIndex = audioStreams.length > 0 ? audioStreams[0].Index : undefined;
@@ -3482,7 +3499,7 @@ export class JellyfinPlayer extends EventEmitter {
      *                    selecting it would require a transcode restart
      */
     isAudioTrackNativelyPlayable(track) {
-        return isAudioTrackNativelyPlayable(track);
+        return isAudioTrackNativelyPlayable(track, this._backendType);
     }
 
     /**
@@ -3492,7 +3509,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {Object|null}
      */
     resolveBestAudioStream(mediaSource, targetLang) {
-        return resolveBestAudioStream(mediaSource, targetLang);
+        return resolveBestAudioStream(mediaSource, targetLang, this._backendType);
     }
 
     /**
@@ -3511,6 +3528,12 @@ export class JellyfinPlayer extends EventEmitter {
     _getBackendAudioTracks(mediaSource = this._currentMediaSource) {
         // Retrieve all audio streams attached to the current media source
         const tracks = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+
+        // For MoviPlayer, demuxing happens via FFmpeg WASM inside the web component,
+        // which exposes all container audio tracks natively without browser element filtering.
+        if (this._backendType === 'movi') {
+            return tracks;
+        }
 
         // Filter out audio formats that the hardware pipeline or browser omits from native track lists
         return tracks.filter((track) => {

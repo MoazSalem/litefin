@@ -37,7 +37,7 @@ export const MediaHelper = {
      * @returns {Object} Stream info with URL and metadata
      */
     buildStreamUrl(options) {
-        const { serverUrl, itemId, mediaSource, startPositionTicks, playSessionId, authToken, audioStreamIndex } = options;
+        const { serverUrl, itemId, mediaSource, startPositionTicks, playSessionId, authToken, audioStreamIndex, backendType } = options;
 
         /*
          * Dynamically select the token query parameter key name.
@@ -108,7 +108,9 @@ export const MediaHelper = {
                 const isInterlaced = videoStream && videoStream.IsInterlaced;
 
                 // Check global variable platformInfo if it's imported (we must import it!)
-                const useProgressiveTs = platformInfo.isTizen && (isMpeg2 || isInterlaced);
+                // MoviPlayer's FFmpeg-WASM demuxer reads raw MPEG-TS natively, so Live TV
+                // always bypasses the HLS proxy there regardless of codec.
+                const useProgressiveTs = backendType === 'movi' || (platformInfo.isTizen && (isMpeg2 || isInterlaced));
 
                 if (useProgressiveTs) {
                     const ext = mediaSource.Container ? `.${mediaSource.Container}` : '.ts';

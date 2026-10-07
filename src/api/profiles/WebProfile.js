@@ -342,7 +342,8 @@ export function buildJellyfinProfile(options = {}) {
     if (enableVP9) generalVideoCodecs.push('vp9');
     if (caps.vp8) generalVideoCodecs.push('vp8');
     if (enableAV1) generalVideoCodecs.push('av1');
-    if (caps.mpeg2video) generalVideoCodecs.push('mpeg2video');
+    // Movi's FFmpeg-WASM pipeline decodes MPEG-2 (broadcast Live TV) without server help
+    if (caps.mpeg2video || isMovi) generalVideoCodecs.push('mpeg2video');
 
     const webmVideoCodecs = [];
     if (caps.vp8) webmVideoCodecs.push('vp8');
@@ -359,7 +360,8 @@ export function buildJellyfinProfile(options = {}) {
         // Advertise MKV first with all supported video and audio codecs to unlock direct play!
         if (isMovi) {
             directPlayProfiles.push({
-                Container: 'mkv,mp4,m4v,mov,webm,ts',
+                // 'mpegts' is the container name Jellyfin reports for Live TV streams
+                Container: 'mkv,mp4,m4v,mov,webm,ts,mpegts',
                 Type: 'Video',
                 VideoCodec: generalVideoCodecs.join(','),
                 AudioCodec: audioCodecString

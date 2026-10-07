@@ -671,6 +671,8 @@
     "EnableCollectionRowsDescription": "Display custom collection and trending rows on the home screen.",
     "EnableDebugLogs": "Enable Debug Logs",
     "EnableDebugLogsDescription": "Allow application to output logs to console",
+    "EnableMoviDebugLogs": "Enable Movi Engine Logs",
+    "EnableMoviDebugLogsDescription": "Output low-level WebAssembly demuxer, FFmpeg, and decoding logs from movi-player to the logger.",
     "EnableDV": "Dolby Vision Force State",
     "EnableFmp4HlsContainer": "Allow fMP4 HLS Containers",
     "EnableFmp4HlsContainerDescription": "Advertise fMP4 (ISOBMFF) HLS transcoding profiles. Unlocks HEVC/AV1 remuxing on supported hardware.",

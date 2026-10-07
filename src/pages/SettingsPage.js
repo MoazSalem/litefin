@@ -6727,6 +6727,8 @@ class SettingsPage extends Page {
     _renderDebugTab() {
         const logsEnabled = debugOverlay.isLogsEnabled;
         const overlayEnabled = debugOverlay.isOverlayEnabled;
+        // Check whether low-level Movi player engine logging is enabled (defaults to false)
+        const moviLogsEnabled = storage.getItem('debug_movi_logs') === 'true';
 
         return `
             <div class="settings-tab-content">
@@ -6770,6 +6772,19 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="btn btn-option" id="btn-upload-logs" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="Upload">
                             ${i18n.t('Upload')}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableMoviDebugLogs">${i18n.t('EnableMoviDebugLogs') || 'Enable Movi Engine Logs'}</span>
+                        <span class="setting-description" data-i18n="EnableMoviDebugLogsDescription">${i18n.t('EnableMoviDebugLogsDescription') || 'Output low-level WebAssembly demuxer, FFmpeg, and decoding logs from movi-player to the logger.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${moviLogsEnabled ? 'active' : ''}" 
+                                id="toggle-debug-movi-logs" 
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
@@ -11120,6 +11135,28 @@ class SettingsPage extends Page {
                 // Update DebugOverlay
                 debugOverlay.setOverlayEnabled(newState);
                 storage.setItem('debug_overlay_enabled', newState);
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // Movi Player Engine Logs Toggle
+        // ---------------------------------------------------------------------
+        // Governs output from low-level WebAssembly demuxer, FFmpeg, and decoding
+        // pipelines within the movi-player backend. Disabled by default to avoid
+        // saturating console and debug ring buffers during normal playback.
+        // ---------------------------------------------------------------------
+        const toggleMoviLogs = this.$('#toggle-debug-movi-logs');
+        if (toggleMoviLogs) {
+            toggleMoviLogs.addEventListener('click', () => {
+                // Determine new state based on current class list
+                const newState = !toggleMoviLogs.classList.contains('active');
+                toggleMoviLogs.classList.toggle('active');
+
+                // Persist selection directly into application storage
+                storage.setItem('debug_movi_logs', newState);
+
+                // Broadcast change event across application
+                eventBus.emit('prefChanged:debug_movi_logs', newState);
             });
         }
 
