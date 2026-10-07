@@ -18,6 +18,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { touchHorizontalScroller } from './TouchHorizontalScroller.js';
 
 const log = logger.create('AndroidAdapter');
 
@@ -84,6 +85,10 @@ class AndroidAdapter {
 
         // Physical-keyboard support (emulator, DeX, keyboards/remotes on phones).
         this._setupKeyboardHandler();
+
+        // Finger-driven horizontal row scrolling (smooth, 1:1 with the
+        // finger — matches the vertical scroll feel; Android only).
+        touchHorizontalScroller.init();
 
         // Scale the TV-sized UI down to phone screens (see _applyDisplayScale).
         this._injectLandscapeRescueCSS();

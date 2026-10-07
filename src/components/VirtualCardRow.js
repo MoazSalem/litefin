@@ -53,12 +53,12 @@ export class VirtualCardRow {
         const scale = isExpanded
             ? parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.2
             : isModernPosters
-                ? parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2
-                : isModern
-                    ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.2
-                    : isExpanding
-                        ? parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0
-                        : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+              ? parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2
+              : isModern
+                ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.2
+                : isExpanding
+                  ? parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0
+                  : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
 
         if (isExpanded) {
             this.modernMultiplier = scale;
@@ -66,7 +66,11 @@ export class VirtualCardRow {
             // =================================================================
             // Modern Cards (Expanded): Uniform 16:9 Widescreen Cards (396px base)
             // =================================================================
-            if (this.cardType === 'square' || this.cardType === 'artist' || (isExpanded && this.cardType === 'person')) {
+            if (
+                this.cardType === 'square' ||
+                this.cardType === 'artist' ||
+                (isExpanded && this.cardType === 'person')
+            ) {
                 this.itemWidth = Math.round(223 * scale);
             } else {
                 this.itemWidth = Math.round(396 * scale);
@@ -340,8 +344,8 @@ export class VirtualCardRow {
                 imageRatioDiv.style.paddingBottom = this.isLandscape
                     ? '56.25%'
                     : this.cardType === 'square' || this.cardType === 'artist'
-                        ? '100%'
-                        : '150%';
+                      ? '100%'
+                      : '150%';
                 imageRatioDiv.style.border = '3px solid transparent';
                 dummyContent.appendChild(imageRatioDiv);
 
@@ -364,7 +368,11 @@ export class VirtualCardRow {
                 imageRatioDiv.style.width = '100%';
                 imageRatioDiv.style.height = '0';
                 let padding = '150%'; // Classic & Modern Portrait Poster (2:3)
-                if (this.cardType === 'square' || this.cardType === 'artist' || ((isExpanded || isModernPosters) && this.cardType === 'person')) {
+                if (
+                    this.cardType === 'square' ||
+                    this.cardType === 'artist' ||
+                    ((isExpanded || isModernPosters) && this.cardType === 'person')
+                ) {
                     // Square / Artist / Person icon: 1:1 aspect ratio
                     padding = '100%';
                 } else if (this.isLandscape || isExpanded) {
@@ -396,6 +404,10 @@ export class VirtualCardRow {
 
         this.bufferZone = Math.floor(this.visibleCount / 2);
 
+        // Center index currently driving the touch-scroll window (null when
+        // no touch gesture is in flight) — see syncScrollToPosition().
+        this._touchWindowIndex = null;
+
         // -------------------------------------------------------------
         // Initialize focused index.
         // -------------------------------------------------------------
@@ -414,7 +426,8 @@ export class VirtualCardRow {
         if (this.currentIndex > 0) {
             const isRtl = document.documentElement.dir === 'rtl';
             const elementPos = this.getItemPosition(this.currentIndex);
-            const canExpand = isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+            const canExpand =
+                isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
             const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
 
             const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
@@ -422,6 +435,16 @@ export class VirtualCardRow {
             const maxScroll = Math.max(0, this.getTrackWidth() - containerWidth);
             const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
+            // Android: the row is a NATIVE horizontal scroller (browser owns
+            // touch drag + fling). Restoring position must write scrollLeft on
+            // the scroller — a track transform here would double-offset the
+            // content inside the scroller.
+            if (platformInfo.isAndroid) {
+                requestAnimationFrame(() => {
+                    this.track.parentElement.scrollLeft = isRtl ? -finalScrollLeft : finalScrollLeft;
+                });
+                // Skip the transform restore below — scrollLeft owns position on Android.
+            } else {
             this.track.style.transition = 'none';
             this.track.style.webkitTransition = 'none';
 
@@ -436,6 +459,7 @@ export class VirtualCardRow {
                 this.track.style.webkitTransition = '';
                 this.track.style.transition = '';
             });
+            }
         }
 
         // =================================================================
@@ -521,7 +545,8 @@ export class VirtualCardRow {
             // the expanded card perfectly in the middle of the viewport.
             // -----------------------------------------------------------------
             const isExpanding = document.documentElement.getAttribute('data-layout-media-rows') === 'expanding';
-            const canExpand = isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+            const canExpand =
+                isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
             const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
 
             const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
@@ -835,6 +860,58 @@ export class VirtualCardRow {
         if (targetNode && targetNode.dataset && targetNode.dataset.virtualIndex !== undefined) {
             this.currentIndex = parseInt(targetNode.dataset.virtualIndex, 10);
         }
+    }
+
+    /**
+     * =========================================================================
+     * Touch-scroll support (Android TouchHorizontalScroller)
+     * =========================================================================
+     * Keeps the virtual window covering the visible viewport for an arbitrary,
+     * finger-driven scroll position WITHOUT touching focus. The card nearest
+     * the viewport center drives the sliding window (same windowing model as
+     * D-pad navigation); the window is only recomputed when that center card
+     * changes, so a drag costs zero DOM work between card boundaries.
+     *
+     * `x` is expressed in the ScrollController transform convention (positive
+     * = revealing content to the right in LTR; the caller mirrors RTL).
+     * @param {number} x - scroll position in track space (px)
+     */
+    syncScrollToPosition(x) {
+        if (this.totalItems === 0) return;
+        const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
+        const centerPos = x + containerWidth / 2;
+        const centerIndex = Math.max(
+            0,
+            Math.min(
+                this.totalItems - 1,
+                Math.round((centerPos - this.sidePadding - this.itemWidth / 2) / this.totalItemWidth)
+            )
+        );
+        if (centerIndex !== this._touchWindowIndex) {
+            this._touchWindowIndex = centerIndex;
+            this._updateWindow(centerIndex);
+        }
+    }
+
+    /**
+     * Finish a touch gesture: adopt the card nearest the viewport center as
+     * the saved index (so the next D-pad press continues from where the
+     * finger left the row) and trim the window back to its normal size.
+     * @param {number} x - final scroll position in track space (px)
+     */
+    endTouchScroll(x) {
+        this._touchWindowIndex = null;
+        if (this.totalItems === 0) return;
+        const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
+        const centerPos = x + containerWidth / 2;
+        this.currentIndex = Math.max(
+            0,
+            Math.min(
+                this.totalItems - 1,
+                Math.round((centerPos - this.sidePadding - this.itemWidth / 2) / this.totalItemWidth)
+            )
+        );
+        this._updateWindow(this.currentIndex);
     }
 
     /**

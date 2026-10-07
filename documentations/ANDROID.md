@@ -49,6 +49,7 @@ web bundle — the same code paths as the Tizen and webOS builds.
 | Player | `src/player/core/JellyfinPlayer.js` | auto-selects HTML5 backend (hls.js) — no changes needed |
 | Device profile | `src/api/DeviceProfile.js` | falls through to `WebProfile` (MSE-capable profile) |
 | Cursor CSS | `src/styles/base.css` | cursor never hidden on `data-platform="android"` |
+| Touch row scrolling | `src/android/TouchHorizontalScroller.js` | finger-drag horizontal scrolling on media rows (below) |
 
 ## Build prerequisites
 
@@ -93,6 +94,38 @@ adb shell am start -n com.litefin.app/.MainActivity
 
 Remote debugging: `chrome://inspect` → the Litefin WebView (debugging is
 enabled in debug and release builds for now).
+
+## Touch horizontal row scrolling
+
+On Android, media rows are **native horizontal scrollers**: `.row-items` is
+switched to `overflow-x: auto`, so the browser compositor owns the drag
+tracking and fling inertia — the same physics as the vertical page scroll
+(no JS max-speed cap, no lag behind the finger). This mirrors the official
+Jellyfin clients, which use native scrolling with programmatic focus
+animation on top.
+
+`TouchHorizontalScroller` (initialized from `AndroidAdapter.init()`) adds the
+thin JS layer the TV architecture needs on top of that native scroller:
+
+- After the browser fling ends, the row eases onto the exact card-center
+  geometry `ScrollController.scrollIntoView` uses for D-pad focus, and
+  `VirtualCardRow.endTouchScroll` saves the centered card index — so the
+  remote continues seamlessly from wherever the finger left the row.
+  The settle waits for the native momentum to genuinely stop (watching
+  scrollLeft per frame) instead of firing on a fixed timer, so the JS ease
+  never fights the compositor's fling velocity.
+- A fresh finger press mid-fling/settle cancels the settle (catch-the-fling).
+- Card clicks are suppressed for ~400ms after a real drag so the row can be
+  swiped without activating a card under the finger.
+- `VirtualCardRow.syncScrollToPosition` keeps the virtual card window synced
+  from raw `scroll` events, and LazyLoader resumes image loading when
+  scrolling goes idle.
+
+D-pad focus centering (ScrollController) writes `scrollLeft` on Android —
+touch and remote share ONE coordinate system; no `translate3d` on the track.
+Only `.row-items` rows scroll this way (hero carousel, modals and the
+sidebar are excluded); the feature is compiled into the Android bundle and
+gated by `platformInfo.isAndroid`, so Tizen/webOS/web are untouched.
 
 ## Known limitations (intentional, minimal port)
 

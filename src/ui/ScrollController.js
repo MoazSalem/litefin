@@ -22,6 +22,7 @@
 
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 // ============================================================================
 // Constants — all tunable values in one place for easy TV hardware tweaking
@@ -1070,8 +1071,29 @@ class ScrollController {
                     if (trackWidth > containerWidth) {
                         const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
+                        // =====================================================
+                        // ANDROID (touch): native horizontal scroller
+                        // =====================================================
+                        // On Android the row is a real overflow-x scroller (see
+                        // TouchHorizontalScroller) — the browser compositor owns
+                        // touch drag + fling inertia, identical to vertical page
+                        // scrolling. Focus centering therefore writes scrollLeft
+                        // instead of a track transform, so D-pad and touch share
+                        // ONE coordinate system and never fight each other.
+                        if (platformInfo.isAndroid) {
+                            const signedLeft = isRtl ? -finalScrollLeft : finalScrollLeft;
+                            if (options.instantScroll) {
+                                rowItems.scrollLeft = signedLeft;
+                            } else {
+                                this.smoothScrollTo(
+                                    rowItems,
+                                    signedLeft,
+                                    SCROLL_DURATION_HORIZONTAL,
+                                    'horizontal'
+                                );
+                            }
+                        } else if (options.instantScroll) {
                         // Use completely hardware-accelerated CSS transform!
-                        if (options.instantScroll) {
                             // OPTIMIZATION: Parse the current transform to check if we're already
                             // at the target position. This skips the forced-layout reflow path
                             // entirely when navigating vertically (the card is already centered).
@@ -1130,6 +1152,10 @@ class ScrollController {
                                 }
                             }
                         }
+                    } else if (platformInfo.isAndroid) {
+                        // Short rows on Android: reset the native scroller instead
+                        // of the (unused) track transform.
+                        rowItems.scrollLeft = 0;
                     } else {
                         // For short rows, ensure the track is reset to 0 to prevent stale
                         // offsets if items were removed or the window was resized.
