@@ -3355,6 +3355,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelInstantPlayback">${i18n.t('LabelInstantPlayback')}</span>

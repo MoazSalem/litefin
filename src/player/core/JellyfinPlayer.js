@@ -88,8 +88,7 @@ export function isAudioTrackNativelyPlayable(track, backendType = null) {
     const isMovi =
         backendType === 'movi' ||
         PlayerSettings.get('playerBackend') === 'movi' ||
-        PlayerSettings.get('preferredPlayerBackend') === 'movi' ||
-        platformInfo.isDesktop;
+        (typeof platformInfo !== 'undefined' && (platformInfo.isDesktop || platformInfo.isAndroid) && platformInfo.hasWebCodecsSupport);
 
     // FLAC / ALAC in video containers: unsupported on standard HTML5 players when enableFlacInVideo is disabled,
     // but fully supported on MoviPlayer via WASM demuxer and decoder
@@ -281,7 +280,7 @@ export function resolveBestAudioStream(mediaSource, targetLang, backendType = nu
         if (cleanTrack === cleanTarget) return true;
 
         // Compare normalized ISO codes via languageManager
-        if (typeof languageManager?.normalizeLanguage === 'function') {
+        if (typeof languageManager !== 'undefined' && typeof languageManager?.normalizeLanguage === 'function') {
             const normTrack = languageManager.normalizeLanguage(cleanTrack);
             const normTarget = languageManager.normalizeLanguage(cleanTarget);
             if (normTrack && normTarget) {
@@ -818,8 +817,8 @@ export class JellyfinPlayer extends EventEmitter {
         // and multi-audio decoding (AC-3, E-AC-3, TrueHD, DTS) natively.
         // If on web and WebCodecs is missing, falls through to HTML5.
         // ----------------------------------------------------------------
-        if (platformInfo.isDesktop && platformInfo.hasWebCodecsSupport) {
-            log.info('Desktop platform with WebCodecs detected — defaulting to MoviPlayer backend');
+        if ((platformInfo.isDesktop || platformInfo.isAndroid) && platformInfo.hasWebCodecsSupport) {
+            log.info('Platform with WebCodecs detected (Desktop/Android) — defaulting to MoviPlayer backend');
             this._backendType = 'movi';
             this._backend    = new MoviVideoPlayer(sharedOptions);
             return;

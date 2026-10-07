@@ -43,6 +43,7 @@
 .player-container movi-player,
 .player-container .movi-player-container,
 .player-container canvas.movi-canvas {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: contain;

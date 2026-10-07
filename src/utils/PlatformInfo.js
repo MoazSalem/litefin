@@ -190,11 +190,28 @@ class PlatformInfo {
 
     /**
      * =========================================================================
+     * Android Environment Detection
+     * =========================================================================
+     * Evaluates whether the application is currently running inside an Android
+     * runtime environment (e.g. Android TV, Google TV, or mobile Android).
+     * =========================================================================
+     * @returns {boolean} True if running on an Android platform.
+     */
+    get isAndroid() {
+        if (typeof navigator !== 'undefined' && navigator.userAgent) {
+            return /Android/i.test(navigator.userAgent);
+        }
+        return false;
+    }
+
+    /**
+     * =========================================================================
      * Desktop Environment Detection
      * =========================================================================
      * Evaluates whether the application is currently running in a desktop
-     * operating system environment (packaged via Pake/Tauri, Electron, or a
-     * desktop browser). Excludes TV runtimes (Tizen, webOS) and mobile devices.
+     * operating system environment (packaged via Tauri, Electron, or a
+     * desktop browser on Windows, macOS, or Linux). Excludes TV runtimes
+     * (Tizen, webOS, Android TV) and mobile devices.
      *
      * Used to default to high-performance, container-capable player backends
      * (such as MoviPlayer via WebCodecs and WASM) on desktop machines.
@@ -202,12 +219,12 @@ class PlatformInfo {
      * @returns {boolean} True if running on a desktop platform.
      */
     get isDesktop() {
-        // Quick exit for dedicated Smart TV platforms
-        if (this.isTizen || this.isWebOS) {
+        // Quick exit for dedicated Smart TV platforms and Android runtimes
+        if (this.isTizen || this.isWebOS || this.isAndroid) {
             return false;
         }
 
-        // Check for dedicated desktop application shell wrappers (Pake / Tauri)
+        // Check for dedicated desktop application shell wrappers (Pake / Tauri on desktop)
         if (typeof window !== 'undefined') {
             if (window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__) {
                 return true;

@@ -128,7 +128,7 @@ export class PrewarmManager {
             let backendType = 'html5';
             if (
                 (playerBackendSetting === 'movi' && platformInfo.hasWebCodecsSupport) ||
-                (playerBackendSetting === 'auto' && platformInfo.isDesktop && platformInfo.hasWebCodecsSupport)
+                (playerBackendSetting === 'auto' && (platformInfo.isDesktop || platformInfo.isAndroid) && platformInfo.hasWebCodecsSupport)
             ) {
                 backendType = 'movi';
             } else if (playerBackendSetting === 'avplay' || (playerBackendSetting === 'auto' && platformInfo.isTizen)) {

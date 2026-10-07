@@ -28,6 +28,7 @@ import { PlayerEvent } from './JellyfinPlayer.js';
 import { storage } from '../../utils/StorageService.js';
 import { eventBus } from '../../core/EventBus.js';
 
+
 // Dedicated logger channels
 const log = logger.create('MoviVideoPlayer');
 const engineLog = logger.create('MoviEngine');
@@ -197,16 +198,12 @@ export class MoviVideoPlayer {
             try {
                 // Intercept error-level messages (demuxing failures, decoding stalls, network drops)
                 MoviLogger.error = (tag, message, ...args) => {
-                    if (isEngineLoggingEnabled()) {
-                        engineLog.error(`[${tag}] ${message}`, ...args);
-                    }
+                    engineLog.error(`[${tag}] ${message}`, ...args);
                 };
 
                 // Intercept warning-level messages (dropping frames, buffering renegotiations)
                 MoviLogger.warn = (tag, message, ...args) => {
-                    if (isEngineLoggingEnabled()) {
-                        engineLog.warn(`[${tag}] ${message}`, ...args);
-                    }
+                    engineLog.warn(`[${tag}] ${message}`, ...args);
                 };
 
                 // Intercept informational messages (stream specs, codec detection, track counts)
@@ -388,9 +385,20 @@ export class MoviVideoPlayer {
          */
         element.setAttribute('persist', 'none');
 
+
         // Apply saved system volume
         const savedVol = MediaHelper.getSavedVolume();
         element.volume = typeof savedVol === 'number' ? savedVol : 1.0;
+
+        // Explicit layout box styling ensuring the custom element occupies the full container
+        // without collapsing or falling back to inline layout on WebView runtimes
+        element.style.position = 'absolute';
+        element.style.top = '0';
+        element.style.left = '0';
+        element.style.width = '100%';
+        element.style.height = '100%';
+        element.style.display = 'block';
+        element.style.backgroundColor = '#000000';
 
         // Ensure parent container exists
         if (!this.container) {
@@ -402,6 +410,13 @@ export class MoviVideoPlayer {
         this.container.appendChild(element);
         this._moviElement = element;
         this._videoElement = element;
+
+        // Force initial layout size sync if engine is ready
+        if (typeof element.updateCanvasSize === 'function') {
+            try {
+                element.updateCanvasSize();
+            } catch (_) {}
+        }
 
         // Bind DOM events to normalized Litefin events
         this._bindEvents(element);
@@ -432,7 +447,13 @@ export class MoviVideoPlayer {
             loadedmetadata: () => {
                 log.info(`movi-player: loadedmetadata (duration: ${element.duration}s)`);
                 // Ensure inner player engine errors are tracked after demuxer metadata pass
-                this._attachInnerPlayerErrorListener(element);
+                // Ensure internal WebGL canvas sizes are updated to match host box
+                if (typeof element.updateCanvasSize === 'function') {
+                    try {
+                        element.updateCanvasSize();
+                    } catch (_) {}
+                }
+
                 this.onEvent({
                     type: PlayerEvent.LOADED_METADATA,
                     data: { duration: element.duration }

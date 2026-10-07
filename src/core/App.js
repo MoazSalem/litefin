@@ -534,7 +534,7 @@ class App {
                      * If the user manually toggles the setting, their stored preference is respected.
                      * Media playback views (/player) are always spared to avoid interruptions.
                      * ========================================================================= */
-                    const isTv = platformInfo.isTizen || platformInfo.isWebOS;
+                    const isTv = typeof platformInfo !== 'undefined' ? (platformInfo.isTizen || platformInfo.isWebOS) : true;
                     const savedReload = storage.getItem('pref:reloadOnResume');
                     const reloadOnResume = savedReload !== null ? savedReload === 'true' : isTv;
 
