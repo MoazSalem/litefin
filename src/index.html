@@ -3,6 +3,14 @@
 
 <head>
     <meta charset="UTF-8">
+    <style>
+        /* Immediate critical dark background to prevent any white canvas flash during boot */
+        html, body {
+            background-color: #000000 !important;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="referrer" content="no-referrer">
     <meta name="description" content="Litefin - Native Jellyfin Client for Samsung Tizen TVs">

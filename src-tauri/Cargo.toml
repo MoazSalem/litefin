@@ -1,0 +1,43 @@
+# =============================================================================
+# Litefin - Tauri v2 Desktop & Mobile Application Manifest
+# =============================================================================
+# High-performance, lightweight Rust shell wrapping Litefin's frontend.
+# Configured for cross-platform compilation targeting Windows, macOS, Linux,
+# and Android / Android TV devices.
+# =============================================================================
+
+[package]
+name = "litefin"
+version = "1.9.28"
+description = "Native Jellyfin client for Samsung Tizen, LG webOS, Desktop, and Android TV"
+authors = ["Litefin Team"]
+edition = "2021"
+license = "GPL-2.0"
+
+# -----------------------------------------------------------------------------
+# Library Definition for Cross-Platform Compilation
+# -----------------------------------------------------------------------------
+# Required by Tauri v2 to support both Desktop targets (via main.rs) and
+# Mobile targets (compiled as a static/cdylib library for Android JNI runtime).
+# -----------------------------------------------------------------------------
+[lib]
+name = "litefin_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# -----------------------------------------------------------------------------
+# Build Dependencies
+# -----------------------------------------------------------------------------
+# Code generation and asset compilation handled by tauri-build at compile time.
+# -----------------------------------------------------------------------------
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# -----------------------------------------------------------------------------
+# Runtime Core Dependencies
+# -----------------------------------------------------------------------------
+# Lean core dependencies without bloat, leaving heavy decoding to WebAssembly/Movi.
+# -----------------------------------------------------------------------------
+[dependencies]
+tauri = { version = "2.12", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
