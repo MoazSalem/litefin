@@ -15,7 +15,14 @@ const log = logger.create('VersionChecker');
 
 class VersionChecker {
     constructor() {
-        this.apiEndpoint = 'https://api.github.com/repos/MoazSalem/litefin/releases/latest';
+        /* Android port checks its own fork's releases (NOT the upstream
+         * Litefin TV project — different version lines, this port is pre-1.0
+         * while TV is 1.9.x). GitHub's /releases/latest excludes draft and
+         * pre-release entries automatically, so while every release here is
+         * marked pre-release, a 404 means "no stable release yet" and is
+         * handled as up-to-date. Switch this URL to publish a stable
+         * release channel later. */
+        this.apiEndpoint = 'https://api.github.com/repos/bdwandry/litefin-android/releases/latest';
     }
 
     /**
@@ -62,6 +69,18 @@ class VersionChecker {
             // __APP_VERSION__ is injected globally by Webpack
             const currentVersion = __APP_VERSION__;
 
+            /* The port's versions do not share a timeline with the TV app's;
+             * also guard against a remote tag that wouldn't parse cleanly. */
+            if (!/^v?\d+(\.\d+)*$/.test(latestVersion || '')) {
+                log.debug(`Ignoring non-numeric remote tag: ${latestVersion}`);
+                if (manual) {
+                    toast.show(i18n.t('AppIsUpToDate') || 'Litefin is up to date.', 3000, {
+                        icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`
+                    });
+                }
+                return;
+            }
+
             log.debug(`Latest remote version: ${latestVersion}, Current local version: ${currentVersion}`);
 
             if (latestVersion && this._isNewer(latestVersion, currentVersion)) {
@@ -81,9 +100,21 @@ class VersionChecker {
                 });
             }
         } catch (error) {
-            log.error('Failed to check for updates', error);
-            if (manual) {
+            /* 404 from /releases/latest = every release is draft/prerelease,
+             * i.e. "no stable channel yet" — not an error worth a toast on
+             * the silent startup path. */
+            const is404 = error && error.status === 404;
+            if (!is404) {
+                log.error('Failed to check for updates', error);
+            } else {
+                log.debug('No stable release channel yet (all releases pre-release/draft).');
+            }
+            if (manual && !is404) {
                 toast.show(i18n.t('UpdateCheckFailed') || 'Could not check for updates.', 3000);
+            } else if (manual && is404) {
+                toast.show(i18n.t('AppIsUpToDate') || 'Litefin is up to date.', 3000, {
+                    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`
+                });
             }
         }
     }

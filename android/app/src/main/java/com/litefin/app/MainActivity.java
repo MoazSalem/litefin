@@ -7,6 +7,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -42,6 +43,17 @@ public class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setNavigationBarColor(Color.BLACK);
         getWindow().setStatusBarColor(Color.BLACK);
+
+        /*
+         * True fullscreen: hide the status bar (clock, notifications, battery)
+         * so the app owns the entire screen. The gesture navigation zones stay
+         * live — the user can still pull down from the top edge to reveal the
+         * notification shade, and the system re-hides it afterwards. The bar
+         * auto-re-hides whenever focus returns (dialogs, splitscreen, back
+         * from the shade, app resume) via setOnSystemUiVisibilityChangeListener
+         * below and the onResume hook.
+         */
+        hideSystemBars();
 
         webView = new WebView(this);
         setContentView(webView);
@@ -107,6 +119,32 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * Enters sticky immersive fullscreen: hides the status AND navigation
+     * bars. Sticky mode means a swipe from any edge temporarily reveals the
+     * bars (notifications included) without unlinking fullscreen mode — the
+     * system hides them again on its own.
+     */
+    private void hideSystemBars() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        // Re-assert fullscreen whenever the system clears it (shade pulled,
+        // dialog focus, split screen, etc.).
+        getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(
+                visibility -> {
+                    if ((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0) {
+                        hideSystemBars();
+                    }
+                });
+    }
+
+    /**
      * Called by LitefinBridge when the web app signals boot completion.
      * Fades out the native splash.
      */
@@ -167,6 +205,9 @@ public class MainActivity extends Activity {
         if (webView != null) {
             webView.onResume();
         }
+        // Re-enter fullscreen after returning from the notification shade,
+        // recents, or another app.
+        hideSystemBars();
     }
 
     @Override

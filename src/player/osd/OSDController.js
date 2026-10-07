@@ -757,6 +757,18 @@ export default class OSDController extends Component {
              */
             if (!this._isOsdVisible && !this.isModalOpen && !resolvedTarget.closest?.('.osd-overlays > *')) {
                 e.stopPropagation();
+                /*
+                 * ANDROID TOUCH: tap = OSD toggle, never a play/pause toggle.
+                 * On the phone the "click the video = pause" convention misfires:
+                 * every tap (for the OSD) pauses the video. Show the controls
+                 * with the standard auto-hide instead; tapping the playing video
+                 * again while the OSD is up hides them (tap below). Distant
+                 * pointers (TV magic cursor / desktop mouse) keep stock behavior.
+                 */
+                if (this._isAndroidTouch()) {
+                    this.show();
+                    return;
+                }
                 // Route through PlayerPage remote play/pause handler to update heartbeat and UI
                 if (this._playerPage && typeof this._playerPage._onRemotePlayPause === 'function') {
                     this._playerPage._onRemotePlayPause();
@@ -848,6 +860,15 @@ export default class OSDController extends Component {
              * Modals/overlays are excluded since their content may handle clicks internally.
              */
             if (!this.isModalOpen && !resolvedTarget.closest?.('.osd-overlays > *')) {
+                /*
+                 * ANDROID TOUCH: background tap while the OSD is visible HIDES
+                 * it (video-only view) instead of pausing. Desktop/magic-cursor
+                 * pointers keep the play/pause convention.
+                 */
+                if (this._isAndroidTouch()) {
+                    this.hide();
+                    return;
+                }
                 this._executeAction('togglePlay');
             }
         });
@@ -984,6 +1005,17 @@ export default class OSDController extends Component {
     }
 
     _onMouseMove(e) {
+        /*
+         * ANDROID TOUCH: Android synthesizes a mousemove from every tap. Letting
+         * it wake the OSD races the tap's click event (mousemove shows the OSD,
+         * the click hides it ~6ms later), so a quick tap appears to do nothing.
+         * On touch devices the tap's click handler is the single source of truth
+         * for showing/hiding the OSD; fake mouse moves are ignored.
+         */
+        if (this._isAndroidTouch()) {
+            return;
+        }
+
         /*
          * In stealth mode, cursor movement does NOT resurrect Layer 1.
          * Only explicit manual 4-second hold down is permitted to reveal controls.
@@ -1323,6 +1355,20 @@ export default class OSDController extends Component {
                 this._updateFocus();
             }
         }
+    }
+
+    /**
+     * True when running on the Android shell where input is touch-first.
+     * Distinguishes the phone from TV pointers (magic cursor, D-pad) that use
+     * the stock "click video = play/pause" convention.
+     * @private
+     * @returns {boolean}
+     */
+    _isAndroidTouch() {
+        return (
+            document.documentElement.hasAttribute('data-litefin-touch') &&
+            !window.matchMedia('(pointer: fine)').matches
+        );
     }
 
     /**
@@ -3791,6 +3837,33 @@ export default class OSDController extends Component {
 
         /* Update time labels live */
         this._syncTimeDisplayToPercent(percent);
+
+        /*
+         * Touch scrub preview: during a finger drag the native range input only
+         * emits 'input' events (no mousemove fires while dragging, and Android
+         * synthetic mousemoves are suppressed), so mirror the keyboard-scrub
+         * preview here: time tooltip plus trickplay thumbnail at the drag
+         * position. Both are hidden again on 'change' (finger release).
+         */
+        const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+        if (this._player && duration > 0) {
+            const targetTicks = duration * (percent / 100);
+            if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
+            const tooltip = this._cachedTooltipEl;
+            if (tooltip) {
+                const forceHours = duration >= 3600 * 10000000;
+                const timeText = this._formatTime(targetTicks, forceHours);
+                if (this._cachedTooltipTextEl) {
+                    this._cachedTooltipTextEl.textContent = timeText;
+                } else {
+                    tooltip.textContent = timeText;
+                }
+                tooltip.classList.add('visible');
+                tooltip.style.left = percent + '%';
+
+                this._updateTrickplayTooltip(targetTicks);
+            }
+        }
     }
 
     /**
@@ -3867,6 +3940,11 @@ export default class OSDController extends Component {
         this._osdSliderRowEl?.classList.remove('dragging');
         this._osdBottomEl?.classList.remove('dragging');
         this._seekResumePlayback = false;
+
+        /* Hide the scrub preview (time tooltip + trickplay thumb) shown during the drag */
+        const dragTooltip = this._cachedTooltipEl || this._osdEl.querySelector('#osdSeekTooltip');
+        if (dragTooltip) dragTooltip.classList.remove('visible');
+        this._hideTrickplayThumb();
 
         try {
             if (this._seekRequiresConfirmation) this._clearSeekState(false);

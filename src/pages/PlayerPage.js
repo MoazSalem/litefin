@@ -477,7 +477,11 @@ class PlayerPage extends Page {
                 log.info('Remote: Pause');
 
                 // If user was preview scrubbing, commit the seek and remain paused
-                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                if (
+                    this._osd &&
+                    typeof this._osd.hasPendingSeekConfirmation === 'function' &&
+                    this._osd.hasPendingSeekConfirmation()
+                ) {
                     log.info('Remote Pause confirming pending timeline seek');
                     this._osd.confirmPendingSeek('pause');
                     this._reportPlaybackProgress('pause');
@@ -506,7 +510,11 @@ class PlayerPage extends Page {
                 log.info('Remote: Play/Resume');
 
                 // If user was preview scrubbing, commit the seek and unpause playback
-                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                if (
+                    this._osd &&
+                    typeof this._osd.hasPendingSeekConfirmation === 'function' &&
+                    this._osd.hasPendingSeekConfirmation()
+                ) {
                     log.info('Remote Play confirming pending timeline seek');
                     this._osd.confirmPendingSeek('play');
                     this._reportPlaybackProgress('unpause');
@@ -539,7 +547,11 @@ class PlayerPage extends Page {
                 log.info('Remote: PlayPause');
 
                 // If user was preview scrubbing, commit the seek and resume playback
-                if (this._osd && typeof this._osd.hasPendingSeekConfirmation === 'function' && this._osd.hasPendingSeekConfirmation()) {
+                if (
+                    this._osd &&
+                    typeof this._osd.hasPendingSeekConfirmation === 'function' &&
+                    this._osd.hasPendingSeekConfirmation()
+                ) {
                     log.info('Remote Play/Pause confirming pending timeline seek');
                     this._osd.confirmPendingSeek('playPause');
                     this._reportPlaybackProgress(this._player?.isPaused?.() ? 'pause' : 'unpause');
@@ -844,6 +856,28 @@ class PlayerPage extends Page {
                 // - In stealth mode (hidden layout): _onRemotePlayPause shows the transient stealth HUD without waking the full OSD.
                 // - In standard layout: _onRemotePlayPause toggles playback and reveals/focuses the Play/Pause button.
                 // OSD buttons, seekbars, and modals are fully guarded by the contains() check above.
+
+                /*
+                 * ANDROID TOUCH: tap = OSD toggle, never play/pause. Show the
+                 * controls (with standard auto-hide) when hidden; hide them
+                 * again when visible. Touch taps leave stuck hover/focus on
+                 * the overlay, making "click = pause" misfire constantly on
+                 * the phone. Desktop/magic-cursor pointers keep stock behavior.
+                 */
+                if (
+                    document.documentElement.hasAttribute('data-litefin-touch') &&
+                    !window.matchMedia('(pointer: fine)').matches
+                ) {
+                    if (this._osd) {
+                        if (this._osd.isOsdVisible) {
+                            this._osd.hide();
+                        } else {
+                            this._osd.show();
+                        }
+                    }
+                    return;
+                }
+
                 this._onRemotePlayPause();
             });
 
@@ -1328,7 +1362,12 @@ class PlayerPage extends Page {
         if (savedSubtitleIndex === undefined && item?.Id) {
             const savedItemSubtitle = storage.getItem(`track:subtitle:${item.Id}`);
             if (savedItemSubtitle !== null && savedItemSubtitle !== undefined) {
-                const resolvedSubtitle = MediaHelper.resolveSavedTrack(mediaSource, 'Subtitle', savedItemSubtitle, item.Id);
+                const resolvedSubtitle = MediaHelper.resolveSavedTrack(
+                    mediaSource,
+                    'Subtitle',
+                    savedItemSubtitle,
+                    item.Id
+                );
                 if (resolvedSubtitle !== undefined) {
                     savedSubtitleIndex = resolvedSubtitle;
                     if (savedSubtitleIndex === -1) {
@@ -1429,7 +1468,8 @@ class PlayerPage extends Page {
             const audioStreams = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
 
             // Attempt best direct play match first, falling back to disposition default
-            const resolvedAudioStream = resolveBestAudioStream(mediaSource) ||
+            const resolvedAudioStream =
+                resolveBestAudioStream(mediaSource) ||
                 audioStreams.find((s) => s.IsDefault) ||
                 (mediaSource?.DefaultAudioStreamIndex !== undefined && mediaSource?.DefaultAudioStreamIndex !== null
                     ? audioStreams.find((s) => s.Index === mediaSource.DefaultAudioStreamIndex)
@@ -1849,7 +1889,7 @@ class PlayerPage extends Page {
                 const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
                 if (userTransChannels && userTransChannels > 0) return userTransChannels;
                 const userChannels = PlayerSettings.get('allowedAudioChannels');
-                return (userChannels && userChannels > 0) ? userChannels : 6;
+                return userChannels && userChannels > 0 ? userChannels : 6;
             })(),
             SegmentContainer: 'ts',
             MinSegments: 1,
@@ -2335,7 +2375,10 @@ class PlayerPage extends Page {
                     const mediaSource = this._player?.getCurrentMediaSource?.();
                     const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
                     const durationTicks =
-                        this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || outgoingItem?.RunTimeTicks || 0;
+                        this._player?.getDurationTicks?.() ||
+                        mediaSource?.RunTimeTicks ||
+                        outgoingItem?.RunTimeTicks ||
+                        0;
 
                     // If user was near end of outgoing item, mark ended
                     if (durationTicks > 0 && positionTicks >= durationTicks * 0.8) {
@@ -2505,7 +2548,9 @@ class PlayerPage extends Page {
                         'session:lastAudioTitle',
                         activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
                     );
-                    log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
+                    log.info(
+                        `[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`
+                    );
                 }
             }
         }
@@ -2526,8 +2571,8 @@ class PlayerPage extends Page {
                     activeSubtitleIndex === -1
                         ? -1
                         : mediaSource.MediaStreams.find(
-                            (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
-                        );
+                              (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
+                          );
 
                 // Persist per-item selection so resuming this specific item restores the exact track.
                 // Uses MediaHelper.saveTrackMemory to record metadata (language, title, external status)
@@ -2540,7 +2585,9 @@ class PlayerPage extends Page {
                         mediaSource,
                         this._item.SeriesId || null
                     );
-                    log.info(`[Track Memory] Saved item subtitle track: ${this._item.Id} -> index ${activeSubtitleIndex}`);
+                    log.info(
+                        `[Track Memory] Saved item subtitle track: ${this._item.Id} -> index ${activeSubtitleIndex}`
+                    );
                 }
 
                 if (PlayerSettings.get('rememberTracksForSession') !== false) {
@@ -2713,7 +2760,8 @@ class PlayerPage extends Page {
             error?.isNetworkError ||
             error?.code === 'PLAYER_ERROR_CONNECTION_FAILED' ||
             error?.message === 'PLAYER_ERROR_CONNECTION_FAILED' ||
-            (typeof error?.message === 'string' && /connection|network|offline|PLAYER_ERROR_CONNECTION_FAILED|MEDIA_ERR_NETWORK/i.test(error.message))
+            (typeof error?.message === 'string' &&
+                /connection|network|offline|PLAYER_ERROR_CONNECTION_FAILED|MEDIA_ERR_NETWORK/i.test(error.message))
         );
 
         const currentPosTicks = this._player?.getCurrentPositionTicks?.() || 0;
@@ -2815,7 +2863,12 @@ class PlayerPage extends Page {
         const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
 
         // If actively playing or buffered and not already recovering or paused
-        if (!this._isAutoRecovering && !this._isPaused && !this._isExiting && (this._hasReportedStart || currentPosTicks > 0)) {
+        if (
+            !this._isAutoRecovering &&
+            !this._isPaused &&
+            !this._isExiting &&
+            (this._hasReportedStart || currentPosTicks > 0)
+        ) {
             log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
             this._startAutoRecovery({
                 isNetworkError: true,
@@ -2926,7 +2979,9 @@ class PlayerPage extends Page {
                 statusEl.textContent = `Reconnecting to server... (${this._autoRecoveryAttempts}/${maxAttempts})`;
             }
 
-            log.info(`[AutoRecovery] Checking server connectivity (attempt ${this._autoRecoveryAttempts}/${maxAttempts})...`);
+            log.info(
+                `[AutoRecovery] Checking server connectivity (attempt ${this._autoRecoveryAttempts}/${maxAttempts})...`
+            );
 
             let isOnline = false;
 
@@ -3041,7 +3096,11 @@ class PlayerPage extends Page {
 
         // 2. Check secondary subtitle sync — clear if cue end time has passed.
         // Guard against clearing while seeking is in flight to prevent premature cue dismissal.
-        if (!this._player?.isSeeking && this._secondarySubtitleEndTime !== null && ticks >= this._secondarySubtitleEndTime) {
+        if (
+            !this._player?.isSeeking &&
+            this._secondarySubtitleEndTime !== null &&
+            ticks >= this._secondarySubtitleEndTime
+        ) {
             this._clearSecondarySubtitle();
         }
 
@@ -3629,7 +3688,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) { }
+                } catch (e) {}
                 this._osd.activeMenu = null;
             }
             this._osd.hide?.();
@@ -3739,7 +3798,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) { }
+                } catch (e) {}
                 this._osd.activeMenu = null;
             }
             this._osd.hide();
@@ -3808,7 +3867,7 @@ class PlayerPage extends Page {
             if (this._osd.activeMenu) {
                 try {
                     this._osd.activeMenu.hide();
-                } catch (e) { }
+                } catch (e) {}
                 this._osd.activeMenu = null;
             }
             this._osd.hide();
@@ -4063,14 +4122,16 @@ class PlayerPage extends Page {
             // Live streams (TV channels, infinite streams, or active live stream IDs) have
             // rolling buffer durations (e.g. 5s chunks) and must never trigger PlayedToCompletion
             // position overrides.
-            const isLive = item?.Type === 'TvChannel' || Boolean(mediaSource?.LiveStreamId || mediaSource?.IsInfiniteStream);
-            const _isNearComplete = !isLive && durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
+            const isLive =
+                item?.Type === 'TvChannel' || Boolean(mediaSource?.LiveStreamId || mediaSource?.IsInfiniteStream);
+            const _isNearComplete =
+                !isLive && durationTicks > 0 && (this._isPlaybackEnded || rawPosition >= durationTicks * 0.8);
             if (_isNearComplete) {
                 log.info(
                     `Overriding positionTicks with durationTicks (${durationTicks})` +
-                    (this._isPlaybackEnded
-                        ? ' due to natural end of playback / next item transition'
-                        : ' due to near-complete playback position (>= 80%)')
+                        (this._isPlaybackEnded
+                            ? ' due to natural end of playback / next item transition'
+                            : ' due to near-complete playback position (>= 80%)')
                 );
                 rawPosition = durationTicks;
             }
@@ -4264,15 +4325,12 @@ class PlayerPage extends Page {
 
         // Capture true playing state prior to pausing, ensuring we know whether playback
         // was running or already paused by the viewer when app enters background.
-        const wasPlaying = this._player?.isPaused
-            ? !this._player.isPaused()
-            : !this._isPaused;
+        const wasPlaying = this._player?.isPaused ? !this._player.isPaused() : !this._isPaused;
         this._resumePlaybackAfterProfileSelection = wasPlaying;
 
         // Determine if profile selection dialog should intercept on foreground resume
         const shouldGateProfileSelection =
-            storage.getItem('pref:showProfilesOnResume') === 'true' &&
-            state.get('user:sessionCount', 0) > 1;
+            storage.getItem('pref:showProfilesOnResume') === 'true' && state.get('user:sessionCount', 0) > 1;
 
         if (shouldGateProfileSelection) {
             this._resumeMutedAfterProfileSelection = Boolean(this._player?.isMuted?.());
@@ -4375,14 +4433,13 @@ class PlayerPage extends Page {
                     // due to memory pressure while in background), perform seamless stream reload
                     log.warn('[AVPlay] Decoder restore failed or surface evicted; triggering recovery watchdog');
 
-                    const savedMs = typeof backend.getSuspendedPositionMs === 'function'
-                        ? backend.getSuspendedPositionMs()
-                        : 0;
-                    const savedTicks = savedMs > 0
-                        ? savedMs * 10000
-                        : (this._player?.getCurrentPositionTicks?.() || 0);
+                    const savedMs =
+                        typeof backend.getSuspendedPositionMs === 'function' ? backend.getSuspendedPositionMs() : 0;
+                    const savedTicks = savedMs > 0 ? savedMs * 10000 : this._player?.getCurrentPositionTicks?.() || 0;
 
-                    log.info(`[RestoreWatchdog] Seamlessly reloading stream from ${(savedTicks / 10000000).toFixed(1)}s`);
+                    log.info(
+                        `[RestoreWatchdog] Seamlessly reloading stream from ${(savedTicks / 10000000).toFixed(1)}s`
+                    );
 
                     this._resumePosition = savedTicks;
                     this._showLoading(true);

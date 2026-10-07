@@ -147,6 +147,16 @@ Only `.row-items` rows scroll this way (hero carousel, modals and the
 sidebar are excluded); the feature is compiled into the Android bundle and
 gated by `platformInfo.isAndroid`, so Tizen/webOS/web are untouched.
 
+## Fullscreen (sticky immersive)
+
+MainActivity enters sticky immersive fullscreen on launch: the status bar
+(clock/notifications/battery) and navigation bar are hidden and the app owns
+the entire screen. Gesture zones stay live — swiping from an edge temporarily
+reveals the bars without breaking fullscreen mode (sticky), and the system
+re-hides them automatically. `setOnSystemUiVisibilityChangeListener` plus a
+`onResume` hook re-assert fullscreen after shade pulls, dialogs, recents or
+app switches.
+
 ## Landscape full-bleed backdrops
 
 Viewport units do not scale with CSS zoom: under the display-scale zoom,
@@ -247,6 +257,29 @@ rest. Fixes (landscape-scaled only):
 - D-pad navigation, program taps (play) and channel taps are unchanged;
   portrait keeps the stock collapsed guide untouched (verified h1 56px,
   padding 60px, grid 685px = calc(100vh - 230px), touch-action auto).
+
+## Player touch input (tap = OSD toggle, scrub shows trickplay)
+
+On the Android WebView, the stock TV convention "click the video = play/pause"
+misfires: every tap (meant to summon controls) paused playback. The player is
+touched up in two places, both gated to Android touch
+(`data-litefin-touch` attribute set by AndroidAdapter AND no fine pointer):
+
+- Tap on the playing video toggles the OSD. Hidden + tap → controls appear
+  (with the standard 3.5s auto-hide). Visible + tap → controls hide. Playback
+  state is never changed by a tap. Implemented in the OSDController click
+  handler (hidden/visible background paths) and PlayerPage's video-background
+  click handler via an `_isAndroidTouch()` guard.
+- Android synthesizes a `mousemove` from every tap; left unguarded it raced
+  the tap's click (show → hide within ~6ms, so a tap appeared to do nothing
+  and only a 3.5s hold "worked"). `OSDController._onMouseMove()` now ignores
+  fake mouse moves on Android touch; TV magic-cursor behavior is unchanged.
+- Finger-scrubbing the timeline now shows the time tooltip plus the trickplay
+  thumbnail while dragging. Touch drags only emit range-input `input` events
+  (no mousemove), so the preview is now also wired into
+  `_handlePositionSliderInput()` and hidden on release
+  (`_handlePositionSliderChange()`). Remote/keyboard scrub and mouse-hover
+  previews are unchanged.
 
 ## Known limitations (intentional, minimal port)
 
