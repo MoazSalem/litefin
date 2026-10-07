@@ -12,6 +12,20 @@
         }
     </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script>
+        /*
+         * TV & Android 1080p Viewport Normalization
+         * Locks the layout canvas to 1920 CSS pixels wide on Android/TV devices
+         * paired with WebView useWideViewPort to ensure identical proportions
+         * across 720p, 1080p, and 4K displays without container clipping.
+         */
+        if (/Android/i.test(navigator.userAgent)) {
+            var metaViewport = document.querySelector('meta[name="viewport"]');
+            if (metaViewport) {
+                metaViewport.setAttribute('content', 'width=1920, user-scalable=no');
+            }
+        }
+    </script>
     <meta name="referrer" content="no-referrer">
     <meta name="description" content="Litefin - Native Jellyfin Client for Samsung Tizen TVs">
     <title>Litefin</title>
