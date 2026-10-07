@@ -318,6 +318,15 @@
     box-shadow: 0 0 6px rgba(var(--jf-accent-rgb), 0.8);
 }
 
+.chapter-row > .chapter-row__playing-dot {
+    position: absolute;
+    right: 1.6em;
+    top: 50%;
+    bottom: auto;
+    -webkit-transform: translateY(-50%);
+    transform: translateY(-50%);
+}
+
 /* Standard keyframes for Tizen performance */
 @-webkit-keyframes playing-dot-pulse {
     0%, 100% { opacity: 1; -webkit-transform: scale(1); transform: scale(1); }
