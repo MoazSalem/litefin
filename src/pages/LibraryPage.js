@@ -417,16 +417,30 @@ class LibraryPage extends Page {
         // If the route was restored or re-entered and items were preserved in state,
         // construct a synthetic savedState so the page rehydrates instead of dropping lazy-loaded items
         if (!savedState && this.state.items && this.state.items.length > 0) {
+            // Extract target item ID from CSS selector if present (e.g. data-item-id="...")
+            let fallbackItemId = null;
+            if (this._pendingNavState?.focusElementSelector) {
+                const match = this._pendingNavState.focusElementSelector.match(/data-(?:item-)?id="([^"]+)"/);
+                fallbackItemId = match ? match[1] : this._pendingNavState.focusElementSelector.replace(/^#/, '');
+            }
+
             savedState = {
                 stateData: this.state,
                 focusSectionId: this._pendingNavState?.focusSectionName || 'library-grid',
-                focusItemId: null
+                focusItemId: fallbackItemId
             };
         }
 
         if (savedState) {
             // Merge cached state properties
             Object.assign(this.state, savedState.stateData);
+
+            // Restore the server query context. This path bypasses _loadItems(),
+            // which is the only place it is built, and letter jumps / infinite
+            // batch fetching both depend on it.
+            if (savedState.lastFetchContext) {
+                this._lastFetchContext = savedState.lastFetchContext;
+            }
 
             // ------------------------------------------------------------------
             // Load persisted view mode, sort configurations, and active filters.
@@ -494,7 +508,11 @@ class LibraryPage extends Page {
             }
 
             this._updatePaginationUI();
-            this.setLoading(false);
+
+            // ------------------------------------------------------------------
+            // Keep loading overlay active during focus restoration so the user
+            // does not see an intermediate focus snap or jump from page top.
+            // ------------------------------------------------------------------
 
             // 3. Restore Focus
             // Mark restoration active so intermediate scroll events and layout shifts
@@ -511,38 +529,10 @@ class LibraryPage extends Page {
                     const sectionConfig = focusManager.getSectionConfig(sectionId);
                     const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
 
-                    // If the saved focus item is beyond the first rendered chunk,
-                    // expand the rendered window so the card element exists in the
-                    // DOM and can be found by querySelector. Without this, focus
-                    // restoration silently fails for items past the initial chunk.
-                    const grid = this.$('#library-grid');
-                    if (grid && this.state.items && this.state._gridColumns) {
-                        const targetStr = String(targetId);
-                        const itemIndex = this.state.items.findIndex(
-                            (item) => String(item.Id) === targetStr || String(item.id) === targetStr
-                        );
-
-                        if (itemIndex >= 0) {
-                            const columns = this.state._gridColumns;
-
-                            // Append chunks until the target item index is encompassed by windowEnd
-                            while (
-                                itemIndex >= this.state.gridWindowEnd &&
-                                this.state.gridWindowEnd < this.state.items.length
-                            ) {
-                                this._appendGridChunk(grid, this.state.items, columns);
-                            }
-
-                            // Prepend chunks if the item was evicted above the top boundary
-                            while (itemIndex < this.state.gridWindowStart && this.state.gridWindowStart > 0) {
-                                this._prependGridChunk(grid, this.state.items, columns);
-                            }
-
-                            // Pre-emptively record target item index so the focus direction
-                            // evaluator starts from this exact card on the next user keypress
-                            this._lastFocusItemIndex = itemIndex;
-                        }
-                    }
+                    // Ensure the target item AND forward buffer rows ahead of it
+                    // are fully rendered into the DOM so the screen below the focused
+                    // card is populated rather than blank.
+                    const itemIndex = this._ensureGridWindowEncompassesItem(targetId);
 
                     // =========================================================================
                     // TWO-PHASE LAYOUT FLUSH (TIZEN / WEBKIT DOM SETTLE)
@@ -572,11 +562,22 @@ class LibraryPage extends Page {
 
                         // Evict state entry once consumed to prevent stale reapplications
                         state.delete(cacheKey);
+                        this._pendingNavState = null;
+
+                        // Reveal page and remove loading overlay once focus has securely landed
+                        this.setLoading(false);
                         this.markReady();
 
                         // Release restoration guard on the following frame once layout has stabilized
                         requestAnimationFrame(() => {
                             this._isRestoringFocus = false;
+                            // Synchronize sliding window and alphabet position to newly focused item
+                            if (itemIndex >= 0) {
+                                const grid = this.$('#library-grid');
+                                const columns = this.state._gridColumns || 7;
+                                const currentRow = Math.floor(itemIndex / columns);
+                                this._syncGridWindow(grid, this.state.items, columns, currentRow, itemIndex);
+                            }
                         });
                     });
                     return;
@@ -587,6 +588,8 @@ class LibraryPage extends Page {
                 }
 
                 state.delete(cacheKey);
+                this._pendingNavState = null;
+                this.setLoading(false);
                 this.markReady();
                 this._isRestoringFocus = false;
             });
@@ -722,9 +725,26 @@ class LibraryPage extends Page {
         // If router provided pending navigation state (cache miss or fallback),
         // restore scroll/focus via NavigationState instead of blindly resetting to top.
         if (this._pendingNavState) {
+            // Expand grid window to include target item and forward buffer rows
+            const pending = this._pendingNavState;
+            let targetId = null;
+            if (pending.focusElementSelector) {
+                const match = pending.focusElementSelector.match(/data-(?:item-)?id="([^"]+)"/);
+                targetId = match ? match[1] : pending.focusElementSelector.replace(/^#/, '');
+            }
+            if (targetId && (pending.focusSectionName === 'library-grid' || !pending.focusSectionName)) {
+                this._ensureGridWindowEncompassesItem(targetId, pending.focusElementIndex);
+            }
+
             this.restoreScrollFocusWhenReady();
+            // Safety fallback timer: guarantees loading overlay is unhidden if restoration
+            // is skipped or takes unexpectedly long on slow network/hardware
+            this._focusRestoreSafetyTimeout = setTimeout(() => {
+                this.setLoading(false);
+            }, 1000);
         } else {
             this._setupFocus();
+            this.setLoading(false);
         }
 
         // Mark the page as rendered, fulfilling the Promise for NavigationState
@@ -969,7 +989,8 @@ class LibraryPage extends Page {
         state.set(this._getCacheKey(), {
             stateData: this.state,
             focusSectionId: storage.getItem('pref:disableFocusRestore') === 'true' ? null : focusSectionId,
-            focusItemId: storage.getItem('pref:disableFocusRestore') === 'true' ? null : focusItemId
+            focusItemId: storage.getItem('pref:disableFocusRestore') === 'true' ? null : focusItemId,
+            lastFetchContext: this._lastFetchContext
         });
     }
 
@@ -1002,7 +1023,9 @@ class LibraryPage extends Page {
             gridColumns: this.state.gridColumns,
             // Preserve loaded media items and total count across router navigation
             items: this.state.items ? [...this.state.items] : null,
-            totalRecordCount: this.state.totalRecordCount
+            totalRecordCount: this.state.totalRecordCount,
+            // Keep the active server query so letter jumps keep working after back navigation
+            lastFetchContext: this._lastFetchContext
         };
     }
 
@@ -1035,11 +1058,48 @@ class LibraryPage extends Page {
             this.state.totalRecordCount = savedState.totalRecordCount || savedState.items.length;
         }
 
+        // Restore query context for infinite scrolling and letter jump calculation
+        if (savedState.lastFetchContext) {
+            this._lastFetchContext = savedState.lastFetchContext;
+        }
+
         log.info('Navigation state restored:', savedState);
+    }
+
+    /**
+     * =========================================================================
+     * SCROLL / FOCUS RESTORATION COMPLETION HOOK
+     * =========================================================================
+     * Invoked by NavigationState after scroll offset has been synchronized and
+     * focus has landed securely on the restored target item.
+     *
+     * By releasing the loading overlay here instead of at the end of data fetch,
+     * the intermediate state (where focus temporarily rests at the top of the
+     * page before snapping to the restored item) remains completely hidden.
+     * =========================================================================
+     */
+    onScrollFocusRestored() {
+        // Clear safety fallback timer since restoration completed normally
+        if (this._focusRestoreSafetyTimeout) {
+            clearTimeout(this._focusRestoreSafetyTimeout);
+            this._focusRestoreSafetyTimeout = null;
+        }
+
+        // Release pending navigation state reference
+        this._pendingNavState = null;
+
+        // Reveal page layout now that focus has securely landed on target item
+        this.setLoading(false);
     }
 
     destroy() {
         super.destroy();
+
+        // Clear focus restoration safety fallback timer
+        if (this._focusRestoreSafetyTimeout) {
+            clearTimeout(this._focusRestoreSafetyTimeout);
+            this._focusRestoreSafetyTimeout = null;
+        }
 
         // Clean up alphabet selector position listener
         if (this._onAlphaPickerPositionChanged) {
@@ -1298,7 +1358,9 @@ class LibraryPage extends Page {
                 this._renderGrid(this.state.items);
             }
             this._updatePaginationUI();
-            this.setLoading(false);
+            if (!this._pendingNavState) {
+                this.setLoading(false);
+            }
             return;
         }
 
@@ -2144,7 +2206,11 @@ class LibraryPage extends Page {
             log.error('Failed to load items', e);
             this.$('#library-grid').innerHTML = `<p class="error-msg">${i18n.t('FailedToLoadContent')}</p>`;
         } finally {
-            this.setLoading(false);
+            // Keep loading active if focus restoration is pending;
+            // onScrollFocusRestored or the safety timer will release it once focus settles.
+            if (!this._pendingNavState) {
+                this.setLoading(false);
+            }
             // Apply Header visibility and specialization AFTER content is loaded
             this._updateControlsVisibility();
             this._updateHeaderVisibility();
@@ -3521,6 +3587,89 @@ class LibraryPage extends Page {
             this._gridEvalPending = false;
             this._evaluateGrid();
         });
+    }
+
+    /**
+     * =========================================================================
+     * GRID WINDOW EXPANSION FOR TARGET FOCUS ITEM
+     * =========================================================================
+     * Ensures that the target focus item AND a healthy forward buffer of rows
+     * ahead of it (below it in the viewport) are rendered in the DOM.
+     *
+     * Without appending forward buffer rows, focus lands on the very last card
+     * in the rendered window, leaving the rest of the screen below it completely
+     * blank and empty until the user scrolls or moves.
+     *
+     * @param {string|null} targetId - Item ID to locate
+     * @param {number} [targetIndex=-1] - Optional fallback index
+     * @returns {number} The resolved itemIndex, or -1 if not found
+     * =========================================================================
+     */
+    _ensureGridWindowEncompassesItem(targetId, targetIndex = -1) {
+        // Guard: Verify grid and item collection exist
+        const grid = this.$('#library-grid');
+        if (!grid || !this.state.items || !this.state.items.length) {
+            return -1;
+        }
+
+        const columns = this.state._gridColumns || 7;
+        let itemIndex = -1;
+
+        // Locate item index by unique ID
+        if (targetId) {
+            const targetStr = String(targetId);
+            itemIndex = this.state.items.findIndex(
+                (item) => String(item.Id) === targetStr || String(item.id) === targetStr
+            );
+        }
+
+        // Fallback to numeric index if ID match failed
+        if (itemIndex < 0 && targetIndex >= 0 && targetIndex < this.state.items.length) {
+            itemIndex = targetIndex;
+        }
+
+        // Item could not be located in current items array
+        if (itemIndex < 0) {
+            return -1;
+        }
+
+        // Determine forward buffer rows ahead of the target item
+        // List view has single column and needs more rows; multi-column needs 5 rows
+        const isListView = this.state.viewMode === 'list';
+        const ROWS_BELOW = isListView ? 15 : 5;
+        const currentRow = Math.floor(itemIndex / columns);
+
+        // Calculate target forward index encompassing the target item plus forward buffer
+        const forwardTargetIndex = Math.min(
+            this.state.items.length,
+            (currentRow + ROWS_BELOW + 1) * columns
+        );
+
+        // Append chunks until the target item AND the rows ahead of it are rendered
+        while (
+            forwardTargetIndex > this.state.gridWindowEnd &&
+            this.state.gridWindowEnd < this.state.items.length
+        ) {
+            this._appendGridChunk(grid, this.state.items, columns);
+        }
+
+        // Prepend chunks if the target item was evicted above the top boundary
+        while (itemIndex < this.state.gridWindowStart && this.state.gridWindowStart > 0) {
+            this._prependGridChunk(grid, this.state.items, columns);
+        }
+
+        // Pre-emptively record target item index so the focus direction evaluator starts from this card
+        this._lastFocusItemIndex = itemIndex;
+
+        // Proactively stream next batch if approaching end of loaded array in infinite mode
+        const prefetchThreshold = this.state.items.length - (columns * 4);
+        const hasMore = this.state._hasMoreInfinite !== false &&
+            (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
+        if (this.state.isInfinite && itemIndex >= prefetchThreshold && hasMore) {
+            this._loadNextInfiniteBatch();
+        }
+
+        return itemIndex;
     }
 
     /**
