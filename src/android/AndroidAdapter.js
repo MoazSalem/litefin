@@ -118,6 +118,13 @@ class AndroidAdapter {
      * back in the visible area. Portrait is untouched (media query doesn't
      * match), and unscaled viewports (tablets/desktop-size, zoom = 1) keep the
      * stock layout because the attribute is only set while scaling.
+     *
+     * The same landscape-only block also raises the rem base font size
+     * (16px -> 20px): the whole-app text enlargement for phones. Every text
+     * element in the app is rem-based (LayoutManager.setTextScale uses the
+     * same lever), so UI text, card labels, metadata and menus all grow
+     * together while layout geometry, icons and images stay put. Portrait is
+     * excluded by the media query and never changes.
      * @private
      */
     _injectLandscapeRescueCSS() {
@@ -131,6 +138,203 @@ class AndroidAdapter {
                 '    }',
                 '    html[data-litefin-scaled] .hero-carousel-container .hero-item {',
                 '        padding-bottom: 180px !important;',
+                '    }',
+                '    /* Landscape-only text enlargement: raise the rem base so ALL',
+                '     * text renders ~37% larger on the down-scaled phone layout, and',
+                '     * bump the card-label scale variable (card titles/subtitles are',
+                '     * calc(rem * var(--card-title-font-scale)) so they need their own',
+                '     * multiplier). !important beats the inline font-size / custom',
+                '     * property LayoutManager writes to <html> at boot. Portrait never',
+                '     * matches this media query and stays stock. */',
+                '    html[data-litefin-scaled] {',
+                '        font-size: 22px !important;',
+                '        --card-title-font-scale: 1.3 !important;',
+                '    }',
+                '',
+                '    /* ==========================================================',
+                '     * LANDSCAPE-ONLY FULL-BLEED BACKDROP FIX',
+                '     * Viewport units do not scale with CSS zoom, so the fixed',
+                '     * details backdrop (100vw/100vh in details.css) resolves to',
+                '     * the raw phone viewport (e.g. 915x412) while the app canvas',
+                '     * is 1600x720 design px — it renders at ~57% width and leaves',
+                '     * a black band. Pin it to the design canvas via the custom',
+                '     * properties _applyDisplayScale exposes (same values as the',
+                '     * #app pin). Landscape only — portrait stays stock.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .details-backdrop {',
+                '        width: var(--litefin-app-w, 100vw) !important;',
+                '        height: var(--litefin-app-h, 100vh) !important;',
+                '    }',
+                '    /* ==========================================================',
+                '     * LANDSCAPE-ONLY BOOT SPLASH FIX',
+                '     * The index.html boot splash (#app-splash, z-index max) is the',
+                '     * same over-constrained fixed 100vw/100vh cover as the page',
+                '     * loading overlay: after display scaling applies, it covers',
+                '     * only the top-left ~57% of the canvas and its spinner rides',
+                '     * at ~29% width instead of center. Pin it to the design canvas',
+                '     * too (at true first paint, before JS/zoom, the raw viewport',
+                '     * sizing is already correct). Landscape only — portrait stays',
+                '     * stock.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .splash-content {',
+                '        width: var(--litefin-app-w, 100vw) !important;',
+                '        height: var(--litefin-app-h, 100vh) !important;',
+                '    }',
+                '    /* ==========================================================',
+                '     * LANDSCAPE-ONLY TRANSITION LOADING OVERLAY FIX',
+                '     * The per-page loading overlay (base.css .page-loading) is a',
+                '     * fixed 100vw/100vh cover with z-index 9999 — same viewport-',
+                '     * unit trap: it covered only the top-left ~57% of the screen,',
+                '     * so its spinner sat off-center and the sidebar bled through.',
+                '     * Pin it to the design canvas (insets stay 0; the explicit',
+                '     * width/height then span the full 1600x720) so the screen goes',
+                '     * fully black and the spinner centers. Landscape only.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .page-loading {',
+                '        width: var(--litefin-app-w, 100vw) !important;',
+                '        height: var(--litefin-app-h, 100vh) !important;',
+                '    }',
+                '    /* ==========================================================',
+                '     * LANDSCAPE-ONLY LIVE TV GUIDE GRID FIX',
+                '     * The EPG grid is a fixed-height virtualized viewport sized',
+                '     * with calc(100vh - 230px) in livetv.css — under zoom 100vh',
+                '     * resolves against the raw 412px phone viewport, collapsing',
+                '     * the grid to a 182px sliver (one header + one row). Size it',
+                '     * from the design canvas instead. The offset is 359px, not',
+                '     * the TV 230px: the landscape 22px text scale (1.375x) grows',
+                '     * the h1 + tab header accordingly (measured live), and 720 -',
+                '     * 359 fits the grid EXACTLY in the canvas with no page',
+                '     * overflow. Also kill browser touch handling inside it so the',
+                '     * touch panning added in EpgGrid owns every gesture (the',
+                '     * browser must not scroll the page out from under the',
+                '     * swipes). Landscape only — portrait keeps the stock',
+                '     * collapsed grid untouched.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .epg-grid-container {',
+                '        height: calc(var(--litefin-app-h, 100vh) - 203px) !important;',
+                '        touch-action: none;',
+                '    }',
+                '    /* The h1 + tab header eats ~359 of 720 design px in landscape',
+                '     * (fonts grew 1.375x with the 22px root). Tighten it to ~185px',
+                '     * so the guide gets the majority of the screen, and stop the',
+                '     * page chrome from rubber-banding like a scroll target (the',
+                '     * grid itself owns all scrolling; the header is static).',
+                '     * Landscape only. */',
+                '    html[data-litefin-scaled] .livetv-page .page-content {',
+                '        padding-top: 12px;',
+                '        padding-bottom: 12px;',
+                '        overscroll-behavior: none;',
+                '    }',
+                '    html[data-litefin-scaled] .livetv-page .page-header {',
+                '        padding-top: 12px;',
+                '        padding-bottom: 12px;',
+                '        margin-bottom: 12px;',
+                '    }',
+                '    html[data-litefin-scaled] .livetv-page .page-header h1 {',
+                '        font-size: 2.2rem;',
+                '        line-height: 1.15;',
+                '        margin-bottom: 14px;',
+                '    }',
+                '    html[data-litefin-scaled] .livetv-page .ltv-tab-header {',
+                '        padding: 4px;',
+                '    }',
+                '    html[data-litefin-scaled] .livetv-page .ltv-tab-btn {',
+                '        padding: 10px 30px !important;',
+                '    }',
+                '    /* ==========================================================',
+                '     * LANDSCAPE-ONLY IMMERSIVE HOME BACKDROP FIX',
+                '     * The immersive hero canvas IS the home screen background',
+                '     * image. It is sized with vh units plus raw-px media queries',
+                '     * (hero-carousel.css max-height 850px/700px blocks match the',
+                '     * RAW phone viewport — 412px — not the 720px design canvas),',
+                '     * so it capped at 420 of 720 design px: artwork stopped',
+                '     * mid-screen and left a black band behind the content rows.',
+                '     * Pin the canvas to the full design height so the artwork',
+                '     * fills the screen with the rows floating over it, and drop',
+                '     * the slide indicators to the fade zone (they are anchored',
+                '     * from the bottom and would otherwise land on the title',
+                '     * text in the taller canvas). Landscape only — portrait',
+                '     * keeps the stock banner.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-carousel {',
+                '        height: var(--litefin-app-h, 90vh) !important;',
+                '        min-height: var(--litefin-app-h, 650px) !important;',
+                '    }',
+                '    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-indicators {',
+                '        bottom: 400px !important;',
+                '    }',
+                '    /* Immersive-only content anchoring: with the full-canvas backdrop',
+                '     * the title block, slide dots and My Media rows must sit at TV',
+                '     * proportions (title block ends ~41% down the screen, dots in',
+                '     * the gap below it, section rows floating over the lower',
+                '     * backdrop) instead of cramming into the bottom quarter.',
+                '     * Non-immersive banner modes keep the generic 180px/-160px',
+                '     * pairing below. */',
+                '    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-item {',
+                '        padding-bottom: 423px !important;',
+                '    }',
+                '    html[data-litefin-scaled] #home-hero-placeholder.style-immersive + .home-rows {',
+                '        margin-top: -405px !important;',
+                '    }',
+                '    /* ==========================================================',
+                '     * LANDSCAPE-ONLY SETTINGS SPACING PASS',
+                '     * The TV-density settings grid reads as "squished" on a phone',
+                '     * once text grows. Open up vertical rhythm and let the content',
+                '     * panel scroll (it already overflows: auto). Portrait and TVs',
+                '     * never match this media query.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .settings-content-panel {',
+                '        padding: 48px 72px;',
+                '    }',
+                '    html[data-litefin-scaled] .content-title {',
+                '        padding-bottom: 28px;',
+                '    }',
+                '    html[data-litefin-scaled] .content-subtitle {',
+                '        margin: -8px 0 18px 0;',
+                '        padding-bottom: 16px;',
+                '    }',
+                '    html[data-litefin-scaled] .setting-section-title {',
+                '        margin-top: 36px;',
+                '        margin-bottom: 24px;',
+                '        padding-bottom: 14px;',
+                '    }',
+                '    html[data-litefin-scaled] .setting-item {',
+                '        padding: 28px 24px;',
+                '        min-height: 96px;',
+                '        margin: 14px 0;',
+                '    }',
+                '    html[data-litefin-scaled] .setting-name {',
+                '        margin-bottom: 10px;',
+                '    }',
+                '    /* Sidebar: wider so grown menu labels stay on one line, plus',
+                '     * phone-sized touch targets: bigger labels, taller rows and',
+                '     * larger icons (dialed back ~12% from the first pass after',
+                '     * on-device feedback — still ~68px design rows ≈ 39px physical',
+                '     * after the landscape zoom). */',
+                '    html[data-litefin-scaled] .settings-sidebar {',
+                '        width: 430px;',
+                '        padding: 44px 0;',
+                '    }',
+                '    html[data-litefin-scaled] .settings-sidebar-header {',
+                '        padding: 0 44px;',
+                '        margin-bottom: 28px;',
+                '    }',
+                '    html[data-litefin-scaled] .settings-sidebar-header h2 {',
+                '        font-size: 2.4rem;',
+                '    }',
+                '    html[data-litefin-scaled] .settings-menu-btn {',
+                '        font-size: 1.5rem !important;',
+                '        padding: 16px 24px;',
+                '        margin: 8px 18px;',
+                '        min-height: 68px;',
+                '    }',
+                '    html[data-litefin-scaled] .settings-menu-btn .menu-icon {',
+                '        width: 31px;',
+                '        height: 31px;',
+                '        margin-right: 17px;',
+                '    }',
+                '    html[data-litefin-scaled] .btn-option {',
+                '        padding: 14px 26px;',
                 '    }',
                 '}'
             ].join('\n');
@@ -184,16 +388,30 @@ class AndroidAdapter {
                 }
 
                 /*
-                 * #app is styled `width: 100vw; height: 100vh` in base.css. Viewport
-                 * units do NOT scale with CSS zoom, so #app (and anything sized with
-                 * vw/vh) would stay at the raw viewport size while the rest of the
-                 * document scales — clipping the layout. Pin #app to the effective
-                 * design-space dimensions so the whole tree lays out consistently.
+                 * Viewport units do NOT scale with CSS zoom: 100vw/100vh
+                 * resolve to the raw phone viewport (e.g. 915x412) while the
+                 * rest of the document lays out on the design canvas — the
+                 * trap that clips #app (styled 100vw/100vh in base.css) and
+                 * the fixed details-page backdrop (100vw/100vh in
+                 * details.css). Pin #app to the effective design-space
+                 * dimensions and expose them as custom properties so
+                 * landscape rescue CSS can pin other full-bleed elements to
+                 * the same canvas.
                  */
+                const designW = `${Math.round(window.innerWidth / scale)}px`;
+                const designH = `${Math.round(window.innerHeight / scale)}px`;
+                const root = document.documentElement;
+                if (scale < 1) {
+                    root.style.setProperty('--litefin-app-w', designW);
+                    root.style.setProperty('--litefin-app-h', designH);
+                } else {
+                    root.style.removeProperty('--litefin-app-w');
+                    root.style.removeProperty('--litefin-app-h');
+                }
                 const appEl = document.getElementById('app');
                 if (appEl && scale < 1) {
-                    appEl.style.width = `${Math.round(window.innerWidth / scale)}px`;
-                    appEl.style.height = `${Math.round(window.innerHeight / scale)}px`;
+                    appEl.style.width = designW;
+                    appEl.style.height = designH;
                 } else if (appEl) {
                     appEl.style.removeProperty('width');
                     appEl.style.removeProperty('height');

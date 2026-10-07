@@ -16,6 +16,7 @@ import { eventBus } from '../core/EventBus.js';
 import { imageService } from '../utils/ImageService.js';
 import { escapeHtml } from '../utils/Utils.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('EpgGrid');
 
@@ -43,11 +44,13 @@ class EpgGrid {
         // Programs schedule data mapped by channel ID
         this.programsMap = new Map();
 
-        // Timeframe initialization
-        // Set initial EPG timeframe to 8 hours (2 hours back to 6 hours forward)
-        // Drastically reduces network payload and JSON parsing overhead on low-spec hardware
+        // Timeframe initialization: 2 hours of lookback, then the guide span.
+        // TV keeps the original 8-hour span (payload parsimony on low-spec
+        // hardware); Android matches the reference apps' 12-hour forward
+        // guide (14h total including lookback).
         this.startTime = this._getRoundStartTime();
-        this.endTime = new Date(this.startTime.getTime() + 8 * 60 * 60 * 1000);
+        this.GUIDE_HOURS = platformInfo.isAndroid ? 14 : 8;
+        this.endTime = new Date(this.startTime.getTime() + this.GUIDE_HOURS * 60 * 60 * 1000);
 
         // Virtual scroll state
         this.scrollX = 0;
@@ -56,6 +59,15 @@ class EpgGrid {
         this.visibleWidth = 0;
         // Default height fallback before layout measurement completes
         this.visibleHeight = 600;
+
+        // Android touch panning + fling state (see _setupEventListeners)
+        this._touchPanningEnabled = false;
+        this._touchLast = null;
+        this._touchSamples = [];
+        this._flingRaf = null;
+        this._flingVx = 0;
+        this._flingVy = 0;
+        this._flingLast = 0;
 
         // On-demand rendering state tracking
         this._needsRender = true;
@@ -157,6 +169,7 @@ class EpgGrid {
     destroy() {
         this._isDestroyed = true;
         this._isMounted = false;
+        this._stopFling();
     }
 
     // =========================================================================
@@ -195,7 +208,7 @@ class EpgGrid {
                         <div class="epg-channels-track" id="epg-channels-track" style="height: ${this.channels.length * this.ROW_HEIGHT}px;"></div>
                     </div>
                     <div class="epg-programs" id="epg-programs">
-                        <div class="epg-programs-track" id="epg-programs-track" style="height: ${this.channels.length * this.ROW_HEIGHT}px; width: ${8 * this.PIXELS_PER_HOUR}px;"></div>
+                        <div class="epg-programs-track" id="epg-programs-track" style="height: ${this.channels.length * this.ROW_HEIGHT}px; width: ${this.GUIDE_HOURS * this.PIXELS_PER_HOUR}px;"></div>
                         <div class="epg-indicator" id="epg-now-indicator"></div>
                     </div>
                 </div>
@@ -291,7 +304,42 @@ class EpgGrid {
             }
         }
 
+        // 3b. Pan re-render: a row renders its program cells for the
+        // horizontal window ONLY at creation time — D-pad navigation hides
+        // that (_findProgramEl mounts focus targets on demand), but
+        // wheel/touch panning left everything past the original window
+        // black forever. Re-render a row's cells when the pan shifts more
+        // than the 400px overscan from its anchor; _renderProgramsInRow
+        // clears the row first, so this is idempotent.
+        for (const [channelId, data] of this.domNodes.entries()) {
+            const rowIndex = this.channelIndexMap.get(channelId);
+            if (rowIndex === undefined) continue;
+            if (data._anchorX === undefined || Math.abs(this.scrollX - data._anchorX) > 400) {
+                data._anchorX = this.scrollX;
+                this._renderProgramsInRow(channelId, data.rowEl, rowIndex);
+            }
+        }
+
         // 4. Update GPU-accelerated CSS transforms
+        /*
+         * Android landscape only: the grid keeps a 2-hour lookback window for
+         * TV backwards browsing, but on the down-scaled phone that zone is
+         * empty black space (guide data rarely exists there) and touch panning
+         * or restored session state can park the view inside it. Enforce NOW
+         * (rounded to the half-hour slot, matching _scrollToNow) as the
+         * horizontal floor at the single point where scroll state becomes
+         * transforms — every entry path (init, restore, touch pan) funnels
+         * through this render. TVs keep the lookback untouched; portrait
+
+         * (locked orientation) renders without the floor, exactly stock.
+         */
+        if (platformInfo.isAndroid && this._isLandscape()) {
+            const floorX = this._getTimeOffset(this._roundNowToSlot());
+            if (this.scrollX < floorX) {
+                this.scrollX = floorX;
+            }
+        }
+
         const scrollX = -this.scrollX;
         const scrollY = -this.scrollY;
 
@@ -390,10 +438,11 @@ class EpgGrid {
         const fallbackData = CardRenderer.getFallbackData(channel.Name);
 
         channelEl.innerHTML = `
-            ${logoUrl
-                ? `<img class="epg-channel-logo" src="${logoUrl}" 
+            ${
+                logoUrl
+                    ? `<img class="epg-channel-logo" src="${logoUrl}" 
                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />`
-                : ''
+                    : ''
             }
             <div class="epg-channel-logo-fallback grad-${fallbackData.gradNum}" 
                  style="${logoUrl ? 'display: none;' : 'display: flex;'}">
@@ -418,7 +467,10 @@ class EpgGrid {
         const data = {
             rowEl,
             channelEl,
-            programNodes: new Map()
+            programNodes: new Map(),
+            /* Horizontal anchor: scrollX the row's program cells were last
+             * rendered for (see _renderVirtualGrid pan re-render). */
+            _anchorX: this.scrollX
         };
         this.domNodes.set(channel.Id, data);
 
@@ -539,6 +591,86 @@ class EpgGrid {
         });
 
         const gridContainer = this.container.querySelector('.epg-grid-container');
+
+        /*
+         * Android touch panning: the virtualized grid owns all scrolling via
+         * internal scrollX/scrollY state and has no native overflow, so
+         * browser swipes do nothing (and with the landscape `touch-action: none`
+         * in AndroidAdapter they are swallowed entirely). Translate swipe
+         * gestures into the SAME state the wheel handler drives — clamping,
+         * virtualization and rendering are reused untouched. Only active on
+         * Android in landscape; portrait (locked orientation) keeps stock
+         * behavior. Gestures are landscape-checked live so rotating during
+         * a session deactivates panning safely.
+         */ const isLandscape = () => this._isLandscape();
+        this._touchPanningEnabled = platformInfo.isAndroid && isLandscape();
+
+        if (this._touchPanningEnabled && gridContainer) {
+            this._touchHandler = (e) => {
+                if (!isLandscape()) return;
+                const touch = e.touches ? e.touches[0] : null;
+                if (!touch) return;
+                if (e.type === 'touchstart') {
+                    this._stopFling();
+                    this._touchLast = { x: touch.clientX, y: touch.clientY };
+                    this._touchSamples = [];
+                } else if (this._touchLast) {
+                    /* Deltas arrive in PHYSICAL px; the grid constants
+                     * (ROW_HEIGHT, PIXELS_PER_MINUTE) are design-space. Divide
+                     * by the display-scale zoom so one row of finger travel
+                     * pans exactly one row (100 design px = 57 physical px on
+                     * a 0.572-scaled landscape phone). Unscaled viewports get
+                     * zoom = 1 → plain 1:1. */
+                    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+                    const dx = (this._touchLast.x - touch.clientX) / zoom;
+                    const dy = (this._touchLast.y - touch.clientY) / zoom;
+                    this._touchLast.x = touch.clientX;
+                    this._touchLast.y = touch.clientY;
+
+                    // Same clamping and maxima as the wheel handler above.
+                    if (dy !== 0) {
+                        const maxScrollY = Math.max(0, this.channels.length * this.ROW_HEIGHT - this.visibleHeight);
+                        this.scrollY = Math.max(0, Math.min(this.scrollY + dy, maxScrollY));
+                    }
+                    // Horizontal finger travel is short; boost 2x so the
+                    // timeline actually pans under the thumb.
+                    if (dx !== 0) {
+                        const maxScrollX = Math.max(0, this.GUIDE_HOURS * this.PIXELS_PER_HOUR - this.visibleWidth);
+                        this.scrollX = Math.max(0, Math.min(this.scrollX + dx * 2, maxScrollX));
+                    }
+                    /* Velocity sampling for the post-release fling: store the
+                     * deltas AS APPLIED (x carries the same 2x boost) so the
+                     * glide continues at the speed the content was moving. */
+                    this._touchSamples.push({
+                        t: e.timeStamp || performance.now(),
+                        vx: dx * 2,
+                        vy: dy
+                    });
+                    if (this._touchSamples.length > 8) this._touchSamples.shift();
+                    this.requestRender();
+                }
+            };
+            for (const type of ['touchstart', 'touchmove']) {
+                gridContainer.addEventListener(type, this._touchHandler, { passive: true });
+            }
+            gridContainer.addEventListener(
+                'touchend',
+                () => {
+                    this._touchLast = null;
+                    this._startFling();
+                },
+                { passive: true }
+            );
+            gridContainer.addEventListener(
+                'touchcancel',
+                () => {
+                    this._touchLast = null;
+                    this._touchSamples = [];
+                },
+                { passive: true }
+            );
+        }
+
         if (gridContainer) {
             gridContainer.addEventListener(
                 'wheel',
@@ -561,17 +693,118 @@ class EpgGrid {
                         const maxScrollY = Math.max(0, this.channels.length * this.ROW_HEIGHT - this.visibleHeight);
                         this.scrollY = Math.max(0, Math.min(this.scrollY + deltaY, maxScrollY));
                     }
-
                     if (deltaX !== 0) {
-                        const maxScrollX = Math.max(0, 8 * this.PIXELS_PER_HOUR - this.visibleWidth);
+                        const maxScrollX = Math.max(0, this.GUIDE_HOURS * this.PIXELS_PER_HOUR - this.visibleWidth);
                         this.scrollX = Math.max(0, Math.min(this.scrollX + deltaX, maxScrollX));
                     }
-
                     this.requestRender();
                 },
                 { passive: false }
             );
         }
+    }
+
+    /**
+     * Starts an inertial glide (fling) after the finger lifts, using the
+     * velocity captured from the last ~120ms of the gesture. The glide
+     * reuses the exact clamps of the pan path — track bounds, channel
+     * bounds and the Android landscape now-floor — and decays
+     * exponentially (~0.96/frame) until the velocity dies out or the view
+     * hits a boundary, so panning feels like every other scroll surface in
+     * the app instead of stopping dead. Landscape only, matching touch
+     * panning.
+     * @private
+     */
+    _startFling() {
+        const samples = this._touchSamples || [];
+        this._touchSamples = [];
+        if (samples.length < 2) return;
+
+        const last = samples[samples.length - 1];
+        let first = samples[0];
+        for (let i = samples.length - 1; i >= 0; i--) {
+            first = samples[i];
+            if (last.t - samples[i].t > 120) break;
+        }
+        const dt = last.t - first.t;
+        if (dt <= 0 || dt > 300) return;
+
+        let vx = 0;
+        let vy = 0;
+        for (const s of samples) {
+            if (s.t >= first.t) {
+                vx += s.vx;
+                vy += s.vy;
+            }
+        }
+        vx /= dt;
+        vy /= dt;
+
+        // A gentle lift stops dead; a real flick glides.
+        if (Math.hypot(vx, vy) < 0.15) return;
+        const cap = 2.5;
+        this._flingVx = Math.max(-cap, Math.min(cap, vx));
+        this._flingVy = Math.max(-cap, Math.min(cap, vy));
+        this._flingLast = performance.now();
+        if (this._flingRaf) cancelAnimationFrame(this._flingRaf);
+
+        const step = (now) => {
+            if (this._isDestroyed) return;
+            const stepDt = Math.min(now - this._flingLast, 50);
+            this._flingLast = now;
+            const decay = Math.pow(0.96, stepDt / 16.7);
+            let vx2 = this._flingVx * decay;
+            let vy2 = this._flingVy * decay;
+            if (Math.abs(vx2) < 0.02) vx2 = 0;
+            if (Math.abs(vy2) < 0.02) vy2 = 0;
+
+            if (vx2 !== 0) {
+                const maxScrollX = Math.max(0, this.GUIDE_HOURS * this.PIXELS_PER_HOUR - this.visibleWidth);
+                let minX = 0;
+                if (platformInfo.isAndroid && this._isLandscape()) {
+                    minX = this._getTimeOffset(this._roundNowToSlot());
+                }
+                const nx = Math.max(minX, Math.min(this.scrollX + vx2 * stepDt, maxScrollX));
+                if (nx === this.scrollX) {
+                    vx2 = 0; // boundary reached on this axis
+                } else {
+                    this.scrollX = nx;
+                }
+            }
+            if (vy2 !== 0) {
+                const maxScrollY = Math.max(0, this.channels.length * this.ROW_HEIGHT - this.visibleHeight);
+                const ny = Math.max(0, Math.min(this.scrollY + vy2 * stepDt, maxScrollY));
+                if (ny === this.scrollY) {
+                    vy2 = 0;
+                } else {
+                    this.scrollY = ny;
+                }
+            }
+
+            this._flingVx = vx2;
+            this._flingVy = vy2;
+            this.requestRender();
+
+            if (vx2 !== 0 || vy2 !== 0) {
+                this._flingRaf = requestAnimationFrame(step);
+            } else {
+                this._flingRaf = null;
+            }
+        };
+        this._flingRaf = requestAnimationFrame(step);
+    }
+
+    /**
+     * Cancels any in-flight fling glide (new touch or teardown).
+     * @private
+     */
+    _stopFling() {
+        if (this._flingRaf) {
+            cancelAnimationFrame(this._flingRaf);
+            this._flingRaf = null;
+        }
+        this._flingVx = 0;
+        this._flingVy = 0;
     }
 
     /**
@@ -986,18 +1219,39 @@ class EpgGrid {
     }
 
     /**
+     * Rounds the current time down to the nearest half-hour timeline slot.
+     * Shared by _scrollToNow and the Android landscape now-floor in
+     * _renderVirtualGrid so both align the view identically.
+     * @private
+     * @returns {Date} Copy of now with minutes floored to :00/:30, seconds/ms zeroed
+     */
+    _roundNowToSlot() {
+        const rounded = new Date();
+        rounded.setMinutes(rounded.getMinutes() >= 30 ? 30 : 0);
+        rounded.setSeconds(0);
+        rounded.setMilliseconds(0);
+        return rounded;
+    }
+
+    /**
+     * Landscape check used by Android-only behaviors (touch panning and the
+     * now-scroll floor). Portrait is locked to stock behavior.
+     * @private
+     * @returns {boolean} True when the viewport is landscape
+     */
+    _isLandscape() {
+        return typeof window.matchMedia === 'function'
+            ? window.matchMedia('(orientation: landscape)').matches
+            : window.innerWidth > window.innerHeight;
+    }
+
+    /**
      * Aligns horizontal view offset to the current time slot flush left on initial load.
      * @private
      */
     _scrollToNow() {
-        const now = new Date();
-        const roundedNow = new Date(now);
-        roundedNow.setMinutes(roundedNow.getMinutes() >= 30 ? 30 : 0);
-        roundedNow.setSeconds(0);
-        roundedNow.setMilliseconds(0);
-
         // Align the current half-hour slot cleanly to the left edge (scrollX offset)
-        this.scrollX = Math.max(0, this._getTimeOffset(roundedNow));
+        this.scrollX = Math.max(0, this._getTimeOffset(this._roundNowToSlot()));
     }
 
     /**
@@ -1007,8 +1261,11 @@ class EpgGrid {
     _updateIndicator() {
         if (!this.nowIndicator) return;
 
-        // Toggle visibility class based on user navigation into EPG program items
-        if (this._showIndicator) {
+        /* TV reveals the current-time line when the user navigates INTO the
+         * program items (D-pad flow). Touch phones never focus anything, so
+         * the line would never appear — always show it on Android landscape. */
+        const show = this._showIndicator || (platformInfo.isAndroid && this._isLandscape());
+        if (show) {
             this.nowIndicator.classList.add('visible');
         } else {
             this.nowIndicator.classList.remove('visible');
