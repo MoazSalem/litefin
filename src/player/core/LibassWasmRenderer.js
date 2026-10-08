@@ -92,19 +92,29 @@ export default class LibassWasmRenderer {
         }
 
         this._container = container;
-        this._videoElement = video || null;
-        this._isVirtual = !video;
+        // Verify whether the passed element is an authentic HTMLVideoElement.
+        // Virtual backends (such as Android ExoPlayer proxy <div> or Tizen AVPlay)
+        // do not provide real media events or currentTime properties. They must operate
+        // in virtual/manual canvas mode with ticking driven by SubtitleManager.
+        const isRealVideo = Boolean(
+            video && (
+                video.tagName === 'VIDEO' ||
+                (typeof HTMLVideoElement !== 'undefined' && video instanceof HTMLVideoElement)
+            )
+        );
+        this._videoElement = isRealVideo ? video : null;
+        this._isVirtual = !isRealVideo;
         this._videoWidth = width || 1920;
         this._videoHeight = height || 1080;
         this._videoFrameRate = videoFrameRate || 24;
         this._getTime = typeof getTime === 'function' ? getTime : null;
         // AVPlay's getCurrentTime() leads the actual displayed frame by
-        // the hardware decode pipeline depth (~1-2 frames). Default 0.06s
-        // (60ms ~1.5 frames at 24fps) for AVPlay mode; override via
-        // constructor if tuning for a different device.
+        // the hardware decode pipeline depth (~1-2 frames). Only apply this 0.06s
+        // compensation when running specifically on Tizen AVPlay hardware.
+        const isAvplay = typeof window !== 'undefined' && Boolean(window.webapis?.avplay || window.tizen?.avplay);
         this._avplayLatency = typeof avplayLatency === 'number'
             ? Math.max(0, avplayLatency)
-            : (this._isVirtual ? 0.06 : 0);
+            : (isAvplay ? 0.06 : 0);
 
         this._fontFamily = null;
         this._fontClass = null;
@@ -136,7 +146,7 @@ export default class LibassWasmRenderer {
         this._onWindowResize = () => this._resizeRenderer();
 
         log.info('LibassWasmRenderer initialized' +
-            (this._isVirtual ? ' (AVPlay/Manual mode)' : ' (HTML5/Auto mode)'));
+            (this._isVirtual ? ' (Virtual/Manual Canvas mode)' : ' (HTML5/Auto mode)'));
     }
 
     /**

@@ -22,18 +22,29 @@ mod discovery;
 // frontend IPC bridge. Handles toggling desktop window fullscreen mode cleanly.
 // -----------------------------------------------------------------------------
 #[tauri::command]
-async fn toggle_fullscreen(window: tauri::WebviewWindow) -> Result<bool, String> {
-    // Query current window presentation state from OS window handle
-    let is_fullscreen = window.is_fullscreen().map_err(|e| e.to_string())?;
+async fn toggle_fullscreen(
+    #[allow(unused_variables)] window: tauri::WebviewWindow,
+) -> Result<bool, String> {
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    {
+        // Query current window presentation state from OS window handle
+        let is_fullscreen = window.is_fullscreen().map_err(|e| e.to_string())?;
 
-    // Invert fullscreen state for seamless toggle transition
-    let target_state = !is_fullscreen;
+        // Invert fullscreen state for seamless toggle transition
+        let target_state = !is_fullscreen;
 
-    // Apply updated presentation state directly to OS window handle
-    window.set_fullscreen(target_state).map_err(|e| e.to_string())?;
+        // Apply updated presentation state directly to OS window handle
+        window.set_fullscreen(target_state).map_err(|e| e.to_string())?;
 
-    // Return the new active fullscreen state to the frontend caller
-    Ok(target_state)
+        // Return the new active fullscreen state to the frontend caller
+        Ok(target_state)
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        // Android and Mobile targets run in immersive full-screen activities natively
+        Ok(true)
+    }
 }
 
 /// Mobile entrypoint macro required by Tauri v2 for Android JNI initialization.
