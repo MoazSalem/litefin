@@ -2222,7 +2222,7 @@ export default class OSDController extends Component {
              */
             if (PlayerSettings.get('osdLayout') === 'hidden') {
                 if (this._currentFocusRow === -1) {
-                    const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                    const focusedEl = this._getFocusedOverlayElement();
                     if (focusedEl && focusedEl.isConnected && (
                         focusedEl.closest('.plugin-widget.visible') ||
                         focusedEl.closest('.upnext-dialog.visible') ||
@@ -2292,7 +2292,7 @@ export default class OSDController extends Component {
                 // that routes to the widget's onSelect() callback — so clicking the
                 // focused button is sufficient to dispatch the action correctly.
                 // We do NOT fall through to togglePlay; the widget owns this press.
-                const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                const focusedEl = this._getFocusedOverlayElement();
                 /*
                  * ====================================================================
                  * HIDDEN WIDGET & OVERLAY VISIBILITY GUARD
@@ -2360,7 +2360,7 @@ export default class OSDController extends Component {
         // (also in Row -1) would be incorrectly forwarded to the Up Next dialog
         // because activeMenu is set to upNextDialog for the whole session.
         if (this._currentFocusRow === -1 && this.activeMenu && this.activeMenu.isVisible && !this.activeMenu.isModal) {
-            const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+            const focusedEl = this._getFocusedOverlayElement();
             const menuOwnsElement = !this.activeMenu.$el || (focusedEl && this.activeMenu.$el.contains(focusedEl));
             if (menuOwnsElement && this.activeMenu.handleKey(key)) return true;
         }
@@ -2408,7 +2408,7 @@ export default class OSDController extends Component {
                 if (this._currentFocusRow === -1) {
                     // Overlay row (Row -1): plugin widget holds focus.
                     // Click the focused button directly in JavaScript.
-                    const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                    const focusedEl = this._getFocusedOverlayElement();
                     /*
                      * ====================================================================
                      * HIDDEN WIDGET & OVERLAY VISIBILITY GUARD
@@ -2814,6 +2814,24 @@ export default class OSDController extends Component {
     _getFocused() {
         return this._osdEl.querySelector('.focused');
     }
+
+    /**
+     * Resolve the overlay-row element that an OK press should activate.
+     *
+     * The stored index belongs to the focused row and is not reset when that row
+     * changes, so it can point outside the overlay row - which usually holds a single
+     * button while the controls row holds several. Clamp the index the same way
+     * _updateFocus() does and fall back to the element that actually carries .focused.
+     * Without this the callers read "undefined" and fell through to their
+     * no-overlay-target branch, i.e. OK toggled playback instead of triggering the
+     * visible widget.
+     */
+    _getFocusedOverlayElement() {
+        const idx = Math.min(this._currentFocusIndex, Math.max(this._cachedOverlayRow.length - 1, 0));
+        return this._cachedOverlayRow[idx] || this._getFocused();
+    }
+
+
 
 
     _getControls() {
@@ -4480,7 +4498,7 @@ export default class OSDController extends Component {
              * If focus was inside the dialog, we restore it back to the controls row.
              * ========================================================================
              */
-            const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+            const focusedEl = this._getFocusedOverlayElement();
             const wasDialogFocused = focusedEl && this.upNextDialog.$el?.contains(focusedEl);
 
             this.upNextDialog.hide();
