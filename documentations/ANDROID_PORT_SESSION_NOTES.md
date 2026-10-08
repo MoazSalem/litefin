@@ -37,8 +37,11 @@ Build: export ANDROID_HOME="C:/android-sdk" JAVA_HOME="C:/android-sdk/jdk21/jdk-
   var(--litefin-app-w/h) (details backdrop, page-loading, boot splash all done)
 
 ## Versioning
-- Android port versions INDEPENDENTLY of Litefin TV: releases v0.1.0..v0.5.0, all pre-release
-- v0.5.0 (versionCode 5) = current: touch-first player input (tap toggles OSD,
+- Android port versions INDEPENDENTLY of Litefin TV: releases v0.1.0..v0.5.0 shipped as
+  pre-releases; v0.6.0 is the current release version (not marked pre-release)
+- v0.6.0 (versionCode 6) = current: portrait-mode support + re-version to the release
+  version line; builds from source via npm run build:android -> dist/Litefin-0.6.0.apk
+- v0.5.0 (versionCode 5): touch-first player input (tap toggles OSD,
   finger scrub shows trickplay), sidebar press-and-hold tooltips, sticky
   immersive fullscreen, forked update-check endpoint
 
