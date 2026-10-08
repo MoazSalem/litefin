@@ -91,7 +91,11 @@ class AndroidAdapter {
         touchHorizontalScroller.init();
 
         // Scale the TV-sized UI down to phone screens (see _applyDisplayScale).
+        // Landscape rescue is the released, frozen stylesheet; portrait rescue
+        // is a separate <style> gated to @media (orientation: portrait) — the
+        // two can never activate on the same viewport.
         this._injectLandscapeRescueCSS();
+        this._injectPortraitRescueCSS();
         this._applyDisplayScale();
 
         // Signal touch-primary input to CSS (sidebar tooltips and other
@@ -429,6 +433,298 @@ class AndroidAdapter {
 
     /**
      * =========================================================================
+     * PORTRAIT RESCUE CSS (portrait-only; landscape untouched)
+     * =========================================================================
+     * Portrait port of the landscape rescue PATTERNS, in a separate <style>
+     * element (litefin-portrait-rescue) gated to @media (orientation:
+     * portrait) + html[data-litefin-scaled]. The landscape stylesheet's
+     * layout-affecting rules all live inside @media (orientation: landscape),
+     * so exactly one rescue stylesheet can ever be active per viewport.
+     *
+     * Contents (750px design canvas):
+     *  - Text bump via the same lever landscape uses (root rem base + card
+     *    title scale) — beats the inline font-size LayoutManager writes.
+     *  - #app scrolls vertically like a phone page (horizontal locked).
+     *  - Full-bleed fixed covers (details backdrop, boot splash, page
+     *    loading) pinned to the design canvas via --litefin-app-w/h — same
+     *    zoom + viewport-units trap landscape fixed, same mechanism.
+     * @private
+     */
+    _injectPortraitRescueCSS() {
+        try {
+            const style = document.createElement('style');
+            style.id = 'litefin-portrait-rescue';
+            style.textContent = [
+                '@media (orientation: portrait) {',
+                '    /* Text bump: same lever as landscape, sized for the 750px',
+                '     * canvas so physical text size matches the landscape feel. Also',
+                '     * tighten the collapsed sidebar rail: on the 750px canvas the',
+                '     * stock 100px rail leaves a dead strip next to the icons — 64px',
+                '     * keeps the icon glyphs clear and gives library cards the width.',
+                '     * Drives #page-container left offset AND the dock width; portrait',
+                '     * only — landscape keeps the stock 100px. */',
+                '    html[data-litefin-scaled] {',
+                '        font-size: 20px !important;',
+                '        --card-title-font-scale: 1.15 !important;',
+                '        --sidebar-width-collapsed: 64px;',
+                '    }',
+                '',
+                '    /* Phone-page scrolling: the TV layout is authored as a',
+                '     * fixed-viewport app; in portrait the canvas is tall, so let',
+                '     * pages overflow and scroll vertically. */',
+                '    html[data-litefin-scaled] #app {',
+                '        overflow-x: hidden !important;',
+                '        overflow-y: auto !important;',
+                '    }',
+                '',
+                '    /* Full-bleed pins (zoom + viewport-units trap, same as',
+                '     * landscape): fixed 100vw/100vh covers resolve against the RAW',
+                '     * phone viewport, not the design canvas. Pin them to the',
+                '     * canvas via the --litefin-app-w/h custom properties. */',
+                '    html[data-litefin-scaled] .details-backdrop,',
+                '    html[data-litefin-scaled] .splash-content,',
+                '    html[data-litefin-scaled] .page-loading {',
+                '        width: var(--litefin-app-w, 100vw) !important;',
+                '        height: var(--litefin-app-h, 100vh) !important;',
+                '    }',
+                '',
+                '    /* Library pages (Movies, Shows, ...): reclaim the TV-sized side',
+                '     * padding (50px each side on top of the 100px sidebar offset) so',
+                '     * cards fill the phone width edge to edge with just a small gap.',
+                '     * Portrait only — landscape keeps the stock 50px padding. */',
+                '    html[data-litefin-scaled] .library-content {',
+                '        padding-left: 16px !important;',
+                '        padding-right: 16px !important;',
+                '    }',
+                '',
+                '    /* Details page: stack the poster ABOVE the info column (phone',
+                '     * layout). The stock TV layout is a flex ROW — poster 420px',
+                '     * fixed + info column squeezed into the remaining ~106px on the',
+                '     * 750px canvas, which squashes every text element. Poster uses a',
+                '     * FIXED px padding-bottom ratio in stock CSS, so it is re-based',
+                '     * to percentage ratios that scale with the new width. Portrait',
+                '     * only — landscape keeps the side-by-side TV split. */',
+                '    html[data-litefin-scaled] .details-main-split {',
+                '        flex-direction: column !important;',
+                '        align-items: center !important;',
+                '        padding: 24px 16px 0 16px !important;',
+                '    }',
+                '    html[data-litefin-scaled] .hero-poster {',
+                '        width: 100% !important;',
+                '        max-width: 300px !important;',
+                '        margin-right: 0 !important;',
+                '        height: auto !important;',
+                '        padding-bottom: 0 !important;',
+                '        aspect-ratio: 2 / 3 !important;',
+                '    }',
+                '    html[data-litefin-scaled] .hero-poster.landscape {',
+                '        aspect-ratio: 16 / 9 !important;',
+                '    }',
+                '    html[data-litefin-scaled] .hero-poster.square {',
+                '        aspect-ratio: 1 / 1 !important;',
+                '    }',
+                '    html[data-litefin-scaled] .details-info-col {',
+                '        width: 100% !important;',
+                '    }',
+                '    /* The item logo image floats beside the title in the TV row',
+                '     * layout; stacked full-width it collides with the title text.',
+                '     * The text title already names the item — hide the logo. */',
+                '    html[data-litefin-scaled] .details-logo {',
+                '        display: none !important;',
+                '    }',
+                '',
+                '    /* ==========================================================',
+                '     * PORTRAIT IMMERSIVE HOME HERO (ported from landscape math)',
+                '     * Stock TV hero paddings (570px item / -550px rows) are tuned',
+                '     * for 1080p TV heights — on the 1666px portrait canvas the',
+                '     * title block overflows the top (cut logo) and My Media lands',
+                '     * at ~274px with zero breathing room. Mirror the landscape',
+                '     * immersive proportions on the taller canvas: full-canvas',
+                '     * backdrop, title block anchored with room, dots below it,',
+                '     * rows floating over the lower backdrop. Landscape values are',
+                '     * NOT touched — these rules live behind the portrait query.',
+                '     * Tuned: title block ends ~36% down, My Media starts ~33%',
+                '     * (was ~49% — half the screen — on the first pass). */',
+                '    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-carousel {',
+                '        height: var(--litefin-app-h, 90vh) !important;',
+                '        min-height: var(--litefin-app-h, 650px) !important;',
+                '    }',
+                '    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-item {',
+                '        padding-bottom: 1158px !important;',
+                '    }',
+                '    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-indicators {',
+                '        bottom: 1105px !important;',
+                '    }',
+                '    html[data-litefin-scaled] #home-hero-placeholder.style-immersive + .home-rows {',
+                '        margin-top: -1117px !important;',
+                '    }',
+                '',
+                '    /* ==========================================================',
+                '     * PORTRAIT LIVE TV TAB BAR FIT',
+                '     * The four Live TV tabs (Suggestions/Guide/Channels/',
+                '     * Recordings) are width:fit-content + margin auto at TV',
+                '     * sizes — at the 20px portrait root the row is wider than',
+                '     * the 750px canvas, so Recordings clips off-screen to the',
+                '     * right. Tighten padding + font inside the portrait query',
+                '     * so all four fit; landscape keeps the frozen 30px/22px',
+                '     * rules in the landscape stylesheet untouched.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .livetv-page .ltv-tab-header {',
+                '        padding: 4px;',
+                '        max-width: calc(100% - 24px);',
+                '        /* Left-align under the page title instead of the stock',
+                '         * centering — the .page-header is a column flex with',
+                '         * align-items:center, which ignores margins and leaves a',
+                '         * dead gap on the left while parking Recordings on the',
+                '         * right edge. align-self wins over the parent centering. */',
+                '        align-self: flex-start !important;',
+                '        margin: 0 !important;',
+                '    }',
+                '    /* The stock 60px page-header side padding pushed the',
+                '     * left-aligned tab bar far from the screen edge. Trim it in',
+                '     * portrait so the tabs hug the left like the content below;',
+                '     * the centered h1 is unaffected (align-items:center). */',
+                '    html[data-litefin-scaled] .livetv-page .page-header {',
+                '        padding-left: 16px !important;',
+                '        padding-right: 16px !important;',
+                '    }',
+                '    html[data-litefin-scaled] .livetv-page .ltv-tab-btn {',
+                '        padding: 10px 18px !important;',
+                '        font-size: 1.05rem !important;',
+                '        white-space: nowrap;',
+                '    }',
+                '',
+                '    /* ==========================================================',
+                '     * PORTRAIT LIVE TV CHANNELS GRID (portrait-only)',
+                '     * The Channels tab renders a MediaGrid with the stock',
+                '     * person-grid class: flex-wrap at calc(20% - 26px) per card',
+                '     * with 60px grid side padding — five tiny columns and big',
+                '     * black gutters on the 750px portrait canvas. Re-base to 3',
+                '     * cards per row (matching the portrait library grid) with a',
+                '     * 12px page edge and 6px card gutters so the grid fills the',
+                '     * width edge to edge. Landscape keeps the frozen 5-across TV',
+                '     * rules untouched.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .person-grid {',
+                '        padding-left: 12px !important;',
+                '        padding-right: 12px !important;',
+                '    }',
+                '    html[data-litefin-scaled] .person-grid .media-card {',
+                '        width: calc(33.33% - 14px) !important;',
+                '        margin-right: 6px !important;',
+                '        margin-left: 6px !important;',
+                '    }',
+                '    html[data-litefin-scaled] .person-grid .card-image {',
+                '        height: auto !important;',
+                '        aspect-ratio: 1 / 1 !important;',
+                '    }',
+                '',
+                '    /* ==========================================================',
+                '     * PORTRAIT LIVE TV GUIDE GRID HEIGHT (portrait-only)',
+                '     * The EPG grid is a fixed-height virtualized viewport sized',
+                '     * with calc(100vh - 230px) in livetv.css — under zoom 100vh',
+                '     * resolves against the RAW phone viewport (~915px tall in',
+                '     * portrait), not the 1666px design canvas, so the guide',
+                '     * renders a ~685px sliver and the virtualizer draws only ~6',
+                '     * rows, leaving a black void below. Size it from the design',
+                '     * canvas via the custom properties _applyPortraitScale',
+                '     * exposes: the measured header stack is 327px (h1 + tabs) on',
+                '     * the portrait canvas and .page-content has 20px bottom',
+                '     * padding, so canvas-h - 347 fills the screen exactly. The',
+                '     * virtualizer derives visibleHeight from this element',
+                '     * dynamically (EpgGrid._updateVisibleDimensions) — no row',
+                '     * count is hardcoded, and swiping inside the grid is handled',
+                '     * by EpgGrid touch panning (now active in both orientations).',
+                '     * Landscape never matches this query — the landscape',
+                '     * stylesheet keeps its own frozen 203px rule untouched.',
+                '     * ========================================================== */',
+                '    html[data-litefin-scaled] .epg-grid-container {',
+                '        height: calc(var(--litefin-app-h, 100vh) - 347px) !important;',
+                '        touch-action: none;',
+                '    }',
+                '}'
+            ].join('\n');
+            document.head.appendChild(style);
+        } catch (e) {
+            log.warn('Failed to inject portrait rescue CSS:', e);
+        }
+    }
+
+    /**
+     * =========================================================================
+     * PORTRAIT DISPLAY SCALE (portrait-only; landscape never runs this)
+     * =========================================================================
+     * Portrait port of the landscape display-scale pattern: fit a fixed
+     * design WIDTH with CSS zoom so the TV layout renders at a chosen
+     * size, and pin #app + the --litefin-app-w/h custom properties to the
+     * effective design canvas (the zoom + viewport-units trap).
+     *
+     * Differences from landscape, all deliberate:
+     *  - Design width 750 instead of 1600: the TV layout renders ~2.1x
+     *    larger physically in portrait and the page scrolls vertically
+     *    like a phone app (portrait rescue CSS unlocks #app scrolling).
+     *  - Everything (orientation check, scale, vars, #app pin) is computed
+     *    FRESH inside this method on every call — never captured at init —
+     *    so rotation always re-evaluates with current viewport values.
+     *  - Returns true only for portrait viewports; landscape viewports
+     *    return false immediately and _applyDisplayScale's untouched
+     *    landscape math takes over.
+     * @private
+     * @returns {boolean} true when this call was a portrait viewport that
+     *   this method fully handled.
+     */
+    _applyPortraitScale() {
+        /* Fresh per call — the whole point of the separation fix. */
+        const isPortrait = window.innerHeight > window.innerWidth;
+        if (!isPortrait) return false;
+
+        try {
+            const PORTRAIT_DESIGN_WIDTH = 750;
+            const MIN_SCALE = 0.15;
+
+            const scale = Math.min(1, Math.max(MIN_SCALE, window.innerWidth / PORTRAIT_DESIGN_WIDTH));
+            const root = document.documentElement;
+            const appEl = document.getElementById('app');
+
+            if (scale >= 1) {
+                /* Desktop-sized portrait viewport: stock layout, unscaled. */
+                root.style.removeProperty('zoom');
+                root.removeAttribute('data-litefin-scaled');
+                root.style.removeProperty('--litefin-app-w');
+                root.style.removeProperty('--litefin-app-h');
+                if (appEl) {
+                    appEl.style.removeProperty('width');
+                    appEl.style.removeProperty('height');
+                }
+            } else {
+                const designW = `${Math.round(window.innerWidth / scale)}px`;
+                const designH = `${Math.round(window.innerHeight / scale)}px`;
+
+                root.style.setProperty('zoom', String(scale));
+                /* data-litefin-scaled gates BOTH rescue stylesheets, but the
+                 * landscape one is additionally wrapped in
+                 * @media (orientation: landscape), so setting it in portrait
+                 * can never activate a landscape rule. */
+                root.setAttribute('data-litefin-scaled', '1');
+                root.style.setProperty('--litefin-app-w', designW);
+                root.style.setProperty('--litefin-app-h', designH);
+                if (appEl) {
+                    appEl.style.width = designW;
+                    appEl.style.height = designH;
+                }
+            }
+
+            log.debug(
+                `Portrait display scale: ${scale.toFixed(3)} (viewport ${window.innerWidth}x${window.innerHeight})`
+            );
+        } catch (e) {
+            log.warn('Failed to apply portrait display scale:', e);
+        }
+        return true;
+    }
+
+    /**
+     * =========================================================================
      * Display Scaling (Android phones/tablets)
      * =========================================================================
      * Litefin's layout is authored for a ~1600-1920px TV viewport. Phone
@@ -456,6 +752,16 @@ class AndroidAdapter {
         const MIN_SCALE = 0.15; // Safety floor only; portrait lands ~0.26 on phones
 
         const apply = () => {
+            /*
+             * PORTRAIT HANDOFF: portrait owns its own scaling path entirely
+             * (separate method, separate CSS — see _applyPortraitScale). It
+             * re-evaluates orientation FRESH on every resize call, so no
+             * stale orientation state can leak into this landscape math.
+             * When it returns true, portrait fully handled zoom/vars/#app
+             * and the landscape code below must not run; when false, this
+             * is a landscape viewport and the original math runs unchanged.
+             */
+            if (this._applyPortraitScale()) return;
             try {
                 const scale = Math.min(1, Math.max(MIN_SCALE, window.innerWidth / DESIGN_WIDTH));
                 if (scale >= 1) {

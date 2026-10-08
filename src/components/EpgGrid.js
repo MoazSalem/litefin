@@ -170,6 +170,10 @@ class EpgGrid {
         this._isDestroyed = true;
         this._isMounted = false;
         this._stopFling();
+        if (this._gridResizeObserver) {
+            this._gridResizeObserver.disconnect();
+            this._gridResizeObserver = null;
+        }
     }
 
     // =========================================================================
@@ -311,11 +315,23 @@ class EpgGrid {
         // black forever. Re-render a row's cells when the pan shifts more
         // than the 400px overscan from its anchor; _renderProgramsInRow
         // clears the row first, so this is idempotent.
+        //
+        // ORIENTATION CHANGE: rotation grows visibleWidth (portrait ~356 →
+        // landscape ~1350 design px) WITHOUT touching scrollX, so the pan
+        // anchor check never fires and the newly revealed right side of
+        // every row stays black until the user scrolls. Anchor each row to
+        // the visible geometry as well as scrollX — any dimension change
+        // forces a cell re-render for every mounted row.
         for (const [channelId, data] of this.domNodes.entries()) {
             const rowIndex = this.channelIndexMap.get(channelId);
             if (rowIndex === undefined) continue;
-            if (data._anchorX === undefined || Math.abs(this.scrollX - data._anchorX) > 400) {
+            const geometryChanged =
+                data._anchorVW !== undefined &&
+                (data._anchorVW !== this.visibleWidth || data._anchorVH !== this.visibleHeight);
+            if (geometryChanged || data._anchorX === undefined || Math.abs(this.scrollX - data._anchorX) > 400) {
                 data._anchorX = this.scrollX;
+                data._anchorVW = this.visibleWidth;
+                data._anchorVH = this.visibleHeight;
                 this._renderProgramsInRow(channelId, data.rowEl, rowIndex);
             }
         }
@@ -468,9 +484,12 @@ class EpgGrid {
             rowEl,
             channelEl,
             programNodes: new Map(),
-            /* Horizontal anchor: scrollX the row's program cells were last
-             * rendered for (see _renderVirtualGrid pan re-render). */
-            _anchorX: this.scrollX
+            /* Horizontal anchor: scrollX + visible geometry the row's program
+             * cells were last rendered for (see _renderVirtualGrid pan
+             * re-render and the orientation-change re-render). */
+            _anchorX: this.scrollX,
+            _anchorVW: this.visibleWidth,
+            _anchorVH: this.visibleHeight
         };
         this.domNodes.set(channel.Id, data);
 
@@ -593,21 +612,48 @@ class EpgGrid {
         const gridContainer = this.container.querySelector('.epg-grid-container');
 
         /*
+         * Rotation-safe re-measure: on Android, the window 'resize' event can
+         * fire BEFORE the zoom/canvas relayout settles (the display-scale
+         * handler re-zooms the document asynchronously), so the virtualizer
+         * re-renders once with stale visibleWidth/visibleHeight bounds and
+         * leaves unrendered black gaps until the next scroll forces a
+         * re-render. A ResizeObserver on the grid container fires after the
+         * element's actual box changes, so measurement always reflects real
+         * layout. Coalesced to one rAF to avoid double renders when width
+         * and height report in separate observations.
+         */
+        if (typeof ResizeObserver === 'function' && gridContainer) {
+            this._resizeRafPending = false;
+            this._gridResizeObserver = new ResizeObserver(() => {
+                if (this._resizeRafPending || this._isDestroyed) return;
+                this._resizeRafPending = true;
+                requestAnimationFrame(() => {
+                    this._resizeRafPending = false;
+                    if (this._isDestroyed) return;
+                    this._updateVisibleDimensions();
+                    this.requestRender();
+                });
+            });
+            this._gridResizeObserver.observe(gridContainer);
+        }
+
+        /*
          * Android touch panning: the virtualized grid owns all scrolling via
          * internal scrollX/scrollY state and has no native overflow, so
-         * browser swipes do nothing (and with the landscape `touch-action: none`
-         * in AndroidAdapter they are swallowed entirely). Translate swipe
+         * browser swipes do nothing (and with `touch-action: none` inside the
+         * grid container they are swallowed entirely). Translate swipe
          * gestures into the SAME state the wheel handler drives — clamping,
-         * virtualization and rendering are reused untouched. Only active on
-         * Android in landscape; portrait (locked orientation) keeps stock
-         * behavior. Gestures are landscape-checked live so rotating during
-         * a session deactivates panning safely.
-         */ const isLandscape = () => this._isLandscape();
-        this._touchPanningEnabled = platformInfo.isAndroid && isLandscape();
+         * virtualization and rendering are reused untouched. Active on Android
+         * in BOTH orientations (the guide is a fixed-canvas virtualized grid
+         * in portrait too after the display-scale port, so stock browser
+         * scrolling can never move it); the gesture handler checks nothing
+         * at mount time — registration is unconditional on Android and every
+         * event re-derives geometry live, so rotating mid-gesture is safe.
+         */
+        this._touchPanningEnabled = platformInfo.isAndroid;
 
         if (this._touchPanningEnabled && gridContainer) {
             this._touchHandler = (e) => {
-                if (!isLandscape()) return;
                 const touch = e.touches ? e.touches[0] : null;
                 if (!touch) return;
                 if (e.type === 'touchstart') {

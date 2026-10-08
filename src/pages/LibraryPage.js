@@ -56,7 +56,10 @@ class LibraryPage extends Page {
             // Pagination
             startIndex: 0,
             isInfinite: storage.getItem('pref:libraryPageSize') === 'unlimited',
-            limit: storage.getItem('pref:libraryPageSize') === 'unlimited' ? 100 : parseInt(storage.getItem('pref:libraryPageSize') || 100, 10),
+            limit:
+                storage.getItem('pref:libraryPageSize') === 'unlimited'
+                    ? 100
+                    : parseInt(storage.getItem('pref:libraryPageSize') || 100, 10),
             totalRecordCount: 0,
 
             // Data Cache
@@ -301,12 +304,117 @@ class LibraryPage extends Page {
         }
     }
 
+    /**
+     * ANDROID PORTRAIT column override (portrait-only; landscape/TV untouched).
+     * On a scaled Android portrait viewport the 750px design canvas is far too
+     * narrow for the TV column counts (7 poster columns => ~61px cards with
+     * unreadable titles). Return phone-appropriate column counts so posters
+     * render large and the page scrolls vertically instead. Returns null on
+     * every other platform and on landscape viewports, so callers keep the
+     * stock values and landscape rendering is byte-identical.
+     * @param {string} mode - Grid view mode ('poster', 'thumb', ...)
+     * @returns {number|null} Portrait column count, or null to keep stock.
+     * @private
+     */
+    /**
+     * Single source of truth for the effective dynamic-grid column count.
+     * Used by _renderGrid, the chunk-size computation, AND the Android
+     * portrait rotation handler, so every consumer always agrees.
+     * Reproduces the stock resolution (user preference > forced-landscape
+     * thumb > default-per-mode) and then applies the ANDROID PORTRAIT
+     * override, which returns null for landscape viewports so stock values
+     * pass through untouched.
+     * @param {string} viewMode - Current grid view mode
+     * @returns {number} Effective column count for the current viewport.
+     * @private
+     */
+    _resolveDynamicGridColumns(viewMode) {
+        const isForcedLandscape =
+            this.state.viewType === 'Episodes' ||
+            this.state.viewType === 'Upcoming' ||
+            this.state.viewType === 'Networks' ||
+            this.params.includeItemTypes === 'Episode';
+        const effectiveMode = isForcedLandscape ? 'thumb' : viewMode;
+        let columns = this.state.gridColumns;
+        if (isForcedLandscape && viewMode !== 'thumb') {
+            const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+            const savedThumbCols = parseInt(
+                storage.getItem(
+                    isSeerr ? 'pref:seerr:gridColumns:thumb' : `pref:library:gridColumns:${this.state.libraryId}:thumb`
+                ),
+                10
+            );
+            columns = !isNaN(savedThumbCols) ? savedThumbCols : this._getDefaultColumnsForMode('thumb');
+        } else if (!columns) {
+            columns = this._getDefaultColumnsForMode(effectiveMode);
+        }
+        // ANDROID PORTRAIT: phone column counts on the scaled portrait canvas
+        // (bigger posters, vertical scrolling). Landscape viewports return
+        // null here — every stock value passes through unchanged.
+        const portraitCols = this._getPortraitColumnOverride(effectiveMode);
+        if (portraitCols) columns = portraitCols;
+        return columns;
+    }
+
+    /**
+     * ANDROID PORTRAIT rotation handler. The --grid-columns custom property
+     * is computed once at render time, so rotating the device would leave
+     * the grid sized for the previous orientation. Re-renders the grid from
+     * cached items (no refetch) — but ONLY when the effective column count
+     * for the current viewport actually differs. TVs never fire resize
+     * events and unscaled viewports resolve stock counts, so this is a
+     * no-op everywhere except a scaled Android viewport that rotated.
+     * @private
+     */
+    _onViewportColumnsChanged() {
+        try {
+            const grid = this.$('#library-grid');
+            if (!grid || !grid.classList.contains('mode-dynamic')) return;
+            if (!this.state.items || this.state.items.length === 0) return;
+            const expected = this._resolveDynamicGridColumns(this.state.viewMode);
+            const current = parseInt(grid.style.getPropertyValue('--grid-columns'), 10);
+            if (!isNaN(current) && expected && expected !== current) {
+                this._renderGrid(this.state.items);
+            }
+        } catch (e) {
+            log.warn('Grid rotation re-render failed:', e);
+        }
+    }
+
+    _getPortraitColumnOverride(mode) {
+        try {
+            // Only the Android shell sets data-litefin-scaled (display scaling)
+            if (!document.documentElement.hasAttribute('data-litefin-scaled')) return null;
+            // Landscape viewports keep stock column counts
+            if (window.innerWidth >= window.innerHeight) return null;
+            switch (mode) {
+                case 'poster':
+                    return 3;
+                case 'small-poster':
+                    return 4;
+                case 'thumb':
+                    return 2;
+                case 'banner':
+                    return 2;
+                default:
+                    return null; // 'list' and unknown modes untouched
+            }
+        } catch (_) {
+            return null;
+        }
+    }
+
     // ========================================================================
     // Lifecycle
     // ========================================================================
 
     async onInit() {
         this.setLoading(true);
+
+        // ANDROID PORTRAIT: re-resolve grid columns when the viewport rotates.
+        // Self-limiting — a no-op on TVs/unscaled viewports (see handler).
+        this._boundViewportColumnsChanged = this._onViewportColumnsChanged.bind(this);
+        window.addEventListener('resize', this._boundViewportColumnsChanged, { passive: true });
 
         // Reset alphabet quick-jump offset cache on fresh library load
         this._scrollLetterSeq = 0;
@@ -332,7 +440,8 @@ class LibraryPage extends Page {
 
         if (isSeerrLibrary) {
             const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
-            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            const mediaType =
+                rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows' ? 'tv' : 'movie';
             let seerrTitle = this.params.name ? decodeURIComponent(this.params.name) : '';
             const gId = this.params.genreId || this.params.genre;
             if (!seerrTitle) {
@@ -827,7 +936,7 @@ class LibraryPage extends Page {
             this._onLibraryPageSizeChanged = (newSize) => {
                 const isInfinite = newSize === 'unlimited';
                 this.state.isInfinite = isInfinite;
-                this.state.limit = isInfinite ? 100 : (parseInt(newSize, 10) || 100);
+                this.state.limit = isInfinite ? 100 : parseInt(newSize, 10) || 100;
                 this.state.startIndex = 0;
                 this._loadItems();
             };
@@ -1041,6 +1150,12 @@ class LibraryPage extends Page {
     destroy() {
         super.destroy();
 
+        // ANDROID PORTRAIT: viewport rotation handler
+        if (this._boundViewportColumnsChanged) {
+            window.removeEventListener('resize', this._boundViewportColumnsChanged);
+            this._boundViewportColumnsChanged = null;
+        }
+
         // Clean up alphabet selector position listener
         if (this._onAlphaPickerPositionChanged) {
             eventBus.off('alphaPickerPosition:changed', this._onAlphaPickerPositionChanged);
@@ -1142,9 +1257,16 @@ class LibraryPage extends Page {
 
             // Detect Game libraries (JellyEmu collections or libraries specifically named after games/roms using word boundaries)
             const libNameLower = (item.Name || '').toLowerCase();
-            const isGameKeyword = /\b(games?|roms?|emulators?|emulation|jellyemu|retroarch|retrogames?)\b/i.test(libNameLower);
+            const isGameKeyword = /\b(games?|roms?|emulators?|emulation|jellyemu|retroarch|retrogames?)\b/i.test(
+                libNameLower
+            );
 
-            if (!isMediaCol && (item.CollectionType === 'games' || (isGameKeyword && item.CollectionType !== 'books') || this.params.isGame === 'true')) {
+            if (
+                !isMediaCol &&
+                (item.CollectionType === 'games' ||
+                    (isGameKeyword && item.CollectionType !== 'books') ||
+                    this.params.isGame === 'true')
+            ) {
                 this.state.isGameLibrary = true;
             } else {
                 this.state.isGameLibrary = false;
@@ -1157,7 +1279,10 @@ class LibraryPage extends Page {
             // Inherit isGameLibrary if we are inside a verified games library
             // or if the console folder explicitly matches a gaming console name under an existing game context.
             if (!isMediaCol && !this.state.isGameLibrary && this.state.isSubFolder && this.params.isGame === 'true') {
-                const isConsoleName = /\b(nintendo|sega|sony|atari|game boy|gameboy|gba|gbc|snes|nes|n64|playstation|psx|ps1|ps2|genesis|megadrive|game gear|dreamcast|mame|arcade|neogeo)\b/i.test(libNameLower);
+                const isConsoleName =
+                    /\b(nintendo|sega|sony|atari|game boy|gameboy|gba|gbc|snes|nes|n64|playstation|psx|ps1|ps2|genesis|megadrive|game gear|dreamcast|mame|arcade|neogeo)\b/i.test(
+                        libNameLower
+                    );
                 if (isConsoleName) {
                     this.state.isGameLibrary = true;
                 }
@@ -1203,16 +1328,15 @@ class LibraryPage extends Page {
         if (this.state.libraryId === 'seerr') {
             const seerrType = this.params.seerrType;
             const rawMediaType = this.params.mediaType || (seerrType === 'network' ? 'tv' : 'movie');
-            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            const mediaType =
+                rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows' ? 'tv' : 'movie';
             const selectedGenre =
                 this.state.filters.genre !== undefined
                     ? this.state.filters.genre
                     : this.params.genreId || this.params.genre;
             const genreId = selectedGenre;
             const language =
-                this.state.filters.language !== undefined
-                    ? this.state.filters.language
-                    : this.params.language;
+                this.state.filters.language !== undefined ? this.state.filters.language : this.params.language;
             const certification =
                 this.state.filters.certification !== undefined
                     ? this.state.filters.certification
@@ -1243,21 +1367,43 @@ class LibraryPage extends Page {
             const sortField = this.state.sortBy || 'popularity';
             const sortDir = (this.state.sortOrder || 'Descending').toLowerCase().startsWith('asc') ? 'asc' : 'desc';
             // Only send sortBy parameter if it differs from the upstream default (popularity.desc)
-            const seerrSortBy = (sortField === 'popularity' && sortDir === 'desc') ? null : `${sortField}.${sortDir}`;
+            const seerrSortBy = sortField === 'popularity' && sortDir === 'desc' ? null : `${sortField}.${sortDir}`;
 
             let items = [];
             try {
                 if (seerrType === 'keyword' || seerrType === 'tag' || keywordId) {
                     if (mediaType === 'tv') {
-                        items = await seerr.discoverTv(seerrPage, { keywords: keywordId, genre: genreId, language, certification, sortBy: seerrSortBy });
+                        items = await seerr.discoverTv(seerrPage, {
+                            keywords: keywordId,
+                            genre: genreId,
+                            language,
+                            certification,
+                            sortBy: seerrSortBy
+                        });
                     } else {
-                        items = await seerr.discoverMovies(seerrPage, { keywords: keywordId, genre: genreId, language, certification, sortBy: seerrSortBy });
+                        items = await seerr.discoverMovies(seerrPage, {
+                            keywords: keywordId,
+                            genre: genreId,
+                            language,
+                            certification,
+                            sortBy: seerrSortBy
+                        });
                     }
                 } else if (genreId || language || certification || seerrType === 'genre') {
                     if (mediaType === 'tv') {
-                        items = await seerr.discoverTv(seerrPage, { genre: genreId, language, certification, sortBy: seerrSortBy });
+                        items = await seerr.discoverTv(seerrPage, {
+                            genre: genreId,
+                            language,
+                            certification,
+                            sortBy: seerrSortBy
+                        });
                     } else {
-                        items = await seerr.discoverMovies(seerrPage, { genre: genreId, language, certification, sortBy: seerrSortBy });
+                        items = await seerr.discoverMovies(seerrPage, {
+                            genre: genreId,
+                            language,
+                            certification,
+                            sortBy: seerrSortBy
+                        });
                     }
                 } else if (seerrType === 'studio' || studioId) {
                     items = await seerr.moviesByStudio(studioId, seerrPage);
@@ -1290,7 +1436,9 @@ class LibraryPage extends Page {
             };
             this.state.items = items || [];
             this.state.limit = 100;
-            this.state.totalRecordCount = items.totalResults || (items.totalPages ? items.totalPages * 100 : (items.length ? (seerrPage + 1) * 100 : 0));
+            this.state.totalRecordCount =
+                items.totalResults ||
+                (items.totalPages ? items.totalPages * 100 : items.length ? (seerrPage + 1) * 100 : 0);
 
             const grid = this.$('#library-grid');
             if (grid) {
@@ -1375,10 +1523,15 @@ class LibraryPage extends Page {
 
         // Align limit to grid columns so the last rendered row is always full.
         // Avoids visual partial-row gaps when navigating the grid via D-pad.
-        const effectiveLimitCols = (isLandscape && this.state.viewMode !== 'thumb')
-            ? this._getDefaultColumnsForMode('thumb')
-            : (this.state.gridColumns || this._getDefaultColumnsForMode(this.state.viewMode));
-        const alignCols = this.state.gridMode === 'dynamic' ? effectiveLimitCols : 0;
+        const effectiveLimitCols =
+            isLandscape && this.state.viewMode !== 'thumb'
+                ? this._getDefaultColumnsForMode('thumb')
+                : this.state.gridColumns || this._getDefaultColumnsForMode(this.state.viewMode);
+        // ANDROID PORTRAIT: apply the portrait column override AFTER the stock
+        // resolution above, so landscape and TV behavior are untouched.
+        const portraitLimitCols =
+            this.state.gridMode === 'dynamic' ? this._getPortraitColumnOverride(this.state.viewMode) : null;
+        const alignCols = this.state.gridMode === 'dynamic' ? portraitLimitCols || effectiveLimitCols : 0;
         if (alignCols > 0) {
             this.state.limit = Math.ceil(this.state.limit / alignCols) * alignCols;
         }
@@ -1463,7 +1616,11 @@ class LibraryPage extends Page {
             const isTv =
                 info?.CollectionType === 'tvshows' ||
                 ['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(info?.Type);
-            const isGame = this.state.isGameLibrary || (info?.CollectionType === 'games' && info?.CollectionType !== 'homevideos' && info?.CollectionType !== 'photos');
+            const isGame =
+                this.state.isGameLibrary ||
+                (info?.CollectionType === 'games' &&
+                    info?.CollectionType !== 'homevideos' &&
+                    info?.CollectionType !== 'photos');
 
             if (isGame || info?.CollectionType === 'books') {
                 subViewItemTypes = 'Book';
@@ -1576,7 +1733,9 @@ class LibraryPage extends Page {
                 if (f.Years) params.Years = f.Years;
                 if (f.OfficialRatings) {
                     // Pipe-delimited parental ratings as expected by Jellyfin's PipeDelimitedCollectionModelBinder
-                    const ratingsList = (f.OfficialRatings.includes('|') ? f.OfficialRatings.split('|') : f.OfficialRatings.split(','))
+                    const ratingsList = (
+                        f.OfficialRatings.includes('|') ? f.OfficialRatings.split('|') : f.OfficialRatings.split(',')
+                    )
                         .map((r) => r.trim())
                         .filter(Boolean);
                     if (ratingsList.length > 0) {
@@ -1950,10 +2109,10 @@ class LibraryPage extends Page {
                     collectionType === 'tvshows'
                         ? 'Series'
                         : collectionType === 'movies'
-                            ? 'Movie'
-                            : collectionType === 'music'
-                                ? 'MusicAlbum'
-                                : 'Movie,Series';
+                          ? 'Movie'
+                          : collectionType === 'music'
+                            ? 'MusicAlbum'
+                            : 'Movie,Series';
 
                 const rowPromises = allGenres.map(async (genre) => {
                     const params = {
@@ -2189,7 +2348,7 @@ class LibraryPage extends Page {
 
         const { startIndex, limit, totalRecordCount } = this.state;
         const pageParam = this.params.page ? parseInt(this.params.page, 10) : null;
-        const currentPage = (!isNaN(pageParam) && pageParam > 0) ? pageParam : (Math.floor(startIndex / (limit || 1)) + 1);
+        const currentPage = !isNaN(pageParam) && pageParam > 0 ? pageParam : Math.floor(startIndex / (limit || 1)) + 1;
         const totalPages = Math.ceil(totalRecordCount / (limit || 1));
 
         this.$('#pagination-info').textContent = i18n.t('PageNumberXOfY', [currentPage, totalPages || 1]);
@@ -2623,7 +2782,9 @@ class LibraryPage extends Page {
          * standard filtering mode, providing immediate visual feedback.
          * ----------------------------------------------------------------- */
         const isScrollModeActive = this.state.isInfinite && storage.getItem('pref:alphaPickerScrollMode') !== 'false';
-        const activeChar = isScrollModeActive ? (this.state.scrollAlphaChar || this.state.nameStartsWith) : this.state.nameStartsWith;
+        const activeChar = isScrollModeActive
+            ? this.state.scrollAlphaChar || this.state.nameStartsWith
+            : this.state.nameStartsWith;
 
         picker.innerHTML = this.state.alphaPickerChars
             .map((char) => {
@@ -2771,18 +2932,11 @@ class LibraryPage extends Page {
         if (this.state.gridMode === 'dynamic' && this.state.viewMode !== 'list') {
             grid.classList.add('mode-dynamic');
 
-            // Effective columns must reflect forced-landscape tabs (e.g. Episodes = 4 cols, not poster's 7)
+            // Effective columns must reflect forced-landscape tabs (e.g. Episodes = 4 cols, not poster's 7).
+            // Single source of truth: _resolveDynamicGridColumns (also used by
+            // the chunk sizer and the Android portrait rotation handler).
             const effectiveMode = isLandscape ? 'thumb' : this.state.viewMode;
-            let effectiveColumns = this.state.gridColumns;
-            if (isLandscape && this.state.viewMode !== 'thumb') {
-                const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
-                const savedThumbCols = parseInt(storage.getItem(
-                    isSeerr ? 'pref:seerr:gridColumns:thumb' : `pref:library:gridColumns:${this.state.libraryId}:thumb`
-                ), 10);
-                effectiveColumns = !isNaN(savedThumbCols) ? savedThumbCols : this._getDefaultColumnsForMode('thumb');
-            } else if (!effectiveColumns) {
-                effectiveColumns = this._getDefaultColumnsForMode(effectiveMode);
-            }
+            const effectiveColumns = this._resolveDynamicGridColumns(effectiveMode);
 
             grid.style.setProperty('--grid-columns', effectiveColumns);
 
@@ -2921,7 +3075,9 @@ class LibraryPage extends Page {
 
         // Update Count
         const start = this.state.isInfinite ? 1 : this.state.startIndex + 1;
-        const end = this.state.isInfinite ? this.state.items.length : Math.min(this.state.startIndex + this.state.limit, this.state.totalRecordCount);
+        const end = this.state.isInfinite
+            ? this.state.items.length
+            : Math.min(this.state.startIndex + this.state.limit, this.state.totalRecordCount);
         this.$('#count-indicator').textContent = i18n.t('ListPaging', [start, end, this.state.totalRecordCount]);
 
         // Resolve card type based on the active view mode and library/tab context.
@@ -2944,16 +3100,7 @@ class LibraryPage extends Page {
         // Chunk sizing: (columns × 5 rows) gives ~2 visible screens worth of content.
         // ====================================================================
         const effectiveMode = isLandscape ? 'thumb' : this.state.viewMode;
-        let columns = this.state.gridColumns;
-        if (isLandscape && this.state.viewMode !== 'thumb') {
-            const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
-            const savedThumbCols = parseInt(storage.getItem(
-                isSeerr ? 'pref:seerr:gridColumns:thumb' : `pref:library:gridColumns:${this.state.libraryId}:thumb`
-            ), 10);
-            columns = !isNaN(savedThumbCols) ? savedThumbCols : this._getDefaultColumnsForMode('thumb');
-        } else if (!columns) {
-            columns = this._getDefaultColumnsForMode(effectiveMode);
-        }
+        let columns = this._resolveDynamicGridColumns(effectiveMode);
 
         // In List view, there is strictly 1 card per row regardless of gridColumns settings
         if (this.state.viewMode === 'list') {
@@ -3052,7 +3199,12 @@ class LibraryPage extends Page {
             orientation: 'grid',
             columns: currentColumns,
             leaveUp: gridLeaveUp,
-            leaveDown: (this.state.isInfinite && this.state.items.length < this.state.totalRecordCount) ? null : (this.state.isInfinite ? null : 'library-pagination'),
+            leaveDown:
+                this.state.isInfinite && this.state.items.length < this.state.totalRecordCount
+                    ? null
+                    : this.state.isInfinite
+                      ? null
+                      : 'library-pagination',
             leaveLeft: 'sidebar',
             leaveRight: isRightPosNav && isAlphaVisible ? 'alpha-picker' : null,
             selector: '.media-card',
@@ -3128,7 +3280,8 @@ class LibraryPage extends Page {
                         if (this.state.gridWindowEnd < this.state.items.length) {
                             this._appendGridChunk(grid, this.state.items, currentColumns);
                         } else if (this.state.isInfinite) {
-                            const hasMore = this.state._hasMoreInfinite !== false &&
+                            const hasMore =
+                                this.state._hasMoreInfinite !== false &&
                                 (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
                             if (hasMore) {
                                 this._loadNextInfiniteBatch();
@@ -3193,7 +3346,8 @@ class LibraryPage extends Page {
             this._lastGridScrollTop = 0;
             this._onGridScroll = () => {
                 // Determine current scroll position from container or window (for TV webOS pointer/wheel scrolling)
-                this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
+                this._gridScrollTop =
+                    scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
                 this._pendingScrollEval = true;
                 this._scheduleGridEval();
             };
@@ -3201,7 +3355,8 @@ class LibraryPage extends Page {
                 // Mark manual scroll active when user spins wheel or magic remote
                 this._isManualScroll = true;
                 this._lastManualScrollTime = Date.now();
-                this._gridScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
+                this._gridScrollTop =
+                    scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop || 0;
                 this._pendingScrollEval = true;
                 this._scheduleGridEval();
             };
@@ -3287,10 +3442,10 @@ class LibraryPage extends Page {
                         this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr'
                             ? 'discover'
                             : this.state.viewType === 'Upcoming'
-                                ? 'upcoming'
-                                : this.state.viewType === 'Albums'
-                                    ? 'music'
-                                    : 'library',
+                              ? 'upcoming'
+                              : this.state.viewType === 'Albums'
+                                ? 'music'
+                                : 'library',
                     showMeta: !isLandscape && this.state.viewMode === 'list',
                     isGrid: true,
                     cardWidth: cardWidth
@@ -3594,7 +3749,6 @@ class LibraryPage extends Page {
                     if (itemIndex >= appendThreshold && this.state.gridWindowEnd < this.state.items.length) {
                         this._appendGridChunk(grid, this.state.items, currentColumns);
                     }
-
                 } else {
                     const lookBehindItems = currentColumns === 1 ? 6 : currentColumns * 2;
                     const prependThreshold = this.state.gridWindowStart + lookBehindItems;
@@ -3604,8 +3758,9 @@ class LibraryPage extends Page {
                 }
 
                 // Proactively stream next batch when approaching end of loaded array (works on both moves & letter jumps)
-                const prefetchThreshold = this.state.items.length - (currentColumns * 4);
-                const hasMore = this.state._hasMoreInfinite !== false &&
+                const prefetchThreshold = this.state.items.length - currentColumns * 4;
+                const hasMore =
+                    this.state._hasMoreInfinite !== false &&
                     (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
                 if (this.state.isInfinite && itemIndex >= prefetchThreshold && hasMore) {
                     this._loadNextInfiniteBatch();
@@ -3654,21 +3809,33 @@ class LibraryPage extends Page {
             const distanceFromRenderedTop = scrollTop - spacerHeight;
 
             // Check append: if user is scrolling down OR near the bottom boundary of rendered items
-            const hasMoreToFetch = this.state._hasMoreInfinite !== false &&
+            const hasMoreToFetch =
+                this.state._hasMoreInfinite !== false &&
                 (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
 
-            if ((isScrollingDown || distanceFromBottom <= containerHeight) && distanceFromBottom <= containerHeight * 1.5) {
+            if (
+                (isScrollingDown || distanceFromBottom <= containerHeight) &&
+                distanceFromBottom <= containerHeight * 1.5
+            ) {
                 if (this.state.gridWindowEnd < this.state.items.length) {
                     this._appendGridChunk(grid, this.state.items, currentColumns);
                 }
                 // Proactively stream next batch when within 4 rows of loaded array boundary during scroll
-                if (this.state.isInfinite && (this.state.items.length - this.state.gridWindowEnd < currentColumns * 4) && hasMoreToFetch) {
+                if (
+                    this.state.isInfinite &&
+                    this.state.items.length - this.state.gridWindowEnd < currentColumns * 4 &&
+                    hasMoreToFetch
+                ) {
                     this._loadNextInfiniteBatch();
                 }
             }
 
             // Check prepend: if user is scrolling up OR near the top boundary of rendered items
-            if ((isScrollingUp || distanceFromRenderedTop <= containerHeight) && this.state.gridWindowStart > 0 && distanceFromRenderedTop <= containerHeight * 1.5) {
+            if (
+                (isScrollingUp || distanceFromRenderedTop <= containerHeight) &&
+                this.state.gridWindowStart > 0 &&
+                distanceFromRenderedTop <= containerHeight * 1.5
+            ) {
                 this._prependGridChunk(grid, this.state.items, currentColumns);
             }
 
@@ -3716,9 +3883,7 @@ class LibraryPage extends Page {
                 if (derivedRow <= maxRow) {
                     // Forward focused card index if navigating via D-pad so alphabet rail
                     // maintains lock on focused card rather than reverting to the top row
-                    const targetIndexForSync = (!this._isManualScroll && focusedIndex !== null)
-                        ? focusedIndex
-                        : null;
+                    const targetIndexForSync = !this._isManualScroll && focusedIndex !== null ? focusedIndex : null;
                     this._syncGridWindow(grid, this.state.items, currentColumns, derivedRow, targetIndexForSync);
                 }
             }
@@ -3907,8 +4072,8 @@ class LibraryPage extends Page {
         const nextUpTarget = this._isSubView()
             ? null
             : isHorizontalLayout || isGenresView
-                ? 'library-tabs'
-                : 'library-controls';
+              ? 'library-tabs'
+              : 'library-controls';
 
         rows.forEach((row, rowIndex) => {
             const headerId = `header-${rowIndex}`;
@@ -4083,22 +4248,22 @@ class LibraryPage extends Page {
                 onEnter:
                     isHorizontalRow && virtualRow
                         ? (fromElement, options) => {
-                            if (
-                                fromElement &&
-                                options &&
-                                (options.direction === 'up' || options.direction === 'down')
-                            ) {
-                                virtualRow._updateWindow(virtualRow.currentIndex);
-                                return virtualRow.domNodes.get(virtualRow.currentIndex);
-                            }
-                            return null;
-                        }
+                              if (
+                                  fromElement &&
+                                  options &&
+                                  (options.direction === 'up' || options.direction === 'down')
+                              ) {
+                                  virtualRow._updateWindow(virtualRow.currentIndex);
+                                  return virtualRow.domNodes.get(virtualRow.currentIndex);
+                              }
+                              return null;
+                          }
                         : null,
                 onRestoreIndex:
                     isHorizontalRow && virtualRow
                         ? (index) => {
-                            return virtualRow.focusByIndex(index);
-                        }
+                              return virtualRow.focusByIndex(index);
+                          }
                         : null
             });
         });
@@ -4453,11 +4618,15 @@ class LibraryPage extends Page {
         const forwardBuffer = (ROWS_BELOW + 4) * columns;
         const minItemsNeeded = targetIndex + forwardBuffer;
 
-        if (targetIndex >= 0 && this.state.items.length < minItemsNeeded && this.state.items.length < (this.state.totalRecordCount || 0)) {
+        if (
+            targetIndex >= 0 &&
+            this.state.items.length < minItemsNeeded &&
+            this.state.items.length < (this.state.totalRecordCount || 0)
+        ) {
             this._showInfiniteLoading(true);
             try {
                 const batchSize = this.state.limit || 100;
-                const needed = Math.max(batchSize, (minItemsNeeded - this.state.items.length) + batchSize);
+                const needed = Math.max(batchSize, minItemsNeeded - this.state.items.length + batchSize);
                 const fetchedItems = await this._fetchItemsBatch(this.state.items.length, needed);
 
                 // Check again for newer letter request before modifying state
@@ -4527,7 +4696,7 @@ class LibraryPage extends Page {
 
         // Eagerly force-load posters for visible and upcoming cards (target row + forward buffer)
         // so media appears instantly without waiting on IntersectionObserver
-        const visibleEnd = Math.min(allCards.length, Math.max(0, cardDomIndex) + (columns * 4));
+        const visibleEnd = Math.min(allCards.length, Math.max(0, cardDomIndex) + columns * 4);
         for (let i = Math.max(0, cardDomIndex); i < visibleEnd; i++) {
             const img = allCards[i].querySelector('img[data-src]');
             if (img) lazyLoader.forceLoad(img);
@@ -4535,16 +4704,20 @@ class LibraryPage extends Page {
         lazyLoader.observe(grid);
 
         // Resolve target card either by computed index offset or unique item identifier
-        let targetCard = (cardDomIndex >= 0 && cardDomIndex < allCards.length)
-            ? allCards[cardDomIndex]
-            : grid.querySelector(`.media-card[data-item-id="${this.state.items[targetIndex]?.Id}"]`);
+        let targetCard =
+            cardDomIndex >= 0 && cardDomIndex < allCards.length
+                ? allCards[cardDomIndex]
+                : grid.querySelector(`.media-card[data-item-id="${this.state.items[targetIndex]?.Id}"]`);
 
         // Millimeter-precise alignment: anchor the target card's row firmly at the top of the viewport
         if (targetCard) {
             const cardRect = targetCard.getBoundingClientRect();
             const containerRect = scrollContainer.getBoundingClientRect();
             // Position card top 20px below container top (clean margin for poster glow/shadow)
-            targetScrollTop = Math.max(0, Math.round(scrollContainer.scrollTop + (cardRect.top - containerRect.top) - 20));
+            targetScrollTop = Math.max(
+                0,
+                Math.round(scrollContainer.scrollTop + (cardRect.top - containerRect.top) - 20)
+            );
         } else {
             // Robust fallback: traverse parent hierarchy to calculate exact grid top relative to scrollContainer
             let gridTop = 0;
@@ -4553,7 +4726,7 @@ class LibraryPage extends Page {
                 gridTop += el.offsetTop || 0;
                 el = el.offsetParent;
             }
-            targetScrollTop = Math.max(0, Math.round(gridTop + (targetRow * rowHeight) - 20));
+            targetScrollTop = Math.max(0, Math.round(gridTop + targetRow * rowHeight - 20));
             if (allCards.length > 0) {
                 targetCard = allCards[0];
             }
@@ -4609,9 +4782,19 @@ class LibraryPage extends Page {
             // Check if user is navigating with D-pad and currently has a card focused
             const focused = focusManager.getFocused() || this._gridFocusElement;
             const grid = this.$('#library-grid');
-            if (!this._isManualScroll && focused && grid && grid.contains(focused) && focused.classList.contains('media-card')) {
+            if (
+                !this._isManualScroll &&
+                focused &&
+                grid &&
+                grid.contains(focused) &&
+                focused.classList.contains('media-card')
+            ) {
                 // Determine item from focused card
-                if (this._lastFocusItemIndex !== null && this._lastFocusItemIndex >= 0 && this._lastFocusItemIndex < items.length) {
+                if (
+                    this._lastFocusItemIndex !== null &&
+                    this._lastFocusItemIndex >= 0 &&
+                    this._lastFocusItemIndex < items.length
+                ) {
                     item = items[this._lastFocusItemIndex];
                 } else {
                     const itemId = focused.dataset?.itemId;
@@ -4684,7 +4867,11 @@ class LibraryPage extends Page {
         if (!name) return '#';
 
         // Extract first character and strip combining diacritics/accents (e.g., 'É' -> 'E')
-        const firstChar = name.charAt(0).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        const firstChar = name
+            .charAt(0)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase();
 
         // Any non-alphabetic character (numbers, brackets, punctuation, symbols) belongs to '#'
         if (firstChar < 'A' || firstChar > 'Z') {
@@ -4755,21 +4942,54 @@ class LibraryPage extends Page {
             let items = [];
             try {
                 if (ctx.seerrType === 'keyword' || ctx.seerrType === 'tag' || ctx.keywordId) {
-                    items = ctx.mediaType === 'tv'
-                        ? await seerr.discoverTv(seerrPage, { keywords: ctx.keywordId, genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy })
-                        : await seerr.discoverMovies(seerrPage, { keywords: ctx.keywordId, genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy });
+                    items =
+                        ctx.mediaType === 'tv'
+                            ? await seerr.discoverTv(seerrPage, {
+                                  keywords: ctx.keywordId,
+                                  genre: ctx.genreId,
+                                  language: ctx.language,
+                                  certification: ctx.certification,
+                                  sortBy: ctx.seerrSortBy
+                              })
+                            : await seerr.discoverMovies(seerrPage, {
+                                  keywords: ctx.keywordId,
+                                  genre: ctx.genreId,
+                                  language: ctx.language,
+                                  certification: ctx.certification,
+                                  sortBy: ctx.seerrSortBy
+                              });
                 } else if (ctx.genreId || ctx.language || ctx.certification || ctx.seerrType === 'genre') {
-                    items = ctx.mediaType === 'tv'
-                        ? await seerr.discoverTv(seerrPage, { genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy })
-                        : await seerr.discoverMovies(seerrPage, { genre: ctx.genreId, language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy });
+                    items =
+                        ctx.mediaType === 'tv'
+                            ? await seerr.discoverTv(seerrPage, {
+                                  genre: ctx.genreId,
+                                  language: ctx.language,
+                                  certification: ctx.certification,
+                                  sortBy: ctx.seerrSortBy
+                              })
+                            : await seerr.discoverMovies(seerrPage, {
+                                  genre: ctx.genreId,
+                                  language: ctx.language,
+                                  certification: ctx.certification,
+                                  sortBy: ctx.seerrSortBy
+                              });
                 } else if (ctx.seerrType === 'studio' || ctx.studioId) {
                     items = await seerr.moviesByStudio(ctx.studioId, seerrPage);
                 } else if (ctx.seerrType === 'network' || ctx.networkId) {
                     items = await seerr.tvByNetwork(ctx.networkId, seerrPage);
                 } else {
-                    items = ctx.mediaType === 'tv'
-                        ? await seerr.discoverTv(seerrPage, { language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy })
-                        : await seerr.discoverMovies(seerrPage, { language: ctx.language, certification: ctx.certification, sortBy: ctx.seerrSortBy });
+                    items =
+                        ctx.mediaType === 'tv'
+                            ? await seerr.discoverTv(seerrPage, {
+                                  language: ctx.language,
+                                  certification: ctx.certification,
+                                  sortBy: ctx.seerrSortBy
+                              })
+                            : await seerr.discoverMovies(seerrPage, {
+                                  language: ctx.language,
+                                  certification: ctx.certification,
+                                  sortBy: ctx.seerrSortBy
+                              });
                 }
             } catch (err) {
                 log.warn('Failed to load Seerr batch', err);
@@ -4959,7 +5179,7 @@ class LibraryPage extends Page {
         // dynamic column limit alignment (e.g., 100 aligned to 105).
         // ====================================================================
         const isSeerr = this.state.libraryId === 'seerr';
-        const pageLimit = isSeerr ? 100 : (this.state.limit || 100);
+        const pageLimit = isSeerr ? 100 : this.state.limit || 100;
         const currentPage = Math.floor(this.state.startIndex / pageLimit) + 1;
         const totalPages = Math.ceil(this.state.totalRecordCount / pageLimit) || 1;
         const targetPage = currentPage + direction;
@@ -4971,10 +5191,14 @@ class LibraryPage extends Page {
             const currentParams = new URLSearchParams();
             if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
             if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
-            if (this.params.genreId || this.params.genre) currentParams.set('genreId', this.params.genreId || this.params.genre);
-            if (this.params.studioId || this.params.studio) currentParams.set('studioId', this.params.studioId || this.params.studio);
-            if (this.params.networkId || this.params.network) currentParams.set('networkId', this.params.networkId || this.params.network);
-            if (this.params.keywordId || this.params.keywords || this.params.keyword) currentParams.set('keywordId', this.params.keywordId || this.params.keywords || this.params.keyword);
+            if (this.params.genreId || this.params.genre)
+                currentParams.set('genreId', this.params.genreId || this.params.genre);
+            if (this.params.studioId || this.params.studio)
+                currentParams.set('studioId', this.params.studioId || this.params.studio);
+            if (this.params.networkId || this.params.network)
+                currentParams.set('networkId', this.params.networkId || this.params.network);
+            if (this.params.keywordId || this.params.keywords || this.params.keyword)
+                currentParams.set('keywordId', this.params.keywordId || this.params.keywords || this.params.keyword);
             if (this.params.name) currentParams.set('name', this.params.name);
             currentParams.set('page', targetPage);
 
@@ -5119,21 +5343,21 @@ class LibraryPage extends Page {
 
         if (isSeerr) {
             const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
-            const isTv = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows');
+            const isTv = rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows';
 
             const sortOptions = isTv
                 ? [
-                    { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
-                    { label: 'OptionFirstAirDate', fallback: 'First Air Date', value: 'first_air_date' },
-                    { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
-                    { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
-                ]
+                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                      { label: 'OptionFirstAirDate', fallback: 'First Air Date', value: 'first_air_date' },
+                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                  ]
                 : [
-                    { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
-                    { label: 'OptionReleaseDate', fallback: 'Release Date', value: 'release_date' },
-                    { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
-                    { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
-                ];
+                      { label: 'OptionPopularity', fallback: 'Popularity', value: 'popularity' },
+                      { label: 'OptionReleaseDate', fallback: 'Release Date', value: 'release_date' },
+                      { label: 'OptionTmdbRating', fallback: 'TMDB Rating', value: 'vote_average' },
+                      { label: 'OptionTitle', fallback: 'Title (A-Z)', value: 'original_title' }
+                  ];
 
             const orderOptions = [
                 { label: 'Descending', fallback: 'Descending', value: 'Descending' },
@@ -5261,7 +5485,11 @@ class LibraryPage extends Page {
         let tempColumns;
         if (validInitialOpts.includes(initialSavedCols)) {
             tempColumns = initialSavedCols;
-        } else if (validInitialOpts.includes(this.state.gridColumns) && this.state.viewMode === tempMode && !isLandscape) {
+        } else if (
+            validInitialOpts.includes(this.state.gridColumns) &&
+            this.state.viewMode === tempMode &&
+            !isLandscape
+        ) {
             tempColumns = this.state.gridColumns;
         } else {
             tempColumns = defaultInitialCols;
@@ -5340,9 +5568,7 @@ class LibraryPage extends Page {
         ];
 
         // For Seerr discovery, limit view mode options to Poster and Small Poster
-        const modes = isSeerr
-            ? allModes.filter((m) => m.value === 'poster' || m.value === 'small-poster')
-            : allModes;
+        const modes = isSeerr ? allModes.filter((m) => m.value === 'poster' || m.value === 'small-poster') : allModes;
 
         const updateModalUI = () => {
             const hasGridOptions = tempMode !== 'list';
@@ -5412,8 +5638,8 @@ class LibraryPage extends Page {
                     tempMode === 'list'
                         ? 'view-mode-options'
                         : tempGridMode === 'dynamic'
-                            ? 'columns-options'
-                            : 'grid-mode-options',
+                          ? 'columns-options'
+                          : 'grid-mode-options',
                 selector: 'button'
             });
         };
@@ -5427,8 +5653,8 @@ class LibraryPage extends Page {
                     <h3 class="section-subtitle" style="font-size: 1.2rem; opacity: 0.7; margin-bottom: 12px;">Layout Style</h3>
                     <div class="view-mode-options" id="view-mode-options" style="display: flex; gap: 10px; margin-bottom: 10px;">
                         ${modes
-                .map(
-                    (m) => `
+                            .map(
+                                (m) => `
                             <button class="view-mode-option-btn ${m.value === tempMode ? 'selected' : ''}"
                                     data-mode="${m.value}"
                                     tabindex="0">
@@ -5436,8 +5662,8 @@ class LibraryPage extends Page {
                                 <span class="vm-label">${i18n.t(m.label)}</span>
                             </button>
                         `
-                )
-                .join('')}
+                            )
+                            .join('')}
                     </div>
                 </div>
 
@@ -5569,8 +5795,8 @@ class LibraryPage extends Page {
                         <h2 class="modal-title" data-i18n="HeaderSortBy">${i18n.t('HeaderSortBy')}</h2>
                         <div class="modal-options">
                             ${sortOptions
-                .map(
-                    (opt) => `
+                                .map(
+                                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentSort ? 'selected' : ''}" 
                                         data-type="sort" 
                                         data-value="${opt.value}"
@@ -5579,8 +5805,8 @@ class LibraryPage extends Page {
                                     <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
-                )
-                .join('')}
+                                )
+                                .join('')}
                         </div>
                     </div>
 
@@ -5589,8 +5815,8 @@ class LibraryPage extends Page {
                         <h2 class="modal-title" data-i18n="HeaderSortOrder">${i18n.t('HeaderSortOrder')}</h2>
                         <div class="modal-options">
                             ${orderOptions
-                .map(
-                    (opt) => `
+                                .map(
+                                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentOrder ? 'selected' : ''}" 
                                         data-type="order" 
                                         data-value="${opt.value}"
@@ -5599,8 +5825,8 @@ class LibraryPage extends Page {
                                     <span data-i18n="${opt.label}">${i18n.t(opt.label) || opt.fallback || opt.label}</span>
                                 </button>
                             `
-                )
-                .join('')}
+                                )
+                                .join('')}
                         </div>
                     </div>
                 </div>
@@ -5717,7 +5943,8 @@ class LibraryPage extends Page {
 
         if (isSeerr) {
             const rawMediaType = this.params.mediaType || (this.params.seerrType === 'network' ? 'tv' : 'movie');
-            const mediaType = (rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows') ? 'tv' : 'movie';
+            const mediaType =
+                rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows' ? 'tv' : 'movie';
             const isTv = mediaType === 'tv';
             // Strictly show movie genres for movies, and TV genres for series
             const genreList = isTv ? TV_GENRES_FALLBACK : MOVIE_GENRES_FALLBACK;
@@ -5734,9 +5961,7 @@ class LibraryPage extends Page {
             }
 
             const currentLanguage =
-                this.state.filters.language !== undefined
-                    ? this.state.filters.language
-                    : this.params.language;
+                this.state.filters.language !== undefined ? this.state.filters.language : this.params.language;
 
             if (this.state.filters.language === undefined && currentLanguage) {
                 this.state.filters.language = currentLanguage.toString();
@@ -5799,7 +6024,14 @@ class LibraryPage extends Page {
         } catch (e) {
             log.error('Failed to fetch filters', e);
             // We can still show static filters
-            filtersData = { Genres: [], OfficialRatings: [], Tags: [], Years: [], AudioLanguages: [], SubtitleLanguages: [] };
+            filtersData = {
+                Genres: [],
+                OfficialRatings: [],
+                Tags: [],
+                Years: [],
+                AudioLanguages: [],
+                SubtitleLanguages: []
+            };
         }
 
         this._renderFilterModal(filtersData);
@@ -5822,17 +6054,17 @@ class LibraryPage extends Page {
         // ------------------------------------------------------------------
         const genreItems = Array.isArray(data?.Genres)
             ? data.Genres.map((g) => {
-                if (typeof g === 'object' && g !== null) {
-                    // Extract name string, accommodating both PascalCase and camelCase keys
-                    const name = g.Name || g.name || g.label || g.value || '';
-                    return {
-                        label: name,
-                        value: name,
-                        type: g.type || 'multi'
-                    };
-                }
-                return { label: g, value: g, type: 'multi' };
-            }).filter((item) => Boolean(item.label && item.value))
+                  if (typeof g === 'object' && g !== null) {
+                      // Extract name string, accommodating both PascalCase and camelCase keys
+                      const name = g.Name || g.name || g.label || g.value || '';
+                      return {
+                          label: name,
+                          value: name,
+                          type: g.type || 'multi'
+                      };
+                  }
+                  return { label: g, value: g, type: 'multi' };
+              }).filter((item) => Boolean(item.label && item.value))
             : [];
 
         // ------------------------------------------------------------------
@@ -5840,18 +6072,18 @@ class LibraryPage extends Page {
         // ------------------------------------------------------------------
         const audioLanguageItems = Array.isArray(data?.AudioLanguages)
             ? data.AudioLanguages.map((l) => ({
-                label: l.Name || l.label || l.Value || l,
-                value: l.Value || l.value || l,
-                type: 'multi'
-            }))
+                  label: l.Name || l.label || l.Value || l,
+                  value: l.Value || l.value || l,
+                  type: 'multi'
+              }))
             : [];
 
         const subtitleLanguageItems = Array.isArray(data?.SubtitleLanguages)
             ? data.SubtitleLanguages.map((l) => ({
-                label: l.Name || l.label || l.Value || l,
-                value: l.Value || l.value || l,
-                type: 'multi'
-            }))
+                  label: l.Name || l.label || l.Value || l,
+                  value: l.Value || l.value || l,
+                  type: 'multi'
+              }))
             : [];
 
         const languageItems = Array.isArray(data?.Languages)
@@ -5865,107 +6097,111 @@ class LibraryPage extends Page {
         // Sections Definition
         const sections = isSeerr
             ? [
-                {
-                    title: 'Genres',
-                    id: 'sec-genres',
-                    itemKey: 'genre', // Key in state.filters for Seerr
-                    separator: ',',
-                    items: genreItems
-                },
-                {
-                    title: 'OriginalLanguage',
-                    id: 'sec-languages',
-                    itemKey: 'language', // Key in state.filters for Seerr
-                    separator: '|', // Pipe-separated ISO codes for Seerr/TMDB e.g. ar|zh
-                    items: languageItems
-                },
-                {
-                    title: 'ContentRating',
-                    id: 'sec-certifications',
-                    itemKey: 'certification', // Key in state.filters for Seerr
-                    separator: '|', // Pipe-separated certification values e.g. NR|G|PG-13
-                    items: certificationItems
-                }
-            ]
+                  {
+                      title: 'Genres',
+                      id: 'sec-genres',
+                      itemKey: 'genre', // Key in state.filters for Seerr
+                      separator: ',',
+                      items: genreItems
+                  },
+                  {
+                      title: 'OriginalLanguage',
+                      id: 'sec-languages',
+                      itemKey: 'language', // Key in state.filters for Seerr
+                      separator: '|', // Pipe-separated ISO codes for Seerr/TMDB e.g. ar|zh
+                      items: languageItems
+                  },
+                  {
+                      title: 'ContentRating',
+                      id: 'sec-certifications',
+                      itemKey: 'certification', // Key in state.filters for Seerr
+                      separator: '|', // Pipe-separated certification values e.g. NR|G|PG-13
+                      items: certificationItems
+                  }
+              ]
             : [
-                {
-                    title: 'Filters',
-                    id: 'sec-filters',
-                    items: [
-                        { label: 'Played', key: 'IsPlayed', type: 'boolean' },
-                        { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
-                        { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
-                        { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
-                    ]
-                },
-                {
-                    title: 'Features',
-                    id: 'sec-features',
-                    hidden: isMusic, // Hide video features for music
-                    items: [
-                        { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
-                        { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
-                        { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
-                        { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
-                        { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
-                    ]
-                },
-                {
-                    title: 'Genres',
-                    id: 'sec-genres',
-                    itemKey: 'Genres', // Key in state
-                    separator: '|', // Pipe-delimited collection required by Jellyfin backend
-                    items: genreItems
-                },
-                {
-                    title: 'HeaderParentalRatings',
-                    id: 'sec-ratings',
-                    itemKey: 'OfficialRatings',
-                    separator: '|', // Pipe-delimited collection required by Jellyfin backend
-                    items: (data?.OfficialRatings || []).map((r) => ({ label: r, value: r, type: 'multi' }))
-                },
-                {
-                    title: 'Tags',
-                    id: 'sec-tags',
-                    itemKey: 'Tags',
-                    separator: '|', // Pipe-delimited collection required by Jellyfin backend
-                    items: (data?.Tags || []).map((t) => ({ label: t, value: t, type: 'multi' }))
-                },
-                {
-                    title: 'HeaderVideoTypes',
-                    id: 'sec-videotypes',
-                    hidden: isMusic, // Hide video types for music
-                    itemKey: 'VideoTypes', // Comma list
-                    items: [
-                        { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
-                        { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
-                        { label: 'Option4K', key: 'Is4K', type: 'boolean' },
-                        { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
-                        { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
-                        { label: 'Option3D', key: 'Is3D', type: 'boolean' }
-                    ]
-                },
-                {
-                    title: 'AudioTracks',
-                    id: 'sec-audio-languages',
-                    hidden: isMusic, // Hide audio track filter for music
-                    itemKey: 'AudioLanguages',
-                    items: audioLanguageItems
-                },
-                {
-                    title: 'SubtitleTracks',
-                    id: 'sec-subtitle-languages',
-                    hidden: isMusic, // Hide subtitle track filter for music
-                    itemKey: 'SubtitleLanguages',
-                    items: subtitleLanguageItems
-                },
-                {
-                    title: 'HeaderYears',
-                    id: 'sec-years',
-                    itemKey: 'Years',
-                    items: (data?.Years || []).map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
-                }
-            ];
+                  {
+                      title: 'Filters',
+                      id: 'sec-filters',
+                      items: [
+                          { label: 'Played', key: 'IsPlayed', type: 'boolean' },
+                          { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
+                          { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
+                          { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'Features',
+                      id: 'sec-features',
+                      hidden: isMusic, // Hide video features for music
+                      items: [
+                          { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
+                          { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
+                          { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
+                          { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
+                          { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'Genres',
+                      id: 'sec-genres',
+                      itemKey: 'Genres', // Key in state
+                      separator: '|', // Pipe-delimited collection required by Jellyfin backend
+                      items: genreItems
+                  },
+                  {
+                      title: 'HeaderParentalRatings',
+                      id: 'sec-ratings',
+                      itemKey: 'OfficialRatings',
+                      separator: '|', // Pipe-delimited collection required by Jellyfin backend
+                      items: (data?.OfficialRatings || []).map((r) => ({ label: r, value: r, type: 'multi' }))
+                  },
+                  {
+                      title: 'Tags',
+                      id: 'sec-tags',
+                      itemKey: 'Tags',
+                      separator: '|', // Pipe-delimited collection required by Jellyfin backend
+                      items: (data?.Tags || []).map((t) => ({ label: t, value: t, type: 'multi' }))
+                  },
+                  {
+                      title: 'HeaderVideoTypes',
+                      id: 'sec-videotypes',
+                      hidden: isMusic, // Hide video types for music
+                      itemKey: 'VideoTypes', // Comma list
+                      items: [
+                          { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
+                          { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
+                          { label: 'Option4K', key: 'Is4K', type: 'boolean' },
+                          { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
+                          { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
+                          { label: 'Option3D', key: 'Is3D', type: 'boolean' }
+                      ]
+                  },
+                  {
+                      title: 'AudioTracks',
+                      id: 'sec-audio-languages',
+                      hidden: isMusic, // Hide audio track filter for music
+                      itemKey: 'AudioLanguages',
+                      items: audioLanguageItems
+                  },
+                  {
+                      title: 'SubtitleTracks',
+                      id: 'sec-subtitle-languages',
+                      hidden: isMusic, // Hide subtitle track filter for music
+                      itemKey: 'SubtitleLanguages',
+                      items: subtitleLanguageItems
+                  },
+                  {
+                      title: 'HeaderYears',
+                      id: 'sec-years',
+                      itemKey: 'Years',
+                      items: (data?.Years || []).map((y) => ({
+                          label: y.toString(),
+                          value: y.toString(),
+                          type: 'multi'
+                      }))
+                  }
+              ];
 
         // Filter out empty and hidden sections
         const validSections = sections.filter((s) => s.items.length > 0 && !s.hidden);
@@ -5985,16 +6221,16 @@ class LibraryPage extends Page {
                     <!-- Left Sidebar -->
                     <div class="filter-sidebar" id="filter-sidebar">
                         ${validSections
-                .map(
-                    (s) => `
+                            .map(
+                                (s) => `
                             <button class="filter-category-btn ${s.id === activeSectionId ? 'active' : ''}" 
                                     data-id="${s.id}" tabindex="0"
                                     data-i18n="${s.title}">
                                 ${i18n.t(s.title)}
                             </button>
                         `
-                )
-                .join('')}
+                            )
+                            .join('')}
                     </div>
 
                     <!-- Right Main Content -->
@@ -6200,7 +6436,10 @@ class LibraryPage extends Page {
                 const sep = section?.separator || (key === 'language' || key === 'certification' ? '|' : ',');
                 // Split existing stored selections handling either pipe or comma delimiters
                 let current = this.state.filters[key]
-                    ? this.state.filters[key].split(/[|,]/).map((s) => s.trim()).filter(Boolean)
+                    ? this.state.filters[key]
+                          .split(/[|,]/)
+                          .map((s) => s.trim())
+                          .filter(Boolean)
                     : [];
                 if (!isSelected) current.push(val);
                 else current = current.filter((v) => v !== val);
@@ -6361,8 +6600,8 @@ class LibraryPage extends Page {
                 </div>
                 <div class="modal-options page-content" id="modal-options">
                     ${options
-                .map(
-                    (opt) => `
+                        .map(
+                            (opt) => `
                         <button class="modal-option-btn ${opt.selected ? 'selected' : ''}" 
                                 data-value="${opt.value}" 
                                 tabindex="0">
@@ -6370,8 +6609,8 @@ class LibraryPage extends Page {
                             <span class="check-icon">✓</span>
                         </button>
                     `
-                )
-                .join('')}
+                        )
+                        .join('')}
                 </div>
                 <button class="modal-close-btn" id="modal-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
             </div>
@@ -6480,7 +6719,14 @@ class LibraryPage extends Page {
             (viewType === 'Items' || viewType === 'Folders');
 
         const shouldShow =
-            isSeerr || isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
+            isSeerr ||
+            isMovieMain ||
+            isTVMain ||
+            isEpisodes ||
+            isMusicMain ||
+            isCollections ||
+            isFolderMain ||
+            isFolderLikeMain;
 
         const isSubView = this._isSubView();
         const isSubFolder = this.state.isSubFolder;
@@ -6613,7 +6859,12 @@ class LibraryPage extends Page {
             this.registerFocusSection('library-grid', this.$('#library-grid'), {
                 ...gridConfig,
                 leaveUp: gridLeaveUp,
-                leaveDown: (this.state.isInfinite && this.state.items.length < this.state.totalRecordCount) ? null : (this.state.isInfinite ? null : (gridConfig.leaveDown || 'library-pagination')),
+                leaveDown:
+                    this.state.isInfinite && this.state.items.length < this.state.totalRecordCount
+                        ? null
+                        : this.state.isInfinite
+                          ? null
+                          : gridConfig.leaveDown || 'library-pagination',
                 leaveRight: isRightPosHeader && isAlphaVisible ? 'alpha-picker' : null
             });
 
