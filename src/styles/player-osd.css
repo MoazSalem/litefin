@@ -480,6 +480,54 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     border: 2px solid var(--jf-osd-btn-focus-border) !important;
 }
 
+/*
+ * ── OSD Button Focus GROW Effect ───────────────────────────────────────────
+ * The focused control - play/pause included - scales up a little so the current
+ * D-pad target is readable from couch distance; the icon grows with it. The
+ * Next-Up buttons scale on focus in the same way (.upnext-btn in upnext.css).
+ * .osd-btn already carries the transform transition, which is armed here for the
+ * icon as well.
+ */
+.osd-btn:focus,
+.osd-btn.focused {
+    -webkit-transform: scale(1.08);
+    transform: scale(1.08);
+}
+
+.osd-btn .osd-icon {
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.osd-btn:focus .osd-icon,
+.osd-btn.focused .osd-icon {
+    -webkit-transform: scale(1.12);
+    transform: scale(1.12);
+}
+
+/*
+ * "Low VRAM" mode disables the focus scaling for UI controls, including
+ * .osd-btn (see the html[data-low-vram="true"] rules in base.css). Those rules
+ * match the button only, so the icon is reset here as well - otherwise the
+ * button would stay at scale(1) while its icon still jumped to scale(1.12).
+ */
+html[data-low-vram="true"] .osd-btn:focus .osd-icon,
+html[data-low-vram="true"] .osd-btn.focused .osd-icon {
+    -webkit-transform: none !important;
+    transform: none !important;
+}
+
+/*
+ * The Magic Remote pointer mode disables focus transforms for the focused element
+ * as well (body.webos-cursor-active in base.css). That rule matches the button, not
+ * the icon, so the icon is reset here too while the pointer is active.
+ */
+body.webos-cursor-active .osd-btn:focus .osd-icon,
+body.webos-cursor-active .osd-btn.focused .osd-icon {
+    -webkit-transform: none !important;
+    transform: none !important;
+}
+
 /* Accent color for active toggle buttons when not focused */
 .osd-btn.active:not(#osdFavoriteBtn) {
     color: var(--jf-osd-btn-bg) !important;
