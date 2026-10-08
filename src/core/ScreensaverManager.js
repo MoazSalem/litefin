@@ -12,6 +12,8 @@ import { storage } from '../utils/StorageService.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { androidAdapter } from '../android/AndroidAdapter.js';
+import { desktopAdapter } from '../desktop/DesktopAdapter.js';
+import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { auth } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
@@ -35,6 +37,39 @@ class ScreensaverManager {
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
 
         this._hideBound = this.hide.bind(this);
+    }
+
+    /**
+     * Resolves the active platform adapter for system idle tracking and input reporting.
+     * Ensures WebOS, Android, Desktop (Tauri), Tizen, and Web Browser environments
+     * each communicate with their dedicated adapter rather than assuming TV defaults.
+     *
+     * @private
+     * @returns {Object} The platform-specific adapter instance.
+     */
+    _getPlatformAdapter() {
+        // LG webOS TV adapter
+        if (platformInfo.isWebOS) {
+            return webosAdapter;
+        }
+
+        // Android / Fire TV adapter
+        if (platformInfo.isAndroid) {
+            return androidAdapter;
+        }
+
+        // Desktop application adapter (Tauri windowing)
+        if (platformInfo.isDesktop) {
+            return desktopAdapter;
+        }
+
+        // Samsung Tizen TV adapter (dedicated to Tizen hardware)
+        if (platformInfo.isTizen) {
+            return tizenAdapter;
+        }
+
+        // Standard web browser fallback
+        return webAdapter;
     }
 
     init() {
@@ -71,11 +106,8 @@ class ScreensaverManager {
              * reportInput() resets the OS-level idle counter, giving the user a
              * full delay period before the screensaver can appear again.
              */
-            const platformAdapter = platformInfo.isWebOS
-                ? webosAdapter
-                : platformInfo.isAndroid
-                ? androidAdapter
-                : tizenAdapter;
+            // Reset OS idle timer on the resolved platform adapter
+            const platformAdapter = this._getPlatformAdapter();
             platformAdapter.reportInput?.();
         });
         eventBus.on('auth:logout', () => {
@@ -122,11 +154,8 @@ class ScreensaverManager {
         // If currently playing video, never show screensaver
         if (this._isVideoPlaying) return;
 
-        const platformAdapter = platformInfo.isWebOS
-            ? webosAdapter
-            : platformInfo.isAndroid
-            ? androidAdapter
-            : tizenAdapter;
+        // Query idle time from the active platform adapter
+        const platformAdapter = this._getPlatformAdapter();
         const minIdleTimeMs = this._delaySeconds * 1000;
 
         if (platformAdapter.idleTime >= minIdleTimeMs) {
@@ -190,12 +219,8 @@ class ScreensaverManager {
 
         document.body.classList.remove('screensaver-active');
 
-        // Reset tracking to prevent immediate re-triggering
-        const platformAdapter = platformInfo.isWebOS
-            ? webosAdapter
-            : platformInfo.isAndroid
-            ? androidAdapter
-            : tizenAdapter;
+        // Reset tracking to prevent immediate re-triggering across platforms
+        const platformAdapter = this._getPlatformAdapter();
         platformAdapter.reportInput?.();
 
         // Let plugin clean up DOM/Animation

@@ -162,6 +162,34 @@ class AndroidAdapter {
             // Determine if player page is actively rendering in the DOM
             const isPlayerActive = window.location.hash.startsWith('#/player');
 
+            // Physical keyboard shortcuts when video player is active (J/K/L/M)
+            if (isPlayerActive && !isTextInput && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                switch (e.key) {
+                    case 'k':
+                    case 'K':
+                        e.preventDefault();
+                        eventBus.emit('key:playPause', e);
+                        return;
+                    case 'j':
+                    case 'J':
+                        e.preventDefault();
+                        eventBus.emit('key:rewind', e);
+                        return;
+                    case 'l':
+                    case 'L':
+                        e.preventDefault();
+                        eventBus.emit('key:fastForward', e);
+                        return;
+                    case 'm':
+                    case 'M':
+                        e.preventDefault();
+                        eventBus.emit('remote:togglemute');
+                        return;
+                    default:
+                        break;
+                }
+            }
+
             // Prevent default spatial navigation jumps when browsing outside text fields
             if (!isTextInput) {
                 const directionalKeys = [

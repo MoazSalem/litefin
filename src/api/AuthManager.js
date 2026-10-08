@@ -32,6 +32,8 @@ import { api, ServerUnreachableError, sendWakeOnLan } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { androidAdapter } from '../android/AndroidAdapter.js';
+import { desktopAdapter } from '../desktop/DesktopAdapter.js';
+import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
 import { buildJellyfinProfile } from './DeviceProfile.js';
@@ -180,14 +182,23 @@ class AuthManager {
             log.info('Generated new device ID');
         }
 
-        // Resolve device name from the platform adapter
+        // Resolve device name from the corresponding platform adapter
         let deviceName;
         if (platformInfo.isWebOS) {
+            // LG webOS TV device name (e.g., "LG OLED55...")
             deviceName = webosAdapter.getDeviceName();
         } else if (platformInfo.isAndroid) {
+            // Android / Fire TV device model name
             deviceName = androidAdapter.getDeviceName();
-        } else {
+        } else if (platformInfo.isDesktop) {
+            // Desktop Tauri client (e.g., "Litefin Desktop (Windows)")
+            deviceName = desktopAdapter.getDeviceName();
+        } else if (platformInfo.isTizen) {
+            // Samsung Tizen TV model name
             deviceName = tizenAdapter.getDeviceName();
+        } else {
+            // Generic browser client (e.g., "Litefin Web (Chrome)")
+            deviceName = webAdapter.getDeviceName();
         }
 
         log.info(`Identification check: platform=${platformInfo.platformString}, deviceName="${deviceName}"`);

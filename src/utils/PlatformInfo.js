@@ -117,7 +117,16 @@ class PlatformInfo {
             ) {
                 this._platform = 'android';
             }
-            // Default
+            // Desktop check — Tauri desktop application shell or Electron wrapper
+            // Specifically covers desktop builds (Windows, macOS, Linux)
+            else if (
+                typeof window !== 'undefined' &&
+                (window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__ ||
+                 window.process?.versions?.electron || /Electron/i.test(navigator?.userAgent || ''))
+            ) {
+                this._platform = 'desktop';
+            }
+            // Default: Web browser environment
             else {
                 this._platform = 'web';
             }
@@ -191,9 +200,9 @@ class PlatformInfo {
         return this._platform === 'webos';
     }
 
-    /** @returns {boolean} True if running in a standard web browser (excluding Android TV/Smart TVs) */
+    /** @returns {boolean} True if running in a standard web browser (excluding Android TV, Smart TVs, and desktop app shells) */
     get isWeb() {
-        return this._platform === 'web' && !this.isAndroid;
+        return this._platform === 'web' || (!this.isTizen && !this.isWebOS && !this.isAndroid && !this.isDesktop);
     }
 
     /**
@@ -272,7 +281,7 @@ class PlatformInfo {
             return false;
         }
 
-        // Check for dedicated desktop application shell wrappers (Pake / Tauri on desktop)
+        // Check for dedicated desktop application shell wrapper (Tauri on desktop)
         if (typeof window !== 'undefined') {
             if (window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__) {
                 return true;
@@ -298,8 +307,8 @@ class PlatformInfo {
             }
         }
 
-        // Default to true for standard web when not identified as a TV
-        return this.isWeb;
+        // Return false when no desktop indicator is matched
+        return false;
     }
 
     /** @returns {string} The raw platform string ('tizen', 'webos', 'web') */

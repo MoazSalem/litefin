@@ -94,7 +94,8 @@ class TizenAdapter {
                 log.info('Running on Tizen (app info unavailable)');
             }
         } else {
-            log.info('Not running on Tizen platform (browser mode)');
+            this._isTizen = false;
+            log.info('Not running on Samsung Tizen platform');
         }
     }
 
@@ -103,7 +104,13 @@ class TizenAdapter {
      * Call this after DOM is ready
      */
     init() {
-        log.info('Initializing...');
+        // Enforce strict platform isolation - never run on non-Tizen targets
+        if (!this._isTizen) {
+            log.info('TizenAdapter: Skipped initialization (target is not Samsung Tizen TV)');
+            return;
+        }
+
+        log.info('Initializing TizenAdapter for Samsung TV hardware...');
 
         this._lastInputTime = Date.now();
 
@@ -113,14 +120,14 @@ class TizenAdapter {
         // Setup key event handler
         this._setupKeyHandler();
 
-        // Setup mouse listeners for non-tv pointers or browser mode
+        // Setup mouse listeners for Tizen pointer/air-mouse mode
         document.addEventListener('mousemove', () => this.reportInput(), { passive: true });
         document.addEventListener('mousedown', () => this.reportInput(), { passive: true });
 
         // Get device info
         this._getDeviceInfo();
 
-        log.info('Initialized');
+        log.info('TizenAdapter initialized');
     }
 
     /**
@@ -215,6 +222,34 @@ class TizenAdapter {
              */
             const isPlayerActive = window.location.hash.startsWith('#/player');
 
+            // Physical keyboard media player shortcuts (J/K/L/M) on attached keyboards
+            if (isPlayerActive && !isTextInput && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                switch (e.key) {
+                    case 'k':
+                    case 'K':
+                        e.preventDefault();
+                        eventBus.emit('key:playPause', e);
+                        return;
+                    case 'j':
+                    case 'J':
+                        e.preventDefault();
+                        eventBus.emit('key:rewind', e);
+                        return;
+                    case 'l':
+                    case 'L':
+                        e.preventDefault();
+                        eventBus.emit('key:fastForward', e);
+                        return;
+                    case 'm':
+                    case 'M':
+                        e.preventDefault();
+                        eventBus.emit('remote:togglemute');
+                        return;
+                    default:
+                        break;
+                }
+            }
+
             if (!isTextInput) {
                 const keysToPrevent = [
                     TIZEN_KEYS.LEFT,
@@ -268,7 +303,6 @@ class TizenAdapter {
                     }
                     break;
 
-                // Media controls
                 // Media controls
                 case TIZEN_KEYS.PLAY:
                     e.preventDefault();

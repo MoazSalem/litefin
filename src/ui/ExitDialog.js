@@ -3,6 +3,8 @@ import { i18n } from '../utils/i18n.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { androidAdapter } from '../android/AndroidAdapter.js';
+import { desktopAdapter } from '../desktop/DesktopAdapter.js';
+import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { logger } from '../utils/Logger.js';
 
@@ -69,12 +71,16 @@ class ExitDialog {
         this.overlay.querySelector('#exit-dialog-yes').onclick = (e) => {
             e.stopPropagation();
             log.info('User confirmed exit via dialog.');
-            if (platformInfo.isWebOS) {
+            if (platformInfo.isTizen) {
+                tizenAdapter.exit();
+            } else if (platformInfo.isWebOS) {
                 webosAdapter.exit();
             } else if (platformInfo.isAndroid) {
                 androidAdapter.exit();
+            } else if (platformInfo.isDesktop) {
+                desktopAdapter.exit();
             } else {
-                tizenAdapter.exit();
+                webAdapter.exit();
             }
         };
 
