@@ -162,3 +162,49 @@ test('JellyfinPlayer: Watchdog behavior simulation (health vs stall escalation)'
     assert.strictEqual(restartedWithMode, 'transcode', 'Should escalate to transcode when stalled');
     assert.strictEqual(restartedAtTicks, 305000000);
 });
+
+test('HtmlVideoPlayer & JellyfinPlayer: HLS resume startup failure and transcode escalation', () => {
+    const htmlSource = readFileSync(
+        new URL('../src/player/core/HtmlVideoPlayer.js', import.meta.url),
+        'utf8'
+    );
+    const jellyfinSource = readFileSync(
+        new URL('../src/player/core/JellyfinPlayer.js', import.meta.url),
+        'utf8'
+    );
+
+    // 1. Verify HtmlVideoPlayer initializes and manages _hlsStartTimeout
+    assert.ok(
+        htmlSource.includes('this._hlsStartTimeout = null;'),
+        'HtmlVideoPlayer must initialize _hlsStartTimeout'
+    );
+    assert.ok(
+        htmlSource.includes('_clearHlsStartTimeout()'),
+        'HtmlVideoPlayer must define _clearHlsStartTimeout method'
+    );
+    assert.ok(
+        htmlSource.includes("type: 'resumeseekfailed'"),
+        'HtmlVideoPlayer must emit resumeseekfailed on HLS resume startup timeout'
+    );
+
+    // 2. Verify JellyfinPlayer checks isAlreadyRemux and escalates straight to transcode
+    assert.ok(
+        jellyfinSource.includes('isAlreadyRemux'),
+        'JellyfinPlayer must determine if session is already running in DirectStream/Remux mode'
+    );
+    assert.ok(
+        jellyfinSource.includes("restartOptions.playbackMode = 'transcode';"),
+        'JellyfinPlayer must escalate directly to transcode when already in remux mode'
+    );
+
+    // 3. Verify JellyfinPlayer arms remux watchdog when resuming in DirectStream / Remux mode
+    assert.ok(
+        jellyfinSource.includes("this._currentPlayMethod === 'DirectStream' || this._currentPlayMethod === 'Remux'"),
+        'JellyfinPlayer must check for DirectStream or Remux mode on playback start'
+    );
+    assert.ok(
+        jellyfinSource.includes('this._armRemuxStuckWatchdog(effectiveStartPositionTicks);'),
+        'JellyfinPlayer must arm remux watchdog when resuming in DirectStream/Remux mode'
+    );
+});
+

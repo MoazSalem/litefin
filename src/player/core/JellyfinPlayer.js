@@ -1289,8 +1289,20 @@ export class JellyfinPlayer extends EventEmitter {
             const currentPosTicks = this.getCurrentPositionTicks();
             const effectiveTicks = targetTicks || currentPosTicks;
 
-            log.warn('resumeseekfailed: DirectPlay resume failed at', (currentPosTicks / 10000000).toFixed(2),
-                's. Restarting with Remux at target', (effectiveTicks / 10000000).toFixed(2), 's');
+            // -----------------------------------------------------------------
+            // Dynamic Fallback Escalation (DirectPlay -> Remux -> Transcode):
+            // If the current stream is already running in DirectStream or Remux mode,
+            // restarting in Remux would simply re-attempt the exact mid-GOP stream copy
+            // that failed or stalled. In that case, escalate straight to 'transcode'.
+            // Otherwise, fall back from DirectPlay to 'remux' first.
+            // -----------------------------------------------------------------
+            const isAlreadyRemux = this._playbackMode === 'remux' ||
+                                   this._currentPlayMethod === 'DirectStream' ||
+                                   this._currentPlayMethod === 'Remux';
+
+            log.warn('resumeseekfailed: Resume failed at', (currentPosTicks / 10000000).toFixed(2),
+                `s (isAlreadyRemux: ${isAlreadyRemux}). Restarting with ${isAlreadyRemux ? 'Transcode' : 'Remux'} at target`,
+                (effectiveTicks / 10000000).toFixed(2), 's');
 
             if (this._currentPlayOptions && !this._isRestarting) {
                 // Build restart options preserving active audio and subtitle selections
@@ -1302,6 +1314,11 @@ export class JellyfinPlayer extends EventEmitter {
                     startPositionTicks: effectiveTicks,
                     playbackMode: 'remux'
                 };
+
+                // If already remuxing/direct streaming, escalate straight to full transcode
+                if (isAlreadyRemux) {
+                    restartOptions.playbackMode = 'transcode';
+                }
 
                 this._currentPlayOptions = restartOptions;
                 this._lastPlayOptions = restartOptions;
@@ -1320,7 +1337,9 @@ export class JellyfinPlayer extends EventEmitter {
                         // If the hardware decoder hangs on mid-GOP stream copy, the
                         // watchdog will detect lack of progress and escalate to transcode.
                         // -------------------------------------------------------------
-                        this._armRemuxStuckWatchdog(effectiveTicks);
+                        if (!isAlreadyRemux) {
+                            this._armRemuxStuckWatchdog(effectiveTicks);
+                        }
                     } catch (e) {
                         log.error('resumeseekfailed restart failed:', e);
                         this._clearRemuxStuckWatchdog();
@@ -2240,6 +2259,20 @@ export class JellyfinPlayer extends EventEmitter {
 
             this._isPlaying = true;
             this._isPaused = options.autoPlay === false;
+
+            // -----------------------------------------------------------------
+            // DirectStream / Remux Startup Stuck Watchdog:
+            // When resuming media in DirectStream or Remux mode, FFmpeg stream-copies
+            // the video bitstream starting mid-GOP without inserting a clean IDR keyframe.
+            // On both hardware decoders (webOS/Tizen) and browser MSE (HtmlVideoPlayer/Hls.js),
+            // this can freeze the decoder or fail segment decoding.
+            // Arm the stuck watchdog (8s window) so if playback does not advance forward,
+            // we automatically escalate to full transcode.
+            // -----------------------------------------------------------------
+            if ((this._currentPlayMethod === 'DirectStream' || this._currentPlayMethod === 'Remux' || this._playbackMode === 'remux') &&
+                effectiveStartPositionTicks > 0) {
+                this._armRemuxStuckWatchdog(effectiveStartPositionTicks);
+            }
 
             this.emit(PlayerEvent.PLAYBACK_START, {
                 item: this._currentItem,
