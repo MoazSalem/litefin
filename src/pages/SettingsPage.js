@@ -3338,6 +3338,15 @@ class SettingsPage extends Page {
                     { value: 'auto', label: i18n.t('AutoRecommended') }
                 ];
 
+                // Add platform-specific native hardware player backends
+                if (platformInfo.isAndroid) {
+                    options.push({ value: 'exoplayer', label: i18n.t('BackendExoPlayer') || 'Media3 ExoPlayer (Android Native)' });
+                } else if (platformInfo.isTizen) {
+                    options.push({ value: 'avplay', label: i18n.t('BackendTizen') });
+                } else if (platformInfo.isWebOS) {
+                    options.push({ value: 'webos', label: i18n.t('BackendWebOS') });
+                }
+
                 // Check WebCodecs API support: only show Movi Player if hardware-accelerated
                 // WebCodecs frame decoding is supported on the current runtime.
                 // On TVs or web browsers without WebCodecs, Movi Player is hidden.
@@ -3350,15 +3359,6 @@ class SettingsPage extends Page {
 
                 // Native HTML5 browser video backend is universally available
                 options.push({ value: 'html5', label: i18n.t('BackendWeb') });
-
-                // Add platform-specific native hardware player backends
-                if (platformInfo.isAndroid) {
-                    options.push({ value: 'exoplayer', label: i18n.t('BackendExoPlayer') || 'Media3 ExoPlayer (Android Native)' });
-                } else if (platformInfo.isTizen) {
-                    options.push({ value: 'avplay', label: i18n.t('BackendTizen') });
-                } else if (platformInfo.isWebOS) {
-                    options.push({ value: 'webos', label: i18n.t('BackendWebOS') });
-                }
 
                 // If currently stored backend setting is 'movi' but WebCodecs is not supported,
                 // fallback display value to 'html5' to prevent invalid dropdown selection state
@@ -6746,6 +6746,8 @@ class SettingsPage extends Page {
         const overlayEnabled = debugOverlay.isOverlayEnabled;
         // Check whether low-level Movi player engine logging is enabled (defaults to false)
         const moviLogsEnabled = storage.getItem('debug_movi_logs') === 'true';
+        // Check whether low-level ExoPlayer native engine logging is enabled (defaults to false)
+        const exoLogsEnabled = storage.getItem('debug_exoplayer_logs') === 'true';
 
         return `
             <div class="settings-tab-content">
@@ -6801,6 +6803,19 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="toggle-switch ${moviLogsEnabled ? 'active' : ''}" 
                                 id="toggle-debug-movi-logs" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableExoPlayerDebugLogs">${i18n.t('EnableExoPlayerDebugLogs') || 'Enable ExoPlayer Debug Logs'}</span>
+                        <span class="setting-description" data-i18n="EnableExoPlayerDebugLogsDescription">${i18n.t('EnableExoPlayerDebugLogsDescription') || 'Output low-level Media3 ExoPlayer playback and state events to the console.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${exoLogsEnabled ? 'active' : ''}" 
+                                id="toggle-debug-exoplayer-logs" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -11193,6 +11208,21 @@ class SettingsPage extends Page {
 
                 // Broadcast change event across application
                 eventBus.emit('prefChanged:debug_movi_logs', newState);
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // ExoPlayer Native Debug Logs Toggle
+        // ---------------------------------------------------------------------
+        // Governs low-level logging from Media3 ExoPlayer Android native bridge.
+        // ---------------------------------------------------------------------
+        const toggleExoLogs = this.$('#toggle-debug-exoplayer-logs');
+        if (toggleExoLogs) {
+            toggleExoLogs.addEventListener('click', () => {
+                const newState = !toggleExoLogs.classList.contains('active');
+                toggleExoLogs.classList.toggle('active');
+                storage.setItem('debug_exoplayer_logs', newState);
+                eventBus.emit('prefChanged:debug_exoplayer_logs', newState);
             });
         }
 

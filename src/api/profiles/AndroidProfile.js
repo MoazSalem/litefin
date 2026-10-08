@@ -27,6 +27,37 @@ const log = logger.create('AndroidProfile');
 let _cachedCapabilities = null;
 
 /**
+ * Detects actual hardware video decoding capabilities via the native
+ * Android MediaCodecList interface exposed on window.LitefinAndroid.
+ * Accurately handles chipsets (like Amlogic S905X on Android 9) that
+ * lack hardware AV1 decoders to prevent black-screen playback errors.
+ */
+function detectHardwareVideoCodecs() {
+    try {
+        if (typeof window !== 'undefined' && window.LitefinAndroid?.getSupportedVideoCodecs) {
+            const raw = window.LitefinAndroid.getSupportedVideoCodecs();
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                log.info('Detected hardware video codecs via Android MediaCodecList:', parsed);
+                return parsed;
+            }
+        }
+    } catch (e) {
+        log.warn('Failed to parse hardware codecs from LitefinAndroid bridge:', e);
+    }
+
+    // Default safe baseline: TV boxes running Android 9 / S905X do NOT have AV1 hardware decoders
+    return {
+        h264: true,
+        hevc: true,
+        vp9: true,
+        vp8: true,
+        av1: false,
+        mpeg2video: true
+    };
+}
+
+/**
  * ============================================================================
  * Android Device Capability Detection
  * ============================================================================
@@ -60,20 +91,22 @@ export function getDeviceCapabilities() {
     // -------------------------------------------------------------------------
     // Native ExoPlayer Media3 Hardware Decoder Profile
     // -------------------------------------------------------------------------
-    // Native Media3 ExoPlayer paired with Android MediaCodec handles full
-    // zero-copy decoding across all broadcast, disc, and web codecs.
+    // Query actual MediaCodecList decoders so devices without AV1 hardware
+    // report av1: false, triggering seamless Jellyfin server transcoding.
     // -------------------------------------------------------------------------
+    const hwCodecs = detectHardwareVideoCodecs();
+
     _cachedCapabilities = {
         uhd: true,
         uhd8K: false,
         hdr10: hdr10,
         hlg: hlg,
         dolbyVision: true,
-        hevc: true,
-        av1: true,
-        vp9: true,
-        vp8: true,
-        mpeg2video: true,
+        hevc: hwCodecs.hevc !== false,
+        av1: hwCodecs.av1 === true,
+        vp9: hwCodecs.vp9 !== false,
+        vp8: hwCodecs.vp8 !== false,
+        mpeg2video: hwCodecs.mpeg2video !== false,
         mpegts: true,
         ac3: true,
         eac3: true,
@@ -141,12 +174,14 @@ export function buildJellyfinProfile(options = {}) {
     // -------------------------------------------------------------------------
     // Hardware Video Codec Capabilities
     // -------------------------------------------------------------------------
-    // Native ExoPlayer paired with MediaCodec decodes HEVC, VP9, and AV1
-    // directly on hardware out of the box without requiring software shims.
+    // Determine exact hardware codec support so that older TV boxes (e.g. S905X)
+    // without AV1 hardware decoders trigger server-side video transcoding,
+    // avoiding pure black screens and dropped video renderers.
     // -------------------------------------------------------------------------
-    const enableHEVC = true;
-    const enableVP9 = true;
-    const enableAV1 = true;
+    const hwCodecs = detectHardwareVideoCodecs();
+    const enableHEVC = hwCodecs.hevc !== false;
+    const enableVP9 = hwCodecs.vp9 !== false;
+    const enableAV1 = hwCodecs.av1 === true;
 
     // Audio format passthrough settings
     const dtsSetting = PlayerSettings.get('enableDts');

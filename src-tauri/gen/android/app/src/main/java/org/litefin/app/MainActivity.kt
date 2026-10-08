@@ -3,11 +3,14 @@ package org.litefin.app
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Bundle
-import android.view.SurfaceView
+import android.view.KeyEvent
+import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 
 /**
@@ -16,11 +19,11 @@ import androidx.activity.enableEdgeToEdge
  * =============================================================================
  * Hosts Litefin's dual-plane rendering architecture:
  *
- * 1. Native Hardware Surface Plane (Z-Index 0):
- *    - An Android [SurfaceView] dedicated to zero-copy video decode and rendering
- *      via Media3 ExoPlayer and hardware MediaCodec instances.
- *    - Bypasses Chromium's internal compositor pipeline completely to ensure
- *      steady 60 FPS playback without UI thread frame drops.
+ * 1. Native Hardware Texture Plane (Z-Index 0):
+ *    - An Android [TextureView] dedicated to video decode and rendering via
+ *      Media3 ExoPlayer and hardware MediaCodec instances.
+ *    - Composes directly into Android's window view hierarchy without requiring
+ *      SurfaceFlinger punch-through holes, eliminating black screens on TVs.
  *
  * 2. Transparent Chromium WebView Plane (Z-Index 1):
  *    - A hardware-accelerated [RustWebView] hosting Litefin's HTML/CSS/JS interface.
@@ -43,10 +46,10 @@ class MainActivity : TauriActivity() {
   // ---------------------------------------------------------------------------
   // View Hierarchy References
   // ---------------------------------------------------------------------------
-  // Reference to the native SurfaceView used for hardware video playback
-  private var surfaceView: SurfaceView? = null
+  // Reference to the native TextureView used for video playback
+  private var textureView: TextureView? = null
 
-  // Reference to the shared FrameLayout root container hosting SurfaceView and WebView
+  // Reference to the shared FrameLayout root container hosting TextureView and WebView
   private var rootContainer: FrameLayout? = null
 
   // Reference to the active WebView instance
@@ -68,10 +71,22 @@ class MainActivity : TauriActivity() {
     // -------------------------------------------------------------------------
     // Configure Window Pixel Format for Hardware Transparency
     // -------------------------------------------------------------------------
-    // Translucent window format allows SurfaceView composited behind the window
-    // to punch through transparent pixels in the WebView.
+    // Translucent window format allows video composited behind the webview
+    // to show through transparent pixels in the WebView canvas.
     // -------------------------------------------------------------------------
     window.setFormat(PixelFormat.TRANSLUCENT)
+
+    // -------------------------------------------------------------------------
+    // Intercept System Back Navigation & Gestures
+    // -------------------------------------------------------------------------
+    // Prevents Tauri's default OnBackPressedCallback from executing
+    // webView.goBack(), which bypasses modals and in-page back handlers.
+    // -------------------------------------------------------------------------
+    onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+      override fun handleOnBackPressed() {
+        handleHardwareBack()
+      }
+    })
 
     super.onCreate(savedInstanceState)
   }
@@ -112,14 +127,23 @@ class MainActivity : TauriActivity() {
     }
 
     // -------------------------------------------------------------------------
-    // 2. Enable Hardware Acceleration & Transparent Canvas
+    // 2. Enable Transparent Canvas Mode
     // -------------------------------------------------------------------------
     // Setting background to Color.TRANSPARENT ensures that any transparent
-    // CSS elements (.player-page, body.player-active) allow the SurfaceView
+    // CSS elements (.player-page, body.player-active) allow the video
     // beneath the WebView to show through directly to the display controller.
+    // We leave layerType default (NONE) rather than forcing LAYER_TYPE_HARDWARE,
+    // which in Android 9 / Chromium can create an opaque offscreen bitmap buffer.
     // -------------------------------------------------------------------------
     webView.setBackgroundColor(Color.TRANSPARENT)
-    webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+    webView.setLayerType(View.LAYER_TYPE_NONE, null)
+
+    // -------------------------------------------------------------------------
+    // 3. Register Native Android Bridge Interface
+    // -------------------------------------------------------------------------
+    // Injects `window.LitefinAndroid` for clean OS exit and device queries.
+    // -------------------------------------------------------------------------
+    webView.addJavascriptInterface(AndroidBridge(), "LitefinAndroid")
   }
 
   /**
@@ -128,13 +152,14 @@ class MainActivity : TauriActivity() {
    * ===========================================================================
    * Tao's JNI layer calls `activity.setContentView(webView)`.
    * By intercepting here, we wrap the incoming [WebView] inside our dual-plane
-   * [FrameLayout] (with [SurfaceView] at index 0 and [WebView] at index 1)
+   * [FrameLayout] (with [TextureView] at index 0 and [WebView] at index 1)
    * BEFORE it is attached to the window DecorView, preventing the crash:
    * "The specified child already has a parent. You must call removeView() first."
    * ===========================================================================
    */
   override fun setContentView(view: View?) {
     if (view is WebView) {
+      activeWebView = view
       super.setContentView(wrapInSurfaceContainer(view))
     } else {
       super.setContentView(view)
@@ -143,6 +168,7 @@ class MainActivity : TauriActivity() {
 
   override fun setContentView(view: View?, params: ViewGroup.LayoutParams?) {
     if (view is WebView) {
+      activeWebView = view
       super.setContentView(wrapInSurfaceContainer(view), params)
     } else {
       super.setContentView(view, params)
@@ -150,7 +176,7 @@ class MainActivity : TauriActivity() {
   }
 
   /**
-   * Constructs the dual-plane layout wrapping [SurfaceView] behind [WebView].
+   * Constructs the dual-plane layout wrapping [TextureView] behind [WebView].
    */
   private fun wrapInSurfaceContainer(webView: View): FrameLayout {
     rootContainer?.let { return it }
@@ -171,24 +197,22 @@ class MainActivity : TauriActivity() {
     }
 
     // -------------------------------------------------------------------------
-    // Hardware Video Plane (SurfaceView)
+    // Hardware Video Plane (TextureView)
     // -------------------------------------------------------------------------
     // Placed at index 0 (behind WebView at index 1).
-    // Default visibility is GONE to conserve GPU bandwidth when idle.
+    // Uses TextureView for seamless alpha blending with transparent WebView.
     // -------------------------------------------------------------------------
-    val surface = SurfaceView(this).apply {
+    val texture = TextureView(this).apply {
       layoutParams = FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT
       )
-      visibility = View.GONE
+      visibility = View.VISIBLE
     }
-    surface.setZOrderMediaOverlay(false)
-    surface.setZOrderOnTop(false)
 
-    this.surfaceView = surface
+    this.textureView = texture
 
-    container.addView(surface)
+    container.addView(texture)
     container.addView(webView)
     this.rootContainer = container
     return container
@@ -208,11 +232,11 @@ class MainActivity : TauriActivity() {
   fun showVideoSurface() {
     runOnUiThread {
       // -----------------------------------------------------------------------
-      // Reveal Hardware Decoding Surface Plane
+      // Reveal Hardware Decoding Plane
       // -----------------------------------------------------------------------
-      surfaceView?.visibility = View.VISIBLE
-      // Clear container and window backgrounds to allow zero-copy video decode
-      // on the hardware SurfaceView to punch through cleanly to the compositor
+      textureView?.visibility = View.VISIBLE
+      // Clear container and window backgrounds to allow video decode
+      // on the hardware TextureView to show through cleanly to the compositor
       rootContainer?.setBackgroundColor(Color.TRANSPARENT)
       window.setBackgroundDrawableResource(android.R.color.transparent)
     }
@@ -223,10 +247,6 @@ class MainActivity : TauriActivity() {
    */
   fun hideVideoSurface() {
     runOnUiThread {
-      // -----------------------------------------------------------------------
-      // Hide Hardware Decoding Surface Plane
-      // -----------------------------------------------------------------------
-      surfaceView?.visibility = View.GONE
       // Restore solid pitch black backgrounds for standard navigation UI
       rootContainer?.setBackgroundColor(Color.BLACK)
       window.setBackgroundDrawableResource(android.R.color.black)
@@ -234,10 +254,17 @@ class MainActivity : TauriActivity() {
   }
 
   /**
-   * Retrieve the active [SurfaceView] instance for ExoPlayer attachment.
+   * Retrieve the active [TextureView] instance for ExoPlayer attachment.
    */
-  fun getSurfaceView(): SurfaceView? {
-    return surfaceView
+  fun getTextureView(): TextureView? {
+    return textureView
+  }
+
+  /**
+   * Backward-compatibility accessor.
+   */
+  fun getSurfaceView(): android.view.SurfaceView? {
+    return null
   }
 
   /**
@@ -245,5 +272,121 @@ class MainActivity : TauriActivity() {
    */
   fun getWebView(): WebView? {
     return activeWebView
+  }
+
+  /**
+   * ===========================================================================
+   * Hardware Remote Key Event Interceptor
+   * ===========================================================================
+   * Intercepts physical remote control keys from Android TV remotes before
+   * they reach the focused WebView.
+   *
+   * By consuming KeyEvent.KEYCODE_BACK, we prevent Chromium's WebView from
+   * natively triggering browser history pop (webView.goBack()), routing it
+   * instead through Litefin's centralized eventBus ('key:back').
+   * ===========================================================================
+   */
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+      if (event.action == KeyEvent.ACTION_UP) {
+        handleHardwareBack()
+      }
+      // Return true for both ACTION_DOWN and ACTION_UP to fully consume
+      // the hardware back event and prevent any default browser history navigation.
+      return true
+    }
+    return super.dispatchKeyEvent(event)
+  }
+
+  /**
+   * Dispatches the hardware back event to the Litefin web application.
+   */
+  fun handleHardwareBack() {
+    runOnUiThread {
+      activeWebView?.evaluateJavascript(
+        """
+        (function() {
+          if (window.androidAdapter && typeof window.androidAdapter.handleHardwareBack === 'function') {
+            window.androidAdapter.handleHardwareBack();
+          } else if (window.eventBus && typeof window.eventBus.emit === 'function') {
+            window.eventBus.emit('key:back');
+          } else {
+            var evt = new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true });
+            document.dispatchEvent(evt);
+          }
+        })();
+        """.trimIndent(),
+        null
+      )
+    }
+  }
+
+  /**
+   * ===========================================================================
+   * Native Android Application Bridge
+   * ===========================================================================
+   * Exposes core OS lifecycle and system queries directly to JavaScript via
+   * `window.LitefinAndroid`.
+   * ===========================================================================
+   */
+  inner class AndroidBridge {
+    /**
+     * Terminates the Android application task cleanly.
+     */
+    @JavascriptInterface
+    fun exit() {
+      runOnUiThread {
+        finishAffinity()
+      }
+    }
+
+    /**
+     * Retrieves the formatted device model string.
+     */
+    @JavascriptInterface
+    fun getDeviceName(): String {
+      val manufacturer = android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+      val model = android.os.Build.MODEL
+      return if (model.startsWith(manufacturer, ignoreCase = true)) {
+        model
+      } else {
+        "$manufacturer $model"
+      }
+    }
+
+    /**
+     * Queries hardware decoder support via Android MediaCodecList.
+     * Accurately determines if device hardware supports AVC, HEVC, VP9, and AV1.
+     */
+    @JavascriptInterface
+    fun getSupportedVideoCodecs(): String {
+      return try {
+        // Query list of regular decoders registered with the Android media framework
+        val codecList = android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS)
+        val supportedMimes = mutableSetOf<String>()
+        // Iterate available codecs and extract supported video mime types
+        for (info in codecList.codecInfos) {
+          if (!info.isEncoder) {
+            for (type in info.supportedTypes) {
+              if (type.startsWith("video/", ignoreCase = true)) {
+                supportedMimes.add(type.lowercase())
+              }
+            }
+          }
+        }
+        // Package findings into JSON payload for profile evaluation
+        val result = org.json.JSONObject()
+        result.put("h264", supportedMimes.contains("video/avc"))
+        result.put("hevc", supportedMimes.contains("video/hevc"))
+        result.put("vp9", supportedMimes.contains("video/x-vnd.on2.vp9"))
+        result.put("vp8", supportedMimes.contains("video/x-vnd.on2.vp8"))
+        result.put("av1", supportedMimes.contains("video/av01"))
+        result.put("mpeg2video", supportedMimes.contains("video/mpeg2"))
+        result.toString()
+      } catch (e: Exception) {
+        // Safe fallback for older Android TV devices
+        """{"h264":true,"hevc":true,"vp9":true,"vp8":true,"av1":false,"mpeg2video":true}"""
+      }
+    }
   }
 }

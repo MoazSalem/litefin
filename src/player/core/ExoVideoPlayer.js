@@ -41,25 +41,35 @@ const SEEK_THRESHOLD_MS = 500;
  * @returns {Promise<any>}
  */
 async function invokeNative(command, args = {}) {
+    const isDebug = typeof storage !== 'undefined' && storage.getItem('debug_exoplayer_logs') === 'true';
+    if (isDebug) {
+        log.info(`[ExoDebug] invokeNative -> ${command}:`, JSON.stringify(args));
+    }
+
     // 1. Direct high-throughput @JavascriptInterface bridge
     if (typeof window !== 'undefined' && window.LitefinExoPlayer) {
         const bridge = window.LitefinExoPlayer;
         if (typeof bridge[command] === 'function') {
             try {
+                let res;
                 if (command === 'prepare') {
                     const headersJson = args.headers ? JSON.stringify(args.headers) : null;
-                    return bridge.prepare(args.url || '', headersJson, args.startPositionMs || 0);
+                    res = bridge.prepare(args.url || '', headersJson, args.startPositionMs || 0);
                 } else if (command === 'seek') {
-                    return bridge.seek(args.positionMs || 0);
+                    res = bridge.seek(args.positionMs || 0);
                 } else if (command === 'setPlaybackSpeed') {
-                    return bridge.setPlaybackSpeed(args.speed || 1.0);
+                    res = bridge.setPlaybackSpeed(args.speed || 1.0);
                 } else if (command === 'setVolume') {
-                    return bridge.setVolume(args.volume ?? 1.0);
+                    res = bridge.setVolume(args.volume ?? 1.0);
                 } else if (command === 'selectAudioTrack') {
-                    return bridge.selectAudioTrack(args.trackIndex || 0);
+                    res = bridge.selectAudioTrack(args.trackIndex || 0);
                 } else {
-                    return bridge[command]();
+                    res = bridge[command]();
                 }
+                if (isDebug) {
+                    log.info(`[ExoDebug] Direct bridge ${command} returned:`, res);
+                }
+                return res;
             } catch (err) {
                 log.warn(`Direct bridge invoke failed for ${command}:`, err);
             }
@@ -121,6 +131,9 @@ export class ExoVideoPlayer {
         // Startup watchdog timer
         this._startupWatchdogTimer = null;
 
+        // Active polling heartbeat timer (250ms cadence)
+        this._pollInterval = null;
+
         // Bound event listeners for clean unbinding
         this._boundEventHandlers = [];
 
@@ -145,7 +158,12 @@ export class ExoVideoPlayer {
         // 1. Playback State Transitions
         const onPlaybackState = (event) => {
             const data = event.detail || {};
-            log.debug('ExoPlayer state event received:', data);
+            const isDebug = typeof storage !== 'undefined' && storage.getItem('debug_exoplayer_logs') === 'true';
+            if (isDebug) {
+                log.info('[ExoDebug] Playback state event:', JSON.stringify(data));
+            } else {
+                log.debug('ExoPlayer state event received:', data);
+            }
 
             if (data.state === 'buffering') {
                 this._isBuffering = true;
@@ -185,6 +203,11 @@ export class ExoVideoPlayer {
             const durMs = data.durationMs || 0;
             const bufMs = data.bufferedMs || 0;
 
+            const isDebug = typeof storage !== 'undefined' && storage.getItem('debug_exoplayer_logs') === 'true';
+            if (isDebug && Math.floor(posMs / 1000) % 5 === 0) {
+                log.info(`[ExoDebug] Time update: ${posMs}ms / ${durMs}ms (buffered: ${bufMs}ms)`);
+            }
+
             this._currentTime = posMs / 1000;
             if (durMs > 0) {
                 this._duration = durMs / 1000;
@@ -207,6 +230,11 @@ export class ExoVideoPlayer {
         // 3. Audio & Video Track Discovery
         const onTracksChanged = (event) => {
             const data = event.detail || {};
+            if (Array.isArray(data.videoTracks)) {
+                for (const vt of data.videoTracks) {
+                    log.info(`[ExoDebug] Video track [${vt.index}]: mime=${vt.mimeType || 'unknown'}, ${vt.width}x${vt.height}, supported=${vt.isSupported}, selected=${vt.isSelected}`);
+                }
+            }
             if (Array.isArray(data.audioTracks)) {
                 this._audioTracks = data.audioTracks;
                 log.info(`Discovered ${data.audioTracks.length} native audio tracks via ExoPlayer`);
@@ -353,6 +381,9 @@ export class ExoVideoPlayer {
 
         // 4. Trigger playback
         await invokeNative('play');
+
+        // 5. Start active polling heartbeat as failsafe
+        this._startPollingLoop();
     }
 
     /**
@@ -385,6 +416,7 @@ export class ExoVideoPlayer {
     async stop() {
         log.info('ExoVideoPlayer.stop() called');
         this._clearStartupWatchdog();
+        this._stopPollingLoop();
         this._started = false;
         this._isPaused = true;
 
@@ -554,6 +586,7 @@ export class ExoVideoPlayer {
     async destroy() {
         log.info('ExoVideoPlayer.destroy() called');
         this._clearStartupWatchdog();
+        this._stopPollingLoop();
         this._removeNativeListeners();
 
         try {
@@ -600,6 +633,55 @@ export class ExoVideoPlayer {
         }
     }
 
+    /**
+     * Starts continuous 250ms polling loop as an active heartbeat.
+     * Ensures OSD and Jellyfin progress never stall even if WebView CustomEvents are delayed.
+     * @private
+     */
+    _startPollingLoop() {
+        this._stopPollingLoop();
+        this._pollInterval = setInterval(() => {
+            if (typeof window === 'undefined' || !window.LitefinExoPlayer) return;
+            try {
+                const bridge = window.LitefinExoPlayer;
+                const posMs = bridge.getCurrentPositionMs ? bridge.getCurrentPositionMs() : 0;
+                const durMs = bridge.getDurationMs ? bridge.getDurationMs() : 0;
+
+                if (posMs > 0) {
+                    this._currentTime = posMs / 1000;
+                }
+                if (durMs > 0) {
+                    this._duration = durMs / 1000;
+                }
+
+                // Forward timeupdate if actively playing
+                if (posMs > 0 && !this._isPaused) {
+                    this.onEvent({
+                        type: PlayerEvent.TIME_UPDATE,
+                        data: {
+                            time: this._currentTime,
+                            currentTime: this._currentTime,
+                            duration: this._duration,
+                            positionTicks: Math.round(posMs * 10000),
+                            bufferedTime: this._bufferedTime
+                        }
+                    });
+                }
+            } catch (_) { }
+        }, 250);
+    }
+
+    /**
+     * Halts polling heartbeat.
+     * @private
+     */
+    _stopPollingLoop() {
+        if (this._pollInterval) {
+            clearInterval(this._pollInterval);
+            this._pollInterval = null;
+        }
+    }
+
     // ========================================================================
     // State Query Methods & Properties
     // ========================================================================
@@ -610,6 +692,14 @@ export class ExoVideoPlayer {
      * @returns {number} Current position in seconds
      */
     getCurrentTime() {
+        if (typeof window !== 'undefined' && window.LitefinExoPlayer?.getCurrentPositionMs) {
+            try {
+                const posMs = window.LitefinExoPlayer.getCurrentPositionMs();
+                if (posMs > 0) {
+                    this._currentTime = posMs / 1000;
+                }
+            } catch (_) { }
+        }
         return this._currentTime || 0;
     }
 
@@ -618,6 +708,14 @@ export class ExoVideoPlayer {
      * @returns {number} Duration in seconds
      */
     getDuration() {
+        if (typeof window !== 'undefined' && window.LitefinExoPlayer?.getDurationMs) {
+            try {
+                const durMs = window.LitefinExoPlayer.getDurationMs();
+                if (durMs > 0) {
+                    this._duration = durMs / 1000;
+                }
+            } catch (_) { }
+        }
         return this._duration || 0;
     }
 

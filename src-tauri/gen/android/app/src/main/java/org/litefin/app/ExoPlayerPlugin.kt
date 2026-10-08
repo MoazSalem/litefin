@@ -77,19 +77,26 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
   // Runnable broadcasting current position, duration, and buffered ranges
   private val progressHeartbeatRunnable = object : Runnable {
     override fun run() {
+      val exo = player ?: return
       emitProgressUpdate()
-      // Continue scheduling as long as the player is active and playing
-      if (player?.isPlaying == true) {
+      // Continue scheduling as long as the player is active and not ended or idle
+      if (exo.playbackState != Player.STATE_ENDED && exo.playbackState != Player.STATE_IDLE) {
         mainHandler.postDelayed(this, 250L)
       }
     }
   }
 
   // ---------------------------------------------------------------------------
+  // Direct WebView Reference for Reliable Event Dispatching
+  // ---------------------------------------------------------------------------
+  private var pluginWebView: android.webkit.WebView? = null
+
+  // ---------------------------------------------------------------------------
   // Plugin Lifecycle Initialization
   // ---------------------------------------------------------------------------
   override fun load(webView: android.webkit.WebView) {
     super.load(webView)
+    this.pluginWebView = webView
 
     // Register synchronous / direct JavaScript bridge onto the WebView
     activity.runOnUiThread {
@@ -101,7 +108,12 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
    * Initializes or returns the existing Media3 ExoPlayer instance on the main thread.
    */
   private fun ensurePlayer(): ExoPlayer {
-    player?.let { return it }
+    player?.let { existing ->
+      MainActivity.instance?.getTextureView()?.let { textureView ->
+        existing.setVideoTextureView(textureView)
+      }
+      return existing
+    }
 
     val selector = DefaultTrackSelector(activity)
     this.trackSelector = selector
@@ -111,11 +123,12 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
       .build()
 
     // -------------------------------------------------------------------------
-    // Bind Hardware SurfaceView
+    // Bind Hardware TextureView
     // -------------------------------------------------------------------------
-    // Connect player output to the SurfaceView hosted behind the transparent WebView
-    MainActivity.instance?.getSurfaceView()?.let { surfaceView ->
-      newPlayer.setVideoSurfaceView(surfaceView)
+    // Connect player output to the TextureView hosted behind the transparent WebView.
+    // Unlike SurfaceView, TextureView composites seamlessly with the Android View tree.
+    MainActivity.instance?.getTextureView()?.let { textureView ->
+      newPlayer.setVideoTextureView(textureView)
     }
 
     // -------------------------------------------------------------------------
@@ -200,8 +213,39 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
           }
         }
 
+        // ---------------------------------------------------------------------
+        // Inspect Video Tracks for Hardware Support
+        // ---------------------------------------------------------------------
+        val videoTracksArray = JSArray()
+        var videoIndex = 0
+        for (group in tracks.groups) {
+          if (group.type == C.TRACK_TYPE_VIDEO) {
+            val trackGroup = group.mediaTrackGroup
+            for (i in 0 until trackGroup.length) {
+              val format = trackGroup.getFormat(i)
+              val isSupported = group.isTrackSupported(i)
+              val isSelected = group.isTrackSelected(i)
+              if (!isSupported) {
+                android.util.Log.w("ExoPlayerPlugin", "Video track (${format.sampleMimeType}) is NOT supported by device hardware decoders!")
+              }
+              val trackObj = JSObject().apply {
+                put("index", videoIndex)
+                put("mimeType", format.sampleMimeType ?: "")
+                put("codecs", format.codecs ?: "")
+                put("width", format.width)
+                put("height", format.height)
+                put("isSupported", isSupported)
+                put("isSelected", isSelected)
+              }
+              videoTracksArray.put(trackObj)
+              videoIndex++
+            }
+          }
+        }
+
         val payload = JSObject().apply {
           put("audioTracks", audioTracksArray)
+          put("videoTracks", videoTracksArray)
         }
         dispatchNativeEvent("exoplayer://tracks-changed", payload)
       }
@@ -459,11 +503,17 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     // 2. Dispatch directly into WebView DOM CustomEvent bus for low-latency delivery
     activity.runOnUiThread {
       try {
-        val webView = MainActivity.instance?.getWebView() ?: return@runOnUiThread
+        val webView = this.pluginWebView ?: MainActivity.instance?.getWebView()
+        if (webView == null) {
+          android.util.Log.e("LitefinExoPlayer", "Cannot dispatch $eventName: webView reference is null")
+          return@runOnUiThread
+        }
         val jsonString = payload.toString()
         val script = "window.dispatchEvent(new CustomEvent('$eventName', { detail: $jsonString }));"
         webView.evaluateJavascript(script, null)
-      } catch (_: Exception) { }
+      } catch (err: Exception) {
+        android.util.Log.e("LitefinExoPlayer", "Failed to dispatch $eventName via evaluateJavascript: ${err.message}")
+      }
     }
   }
 

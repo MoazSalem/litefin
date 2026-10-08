@@ -25,7 +25,7 @@
         "alwaysOnTop": false,
         "center": true,
         "zoomHotkeysEnabled": true,
-        "backgroundColor": "#000000"
+        "transparent": true
       }
     ],
     "security": {
