@@ -687,8 +687,8 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
         return false;
     }
 
-    // Tizen AVPlay and MoviPlayer both demux multi-audio tracks natively in hardware/WASM
-    if (backendType === 'avplay' || backendType === 'movi') {
+    // Tizen AVPlay, MoviPlayer, and ExoPlayer all demux multi-audio tracks natively in hardware/WASM
+    if (backendType === 'avplay' || backendType === 'tizen' || backendType === 'movi' || backendType === 'exoplayer') {
         return false;
     }
 
@@ -2817,7 +2817,7 @@ export class JellyfinPlayer extends EventEmitter {
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                               this._currentPlayMethod === 'DirectStream' ||
                               this._currentPlayMethod === 'Remux';
-        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && this._backendType !== 'movi' && !supportsNativeAudio);
+        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && this._backendType !== 'movi' && this._backendType !== 'exoplayer' && !supportsNativeAudio);
 
         log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart} isTargetCodecSupported=${isTargetCodecSupported}`);
 
@@ -2866,7 +2866,7 @@ export class JellyfinPlayer extends EventEmitter {
             }
 
             const needsDirectStreamForAudio = trackRequiresDirectStream ||
-                (this._backendType !== 'tizen' && this._backendType !== 'movi' && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
+                (this._backendType !== 'tizen' && this._backendType !== 'movi' && this._backendType !== 'exoplayer' && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
             // ────────────────────────────────────────────────────────────────
             // Calculate Restart Playback Mode
@@ -3839,9 +3839,9 @@ export class JellyfinPlayer extends EventEmitter {
         // Retrieve all audio streams attached to the current media source
         const tracks = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
 
-        // For MoviPlayer, demuxing happens via FFmpeg WASM inside the web component,
-        // which exposes all container audio tracks natively without browser element filtering.
-        if (this._backendType === 'movi') {
+        // For MoviPlayer (WebCodecs) and ExoPlayer (Android Media3), demuxing happens natively
+        // inside the backend engine, exposing all container audio tracks without browser element filtering.
+        if (this._backendType === 'movi' || this._backendType === 'exoplayer') {
             return tracks;
         }
 

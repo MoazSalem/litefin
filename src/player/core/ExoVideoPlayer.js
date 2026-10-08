@@ -27,7 +27,8 @@ import { storage } from '../../utils/StorageService.js';
 const log = logger.create('ExoVideoPlayer');
 
 // Maximum time in milliseconds to wait for the native player to report playback readiness
-const STARTUP_TIMEOUT_MS = 15000;
+// 30 seconds accommodates high-bitrate HEVC/4K network streams resuming deep into files
+const STARTUP_TIMEOUT_MS = 30000;
 
 // Minimum seek distance in milliseconds to trigger a native seek
 const SEEK_THRESHOLD_MS = 500;
@@ -62,7 +63,7 @@ async function invokeNative(command, args = {}) {
                 } else if (command === 'setVolume') {
                     res = bridge.setVolume(args.volume ?? 1.0);
                 } else if (command === 'selectAudioTrack') {
-                    res = bridge.selectAudioTrack(args.trackIndex || 0);
+                    res = bridge.selectAudioTrack(args.trackIndex ?? 0);
                 } else {
                     res = bridge[command]();
                 }
@@ -186,10 +187,14 @@ export class ExoVideoPlayer {
             }
 
             if (typeof data.isPlaying === 'boolean') {
-                if (data.isPlaying && this._isPaused) {
-                    this._isPaused = false;
-                    this.onEvent({ type: PlayerEvent.PLAYING });
-                } else if (!data.isPlaying && !this._isPaused && !this._isBuffering) {
+                if (data.isPlaying) {
+                    // Actively playing frames — disarm startup deadlock watchdog immediately
+                    this._clearStartupWatchdog();
+                    if (this._isPaused) {
+                        this._isPaused = false;
+                        this.onEvent({ type: PlayerEvent.PLAYING });
+                    }
+                } else if (!this._isPaused && !this._isBuffering) {
                     this._isPaused = true;
                     this.onEvent({ type: PlayerEvent.PAUSE });
                 }
@@ -213,6 +218,11 @@ export class ExoVideoPlayer {
                 this._duration = durMs / 1000;
             }
             this._bufferedTime = bufMs / 1000;
+
+            // Media data is arriving or advancing — disarm startup timer
+            if (posMs > 0 || bufMs > 0) {
+                this._clearStartupWatchdog();
+            }
 
             // Normalize and dispatch to Jellyfin player event pipeline
             this.onEvent({
@@ -238,6 +248,23 @@ export class ExoVideoPlayer {
             if (Array.isArray(data.audioTracks)) {
                 this._audioTracks = data.audioTracks;
                 log.info(`Discovered ${data.audioTracks.length} native audio tracks via ExoPlayer`);
+
+                // -------------------------------------------------------------
+                // Target Audio Track Verification & Enforcement
+                // -------------------------------------------------------------
+                // If a specific 0-based audio track index was requested prior to
+                // container demuxing, check if the currently selected native track
+                // aligns with it. If not, re-assert the selection immediately.
+                if (typeof this._currentAudioIndex === 'number' && this._currentAudioIndex >= 0) {
+                    const activeTrack = data.audioTracks.find((t) => t.isSelected);
+                    if (!activeTrack || activeTrack.index !== this._currentAudioIndex) {
+                        log.info(`[ExoPlayer] Re-applying target audio track index ${this._currentAudioIndex} after tracks discovery`);
+                        invokeNative('selectAudioTrack', { trackIndex: this._currentAudioIndex }).catch((err) => {
+                            log.warn('[ExoPlayer] Failed to re-apply target audio track:', err);
+                        });
+                    }
+                }
+
                 this.onEvent({
                     type: PlayerEvent.MEDIA_STREAMS_CHANGE,
                     data: { audioTracks: this._audioTracks }
@@ -267,12 +294,26 @@ export class ExoVideoPlayer {
             });
         };
 
+        // 6. First Decoded Frame Presentation Event
+        const onFirstFrame = () => {
+            log.info('ExoPlayer first frame presented on display');
+            this._clearStartupWatchdog();
+            this._isBuffering = false;
+            if (!this._started) {
+                this._started = true;
+                this.onEvent({ type: PlayerEvent.CAN_PLAY });
+                this.onEvent({ type: PlayerEvent.PLAY });
+                this.onEvent({ type: PlayerEvent.PLAYING });
+            }
+        };
+
         // Attach listeners to window
         window.addEventListener('exoplayer://playback-state', onPlaybackState);
         window.addEventListener('exoplayer://time-update', onTimeUpdate);
         window.addEventListener('exoplayer://tracks-changed', onTracksChanged);
         window.addEventListener('exoplayer://video-size', onVideoSize);
         window.addEventListener('exoplayer://error', onError);
+        window.addEventListener('exoplayer://first-frame', onFirstFrame);
 
         // Retain unbind handles
         this._boundEventHandlers.push(
@@ -280,7 +321,8 @@ export class ExoVideoPlayer {
             { name: 'exoplayer://time-update', handler: onTimeUpdate },
             { name: 'exoplayer://tracks-changed', handler: onTracksChanged },
             { name: 'exoplayer://video-size', handler: onVideoSize },
-            { name: 'exoplayer://error', handler: onError }
+            { name: 'exoplayer://error', handler: onError },
+            { name: 'exoplayer://first-frame', handler: onFirstFrame }
         );
     }
 
@@ -376,10 +418,24 @@ export class ExoVideoPlayer {
         await this.setVolume(this._volume * 100);
         this.setAspectRatio(this._aspectRatio || 'auto');
 
-        // 3. Switch audio stream if explicitly specified
-        if (typeof options.audioStreamIndex === 'number' && options.audioStreamIndex >= 0) {
+        // ---------------------------------------------------------------------
+        // 3. Switch Audio Stream If Explicitly Specified
+        // ---------------------------------------------------------------------
+        // JellyfinPlayer calculates audioTrackListIndex (0-based container track index).
+        // Fall back to mapping options.audioStreamIndex against MediaStreams if needed.
+        if (typeof options.audioTrackListIndex === 'number' && options.audioTrackListIndex >= 0) {
+            this._currentAudioIndex = options.audioTrackListIndex;
+        } else if (typeof options.audioStreamIndex === 'number' && options.mediaSource?.MediaStreams) {
+            const audioStreams = options.mediaSource.MediaStreams.filter((s) => s.Type === 'Audio');
+            const foundIndex = audioStreams.findIndex((s) => s.Index === options.audioStreamIndex);
+            this._currentAudioIndex = foundIndex >= 0 ? foundIndex : 0;
+        } else if (typeof options.audioStreamIndex === 'number' && options.audioStreamIndex >= 0) {
             this._currentAudioIndex = options.audioStreamIndex;
-            await invokeNative('selectAudioTrack', { trackIndex: options.audioStreamIndex });
+        }
+
+        if (typeof this._currentAudioIndex === 'number' && this._currentAudioIndex >= 0) {
+            log.info(`ExoVideoPlayer.play: Queuing initial audio track index ${this._currentAudioIndex}`);
+            await invokeNative('selectAudioTrack', { trackIndex: this._currentAudioIndex });
         }
 
         // 4. Trigger playback
@@ -580,6 +636,14 @@ export class ExoVideoPlayer {
      */
     supportsNativeAudioTracks() {
         return true;
+    }
+
+    /**
+     * Returns audio tracks discovered natively by ExoPlayer.
+     * @returns {Array} Array of native audio track objects
+     */
+    getAudioTracks() {
+        return this._audioTracks || [];
     }
 
     /**

@@ -350,10 +350,63 @@ class MainActivity : TauriActivity() {
   }
 
   /**
-   * Retrieve the active [TextureView] instance for ExoPlayer attachment.
+   * Cleans up and recreates the hardware TextureView, guaranteeing that
+   * the next playback session gets an active, valid SurfaceTexture.
+   * Media3 ExoPlayer destroys the underlying SurfaceTexture upon player release;
+   * replacing the TextureView in the aspectContainer forces Android to allocate
+   * a fresh hardware SurfaceTexture immediately.
+   */
+  fun resetTextureView() {
+    runOnUiThread {
+      val current = textureView
+      val container = aspectRatioLayout ?: return@runOnUiThread
+      if (current != null) {
+        container.removeView(current)
+      }
+      val freshTexture = TextureView(this).apply {
+        layoutParams = FrameLayout.LayoutParams(
+          FrameLayout.LayoutParams.MATCH_PARENT,
+          FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        visibility = View.VISIBLE
+        alpha = 0f
+        isFocusable = false
+      }
+      container.addView(freshTexture, 0)
+      this.textureView = freshTexture
+    }
+  }
+
+  /**
+   * Retrieves or recreates a fresh, available [TextureView] instance for ExoPlayer attachment.
+   * If the previous TextureView's SurfaceTexture was destroyed upon player release,
+   * detaching and re-attaching a fresh TextureView ensures Android allocates a new
+   * hardware SurfaceTexture immediately.
    */
   fun getTextureView(): TextureView? {
-    return textureView
+    val current = textureView
+    if (current != null && current.isAvailable && current.surfaceTexture != null) {
+      return current
+    }
+
+    // Recreate if TextureView has lost its SurfaceTexture
+    aspectRatioLayout?.let { container ->
+      current?.let { container.removeView(it) }
+      val freshTexture = TextureView(this).apply {
+        layoutParams = FrameLayout.LayoutParams(
+          FrameLayout.LayoutParams.MATCH_PARENT,
+          FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        visibility = View.VISIBLE
+        alpha = 0f
+        isFocusable = false
+      }
+      container.addView(freshTexture, 0)
+      this.textureView = freshTexture
+      return freshTexture
+    }
+
+    return current
   }
 
   /**

@@ -355,5 +355,69 @@ test('resolveBestAudioStream selects 5.1 track when default track is 7.1 and max
     assert.strictEqual(best.Index, 1, 'Should select English AC3 5.1 instead of EAC3 7.1');
 });
 
+// ============================================================================
+// ExoPlayer Multi-Audio & DirectPlay Track Tests
+// ============================================================================
+
+test('doesAudioTrackRequireDirectStream returns false for exoplayer backend across all codecs', () => {
+    // -------------------------------------------------------------------------
+    // ExoPlayer runs natively via Android Media3 and demuxes multi-channel /
+    // multi-track MKV/MP4 containers in hardware. It never requires server remuxing
+    // to toggle audio tracks.
+    // -------------------------------------------------------------------------
+    const { doesAudioTrackRequireDirectStream } = setup();
+
+    const mediaSource = {
+        Id: 'mkv-multi-audio',
+        MediaStreams: [
+            { Index: 0, Type: 'Video', Codec: 'h264' },
+            { Index: 1, Type: 'Audio', Codec: 'dts', Language: 'eng', IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'truehd', Language: 'jpn', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'flac', Language: 'fra', IsDefault: false }
+        ]
+    };
+
+    // All tracks should return false (no server direct-stream remux required)
+    assert.strictEqual(
+        doesAudioTrackRequireDirectStream(mediaSource, 1, 'exoplayer'),
+        false,
+        'ExoPlayer backend must not require direct stream for default DTS track'
+    );
+    assert.strictEqual(
+        doesAudioTrackRequireDirectStream(mediaSource, 2, 'exoplayer'),
+        false,
+        'ExoPlayer backend must not require direct stream for secondary TrueHD track'
+    );
+    assert.strictEqual(
+        doesAudioTrackRequireDirectStream(mediaSource, 3, 'exoplayer'),
+        false,
+        'ExoPlayer backend must not require direct stream for FLAC track'
+    );
+});
+
+test('isAudioTrackNativelyPlayable treats advanced audio tracks as playable on exoplayer', () => {
+    // -------------------------------------------------------------------------
+    // Advanced backends like ExoPlayer have full hardware and software decoding
+    // for rich codecs without browser-level Chromium audio pipeline constraints.
+    // -------------------------------------------------------------------------
+    const { isAudioTrackNativelyPlayable } = setup();
+
+    assert.strictEqual(
+        isAudioTrackNativelyPlayable({ Codec: 'truehd' }, null, 'exoplayer'),
+        true,
+        'ExoPlayer backend should treat TrueHD as playable'
+    );
+    assert.strictEqual(
+        isAudioTrackNativelyPlayable({ Codec: 'dts' }, null, 'exoplayer'),
+        true,
+        'ExoPlayer backend should treat DTS as playable'
+    );
+    assert.strictEqual(
+        isAudioTrackNativelyPlayable({ Codec: 'flac' }, null, 'exoplayer'),
+        true,
+        'ExoPlayer backend should treat FLAC as playable'
+    );
+});
+
 
 

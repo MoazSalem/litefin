@@ -60,6 +60,9 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
   // Custom track selector enabling fine-grained audio stream switching
   private var trackSelector: DefaultTrackSelector? = null
 
+  // Queued audio track index to be applied once media tracks are demuxed
+  private var pendingAudioTrackIndex: Int? = null
+
   // Reusable OkHttpClient configured with optimized connection timeouts
   private val okHttpClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
@@ -164,6 +167,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
       override fun onRenderedFirstFrame() {
         // Guarantee video surface is revealed the instant the first decoded frame is ready
         MainActivity.instance?.showVideoSurface()
+        dispatchNativeEvent("exoplayer://first-frame", JSObject())
       }
 
       override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -199,6 +203,17 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
       }
 
       override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+        // ---------------------------------------------------------------------
+        // Deferred Startup Audio Track Resolution
+        // ---------------------------------------------------------------------
+        // If an initial audio track selection was requested before demuxing finished,
+        // apply the override now that media track groups are fully populated.
+        val pendingIndex = pendingAudioTrackIndex
+        if (pendingIndex != null) {
+          pendingAudioTrackIndex = null
+          applyAudioTrackSelection(pendingIndex)
+        }
+
         val audioTracksArray = JSArray()
 
         var audioIndex = 0
@@ -312,6 +327,8 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         // Immediately hide video plane so previous movie's last frame is never shown
         MainActivity.instance?.hideVideoSurface()
 
+        // Clear any previous track selection request
+        pendingAudioTrackIndex = null
         exo.setMediaSource(mediaSource)
 
         val startPosition = args.startPositionMs ?: 0L
@@ -431,6 +448,88 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   /**
+   * Applies the requested 0-based audio track selection to the running ExoPlayer.
+   * Updates [Player.setTrackSelectionParameters] so the playback looper immediately
+   * reconfigures the audio pipeline without requiring a playback restart.
+   *
+   * @param targetIndex The 0-based audio track index within available audio groups.
+   * @return True if the track was immediately matched and applied, false if deferred.
+   */
+  private fun applyAudioTrackSelection(targetIndex: Int): Boolean {
+    val exo = player ?: return false
+    val selector = trackSelector ?: return false
+
+    // Handle disabling audio track if negative index is requested
+    if (targetIndex < 0) {
+      val disabledPlayerParams = exo.trackSelectionParameters.buildUpon()
+        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+        .build()
+      exo.trackSelectionParameters = disabledPlayerParams
+
+      // Keep DefaultTrackSelector in sync with player parameters
+      val disabledSelectorParams = selector.buildUponParameters()
+        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+        .build()
+      selector.parameters = disabledSelectorParams
+
+      pendingAudioTrackIndex = null
+      return true
+    }
+
+    // Traverse audio track groups to locate matching index
+    var foundTrack = false
+    var currentIdx = 0
+    val currentTracks = exo.currentTracks
+
+    for (group in currentTracks.groups) {
+      if (group.type == C.TRACK_TYPE_AUDIO) {
+        val trackGroup = group.mediaTrackGroup
+        for (i in 0 until trackGroup.length) {
+          if (currentIdx == targetIndex) {
+            // Build track selection override for this specific track group and index
+            val override = TrackSelectionOverride(trackGroup, i)
+
+            // Update ExoPlayer's TrackSelectionParameters (canonical Media3 source of truth)
+            // This immediately signals the internal playback looper to switch decoders and audio sinks.
+            val newPlayerParams = exo.trackSelectionParameters.buildUpon()
+              .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+              .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+              .addOverride(override)
+              .build()
+            exo.trackSelectionParameters = newPlayerParams
+
+            // Keep DefaultTrackSelector parameters synchronized
+            val newSelectorParams = selector.buildUponParameters()
+              .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+              .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+              .addOverride(override)
+              .build()
+            selector.parameters = newSelectorParams
+
+            android.util.Log.i("ExoPlayerPlugin", "Successfully selected audio track index $targetIndex (mime: ${trackGroup.getFormat(i).sampleMimeType})")
+            foundTrack = true
+            break
+          }
+          currentIdx++
+        }
+        if (foundTrack) break
+      }
+    }
+
+    if (!foundTrack) {
+      // If tracks aren't prepared yet, queue it for when onTracksChanged fires
+      android.util.Log.i("ExoPlayerPlugin", "Audio track index $targetIndex not found in current tracks (count: $currentIdx). Queueing as pending.")
+      pendingAudioTrackIndex = targetIndex
+      return false
+    } else {
+      pendingAudioTrackIndex = null
+      return true
+    }
+  }
+
+  /**
    * Switches the active audio stream to the requested index.
    */
   @Command
@@ -440,37 +539,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     activity.runOnUiThread {
       try {
         val targetIndex = args.trackIndex ?: 0
-        val exo = player ?: run {
-          invoke.resolve()
-          return@runOnUiThread
-        }
-
-        val selector = trackSelector ?: run {
-          invoke.resolve()
-          return@runOnUiThread
-        }
-
-        // Iterate through audio track groups to find matching index
-        var currentIdx = 0
-        for (group in exo.currentTracks.groups) {
-          if (group.type == C.TRACK_TYPE_AUDIO) {
-            val trackGroup = group.mediaTrackGroup
-            for (i in 0 until trackGroup.length) {
-              if (currentIdx == targetIndex) {
-                // Apply track selection override
-                val override = TrackSelectionOverride(trackGroup, i)
-                val params = selector.buildUponParameters()
-                  .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                  .addOverride(override)
-                  .build()
-                selector.parameters = params
-                invoke.resolve()
-                return@runOnUiThread
-              }
-              currentIdx++
-            }
-          }
-        }
+        applyAudioTrackSelection(targetIndex)
         invoke.resolve()
       } catch (e: Exception) {
         invoke.reject("Failed to select audio track: ${e.message}")
@@ -506,7 +575,9 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         player?.release()
         player = null
         trackSelector = null
+        pendingAudioTrackIndex = null
         MainActivity.instance?.hideVideoSurface()
+        MainActivity.instance?.resetTextureView()
         invoke.resolve()
       } catch (e: Exception) {
         invoke.reject("Failed to destroy player: ${e.message}")
@@ -605,6 +676,8 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
           // Immediately conceal video surface so previous media frame is never flashed
           MainActivity.instance?.hideVideoSurface()
 
+          // Reset pending track index on fresh preparation
+          pendingAudioTrackIndex = null
           exo.setMediaSource(mediaSource)
           if (startPositionMs > 0) {
             exo.seekTo(startPositionMs)
@@ -665,26 +738,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     @JavascriptInterface
     fun selectAudioTrack(trackIndex: Int) {
       activity.runOnUiThread {
-        val exo = player ?: return@runOnUiThread
-        val selector = trackSelector ?: return@runOnUiThread
-        var currentIdx = 0
-        for (group in exo.currentTracks.groups) {
-          if (group.type == C.TRACK_TYPE_AUDIO) {
-            val trackGroup = group.mediaTrackGroup
-            for (i in 0 until trackGroup.length) {
-              if (currentIdx == trackIndex) {
-                val override = TrackSelectionOverride(trackGroup, i)
-                val params = selector.buildUponParameters()
-                  .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                  .addOverride(override)
-                  .build()
-                selector.parameters = params
-                return@runOnUiThread
-              }
-              currentIdx++
-            }
-          }
-        }
+        applyAudioTrackSelection(trackIndex)
       }
     }
 
@@ -704,7 +758,9 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         player?.release()
         player = null
         trackSelector = null
+        pendingAudioTrackIndex = null
         MainActivity.instance?.hideVideoSurface()
+        MainActivity.instance?.resetTextureView()
       }
     }
 
