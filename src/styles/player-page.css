@@ -50,6 +50,17 @@
     background: #000;
 }
 
+/* ExoPlayer Surface Proxy:
+   Kept 100% transparent so the zero-copy hardware SurfaceView beneath
+   the WebView remains visible with zero compositor overhead. */
+.player-container .exoplayer-surface-proxy {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: transparent !important;
+    pointer-events: none;
+}
+
 /* ==========================================================================
    Audio / Music Visualizer Overlay
    ========================================================================== */

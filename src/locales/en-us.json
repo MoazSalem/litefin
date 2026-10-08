@@ -479,6 +479,7 @@
     "BackdropIncludeMusic": "Include music library",
     "BackdropIncludeMusicDescription": "Show backdrops from music artists in the screensaver",
     "BackendMovi": "Movi Player (Desktop MKV/WebCodecs)",
+    "BackendExoPlayer": "Media3 ExoPlayer (Android Native)",
     "BackendTizen": "Tizen Native (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
     "BackendWebOS": "LG Native (webOS Player)",

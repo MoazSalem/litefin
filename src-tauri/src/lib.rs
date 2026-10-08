@@ -5,6 +5,7 @@
 // and Mobile targets (via Android JNI bindings).
 // =============================================================================
 
+#[allow(unused_imports)]
 use tauri::Manager;
 
 /// Mobile entrypoint macro required by Tauri v2 for Android JNI initialization.
@@ -13,13 +14,35 @@ pub fn run() {
     // -------------------------------------------------------------------------
     // Initialize the Tauri application builder pipeline
     // -------------------------------------------------------------------------
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
+
+    // -------------------------------------------------------------------------
+    // Android ExoPlayer Native Plugin Registration
+    // -------------------------------------------------------------------------
+    // Binds the native ExoPlayerPlugin.kt Android class into the Tauri runtime,
+    // exposing low-latency hardware media decode commands directly to JavaScript.
+    // Explicitly types Builder with default () config to satisfy DeserializeOwned.
+    // -------------------------------------------------------------------------
+    #[cfg(target_os = "android")]
+    {
+        builder = builder.plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("exoplayer")
+                .setup(|_app, api| {
+                    let _ = api.register_android_plugin("org.litefin.app", "ExoPlayerPlugin");
+                    Ok(())
+                })
+                .build(),
+        );
+    }
+
+    builder
         // Setup hook for platform-specific configurations
-        .setup(|app| {
+        .setup(|_app| {
             // Configure default desktop zoom level (80% / 0.8 scale factor matching pake.json)
             #[cfg(desktop)]
             {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = _app.get_webview_window("main") {
                     let _ = window.set_zoom(0.8);
                 }
             }

@@ -16,6 +16,7 @@ import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
 import { TizenAVPlayer } from './TizenAVPlayer.js';
 import { WebOSPlayer } from './WebOSPlayer.js';
 import { MoviVideoPlayer } from './MoviVideoPlayer.js';
+import { ExoVideoPlayer } from './ExoVideoPlayer.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { MediaHelper } from './MediaHelper.js';
 import { buildJellyfinProfile, getDeviceCapabilities } from '../../api/DeviceProfile.js';
@@ -84,27 +85,35 @@ export function isAudioTrackNativelyPlayable(track, backendType = null) {
         return false;
     }
 
-    // Determine if current backend is movi (passed explicitly or inferred from settings/platform)
+    // Determine if current backend is exoplayer (Android native) or movi (desktop WebAssembly)
+    const isExo =
+        backendType === 'exoplayer' ||
+        PlayerSettings.get('playerBackend') === 'exoplayer' ||
+        (typeof platformInfo !== 'undefined' && platformInfo.isAndroid);
+
     const isMovi =
         backendType === 'movi' ||
         PlayerSettings.get('playerBackend') === 'movi' ||
-        (typeof platformInfo !== 'undefined' && (platformInfo.isDesktop || platformInfo.isAndroid) && platformInfo.hasWebCodecsSupport);
+        (typeof platformInfo !== 'undefined' && platformInfo.isDesktop && platformInfo.hasWebCodecsSupport);
+
+    // Advanced backends handle software/hardware decode for rich multi-channel codecs natively
+    const isAdvancedBackend = isMovi || isExo;
 
     // FLAC / ALAC in video containers: unsupported on standard HTML5 players when enableFlacInVideo is disabled,
-    // but fully supported on MoviPlayer via WASM demuxer and decoder
-    if ((codec === 'flac' || codec === 'alac') && !isMovi && !PlayerSettings.get('enableFlacInVideo')) {
+    // but fully supported on ExoPlayer and MoviPlayer via native decoders
+    if ((codec === 'flac' || codec === 'alac') && !isAdvancedBackend && !PlayerSettings.get('enableFlacInVideo')) {
         return false;
     }
 
     // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled,
-    // unless MoviPlayer is active, which decodes DTS multi-channel in software WASM
-    if ((codec.includes('dts') || codec === 'dca') && !isMovi && !isDtsSupported()) {
+    // unless ExoPlayer or MoviPlayer is active, which decodes or passes through DTS multi-channel
+    if ((codec.includes('dts') || codec === 'dca') && !isAdvancedBackend && !isDtsSupported()) {
         return false;
     }
 
     // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled,
-    // unless MoviPlayer is active, which decodes TrueHD / MLP lossless streams in software WASM
-    if (codec === 'truehd' && !isMovi && !isTrueHdSupported()) {
+    // unless ExoPlayer or MoviPlayer is active, which decodes TrueHD / MLP lossless streams
+    if (codec === 'truehd' && !isAdvancedBackend && !isTrueHdSupported()) {
         return false;
     }
 
@@ -740,6 +749,16 @@ export class JellyfinPlayer extends EventEmitter {
         };
 
         // ----------------------------------------------------------------
+        // Explicit override: 'exoplayer' → use ExoVideoPlayer
+        // ----------------------------------------------------------------
+        if (backendSetting === 'exoplayer') {
+            log.info('Using ExoPlayer backend (forced by setting)');
+            this._backendType = 'exoplayer';
+            this._backend    = new ExoVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
         // Explicit override: 'movi' → use MoviVideoPlayer if WebCodecs available
         // ----------------------------------------------------------------
         if (backendSetting === 'movi') {
@@ -790,6 +809,19 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         // ----------------------------------------------------------------
+        // Auto-detect: Android platform → ExoVideoPlayer.
+        // Provides native hardware-accelerated MediaCodec decoding via
+        // Android SurfaceView and Media3 ExoPlayer, bypassing Chromium
+        // video stack bottlenecks and delivering steady 60 FPS playback.
+        // ----------------------------------------------------------------
+        if (platformInfo.isAndroid) {
+            log.info('Android platform detected — using ExoPlayer backend');
+            this._backendType = 'exoplayer';
+            this._backend    = new ExoVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
         // Auto-detect: WebOS platform → use the native WebOS backend.
         // This gives us hardware-accelerated HLS and track switching
         // without the complexity of the Luna media service API.
@@ -817,8 +849,8 @@ export class JellyfinPlayer extends EventEmitter {
         // and multi-audio decoding (AC-3, E-AC-3, TrueHD, DTS) natively.
         // If on web and WebCodecs is missing, falls through to HTML5.
         // ----------------------------------------------------------------
-        if ((platformInfo.isDesktop || platformInfo.isAndroid) && platformInfo.hasWebCodecsSupport) {
-            log.info('Platform with WebCodecs detected (Desktop/Android) — defaulting to MoviPlayer backend');
+        if (platformInfo.isDesktop && platformInfo.hasWebCodecsSupport) {
+            log.info('Platform with WebCodecs detected (Desktop) — defaulting to MoviPlayer backend');
             this._backendType = 'movi';
             this._backend    = new MoviVideoPlayer(sharedOptions);
             return;
@@ -2431,7 +2463,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {boolean}
      */
     isMuted() {
-        return this._backend?.isMuted() ?? false;
+        return (typeof this._backend?.isMuted === 'function') ? this._backend.isMuted() : false;
     }
 
     // ========================================================================

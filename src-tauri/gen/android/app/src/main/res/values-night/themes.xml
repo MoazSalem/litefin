@@ -1,0 +1,18 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Base application theme for Litefin (Night mode).
+      Explicitly locks window background and splash backgrounds to pure black (#000000)
+      to eliminate any white flash during process creation and window initialization.
+    -->
+    <style name="Theme.litefin" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Root window canvas background prior to view inflation -->
+        <item name="android:windowBackground">@color/black</item>
+        <!-- Standard theme background color -->
+        <item name="android:colorBackground">@color/black</item>
+        <!-- Android 12+ (API 31+) splash screen canvas background -->
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/black</item>
+        <!-- System bars background colors to maintain dark immersion -->
+        <item name="android:statusBarColor">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
+    </style>
+</resources>

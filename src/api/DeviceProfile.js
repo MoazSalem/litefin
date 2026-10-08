@@ -13,9 +13,11 @@
 import { platformInfo } from '../utils/PlatformInfo.js';
 import * as TizenProfile from './profiles/TizenProfile.js';
 import * as WebOSProfile from './profiles/WebOSProfile.js';
+import * as AndroidProfile from './profiles/AndroidProfile.js';
 import * as WebProfile from './profiles/WebProfile.js';
 
 export function getActiveProfileModule() {
+    if (platformInfo.isAndroid) return AndroidProfile;
     if (platformInfo.isWebOS) return WebOSProfile;
     if (platformInfo.isTizen) return TizenProfile;
     return WebProfile; // Default for normal web browsers

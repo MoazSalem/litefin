@@ -126,9 +126,11 @@ export class PrewarmManager {
             // Determine video player backend configuration based on platform
             const playerBackendSetting = PlayerSettings.get('playerBackend') || 'auto';
             let backendType = 'html5';
-            if (
+            if (playerBackendSetting === 'exoplayer' || (playerBackendSetting === 'auto' && platformInfo.isAndroid)) {
+                backendType = 'exoplayer';
+            } else if (
                 (playerBackendSetting === 'movi' && platformInfo.hasWebCodecsSupport) ||
-                (playerBackendSetting === 'auto' && (platformInfo.isDesktop || platformInfo.isAndroid) && platformInfo.hasWebCodecsSupport)
+                (playerBackendSetting === 'auto' && platformInfo.isDesktop && platformInfo.hasWebCodecsSupport)
             ) {
                 backendType = 'movi';
             } else if (playerBackendSetting === 'avplay' || (playerBackendSetting === 'auto' && platformInfo.isTizen)) {

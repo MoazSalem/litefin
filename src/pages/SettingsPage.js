@@ -3338,7 +3338,9 @@ class SettingsPage extends Page {
                 options.push({ value: 'html5', label: i18n.t('BackendWeb') });
 
                 // Add platform-specific native hardware player backends
-                if (platformInfo.isTizen) {
+                if (platformInfo.isAndroid) {
+                    options.push({ value: 'exoplayer', label: i18n.t('BackendExoPlayer') || 'Media3 ExoPlayer (Android Native)' });
+                } else if (platformInfo.isTizen) {
                     options.push({ value: 'avplay', label: i18n.t('BackendTizen') });
                 } else if (platformInfo.isWebOS) {
                     options.push({ value: 'webos', label: i18n.t('BackendWebOS') });

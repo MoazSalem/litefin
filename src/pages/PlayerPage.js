@@ -982,7 +982,7 @@ class PlayerPage extends Page {
 
         if (playerBackend === 'avplay') {
             useTizenPlayer = true;
-        } else if (playerBackend === 'html5' || playerBackend === 'movi' || playerBackend === 'webos') {
+        } else if (playerBackend === 'html5' || playerBackend === 'movi' || playerBackend === 'webos' || playerBackend === 'exoplayer') {
             useTizenPlayer = false;
         }
 
