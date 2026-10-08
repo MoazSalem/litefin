@@ -901,6 +901,18 @@ html[data-layout-media-rows="modern-posters"] .library-grid.view-list .media-car
     display: block !important;
 }
 
+/* List View: Proportion center video play badge to fit compact 75x110 thumbnail */
+.library-grid.view-list .media-card .video-badge {
+    width: 36px !important;
+    height: 36px !important;
+}
+
+.library-grid.view-list .media-card .video-badge svg {
+    width: 18px !important;
+    height: 18px !important;
+    margin-left: 3px !important;
+}
+
 /* List: Ensure fallbacks don't overflow the tiny 75x110 block */
 .library-grid.view-list .card-image .media-fallback-initials {
     font-size: 24px !important;
