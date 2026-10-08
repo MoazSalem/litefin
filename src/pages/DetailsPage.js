@@ -64,6 +64,7 @@ class DetailsPage extends Page {
         this._people = null;
 
         this._similar = null;
+        this._seerrRecommendations = null;
 
         // Track/Version selection state
         this._selectedMediaSourceId = null;
@@ -378,6 +379,12 @@ class DetailsPage extends Page {
                     <section class="details-similar media-row hidden" id="similar-section">
                         <h2 class="row-title" data-i18n="HeaderMoreLikeThis">More Like This</h2>
                         <div class="similar-row" id="similar-row"></div>
+                    </section>
+
+                    <!-- Seerr Recommendations -->
+                    <section class="details-seerr-recommendations media-row hidden" id="seerr-recommendations-section">
+                        <h2 class="row-title" data-i18n="SeerrRecommendations">${i18n.t('SeerrRecommendations')}</h2>
+                        <div class="seerr-recommendations-row" id="seerr-recommendations-row"></div>
                     </section>
                 </div>
                 
@@ -962,13 +969,15 @@ class DetailsPage extends Page {
             // 5a. Primary rows first (seasons, episodes, cast, special features)
             await this._loadSecondaryContent();
 
-            // 4b. Bottom-of-page rows after (similar items, collections)
+            // 4b. Bottom-of-page rows after (similar items, collections, seerr recommendations)
             if (this._item.Type !== 'Season') {
                 await this._loadSimilar();
             }
             if (this._item.Type === 'Movie' || this._item.Type === 'Series') {
                 await this._loadItemCollections();
             }
+            // Fetch and display Seerr recommendations row for movies, series, seasons, and episodes
+            await this._loadSeerrRecommendations();
 
             // Trigger theme song background audio if user has activated it
             if (storage.getItem('pref:playThemeSongs') === 'true') {
@@ -1704,7 +1713,9 @@ class DetailsPage extends Page {
             'details-special-features',
             'artists-section',
             'guest-stars-section',
-            'details-similar'
+            'details-item-collections',
+            'details-similar',
+            'details-seerr-recommendations'
         ];
 
         // For each section that exists, update its links
@@ -4112,7 +4123,12 @@ class DetailsPage extends Page {
                 elementId: '#item-collections-row',
                 isVisible: () => isNotHidden('#item-collections-section')
             },
-            { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') }
+            { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
+            {
+                name: 'details-seerr-recommendations',
+                elementId: '#seerr-recommendations-row',
+                isVisible: () => isNotHidden('#seerr-recommendations-section')
+            }
         ];
 
         let foundCurrent = false;
@@ -4136,6 +4152,11 @@ class DetailsPage extends Page {
         };
 
         const sections = [
+            {
+                name: 'details-seerr-recommendations',
+                elementId: '#seerr-recommendations-row',
+                isVisible: () => isNotHidden('#seerr-recommendations-section')
+            },
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
             {
                 name: 'details-item-collections',
@@ -4424,6 +4445,238 @@ class DetailsPage extends Page {
             },
             focusSectionName: 'details-similar',
             cardType: useSquare ? 'square' : 'poster'
+        });
+    }
+
+    /**
+     * Resolves and caches the parent Series item for Season or Episode items.
+     * Ensures we have access to the Series TMDb ID for Seerr recommendations.
+     * Checks in-memory state cache first, then falls back to fetching from Jellyfin API.
+     *
+     * @returns {Promise<Object|null>} Resolved series item, or null if not applicable.
+     */
+    async _getParentSeriesItem() {
+        if (!this._item) return null;
+
+        // If active item is already a Series, return it immediately
+        if (this._item.Type === 'Series') {
+            return this._item;
+        }
+
+        // Only Season and Episode items belong to a parent Series
+        if (this._item.Type !== 'Season' && this._item.Type !== 'Episode') {
+            return null;
+        }
+
+        // Determine the series ID from the item metadata
+        let seriesId = this._item.SeriesId;
+
+        // For Season, ParentId in Jellyfin is the series ID
+        if (!seriesId && this._item.Type === 'Season' && this._item.ParentId) {
+            seriesId = this._item.ParentId;
+        }
+
+        // For Episode, if SeriesId is missing, resolve via season parent
+        if (!seriesId && this._item.Type === 'Episode') {
+            const seasonId = this._item.SeasonId || this._item.ParentId;
+            if (seasonId) {
+                // Check if season is already in memory cache
+                const cachedSeason = state.get(`details:season:${seasonId}`);
+                if (cachedSeason?.SeriesId) {
+                    seriesId = cachedSeason.SeriesId;
+                } else {
+                    try {
+                        const seasonItem = await api.getItem(seasonId);
+                        if (seasonItem) {
+                            state.set(`details:season:${seasonId}`, seasonItem);
+                            seriesId = seasonItem.SeriesId || seasonItem.ParentId;
+                        }
+                    } catch (err) {
+                        log.warn('Failed to resolve season parent for episode:', err);
+                    }
+                }
+            }
+        }
+
+        if (!seriesId) return null;
+
+        // Check if parent series is already cached in memory
+        let series = this._parentSeries || state.get(`details:series:${seriesId}`);
+
+        // If not cached or missing provider IDs, fetch the series from server
+        if (!series || (!series.ProviderIds && !series.SeriesTmdbId)) {
+            try {
+                series = await api.getItem(seriesId, {
+                    Fields: 'ProviderIds,SeriesTmdbId'
+                });
+                if (series) {
+                    state.set(`details:series:${seriesId}`, series);
+                    this._parentSeries = series;
+                }
+            } catch (err) {
+                log.warn(`Failed to fetch parent series ${seriesId}:`, err);
+            }
+        } else if (!this._parentSeries) {
+            this._parentSeries = series;
+        }
+
+        return series;
+    }
+
+    /**
+     * Resolves the media type and TMDb ID required for querying Seerr recommendations.
+     * Handles movies directly and resolves TV series parent metadata for seasons and episodes.
+     *
+     * @returns {Promise<{ mediaType: string, tmdbId: string|number }|null>}
+     */
+    async _resolveSeerrTarget() {
+        if (!this._item) return null;
+
+        const type = this._item.Type;
+
+        // 1. Movie handling
+        if (type === 'Movie') {
+            const tmdbId =
+                this._item.ProviderIds?.Tmdb ||
+                this._item.ProviderIds?.tmdb ||
+                this._item.ProviderIds?.TMDB;
+            if (!tmdbId) return null;
+            return { mediaType: 'movie', tmdbId };
+        }
+
+        // 2. TV Series, Season, and Episode handling
+        if (type === 'Series' || type === 'Season' || type === 'Episode') {
+            const series = await this._getParentSeriesItem();
+            const tmdbId =
+                series?.ProviderIds?.Tmdb ||
+                series?.ProviderIds?.tmdb ||
+                series?.ProviderIds?.TMDB ||
+                series?.SeriesTmdbId ||
+                this._item.SeriesTmdbId ||
+                this._item.SeriesProviderIds?.Tmdb ||
+                this._item.SeriesProviderIds?.tmdb;
+
+            if (!tmdbId) return null;
+            return { mediaType: 'tv', tmdbId };
+        }
+
+        return null;
+    }
+
+    /**
+     * Loads recommendations from Seerr companion service for movies, series, seasons, and episodes.
+     * Evaluates user preferences and service availability before dispatching network requests.
+     */
+    async _loadSeerrRecommendations() {
+        // -------------------------------------------------------------------------
+        // 1. User Preference & Service Availability Check
+        // -------------------------------------------------------------------------
+        const isEnabled = storage.getItem('pref:SeerrRecommendations') !== 'false';
+        const section = this.$('#seerr-recommendations-section');
+
+        if (!isEnabled) {
+            if (section) section.classList.add('hidden');
+            return;
+        }
+
+        // Verify that Seerr companion service is configured and reachable
+        let isAvailable = false;
+        try {
+            isAvailable = await seerr.isAvailable();
+        } catch (e) {
+            log.warn('Failed to verify Seerr availability:', e);
+        }
+
+        if (!isAvailable) {
+            if (section) section.classList.add('hidden');
+            return;
+        }
+
+        // -------------------------------------------------------------------------
+        // 2. TMDb Identification & Media Type Resolution
+        // -------------------------------------------------------------------------
+        const target = await this._resolveSeerrTarget();
+        if (!target || !target.tmdbId) {
+            if (section) section.classList.add('hidden');
+            return;
+        }
+
+        // -------------------------------------------------------------------------
+        // 3. Data Retrieval with In-Memory Caching
+        // -------------------------------------------------------------------------
+        try {
+            const cacheKey = `details:seerr-recommendations:${target.mediaType}:${target.tmdbId}`;
+            const cached = state.get(cacheKey);
+
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                this._seerrRecommendations = cached;
+            } else {
+                const recs = await seerr.recommendations(target.mediaType, target.tmdbId);
+                this._seerrRecommendations = Array.isArray(recs) ? recs : [];
+                if (this._seerrRecommendations.length > 0) {
+                    state.set(cacheKey, this._seerrRecommendations);
+                }
+            }
+
+            // -------------------------------------------------------------------------
+            // 4. Render Virtual Card Row
+            // -------------------------------------------------------------------------
+            if (this._seerrRecommendations && this._seerrRecommendations.length > 0) {
+                this._renderSeerrRecommendations(target.mediaType);
+            } else {
+                if (section) section.classList.add('hidden');
+            }
+        } catch (error) {
+            log.warn('Failed to load Seerr recommendations:', error);
+            if (section) section.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Renders the Seerr recommendations virtual row using poster cards and status badges.
+     * Handles card click navigation to Seerr details with focus restoration state.
+     *
+     * @param {string} fallbackMediaType - Default media type ('movie'|'tv')
+     */
+    _renderSeerrRecommendations(fallbackMediaType = 'movie') {
+        if (!this._seerrRecommendations || this._seerrRecommendations.length === 0) return;
+
+        this._renderVirtualRow({
+            sectionId: 'seerr-recommendations-section',
+            listId: 'seerr-recommendations-row',
+            items: this._seerrRecommendations,
+            isLandscape: false,
+            renderCard: (item) => {
+                // CardRenderer natively formats Seerr items with status badges and poster artwork
+                return CardRenderer.createCardHtml(item, { type: 'poster' });
+            },
+            focusSectionName: 'details-seerr-recommendations',
+            cardType: 'poster',
+            onClick: (card) => {
+                // Resolve clicked item metadata
+                const cardId = card.dataset.itemId || card.dataset.id;
+                const target =
+                    this._seerrRecommendations?.find(
+                        (i) => String(i.Id) === String(cardId) || String(i._tmdbId) === String(cardId)
+                    ) || null;
+
+                const tmdbId = card.dataset.tmdbId || target?._tmdbId;
+                const mediaType = card.dataset.mediaType || target?._mediaType || fallbackMediaType;
+
+                if (tmdbId) {
+                    // Record last focused item for back-navigation restoration
+                    const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+                        state.set(stateKey, {
+                            itemId: cardId || target?.Id || tmdbId,
+                            sectionId: 'details-seerr-recommendations'
+                        });
+                    }
+
+                    log.info(`Navigating to Seerr details page: /seerr/${mediaType}/${tmdbId}`);
+                    router.navigate(`/seerr/${mediaType}/${tmdbId}`);
+                }
+            }
         });
     }
 
@@ -5218,6 +5471,11 @@ class DetailsPage extends Page {
         }
 
         // ── Seerr Details Shortcut (Only if Seerr is configured and available) ──
+        if (!this._parentSeries && (this._item?.Type === 'Season' || this._item?.Type === 'Episode')) {
+            // Guarantee parent series metadata is loaded to retrieve Series TMDb ID
+            await this._getParentSeriesItem();
+        }
+
         const tmdbId =
             this._item?.ProviderIds?.Tmdb ||
             this._item?.ProviderIds?.tmdb ||

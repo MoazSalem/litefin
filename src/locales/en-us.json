@@ -1495,6 +1495,8 @@
     "ShowTechnicalDetailsDescription": "Display technical specifications including resolution, video codec, HDR, audio format, and subtitle count on the details page.",
     "ShowWatchProviders": "Show streaming services",
     "ShowWatchProvidersDescription": "Show where to watch movies and series on Seerr and Jellyfin details pages. Disabled by default.",
+    "SeerrRecommendations": "Seerr Recommendations",
+    "SeerrRecommendationsDescription": "Show recommendations from Seerr on media details pages.",
     "SidebarColorAccent": "Accent",
     "SidebarColorBlack": "Black",
     "SidebarColorFollowTheme": "Follow Theme",

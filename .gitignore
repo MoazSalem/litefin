@@ -65,3 +65,4 @@ knowledge.md
 *.ipk
 /graphify-out
 .codegraph/
+/src-tauri

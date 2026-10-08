@@ -49,10 +49,11 @@ function setup(settings = {}, caps = {}) {
     });
 
     // Run the exported functions in the VM context
+    const normalizedSource = source.replace(/\r\n/g, '\n');
     const code = `
-        ${source.slice(
-            source.indexOf('export const isTrueHdSupported ='),
-            source.indexOf('// ============================================================================\n// Minimal EventEmitter')
+        ${normalizedSource.slice(
+            normalizedSource.indexOf('export const isTrueHdSupported ='),
+            normalizedSource.indexOf('// ============================================================================\n// Minimal EventEmitter')
         ).replace(/export /g, '')}
 
         ({ isTrueHdSupported, isDtsSupported, isAudioTrackNativelyPlayable, resolveBestAudioStream, doesAudioTrackRequireDirectStream });
