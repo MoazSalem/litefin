@@ -1182,11 +1182,11 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 }
 
 /* ── Transcoded Audio Track Styling ───────────────────────────────────────
- * In accordance with Apple Human Interface Guidelines for visual clarity
- * and legibility, audio tracks that require server-side transcoding preserve
- * full 100% text opacity and contrast rather than being visually dimmed.
- * Actionable items remain completely readable and responsive, with the
- * dedicated "TRANSCODE" pill badge providing the clean semantic indicator.
+ * To ensure optimal visual clarity and legibility, audio tracks that require
+ * server-side transcoding preserve full 100% text opacity and contrast
+ * rather than being visually dimmed. Actionable items remain completely
+ * readable and responsive, with the dedicated "TRANSCODE" pill badge
+ * providing the clean semantic indicator.
  * ────────────────────────────────────────────────────────────────────── */
 .track-option.track-unsupported {
     /* Maintain full text opacity and contrast across all states */

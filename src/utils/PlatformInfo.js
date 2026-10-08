@@ -109,6 +109,14 @@ class PlatformInfo {
             else if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(navigator.userAgent)) {
                 this._platform = 'webos';
             }
+            // Android check — Android TV, Google TV, or Android app wrapper
+            // Explicitly distinguished from desktop/web to prevent TV remotes from getting web-only arrows
+            else if (
+                /Android/i.test(navigator.userAgent) ||
+                (typeof window !== 'undefined' && typeof window.LitefinAndroid !== 'undefined')
+            ) {
+                this._platform = 'android';
+            }
             // Default
             else {
                 this._platform = 'web';
@@ -183,9 +191,9 @@ class PlatformInfo {
         return this._platform === 'webos';
     }
 
-    /** @returns {boolean} True if running in a standard web browser */
+    /** @returns {boolean} True if running in a standard web browser (excluding Android TV/Smart TVs) */
     get isWeb() {
-        return this._platform === 'web';
+        return this._platform === 'web' && !this.isAndroid;
     }
 
     /**
@@ -198,10 +206,34 @@ class PlatformInfo {
      * @returns {boolean} True if running on an Android platform.
      */
     get isAndroid() {
+        if (this._platform === 'android') return true;
+        if (typeof window !== 'undefined' && typeof window.LitefinAndroid !== 'undefined') return true;
         if (typeof navigator !== 'undefined' && navigator.userAgent) {
             return /Android/i.test(navigator.userAgent);
         }
         return false;
+    }
+
+    /** @returns {boolean} True if running on any television runtime (Tizen, WebOS, or Android TV) */
+    get isTv() {
+        return this.isTizen || this.isWebOS || this.isAndroid;
+    }
+
+    /**
+     * =========================================================================
+     * Android OS Version Getter
+     * =========================================================================
+     * Retrieves the Android OS version (e.g. 9, 11, 14) from the User Agent.
+     * =========================================================================
+     * @returns {string|null} Parsed Android version string or null if not Android.
+     */
+    get androidVersion() {
+        // Only evaluate when running in an Android browser or webview environment
+        if (!this.isAndroid) return null;
+
+        // Extract numerical Android release version following 'Android' token
+        const match = navigator.userAgent.match(/Android\s+([0-9.]+)/i);
+        return match && match[1] ? match[1].trim() : null;
     }
 
     /**

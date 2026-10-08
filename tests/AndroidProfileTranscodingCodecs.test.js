@@ -112,3 +112,48 @@ test('AndroidProfile: forces H264 transcode video codec when playbackMode is tra
     const mp4Transcode = profile.TranscodingProfiles.find(p => p.Container === 'mp4' && p.Type === 'Video');
     assert.strictEqual(mp4Transcode.VideoCodec, 'h264', 'transcodeVideo mode must restrict VideoCodec to h264');
 });
+
+test('AndroidProfile: resolves device model and Android OS version from user agent', () => {
+    // Mock user agent string from Xiaomi Mi Box 4
+    try {
+        Object.defineProperty(globalThis.navigator, 'userAgent', {
+            value: 'Mozilla/5.0 (Linux; Android 9; MIBOX4 Build/PI; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.134 Mobile Safari/537.36',
+            configurable: true
+        });
+    } catch (e) {
+        // Ignore if read-only
+    }
+
+    // Bridge without device name to test UA fallback parsing
+    globalThis.LitefinAndroid = {
+        getSupportedVideoCodecs: () => JSON.stringify({ h264: true, hevc: true })
+    };
+
+    // Invalidate cached capabilities
+    AndroidProfile.clearCapabilitiesCache();
+
+    // Query capabilities
+    const caps = AndroidProfile.getDeviceCapabilities();
+
+    // Verify model name was parsed cleanly without player label
+    assert.strictEqual(caps.modelName, 'MIBOX4', 'Model name should be parsed as MIBOX4');
+    assert.strictEqual(caps.androidVersion, '9', 'Android OS version should be parsed as 9');
+});
+
+test('AndroidProfile: detects 1080p viewport and reports FHD', () => {
+    // Set standard 1080p viewport
+    globalThis.screen = { width: 1920, height: 1080 };
+
+    // Invalidate cached capabilities
+    AndroidProfile.clearCapabilitiesCache();
+
+    // Query capabilities
+    const caps = AndroidProfile.getDeviceCapabilities();
+
+    // Verify resolution attributes
+    assert.strictEqual(caps.screenWidth, 1920, 'Screen width must be 1920');
+    assert.strictEqual(caps.screenHeight, 1080, 'Screen height must be 1080');
+    assert.strictEqual(caps.uhd, false, '1080p display must have uhd=false');
+    assert.strictEqual(caps.uhd8K, false, '1080p display must have uhd8K=false');
+});
+

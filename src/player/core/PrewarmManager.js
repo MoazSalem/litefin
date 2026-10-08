@@ -166,6 +166,33 @@ export class PrewarmManager {
                 deviceProfile.DirectPlayProfiles = [];
             }
 
+            // =================================================================
+            // MKV → MP4 Remux Preference Alignment
+            // =================================================================
+            // When "Remux MKV to MP4" is active and the prewarmed item is an MKV container,
+            // strip 'mkv' from DirectPlayProfiles so the prewarmed response aligns with
+            // DirectStream remuxing instead of caching a raw DirectPlay response.
+            // Check targetSource, item.Container, and nested MediaSources[0].Container.
+            const remuxMkvToMp4 = PlayerSettings.get('remuxMkvToMp4');
+            const itemContainer = (
+                targetSource?.Container ||
+                item.Container ||
+                item.MediaSources?.[0]?.Container ||
+                ''
+            ).toLowerCase();
+            const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
+            if (remuxMkvToMp4 && !needsRemux && isMkvItem && Array.isArray(deviceProfile.DirectPlayProfiles)) {
+                for (const profile of deviceProfile.DirectPlayProfiles) {
+                    if (typeof profile.Container === 'string') {
+                        const containers = profile.Container.split(',').filter(c => c.trim() !== 'mkv');
+                        profile.Container = containers.join(',');
+                    }
+                }
+                deviceProfile.DirectPlayProfiles = deviceProfile.DirectPlayProfiles.filter(
+                    p => typeof p.Container !== 'string' || p.Container.length > 0
+                );
+            }
+
             // Clone profile to prevent accidental external mutations
             const clonedProfile = JSON.parse(JSON.stringify(deviceProfile));
             // Assemble base PlaybackInfo request payload.

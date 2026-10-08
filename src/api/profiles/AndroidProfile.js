@@ -58,6 +58,50 @@ function detectHardwareVideoCodecs() {
 }
 
 /**
+ * Detects the device model name cleanly from the native Android bridge or User Agent.
+ * Strips internal player backend labels (e.g. Media3 ExoPlayer) so the genuine
+ * device model is reported (e.g. "MIBOX4" or "Xiaomi MIBOX4").
+ */
+function detectDeviceModel() {
+    try {
+        // Query native Android bridge for model name if available
+        if (typeof window !== 'undefined' && window.LitefinAndroid?.getDeviceName) {
+            const name = window.LitefinAndroid.getDeviceName();
+            if (name && typeof name === 'string' && name.trim()) {
+                return name.trim();
+            }
+        }
+    } catch (e) {
+        log.warn('Failed to query device name from LitefinAndroid bridge:', e);
+    }
+
+    // Parse model from User Agent string:
+    // e.g. "Mozilla/5.0 (Linux; Android 9; MIBOX4 Build/PI; wv)..."
+    if (typeof navigator !== 'undefined' && navigator.userAgent) {
+        const match = navigator.userAgent.match(/Android[^;)]*;\s*([^;)]+?)\s+Build/i);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+
+    // Generic fallback when neither bridge nor UA pattern yields a model
+    return 'Android TV';
+}
+
+/**
+ * Resolves the Android OS release version string from User Agent.
+ */
+function detectAndroidVersion() {
+    if (typeof navigator !== 'undefined' && navigator.userAgent) {
+        const match = navigator.userAgent.match(/Android\s+([0-9.]+)/i);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    return '';
+}
+
+/**
  * ============================================================================
  * Android Device Capability Detection
  * ============================================================================
@@ -88,6 +132,16 @@ export function getDeviceCapabilities() {
 
     const hlg = hdr10;
 
+    // Detect actual viewport and screen resolutions
+    const screenWidth = typeof window !== 'undefined' ? (window.screen?.width || window.innerWidth || 1920) : 1920;
+    const screenHeight = typeof window !== 'undefined' ? (window.screen?.height || window.innerHeight || 1080) : 1080;
+    const uhd8K = screenWidth >= 7680 || screenHeight >= 4320;
+    const uhd = (screenWidth >= 3840 || screenHeight >= 2160) && !uhd8K;
+
+    // Extract device identity and OS information
+    const modelName = detectDeviceModel();
+    const androidVersion = detectAndroidVersion();
+
     // -------------------------------------------------------------------------
     // Native ExoPlayer Media3 Hardware Decoder Profile
     // -------------------------------------------------------------------------
@@ -97,8 +151,10 @@ export function getDeviceCapabilities() {
     const hwCodecs = detectHardwareVideoCodecs();
 
     _cachedCapabilities = {
-        uhd: true,
-        uhd8K: false,
+        screenWidth,
+        screenHeight,
+        uhd,
+        uhd8K,
         hdr10: hdr10,
         hlg: hlg,
         dolbyVision: true,
@@ -114,7 +170,8 @@ export function getDeviceCapabilities() {
         truehd: true,
         mp2: true,
         maxAudioChannels: 8,
-        modelName: 'Android TV (Media3 ExoPlayer)',
+        modelName,
+        androidVersion,
         deviceId: BaseProfile.getFallbackDeviceId('litefin_android_')
     };
 

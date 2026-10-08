@@ -5299,7 +5299,7 @@ class SettingsPage extends Page {
          * If the user explicitly sets the preference, their saved choice takes precedence.
          * =========================================================================
          */
-        const isTv = platformInfo.isTizen || platformInfo.isWebOS;
+        const isTv = platformInfo.isTizen || platformInfo.isWebOS || platformInfo.isAndroid;
         const savedReloadPref = storage.getItem('pref:reloadOnResume');
         const reloadOnResumeEnabled = savedReloadPref !== null ? savedReloadPref === 'true' : isTv;
 
@@ -5402,8 +5402,8 @@ class SettingsPage extends Page {
                 <!-- -------------------------------------------------------------
                  * Dynamic Play Queue Episode Window Size
                  * Configures how many preceding and succeeding episodes are loaded
-                 * around the currently playing episode. Designed according to Apple
-                 * HIG for clarity, tactile responsiveness, and minimal footprint.
+                 * around the currently playing episode. Designed for maximum clarity,
+                 * tactile responsiveness, and minimal memory footprint.
                  * ------------------------------------------------------------- -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -5918,13 +5918,29 @@ class SettingsPage extends Page {
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Platform">${i18n.t('Platform')}</span>
-                            <span class="identity-value">${platformInfo.isWeb ? i18n.t('BrowserValue', [caps.browserVersion]) : platformInfo.isWebOS ? i18n.t('WebOSValue', [caps.webosVersion]) : i18n.t('TizenValue', [caps.tizenVersion])}</span>
+                            <span class="identity-value">${(() => {
+                                // Specific operating system branch detection
+                                if (platformInfo.isAndroid) {
+                                    const ver = caps.androidVersion || platformInfo.androidVersion;
+                                    return ver ? `Android ${ver}` : 'Android';
+                                }
+                                if (platformInfo.isWebOS) {
+                                    return i18n.t('WebOSValue', [caps.webosVersion]);
+                                }
+                                if (platformInfo.isTizen) {
+                                    return i18n.t('TizenValue', [caps.tizenVersion]);
+                                }
+                                if (platformInfo.isDesktop) {
+                                    return `Desktop (${platformInfo.operatingSystem || 'Native'})`;
+                                }
+                                return i18n.t('BrowserValue', [caps.browserVersion]);
+                            })()}</span>
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Resolution">${i18n.t('Resolution')}</span>
                             <span class="identity-value">${i18n.t('ResolutionValue', [
-            caps.screenWidth,
-            caps.screenHeight,
+            caps.screenWidth || (typeof window !== 'undefined' ? (window.screen?.width || window.innerWidth || 1920) : 1920),
+            caps.screenHeight || (typeof window !== 'undefined' ? (window.screen?.height || window.innerHeight || 1080) : 1080),
             caps.uhd8K ? i18n.t('UHD8K') : caps.uhd ? i18n.t('UHD') : i18n.t('FHD')
         ])}</span>
                         </div>
@@ -5955,6 +5971,7 @@ class SettingsPage extends Page {
                     const val = PlayerSettings.get(key);
                     return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
                 };
+                // Video codec capabilities encompassing modern broadcast & streaming standards
                 const codecs = [
                     { name: 'H.264', hw: true, user: true },
                     {
@@ -5963,20 +5980,73 @@ class SettingsPage extends Page {
                         user: resolveOverride('enableHEVC', caps.hevc)
                     },
                     {
-                        name: 'AV1',
-                        hw: caps.av1,
-                        user: resolveOverride('enableAV1', caps.av1)
-                    },
-                    {
                         name: 'VP9',
                         hw: caps.vp9,
                         user: resolveOverride('enableVP9', caps.vp9)
+                    },
+                    {
+                        name: 'VP8',
+                        hw: caps.vp8 !== false,
+                        user: true
+                    },
+                    {
+                        name: 'MPEG-2',
+                        hw: caps.mpeg2video !== false,
+                        user: true
+                    },
+                    {
+                        name: 'AV1',
+                        hw: caps.av1,
+                        user: resolveOverride('enableAV1', caps.av1)
                     }
                 ];
 
                 return codecs
-                    .filter((c) => c.hw)
-                    .map((c) => (c.user ? c.name : `${c.name} (${i18n.t('Disabled')})`))
+                    .map((c) => {
+                        if (!c.hw) return `${c.name} (${i18n.t('Unsupported') || 'Unsupported'})`;
+                        if (!c.user) return `${c.name} (${i18n.t('Disabled') || 'Disabled'})`;
+                        return c.name;
+                    })
+                    .join(', ');
+            })()}</span>
+                        </div>
+                        <div class="identity-item">
+                            <span class="identity-label" data-i18n="AudioCodecs">${i18n.t('AudioCodecs') || 'Audio Codecs'}</span>
+                            <span class="identity-value">${(() => {
+                const resolveOverride = (key, hwSupport) => {
+                    const val = PlayerSettings.get(key);
+                    return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
+                };
+                // Comprehensive inventory of multi-channel surround and lossless audio decoders
+                const audioCodecs = [
+                    { name: 'AAC', hw: true, user: true },
+                    { name: 'AC-3', hw: caps.ac3 !== false, user: true },
+                    {
+                        name: 'E-AC-3',
+                        hw: caps.eac3 !== false,
+                        user: resolveOverride('enableEac3', caps.eac3 !== false)
+                    },
+                    {
+                        name: 'TrueHD',
+                        hw: caps.truehd !== false,
+                        user: resolveOverride('enableTrueHd', caps.truehd !== false)
+                    },
+                    {
+                        name: 'DTS',
+                        hw: caps.dts !== false,
+                        user: resolveOverride('enableDts', caps.dts !== false)
+                    },
+                    { name: 'FLAC', hw: true, user: true },
+                    { name: 'Opus', hw: true, user: true },
+                    { name: 'MP3', hw: true, user: true }
+                ];
+
+                return audioCodecs
+                    .map((c) => {
+                        if (!c.hw) return `${c.name} (${i18n.t('Unsupported') || 'Unsupported'})`;
+                        if (!c.user) return `${c.name} (${i18n.t('Disabled') || 'Disabled'})`;
+                        return c.name;
+                    })
                     .join(', ');
             })()}</span>
                         </div>

@@ -149,6 +149,31 @@ class MainActivity : TauriActivity() {
     // Injects `window.LitefinAndroid` for clean OS exit and device queries.
     // -------------------------------------------------------------------------
     webView.addJavascriptInterface(AndroidBridge(), "LitefinAndroid")
+
+    // -------------------------------------------------------------------------
+    // 4. Lock Native Remote Focus to the WebView
+    // -------------------------------------------------------------------------
+    // On Android TV platforms operating in non-touch D-pad mode, ensure the
+    // WebView immediately requests and claims focus so initial key events
+    // are directly dispatched to the web runtime rather than lost in native view search.
+    // -------------------------------------------------------------------------
+    webView.isFocusable = true
+    webView.isFocusableInTouchMode = true
+    webView.requestFocus()
+  }
+
+  override fun onResume() {
+    super.onResume()
+    // Re-assert focus onto the active WebView when resuming from background
+    activeWebView?.requestFocus()
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    // Guarantee that whenever the window regains focus, the WebView has active focus
+    if (hasFocus) {
+      activeWebView?.requestFocus()
+    }
   }
 
   /**
@@ -199,6 +224,10 @@ class MainActivity : TauriActivity() {
       // native ExoPlayer video rendering.
       // -----------------------------------------------------------------------
       setBackgroundColor(Color.BLACK)
+
+      // Prevent the outer host layout from capturing D-pad focus on TV remotes
+      isFocusable = false
+      descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
     }
 
     // -------------------------------------------------------------------------
@@ -218,6 +247,8 @@ class MainActivity : TauriActivity() {
       // Alpha is set to 0f so the canvas is transparent until playback is ready.
       visibility = View.VISIBLE
       alpha = 0f
+      // Video decoding canvas must never participate in D-pad focus traversal
+      isFocusable = false
     }
 
     this.textureView = texture
@@ -231,12 +262,21 @@ class MainActivity : TauriActivity() {
       )
       // Default to FIT (preserves native movie aspect ratio without stretching)
       resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+      // Block video decoding container from intercepting D-pad directional navigation
+      isFocusable = false
+      descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
     }
     this.aspectRatioLayout = aspectContainer
 
     aspectContainer.addView(texture)
     container.addView(aspectContainer)
     container.addView(webView)
+
+    // Ensure the WebView actively claims focus immediately upon view hierarchy attachment
+    webView.isFocusable = true
+    webView.isFocusableInTouchMode = true
+    webView.requestFocus()
+
     this.rootContainer = container
     return container
   }
@@ -351,6 +391,20 @@ class MainActivity : TauriActivity() {
       // the hardware back event and prevent any default browser history navigation.
       return true
     }
+
+    // -------------------------------------------------------------------------
+    // Android TV Directional D-Pad Direct Dispatch Guard
+    // -------------------------------------------------------------------------
+    // If the system window focus ever drifted to the FrameLayout root or DecorView,
+    // immediately re-anchor focus to activeWebView so directional keys (Left, Right,
+    // Up, Down, Center) are processed directly by Chromium instead of getting consumed
+    // by Android ViewGroup native focus search.
+    // -------------------------------------------------------------------------
+    val webView = activeWebView
+    if (webView != null && currentFocus != webView) {
+      webView.requestFocus()
+    }
+
     return super.dispatchKeyEvent(event)
   }
 

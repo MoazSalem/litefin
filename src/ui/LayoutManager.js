@@ -67,7 +67,7 @@ class LayoutManager {
          * Active Alphabet Selector Position ('top' or 'right').
          * Configures placement and orientation of the library alphabet quick-jump index:
          * - 'top': Classic horizontal ribbon placed inside the library header row.
-         * - 'right': Sleek Apple tvOS-style vertical floating pill docked to the right edge.
+         * - 'right': Sleek vertical floating pill docked to the right edge.
          */
         this._alphaPickerPosition = 'top';
 
