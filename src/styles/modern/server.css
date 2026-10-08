@@ -261,19 +261,36 @@ html[data-layout-login="modern"] .server-version {
     margin-left: 4px;
 }
 
+/* Spring-based pop-in animation for live server dot */
+@keyframes statusDotPop {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    65% {
+        transform: scale(1.35);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
 html[data-layout-login="modern"] .status-dot {
     display: block;
     width: 10px;
     height: 10px;
     background: #2ecc71;
     border-radius: 50%;
-    /* PERFORMANCE: Reduced blur size from 10px to 4px. */
-    box-shadow: 0 0 4px rgba(46, 204, 113, 0.5);
+    /* Subtle neon green glow matching status indicators */
+    box-shadow: 0 0 5px rgba(46, 204, 113, 0.6);
     position: absolute;
     top: 6px;
     left: 41px;
     z-index: 10;
     border: 2px solid var(--jf-card-bg, #0d0d0d);
+    animation: statusDotPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 html[data-layout-login="modern"] .server-item:focus,

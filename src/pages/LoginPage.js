@@ -13,6 +13,7 @@ import {
     api,
     discoverServers,
     cancelDiscovery,
+    testServer,
     ServerUnreachableError,
     hasBackgroundDiscoveryService
 } from '../api/index.js';
@@ -1492,12 +1493,16 @@ class LoginPage extends Page {
             if (savedServers && savedServers.length > 0) {
                 savedServers.forEach((saved) => {
                     const fallbackName = saved.serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-                    this._discoveredServers.push({
+                    const serverObj = {
                         name: saved.serverName || fallbackName,
                         address: saved.serverUrl,
                         version: null,
-                        isSaved: true
-                    });
+                        isSaved: true,
+                        isLive: false // Will be updated to true if HTTP probe succeeds
+                    };
+                    this._discoveredServers.push(serverObj);
+                    // Asynchronously probe saved server reachability
+                    this._probeServer(serverObj);
                 });
             }
             this._renderDiscoveredServers();
@@ -1518,12 +1523,16 @@ class LoginPage extends Page {
             savedServers.forEach((saved) => {
                 // Use the domain/IP as the name if we don't have a specific friendly name saved
                 const fallbackName = saved.serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-                this._discoveredServers.push({
+                const serverObj = {
                     name: saved.serverName || fallbackName,
                     address: saved.serverUrl,
                     version: null,
-                    isSaved: true
-                });
+                    isSaved: true,
+                    isLive: false // Will be updated to true if HTTP probe succeeds
+                };
+                this._discoveredServers.push(serverObj);
+                // Asynchronously probe saved server reachability
+                this._probeServer(serverObj);
             });
         }
         this._renderDiscoveredServers();
@@ -1543,17 +1552,26 @@ class LoginPage extends Page {
                     );
 
                     if (!existing) {
-                        // Server found! Add and render immediately
+                        // Server found via UDP! Add and render immediately
                         log.info(`LoginPage: Found server ${server.name} (${server.address})`);
-                        this._discoveredServers.push(server);
+                        const serverObj = {
+                            ...server,
+                            isLive: false // Will be confirmed by HTTP probe
+                        };
+                        this._discoveredServers.push(serverObj);
                         this._renderDiscoveredServers();
+                        // Probe immediately to confirm live status and retrieve version
+                        this._probeServer(serverObj);
                     } else {
                         // Update existing with better discovery info
                         if (existing.isSaved) {
                             existing.name = server.name || existing.name;
-                            existing.version = server.version || existing.version;
+                            if (server.version) existing.version = server.version;
+                            if (server.id) existing.id = server.id;
                             this._renderDiscoveredServers();
                         }
+                        // Re-probe existing server to ensure live status and version are current
+                        this._probeServer(existing);
                     }
                 },
                 { isManual, allowHttpFallback: isManual }
@@ -1566,7 +1584,14 @@ class LoginPage extends Page {
                         (s) => s.address.replace(/\/$/, '') === server.address.replace(/\/$/, '')
                     );
                     if (!exists) {
-                        this._discoveredServers.push(server);
+                        const serverObj = {
+                            ...server,
+                            isLive: false
+                        };
+                        this._discoveredServers.push(serverObj);
+                        this._probeServer(serverObj);
+                    } else if (!exists.isLive && !exists._probing) {
+                        this._probeServer(exists);
                     }
                 });
             }
@@ -1630,6 +1655,79 @@ class LoginPage extends Page {
         }
     }
 
+    /**
+     * =========================================================================
+     * Server Health & Version Verification Probe
+     * =========================================================================
+     * Pings the server's public system endpoint (/System/Info/Public) using
+     * lightweight asynchronous HTTP XHR.
+     *
+     * Purpose:
+     *  1. Live Status: Confirms whether the server is actively responsive on
+     *     HTTP. Only responsive servers receive the Apple-style live green dot.
+     *  2. Version Retrieval: Discovered UDP responses don't include the Jellyfin
+     *     release version. Probing fetches info.Version and displays the version tag.
+     *  3. Name Normalization: Replaces bare IP/URL strings with the friendly
+     *     server name if one was configured on the server.
+     *
+     * @private
+     * @param {Object} server - Server descriptor entry from this._discoveredServers
+     */
+    async _probeServer(server) {
+        // Guard against invalid server descriptors or missing address
+        if (!server || !server.address) {
+            return;
+        }
+
+        // Prevent redundant simultaneous HTTP probes targeting the exact same server
+        if (server._probing) {
+            return;
+        }
+        server._probing = true;
+
+        try {
+            log.info(`LoginPage: Probing server reachability for "${server.name}" (${server.address})...`);
+
+            // Probe with a 1500ms timeout to avoid hanging on dead servers
+            const info = await testServer(server.address, 1500);
+
+            if (info) {
+                log.info(`LoginPage: Server "${server.name}" confirmed LIVE (v${info.version || 'unknown'})`);
+
+                // Mark verified live status
+                server.isLive = true;
+
+                // Update server version tag if returned by the endpoint
+                if (info.version) {
+                    server.version = info.version;
+                }
+
+                // If existing server name is empty or a bare URL/IP, adopt friendly name
+                if (info.name && (!server.name || server.name === server.address || server.name.includes('://'))) {
+                    server.name = info.name;
+                }
+
+                // Attach canonical server ID if missing
+                if (info.id && !server.id) {
+                    server.id = info.id;
+                }
+            } else {
+                // Non-responsive or unreachable server
+                log.info(`LoginPage: Server "${server.name}" is offline or unreachable`);
+                server.isLive = false;
+            }
+        } catch (err) {
+            // Log transport errors and treat server as non-responsive
+            log.warn(`LoginPage: Probe failed for "${server.name}" (${server.address}):`, err);
+            server.isLive = false;
+        } finally {
+            server._probing = false;
+
+            // Re-render the server list so the live status dot and version badge update
+            this._renderDiscoveredServers();
+        }
+    }
+
     _renderDiscoveredServers() {
         // Layout-aware checks: in modern layout, we only need _serverList. In classic layout, we need both.
         const isModern = layoutManager.isModern();
@@ -1687,7 +1785,7 @@ class LoginPage extends Page {
                         // If the server was already saved, render it with special badges and indicators
                         if (server.isSaved) {
                             return `
-                                <li class="server-item saved" data-server-index="${index}" tabindex="0">
+                                <li class="server-item saved ${server.isLive ? 'is-live' : ''}" data-server-index="${index}" tabindex="0">
                                     <div class="server-icon-box">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
@@ -1695,8 +1793,8 @@ class LoginPage extends Page {
                                             <line x1="6" y1="6" x2="6.01" y2="6"></line>
                                             <line x1="6" y1="18" x2="6.01" y2="18"></line>
                                         </svg>
-                                        <!-- Active status dot indicating a fully saved/trusted server session -->
-                                        <div class="status-dot"></div>
+                                        <!-- Active status dot indicating a verified live server session -->
+                                        ${server.isLive ? '<div class="status-dot"></div>' : ''}
                                     </div>
                                     <div class="server-info">
                                         <div class="name-row">
@@ -1711,7 +1809,7 @@ class LoginPage extends Page {
                         } else {
                             // Standard discovered server card without extra saved badge
                             return `
-                                <li class="server-item" data-server-index="${index}" tabindex="0">
+                                <li class="server-item ${server.isLive ? 'is-live' : ''}" data-server-index="${index}" tabindex="0">
                                     <div class="server-icon-box">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
@@ -1719,6 +1817,8 @@ class LoginPage extends Page {
                                             <line x1="6" y1="6" x2="6.01" y2="6"></line>
                                             <line x1="6" y1="18" x2="6.01" y2="18"></line>
                                         </svg>
+                                        <!-- Active status dot indicating a verified live server session -->
+                                        ${server.isLive ? '<div class="status-dot"></div>' : ''}
                                     </div>
                                     <div class="server-info">
                                         <div class="name-row">
@@ -1741,7 +1841,8 @@ class LoginPage extends Page {
                 .map((server) => {
                     const index = this._discoveredServers.indexOf(server);
                     return `
-                    <li class="server-item" data-server-index="${index}" tabindex="0">
+                    <li class="server-item ${server.isLive ? 'is-live' : ''}" data-server-index="${index}" tabindex="0">
+                        ${server.isLive ? '<span class="status-dot"></span>' : ''}
                         <span class="server-name">${escapeHtml(server.name)}</span>
                         <span class="server-badge" data-i18n="SavedBadge">Saved</span>
                         <span class="server-address">${escapeHtml(server.address)}</span>
@@ -1764,7 +1865,8 @@ class LoginPage extends Page {
                     .map((server) => {
                         const index = this._discoveredServers.indexOf(server);
                         return `
-                        <li class="server-item" data-server-index="${index}" tabindex="0">
+                        <li class="server-item ${server.isLive ? 'is-live' : ''}" data-server-index="${index}" tabindex="0">
+                            ${server.isLive ? '<span class="status-dot"></span>' : ''}
                             <span class="server-name">${escapeHtml(server.name)}</span>
                             <span class="server-address">${escapeHtml(server.address)}</span>
                             ${server.version ? `<span class="server-version">v${escapeHtml(server.version)}</span>` : ''}

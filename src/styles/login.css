@@ -355,6 +355,34 @@ body.app-splash-active .loading-section .loading-spinner {
     margin-right: 16px;
 }
 
+/* Spring pop-in for verified live server dot */
+@keyframes statusDotPop {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    65% {
+        transform: scale(1.35);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.server-item .status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background: #2ecc71;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(46, 204, 113, 0.6);
+    margin-right: 10px;
+    flex-shrink: 0;
+    animation: statusDotPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 .server-item:focus,
 .server-item.focused {
     background: var(--jf-card-bg-hover);

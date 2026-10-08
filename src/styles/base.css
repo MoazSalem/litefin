@@ -1451,15 +1451,23 @@ html[data-badge-style="dark"] .game-card-badge {
 }
 
 /* ============================================================================
-   Magic Remote Support (WebOS)
+   Magic Remote Support (WebOS) & Mouse Cursor Visibility
    ============================================================================ */
 
 /* 
- * By default on TV Platforms we hide the cursor unless the Magic Remote 
- * (pointer mode) is active. The web platform (PC browsers) always shows it.
+ * By default on dedicated TV platforms (Tizen, webOS, Android TV) we hide 
+ * the mouse cursor unless the Magic Remote (pointer mode) is active.
+ * Desktop (Tauri/Electron) and Web platforms (mouse/trackpad users) must 
+ * always show the cursor indicator without unwanted hiding.
  */
-html:not([data-platform="web"]) body:not(.webos-cursor-active) {
+html:not([data-platform="web"]):not([data-platform="desktop"]) body:not(.webos-cursor-active) {
     cursor: none !important;
+}
+
+/* Explicit baseline cursor for mouse-driven desktop and web platforms */
+html[data-platform="desktop"] body,
+html[data-platform="web"] body {
+    cursor: default;
 }
 
 /* 
