@@ -108,13 +108,11 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // software/hardware decode for rich multi-channel codecs natively.
     const isExo =
         backendType === 'exoplayer' ||
-        PlayerSettings.get('playerBackend') === 'exoplayer' ||
-        (typeof platformInfo !== 'undefined' && platformInfo.isAndroid);
+        (!backendType && (PlayerSettings.get('playerBackend') === 'exoplayer' || (typeof platformInfo !== 'undefined' && platformInfo.isAndroid)));
 
     const isMovi =
         backendType === 'movi' ||
-        PlayerSettings.get('playerBackend') === 'movi' ||
-        (typeof platformInfo !== 'undefined' && platformInfo.isDesktop && platformInfo.hasWebCodecsSupport);
+        (!backendType && (PlayerSettings.get('playerBackend') === 'movi' || (typeof platformInfo !== 'undefined' && platformInfo.isDesktop && platformInfo.hasWebCodecsSupport)));
 
     // Advanced backends handle software/hardware decode for rich multi-channel codecs natively
     const isAdvancedBackend = isMovi || isExo;
@@ -173,17 +171,14 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // -------------------------------------------------------------------------
     // Channel limit resolution hierarchy:
     //   a. Explicit user setting ('allowedAudioChannels')
-    //   b. Native hardware device capability (caps.maxAudioChannels, e.g. 2 for stereo, 6 for 5.1, 8 for 7.1/8K)
-    //   c. Safe fallback to 2 (stereo)
+    //   b. Advanced media engines (Movi / ExoPlayer) default to 8 channels (7.1 surround)
+    //   c. Native hardware device capability (caps.maxAudioChannels, e.g. 2 for stereo, 6 for 5.1)
     // When an audio track exceeds the target channel count, the Jellyfin server
     // must transcode/downmix the audio track to fit the device's channel ceiling.
-    // Determine the active maximum channel ceiling. We respect explicit user settings
-    // first. If unset, we defer to native device hardware capabilities (caps.maxAudioChannels).
-    // If neither defines an explicit ceiling constraint, we do not artificially restrict channels.
     const userAllowedChannels = PlayerSettings.get('allowedAudioChannels');
     const effectiveMaxChannels = (userAllowedChannels && userAllowedChannels > 0)
         ? userAllowedChannels
-        : caps?.maxAudioChannels;
+        : (isAdvancedBackend ? 8 : caps?.maxAudioChannels);
 
     // Reject tracks whose discrete channel count exceeds the established channel ceiling,
     // signaling to the caller that the stream requires downmixing or server-side transcoding.
@@ -248,22 +243,79 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // 5. Codec-Specific Native Hardware & Settings Validation
     // -------------------------------------------------------------------------
 
-    // FLAC / ALAC in video containers: unsupported on standard HTML5 players when enableFlacInVideo is disabled,
-    // but fully supported on ExoPlayer and MoviPlayer via native decoders
-    if ((codec === 'flac' || codec === 'alac') && !isAdvancedBackend && !PlayerSettings.get('enableFlacInVideo')) {
+    // Advanced backends (MoviPlayer via FFmpeg WASM demuxer/decoders and ExoPlayer
+    // via native Android MediaCodec) support rich lossless/lossy multi-channel codecs:
+    if (isAdvancedBackend) {
+        // FLAC / ALAC lossless audio streams
+        if (codec === 'flac' || codec === 'alac') {
+            return true;
+        }
+
+        // DTS / DTS-HD / DCA multi-channel surround tracks
+        if (codec.includes('dts') || codec === 'dca') {
+            const setting = PlayerSettings.get('enableDts');
+            return setting !== 'disable';
+        }
+
+        // Dolby TrueHD / MLP lossless multi-channel streams
+        if (codec === 'truehd' || codec === 'mlp') {
+            const setting = PlayerSettings.get('enableTrueHd');
+            return setting !== 'disable';
+        }
+
+        // E-AC3 (Dolby Digital Plus) / AC3 (Dolby Digital) multi-channel tracks
+        if (codec === 'eac3' || codec === 'ec-3') {
+            const setting = PlayerSettings.get('enableEac3');
+            return setting !== 'disable';
+        }
+        if (codec === 'ac3') {
+            return true;
+        }
+
+        // Opus & Vorbis tracks
+        if (codec === 'opus' || codec === 'vorbis') {
+            return true;
+        }
+
+        // Raw uncompressed PCM / WAV audio streams
+        if (codec.startsWith('pcm') || codec === 'wav') {
+            return true;
+        }
+
+        // Broadcast and legacy compressed formats (MP2 / MP1L2)
+        if (codec === 'mp2' || codec === 'mp1l2') {
+            const setting = PlayerSettings.get('enableMp2');
+            return setting !== 'disable';
+        }
+
+        // Universal web audio formats (AAC / MP3)
+        if (codec === 'aac' || codec === 'mp3') {
+            return true;
+        }
+
+        // WMA Windows Media Audio streams
+        if (codec.includes('wma')) {
+            return isMovi || !!caps?.wma;
+        }
+
         return false;
     }
 
-    // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled,
-    // unless ExoPlayer or MoviPlayer is active, which decodes or passes through DTS multi-channel
-    if (codec.includes('dts') || codec === 'dca') {
-        return isAdvancedBackend || isDtsSupported();
+    // Standard backend validation (HTML5 / Tizen AVPlay / WebOS):
+
+    // FLAC / ALAC in video containers: unsupported on standard HTML5 players when enableFlacInVideo is disabled
+    if (codec === 'flac' || codec === 'alac') {
+        return PlayerSettings.get('enableFlacInVideo') === true;
     }
 
-    // Dolby TrueHD / MLP passthrough: unsupported when TrueHD decoding is disabled,
-    // unless ExoPlayer or MoviPlayer is active, which decodes TrueHD / MLP lossless streams
+    // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
+    if (codec.includes('dts') || codec === 'dca') {
+        return isDtsSupported();
+    }
+
+    // Dolby TrueHD / MLP passthrough: unsupported when TrueHD decoding is disabled
     if (codec === 'truehd' || codec === 'mlp') {
-        return isAdvancedBackend || isTrueHdSupported();
+        return isTrueHdSupported();
     }
 
     // E-AC3 (Dolby Digital Plus) support check
@@ -312,6 +364,11 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
             return false;
         }
         return caps?.opus !== false;
+    }
+
+    // Vorbis support check
+    if (codec === 'vorbis') {
+        return container === 'webm' || container === 'ogg';
     }
 
     // WMA / WMAv2 / WMAPro support check (Samsung dropped WMA in Tizen 9.0; unsupported on modern Web/WebOS)
