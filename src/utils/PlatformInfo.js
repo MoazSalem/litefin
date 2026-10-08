@@ -238,6 +238,22 @@ class PlatformInfo {
 
     /**
      * =========================================================================
+     * Tauri Shell Runtime Detection
+     * =========================================================================
+     * Detects if Litefin is currently running inside a Tauri v2 native shell.
+     * Evaluates true across all Tauri distribution targets:
+     *  - Desktop targets (Windows, macOS, Linux)
+     *  - Android TV & Amazon Fire TV targets
+     * =========================================================================
+     * @returns {boolean} True if running under the Tauri application shell.
+     */
+    get isTauri() {
+        if (typeof window === 'undefined') return false;
+        return !!(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__);
+    }
+
+    /**
+     * =========================================================================
      * Desktop Environment Detection
      * =========================================================================
      * Evaluates whether the application is currently running in a desktop

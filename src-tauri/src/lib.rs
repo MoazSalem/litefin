@@ -8,6 +8,13 @@
 #[allow(unused_imports)]
 use tauri::Manager;
 
+// -----------------------------------------------------------------------------
+// Module Imports
+// -----------------------------------------------------------------------------
+// Native UDP server discovery and Wake-on-LAN command handlers.
+// -----------------------------------------------------------------------------
+mod discovery;
+
 /// Mobile entrypoint macro required by Tauri v2 for Android JNI initialization.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -48,6 +55,17 @@ pub fn run() {
             }
             Ok(())
         })
+        // ---------------------------------------------------------------------
+        // Native IPC Bridge Handler Registration
+        // ---------------------------------------------------------------------
+        // Exposes zero-dependency UDP server autodiscovery and Wake-on-LAN
+        // commands directly to the Litefin frontend across Desktop and Android TV.
+        // ---------------------------------------------------------------------
+        .invoke_handler(tauri::generate_handler![
+            discovery::discover_servers,
+            discovery::cancel_server_discovery,
+            discovery::send_wake_on_lan,
+        ])
         // Run the application with generated context
         .run(tauri::generate_context!())
         .expect("Failed to initialize and run the Litefin application runtime");

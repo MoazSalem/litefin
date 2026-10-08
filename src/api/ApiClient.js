@@ -2889,16 +2889,142 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
     });
 }
 
+// -----------------------------------------------------------------------------
+// Tauri v2 Native Discovery & IPC Runtime Utilities
+// -----------------------------------------------------------------------------
+
+/**
+ * Checks whether the current runtime environment is a Tauri application shell.
+ * Returns true on Windows, macOS, Linux, and Android TV running via Tauri.
+ *
+ * @returns {boolean} True if running under Tauri runtime.
+ */
+function _isTauriRuntime() {
+    return typeof window !== 'undefined' && !!(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__);
+}
+
+/**
+ * Dispatches an IPC command across the Tauri bridge to the native Rust backend.
+ * Compatible with Tauri v2 internal bridge and core API wrappers.
+ *
+ * @param {string} command - Registered Tauri command name.
+ * @param {Object} [args={}] - Command parameters passed to Rust.
+ * @returns {Promise<any>} Response from the Rust command handler.
+ */
+async function _invokeTauriCommand(command, args = {}) {
+    // Primary Tauri v2 internal IPC bridge
+    if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__?.invoke) {
+        return window.__TAURI_INTERNALS__.invoke(command, args);
+    }
+    // Secondary fallback to core namespace if available
+    if (typeof window !== 'undefined' && window.__TAURI__?.core?.invoke) {
+        return window.__TAURI__.core.invoke(command, args);
+    }
+    throw new Error('Tauri IPC runtime bridge unavailable');
+}
+
 let activeDiscoveryController = null;
 
 /**
- * Cancel any active discovery process
+ * Cancel any active discovery process across all platform backends.
  */
 export function cancelDiscovery() {
+    // Signal cancellation to native Rust discovery worker if running on Tauri
+    if (_isTauriRuntime()) {
+        _invokeTauriCommand('cancel_server_discovery').catch(() => {});
+    }
+
     if (activeDiscoveryController) {
         log.info('Cancelling discovery scan...');
         activeDiscoveryController.abort();
         activeDiscoveryController = null;
+    }
+}
+
+/**
+ * Attempt Jellyfin server discovery via Tauri native UDP broadcast.
+ *
+ * Dispatches UDP probe packets on port 7359 directly from native Rust standard
+ * library sockets, bypassing browser webview network isolation entirely.
+ *
+ * @param {Function|null} onServerFound  Callback invoked immediately each time
+ *                                        a server response packet is parsed.
+ * @returns {Promise<Array|null>}  Found servers list, or null if Tauri IPC
+ *                                  could not be contacted (fall through to HTTP scan).
+ */
+async function _discoverViaTauriService(onServerFound, targetHints = []) {
+    if (!_isTauriRuntime()) {
+        return null;
+    }
+
+    log.info('Tauri fast path: Initiating native UDP server autodiscovery...');
+
+    const foundServers = [];
+    let serverEventListener = null;
+
+    // Attach real-time DOM listener for microsecond-latency server notification
+    if (typeof onServerFound === 'function') {
+        serverEventListener = (event) => {
+            const srv = event.detail;
+            if (srv && srv.address) {
+                const serverInfo = {
+                    address: srv.address,
+                    name: srv.name || srv.address,
+                    id: srv.id
+                };
+
+                // Deduplicate before firing onServerFound callback
+                const alreadyRecorded = foundServers.some(
+                    (s) => s.id === serverInfo.id || s.address === serverInfo.address
+                );
+
+                if (!alreadyRecorded) {
+                    log.info(`Tauri native UDP: discovered "${serverInfo.name}" at ${serverInfo.address}`);
+                    foundServers.push(serverInfo);
+                    onServerFound(serverInfo);
+                }
+            }
+        };
+
+        window.addEventListener('litefin:server-found', serverEventListener);
+    }
+
+    try {
+        // Dispatch Rust command with a 2500ms discovery window and any explicit hints
+        const results = await _invokeTauriCommand('discover_servers', {
+            timeoutMs: 2500,
+            targetHints: Array.isArray(targetHints) ? targetHints : []
+        });
+
+        if (Array.isArray(results)) {
+            for (const srv of results) {
+                const serverInfo = {
+                    address: srv.address,
+                    name: srv.name || srv.address,
+                    id: srv.id
+                };
+
+                const alreadyRecorded = foundServers.some(
+                    (s) => s.id === serverInfo.id || s.address === serverInfo.address
+                );
+
+                if (!alreadyRecorded) {
+                    foundServers.push(serverInfo);
+                    if (onServerFound) {
+                        onServerFound(serverInfo);
+                    }
+                }
+            }
+        }
+
+        return foundServers;
+    } catch (err) {
+        log.warn('Tauri native UDP discovery failed:', err);
+        return null;
+    } finally {
+        if (serverEventListener) {
+            window.removeEventListener('litefin:server-found', serverEventListener);
+        }
     }
 }
 
@@ -3100,7 +3226,21 @@ export async function sendWakeOnLan(macAddress) {
 
     log.info(`Initiating Wake-on-LAN command for MAC: ${macAddress}`);
 
-    // 1. WebOS implementation: dispatch Luna request to the background service
+    // 1. Tauri platform: native Rust UDP Magic Packet broadcast
+    if (_isTauriRuntime()) {
+        log.info('Platform Tauri: Dispatching native UDP WOL magic packet via Rust IPC');
+        try {
+            const ok = await _invokeTauriCommand('send_wake_on_lan', { macAddress });
+            if (ok) {
+                log.info('Tauri native WOL broadcast sent successfully');
+                return true;
+            }
+        } catch (tauriWolErr) {
+            log.warn('Tauri native WOL broadcast failed:', tauriWolErr);
+        }
+    }
+
+    // 2. WebOS implementation: dispatch Luna request to the background service
     if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
         log.info('Platform WebOS: Dispatching WOL request to Luna service org.litefin.app.service');
 
@@ -3205,12 +3345,17 @@ export async function sendWakeOnLan(macAddress) {
  * @returns {boolean} True if background UDP discovery service is present
  */
 export function hasBackgroundDiscoveryService() {
-    // 1. WebOS Luna Service check
+    // 1. Tauri native discovery support (Desktop & Android TV)
+    if (_isTauriRuntime()) {
+        return true;
+    }
+
+    // 2. WebOS Luna Service check
     if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
         return true;
     }
 
-    // 2. Tizen HTTP Proxy / Discovery Service check
+    // 3. Tizen HTTP Proxy / Discovery Service check
     if (typeof tizen !== 'undefined') {
         try {
             const bgEnabled = storage.getItem('player:enableBackgroundService') !== 'false';
@@ -3220,7 +3365,7 @@ export function hasBackgroundDiscoveryService() {
         }
     }
 
-    // 3. Platforms without background UDP discovery service
+    // 4. Platforms without background UDP discovery service
     return false;
 }
 
@@ -3257,6 +3402,45 @@ export async function discoverServers(onProgress = null, onServerFound = null, o
     if (wolOnScanEnabled && wolMac) {
         log.info(`Server discovery initiated. Sending Wake-on-LAN packet to ${wolMac}...`);
         sendWakeOnLan(wolMac).catch((e) => log.warn('Failed to send WOL on server discovery scan:', e));
+    }
+
+    /*
+     * =========================================================================
+     * Tauri Fast Path: Native UDP Discovery via Rust Standard Sockets
+     * =========================================================================
+     * Tauri builds (Desktop and Android TV) run native Rust code with full
+     * raw UDP socket capabilities. We broadcast the autodiscovery probe on
+     * UDP port 7359 and receive server responses within ~50ms without any
+     * Node.js dependency or slow HTTP subnet scanning.
+     * =========================================================================
+     */
+    if (_isTauriRuntime()) {
+        log.info('Tauri detected — trying native UDP discovery first...');
+
+        // Collect saved server addresses to pass as direct hints to Rust
+        let hints = [];
+        try {
+            const rawSaved = storage.getItem('jellyfin_saved_servers');
+            if (rawSaved) {
+                const parsed = JSON.parse(rawSaved);
+                if (Array.isArray(parsed)) {
+                    hints = parsed.map((s) => s.address || s.serverUrl).filter(Boolean);
+                }
+            }
+        } catch (_) {}
+
+        const tauriServers = await _discoverViaTauriService(onServerFound, hints);
+
+        if (tauriServers !== null) {
+            log.info(`Tauri discovery complete: ${tauriServers.length} server(s) found`);
+            return tauriServers;
+        }
+
+        log.warn('Tauri native discovery unavailable');
+        if (!allowHttpFallback) {
+            log.info('HTTP fallback disabled for automatic discovery — skipping HTTP subnet scan');
+            return [];
+        }
     }
 
     /*
