@@ -2392,6 +2392,20 @@ class SettingsPage extends Page {
 
                 <h3 class="setting-section-title" data-i18n="Seerr">${i18n.t('Seerr') || 'Seerr'}</h3>
 
+                <!-- Seerr Recommendations row on details pages (enabled by default) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SeerrRecommendations">${i18n.t('SeerrRecommendations') || 'Seerr Recommendations'}</span>
+                        <span class="setting-description" data-i18n="SeerrRecommendationsDescription">${i18n.t('SeerrRecommendationsDescription') || 'Show recommendations from Seerr on media details pages.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:SeerrRecommendations') !== 'false' ? 'active' : ''}"
+                            id="toggle-show-seerr-recommendations" tabindex="0" role="switch"
+                            aria-label="${i18n.t('SeerrRecommendations') || 'Seerr Recommendations'}"
+                            aria-checked="${storage.getItem('pref:SeerrRecommendations') !== 'false'}"></button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name">${i18n.t('WatchProvidersRegion')}</span>
@@ -10734,6 +10748,25 @@ class SettingsPage extends Page {
                 storage.setItem('pref:showWatchProviders', String(enabled));
                 showWatchProvidersToggle.classList.toggle('active', enabled);
                 showWatchProvidersToggle.setAttribute('aria-checked', String(enabled));
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // Toggle Switch for Seerr Recommendations on Details Pages
+        // ---------------------------------------------------------------------
+        // Defaults to enabled (true) unless explicitly toggled off by user.
+        const showSeerrRecsToggle = this.$('#toggle-show-seerr-recommendations');
+        if (showSeerrRecsToggle) {
+            showSeerrRecsToggle.addEventListener('click', () => {
+                // Read current setting (treated as true unless strictly 'false')
+                const isCurrentlyActive = storage.getItem('pref:SeerrRecommendations') !== 'false';
+                const nextVal = !isCurrentlyActive;
+                // Save updated preference to persistent storage
+                storage.setItem('pref:SeerrRecommendations', String(nextVal));
+                // Update button visual state and accessibility attributes
+                showSeerrRecsToggle.classList.toggle('active', nextVal);
+                showSeerrRecsToggle.setAttribute('aria-checked', String(nextVal));
+                log.info(`Show Seerr Recommendations set to: ${nextVal}`);
             });
         }
 
