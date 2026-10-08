@@ -1383,15 +1383,8 @@ class LoginPage extends Page {
              */
             if (this._isAddUserMode) {
                 router.navigate('/profiles', { replace: true });
-            } else if (typeof tizen !== 'undefined') {
-                try {
-                    storage.flush();
-                    tizen.application.getCurrentApplication().exit();
-                } catch (e) {
-                    log.error('App exit failed:', e);
-                }
             } else {
-                log.info('App exit (simulated)');
+                eventBus.emit('app:exitRequested');
             }
             return true;
         } else if (this._state === STATE.USERS) {

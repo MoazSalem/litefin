@@ -2,6 +2,7 @@ import { focusManager } from './FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { androidAdapter } from '../android/AndroidAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { logger } from '../utils/Logger.js';
 
@@ -70,6 +71,8 @@ class ExitDialog {
             log.info('User confirmed exit via dialog.');
             if (platformInfo.isWebOS) {
                 webosAdapter.exit();
+            } else if (platformInfo.isAndroid) {
+                androidAdapter.exit();
             } else {
                 tizenAdapter.exit();
             }

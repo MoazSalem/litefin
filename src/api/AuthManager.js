@@ -31,6 +31,7 @@ import { state } from '../core/StateManager.js';
 import { api, ServerUnreachableError, sendWakeOnLan } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { androidAdapter } from '../android/AndroidAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
 import { buildJellyfinProfile } from './DeviceProfile.js';
@@ -183,6 +184,8 @@ class AuthManager {
         let deviceName;
         if (platformInfo.isWebOS) {
             deviceName = webosAdapter.getDeviceName();
+        } else if (platformInfo.isAndroid) {
+            deviceName = androidAdapter.getDeviceName();
         } else {
             deviceName = tizenAdapter.getDeviceName();
         }

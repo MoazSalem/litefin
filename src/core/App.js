@@ -15,6 +15,7 @@ import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { androidAdapter } from '../android/AndroidAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
@@ -96,6 +97,8 @@ class App {
         // 1.6. Initialize platform adapters (hardware/keys)
         if (platformInfo.isWebOS) {
             webosAdapter.init();
+        } else if (platformInfo.isAndroid) {
+            androidAdapter.init();
         } else {
             tizenAdapter.init();
         }
@@ -626,6 +629,8 @@ class App {
                 // The dashboard Offline status is handled automatically by the WebSocket dropping.
                 if (platformInfo.isWebOS) {
                     webosAdapter.exit();
+                } else if (platformInfo.isAndroid) {
+                    androidAdapter.exit();
                 } else {
                     tizenAdapter.exit();
                 }
