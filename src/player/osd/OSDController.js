@@ -2221,6 +2221,19 @@ export default class OSDController extends Component {
              * ========================================================================
              */
             if (PlayerSettings.get('osdLayout') === 'hidden') {
+                /*
+                 * A skip prompt that is on screen and highlighted owns the press, because
+                 * stealth mode never reveals the controls - the press would otherwise
+                 * silently toggle playback instead of skipping.
+                 */
+                if (this._currentFocusRow === 1) {
+                    const stealthCta = this._getHighlightedSkipPrompt();
+                    if (stealthCta) {
+                        stealthCta.click();
+                        return true;
+                    }
+                }
+
                 if (this._currentFocusRow === -1) {
                     const focusedEl = this._getFocusedOverlayElement();
                     if (focusedEl && focusedEl.isConnected && (
@@ -2263,6 +2276,15 @@ export default class OSDController extends Component {
             }
 
             if (e) e.preventDefault();
+            /*
+             * Remember the highlighted skip prompt BEFORE show()/_updateFocus() re-apply the
+             * highlight: _updateFocus() clears every .focused class first, so a prompt that was
+             * highlighted while the OSD was hidden would no longer be recognisable afterwards.
+             * See _getHighlightedSkipPrompt() for why this can happen while the controls row
+             * owns the focus.
+             */
+            const wakeSkipCta = this._currentFocusRow === 1 ? this._getHighlightedSkipPrompt() : null;
+
             this.show();
             this._updateFocus();
 
@@ -2285,6 +2307,12 @@ export default class OSDController extends Component {
              * ========================================================================
              */
             const showOsdOnly = PlayerSettings.get('okShowOsdOnly') === true;
+
+            /* The user selected the prompt, so dispatch it before the row handling below. */
+            if (wakeSkipCta) {
+                wakeSkipCta.click();
+                return true;
+            }
 
             if (this._currentFocusRow === -1) {
                 // Overlay row (Row -1): a plugin widget (e.g. skip-intro) holds focus.
@@ -2831,8 +2859,25 @@ export default class OSDController extends Component {
         return this._cachedOverlayRow[idx] || this._getFocused();
     }
 
+    /**
+     * Resolve the skip prompt button that is on screen and currently highlighted, or null.
+     *
+     * The plugin host only hands focus over to Row -1 while a prompt appears with the OSD
+     * hidden, so the prompt can keep looking highlighted after the focus moved on (auto-hide
+     * reset, episode change) while the row handling dispatches elsewhere. A widget that is
+     * merely .visible does not qualify: .sync-osd keeps that class while the hidden OSD renders
+     * the widget transparent and non-interactive.
+     *
+     * @returns {HTMLElement|null}
+     */
+    _getHighlightedSkipPrompt() {
+        const widget = this._osdEl.querySelector('.osd-overlays .plugin-widget.visible');
+        const cta = widget && widget.querySelector('.skip-intro-btn.focused');
+        if (!cta) return null;
 
-
+        const widgetStyle = getComputedStyle(widget);
+        return widgetStyle.opacity !== '0' && widgetStyle.pointerEvents !== 'none' ? cta : null;
+    }
 
     _getControls() {
         // Return only focusable controls
