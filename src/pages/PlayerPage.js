@@ -956,7 +956,16 @@ class PlayerPage extends Page {
             useTizenPlayer = false;
         }
 
-        log.info(`Resolved player backend: ${playerBackend} (useTizenPlayer: ${useTizenPlayer})`);
+        /*
+         * ====================================================================
+         * Player Backend Resolution Log
+         * ====================================================================
+         * Log the resolved backend setting along with the active device platform.
+         * The useTizenPlayer boolean is only attached when running on Samsung Tizen
+         * hardware to avoid confusing logs on other platforms (Android, WebOS, Desktop, Web).
+         */
+        const tizenDiagnostic = platformInfo.isTizen ? ` (useTizenPlayer: ${useTizenPlayer})` : '';
+        log.info(`Resolved player backend: ${playerBackend} | platform: ${platformInfo.platformString}${tizenDiagnostic}`);
 
         // Construct the player directly — no bridge, no window global
         this._player = new JellyfinPlayer({

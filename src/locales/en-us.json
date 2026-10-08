@@ -471,6 +471,8 @@
     "AutoComplexFormatsOnly": "Auto (complex formats only)",
     "AutoPlayNextDescription": "Automatically play next episode when current ends",
     "AutoRecommended": "Auto (Recommended)",
+    "AutoTranscodeOnError": "Auto-Fallback to Transcode",
+    "AutoTranscodeOnErrorDescription": "Automatically escalate to server-side transcoding if DirectPlay or Remux fails during playback startup or mid-stream.",
     "AutoUpdateCheck": "Check for updates automatically",
     "AutoUpdateCheckDesc": "Notify me when a new version is available on GitHub.",
     "AV1Description": "Direct play AV1 content (requires Tizen 5.5+ / 2020+ TV)",

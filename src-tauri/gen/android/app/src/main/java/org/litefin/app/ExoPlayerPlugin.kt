@@ -63,11 +63,12 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
   // Queued audio track index to be applied once media tracks are demuxed
   private var pendingAudioTrackIndex: Int? = null
 
-  // Reusable OkHttpClient configured with optimized connection timeouts
+  // Reusable OkHttpClient configured with optimized connection timeouts and socket retry
   private val okHttpClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
       .connectTimeout(15, TimeUnit.SECONDS)
       .readTimeout(30, TimeUnit.SECONDS)
+      .retryOnConnectionFailure(true)
       .build()
   }
 
@@ -286,10 +287,30 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
 
       override fun onPlayerError(error: PlaybackException) {
         stopProgressHeartbeat()
+        // Log detailed stack trace to Android Logcat for native troubleshooting
+        android.util.Log.e("ExoPlayerPlugin", "ExoPlayer playback error: ${error.errorCodeName} (${error.errorCode}): ${error.message}", error)
+
+        // Recursively extract all root cause messages and types for actionable diagnostics
+        val causes = mutableListOf<String>()
+        var curr: Throwable? = error.cause
+        while (curr != null) {
+          val msg = curr.message?.takeIf { it.isNotBlank() } ?: curr.javaClass.simpleName
+          causes.add("${curr.javaClass.simpleName}: $msg")
+          android.util.Log.e("ExoPlayerPlugin", "  Caused by: ${curr.javaClass.name}: ${curr.message}", curr)
+          curr = curr.cause
+        }
+
+        val formattedMessage = if (causes.isNotEmpty()) {
+          "${error.message ?: "Playback error"} (${causes.joinToString(" -> ")})"
+        } else {
+          error.message ?: "Unknown playback error"
+        }
+
         val payload = JSObject().apply {
           put("errorCode", error.errorCode)
           put("errorCodeName", error.errorCodeName)
-          put("message", error.message ?: "Unknown playback error")
+          put("message", formattedMessage)
+          put("cause", causes.firstOrNull() ?: "")
         }
         dispatchNativeEvent("exoplayer://error", payload)
       }
@@ -317,11 +338,12 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         // ---------------------------------------------------------------------
         // Build OkHttp Data Source with Custom Headers
         // ---------------------------------------------------------------------
-        // Injects authorization bearer tokens and custom Jellyfin headers
         val httpDataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
-        args.headers?.forEach { (key, value) ->
-          httpDataSourceFactory.setDefaultRequestProperties(mapOf(key to value))
+        val requestHeaders = args.headers
+        if (!requestHeaders.isNullOrEmpty()) {
+          httpDataSourceFactory.setDefaultRequestProperties(requestHeaders)
         }
+        httpDataSourceFactory.setUserAgent("Litefin (Linux; Android; ExoPlayer)")
 
         val dataSourceFactory = DefaultDataSource.Factory(activity, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)

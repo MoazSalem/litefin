@@ -4208,6 +4208,20 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AutoTranscodeOnError">${i18n.t('AutoTranscodeOnError') || 'Auto-Fallback to Transcode'}</span>
+                        <span class="setting-description" data-i18n="AutoTranscodeOnErrorDescription">${i18n.t('AutoTranscodeOnErrorDescription') || 'Automatically escalate to server-side transcoding if DirectPlay or Remux fails during playback startup or mid-stream.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('autoTranscodeOnError') !== false ? 'active' : ''}" 
+                                id="toggle-auto-transcode-on-error" 
+                                data-setting="autoTranscodeOnError"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Playback Buffering Section -->
                 <h3 class="setting-section-title" data-i18n="PlaybackBuffering">${i18n.t('PlaybackBuffering') || 'Playback Buffering'}</h3>
                 

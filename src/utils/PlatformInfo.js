@@ -311,8 +311,16 @@ class PlatformInfo {
         return false;
     }
 
-    /** @returns {string} The raw platform string ('tizen', 'webos', 'web') */
+    /** @returns {string} The raw platform string ('tizen', 'webos', 'android', 'desktop', 'web') */
     get platformString() {
+        return this._platform;
+    }
+
+    /**
+     * Platform identifier accessor.
+     * @returns {'tizen'|'webos'|'android'|'desktop'|'web'} The detected device platform identifier.
+     */
+    get platform() {
         return this._platform;
     }
 

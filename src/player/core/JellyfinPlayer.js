@@ -923,6 +923,15 @@ export class JellyfinPlayer extends EventEmitter {
         this._remuxWatchdogTargetTicks = null;
         this._remuxWatchdogInitialTime = null;
 
+        // ────────────────────────────────────────────────────────────────────
+        // DirectPlay Failure Escalation Guard
+        // ────────────────────────────────────────────────────────────────────
+        // Tracks whether the active playback session has already attempted
+        // automatic fallback from a failed DirectPlay/Remux stream to server-side
+        // transcoding. Prevents recursive escalation loops if transcoding also errors.
+        // ────────────────────────────────────────────────────────────────────
+        this._directPlayEscalated = false;
+
         // ====================================================================
         // Subtitle Manager — centralized subtitle orchestration
         // Handles delivery method selection, external subtitle fetching,
@@ -981,12 +990,35 @@ export class JellyfinPlayer extends EventEmitter {
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
         const backendSetting = this.forcedPlayerBackend || PlayerSettings.get('playerBackend') || 'auto';
 
-        log.info(
-            'Initializing backend — useTizenPlayer:', this.useTizenPlayer,
-            ' | avplay detected:', hasAvPlay,
-            ' | isWebOS:', platformInfo.isWebOS,
-            ' | setting:', backendSetting
-        );
+        /*
+         * ====================================================================
+         * Platform-Aware Backend Initialization Diagnostics
+         * ====================================================================
+         * Compile a clean, contextual diagnostics summary reflecting the active
+         * device runtime (Android, WebOS, Desktop, Tizen, Web) and its capabilities,
+         * rather than outputting legacy Tizen-specific booleans across all devices.
+         */
+        const envDetails = [
+            `platform: ${platformInfo.platformString}`,
+            `setting: ${backendSetting}`
+        ];
+
+        // Report hardware AVPlay support on Samsung Tizen or when the API is explicitly exposed
+        if (platformInfo.isTizen || hasAvPlay) {
+            envDetails.push(`avplay: ${hasAvPlay}`);
+        }
+
+        // Report WebCodecs engine support when running in Desktop shells or Web browsers
+        if (platformInfo.isDesktop || platformInfo.isWeb) {
+            envDetails.push(`webCodecs: ${platformInfo.hasWebCodecsSupport}`);
+        }
+
+        // Surface explicit caller overrides if present
+        if (this.forcedPlayerBackend) {
+            envDetails.push(`forced: ${this.forcedPlayerBackend}`);
+        }
+
+        log.info(`Initializing backend — ${envDetails.join(' | ')}`);
 
         const sharedOptions = {
             container: this.container,
@@ -1529,6 +1561,72 @@ export class JellyfinPlayer extends EventEmitter {
         // Log backend errors with backend context before forwarding to UI layer
         if (event.type === PlayerEvent.ERROR) {
             log.error(`[JellyfinPlayer] Error event received from ${this._backendType} backend:`, event.data);
+
+            // ────────────────────────────────────────────────────────────────
+            // DirectPlay / Remux Failure Transcode Escalation
+            // ────────────────────────────────────────────────────────────────
+            // When DirectPlay or Remux fails at startup or mid-playback (e.g.,
+            // MKV container errors, decoder stalls, network disconnects on static
+            // files, or unsupported bit depths/profiles), we seamlessly escalate
+            // to server-side transcoding instead of dropping the user into a red
+            // error modal. Jellyfin server then serves a compliant HLS stream.
+            // ────────────────────────────────────────────────────────────────
+            const isAutoTranscodeEnabled = PlayerSettings.get('autoTranscodeOnError') !== false;
+            const canEscalate =
+                isAutoTranscodeEnabled &&
+                !PlayerSettings.get('forceDirectPlay') &&
+                !this._isRestarting &&
+                !this._directPlayEscalated &&
+                this._currentPlayOptions &&
+                this._currentPlayMethod !== 'Transcode' &&
+                this._playbackMode !== 'transcode';
+
+            if (canEscalate) {
+                // Prevent cyclic escalation cascades if transcoding also errors
+                this._directPlayEscalated = true;
+                const errorDesc = event.data?.error || event.data?.message || 'Playback error';
+                log.warn(
+                    `[JellyfinPlayer] ${this._currentPlayMethod || 'DirectPlay'} failed on ${this._backendType} (${errorDesc}). ` +
+                    `Escalating session to server transcoding...`
+                );
+
+                // Preserve exact timestamp where DirectPlay errored
+                const currentTicks = this.getCurrentPositionTicks() || this._currentPlayOptions.startPositionTicks || 0;
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    audioStreamIndex: this._currentAudioStreamIndex,
+                    subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                    secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
+                    startPositionTicks: currentTicks,
+                    playbackMode: 'transcode'
+                };
+
+                // Store options and flag restarting state to suppress transient stop events
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions = restartOptions;
+                this._isRestarting = true;
+
+                // Signal UI that recovery/restart is taking place
+                this.emit(PlayerEvent.RESTARTING);
+
+                (async () => {
+                    try {
+                        // Tear down existing backend decoder cleanly
+                        await this.stop();
+                        // Brief stabilization pause before launching transcoded stream
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Re-launch with strict transcode parameters
+                        await this.play(restartOptions);
+                    } catch (escalateErr) {
+                        log.error('[JellyfinPlayer] DirectPlay transcode escalation failed:', escalateErr);
+                        // Forward error to UI if transcode restart fails
+                        this.emit(PlayerEvent.ERROR, event.data);
+                    } finally {
+                        this._isRestarting = false;
+                    }
+                })();
+                return;
+            }
         }
 
         // Re-emit events from backend
@@ -1664,8 +1762,14 @@ export class JellyfinPlayer extends EventEmitter {
      */
     async play(options) {
         //log.info('Play requested:', options);
+        /*
+         * ====================================================================
+         * Active Player Backend Diagnostics
+         * ====================================================================
+         * Log the resolved backend engine ('exoplayer', 'movi', 'webos', 'tizen', 'html5').
+         * The old 'Use Tizen Player' log is omitted here as backendType unifies all platforms.
+         */
         log.info('Backend Type:', this._backendType);
-        log.info('Use Tizen Player:', this.useTizenPlayer);
         
         // Update server URL/Auth if provided in play options
         if (options.serverUrl) this.serverUrl = options.serverUrl;
@@ -1689,6 +1793,8 @@ export class JellyfinPlayer extends EventEmitter {
             // ────────────────────────────────────────────────────────────────
             if (!this._isRestarting) {
                 this._initialPlaybackMode = this._playbackMode;
+                // Fresh playback request resets the escalation safeguard
+                this._directPlayEscalated = false;
             }
 
             // Determine if we need to force a remux for audio tracks on HTML5
@@ -2529,6 +2635,60 @@ export class JellyfinPlayer extends EventEmitter {
                 return;
             }
 
+            // ────────────────────────────────────────────────────────────────
+            // DirectPlay Launch Failure Escalation (Synchronous / Pipeline Rejection)
+            // ────────────────────────────────────────────────────────────────
+            // If the initial backend preparation or media pipeline setup rejected
+            // during DirectPlay or Remux, immediately attempt server transcode before
+            // surfacing a fatal error.
+            // ────────────────────────────────────────────────────────────────
+            const isAutoTranscodeEnabled = PlayerSettings.get('autoTranscodeOnError') !== false;
+            const canEscalate =
+                isAutoTranscodeEnabled &&
+                !PlayerSettings.get('forceDirectPlay') &&
+                !this._isRestarting &&
+                !this._directPlayEscalated &&
+                this._currentPlayOptions &&
+                this._currentPlayMethod !== 'Transcode' &&
+                this._playbackMode !== 'transcode';
+
+            if (canEscalate) {
+                this._directPlayEscalated = true;
+                log.warn(
+                    `[JellyfinPlayer] DirectPlay setup failed (${error?.message || error}). ` +
+                    `Escalating session to server transcoding...`
+                );
+
+                const currentTicks = this.getCurrentPositionTicks() || this._currentPlayOptions.startPositionTicks || 0;
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    audioStreamIndex: this._currentAudioStreamIndex,
+                    subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                    secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
+                    startPositionTicks: currentTicks,
+                    playbackMode: 'transcode'
+                };
+
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions = restartOptions;
+                this._isRestarting = true;
+
+                this.emit(PlayerEvent.RESTARTING);
+
+                try {
+                    await this.stop();
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await this.play(restartOptions);
+                    return;
+                } catch (escalateErr) {
+                    log.error('[JellyfinPlayer] DirectPlay setup transcode escalation failed:', escalateErr);
+                    this.emit(PlayerEvent.ERROR, { error: escalateErr, type: 'playback' });
+                    throw escalateErr;
+                } finally {
+                    this._isRestarting = false;
+                }
+            }
+
             log.error('Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
             throw error;
@@ -2616,6 +2776,7 @@ export class JellyfinPlayer extends EventEmitter {
             this._currentItem = null;
             this._currentMediaSource = null;
             this._currentPlayOptions = null;
+            this._directPlayEscalated = false;
         }
         
         this._isPlaying = false;
@@ -4204,6 +4365,10 @@ export class JellyfinPlayer extends EventEmitter {
                     } else if (deviceProfile?.DirectPlayProfiles?.length === 0 && firstSource.SupportsDirectPlay) {
                         log.info(
                             '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
+                        );
+                    } else if (this._playbackMode === 'transcode' && (firstSource.SupportsDirectPlay || firstSource.SupportsDirectStream)) {
+                        log.info(
+                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay/DirectStream, but active mode requires Transcode. Discarding in favor of fresh transcode request.'
                         );
                     } else {
                         return prewarmedData;

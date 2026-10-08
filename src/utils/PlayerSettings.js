@@ -396,6 +396,17 @@ const DEFAULTS = {
     forceDirectPlay: false,
 
     // -------------------------------------------------------------------------
+    // DIRECTPLAY / REMUX FAILURE AUTO-TRANSCODE ESCALATION
+    // -------------------------------------------------------------------------
+    // When enabled, if DirectPlay or Remux fails during playback startup or mid-stream
+    // (e.g., container demuxer error, I/O reset, or unsupported profile on hardware),
+    // playback automatically escalates to server-side transcoding instead of halting
+    // with a red error modal.
+    //
+    // Default: true
+    autoTranscodeOnError: true,
+
+    // -------------------------------------------------------------------------
     // MKV → MP4 REMUX
     // -------------------------------------------------------------------------
     // When enabled, MKV containers are stripped from the DirectPlay profile so
