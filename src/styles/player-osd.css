@@ -1181,20 +1181,22 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     opacity: 1;
 }
 
-/* ── Unsupported Audio Track Styling ──────────────────────────────────────
- * Audio tracks that cannot be decoded natively by the current backend
- * (e.g. FLAC in MKV on HTML5 browsers) are visually dimmed. Selecting
- * them still works — it triggers a server-side transcode restart — but
- * the reduced opacity communicates that switching will be slower.
+/* ── Transcoded Audio Track Styling ───────────────────────────────────────
+ * In accordance with Apple Human Interface Guidelines for visual clarity
+ * and legibility, audio tracks that require server-side transcoding preserve
+ * full 100% text opacity and contrast rather than being visually dimmed.
+ * Actionable items remain completely readable and responsive, with the
+ * dedicated "TRANSCODE" pill badge providing the clean semantic indicator.
  * ────────────────────────────────────────────────────────────────────── */
 .track-option.track-unsupported {
-    opacity: 0.45;
+    /* Maintain full text opacity and contrast across all states */
+    opacity: 1;
 }
 
-/* Restore full opacity on focus/hover so the dimmed track is still readable */
 .track-option.track-unsupported.focused,
 .track-option.track-unsupported:hover {
-    opacity: 0.7;
+    /* Full contrast on focus and hover */
+    opacity: 1;
 }
 
 /* Distinct badge color for the "TRANSCODE" indicator on unsupported tracks */
