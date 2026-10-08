@@ -13,8 +13,8 @@ android {
         minSdk 21
         // Android 15 (Galaxy S24 Ultra ships 14/15)
         targetSdk 35
-        versionCode 10
-        versionName "0.10.0"
+        versionCode 11
+        versionName "0.11.0"
     }
 
     signingConfigs {
