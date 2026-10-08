@@ -111,13 +111,18 @@ export default class PlaybackInfo extends BaseMenu {
          * -----------------------------------------------------------------
          * Resolve Active Backend Display Label
          * -----------------------------------------------------------------
-         * Check the exact backendType exposed by JellyfinPlayer. If 'movi' is
-         * active (Desktop WebCodecs/WASM player), display 'Movi Player' instead
-         * of falling back to 'Html Player'.
+         * Check the exact backendType exposed by JellyfinPlayer. Supports:
+         * - 'exoplayer': Android Media3 native player
+         * - 'movi': Desktop WebCodecs/WASM player
+         * - 'webos': LG webOS native media player
+         * - 'tizen': Samsung Tizen AVPlay hardware engine
+         * - 'html5': Standard browser HTML5 video element
          * -----------------------------------------------------------------
          */
         let playerType = i18n.t('Unknown');
-        if (this.player.backendType === 'movi') {
+        if (this.player.backendType === 'exoplayer') {
+            playerType = 'ExoPlayer';
+        } else if (this.player.backendType === 'movi') {
             playerType = 'Movi Player';
         } else if (this.player.backendType === 'webos' || platformInfo.isWebOS) {
             playerType = 'WebOS Player';
@@ -125,6 +130,8 @@ export default class PlaybackInfo extends BaseMenu {
             playerType = 'Tizen AVPlayer';
         } else if (this.player.backendType === 'html5') {
             playerType = 'Html Player';
+        } else if (platformInfo.isAndroid) {
+            playerType = 'ExoPlayer';
         } else {
             playerType = this.player.useTizenPlayer ? 'Tizen AVPlayer' : 'Html Player';
         }
@@ -157,7 +164,10 @@ export default class PlaybackInfo extends BaseMenu {
 
         if (!this.player.useTizenPlayer) {
             const video = this.player._backend?._videoElement; 
-            if (video) {
+            const backend = this.player._backend;
+            if (this.player.backendType === 'exoplayer' && backend?.videoWidth && backend?.videoHeight) {
+                videoRes = `${backend.videoWidth}x${backend.videoHeight}`;
+            } else if (video) {
                 if (video.videoWidth && video.videoHeight) {
                     videoRes = `${video.videoWidth}x${video.videoHeight}`;
                 } else if (videoStream) {

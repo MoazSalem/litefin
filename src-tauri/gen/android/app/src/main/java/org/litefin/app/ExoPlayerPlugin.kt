@@ -155,9 +155,15 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         if (playbackState == Player.STATE_READY && newPlayer.playWhenReady) {
           MainActivity.instance?.showVideoSurface()
           startProgressHeartbeat()
-        } else if (playbackState == Player.STATE_ENDED) {
+        } else if (playbackState == Player.STATE_ENDED || playbackState == Player.STATE_IDLE) {
           stopProgressHeartbeat()
+          MainActivity.instance?.hideVideoSurface()
         }
+      }
+
+      override fun onRenderedFirstFrame() {
+        // Guarantee video surface is revealed the instant the first decoded frame is ready
+        MainActivity.instance?.showVideoSurface()
       }
 
       override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -176,9 +182,16 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
       }
 
       override fun onVideoSizeChanged(videoSize: VideoSize) {
+        val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1f
+        val aspect = if (videoSize.height > 0) (videoSize.width * pixelRatio) / videoSize.height else 0f
+        if (aspect > 0f) {
+          MainActivity.instance?.setVideoAspectRatio(aspect)
+        }
+
         val payload = JSObject().apply {
           put("width", videoSize.width)
           put("height", videoSize.height)
+          put("aspectRatio", aspect)
           put("unappliedRotationDegrees", videoSize.unappliedRotationDegrees)
           put("pixelWidthHeightRatio", videoSize.pixelWidthHeightRatio)
         }
@@ -296,6 +309,9 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         val mediaItem = MediaItem.fromUri(Uri.parse(args.url))
         val mediaSource = mediaSourceFactory.createMediaSource(mediaItem)
 
+        // Immediately hide video plane so previous movie's last frame is never shown
+        MainActivity.instance?.hideVideoSurface()
+
         exo.setMediaSource(mediaSource)
 
         val startPosition = args.startPositionMs ?: 0L
@@ -327,6 +343,19 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
       } catch (e: Exception) {
         invoke.reject("Failed to start playback: ${e.message}")
       }
+    }
+  }
+
+  /**
+   * Sets presentation aspect ratio mode (auto, zoom, stretch).
+   */
+  @Command
+  fun setAspectRatio(invoke: Invoke) {
+    val args = invoke.parseArgs(AspectRatioArgs::class.java)
+    val mode = args.mode ?: "auto"
+    activity.runOnUiThread {
+      MainActivity.instance?.setResizeMode(mode)
+      invoke.resolve()
     }
   }
 
@@ -573,6 +602,9 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
           val mediaItem = MediaItem.fromUri(Uri.parse(url))
           val mediaSource = mediaSourceFactory.createMediaSource(mediaItem)
 
+          // Immediately conceal video surface so previous media frame is never flashed
+          MainActivity.instance?.hideVideoSurface()
+
           exo.setMediaSource(mediaSource)
           if (startPositionMs > 0) {
             exo.seekTo(startPositionMs)
@@ -590,6 +622,13 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         exo.playWhenReady = true
         exo.play()
         startProgressHeartbeat()
+      }
+    }
+
+    @JavascriptInterface
+    fun setAspectRatio(mode: String) {
+      activity.runOnUiThread {
+        MainActivity.instance?.setResizeMode(mode)
       }
     }
 
@@ -714,5 +753,9 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
 
   class TrackArgs {
     var trackIndex: Int? = null
+  }
+
+  class AspectRatioArgs {
+    var mode: String? = "auto"
   }
 }

@@ -312,6 +312,45 @@ export function buildJellyfinProfile(options = {}) {
     ];
 
     // -------------------------------------------------------------------------
+    // Video Transcode Codec Resolution (MPEG-TS & fMP4 HLS)
+    // -------------------------------------------------------------------------
+    // Build transcode video codecs dynamically matching verified hardware capabilities.
+    // If a codec is unsupported by the chipset (e.g., AV1 on older TV boxes like S905X),
+    // it MUST NOT be advertised in TranscodingProfiles. Otherwise, Jellyfin's
+    // StreamBuilder assumes the client can consume AV1 inside HLS and will attempt to
+    // copy/remux the raw AV1 stream rather than transcoding to H.264/HEVC, triggering
+    // fatal native ExoPlayer playback errors (ERROR_CODE_IO_UNSPECIFIED).
+    // -------------------------------------------------------------------------
+    const tsTransVideoCodecs = ['h264'];
+    if (enableHEVC) tsTransVideoCodecs.push('hevc');
+    const tsTransVideoCodecString = tsTransVideoCodecs.join(',');
+
+    let mp4TransVideoCodecs = ['h264'];
+    if (enableHEVC) mp4TransVideoCodecs.push('hevc');
+    if (enableVP9) mp4TransVideoCodecs.push('vp9');
+    if (enableAV1) mp4TransVideoCodecs.push('av1');
+
+    // Force universal H.264 video transcode when user explicitly forces video transcode mode
+    if (playbackMode === 'transcodeVideo') {
+        mp4TransVideoCodecs = ['h264'];
+    }
+    const mp4TransVideoCodecString = mp4TransVideoCodecs.join(',');
+
+    // -------------------------------------------------------------------------
+    // Audio Transcode Codec Resolution
+    // -------------------------------------------------------------------------
+    // Align HLS audio transcode targets with user-configured audio capabilities.
+    // Respect EAC-3 toggle so the server does not transcode to EAC-3 when disabled.
+    // -------------------------------------------------------------------------
+    const transAudioCodecs = [];
+    if (enableEac3) transAudioCodecs.push('eac3');
+    transAudioCodecs.push('ac3', 'aac', 'mp3');
+    const transAudioCodecString = transAudioCodecs.join(',');
+
+    // MP4/fMP4 containers can additionally carry lossless FLAC audio
+    const mp4TransAudioCodecString = [...transAudioCodecs, 'flac'].join(',');
+
+    // -------------------------------------------------------------------------
     // Transcoding Fallback Profiles (HLS Stream Delivery)
     // -------------------------------------------------------------------------
     // MaxAudioChannels and MinSegments are strictly numeric integers.
@@ -320,8 +359,8 @@ export function buildJellyfinProfile(options = {}) {
         {
             Container: 'ts',
             Type: 'Video',
-            AudioCodec: 'ac3,eac3,aac,mp3',
-            VideoCodec: 'h264,hevc',
+            AudioCodec: transAudioCodecString,
+            VideoCodec: tsTransVideoCodecString,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannelsNum,
@@ -331,8 +370,8 @@ export function buildJellyfinProfile(options = {}) {
         {
             Container: 'mp4',
             Type: 'Video',
-            AudioCodec: 'ac3,eac3,aac,mp3,flac',
-            VideoCodec: 'h264,hevc,av1,vp9',
+            AudioCodec: mp4TransAudioCodecString,
+            VideoCodec: mp4TransVideoCodecString,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannelsNum,

@@ -248,6 +248,8 @@ export class ExoVideoPlayer {
         // 4. Video Dimensions & Aspect Ratio
         const onVideoSize = (event) => {
             const data = event.detail || {};
+            this._videoWidth = data.width || 0;
+            this._videoHeight = data.height || 0;
             log.info(`ExoPlayer native video dimensions: ${data.width}x${data.height}`);
         };
 
@@ -370,8 +372,9 @@ export class ExoVideoPlayer {
             startPositionMs: resumeMs
         });
 
-        // 2. Apply initial volume setting
+        // 2. Apply initial volume setting and aspect ratio mode
         await this.setVolume(this._volume * 100);
+        this.setAspectRatio(this._aspectRatio || 'auto');
 
         // 3. Switch audio stream if explicitly specified
         if (typeof options.audioStreamIndex === 'number' && options.audioStreamIndex >= 0) {
@@ -777,11 +780,27 @@ export class ExoVideoPlayer {
     }
 
     /**
+     * Retrieves the active aspect ratio mode ('auto', 'zoom', 'stretch').
+     * @returns {string}
+     */
+    getAspectRatio() {
+        return this._aspectRatio || 'auto';
+    }
+
+    /**
      * Sets presentation aspect ratio mode.
-     * @param {string} mode - Mode name
+     * Forwards directly to native Media3 AspectRatioFrameLayout.
+     * @param {string} mode - 'auto' | 'zoom' | 'stretch'
      */
     setAspectRatio(mode) {
         this._aspectRatio = mode || 'auto';
+        if (typeof window !== 'undefined' && window.LitefinExoPlayer?.setAspectRatio) {
+            window.LitefinExoPlayer.setAspectRatio(this._aspectRatio);
+        } else if (typeof window !== 'undefined' && window.LitefinAndroid?.setAspectRatio) {
+            window.LitefinAndroid.setAspectRatio(this._aspectRatio);
+        } else {
+            invokeNative('setAspectRatio', { mode: this._aspectRatio }).catch(() => { });
+        }
     }
 
     // ========================================================================
@@ -806,5 +825,13 @@ export class ExoVideoPlayer {
 
     get playbackRate() {
         return this._playbackSpeed;
+    }
+
+    get videoWidth() {
+        return this._videoWidth || 0;
+    }
+
+    get videoHeight() {
+        return this._videoHeight || 0;
     }
 }

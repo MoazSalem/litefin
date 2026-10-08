@@ -3,6 +3,7 @@ package org.litefin.app
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Bundle
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.TextureView
 import android.view.View
@@ -12,6 +13,7 @@ import android.webkit.WebView
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
+import androidx.media3.ui.AspectRatioFrameLayout
 
 /**
  * =============================================================================
@@ -48,6 +50,9 @@ class MainActivity : TauriActivity() {
   // ---------------------------------------------------------------------------
   // Reference to the native TextureView used for video playback
   private var textureView: TextureView? = null
+
+  // Reference to the AspectRatioFrameLayout enforcing movie proportions
+  private var aspectRatioLayout: AspectRatioFrameLayout? = null
 
   // Reference to the shared FrameLayout root container hosting TextureView and WebView
   private var rootContainer: FrameLayout? = null
@@ -197,22 +202,40 @@ class MainActivity : TauriActivity() {
     }
 
     // -------------------------------------------------------------------------
-    // Hardware Video Plane (TextureView)
+    // Hardware Video Plane (TextureView inside AspectRatioFrameLayout)
     // -------------------------------------------------------------------------
     // Placed at index 0 (behind WebView at index 1).
     // Uses TextureView for seamless alpha blending with transparent WebView.
+    // Wrapped in Media3's AspectRatioFrameLayout to prevent video stretching.
     // -------------------------------------------------------------------------
     val texture = TextureView(this).apply {
       layoutParams = FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT
       )
+      // TextureView MUST remain View.VISIBLE at all times so Android creates
+      // and maintains its SurfaceTexture for ExoPlayer MediaCodec decoders.
+      // Alpha is set to 0f so the canvas is transparent until playback is ready.
       visibility = View.VISIBLE
+      alpha = 0f
     }
 
     this.textureView = texture
 
-    container.addView(texture)
+    // Container enforcing native video aspect ratio with centered letterboxing/pillarboxing
+    val aspectContainer = AspectRatioFrameLayout(this).apply {
+      layoutParams = FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        Gravity.CENTER
+      )
+      // Default to FIT (preserves native movie aspect ratio without stretching)
+      resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+    }
+    this.aspectRatioLayout = aspectContainer
+
+    aspectContainer.addView(texture)
+    container.addView(aspectContainer)
     container.addView(webView)
     this.rootContainer = container
     return container
@@ -235,6 +258,7 @@ class MainActivity : TauriActivity() {
       // Reveal Hardware Decoding Plane
       // -----------------------------------------------------------------------
       textureView?.visibility = View.VISIBLE
+      textureView?.alpha = 1f
       // Clear container and window backgrounds to allow video decode
       // on the hardware TextureView to show through cleanly to the compositor
       rootContainer?.setBackgroundColor(Color.TRANSPARENT)
@@ -247,9 +271,41 @@ class MainActivity : TauriActivity() {
    */
   fun hideVideoSurface() {
     runOnUiThread {
+      // -----------------------------------------------------------------------
+      // Seamlessly Conceal Video Texture via Alpha
+      // -----------------------------------------------------------------------
+      // Setting alpha = 0f guarantees the last decoded video frame from the
+      // previous movie is completely invisible to the user, while preserving
+      // the active SurfaceTexture so ExoPlayer can decode the next stream's
+      // first frame immediately without stalling in the NO_SURFACE state.
+      // -----------------------------------------------------------------------
+      textureView?.alpha = 0f
       // Restore solid pitch black backgrounds for standard navigation UI
       rootContainer?.setBackgroundColor(Color.BLACK)
       window.setBackgroundDrawableResource(android.R.color.black)
+    }
+  }
+
+  /**
+   * Updates target video aspect ratio to preserve geometric proportions.
+   */
+  fun setVideoAspectRatio(aspectRatio: Float) {
+    runOnUiThread {
+      aspectRatioLayout?.setAspectRatio(aspectRatio)
+    }
+  }
+
+  /**
+   * Configures video scaling mode: auto (fit), zoom (crop), or stretch (fill).
+   */
+  fun setResizeMode(mode: String) {
+    runOnUiThread {
+      val targetMode = when (mode.lowercase()) {
+        "zoom" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+      }
+      aspectRatioLayout?.resizeMode = targetMode
     }
   }
 
@@ -387,6 +443,14 @@ class MainActivity : TauriActivity() {
         // Safe fallback for older Android TV devices
         """{"h264":true,"hevc":true,"vp9":true,"vp8":true,"av1":false,"mpeg2video":true}"""
       }
+    }
+
+    /**
+     * Updates native video aspect ratio mode (auto, zoom, stretch).
+     */
+    @JavascriptInterface
+    fun setAspectRatio(mode: String) {
+      setResizeMode(mode)
     }
   }
 }
