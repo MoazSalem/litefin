@@ -1422,7 +1422,7 @@ export default class OSDController extends Component {
         if (this._currentFocusRow === -1) {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
 
             /*
              * ========================================================================
@@ -1847,7 +1847,7 @@ export default class OSDController extends Component {
             // Restore focus to Controls (Row 1) -> Play/Pause
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
 
             this._focusRestoreLockout = true;
             if (this._focusRestoreLockoutTimer) {
@@ -1893,7 +1893,7 @@ export default class OSDController extends Component {
             // Focus should go back to OSD -> Play/Pause
             this._currentFocusRow = 1; // Controls
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
 
             this._focusRestoreLockout = true;
             if (this._focusRestoreLockoutTimer) {
@@ -2679,7 +2679,7 @@ export default class OSDController extends Component {
                     // Return from overlay row straight to Controls, landing on Play/Pause
                     this._currentFocusRow = 1;
                     const playIdx = this._findActionIndex('togglePlay');
-                    this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+                    if (playIdx !== -1) this._currentFocusIndex = playIdx;
                 } else if (this._currentFocusRow === 0) {
                     // Mirror of Up from Row 1: if overlay widgets are visible, stop there first.
                     // Header ↓ Overlay ↓ Controls (symmetric with Controls ↑ Overlay ↑ Header)
@@ -2988,7 +2988,21 @@ export default class OSDController extends Component {
 
     _findActionIndex(action) {
         const controls = this._getControls();
-        return controls.findIndex(btn => btn.dataset.action === action);
+        const idx = controls.findIndex(btn => btn.dataset.action === action);
+        if (idx !== -1) return idx;
+
+        /*
+         * _getControls() drops every element without an offsetParent, so the list is
+         * EMPTY while the OSD is hidden. Callers receive -1 in that case and several of
+         * them fall back to index 0, i.e. the previous-track button. Resolve the action
+         * against the same DOM order without the visibility filter so the result stays
+         * correct while the OSD is hidden - tabindex="-1" stays excluded, keeping the
+         * list identical to the one used for navigation.
+         */
+        const all = Array.from(
+            this._osdEl.querySelectorAll('.osd-controls-left .osd-btn, .osd-controls-right .osd-btn')
+        ).filter(btn => btn.getAttribute('tabindex') !== '-1');
+        return all.findIndex(btn => btn.dataset.action === action);
     }
 
     // ===================================
@@ -4247,7 +4261,7 @@ export default class OSDController extends Component {
             this.show();
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
             this._updateFocus();
         }
     }
@@ -4279,7 +4293,7 @@ export default class OSDController extends Component {
             this.show();
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
             this._updateFocus();
         }
     }
@@ -4484,7 +4498,7 @@ export default class OSDController extends Component {
                 // Return focus target to controls row (Row 1) Play/Pause
                 this._currentFocusRow = 1;
                 const playIdx = this._findActionIndex('togglePlay');
-                this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+                if (playIdx !== -1) this._currentFocusIndex = playIdx;
                 this._updateFocus();
 
                 // Lock out inputs for 350ms to absorb keyboard-synthesized click events on the newly focused play button
@@ -4910,7 +4924,7 @@ export default class OSDController extends Component {
         if (this._currentFocusRow === -1) {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
         }
 
         /*
