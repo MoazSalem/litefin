@@ -78,11 +78,17 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
   private val mainHandler = Handler(Looper.getMainLooper())
 
   // Runnable broadcasting current position, duration, and buffered ranges
+  // Progress updates are gated so that during initial startup or resume seeks
+  // (STATE_BUFFERING), premature progress events are never dispatched to the WebView.
   private val progressHeartbeatRunnable = object : Runnable {
     override fun run() {
       val exo = player ?: return
-      emitProgressUpdate()
-      // Continue scheduling as long as the player is active and not ended or idle
+      // Gate progress emission strictly to active ready playback
+      // Avoids misleading time-updates while the hardware pipeline buffers media
+      if (exo.playbackState == Player.STATE_READY && exo.playWhenReady) {
+        emitProgressUpdate()
+      }
+      // Re-schedule the heartbeat loop at 250ms cadence while player is active
       if (exo.playbackState != Player.STATE_ENDED && exo.playbackState != Player.STATE_IDLE) {
         mainHandler.postDelayed(this, 250L)
       }
@@ -352,10 +358,12 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     activity.runOnUiThread {
       try {
         val exo = ensurePlayer()
-        MainActivity.instance?.showVideoSurface()
+        // Instruct ExoPlayer to begin playback once media buffering completes
+        // We avoid calling startProgressHeartbeat() or showVideoSurface() here
+        // so that the loading screen and hidden surface are preserved until
+        // onRenderedFirstFrame() or onPlaybackStateChanged(STATE_READY) fire.
         exo.playWhenReady = true
         exo.play()
-        startProgressHeartbeat()
         invoke.resolve()
       } catch (e: Exception) {
         invoke.reject("Failed to start playback: ${e.message}")

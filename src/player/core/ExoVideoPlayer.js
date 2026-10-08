@@ -224,6 +224,18 @@ export class ExoVideoPlayer {
                 this._clearStartupWatchdog();
             }
 
+            // -----------------------------------------------------------------
+            // Startup & Buffering Progress Guard
+            // -----------------------------------------------------------------
+            // Suppress dispatching timeupdate events to the higher layers (JellyfinPlayer)
+            // while the media pipeline is still buffering or has not presented frames.
+            // Dispatching premature time updates during initial resume seeks causes the
+            // loading screen to dismiss prematurely before the video frame renders.
+            // -----------------------------------------------------------------
+            if (!this._started || this._isBuffering) {
+                return;
+            }
+
             // Normalize and dispatch to Jellyfin player event pipeline
             this.onEvent({
                 type: PlayerEvent.TIME_UPDATE,
@@ -721,8 +733,9 @@ export class ExoVideoPlayer {
                     this._duration = durMs / 1000;
                 }
 
-                // Forward timeupdate if actively playing
-                if (posMs > 0 && !this._isPaused) {
+                // Forward timeupdate only if playback has started, is not paused, and is not buffering
+                // This prevents the polling loop from falsely reporting active playback during initial seek buffer
+                if (posMs > 0 && !this._isPaused && !this._isBuffering && this._started) {
                     this.onEvent({
                         type: PlayerEvent.TIME_UPDATE,
                         data: {
@@ -808,6 +821,15 @@ export class ExoVideoPlayer {
      */
     isPlaying() {
         return !this._isPaused && this._started && !this._isBuffering;
+    }
+
+    /**
+     * Returns true if the hardware decoder pipeline is actively buffering stream data.
+     * Consulted by JellyfinPlayer to prevent premature dismissal of loading screens during resume seeks.
+     * @returns {boolean}
+     */
+    isBuffering() {
+        return this._isBuffering;
     }
 
     /**

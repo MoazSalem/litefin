@@ -1238,6 +1238,20 @@ export class JellyfinPlayer extends EventEmitter {
             const effectiveCurrentTime = (event.data?.time || 0) + offsetSec;
 
             if (event.type === PlayerEvent.TIME_UPDATE && (event.data?.time || 0) > 0) {
+                // =============================================================
+                // Backend Buffering Check
+                // =============================================================
+                // If the player backend (such as ExoVideoPlayer) is still actively
+                // buffering media data at the resume seek destination, suppress
+                // early resume verification so the loading overlay remains visible.
+                // =============================================================
+                const isBackendBuffering = Boolean(
+                    typeof this._backend?.isBuffering === 'function' && this._backend.isBuffering()
+                );
+                if (isBackendBuffering) {
+                    return;
+                }
+
                 // Check if we have arrived near our target resume position (within 15s GOP keyframe tolerance)
                 if (Math.abs(effectiveCurrentTime - targetSec) < 15 || effectiveCurrentTime >= (targetSec - 15)) {
                     this._pendingStartPositionTicks = null;
