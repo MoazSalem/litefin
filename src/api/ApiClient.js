@@ -2593,6 +2593,29 @@ export class ApiClient {
     }
 
     /**
+     * ========================================================================
+     * Immediate WebSocket KeepAlive Dispatcher
+     * ========================================================================
+     * Dispatches an immediate KeepAlive ping frame over the open WebSocket.
+     * Crucial when handling server-issued 'ForceKeepAlive' challenges to
+     * prevent reverse proxies and the Jellyfin server from terminating
+     * the connection due to idle timeouts.
+     * ========================================================================
+     */
+    sendWebSocketKeepAlive() {
+        // Ensure the socket instance exists and is actively ready for communication
+        if (this._webSocket && this._webSocket.readyState === WebSocket.OPEN) {
+            try {
+                // Jellyfin protocol specifies standard KeepAlive message frame
+                this._webSocket.send(JSON.stringify({ MessageType: 'KeepAlive' }));
+            } catch (err) {
+                // Non-fatal warning if socket write throws
+                log.warn('Failed to send immediate WebSocket KeepAlive ping:', err);
+            }
+        }
+    }
+
+    /**
      * Check if WebSocket is connected
      * @returns {boolean} True if connected
      */

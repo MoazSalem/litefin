@@ -427,7 +427,7 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
         if (cleanTrack === cleanTarget) return true;
 
         // Compare normalized ISO codes via languageManager
-        if (typeof languageManager?.normalizeLanguage === 'function') {
+        if (typeof languageManager !== 'undefined' && typeof languageManager?.normalizeLanguage === 'function') {
             const normTrack = languageManager.normalizeLanguage(cleanTrack);
             const normTarget = languageManager.normalizeLanguage(cleanTarget);
             if (normTrack && normTarget) {
@@ -3996,6 +3996,24 @@ export class JellyfinPlayer extends EventEmitter {
                         firstSource.TranscodingUrl &&
                         firstSource.TranscodingUrl.includes('TranscodeReasons=AudioCodecNotSupported');
 
+                    // =================================================================
+                    // Safeguard Against Prewarmed DirectPlay with Active MKV Remux
+                    // =================================================================
+                    // If the user enabled "Remux MKV to MP4", but the prewarmed PlaybackInfo
+                    // cached DirectPlay for an MKV file, discard the cached response so
+                    // we make a fresh request with 'mkv' stripped from DirectPlayProfiles.
+                    // =================================================================
+                    const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
+                    const prewarmedContainer = (
+                        firstSource.Container ||
+                        options.item?.Container ||
+                        options.item?.MediaSources?.[0]?.Container ||
+                        ''
+                    ).toLowerCase();
+                    const isPrewarmedMkv = prewarmedContainer === 'mkv' ||
+                        prewarmedContainer === 'matroska' ||
+                        prewarmedContainer.includes('mkv');
+
                     if (isAudioCodecError && (this._playbackMode === 'auto' || this._playbackMode === 'directPlay')) {
                         log.warn(
                             '[Prewarm] Prewarmed PlaybackInfo forced transcode for AudioCodecNotSupported. Discarding in favor of fresh direct-play request.'
@@ -4003,6 +4021,10 @@ export class JellyfinPlayer extends EventEmitter {
                     } else if (deviceProfile?.DirectPlayProfiles?.length === 0 && firstSource.SupportsDirectPlay) {
                         log.info(
                             '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
+                        );
+                    } else if (remuxMkvToMp4Setting && isPrewarmedMkv && firstSource.SupportsDirectPlay) {
+                        log.info(
+                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay for MKV, but remuxMkvToMp4 is active. Discarding in favor of fresh remux request.'
                         );
                     } else {
                         return prewarmedData;
@@ -4130,8 +4152,16 @@ export class JellyfinPlayer extends EventEmitter {
         // remux) since those modes rebuild the profile wholesale themselves.
         const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
         const modeLockedProfiles = currentMode === 'directPlay' || currentMode === 'transcode' || currentMode === 'remux';
-        // Treat both 'mkv' and 'matroska' as Matroska containers
-        const itemContainer = (options.item?.Container || '').toLowerCase();
+        // Treat both 'mkv' and 'matroska' as Matroska containers.
+        // Check top-level item container, nested MediaSources[0].Container, and mediaSource.Container
+        // because Jellyfin episode and item metadata responses frequently place the container
+        // format under MediaSources rather than the root item object.
+        const itemContainer = (
+            options.item?.Container ||
+            options.item?.MediaSources?.[0]?.Container ||
+            options.mediaSource?.Container ||
+            ''
+        ).toLowerCase();
         const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
         if (remuxMkvToMp4Setting && !modeLockedProfiles && isMkvItem) {
             const profiles = requestBody.DeviceProfile.DirectPlayProfiles;

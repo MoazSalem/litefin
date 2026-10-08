@@ -26,6 +26,7 @@ function setup({ authenticated = true, count = 2, path = '/home', preference = '
     vm.runInNewContext(listener, {
         document,
         storage,
+        platformInfo: { isTizen: true, isWebOS: false },
         log: { info() {}, debug() {} },
         eventBus: { emit: (name) => calls.push(name) },
         state: { get: (key) => ({ 'user:authenticated': authenticated, 'user:sessionCount': count })[key] },
