@@ -1455,12 +1455,12 @@ html[data-badge-style="dark"] .game-card-badge {
    ============================================================================ */
 
 /* 
- * By default on dedicated TV platforms (Tizen, webOS, Android TV) we hide 
+ * By default on dedicated TV platforms (Tizen, webOS) we hide 
  * the mouse cursor unless the Magic Remote (pointer mode) is active.
- * Desktop (Tauri/Electron) and Web platforms (mouse/trackpad users) must 
- * always show the cursor indicator without unwanted hiding.
+ * Desktop (Tauri/Electron), Web, and mobile/touch Android platforms must 
+ * keep cursor interaction active without unwanted hiding.
  */
-html:not([data-platform="web"]):not([data-platform="desktop"]) body:not(.webos-cursor-active) {
+html:not([data-platform="web"]):not([data-platform="desktop"]):not([data-platform="android"]) body:not(.webos-cursor-active) {
     cursor: none !important;
 }
 

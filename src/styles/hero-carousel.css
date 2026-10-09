@@ -36,6 +36,7 @@
     height: 70vh;
     min-height: 500px;
     overflow: hidden;
+    touch-action: pan-y;
     /* Promote to its own GPU composite layer */
     transform: translateZ(0);
 }
@@ -375,6 +376,7 @@
 .hero-carousel-container {
     position: relative;
     overflow: hidden;
+    touch-action: pan-y;
     /*
      * CRITICAL: contain:layout + paint prevents the carousel's own
      * repaints from cascading into the sidebar or row sections.

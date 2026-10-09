@@ -422,20 +422,35 @@ export class VirtualCardRow {
             const maxScroll = Math.max(0, this.getTrackWidth() - containerWidth);
             const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
-            this.track.style.transition = 'none';
-            this.track.style.webkitTransition = 'none';
+            // =================================================================
+            // ANDROID SCROLL RESTORATION: Native scrollLeft owns position
+            // =================================================================
+            // On Android, TouchHorizontalScroller turns row-items into a native
+            // overflow-x scroller. Restoring focus must write to parent scrollLeft
+            // instead of applying a CSS transform to prevent transform fights.
+            if (platformInfo.isAndroid) {
+                requestAnimationFrame(() => {
+                    if (this.track.parentElement) {
+                        this.track.parentElement.scrollLeft = isRtl ? -finalScrollLeft : finalScrollLeft;
+                    }
+                });
+                // Skip track transform restore below — native scroll owns geometry on Android
+            } else {
+                this.track.style.transition = 'none';
+                this.track.style.webkitTransition = 'none';
 
-            const transformValue = isRtl
-                ? `translate3d(${finalScrollLeft}px, 0, 0)`
-                : `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                const transformValue = isRtl
+                    ? `translate3d(${finalScrollLeft}px, 0, 0)`
+                    : `translate3d(-${finalScrollLeft}px, 0, 0)`;
 
-            this.track.style.webkitTransform = transformValue;
-            this.track.style.transform = transformValue;
+                this.track.style.webkitTransform = transformValue;
+                this.track.style.transform = transformValue;
 
-            requestAnimationFrame(() => {
-                this.track.style.webkitTransition = '';
-                this.track.style.transition = '';
-            });
+                requestAnimationFrame(() => {
+                    this.track.style.webkitTransition = '';
+                    this.track.style.transition = '';
+                });
+            }
         }
 
         // =================================================================
@@ -835,6 +850,63 @@ export class VirtualCardRow {
         if (targetNode && targetNode.dataset && targetNode.dataset.virtualIndex !== undefined) {
             this.currentIndex = parseInt(targetNode.dataset.virtualIndex, 10);
         }
+    }
+
+    /**
+     * =========================================================================
+     * Touch-Scroll Window Synchronization (TouchHorizontalScroller)
+     * =========================================================================
+     * Dynamically shifts the rendered virtual card window to match an arbitrary
+     * finger-driven scroll position without moving UI focus. The card closest
+     * to the viewport center determines the sliding window. Only recomputes
+     * when the center card index changes to minimize DOM manipulation overhead.
+     *
+     * @param {number} x - Current scroll position in track coordinate space (px)
+     */
+    syncScrollToPosition(x) {
+        if (this.totalItems === 0) {
+            return;
+        }
+        const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
+        const centerPos = x + containerWidth / 2;
+        const centerIndex = Math.max(
+            0,
+            Math.min(
+                this.totalItems - 1,
+                Math.round((centerPos - this.sidePadding - this.itemWidth / 2) / this.totalItemWidth)
+            )
+        );
+        if (centerIndex !== this._touchWindowIndex) {
+            this._touchWindowIndex = centerIndex;
+            this._updateWindow(centerIndex);
+        }
+    }
+
+    /**
+     * =========================================================================
+     * Touch-Scroll Gesture Finalizer
+     * =========================================================================
+     * Finalizes touch swipe gesture: records the card closest to the screen center
+     * as the active index so subsequent TV D-pad or remote arrow presses seamlessly
+     * resume navigation from the exact visible card.
+     *
+     * @param {number} x - Final scroll offset in track coordinate space (px)
+     */
+    endTouchScroll(x) {
+        this._touchWindowIndex = null;
+        if (this.totalItems === 0) {
+            return;
+        }
+        const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
+        const centerPos = x + containerWidth / 2;
+        this.currentIndex = Math.max(
+            0,
+            Math.min(
+                this.totalItems - 1,
+                Math.round((centerPos - this.sidePadding - this.itemWidth / 2) / this.totalItemWidth)
+            )
+        );
+        this._updateWindow(this.currentIndex);
     }
 
     /**

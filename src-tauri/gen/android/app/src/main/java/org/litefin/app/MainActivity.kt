@@ -162,10 +162,52 @@ class MainActivity : TauriActivity() {
     webView.requestFocus()
   }
 
+  // Reference to whether playback fullscreen mode is currently engaged
+  private var isPlayerFullscreen: Boolean = false
+
+  /**
+   * Toggles native immersive sticky fullscreen mode.
+   * Hides status and navigation bars during video playback on mobile devices.
+   */
+  fun setFullscreen(fullscreen: Boolean) {
+    isPlayerFullscreen = fullscreen
+    runOnUiThread {
+      try {
+        val windowInsetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        if (fullscreen) {
+          windowInsetsController.systemBarsBehavior =
+            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+          windowInsetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        } else {
+          windowInsetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
+      } catch (e: Exception) {
+        // Fallback legacy flags for older Android versions
+        if (fullscreen) {
+          @Suppress("DEPRECATION")
+          window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+              or View.SYSTEM_UI_FLAG_FULLSCREEN
+              or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+              or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+              or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+              or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+          )
+        } else {
+          @Suppress("DEPRECATION")
+          window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        }
+      }
+    }
+  }
+
   override fun onResume() {
     super.onResume()
     // Re-assert focus onto the active WebView when resuming from background
     activeWebView?.requestFocus()
+    if (isPlayerFullscreen) {
+      setFullscreen(true)
+    }
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -173,6 +215,9 @@ class MainActivity : TauriActivity() {
     // Guarantee that whenever the window regains focus, the WebView has active focus
     if (hasFocus) {
       activeWebView?.requestFocus()
+      if (isPlayerFullscreen) {
+        setFullscreen(true)
+      }
     }
   }
 
@@ -515,6 +560,31 @@ class MainActivity : TauriActivity() {
       } else {
         "$manufacturer $model"
       }
+    }
+
+    /**
+     * Determines whether the host device is an Android TV / Google TV device.
+     * Evaluates official Android UiModeManager television state and leanback feature flags.
+     */
+    @JavascriptInterface
+    fun isTv(): Boolean {
+      return try {
+        val uiModeManager = getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        val isTelevision = uiModeManager?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        val hasLeanback = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+        val hasTvFeature = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION)
+        isTelevision || hasLeanback || hasTvFeature
+      } catch (e: Exception) {
+        false
+      }
+    }
+
+    /**
+     * Toggles native Android immersive fullscreen mode from JavaScript.
+     */
+    @JavascriptInterface
+    fun setFullscreen(fullscreen: Boolean) {
+      this@MainActivity.setFullscreen(fullscreen)
     }
 
     /**
