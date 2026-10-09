@@ -83,6 +83,75 @@ npm run build
 npm run package
 ```
 
+## Building the Android APK from Source
+
+Want to compile the Android client yourself? Here's the full recipe.
+
+### 1. Prerequisites
+
+- **Node.js 18+** and npm dependencies:
+  ```bash
+  npm install
+  ```
+- **JDK 21** — Gradle 8.9 rejects newer JDKs (Java 25 fails with
+  `Unsupported class file major version 69`). On Windows a bundled JDK works:
+  ```bash
+  export JAVA_HOME="C:/android-sdk/jdk21/jdk-21.0.12.1+1"   # Git Bash / WSL style
+  # PowerShell: $env:JAVA_HOME = "C:\android-sdk\jdk21\jdk-21.0.12.1+1"
+  ```
+- **Android SDK** with `platforms;android-35` and `build-tools;35.0.0`:
+  ```bash
+  export ANDROID_HOME="C:/android-sdk"   # point at your SDK root
+  ```
+- **Gradle 8.9** — auto-detected from `C:/android-sdk/gradle/gradle-8.9/bin`,
+  `$GRADLE_HOME/bin`, or `gradle` on PATH.
+
+### 2. One-command build (full pipeline)
+
+```bash
+npm run build:android        # → dist/Litefin-<version>.apk
+```
+
+This syncs the version, builds the modern web bundle, copies it into the
+Android assets, generates launcher icons, creates a local signing keystore on
+first run, runs `gradle assembleRelease`, and copies the APK to `dist/`.
+
+> **Note:** if the Gradle step fails with an Android lint
+> (`Already disposed: MessageBus` / UAST crash), it's a known toolchain issue —
+> run the steps below instead, which skip lint:
+
+### 3. Manual build (workaround path)
+
+```bash
+# 1. Compile the modern web bundle
+npx gulp webpackModern
+
+# 2. Copy it into the Android assets
+rm -rf android/app/src/main/assets/webapp
+cp -r dist/modern android/app/src/main/assets/webapp
+
+# 3. Compile the APK (lint skipped)
+cd android
+"C:/android-sdk/gradle/gradle-8.9/bin/gradle.bat" assembleRelease \
+    --no-daemon -x lint -x lintVitalRelease
+cd ..
+
+# 4. Collect the APK
+cp android/app/build/outputs/apk/release/app-release.apk dist/Litefin-<version>.apk
+```
+
+### 4. Install on a device
+
+```bash
+adb install -r dist/Litefin-<version>.apk
+adb shell am start -n com.litefin.app/.MainActivity
+```
+
+Remote debugging: `chrome://inspect` → the Litefin WebView.
+
+More detail (architecture, touch adaptation, signing) lives in the
+[**Android documentation**](./documentations/ANDROID.md).
+
 ## Quick Installation
 
 ### Samsung Tizen TVs
