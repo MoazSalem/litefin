@@ -1,5 +1,5 @@
 <h1 align="center">Litefin</h1>
-<h3 align="center">Jellyfin and Emby Client for Tizen and webOS Smart TVs</h3>
+<h3 align="center">Jellyfin and Emby Client for Tizen, webOS, and Android</h3>
 
 ![Litefin Banner](./documentations/previews/banner.png)
 
@@ -10,7 +10,7 @@
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/moazsalem)
 [![GitHub Repo stars](https://img.shields.io/github/stars/MoazSalem/litefin)](https://github.com/MoazSalem/litefin/stargazers)
 
-Litefin is an open-source Tizen and webOS Client for Jellyfin written from scratch, designed to provide a premium experience with excellent performance for Jellyfin media browsing and playback (and Emby to a degree), even on legacy hardware. It features a robust player backend specific to each platform, advanced subtitle support, and a highly optimized UI engine for smooth browsing.
+Litefin is an open-source Tizen, webOS, and Android Client for Jellyfin written from scratch, designed to provide a premium experience with excellent performance for Jellyfin media browsing and playback (and Emby to a degree), even on legacy hardware. It features a robust player backend specific to each platform, advanced subtitle support, and a highly optimized UI engine for smooth browsing. On Android it runs in a thin native WebView shell with a fully touch-first UI, while TVs keep the remote-controlled experience.
 
 Extend Litefin features by installing the **Litefin Plugin** on your [**Jellyfin**](https://github.com/MoazSalem/litefin-plugin) or [**Emby**](https://github.com/MoazSalem/litefin-plugin-emby) servers.
 
@@ -50,6 +50,7 @@ Extend Litefin features by installing the **Litefin Plugin** on your [**Jellyfin
 - **TV Admin Features**: Edit item images, run metadata identification, and trigger library scans directly from the remote control.
 - **Multi-Tier TV Server Discovery**: Instant connection via webOS Luna Service, Tizen HTTP service, local subnet scanning, Quick Connect QR code, and Wake-on-LAN (WoL) cold-boot support.
 - **8x Targeted Build Pipeline**: 4 optimized build tiers per platform (Modern, Normal, Legacy, Ultra-Legacy) supporting everything from modern 2024+ smart TVs all the way back to Tizen 2.3+ and webOS 1.0+ (Chromium 32+).
+- **Android Phones & Tablets**: The same web bundle ships inside a lightweight native WebView shell (`com.litefin.app`) with a touch-first adaptation — finger-drag media rows with fling physics, tap-to-toggle player OSD with trickplay scrubbing, adaptive portrait/landscape layouts sized for phone screens, and camera-cutout-safe edge handling. D-pad/remote navigation still works, so Android TV boxes behave like a TV.
 
 
 ## Documentation
@@ -64,6 +65,7 @@ Comprehensive documentation is available in the `documentations` directory:
 - [**UI & UX**](./documentations/UI_UX.md): Design system, components, and animation principles.
 - [**Screenshots**](./documentations/Screenshots.md): Visual previews of the application.
 - [**Development**](./documentations/Development.md): Build pipeline, variants, and deployment guide.
+- [**Android**](./documentations/ANDROID.md): Android WebView shell — architecture, touch adaptation, building the APK, and platform integration points.
 - [**Localization**](./documentations/Localization.md) A doc for translation contributions
 
 ## Quick Start (Development)
@@ -99,6 +101,17 @@ Litefin can be installed on LG TVs using the **Homebrew Channel**:
 2. Either install through the Homebrew Channel UI or download the latest `.ipk` for your hardware from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
 3. Open the Homebrew Channel on your TV and use the **Package Manager** to sideload the `.ipk` file.
 4. (Optional) Install and Configure [**Litefin Plugin**](https://github.com/MoazSalem/litefin-plugin) on your Jellyfin server.
+
+### Android Phones, Tablets & Android TV
+
+Litefin ships as a standard APK:
+
+1. Download the latest `Litefin-<version>.apk` from the [Releases](https://github.com/bdwandry/litefin-android/releases) page.
+2. Sideload it onto your device (open the APK, or `adb install Litefin-<version>.apk` from a computer).
+3. On Android TV boxes, install the APK the same way and use your remote — Litefin's TV navigation works out of the box.
+4. (Optional) Install and Configure [**Litefin Plugin**](https://github.com/MoazSalem/litefin-plugin) on your Jellyfin server.
+
+Building the APK yourself? See the [**Android documentation**](./documentations/ANDROID.md) for prerequisites and the build pipeline.
 
 ## Support
 
