@@ -285,9 +285,9 @@ If Litefin is useful to you, please consider supporting the development:
       </td>
        <td align="center" width="160">
         <a href="https://github.com/bdwandry">
-          <img src="https://github.com/bdwandry.png?s=100" width="80" alt="Bryan Wandrych" />
+          <img src="https://github.com/bdwandry.png?s=100" width="80" alt="bdwandry" />
           <br />
-          <b>Bryan Wandrych</b>
+          <b>bdwandry</b>
         </a>
       </td>
      </tr>
