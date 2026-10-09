@@ -214,6 +214,13 @@ If Litefin is useful to you, please consider supporting the development:
           <b>cozyportal</b>
         </a>
       </td>
+       <td align="center" width="160">
+        <a href="https://github.com/bdwandry">
+          <img src="https://github.com/bdwandry.png?s=100" width="80" alt="Bryan Wandrych" />
+          <br />
+          <b>Bryan Wandrych</b>
+        </a>
+      </td>
      </tr>
     
   </table>
