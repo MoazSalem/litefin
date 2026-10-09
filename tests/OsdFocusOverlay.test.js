@@ -41,6 +41,10 @@ function createOsd(getComputedStyleImpl) {
             },
             querySelector() {
                 return null;
+            },
+            /* Stands in for Node.contains(): true only for nodes flagged as in-document. */
+            contains(el) {
+                return !!(el && el.inDoc === true);
             }
         },
         logger: {
@@ -139,6 +143,32 @@ test('OSDController: _getFocusedOverlayElement delegates to the real DOM _getFoc
     osd._currentFocusIndex = 0;
 
     assert.equal(osd._getFocusedOverlayElement(), domFocused);
+});
+
+/* ---------------------------------------------------------------------------
+ * _isConnected()
+ *
+ * Chromium 38 (webOS 3.x / Ultra-Legacy) has no Element.isConnected, so the
+ * helper has to fall back to document.contains() there - otherwise the overlay
+ * click guards never pass and OK toggles playback instead of the prompt.
+ * ------------------------------------------------------------------------- */
+
+test('OSDController: _isConnected uses the native property when the engine has it', () => {
+    const osd = createOsd();
+    assert.equal(osd._isConnected({ isConnected: true }), true);
+    assert.equal(osd._isConnected({ isConnected: false, inDoc: true }), false);
+});
+
+test('OSDController: _isConnected falls back to document.contains without Element.isConnected', () => {
+    const osd = createOsd();
+    assert.equal(osd._isConnected({ inDoc: true }), true);
+    assert.equal(osd._isConnected({ inDoc: false }), false);
+});
+
+test('OSDController: _isConnected is false for a missing element', () => {
+    const osd = createOsd();
+    assert.equal(osd._isConnected(null), false);
+    assert.equal(osd._isConnected(undefined), false);
 });
 
 /* ---------------------------------------------------------------------------

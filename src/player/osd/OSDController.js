@@ -2236,7 +2236,7 @@ export default class OSDController extends Component {
 
                 if (this._currentFocusRow === -1) {
                     const focusedEl = this._getFocusedOverlayElement();
-                    if (focusedEl && focusedEl.isConnected && (
+                    if (this._isConnected(focusedEl) && (
                         focusedEl.closest('.plugin-widget.visible') ||
                         focusedEl.closest('.upnext-dialog.visible') ||
                         focusedEl.closest('.osd-offset-popup.visible') ||
@@ -2336,7 +2336,7 @@ export default class OSDController extends Component {
                  * If the target is invalid, we fall back to controls recovery.
                  * ====================================================================
                  */
-                if (focusedEl && focusedEl.isConnected && (
+                if (this._isConnected(focusedEl) && (
                     focusedEl.closest('.plugin-widget.visible') ||
                     focusedEl.closest('.upnext-dialog.visible') ||
                     focusedEl.closest('.osd-offset-popup.visible') ||
@@ -2447,7 +2447,7 @@ export default class OSDController extends Component {
                      * Playback Info) handle Enter key clicks correctly on TV adapters.
                      * ====================================================================
                      */
-                    if (focusedEl && focusedEl.isConnected && (
+                    if (this._isConnected(focusedEl) && (
                         focusedEl.closest('.plugin-widget.visible') ||
                         focusedEl.closest('.upnext-dialog.visible') ||
                         focusedEl.closest('.osd-offset-popup.visible') ||
@@ -2877,6 +2877,25 @@ export default class OSDController extends Component {
 
         const widgetStyle = getComputedStyle(widget);
         return widgetStyle.opacity !== '0' && widgetStyle.pointerEvents !== 'none' ? cta : null;
+    }
+
+    /**
+     * Connectivity check for the overlay click guards.
+     *
+     * `Element.isConnected` is Chrome 51+ and is not covered by our polyfills: on
+     * Chromium 38 (webOS 3.x) and the other Ultra-Legacy tiers the property is
+     * `undefined`, so a guard written as `focusedEl.isConnected && …` never passes
+     * there. The OK press then falls through to the controls row - a highlighted
+     * skip prompt toggled playback instead of skipping. `document.contains()` is
+     * available on every tier we build for, so use it whenever the native property
+     * is missing.
+     *
+     * @param {Element|null} el
+     * @returns {boolean}
+     */
+    _isConnected(el) {
+        if (!el) return false;
+        return typeof el.isConnected === 'boolean' ? el.isConnected : document.contains(el);
     }
 
     _getControls() {
