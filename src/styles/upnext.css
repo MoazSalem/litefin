@@ -481,3 +481,22 @@
     font-size: 0.86em;
 }
 
+/* ============================================================================
+ * MOBILE & TOUCH UP-NEXT DIALOG COMPACT SIZING
+ * ============================================================================ */
+html[data-litefin-scaled] .upnext-dialog,
+html[data-litefin-touch] .upnext-dialog {
+    bottom: 5.5em !important;
+    right: 1.2em !important;
+    max-width: 88vw !important;
+    font-size: 0.95rem !important;
+    border-radius: 16px !important;
+}
+
+[dir="rtl"] html[data-litefin-scaled] .upnext-dialog,
+[dir="rtl"] html[data-litefin-touch] .upnext-dialog {
+    right: auto !important;
+    left: 1.2em !important;
+}
+
+

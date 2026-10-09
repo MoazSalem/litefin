@@ -1553,6 +1553,38 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
     max-width: 90vw;
 }
 
+/* ============================================================================
+ * MOBILE & TOUCH MODAL DIALOG OVERRIDES
+ * ============================================================================ */
+html[data-litefin-scaled] .settings-modal,
+html[data-litefin-touch] .settings-modal,
+html[data-litefin-scaled] .player-media-info-modal,
+html[data-litefin-touch] .player-media-info-modal {
+    width: 92vw !important;
+    max-width: 520px !important;
+    max-height: 86vh !important;
+    border-radius: var(--jf-border-radius-lg, 12px) !important;
+    box-sizing: border-box !important;
+}
+
+html[data-litefin-scaled] .settings-modal .modal-header,
+html[data-litefin-touch] .settings-modal .modal-header {
+    padding: 10px 16px !important;
+}
+
+html[data-litefin-scaled] .settings-modal .modal-header h2,
+html[data-litefin-touch] .settings-modal .modal-header h2 {
+    font-size: 1.15rem !important;
+    padding: 6px 0 !important;
+}
+
+html[data-litefin-scaled] .settings-modal .modal-options,
+html[data-litefin-touch] .settings-modal .modal-options {
+    padding: 8px 12px !important;
+    max-height: calc(86vh - 72px) !important;
+    box-sizing: border-box !important;
+}
+
 .player-media-info-modal .media-info-scrollable:focus {
     outline: none;
 }

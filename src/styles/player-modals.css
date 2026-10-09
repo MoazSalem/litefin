@@ -627,3 +627,59 @@
     cursor: pointer;
     text-align: center;
 }
+
+/* ============================================================================
+ * MOBILE & TOUCH PANELS & DRAWERS
+ * ============================================================================
+ * Compact slide-over side drawer adjustments for mobile phone viewports:
+ * 1. Compact panel width (86vw max 440px) replacing wide TV 480px-640px layouts.
+ * 2. Touch target row heights (min-height 44px on items).
+ * 3. Smooth touch scrolling (-webkit-overflow-scrolling: touch).
+ * ============================================================================ */
+html[data-litefin-scaled] .chapters-modal,
+html[data-litefin-scaled] .queue-modal,
+html[data-litefin-touch] .chapters-modal,
+html[data-litefin-touch] .queue-modal {
+    width: 86vw !important;
+    min-width: 0 !important;
+    max-width: 440px !important;
+    border-radius: var(--jf-border-radius-lg, 12px) 0 0 var(--jf-border-radius-lg, 12px) !important;
+    background: rgba(var(--jf-overlay-bg-rgb, 10, 10, 18), 0.95) !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-litefin-scaled] .chapters-modal__header,
+html[data-litefin-scaled] .queue-modal__header,
+html[data-litefin-touch] .chapters-modal__header,
+html[data-litefin-touch] .queue-modal__header {
+    padding: 14px 18px !important;
+}
+
+html[data-litefin-scaled] .chapters-modal__title,
+html[data-litefin-scaled] .queue-modal__title,
+html[data-litefin-touch] .chapters-modal__title,
+html[data-litefin-touch] .queue-modal__title {
+    font-size: 1.2rem !important;
+}
+
+html[data-litefin-scaled] .chapter-row,
+html[data-litefin-scaled] .queue-row,
+html[data-litefin-touch] .chapter-row,
+html[data-litefin-touch] .queue-row {
+    padding: 8px 14px !important;
+    min-height: 44px !important;
+    box-sizing: border-box !important;
+}
+
+html[data-litefin-scaled] .queue-row__thumb-wrap,
+html[data-litefin-touch] .queue-row__thumb-wrap {
+    width: 80px !important;
+    height: 45px !important;
+}
+
+html[data-litefin-scaled] .confirm-exit-actions .modal-action-btn,
+html[data-litefin-touch] .confirm-exit-actions .modal-action-btn {
+    min-width: 100px !important;
+    padding: 10px 20px !important;
+    font-size: 0.95rem !important;
+}
