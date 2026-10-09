@@ -8,6 +8,7 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
+import { api as apiSingleton } from './ApiClient.js';
 import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -97,7 +98,13 @@ class WebSocketHandler {
             // it sends ForceKeepAlive to solicit an immediate KeepAlive reply.
             // Replying promptly prevents the server from closing the connection.
             case 'ForceKeepAlive':
-                api.sendWebSocketKeepAlive?.();
+                /*
+                 * Upstream shipped this referencing a bare `api` identifier
+                 * without importing it (ReferenceError on every
+                 * ForceKeepAlive message). The keepalive lives on the
+                 * ApiClient singleton; import it explicitly.
+                 */
+                apiSingleton.sendWebSocketKeepAlive?.();
                 break;
 
             // ================================================================
