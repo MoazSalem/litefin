@@ -5204,9 +5204,9 @@ class PlayerPage extends Page {
         document.body.classList.remove('player-active', 'lyrics-active');
         document.documentElement.classList.remove('player-active');
 
-        // Exit immersive fullscreen mode when returning to application pages
+        // Maintain immersive fullscreen mode across all views
         if (platformInfo.isAndroid) {
-            androidAdapter.setFullscreen(false);
+            androidAdapter.setFullscreen(true);
         }
 
         // Restore global clock visibility when leaving playback

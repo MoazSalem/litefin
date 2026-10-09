@@ -143,6 +143,24 @@ class AndroidAdapter {
             document.documentElement?.style?.removeProperty('--litefin-app-h');
         }
 
+        // Enforce immersive fullscreen mode across the entire application
+        this.setFullscreen(true);
+
+        // Re-enforce fullscreen when the window regains focus or visibility
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('focus', () => this.setFullscreen(true), { passive: true });
+        }
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.setFullscreen(true);
+                }
+            }, { passive: true });
+            // Browser gesture hook for user interaction
+            document.addEventListener('touchstart', () => this.setFullscreen(true), { passive: true, once: true });
+            document.addEventListener('click', () => this.setFullscreen(true), { passive: true, once: true });
+        }
+
         // Retrieve hardware details from native bridge
         this._loadDeviceInfo();
 
@@ -201,39 +219,34 @@ class AndroidAdapter {
     }
 
     /**
-     * Enters or exits native OS fullscreen mode.
-     * On Android mobile devices, hides the system status bar and navigation pill.
-     * @param {boolean} fullscreen - True to enter fullscreen, false to exit
+     * Enters or maintains native OS fullscreen mode.
+     * The application is configured to always remain in fullscreen mode across all views.
+     * @param {boolean} [fullscreen=true] - Fullscreen state (always locked to true)
      */
-    setFullscreen(fullscreen) {
+    setFullscreen(fullscreen = true) {
         try {
+            // Forward to native bridge if present
             if (typeof window !== 'undefined') {
                 if (typeof window.LitefinAndroid?.setFullscreen === 'function') {
-                    window.LitefinAndroid.setFullscreen(fullscreen);
+                    window.LitefinAndroid.setFullscreen(true);
                     return;
                 }
                 if (typeof window.AndroidBridge?.setFullscreen === 'function') {
-                    window.AndroidBridge.setFullscreen(fullscreen);
+                    window.AndroidBridge.setFullscreen(true);
                     return;
                 }
             }
+
+            // Fallback to DOM fullscreen API
             if (typeof document !== 'undefined') {
-                if (fullscreen) {
-                    if (document.documentElement.requestFullscreen) {
-                        document.documentElement.requestFullscreen().catch(() => {});
-                    } else if (document.documentElement.webkitRequestFullscreen) {
-                        document.documentElement.webkitRequestFullscreen();
-                    }
-                } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen().catch(() => {});
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    }
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
                 }
             }
         } catch (e) {
-            log.warn('Failed toggling fullscreen in AndroidAdapter:', e);
+            log.warn('Failed enforcing fullscreen in AndroidAdapter:', e);
         }
     }
 

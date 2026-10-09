@@ -94,6 +94,7 @@ class MainActivity : TauriActivity() {
     })
 
     super.onCreate(savedInstanceState)
+    setFullscreen(true)
   }
 
   override fun onDestroy() {
@@ -162,41 +163,32 @@ class MainActivity : TauriActivity() {
     webView.requestFocus()
   }
 
-  // Reference to whether playback fullscreen mode is currently engaged
-  private var isPlayerFullscreen: Boolean = false
+  // Reference to whether fullscreen mode is currently engaged
+  private var isFullscreen: Boolean = true
 
   /**
-   * Toggles native immersive sticky fullscreen mode.
-   * Hides status and navigation bars during video playback on mobile devices.
+   * Enforces native immersive sticky fullscreen mode.
+   * Hides status and navigation bars across the entire application.
    */
-  fun setFullscreen(fullscreen: Boolean) {
-    isPlayerFullscreen = fullscreen
+  fun setFullscreen(fullscreen: Boolean = true) {
+    isFullscreen = true
     runOnUiThread {
       try {
         val windowInsetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-        if (fullscreen) {
-          windowInsetsController.systemBarsBehavior =
-            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-          windowInsetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-        } else {
-          windowInsetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-        }
+        windowInsetsController.systemBarsBehavior =
+          androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
       } catch (e: Exception) {
         // Fallback legacy flags for older Android versions
-        if (fullscreen) {
-          @Suppress("DEPRECATION")
-          window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-              or View.SYSTEM_UI_FLAG_FULLSCREEN
-              or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-              or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-              or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-              or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-          )
-        } else {
-          @Suppress("DEPRECATION")
-          window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-        }
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+          View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or View.SYSTEM_UI_FLAG_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        )
       }
     }
   }
@@ -205,19 +197,15 @@ class MainActivity : TauriActivity() {
     super.onResume()
     // Re-assert focus onto the active WebView when resuming from background
     activeWebView?.requestFocus()
-    if (isPlayerFullscreen) {
-      setFullscreen(true)
-    }
+    setFullscreen(true)
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
-    // Guarantee that whenever the window regains focus, the WebView has active focus
+    // Guarantee that whenever the window regains focus, the WebView has active focus and fullscreen is asserted
     if (hasFocus) {
       activeWebView?.requestFocus()
-      if (isPlayerFullscreen) {
-        setFullscreen(true)
-      }
+      setFullscreen(true)
     }
   }
 
@@ -584,7 +572,7 @@ class MainActivity : TauriActivity() {
      */
     @JavascriptInterface
     fun setFullscreen(fullscreen: Boolean) {
-      this@MainActivity.setFullscreen(fullscreen)
+      this@MainActivity.setFullscreen(true)
     }
 
     /**
