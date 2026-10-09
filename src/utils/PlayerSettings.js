@@ -300,6 +300,21 @@ const DEFAULTS = {
     // Custom Vertical Position (0-100% from bottom, used when subtitleVerticalPosition is 'custom')
     subtitleVerticalPositionCustom: 10,
 
+    /* -------------------------------------------------------------------------
+     * DYNAMIC TEXT SUBTITLE SHIFTING
+     * -------------------------------------------------------------------------
+     * When enabled, text subtitles smoothly elevate above the playback controls
+     * and seekbar whenever the OSD interface is brought on screen by remote or
+     * pointer activity, preventing UI overlap with bottom controls.
+     *
+     * In dual-subtitle playback (primary at bottom, secondary at top), the
+     * lower subtitle lifts upward while top and bottom text cues scale to a
+     * compact presentation to preserve clear sightlines across the video.
+     *
+     * Graphic and ASS/SSA subtitles remain at their native authored coordinates.
+     * ------------------------------------------------------------------------- */
+    subtitleOsdDodging: true,
+
     // PGS Subtitle Playback Mode ('client', 'burn', 'disable')
     // 'client' = Custom Web Worker rendering on the TV (Default)
     // 'burn' = Force server to transcode video and burn into frames

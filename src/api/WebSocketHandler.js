@@ -8,6 +8,7 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
+import { api as apiSingleton } from './ApiClient.js';
 import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -91,6 +92,22 @@ class WebSocketHandler {
                 break;
 
             // ================================================================
+            // Server ForceKeepAlive Challenge Handler
+            // ================================================================
+            // When Jellyfin detects socket inactivity or an impending proxy timeout,
+            // it sends ForceKeepAlive to solicit an immediate KeepAlive reply.
+            // Replying promptly prevents the server from closing the connection.
+            case 'ForceKeepAlive':
+                /*
+                 * Upstream shipped this referencing a bare `api` identifier
+                 * without importing it (ReferenceError on every
+                 * ForceKeepAlive message). The keepalive lives on the
+                 * ApiClient singleton; import it explicitly.
+                 */
+                apiSingleton.sendWebSocketKeepAlive?.();
+                break;
+
+            // ================================================================
             // Unhandled message types - log for debugging
             // ================================================================
             default: {
@@ -98,7 +115,6 @@ class WebSocketHandler {
                 const SILENT_TYPES = new Set([
                     'Sessions', // Session list refresh (polled by dashboard)
                     'KeepAlive', // Server keepalive echo
-                    'ForceKeepAlive', // Server asks us to send a keepalive
                     'LibraryChanged', // Library scan completed
                     'RefreshProgress', // Library metadata refresh progress
                     'ScheduledTaskEnded',

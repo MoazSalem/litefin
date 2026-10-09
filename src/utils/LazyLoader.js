@@ -441,10 +441,17 @@ class LazyLoader {
         img.style.display = 'none';
 
         const parent = img.parentElement;
+
+        // Hide chapter thumbnails completely if loading fails instead of injecting gradient fallback
+        if (parent && parent.classList.contains('chapter-row__thumb-wrap')) {
+            parent.classList.remove('skeleton-shimmer');
+            parent.style.display = 'none';
+            return;
+        }
+
         const isSupportedParent =
             parent &&
             (parent.classList.contains('card-image') ||
-                parent.classList.contains('chapter-row__thumb-wrap') ||
                 parent.classList.contains('queue-row__thumb-wrap'));
 
         if (isSupportedParent) {

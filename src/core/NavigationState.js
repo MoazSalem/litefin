@@ -166,6 +166,10 @@ class NavigationState {
         // ====================================================================
         if (focusManager.isTrapped()) {
             log.debug('Skipping NavigationState restoreScrollFocus because focus is trapped in modal');
+            // Notify page so deferred loading overlays can safely be released
+            if (pageInstance && typeof pageInstance.onScrollFocusRestored === 'function') {
+                pageInstance.onScrollFocusRestored();
+            }
             return;
         }
 
@@ -185,6 +189,10 @@ class NavigationState {
             focusManager.getLastMoveTime() > pageInstance._initTimestamp
         ) {
             log.info('Skipping deferred NavigationState restoration: user actively navigated');
+            // Notify page so deferred loading overlays can safely be released
+            if (pageInstance && typeof pageInstance.onScrollFocusRestored === 'function') {
+                pageInstance.onScrollFocusRestored();
+            }
             return;
         }
 
@@ -211,6 +219,11 @@ class NavigationState {
 
         // Restore focus position
         this._restoreFocus(state);
+
+        // Notify page instance that scroll and focus restoration pipeline has executed
+        if (pageInstance && typeof pageInstance.onScrollFocusRestored === 'function') {
+            pageInstance.onScrollFocusRestored();
+        }
     }
 
     /**

@@ -966,23 +966,41 @@ class CardRenderer {
                     subtitleText = i18n.ensureBiDi(item.SeriesName || '');
                 }
             } else {
-                if (isLandscape) {
+                /*
+                 * ============================================================
+                 * Landscape & List Layout Episode Title Formatting
+                 * ============================================================
+                 * When in landscape mode (thumbs) or list mode (options.showMeta),
+                 * display the parent series name as the primary title and the
+                 * episode name as the subtitle/meta so multi-series lists remain
+                 * informative and easy to navigate on TV displays.
+                 * ============================================================
+                 */
+                if (isLandscape || options.showMeta) {
                     if (contextType === 'season-grid') {
+                        // Season episode grid: episode number and title
                         titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
                         subtitleText = '';
                     } else {
-                        // Next Up Style (Keep Series Name)
+                        // Top-level episode view / list view: keep Series Name prominent
                         titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
-                        // If useEpisodeBadges is true, Episode code is in the badge, just show name.
-                        // If useEpisodeBadges is false, Show "SxxExx - Name".
+
+                        // If episode badges are active, episode number is inside badge
                         if (useEpisodeBadges) {
                             subtitleText = i18n.ensureBiDi(item.Name);
                         } else {
-                            subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                            subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name}`);
                         }
                     }
                 } else {
-                    // Poster Style: Episode code in badge if useEpisodeBadges is true
+                    /*
+                     * ========================================================
+                     * Poster & Small-Poster Episode Title Formatting
+                     * ========================================================
+                     * In vertical card orientations, reserve space for concise
+                     * identifiers to prevent multi-line card overflow.
+                     * ========================================================
+                     */
                     if (useEpisodeBadges) {
                         subtitleText = '';
                     } else {
@@ -1296,10 +1314,18 @@ class CardRenderer {
 
         const gameBadgeHtml = CardRenderer.getGameBadgeHtml(item);
 
+        /*
+         * ====================================================================
+         * Metadata Badge Container
+         * ====================================================================
+         * Groups overlay metadata badges (watched state, episode index, quality,
+         * game/seerr flags). videoBadgeHtml is excluded here because it is a
+         * centered play button rendered exclusively within the card-image frame.
+         * ====================================================================
+         */
         const badgeContainer = `
             ${badgeHtml}
             ${playedBadgeHtml}
-            ${videoBadgeHtml}
             ${episodeBadgeHtml}
             ${qualityBadgeHtml}
             ${gameBadgeHtml}
@@ -1427,19 +1453,30 @@ class CardRenderer {
      */
     static createSkeletonHtml(count = 10, isLandscape = false, viewMode = 'poster', hideLabels = false) {
         // Determine the CSS class suffix that matches the real card's layout
+        /*
+         * ====================================================================
+         * Skeleton Card Classification
+         * ====================================================================
+         * Match the visual skeleton silhouette to the selected view mode.
+         * List skeletons must be evaluated first so horizontal rows render
+         * properly even when in landscape-defaulting library collections.
+         * ====================================================================
+         */
         let cardClass = 'media-card skeleton';
-        if (isLandscape || viewMode === 'thumb') {
-            cardClass += ' landscape';
-        } else if (viewMode === 'square') {
-            cardClass += ' square';
-        } else if (viewMode === 'banner') {
-            // Banner = landscape image at fixed height — use landscape card class
-            cardClass += ' landscape';
-        } else if (viewMode === 'list') {
+        if (viewMode === 'list') {
             // List skeletons are horizontal strips with a small image + text block
             cardClass += ' list-skeleton';
+        } else if (isLandscape || viewMode === 'thumb') {
+            // Standard 16:9 landscape skeleton cards
+            cardClass += ' landscape';
+        } else if (viewMode === 'square') {
+            // 1:1 square ratio skeleton cards
+            cardClass += ' square';
+        } else if (viewMode === 'banner') {
+            // Wide horizontal banners
+            cardClass += ' landscape';
         }
-        // 'poster' and 'small-poster' both use the default portrait shape
+        // 'poster' and 'small-poster' use the default portrait shape
 
         const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
         const skeletonHideLabels = hideLabels || (viewMode !== 'list' && cardLabelStyle === 'hidden');

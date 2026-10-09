@@ -117,6 +117,26 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 min: 0, max: 100, step: 1, unit: '%',
                 visible: !isASS && verticalPos === 'custom'
             },
+            /*
+             * -----------------------------------------------------------------
+             * Shift Text Subtitles Above Controls
+             * -----------------------------------------------------------------
+             * Allows remote users to toggle dynamic vertical shift for text
+             * subtitles directly within the quick settings menu.
+             * -----------------------------------------------------------------
+             */
+            {
+                id: 'subtitleOsdDodging',
+                type: 'select',
+                label: i18n.t('LabelSubtitleOsdDodging') || 'Shift Text Subtitles',
+                labelKey: 'LabelSubtitleOsdDodging',
+                key: 'subtitleOsdDodging',
+                visible: !isASS,
+                options: [
+                    { value: true, label: i18n.t('On') },
+                    { value: false, label: i18n.t('Off') }
+                ]
+            },
 
             // Appearance
             {

@@ -438,11 +438,17 @@ class PlayerPage extends Page {
             // ================================================================
             // NETWORK RESILIENCE & OFFLINE EVENT HANDLERS
             // ================================================================
-            // Detect network disconnection immediately rather than waiting
-            // 20-30s for the browser/demuxer socket timeouts.
+            // We listen to browser and operating-system level online/offline events.
+            // Note: The WebSocket connection is solely an auxiliary signaling
+            // and remote-control bridge. Media streaming is carried over HTTP/HTTPS
+            // directly by the hardware decoder or video pipeline. Consequently,
+            // transient WebSocket disconnects or proxy timeouts must NEVER be
+            // treated as total network failures or trigger auto-recovery reloads.
             this._onNetworkOffline = () => this._handleNetworkOffline();
             this._onNetworkOnline = () => this._handleNetworkOnline();
-            eventBus.on('websocket:disconnected', this._onNetworkOffline);
+            
+            // Only listen to websocket:connected to accelerate reconnection polling
+            // when the player is ALREADY actively in the auto-recovery state.
             eventBus.on('websocket:connected', this._onNetworkOnline);
             window.addEventListener('offline', this._onNetworkOffline);
             window.addEventListener('online', this._onNetworkOnline);
@@ -2797,11 +2803,15 @@ class PlayerPage extends Page {
 
             log.warn('[PlaybackWatchdog] Buffering stalled for 3.5s, checking network health...');
 
-            // If browser already reports offline or WebSocket disconnected, recover immediately
+            // ----------------------------------------------------------------
+            // 1. Explicit OS/Browser Offline Verification
+            // ----------------------------------------------------------------
+            // Check if the TV browser engine reports that network is truly down.
+            // Notice: We specifically avoid checking WebSocket connectivity here
+            // because HTTP/HTTPS video delivery runs completely out-of-band.
             const isNavigatorOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-            const isWsDisconnected = typeof api !== 'undefined' && api.isWebSocketConnected === false;
 
-            if (isNavigatorOffline || isWsDisconnected) {
+            if (isNavigatorOffline) {
                 log.warn('[PlaybackWatchdog] Offline status confirmed during stall. Starting auto-recovery.');
                 this._startAutoRecovery({
                     isNetworkError: true,
@@ -2810,7 +2820,12 @@ class PlayerPage extends Page {
                 return;
             }
 
-            // Otherwise, perform a quick 1.5s ping check to verify server availability
+            // ----------------------------------------------------------------
+            // 2. Real HTTP Connectivity Probe to Jellyfin Server
+            // ----------------------------------------------------------------
+            // Perform an active, lightweight HTTP ping directly against the Jellyfin
+            // server. If the server answers, we know the pipe is open and the stall
+            // is merely a standard buffer fetch in progress.
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 1500);
@@ -2851,18 +2866,19 @@ class PlayerPage extends Page {
 
     /**
      * ========================================================================
-     * Handle Network Dropout & WebSocket Disconnection Events
+     * Handle OS/Browser Network Dropout Events
      * ========================================================================
-     * When network connectivity drops, engaging auto-recovery immediately prevents
-     * the player from freezing for 20-30s while the browser/OS socket times out.
+     * Invoked when the TV's network stack explicitly fires window 'offline'.
+     * Preserves current playback position and transitions to the Reconnection
+     * HUD instead of letting the native demuxer hang indefinitely.
      * ========================================================================
      * @private
      */
     _handleNetworkOffline() {
-        log.warn('[AutoRecovery] Network offline event or WebSocket disconnect detected');
+        log.warn('[AutoRecovery] Network offline event detected from window.offline');
         const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
 
-        // If actively playing or buffered and not already recovering or paused
+        // Verify that the player is actively engaged before initiating auto-recovery
         if (
             !this._isAutoRecovering &&
             !this._isPaused &&
@@ -2872,7 +2888,7 @@ class PlayerPage extends Page {
             log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
             this._startAutoRecovery({
                 isNetworkError: true,
-                message: 'Network offline / WebSocket disconnected'
+                message: 'Network offline'
             });
         }
     }
@@ -3266,6 +3282,12 @@ class PlayerPage extends Page {
             // Clear subtitle
             this._clearSubtitle();
         }
+
+        /*
+         * Re-evaluate dual subtitle state whenever primary cue text updates.
+         * Ensures CSS layout rules adjust in real time if both tracks are showing.
+         */
+        this._updateDualSubtitleState();
     }
 
     _clearSubtitle() {
@@ -3281,6 +3303,11 @@ class PlayerPage extends Page {
         // or re-evaluates the same cue time range, SubtitleManager does not think the cue
         // is still actively displayed in the DOM.
         this._player?._subtitleManager?.clearActivePrimaryCue?.();
+
+        /*
+         * Synchronize dual subtitle state when primary overlay is cleared.
+         */
+        this._updateDualSubtitleState();
     }
 
     /**
@@ -3353,6 +3380,11 @@ class PlayerPage extends Page {
             // Empty cue — clear the overlay
             this._clearSecondarySubtitle();
         }
+
+        /*
+         * Re-evaluate dual subtitle state when secondary cue text updates.
+         */
+        this._updateDualSubtitleState();
     }
 
     /**
@@ -3369,6 +3401,54 @@ class PlayerPage extends Page {
 
         // Synchronize SubtitleManager's active cue state
         this._player?._subtitleManager?.clearActiveSecondaryCue?.();
+
+        /*
+         * Synchronize dual subtitle state when secondary overlay is cleared.
+         */
+        this._updateDualSubtitleState();
+    }
+
+    /**
+     * ========================================================================
+     * DUAL SUBTITLE & OSD DODGING STATE SYNCHRONIZATION
+     * ========================================================================
+     * Inspects active subtitle overlay elements and player stream indices to
+     * detect if dual subtitles (primary at bottom and secondary at top) are
+     * concurrently rendering.
+     *
+     * When dual subtitles are active, the 'has-dual-subtitles' class is applied
+     * to .player-page and #player-container so CSS spring transforms can
+     * intelligently reduce font scale and vertical footprint while OSD controls
+     * are present.
+     *
+     * Also checks the global 'subtitleOsdDodging' setting: if disabled, applies
+     * 'osd-dodging-disabled' so that subtitles stay stationary at their baseline.
+     * ========================================================================
+     */
+    _updateDualSubtitleState() {
+        const pageEl = this.el || document.querySelector('.player-page');
+        const playerContainer = document.getElementById('player-container');
+
+        const primaryOverlay = document.getElementById('subtitle-overlay');
+        const secondaryOverlay = document.getElementById('secondary-subtitle-overlay');
+
+        // Check whether both tracks are selected in player OR both overlays currently hold visible text
+        const secIdx = this._player?.getCurrentSecondarySubtitleStreamIndex?.();
+        const primIdx = this._player?.getCurrentSubtitleStreamIndex?.();
+        const hasSecondaryTrack = secIdx !== -1 && secIdx !== null && secIdx !== undefined;
+        const hasPrimaryTrack = primIdx !== -1 && primIdx !== null && primIdx !== undefined;
+
+        const hasPrimaryOverlay = !!(primaryOverlay && !primaryOverlay.classList.contains('hidden') && primaryOverlay.innerHTML.trim().length > 0);
+        const hasSecondaryOverlay = !!(secondaryOverlay && !secondaryOverlay.classList.contains('hidden') && secondaryOverlay.innerHTML.trim().length > 0);
+
+        const isDual = (hasSecondaryTrack && (hasPrimaryTrack || hasPrimaryOverlay)) || (hasPrimaryOverlay && hasSecondaryOverlay);
+        if (pageEl) pageEl.classList.toggle('has-dual-subtitles', isDual);
+        if (playerContainer) playerContainer.classList.toggle('has-dual-subtitles', isDual);
+
+        // Also check if subtitle OSD dodging is globally disabled in user preferences
+        const isDodgingEnabled = PlayerSettings.get('subtitleOsdDodging') !== false;
+        if (pageEl) pageEl.classList.toggle('osd-dodging-disabled', !isDodgingEnabled);
+        if (playerContainer) playerContainer.classList.toggle('osd-dodging-disabled', !isDodgingEnabled);
     }
 
     _onMediaStreamsChange(data) {
@@ -3405,6 +3485,11 @@ class PlayerPage extends Page {
         log.info('Media streams changed, reporting progress to persist selection');
         const isPaused = this._player.isPaused();
         this._reportPlaybackProgress(isPaused ? 'pause' : 'timeupdate');
+
+        /*
+         * Re-evaluate dual subtitle state when media stream selections change.
+         */
+        this._updateDualSubtitleState();
     }
 
     /**
@@ -3497,6 +3582,11 @@ class PlayerPage extends Page {
                 }
             }
         }
+
+        /*
+         * Re-evaluate dual subtitle state on full style refresh.
+         */
+        this._updateDualSubtitleState();
     }
 
     /**
@@ -4921,7 +5011,6 @@ class PlayerPage extends Page {
 
         // Remove network offline/online listeners
         if (this._onNetworkOffline) {
-            eventBus.off('websocket:disconnected', this._onNetworkOffline);
             window.removeEventListener('offline', this._onNetworkOffline);
             this._onNetworkOffline = null;
         }
