@@ -358,7 +358,8 @@ const DEFAULTS = {
     // Enable Instant Playback (pre-fetches PlaybackInfo & item details in background)
     enablePrewarm: true,
 
-    // Player backend ('auto', 'avplay', 'webos', 'html5')
+    // Player backend ('auto', 'movi', 'avplay', 'webos', 'html5')
+    // On desktop environments, 'auto' resolves to 'movi' for native MKV/WebCodecs support.
     playerBackend: 'auto',
 
     /*
@@ -393,6 +394,17 @@ const DEFAULTS = {
 
     // Force all content to direct play (override for testing native decoding)
     forceDirectPlay: false,
+
+    // -------------------------------------------------------------------------
+    // DIRECTPLAY / REMUX FAILURE AUTO-TRANSCODE ESCALATION
+    // -------------------------------------------------------------------------
+    // When enabled, if DirectPlay or Remux fails during playback startup or mid-stream
+    // (e.g., container demuxer error, I/O reset, or unsupported profile on hardware),
+    // playback automatically escalates to server-side transcoding instead of halting
+    // with a red error modal.
+    //
+    // Default: true
+    autoTranscodeOnError: true,
 
     // -------------------------------------------------------------------------
     // MKV → MP4 REMUX

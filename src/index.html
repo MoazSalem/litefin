@@ -3,7 +3,42 @@
 
 <head>
     <meta charset="UTF-8">
+    <style>
+        /* Immediate critical dark background to prevent any white canvas flash during boot */
+        html:not(.player-active), body:not(.player-active) {
+            background-color: #000000 !important;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Seamless transparency mode when video player is active */
+        html.player-active, body.player-active,
+        html.player-active #app, body.player-active #app,
+        html.player-active #page-container, body.player-active #page-container {
+            background-color: transparent !important;
+            background: transparent !important;
+        }
+    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script>
+        /*
+         * TV & Android 1080p Viewport Normalization
+         * Locks the layout canvas to 1920 CSS pixels wide on Android/TV devices
+         * paired with WebView useWideViewPort to ensure identical proportions
+         * across 720p, 1080p, and 4K displays without container clipping.
+         */
+        if (/Android/i.test(navigator.userAgent)) {
+            var metaViewport = document.querySelector('meta[name="viewport"]');
+            if (metaViewport) {
+                metaViewport.setAttribute('content', 'width=1920, user-scalable=no');
+            }
+            // Polyfill window.chrome for Android WebView so that media engines
+            // like movi-player CanvasRenderer correctly recognize the Chromium runtime
+            if (typeof window !== 'undefined' && !window.chrome) {
+                window.chrome = { runtime: {} };
+            }
+        }
+    </script>
     <meta name="referrer" content="no-referrer">
     <meta name="description" content="Litefin - Native Jellyfin Client for Samsung Tizen TVs">
     <title>Litefin</title>

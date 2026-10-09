@@ -37,6 +37,7 @@ import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
 import { sanitizeSubtitleText } from '../utils/Utils.js';
 import { prewarmManager } from '../player/core/PrewarmManager.js';
+import BackdropManager from '../utils/BackdropManager.js';
 
 const log = logger.create('Player');
 
@@ -270,58 +271,19 @@ class PlayerPage extends Page {
         const startPositionTicks = this.params.startPositionTicks ? parseInt(this.params.startPositionTicks, 10) : null;
 
         try {
-            // Show loading
+            // Show loading overlay immediately with a solid opaque black background
             this._showLoading(true);
 
-            // Render cached backdrop if available (for smooth transition)
+            // Ensure loader container has solid black background immediately upon initiation
+            const loader = this.el?.querySelector('.page-loading');
+            if (loader) {
+                loader.style.backgroundColor = '#000000';
+            }
+
+            // Render cached backdrop if available (for seamless visual transition)
             const backdropUrl = state.get('player:backdropUrl');
             if (backdropUrl) {
-                // Apply directly to the loading overlay to ensure visibility
-                const loader = this.el.querySelector('.page-loading');
-                if (loader) {
-                    // IMPORTANT: Do NOT make the loader background transparent yet.
-                    // Setting it to transparent here would expose the black Tizen hardware plane
-                    // for the entire image fetch duration. Instead keep it solidly dark and
-                    // flip to transparent atomically on the same frame as the backdrop fades in.
-                    loader.style.backgroundColor = '#000';
-
-                    // Create a dedicated background layer to fade in independently of the spinner
-                    let backdropLayer = loader.querySelector('.loading-backdrop-layer');
-                    if (!backdropLayer) {
-                        backdropLayer = document.createElement('div');
-                        backdropLayer.className = 'loading-backdrop-layer';
-                        backdropLayer.style.position = 'absolute';
-                        backdropLayer.style.top = '0';
-                        backdropLayer.style.left = '0';
-                        backdropLayer.style.width = '100%';
-                        backdropLayer.style.height = '100%';
-                        backdropLayer.style.backgroundSize = 'cover';
-                        backdropLayer.style.backgroundPosition = 'center';
-                        backdropLayer.style.opacity = '0';
-                        backdropLayer.style.transition = 'opacity 0.6s ease-in-out';
-                        backdropLayer.style.zIndex = '-1';
-                        loader.insertBefore(backdropLayer, loader.firstChild);
-                    }
-
-                    // Preload the image to prevent "half sliced" progressive loading artifact
-                    const img = new Image();
-                    img.onload = () => {
-                        // Now that the image is ready, transition to transparent bg so the
-                        // backdrop layer shows through cleanly with no visible black gap.
-                        loader.style.backgroundColor = 'transparent';
-                        backdropLayer.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${backdropUrl}')`;
-                        requestAnimationFrame(() => {
-                            backdropLayer.style.opacity = '1';
-                        });
-                    };
-                    img.onerror = () => {
-                        // If the image fails, just keep the solid dark background — better than black flash
-                        log.warn('Backdrop image failed to load, keeping solid loading background');
-                    };
-                    img.src = backdropUrl;
-
-                    this._loadingBackdrop = backdropLayer; // Mark for cleanup
-                }
+                this._applyLoadingBackdrop(backdropUrl);
             }
 
             // Enable Tizen AVPlayer transparency mode
@@ -346,6 +308,14 @@ class PlayerPage extends Page {
 
             // Load item details (and wait for font if needed)
             const [itemResult] = await Promise.all(fetchTasks);
+
+            // If initial backdrop wasn't pre-cached in state, attempt fallback resolution from item metadata
+            if (!this._loadingBackdrop && this.el?.classList.contains('loading')) {
+                const itemBackdropUrl = BackdropManager.getBackdropUrl(itemResult, { maxWidth: 1920 });
+                if (itemBackdropUrl) {
+                    this._applyLoadingBackdrop(itemBackdropUrl);
+                }
+            }
 
             // Preserve local trailer metadata mutations (Name & ProductionYear) since
             // local trailers lack parent context and the fresh API fetch wipes our changes.
@@ -988,11 +958,20 @@ class PlayerPage extends Page {
 
         if (playerBackend === 'avplay') {
             useTizenPlayer = true;
-        } else if (playerBackend === 'html5') {
+        } else if (playerBackend === 'html5' || playerBackend === 'movi' || playerBackend === 'webos' || playerBackend === 'exoplayer') {
             useTizenPlayer = false;
         }
 
-        log.info(`Resolved player backend: ${playerBackend} (useTizenPlayer: ${useTizenPlayer})`);
+        /*
+         * ====================================================================
+         * Player Backend Resolution Log
+         * ====================================================================
+         * Log the resolved backend setting along with the active device platform.
+         * The useTizenPlayer boolean is only attached when running on Samsung Tizen
+         * hardware to avoid confusing logs on other platforms (Android, WebOS, Desktop, Web).
+         */
+        const tizenDiagnostic = platformInfo.isTizen ? ` (useTizenPlayer: ${useTizenPlayer})` : '';
+        log.info(`Resolved player backend: ${playerBackend} | platform: ${platformInfo.platformString}${tizenDiagnostic}`);
 
         // Construct the player directly — no bridge, no window global
         this._player = new JellyfinPlayer({
@@ -1463,6 +1442,9 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
+            // Reset player error latch for the new playback attempt
+            this._hasPlayerError = false;
+
             // Build player options. If a specific media source version was pre-selected
             // on the details screen (e.g. 720p vs 1080p), ensure we pass the target
             // mediaSourceId down as a fallback even if the client-side metadata matching
@@ -1510,6 +1492,18 @@ class PlayerPage extends Page {
                     autoPlay: syncPlayManager.wantsAutoPlay()
                 });
             } else {
+                /*
+                 * -------------------------------------------------------------
+                 * Playback Startup Failure Protection
+                 * -------------------------------------------------------------
+                 * If the backend player failed to initialize (e.g. un-upgraded
+                 * custom element, demuxer failure, codec incompatibility), latch
+                 * _hasPlayerError so routine progress or stop reports do NOT fire
+                 * and zero out the user's saved resume position.
+                 * -------------------------------------------------------------
+                 */
+                this._hasPlayerError = true;
+                log.error('_startPlayback: Player play failed:', err);
                 throw err;
             }
         }
@@ -1883,7 +1877,14 @@ class PlayerPage extends Page {
             return;
         }
 
-        const osdContainer = this.$('#osd-overlay');
+        /*
+         * -----------------------------------------------------------------
+         * Query OSD Mounting Target Element
+         * -----------------------------------------------------------------
+         * Locate the #osd-overlay container within the component or the DOM.
+         * -----------------------------------------------------------------
+         */
+        const osdContainer = this.$('#osd-overlay') || document.getElementById('osd-overlay');
         if (!osdContainer) {
             log.error('OSD container #osd-overlay not found');
             return;
@@ -2699,6 +2700,9 @@ class PlayerPage extends Page {
             this._resumePosition = currentTicks;
             log.info(`Captured current position for retry: ${this._resumePosition} ticks`);
         }
+
+        // Latch player error status to halt ongoing progress / stopped server synchronization
+        this._hasPlayerError = true;
 
         log.error('Player error:', error);
 
@@ -3538,6 +3542,20 @@ class PlayerPage extends Page {
     async _reportPlaybackProgress(eventName = 'timeupdate', manualPositionTicks = null) {
         if (!this._player || !this._item) return;
 
+        /*
+         * ---------------------------------------------------------------------
+         * Error & Premature Progress Guard
+         * ---------------------------------------------------------------------
+         * Never report progress if playback has not yet confirmed start on the
+         * server, or if the player entered a fatal error state. Doing so would
+         * report position 0 ticks to the server, erasing the user's progress.
+         * ---------------------------------------------------------------------
+         */
+        if (!this._hasReportedStart || this._hasPlayerError) {
+            log.info('Skipping progress report: playback not started or in error state');
+            return;
+        }
+
         // Skip reporting progress completely if running in private/ghost mode
         if (this._isGhostMode) {
             return;
@@ -3600,10 +3618,23 @@ class PlayerPage extends Page {
      */
     _getPlayerState(manualPositionTicks = null) {
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks =
+        let positionTicks =
             manualPositionTicks !== null && manualPositionTicks !== undefined
                 ? manualPositionTicks
                 : this._player?.getCurrentPositionTicks?.() || 0;
+
+        /*
+         * ---------------------------------------------------------------------
+         * Resume Position Preservation Guard
+         * ---------------------------------------------------------------------
+         * If the current position evaluates to 0 ticks, but we arrived into the
+         * player with a valid saved resume position, preserve this._resumePosition.
+         * Prevents transient initialization ticks from overwriting saved progress.
+         * ---------------------------------------------------------------------
+         */
+        if ((!positionTicks || positionTicks === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+            positionTicks = this._resumePosition;
+        }
 
         // Cache the play method if it exists, so we survive player instance recreation during audio track switches.
         if (this._player?._currentPlayMethod) {
@@ -3694,8 +3725,81 @@ class PlayerPage extends Page {
     // UI Helpers
     // ========================================================================
 
+    /**
+     * ========================================================================
+     * BACKDROP LOADING OVERLAY HANDLER
+     * ========================================================================
+     * Preloads and displays a backdrop image within the player loading screen.
+     * To prevent desktop transparency artifacts on Tauri Windows/desktop builds,
+     * the base loader maintains an opaque pitch-black (#000000) background while
+     * the backdrop layer softly cross-fades into view on top of it.
+     * ========================================================================
+     * @param {string} backdropUrl - Target backdrop image URL
+     */
+    _applyLoadingBackdrop(backdropUrl) {
+        if (!backdropUrl || !this.el) return;
+
+        // Locate active page loader element
+        const loader = this.el.querySelector('.page-loading');
+        if (!loader) return;
+
+        // Ensure loader container maintains a solid opaque black background
+        loader.style.backgroundColor = '#000000';
+
+        // Retrieve or instantiate the dedicated backdrop presentation layer
+        let backdropLayer = loader.querySelector('.loading-backdrop-layer');
+        if (!backdropLayer) {
+            backdropLayer = document.createElement('div');
+            backdropLayer.className = 'loading-backdrop-layer';
+            backdropLayer.style.position = 'absolute';
+            backdropLayer.style.top = '0';
+            backdropLayer.style.left = '0';
+            backdropLayer.style.width = '100%';
+            backdropLayer.style.height = '100%';
+            backdropLayer.style.backgroundSize = 'cover';
+            backdropLayer.style.backgroundPosition = 'center';
+            backdropLayer.style.opacity = '0';
+            backdropLayer.style.transition = 'opacity 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
+            backdropLayer.style.zIndex = '0';
+            backdropLayer.style.pointerEvents = 'none';
+
+            // Insert layer behind the central loading indicator
+            loader.insertBefore(backdropLayer, loader.firstChild);
+        }
+
+        // Asynchronously preload image to ensure smooth, non-glitchy rendering
+        const img = new Image();
+        img.onload = () => {
+            // Guard against page destruction or loading dismissal before network completion
+            if (!this.el || !this.el.classList.contains('loading')) return;
+
+            // Apply linear gradient over image; base loader remains solidly #000000
+            backdropLayer.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${backdropUrl}')`;
+
+            // Fade in gracefully on the next animation frame
+            requestAnimationFrame(() => {
+                backdropLayer.style.opacity = '1';
+            });
+        };
+
+        img.onerror = () => {
+            // Keep solid black on error without exposing transparency
+            log.warn('Backdrop image failed to load, maintaining solid black loading background');
+        };
+
+        img.src = backdropUrl;
+        this._loadingBackdrop = backdropLayer;
+    }
+
     _showLoading(show) {
         this.setLoading(show);
+        if (show && this.el) {
+            // Always ensure the loader has an opaque black background when activated
+            const loader = this.el.querySelector('.page-loading');
+            if (loader) {
+                loader.style.backgroundColor = '#000000';
+            }
+        }
     }
 
     _showError(message) {
@@ -4127,6 +4231,21 @@ class PlayerPage extends Page {
             return;
         }
 
+        /*
+         * ---------------------------------------------------------------------
+         * Active Session Guard
+         * ---------------------------------------------------------------------
+         * If playback never successfully started reporting to the server (e.g.
+         * decoder failed immediately, or user closed the player on an error screen),
+         * DO NOT send PlaybackStopped. There is no active session on the server,
+         * and sending 0 ticks would clobber the user's saved resume position!
+         * ---------------------------------------------------------------------
+         */
+        if (!this._hasReportedStart) {
+            log.info('Skipping PlaybackStopped report: playback never successfully started');
+            return;
+        }
+
         try {
             // 1. Capture data
             const mediaSource =
@@ -4135,6 +4254,19 @@ class PlayerPage extends Page {
             // Ensure position is a rounded integer. We grab the reported position
             // from the player backend or the fallback parameters.
             let rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+
+            /*
+             * -----------------------------------------------------------------
+             * Resume Safeguard on Stop
+             * -----------------------------------------------------------------
+             * If the backend stopped at 0 (or failed before first frame rendered)
+             * but a valid resume position was held, preserve the resume position.
+             * -----------------------------------------------------------------
+             */
+            if ((!rawPosition || rawPosition === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+                log.info(`Preserving initial resume position (${this._resumePosition} ticks) instead of 0 ticks on stop`);
+                rawPosition = this._resumePosition;
+            }
 
             // If the video naturally completed (ended event was fired), advancing to
             // the next item, or the user watched >= 80% of the content (accommodating
@@ -4317,7 +4449,13 @@ class PlayerPage extends Page {
 
         // Capture session info before stopping (stop clears internal player state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        let positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+        // Preserve resume position if player never progressed past 0
+        if ((!positionTicks || positionTicks === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+            positionTicks = this._resumePosition;
+        }
+
         const durationTicks =
             this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 
@@ -4569,7 +4707,13 @@ class PlayerPage extends Page {
 
         // Capture session info BEFORE stopping (stop clears internal state)
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        let positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+        // Preserve resume position if player never progressed past 0
+        if ((!positionTicks || positionTicks === 0) && typeof this._resumePosition === 'number' && this._resumePosition > 0) {
+            positionTicks = this._resumePosition;
+        }
+
         const durationTicks =
             this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
 

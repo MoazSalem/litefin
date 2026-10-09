@@ -2436,6 +2436,8 @@ class HomePage extends Page {
 
         focusManager.register('home-hero', placeholder, {
             orientation: 'horizontal',
+            selector: '#hero-carousel-container',
+            defaultFocusSelector: '#hero-carousel-container',
             leaveDown: () => this._getFirstLiveRowSectionName(),
             leaveLeft: 'sidebar'
         });

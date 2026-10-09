@@ -1,0 +1,83 @@
+# =============================================================================
+# Litefin - Tauri v2 Desktop & Mobile Application Manifest
+# =============================================================================
+# High-performance, lightweight Rust shell wrapping Litefin's frontend.
+# Configured for cross-platform compilation targeting Windows, macOS, Linux,
+# and Android / Android TV devices.
+# =============================================================================
+
+[package]
+name = "litefin"
+version = "1.9.28"
+description = "Native Jellyfin client for Samsung Tizen, LG webOS, Desktop, and Android TV"
+authors = ["Litefin Team"]
+edition = "2021"
+license = "GPL-2.0"
+
+# -----------------------------------------------------------------------------
+# Library Definition for Cross-Platform Compilation
+# -----------------------------------------------------------------------------
+# Required by Tauri v2 to support both Desktop targets (via main.rs) and
+# Mobile targets (compiled as a static/cdylib library for Android JNI runtime).
+# -----------------------------------------------------------------------------
+[lib]
+name = "litefin_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# -----------------------------------------------------------------------------
+# Build Dependencies
+# -----------------------------------------------------------------------------
+# Code generation and asset compilation handled by tauri-build at compile time.
+# -----------------------------------------------------------------------------
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# -----------------------------------------------------------------------------
+# Runtime Core Dependencies
+# -----------------------------------------------------------------------------
+# Lean core dependencies without bloat, leaving heavy decoding to WebAssembly/Movi.
+# -----------------------------------------------------------------------------
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# -----------------------------------------------------------------------------
+# Desktop Platform Dependencies (Windows, macOS, Linux)
+# -----------------------------------------------------------------------------
+# Enables the 'devtools' feature on desktop runtimes so F12 and context-menu
+# inspect element work cleanly in development and production testing builds.
+# -----------------------------------------------------------------------------
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tauri = { version = "2.12", features = ["devtools"] }
+
+# -----------------------------------------------------------------------------
+# Android Mobile Dependencies
+# -----------------------------------------------------------------------------
+# Omits desktop devtools feature on Android targets to keep native .so binaries lean.
+# -----------------------------------------------------------------------------
+[target.'cfg(target_os = "android")'.dependencies]
+tauri = { version = "2.12", features = [] }
+
+# -----------------------------------------------------------------------------
+# Release Profile Optimizations
+# -----------------------------------------------------------------------------
+# Maximum size reduction and dead-code stripping for production native binaries.
+# Enables whole-program Link-Time Optimization (LTO), merges code generation
+# units, strips all symbol tables and debuginfo, and eliminates panic landing pads.
+# -----------------------------------------------------------------------------
+[profile.release]
+# Optimize aggressively for binary size ('z' optimizes for minimal footprint)
+opt-level = "z"
+
+# Enable whole-crate Link-Time Optimization across all dependencies
+lto = true
+
+# Single code generation unit maximizes compiler dead-code elimination passes
+codegen-units = 1
+
+# Strip panic unwinding landing pads to reduce binary size significantly
+panic = "abort"
+
+# Strip all debug symbols and symbol tables directly during compilation
+strip = true
+

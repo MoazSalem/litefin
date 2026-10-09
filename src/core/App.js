@@ -15,6 +15,9 @@ import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { androidAdapter } from '../android/AndroidAdapter.js';
+import { desktopAdapter } from '../desktop/DesktopAdapter.js';
+import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
@@ -93,11 +96,23 @@ class App {
         // 1.5. Initialize Platform Detection — saves OS type (Web, Tizen, WebOS)
         platformInfo.init();
 
-        // 1.6. Initialize platform adapters (hardware/keys)
-        if (platformInfo.isWebOS) {
-            webosAdapter.init();
-        } else {
+        // 1.6. Initialize platform adapters (hardware/keys/lifecycle)
+        // Dispatches to the strictly targeted adapter based on runtime environment:
+        // - Samsung Tizen Smart TVs -> TizenAdapter
+        // - LG WebOS Smart TVs -> WebOSAdapter
+        // - Android TV / Google TV / Android -> AndroidAdapter
+        // - Packaged Desktop App Shells (Tauri) -> DesktopAdapter
+        // - Standard Web Browsers -> WebAdapter
+        if (platformInfo.isTizen) {
             tizenAdapter.init();
+        } else if (platformInfo.isWebOS) {
+            webosAdapter.init();
+        } else if (platformInfo.isAndroid) {
+            androidAdapter.init();
+        } else if (platformInfo.isDesktop) {
+            desktopAdapter.init();
+        } else {
+            webAdapter.init();
         }
 
         // 1.7. Initialize Image Cache — opens IndexedDB for homepage blob caching
@@ -534,7 +549,7 @@ class App {
                      * If the user manually toggles the setting, their stored preference is respected.
                      * Media playback views (/player) are always spared to avoid interruptions.
                      * ========================================================================= */
-                    const isTv = platformInfo.isTizen || platformInfo.isWebOS;
+                    const isTv = typeof platformInfo !== 'undefined' ? (platformInfo.isTizen || platformInfo.isWebOS) : true;
                     const savedReload = storage.getItem('pref:reloadOnResume');
                     const reloadOnResume = savedReload !== null ? savedReload === 'true' : isTv;
 
@@ -624,10 +639,16 @@ class App {
                 // We DO NOT end the session on the server here.
                 // Calling /Sessions/Logout actively revokes the authentication token.
                 // The dashboard Offline status is handled automatically by the WebSocket dropping.
-                if (platformInfo.isWebOS) {
-                    webosAdapter.exit();
-                } else {
+                if (platformInfo.isTizen) {
                     tizenAdapter.exit();
+                } else if (platformInfo.isWebOS) {
+                    webosAdapter.exit();
+                } else if (platformInfo.isAndroid) {
+                    androidAdapter.exit();
+                } else if (platformInfo.isDesktop) {
+                    desktopAdapter.exit();
+                } else {
+                    webAdapter.exit();
                 }
             }
         });

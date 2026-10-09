@@ -3333,19 +3333,44 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${(() => {
+                // Initialize default options array with the Auto (Recommended) option
                 const options = [
-                    { value: 'auto', label: i18n.t('AutoRecommended') },
-                    { value: 'html5', label: i18n.t('BackendWeb') }
+                    { value: 'auto', label: i18n.t('AutoRecommended') }
                 ];
-                if (platformInfo.isTizen) {
+
+                // Add platform-specific native hardware player backends
+                if (platformInfo.isAndroid) {
+                    options.push({ value: 'exoplayer', label: i18n.t('BackendExoPlayer') || 'Media3 ExoPlayer (Android Native)' });
+                } else if (platformInfo.isTizen) {
                     options.push({ value: 'avplay', label: i18n.t('BackendTizen') });
                 } else if (platformInfo.isWebOS) {
                     options.push({ value: 'webos', label: i18n.t('BackendWebOS') });
                 }
-                return this._renderDropdown('player-backend-select', options, currentBackend);
+
+                // Check WebCodecs API support: only show Movi Player if hardware-accelerated
+                // WebCodecs frame decoding is supported on the current runtime.
+                // On TVs or web browsers without WebCodecs, Movi Player is hidden.
+                if (platformInfo.hasWebCodecsSupport) {
+                    options.push({
+                        value: 'movi',
+                        label: i18n.t('BackendMovi') || 'Movi Player (Desktop MKV/WebCodecs)'
+                    });
+                }
+
+                // Native HTML5 browser video backend is universally available
+                options.push({ value: 'html5', label: i18n.t('BackendWeb') });
+
+                // If currently stored backend setting is 'movi' but WebCodecs is not supported,
+                // fallback display value to 'html5' to prevent invalid dropdown selection state
+                const effectiveBackend = (currentBackend === 'movi' && !platformInfo.hasWebCodecsSupport)
+                    ? 'html5'
+                    : currentBackend;
+
+                return this._renderDropdown('player-backend-select', options, effectiveBackend);
             })()}
                     </div>
                 </div>
+
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -4178,6 +4203,20 @@ class SettingsPage extends Page {
                         <button class="toggle-switch ${PlayerSettings.get('forceDirectPlay') ? 'active' : ''}" 
                                 id="toggle-force-direct-play" 
                                 data-setting="forceDirectPlay"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AutoTranscodeOnError">${i18n.t('AutoTranscodeOnError') || 'Auto-Fallback to Transcode'}</span>
+                        <span class="setting-description" data-i18n="AutoTranscodeOnErrorDescription">${i18n.t('AutoTranscodeOnErrorDescription') || 'Automatically escalate to server-side transcoding if DirectPlay or Remux fails during playback startup or mid-stream.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('autoTranscodeOnError') !== false ? 'active' : ''}" 
+                                id="toggle-auto-transcode-on-error" 
+                                data-setting="autoTranscodeOnError"
                                 tabindex="0">
                         </button>
                     </div>
@@ -5274,7 +5313,7 @@ class SettingsPage extends Page {
          * If the user explicitly sets the preference, their saved choice takes precedence.
          * =========================================================================
          */
-        const isTv = platformInfo.isTizen || platformInfo.isWebOS;
+        const isTv = platformInfo.isTizen || platformInfo.isWebOS || platformInfo.isAndroid;
         const savedReloadPref = storage.getItem('pref:reloadOnResume');
         const reloadOnResumeEnabled = savedReloadPref !== null ? savedReloadPref === 'true' : isTv;
 
@@ -5377,8 +5416,8 @@ class SettingsPage extends Page {
                 <!-- -------------------------------------------------------------
                  * Dynamic Play Queue Episode Window Size
                  * Configures how many preceding and succeeding episodes are loaded
-                 * around the currently playing episode. Designed according to Apple
-                 * HIG for clarity, tactile responsiveness, and minimal footprint.
+                 * around the currently playing episode. Designed for maximum clarity,
+                 * tactile responsiveness, and minimal memory footprint.
                  * ------------------------------------------------------------- -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -5893,13 +5932,29 @@ class SettingsPage extends Page {
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Platform">${i18n.t('Platform')}</span>
-                            <span class="identity-value">${platformInfo.isWeb ? i18n.t('BrowserValue', [caps.browserVersion]) : platformInfo.isWebOS ? i18n.t('WebOSValue', [caps.webosVersion]) : i18n.t('TizenValue', [caps.tizenVersion])}</span>
+                            <span class="identity-value">${(() => {
+                                // Specific operating system branch detection
+                                if (platformInfo.isAndroid) {
+                                    const ver = caps.androidVersion || platformInfo.androidVersion;
+                                    return ver ? `Android ${ver}` : 'Android';
+                                }
+                                if (platformInfo.isWebOS) {
+                                    return i18n.t('WebOSValue', [caps.webosVersion]);
+                                }
+                                if (platformInfo.isTizen) {
+                                    return i18n.t('TizenValue', [caps.tizenVersion]);
+                                }
+                                if (platformInfo.isDesktop) {
+                                    return `Desktop (${platformInfo.operatingSystem || 'Native'})`;
+                                }
+                                return i18n.t('BrowserValue', [caps.browserVersion]);
+                            })()}</span>
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Resolution">${i18n.t('Resolution')}</span>
                             <span class="identity-value">${i18n.t('ResolutionValue', [
-            caps.screenWidth,
-            caps.screenHeight,
+            caps.screenWidth || (typeof window !== 'undefined' ? (window.screen?.width || window.innerWidth || 1920) : 1920),
+            caps.screenHeight || (typeof window !== 'undefined' ? (window.screen?.height || window.innerHeight || 1080) : 1080),
             caps.uhd8K ? i18n.t('UHD8K') : caps.uhd ? i18n.t('UHD') : i18n.t('FHD')
         ])}</span>
                         </div>
@@ -5930,6 +5985,7 @@ class SettingsPage extends Page {
                     const val = PlayerSettings.get(key);
                     return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
                 };
+                // Video codec capabilities encompassing modern broadcast & streaming standards
                 const codecs = [
                     { name: 'H.264', hw: true, user: true },
                     {
@@ -5938,20 +5994,73 @@ class SettingsPage extends Page {
                         user: resolveOverride('enableHEVC', caps.hevc)
                     },
                     {
-                        name: 'AV1',
-                        hw: caps.av1,
-                        user: resolveOverride('enableAV1', caps.av1)
-                    },
-                    {
                         name: 'VP9',
                         hw: caps.vp9,
                         user: resolveOverride('enableVP9', caps.vp9)
+                    },
+                    {
+                        name: 'VP8',
+                        hw: caps.vp8 !== false,
+                        user: true
+                    },
+                    {
+                        name: 'MPEG-2',
+                        hw: caps.mpeg2video !== false,
+                        user: true
+                    },
+                    {
+                        name: 'AV1',
+                        hw: caps.av1,
+                        user: resolveOverride('enableAV1', caps.av1)
                     }
                 ];
 
                 return codecs
-                    .filter((c) => c.hw)
-                    .map((c) => (c.user ? c.name : `${c.name} (${i18n.t('Disabled')})`))
+                    .map((c) => {
+                        if (!c.hw) return `${c.name} (${i18n.t('Unsupported') || 'Unsupported'})`;
+                        if (!c.user) return `${c.name} (${i18n.t('Disabled') || 'Disabled'})`;
+                        return c.name;
+                    })
+                    .join(', ');
+            })()}</span>
+                        </div>
+                        <div class="identity-item">
+                            <span class="identity-label" data-i18n="AudioCodecs">${i18n.t('AudioCodecs') || 'Audio Codecs'}</span>
+                            <span class="identity-value">${(() => {
+                const resolveOverride = (key, hwSupport) => {
+                    const val = PlayerSettings.get(key);
+                    return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
+                };
+                // Comprehensive inventory of multi-channel surround and lossless audio decoders
+                const audioCodecs = [
+                    { name: 'AAC', hw: true, user: true },
+                    { name: 'AC-3', hw: caps.ac3 !== false, user: true },
+                    {
+                        name: 'E-AC-3',
+                        hw: caps.eac3 !== false,
+                        user: resolveOverride('enableEac3', caps.eac3 !== false)
+                    },
+                    {
+                        name: 'TrueHD',
+                        hw: caps.truehd !== false,
+                        user: resolveOverride('enableTrueHd', caps.truehd !== false)
+                    },
+                    {
+                        name: 'DTS',
+                        hw: caps.dts !== false,
+                        user: resolveOverride('enableDts', caps.dts !== false)
+                    },
+                    { name: 'FLAC', hw: true, user: true },
+                    { name: 'Opus', hw: true, user: true },
+                    { name: 'MP3', hw: true, user: true }
+                ];
+
+                return audioCodecs
+                    .map((c) => {
+                        if (!c.hw) return `${c.name} (${i18n.t('Unsupported') || 'Unsupported'})`;
+                        if (!c.user) return `${c.name} (${i18n.t('Disabled') || 'Disabled'})`;
+                        return c.name;
+                    })
                     .join(', ');
             })()}</span>
                         </div>
@@ -6719,6 +6828,10 @@ class SettingsPage extends Page {
     _renderDebugTab() {
         const logsEnabled = debugOverlay.isLogsEnabled;
         const overlayEnabled = debugOverlay.isOverlayEnabled;
+        // Check whether low-level Movi player engine logging is enabled (defaults to false)
+        const moviLogsEnabled = storage.getItem('debug_movi_logs') === 'true';
+        // Check whether low-level ExoPlayer native engine logging is enabled (defaults to false)
+        const exoLogsEnabled = storage.getItem('debug_exoplayer_logs') === 'true';
 
         return `
             <div class="settings-tab-content">
@@ -6762,6 +6875,32 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="btn btn-option" id="btn-upload-logs" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="Upload">
                             ${i18n.t('Upload')}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableMoviDebugLogs">${i18n.t('EnableMoviDebugLogs') || 'Enable Movi Engine Logs'}</span>
+                        <span class="setting-description" data-i18n="EnableMoviDebugLogsDescription">${i18n.t('EnableMoviDebugLogsDescription') || 'Output low-level WebAssembly demuxer, FFmpeg, and decoding logs from movi-player to the logger.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${moviLogsEnabled ? 'active' : ''}" 
+                                id="toggle-debug-movi-logs" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableExoPlayerDebugLogs">${i18n.t('EnableExoPlayerDebugLogs') || 'Enable ExoPlayer Debug Logs'}</span>
+                        <span class="setting-description" data-i18n="EnableExoPlayerDebugLogsDescription">${i18n.t('EnableExoPlayerDebugLogsDescription') || 'Output low-level Media3 ExoPlayer playback and state events to the console.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${exoLogsEnabled ? 'active' : ''}" 
+                                id="toggle-debug-exoplayer-logs" 
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
@@ -11131,6 +11270,43 @@ class SettingsPage extends Page {
                 // Update DebugOverlay
                 debugOverlay.setOverlayEnabled(newState);
                 storage.setItem('debug_overlay_enabled', newState);
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // Movi Player Engine Logs Toggle
+        // ---------------------------------------------------------------------
+        // Governs output from low-level WebAssembly demuxer, FFmpeg, and decoding
+        // pipelines within the movi-player backend. Disabled by default to avoid
+        // saturating console and debug ring buffers during normal playback.
+        // ---------------------------------------------------------------------
+        const toggleMoviLogs = this.$('#toggle-debug-movi-logs');
+        if (toggleMoviLogs) {
+            toggleMoviLogs.addEventListener('click', () => {
+                // Determine new state based on current class list
+                const newState = !toggleMoviLogs.classList.contains('active');
+                toggleMoviLogs.classList.toggle('active');
+
+                // Persist selection directly into application storage
+                storage.setItem('debug_movi_logs', newState);
+
+                // Broadcast change event across application
+                eventBus.emit('prefChanged:debug_movi_logs', newState);
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // ExoPlayer Native Debug Logs Toggle
+        // ---------------------------------------------------------------------
+        // Governs low-level logging from Media3 ExoPlayer Android native bridge.
+        // ---------------------------------------------------------------------
+        const toggleExoLogs = this.$('#toggle-debug-exoplayer-logs');
+        if (toggleExoLogs) {
+            toggleExoLogs.addEventListener('click', () => {
+                const newState = !toggleExoLogs.classList.contains('active');
+                toggleExoLogs.classList.toggle('active');
+                storage.setItem('debug_exoplayer_logs', newState);
+                eventBus.emit('prefChanged:debug_exoplayer_logs', newState);
             });
         }
 

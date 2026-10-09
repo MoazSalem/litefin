@@ -175,10 +175,8 @@ class FocusManager {
 
             if (isPageLoading) {
                 const sectionName = this.getSectionForElement(e.target);
-                if (sectionName && sectionName !== 'sidebar') {
-                    log.debug(`Ignoring focusin on "${sectionName}" because page is loading`);
-                    return;
-                }
+                log.debug(`Ignoring focusin on "${sectionName || 'unknown'}" because page is loading`);
+                return;
             }
 
             if (this._focusedElement !== e.target) {

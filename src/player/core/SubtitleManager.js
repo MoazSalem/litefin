@@ -94,6 +94,8 @@ export default class SubtitleManager {
         this._itemId = null;
         this._mediaSourceId = null;
         this._mediaStreams = [];  // All MediaStreams from the current media source
+        // Embedded attachments inventory (e.g. ASS container fonts) from media source
+        this._mediaAttachments = [];
         this._backendType = null; // 'tizen' or 'html5'
         this._videoElement = null; // Reference to real video element (or null)
 
@@ -184,9 +186,21 @@ export default class SubtitleManager {
         this._itemId = context.itemId;
         this._mediaSourceId = context.mediaSourceId;
         this._mediaStreams = context.mediaStreams || [];
+        // Capture container media attachments (fonts, graphics) essential for
+        // high-fidelity ASS subtitle styling via LibassWasmRenderer and FontLoader.
         this._mediaAttachments = context.mediaAttachments || [];
         this._backendType = context.backendType;
-        this._videoElement = context.videoElement || null;
+        // Verify that videoElement is a genuine HTMLVideoElement.
+        // Proxy elements (like ExoVideoPlayer's surface placeholder <div>) must not
+        // be passed to subtitle engines expecting real HTML5 media playback events.
+        const rawVideo = context.videoElement || null;
+        const isRealVideo = Boolean(
+            rawVideo && (
+                rawVideo.tagName === 'VIDEO' ||
+                (typeof HTMLVideoElement !== 'undefined' && rawVideo instanceof HTMLVideoElement)
+            )
+        );
+        this._videoElement = isRealVideo ? rawVideo : null;
         this._playMethod = context.playMethod || 'DirectPlay';
 
         log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}, playMethod=${this._playMethod}`);
@@ -708,6 +722,7 @@ export default class SubtitleManager {
         this._itemId = null;
         this._mediaSourceId = null;
         this._mediaStreams = [];
+        this._mediaAttachments = [];
         if (this._assRenderer) {
             this._assRenderer.destroy();
             this._assRenderer = null;

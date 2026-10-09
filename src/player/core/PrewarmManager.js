@@ -126,7 +126,14 @@ export class PrewarmManager {
             // Determine video player backend configuration based on platform
             const playerBackendSetting = PlayerSettings.get('playerBackend') || 'auto';
             let backendType = 'html5';
-            if (playerBackendSetting === 'avplay' || (playerBackendSetting === 'auto' && platformInfo.isTizen)) {
+            if (playerBackendSetting === 'exoplayer' || (playerBackendSetting === 'auto' && platformInfo.isAndroid)) {
+                backendType = 'exoplayer';
+            } else if (
+                (playerBackendSetting === 'movi' && platformInfo.hasWebCodecsSupport) ||
+                (playerBackendSetting === 'auto' && platformInfo.isDesktop && platformInfo.hasWebCodecsSupport)
+            ) {
+                backendType = 'movi';
+            } else if (playerBackendSetting === 'avplay' || (playerBackendSetting === 'auto' && platformInfo.isTizen)) {
                 backendType = 'avplay';
             } else if (playerBackendSetting === 'webos' || (playerBackendSetting === 'auto' && platformInfo.isWebOS)) {
                 backendType = 'webos';
@@ -157,6 +164,33 @@ export class PrewarmManager {
             // If remux is needed for this audio track, disable DirectPlay in profile
             if (needsRemux) {
                 deviceProfile.DirectPlayProfiles = [];
+            }
+
+            // =================================================================
+            // MKV → MP4 Remux Preference Alignment
+            // =================================================================
+            // When "Remux MKV to MP4" is active and the prewarmed item is an MKV container,
+            // strip 'mkv' from DirectPlayProfiles so the prewarmed response aligns with
+            // DirectStream remuxing instead of caching a raw DirectPlay response.
+            // Check targetSource, item.Container, and nested MediaSources[0].Container.
+            const remuxMkvToMp4 = PlayerSettings.get('remuxMkvToMp4');
+            const itemContainer = (
+                targetSource?.Container ||
+                item.Container ||
+                item.MediaSources?.[0]?.Container ||
+                ''
+            ).toLowerCase();
+            const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
+            if (remuxMkvToMp4 && !needsRemux && isMkvItem && Array.isArray(deviceProfile.DirectPlayProfiles)) {
+                for (const profile of deviceProfile.DirectPlayProfiles) {
+                    if (typeof profile.Container === 'string') {
+                        const containers = profile.Container.split(',').filter(c => c.trim() !== 'mkv');
+                        profile.Container = containers.join(',');
+                    }
+                }
+                deviceProfile.DirectPlayProfiles = deviceProfile.DirectPlayProfiles.filter(
+                    p => typeof p.Container !== 'string' || p.Container.length > 0
+                );
             }
 
             // Clone profile to prevent accidental external mutations

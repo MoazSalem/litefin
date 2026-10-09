@@ -558,16 +558,16 @@ async function syncVersion() {
         }
     }
 
-    // Sync pake.json (Windows Desktop client manifest)
-    // Ensures the native Windows build metadata aligns with Tizen config.xml
-    if (fs.existsSync('./pake.json')) {
-        const pakeConfig = JSON.parse(fs.readFileSync('./pake.json', 'utf8'));
-        if (pakeConfig.appVersion !== version) {
-            console.info(`Syncing pake.json appVersion: ${pakeConfig.appVersion} -> ${version}`);
-            pakeConfig.appVersion = version;
-            fs.writeFileSync('./pake.json', JSON.stringify(pakeConfig, null, 2) + '\n');
+    // Sync src-tauri/tauri.conf.json (Desktop & Android Tauri application manifest)
+    // Ensures the native Tauri build metadata aligns with Tizen config.xml
+    if (fs.existsSync('./src-tauri/tauri.conf.json')) {
+        const tauriConfig = JSON.parse(fs.readFileSync('./src-tauri/tauri.conf.json', 'utf8'));
+        if (tauriConfig.version !== version) {
+            console.info(`Syncing tauri.conf.json version: ${tauriConfig.version} -> ${version}`);
+            tauriConfig.version = version;
+            fs.writeFileSync('./src-tauri/tauri.conf.json', JSON.stringify(tauriConfig, null, 2) + '\n');
         } else {
-            console.info('pake.json appVersion is already up to date');
+            console.info('tauri.conf.json version is already up to date');
         }
     }
 }

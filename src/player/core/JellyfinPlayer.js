@@ -15,6 +15,8 @@
 import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
 import { TizenAVPlayer } from './TizenAVPlayer.js';
 import { WebOSPlayer } from './WebOSPlayer.js';
+import { MoviVideoPlayer } from './MoviVideoPlayer.js';
+import { ExoVideoPlayer } from './ExoVideoPlayer.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { MediaHelper } from './MediaHelper.js';
 import { buildJellyfinProfile, getDeviceCapabilities } from '../../api/DeviceProfile.js';
@@ -74,6 +76,16 @@ export const isDtsSupported = () => {
  */
 export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendType = null) {
     // -------------------------------------------------------------------------
+    // 0. Signature Flexibility & Argument Normalization
+    // -------------------------------------------------------------------------
+    // Support both (track, backendType) and (track, mediaSource, backendType)
+    // call conventions seamlessly across codebase callers and tests.
+    if (typeof mediaSource === 'string' && backendType === null) {
+        backendType = mediaSource;
+        mediaSource = null;
+    }
+
+    // -------------------------------------------------------------------------
     // 1. Guard & Global Forced Transcode
     // -------------------------------------------------------------------------
     // If track metadata or codec is missing, treat as playable to avoid breaking.
@@ -89,12 +101,29 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     const caps = getDeviceCapabilities();
 
     // -------------------------------------------------------------------------
+    // Advanced Backend (ExoPlayer & MoviPlayer) Capabilities
+    // -------------------------------------------------------------------------
+    // Determine if current backend is exoplayer (Android native) or movi (desktop WebAssembly).
+    // ExoPlayer (Android Media3) and MoviPlayer (WebCodecs + WASM demuxer) handle
+    // software/hardware decode for rich multi-channel codecs natively.
+    const isExo =
+        backendType === 'exoplayer' ||
+        (!backendType && (PlayerSettings.get('playerBackend') === 'exoplayer' || (typeof platformInfo !== 'undefined' && platformInfo.isAndroid)));
+
+    const isMovi =
+        backendType === 'movi' ||
+        (!backendType && (PlayerSettings.get('playerBackend') === 'movi' || (typeof platformInfo !== 'undefined' && platformInfo.isDesktop && platformInfo.hasWebCodecsSupport)));
+
+    // Advanced backends handle software/hardware decode for rich multi-channel codecs natively
+    const isAdvancedBackend = isMovi || isExo;
+
+    // -------------------------------------------------------------------------
     // 2. Active Playback Session / Transcoding Status Inspection
     // -------------------------------------------------------------------------
     // If mediaSource contains an active TranscodingUrl, the server is actively
     // streaming via HLS. We can directly inspect whether the active session is
     // transcoding this audio stream or whether the HLS profile permits passthrough.
-    if (mediaSource?.TranscodingUrl) {
+    if (mediaSource?.TranscodingUrl && !isAdvancedBackend) {
         // Query MediaHelper for exact stream statuses parsed from TranscodingInfo or URL
         const { isVideoDirect, isAudioDirect } = MediaHelper.getTranscodeStatus(mediaSource);
 
@@ -142,22 +171,24 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // -------------------------------------------------------------------------
     // Channel limit resolution hierarchy:
     //   a. Explicit user setting ('allowedAudioChannels')
-    //   b. Native hardware device capability (caps.maxAudioChannels, e.g. 2 for stereo, 6 for 5.1, 8 for 7.1/8K)
-    //   c. Safe fallback to 2 (stereo)
+    //   b. Advanced media engines (Movi / ExoPlayer) default to 8 channels (7.1 surround)
+    //   c. Native hardware device capability (caps.maxAudioChannels, e.g. 2 for stereo, 6 for 5.1)
     // When an audio track exceeds the target channel count, the Jellyfin server
     // must transcode/downmix the audio track to fit the device's channel ceiling.
     const userAllowedChannels = PlayerSettings.get('allowedAudioChannels');
     const effectiveMaxChannels = (userAllowedChannels && userAllowedChannels > 0)
         ? userAllowedChannels
-        : (caps?.maxAudioChannels || 2);
+        : (isAdvancedBackend ? 8 : caps?.maxAudioChannels);
 
-    if (typeof track.Channels === 'number' && track.Channels > effectiveMaxChannels) {
+    // Reject tracks whose discrete channel count exceeds the established channel ceiling,
+    // signaling to the caller that the stream requires downmixing or server-side transcoding.
+    if (effectiveMaxChannels && typeof track.Channels === 'number' && track.Channels > effectiveMaxChannels) {
         return false;
     }
 
     // Samsung and LG Smart TV hardware decoders natively support AAC up to 6 channels (5.1).
     // 7.1 AAC tracks cannot be decoded natively in hardware and require server downmix/transcoding.
-    if (codec === 'aac' && typeof track.Channels === 'number' && track.Channels > 6) {
+    if (codec === 'aac' && typeof track.Channels === 'number' && track.Channels > 6 && !isAdvancedBackend) {
         return false;
     }
 
@@ -169,18 +200,18 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // Raw uncompressed PCM inside video containers (MKV, MP4, TS, etc.):
     // HTML5 browsers and Smart TV media engines cannot decode raw PCM streams in video
     // containers natively. Jellyfin server always transcodes PCM video audio to AAC.
-    if (codec.startsWith('pcm') || codec === 'wav') {
+    if ((codec.startsWith('pcm') || codec === 'wav') && !isAdvancedBackend) {
         return false;
     }
 
     // Vorbis is only natively supported inside WebM or OGG containers.
     // When muxed into MKV, MP4, or TS on Smart TVs / browsers, Jellyfin transcodes it.
-    if (codec === 'vorbis' && container && container !== 'webm' && container !== 'ogg') {
+    if (codec === 'vorbis' && container && container !== 'webm' && container !== 'ogg' && !isAdvancedBackend) {
         return false;
     }
 
     // WebM containers only support Opus and Vorbis natively.
-    if (container === 'webm' && codec !== 'opus' && codec !== 'vorbis') {
+    if (container === 'webm' && codec !== 'opus' && codec !== 'vorbis' && !isAdvancedBackend) {
         return false;
     }
 
@@ -189,7 +220,9 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // (e.g. AV1 on browsers without AV1 decode support, or HEVC on Chrome),
     // playback is forced to HLS video transcoding. Non-TS audio codecs (Opus, FLAC)
     // must be transcoded to AAC by the server.
-    if (backendType === 'html5' || (!platformInfo.isTizen && !platformInfo.isWebOS)) {
+    const isTizen = typeof platformInfo !== 'undefined' && platformInfo.isTizen;
+    const isWebOS = typeof platformInfo !== 'undefined' && platformInfo.isWebOS;
+    if (backendType === 'html5' || (!isTizen && !isWebOS && !isAdvancedBackend)) {
         const videoStream = mediaSource?.MediaStreams?.find(s => s.Type === 'Video');
         if (videoStream?.Codec) {
             const vCodec = videoStream.Codec.toLowerCase();
@@ -210,9 +243,69 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // 5. Codec-Specific Native Hardware & Settings Validation
     // -------------------------------------------------------------------------
 
-    // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
-    if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+    // Advanced backends (MoviPlayer via FFmpeg WASM demuxer/decoders and ExoPlayer
+    // via native Android MediaCodec) support rich lossless/lossy multi-channel codecs:
+    if (isAdvancedBackend) {
+        // FLAC / ALAC lossless audio streams
+        if (codec === 'flac' || codec === 'alac') {
+            return true;
+        }
+
+        // DTS / DTS-HD / DCA multi-channel surround tracks
+        if (codec.includes('dts') || codec === 'dca') {
+            const setting = PlayerSettings.get('enableDts');
+            return setting !== 'disable';
+        }
+
+        // Dolby TrueHD / MLP lossless multi-channel streams
+        if (codec === 'truehd' || codec === 'mlp') {
+            const setting = PlayerSettings.get('enableTrueHd');
+            return setting !== 'disable';
+        }
+
+        // E-AC3 (Dolby Digital Plus) / AC3 (Dolby Digital) multi-channel tracks
+        if (codec === 'eac3' || codec === 'ec-3') {
+            const setting = PlayerSettings.get('enableEac3');
+            return setting !== 'disable';
+        }
+        if (codec === 'ac3') {
+            return true;
+        }
+
+        // Opus & Vorbis tracks
+        if (codec === 'opus' || codec === 'vorbis') {
+            return true;
+        }
+
+        // Raw uncompressed PCM / WAV audio streams
+        if (codec.startsWith('pcm') || codec === 'wav') {
+            return true;
+        }
+
+        // Broadcast and legacy compressed formats (MP2 / MP1L2)
+        if (codec === 'mp2' || codec === 'mp1l2') {
+            const setting = PlayerSettings.get('enableMp2');
+            return setting !== 'disable';
+        }
+
+        // Universal web audio formats (AAC / MP3)
+        if (codec === 'aac' || codec === 'mp3') {
+            return true;
+        }
+
+        // WMA Windows Media Audio streams
+        if (codec.includes('wma')) {
+            return isMovi || !!caps?.wma;
+        }
+
         return false;
+    }
+
+    // Standard backend validation (HTML5 / Tizen AVPlay / WebOS):
+
+    // FLAC / ALAC in video containers: unsupported on standard HTML5 players when enableFlacInVideo is disabled
+    if (codec === 'flac' || codec === 'alac') {
+        return PlayerSettings.get('enableFlacInVideo') === true;
     }
 
     // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
@@ -263,13 +356,19 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // HTML5 / Web browsers only decode Opus in WebM containers or standalone audio files (.opus/.ogg).
     // In MKV, MP4, or TS containers on standard HTML5 players, Opus cannot DirectPlay.
     if (codec === 'opus') {
-        if (backendType === 'tizen' || backendType === 'avplay' || platformInfo.isTizen) {
+        const isTizenPlatform = typeof platformInfo !== 'undefined' && platformInfo.isTizen;
+        if (backendType === 'tizen' || backendType === 'avplay' || isTizenPlatform) {
             return caps?.opus !== false;
         }
         if (container && container !== 'webm' && container !== 'ogg' && container !== 'opus') {
             return false;
         }
         return caps?.opus !== false;
+    }
+
+    // Vorbis support check
+    if (codec === 'vorbis') {
+        return container === 'webm' || container === 'ogg';
     }
 
     // WMA / WMAv2 / WMAPro support check (Samsung dropped WMA in Tizen 9.0; unsupported on modern Web/WebOS)
@@ -306,9 +405,10 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
  *
  * @param {Object} mediaSource - Jellyfin MediaSource object containing MediaStreams
  * @param {string} [targetLang] - Optional language ISO code override
+ * @param {string} [backendType] - Active player backend type (e.g. 'movi', 'avplay', 'webos', 'html5')
  * @returns {Object|null} The resolved best audio MediaStream object, or null
  */
-export function resolveBestAudioStream(mediaSource, targetLang) {
+export function resolveBestAudioStream(mediaSource, targetLang, backendType = null) {
     // -------------------------------------------------------------------------
     // 1. MediaSource & Stream Validation
     // -------------------------------------------------------------------------
@@ -473,7 +573,7 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
 
             if (preferDirectPlay) {
                 // Filter candidate preferred tracks that can DirectPlay natively without server transcoding
-                const playablePreferred = preferredTracks.filter((t) => isAudioTrackNativelyPlayable(t, mediaSource));
+                const playablePreferred = preferredTracks.filter((t) => isAudioTrackNativelyPlayable(t, mediaSource, backendType));
 
                 if (playablePreferred.length > 0) {
                     // Pick the highest quality DirectPlay track matching the preferred language
@@ -513,15 +613,23 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
     const sameLangTracks = audioStreams.filter(
         (t) => isLanguageMatch(t.Language, defaultLang) || (defaultLang === 'und' && (!t.Language || t.Language === 'und'))
     );
-    const sameLangPlayable = sameLangTracks.filter((t) => isAudioTrackNativelyPlayable(t, mediaSource));
+    const sameLangPlayable = sameLangTracks.filter((t) => isAudioTrackNativelyPlayable(t, mediaSource, backendType));
 
-    // If the default track is natively playable, check if a superior high-fidelity track
-    // (such as DTS-HD MA or TrueHD) is also natively playable in the same language.
-    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack, mediaSource);
+    // If the default track is natively playable, check if a superior high-fidelity master track
+    // (such as DTS-HD MA, TrueHD, or discrete multi-channel DTS) is also natively playable in the same language.
+    // We only upgrade away from a playable default track if the candidate represents a genuine higher-fidelity
+    // master stream (codec score >= 70) to prevent switching away from an intended stereo/surround baseline
+    // to a secondary commentary or alternative compatibility track.
+    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack, mediaSource, backendType);
     if (isDefaultPlayable) {
         if (sameLangPlayable.length > 1) {
             const bestPlayable = pickBestTrack(sameLangPlayable);
-            if (bestPlayable && scoreTrack(bestPlayable) > scoreTrack(standardDefaultTrack)) {
+            // Verify that the candidate stream exceeds our threshold for premium lossless/discrete master audio
+            const isHighFidelityUpgrade = bestPlayable &&
+                getCodecScore(bestPlayable.Codec) >= 70 &&
+                getCodecScore(bestPlayable.Codec) > getCodecScore(standardDefaultTrack.Codec);
+
+            if (isHighFidelityUpgrade && scoreTrack(bestPlayable) > scoreTrack(standardDefaultTrack)) {
                 log.info(
                     `[AudioTrackSelector] Upgraded playable default track Index ${standardDefaultTrack.Index} ` +
                     `to higher-fidelity playable track Index ${bestPlayable.Index} (${bestPlayable.Codec}, ${bestPlayable.Channels || 2}ch)`
@@ -579,8 +687,8 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
         return false;
     }
 
-    // Tizen AVPlay uses Samsung's native multimedia engine with hardware track demuxing
-    if (backendType === 'avplay') {
+    // Tizen AVPlay, MoviPlayer, and ExoPlayer all demux multi-audio tracks natively in hardware/WASM
+    if (backendType === 'avplay' || backendType === 'tizen' || backendType === 'movi' || backendType === 'exoplayer') {
         return false;
     }
 
@@ -815,6 +923,15 @@ export class JellyfinPlayer extends EventEmitter {
         this._remuxWatchdogTargetTicks = null;
         this._remuxWatchdogInitialTime = null;
 
+        // ────────────────────────────────────────────────────────────────────
+        // DirectPlay Failure Escalation Guard
+        // ────────────────────────────────────────────────────────────────────
+        // Tracks whether the active playback session has already attempted
+        // automatic fallback from a failed DirectPlay/Remux stream to server-side
+        // transcoding. Prevents recursive escalation loops if transcoding also errors.
+        // ────────────────────────────────────────────────────────────────────
+        this._directPlayEscalated = false;
+
         // ====================================================================
         // Subtitle Manager — centralized subtitle orchestration
         // Handles delivery method selection, external subtitle fetching,
@@ -873,18 +990,68 @@ export class JellyfinPlayer extends EventEmitter {
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
         const backendSetting = this.forcedPlayerBackend || PlayerSettings.get('playerBackend') || 'auto';
 
-        log.info(
-            'Initializing backend — useTizenPlayer:', this.useTizenPlayer,
-            ' | avplay detected:', hasAvPlay,
-            ' | isWebOS:', platformInfo.isWebOS,
-            ' | setting:', backendSetting
-        );
+        /*
+         * ====================================================================
+         * Platform-Aware Backend Initialization Diagnostics
+         * ====================================================================
+         * Compile a clean, contextual diagnostics summary reflecting the active
+         * device runtime (Android, WebOS, Desktop, Tizen, Web) and its capabilities,
+         * rather than outputting legacy Tizen-specific booleans across all devices.
+         */
+        const envDetails = [
+            `platform: ${platformInfo.platformString}`,
+            `setting: ${backendSetting}`
+        ];
+
+        // Report hardware AVPlay support on Samsung Tizen or when the API is explicitly exposed
+        if (platformInfo.isTizen || hasAvPlay) {
+            envDetails.push(`avplay: ${hasAvPlay}`);
+        }
+
+        // Report WebCodecs engine support when running in Desktop shells or Web browsers
+        if (platformInfo.isDesktop || platformInfo.isWeb) {
+            envDetails.push(`webCodecs: ${platformInfo.hasWebCodecsSupport}`);
+        }
+
+        // Surface explicit caller overrides if present
+        if (this.forcedPlayerBackend) {
+            envDetails.push(`forced: ${this.forcedPlayerBackend}`);
+        }
+
+        log.info(`Initializing backend — ${envDetails.join(' | ')}`);
 
         const sharedOptions = {
             container: this.container,
             settings:  PlayerSettings,
             onEvent:   this._handleBackendEvent.bind(this)
         };
+
+        // ----------------------------------------------------------------
+        // Explicit override: 'exoplayer' → use ExoVideoPlayer
+        // ----------------------------------------------------------------
+        if (backendSetting === 'exoplayer') {
+            log.info('Using ExoPlayer backend (forced by setting)');
+            this._backendType = 'exoplayer';
+            this._backend    = new ExoVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // Explicit override: 'movi' → use MoviVideoPlayer if WebCodecs available
+        // ----------------------------------------------------------------
+        if (backendSetting === 'movi') {
+            if (platformInfo.hasWebCodecsSupport) {
+                log.info('Using MoviPlayer backend (forced by setting)');
+                this._backendType = 'movi';
+                this._backend    = new MoviVideoPlayer(sharedOptions);
+                return;
+            } else {
+                log.warn('Forced movi backend requested, but WebCodecs is not supported — falling back to HTML5');
+                this._backendType = 'html5';
+                this._backend    = new HtmlVideoPlayer(sharedOptions);
+                return;
+            }
+        }
 
         // ----------------------------------------------------------------
         // Explicit override: 'avplay' → always try TizenAVPlayer
@@ -920,6 +1087,19 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         // ----------------------------------------------------------------
+        // Auto-detect: Android platform → ExoVideoPlayer.
+        // Provides native hardware-accelerated MediaCodec decoding via
+        // Android SurfaceView and Media3 ExoPlayer, bypassing Chromium
+        // video stack bottlenecks and delivering steady 60 FPS playback.
+        // ----------------------------------------------------------------
+        if (platformInfo.isAndroid) {
+            log.info('Android platform detected — using ExoPlayer backend');
+            this._backendType = 'exoplayer';
+            this._backend    = new ExoVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
         // Auto-detect: WebOS platform → use the native WebOS backend.
         // This gives us hardware-accelerated HLS and track switching
         // without the complexity of the Luna media service API.
@@ -942,7 +1122,20 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         // ----------------------------------------------------------------
-        // Fallback: stock HTML5 video (desktop browser, Tizen without AVPlay)
+        // Auto-detect: Desktop platform with WebCodecs support → MoviVideoPlayer.
+        // Provides full MKV container demuxing, WebCodecs hardware decoding,
+        // and multi-audio decoding (AC-3, E-AC-3, TrueHD, DTS) natively.
+        // If on web and WebCodecs is missing, falls through to HTML5.
+        // ----------------------------------------------------------------
+        if (platformInfo.isDesktop && platformInfo.hasWebCodecsSupport) {
+            log.info('Platform with WebCodecs detected (Desktop) — defaulting to MoviPlayer backend');
+            this._backendType = 'movi';
+            this._backend    = new MoviVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // Fallback: stock HTML5 video (standard browser, Tizen without AVPlay, or Web without WebCodecs)
         // ----------------------------------------------------------------
         log.info('Using HTML5 Video backend (fallback)');
         this._backendType = 'html5';
@@ -1077,6 +1270,20 @@ export class JellyfinPlayer extends EventEmitter {
             const effectiveCurrentTime = (event.data?.time || 0) + offsetSec;
 
             if (event.type === PlayerEvent.TIME_UPDATE && (event.data?.time || 0) > 0) {
+                // =============================================================
+                // Backend Buffering Check
+                // =============================================================
+                // If the player backend (such as ExoVideoPlayer) is still actively
+                // buffering media data at the resume seek destination, suppress
+                // early resume verification so the loading overlay remains visible.
+                // =============================================================
+                const isBackendBuffering = Boolean(
+                    typeof this._backend?.isBuffering === 'function' && this._backend.isBuffering()
+                );
+                if (isBackendBuffering) {
+                    return;
+                }
+
                 // Check if we have arrived near our target resume position (within 15s GOP keyframe tolerance)
                 if (Math.abs(effectiveCurrentTime - targetSec) < 15 || effectiveCurrentTime >= (targetSec - 15)) {
                     this._pendingStartPositionTicks = null;
@@ -1351,6 +1558,77 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+        // Log backend errors with backend context before forwarding to UI layer
+        if (event.type === PlayerEvent.ERROR) {
+            log.error(`[JellyfinPlayer] Error event received from ${this._backendType} backend:`, event.data);
+
+            // ────────────────────────────────────────────────────────────────
+            // DirectPlay / Remux Failure Transcode Escalation
+            // ────────────────────────────────────────────────────────────────
+            // When DirectPlay or Remux fails at startup or mid-playback (e.g.,
+            // MKV container errors, decoder stalls, network disconnects on static
+            // files, or unsupported bit depths/profiles), we seamlessly escalate
+            // to server-side transcoding instead of dropping the user into a red
+            // error modal. Jellyfin server then serves a compliant HLS stream.
+            // ────────────────────────────────────────────────────────────────
+            const isAutoTranscodeEnabled = PlayerSettings.get('autoTranscodeOnError') !== false;
+            const canEscalate =
+                isAutoTranscodeEnabled &&
+                !PlayerSettings.get('forceDirectPlay') &&
+                !this._isRestarting &&
+                !this._directPlayEscalated &&
+                this._currentPlayOptions &&
+                this._currentPlayMethod !== 'Transcode' &&
+                this._playbackMode !== 'transcode';
+
+            if (canEscalate) {
+                // Prevent cyclic escalation cascades if transcoding also errors
+                this._directPlayEscalated = true;
+                const errorDesc = event.data?.error || event.data?.message || 'Playback error';
+                log.warn(
+                    `[JellyfinPlayer] ${this._currentPlayMethod || 'DirectPlay'} failed on ${this._backendType} (${errorDesc}). ` +
+                    `Escalating session to server transcoding...`
+                );
+
+                // Preserve exact timestamp where DirectPlay errored
+                const currentTicks = this.getCurrentPositionTicks() || this._currentPlayOptions.startPositionTicks || 0;
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    audioStreamIndex: this._currentAudioStreamIndex,
+                    subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                    secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
+                    startPositionTicks: currentTicks,
+                    playbackMode: 'transcode'
+                };
+
+                // Store options and flag restarting state to suppress transient stop events
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions = restartOptions;
+                this._isRestarting = true;
+
+                // Signal UI that recovery/restart is taking place
+                this.emit(PlayerEvent.RESTARTING);
+
+                (async () => {
+                    try {
+                        // Tear down existing backend decoder cleanly
+                        await this.stop();
+                        // Brief stabilization pause before launching transcoded stream
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Re-launch with strict transcode parameters
+                        await this.play(restartOptions);
+                    } catch (escalateErr) {
+                        log.error('[JellyfinPlayer] DirectPlay transcode escalation failed:', escalateErr);
+                        // Forward error to UI if transcode restart fails
+                        this.emit(PlayerEvent.ERROR, event.data);
+                    } finally {
+                        this._isRestarting = false;
+                    }
+                })();
+                return;
+            }
+        }
+
         // Re-emit events from backend
         this.emit(event.type, event.data);
     }
@@ -1484,8 +1762,14 @@ export class JellyfinPlayer extends EventEmitter {
      */
     async play(options) {
         //log.info('Play requested:', options);
+        /*
+         * ====================================================================
+         * Active Player Backend Diagnostics
+         * ====================================================================
+         * Log the resolved backend engine ('exoplayer', 'movi', 'webos', 'tizen', 'html5').
+         * The old 'Use Tizen Player' log is omitted here as backendType unifies all platforms.
+         */
         log.info('Backend Type:', this._backendType);
-        log.info('Use Tizen Player:', this.useTizenPlayer);
         
         // Update server URL/Auth if provided in play options
         if (options.serverUrl) this.serverUrl = options.serverUrl;
@@ -1509,6 +1793,8 @@ export class JellyfinPlayer extends EventEmitter {
             // ────────────────────────────────────────────────────────────────
             if (!this._isRestarting) {
                 this._initialPlaybackMode = this._playbackMode;
+                // Fresh playback request resets the escalation safeguard
+                this._directPlayEscalated = false;
             }
 
             // Determine if we need to force a remux for audio tracks on HTML5
@@ -1520,7 +1806,7 @@ export class JellyfinPlayer extends EventEmitter {
                 const fallbackSource = options.item.MediaSources[0];
                 const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                 if (ms) {
-                    const bestAudioStream = resolveBestAudioStream(ms);
+                    const bestAudioStream = resolveBestAudioStream(ms, null, this._backendType);
                     if (bestAudioStream) {
                         options.audioStreamIndex = bestAudioStream.Index;
                         log.info(`[AudioSelection] Auto-resolved DirectPlay audio stream index: ${options.audioStreamIndex} (${bestAudioStream.Codec})`);
@@ -2074,7 +2360,7 @@ export class JellyfinPlayer extends EventEmitter {
 
             // If not provided, resolve best DirectPlay audio track from MediaSource
             if (this._currentAudioStreamIndex === undefined && mediaSource.MediaStreams) {
-                const bestStream = resolveBestAudioStream(mediaSource);
+                const bestStream = resolveBestAudioStream(mediaSource, null, this._backendType);
                 if (bestStream) {
                     this._currentAudioStreamIndex = bestStream.Index;
                 } else {
@@ -2124,6 +2410,7 @@ export class JellyfinPlayer extends EventEmitter {
                 playSessionId: playbackInfo.PlaySessionId,
                 authToken: this.authToken,
                 deviceProfile: deviceProfile,
+                backendType: this._backendType,
                 // Pass audioStreamIndex so it's included in manually-built fallback URLs.
                 // When TranscodingUrl is present (the normal case), the server already
                 // has this baked in and this param is unused.
@@ -2348,6 +2635,60 @@ export class JellyfinPlayer extends EventEmitter {
                 return;
             }
 
+            // ────────────────────────────────────────────────────────────────
+            // DirectPlay Launch Failure Escalation (Synchronous / Pipeline Rejection)
+            // ────────────────────────────────────────────────────────────────
+            // If the initial backend preparation or media pipeline setup rejected
+            // during DirectPlay or Remux, immediately attempt server transcode before
+            // surfacing a fatal error.
+            // ────────────────────────────────────────────────────────────────
+            const isAutoTranscodeEnabled = PlayerSettings.get('autoTranscodeOnError') !== false;
+            const canEscalate =
+                isAutoTranscodeEnabled &&
+                !PlayerSettings.get('forceDirectPlay') &&
+                !this._isRestarting &&
+                !this._directPlayEscalated &&
+                this._currentPlayOptions &&
+                this._currentPlayMethod !== 'Transcode' &&
+                this._playbackMode !== 'transcode';
+
+            if (canEscalate) {
+                this._directPlayEscalated = true;
+                log.warn(
+                    `[JellyfinPlayer] DirectPlay setup failed (${error?.message || error}). ` +
+                    `Escalating session to server transcoding...`
+                );
+
+                const currentTicks = this.getCurrentPositionTicks() || this._currentPlayOptions.startPositionTicks || 0;
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    audioStreamIndex: this._currentAudioStreamIndex,
+                    subtitleStreamIndex: this._currentSubtitleStreamIndex,
+                    secondarySubtitleStreamIndex: this._currentSecondarySubtitleStreamIndex,
+                    startPositionTicks: currentTicks,
+                    playbackMode: 'transcode'
+                };
+
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions = restartOptions;
+                this._isRestarting = true;
+
+                this.emit(PlayerEvent.RESTARTING);
+
+                try {
+                    await this.stop();
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await this.play(restartOptions);
+                    return;
+                } catch (escalateErr) {
+                    log.error('[JellyfinPlayer] DirectPlay setup transcode escalation failed:', escalateErr);
+                    this.emit(PlayerEvent.ERROR, { error: escalateErr, type: 'playback' });
+                    throw escalateErr;
+                } finally {
+                    this._isRestarting = false;
+                }
+            }
+
             log.error('Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
             throw error;
@@ -2435,6 +2776,7 @@ export class JellyfinPlayer extends EventEmitter {
             this._currentItem = null;
             this._currentMediaSource = null;
             this._currentPlayOptions = null;
+            this._directPlayEscalated = false;
         }
         
         this._isPlaying = false;
@@ -2575,7 +2917,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {boolean}
      */
     isMuted() {
-        return this._backend?.isMuted() ?? false;
+        return (typeof this._backend?.isMuted === 'function') ? this._backend.isMuted() : false;
     }
 
     // ========================================================================
@@ -2650,7 +2992,7 @@ export class JellyfinPlayer extends EventEmitter {
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                               this._currentPlayMethod === 'DirectStream' ||
                               this._currentPlayMethod === 'Remux';
-        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && !supportsNativeAudio);
+        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && this._backendType !== 'movi' && this._backendType !== 'exoplayer' && !supportsNativeAudio);
 
         log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart} isTargetCodecSupported=${isTargetCodecSupported}`);
 
@@ -2699,7 +3041,7 @@ export class JellyfinPlayer extends EventEmitter {
             }
 
             const needsDirectStreamForAudio = trackRequiresDirectStream ||
-                (this._backendType !== 'tizen' && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
+                (this._backendType !== 'tizen' && this._backendType !== 'movi' && this._backendType !== 'exoplayer' && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
             // ────────────────────────────────────────────────────────────────
             // Calculate Restart Playback Mode
@@ -3652,7 +3994,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {Object|null}
      */
     resolveBestAudioStream(mediaSource, targetLang) {
-        return resolveBestAudioStream(mediaSource, targetLang);
+        return resolveBestAudioStream(mediaSource, targetLang, this._backendType);
     }
 
     /**
@@ -3671,6 +4013,12 @@ export class JellyfinPlayer extends EventEmitter {
     _getBackendAudioTracks(mediaSource = this._currentMediaSource) {
         // Retrieve all audio streams attached to the current media source
         const tracks = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+
+        // For MoviPlayer (WebCodecs) and ExoPlayer (Android Media3), demuxing happens natively
+        // inside the backend engine, exposing all container audio tracks without browser element filtering.
+        if (this._backendType === 'movi' || this._backendType === 'exoplayer') {
+            return tracks;
+        }
 
         // Filter out audio formats that the hardware pipeline or browser omits from native track lists
         return tracks.filter((track) => {
@@ -3769,6 +4117,20 @@ export class JellyfinPlayer extends EventEmitter {
      */
     getCurrentPositionMs() {
         return (this._backend?.getCurrentTime() ?? 0) * 1000;
+    }
+
+    /**
+     * ========================================================================
+     * Start / Resume Position Getter
+     * ========================================================================
+     * Retrieve the initial start or resume position ticks configured for this
+     * playback session. Used by PlayerPage and OSDController to compute watch
+     * time thresholds and safeguard against overwriting resume positions.
+     * ========================================================================
+     * @returns {number} Start position in 100-nanosecond ticks
+     */
+    getStartPositionTicks() {
+        return this._pendingStartPositionTicks || this._startPositionTicks || 0;
     }
 
     /**
@@ -4022,9 +4384,9 @@ export class JellyfinPlayer extends EventEmitter {
                         log.info(
                             '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
                         );
-                    } else if (remuxMkvToMp4Setting && isPrewarmedMkv && firstSource.SupportsDirectPlay) {
+                    } else if ( remuxMkvToMp4Setting && isPrewarmedMkv && this._playbackMode === 'transcode' && (firstSource.SupportsDirectPlay || firstSource.SupportsDirectStream)) {
                         log.info(
-                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay for MKV, but remuxMkvToMp4 is active. Discarding in favor of fresh remux request.'
+                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay/DirectStream, but active mode requires Transcode. Discarding in favor of fresh transcode request.'
                         );
                     } else {
                         return prewarmedData;

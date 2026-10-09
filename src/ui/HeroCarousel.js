@@ -366,8 +366,12 @@ class HeroCarousel {
         };
 
         // Register with focus manager with dynamic leaveDown resolution
+        // Explicitly isolate selector to #hero-carousel-container so internal children
+        // (such as dots, titles, or descriptions) are never targeted as separate focus stops
         focusManager.register('home-hero', this._container.parentElement, {
             orientation: 'horizontal',
+            selector: '#hero-carousel-container',
+            defaultFocusSelector: '#hero-carousel-container',
             onMove: (direction) => this._onMove(direction),
             leaveDown: dynamicLeaveDown,
             leaveLeft: 'sidebar'
