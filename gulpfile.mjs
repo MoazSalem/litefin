@@ -14,6 +14,7 @@ import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import archiver from 'archiver';
 import path from 'path';
+import { moveTauriOutputs } from './scripts/move-tauri-artifacts.js';
 
 /*
  * exec() buffers ALL stdout + stderr in the parent process's RAM.
@@ -80,6 +81,15 @@ function cleanWgt() {
 
 function cleanIpk() {
     return del(['*.ipk']);
+}
+
+/*
+ * Remove all desktop and mobile Tauri application packages from the repository root.
+ * Targets Windows installers (.exe, .msi), Linux packages (.deb, .AppImage),
+ * macOS disk images (.dmg), and Android packages (.apk, .aab).
+ */
+function cleanTauri() {
+    return del(['*.exe', '*.msi', '*.deb', '*.AppImage', '*.dmg', '*.apk', '*.aab']);
 }
 
 // ============================================================================
@@ -723,6 +733,8 @@ export {
     cleanDist,
     cleanWgt,
     cleanIpk,
+    cleanTauri,
+    moveTauriOutputs,
     webpackModern,
     webpackNormal,
     webpackNormalOblong,
