@@ -38,6 +38,46 @@ tauri-build = { version = "2", features = [] }
 # Lean core dependencies without bloat, leaving heavy decoding to WebAssembly/Movi.
 # -----------------------------------------------------------------------------
 [dependencies]
-tauri = { version = "2.12", features = ["devtools"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# -----------------------------------------------------------------------------
+# Desktop Platform Dependencies (Windows, macOS, Linux)
+# -----------------------------------------------------------------------------
+# Enables the 'devtools' feature on desktop runtimes so F12 and context-menu
+# inspect element work cleanly in development and production testing builds.
+# -----------------------------------------------------------------------------
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tauri = { version = "2.12", features = ["devtools"] }
+
+# -----------------------------------------------------------------------------
+# Android Mobile Dependencies
+# -----------------------------------------------------------------------------
+# Omits desktop devtools feature on Android targets to keep native .so binaries lean.
+# -----------------------------------------------------------------------------
+[target.'cfg(target_os = "android")'.dependencies]
+tauri = { version = "2.12", features = [] }
+
+# -----------------------------------------------------------------------------
+# Release Profile Optimizations
+# -----------------------------------------------------------------------------
+# Maximum size reduction and dead-code stripping for production native binaries.
+# Enables whole-program Link-Time Optimization (LTO), merges code generation
+# units, strips all symbol tables and debuginfo, and eliminates panic landing pads.
+# -----------------------------------------------------------------------------
+[profile.release]
+# Optimize aggressively for binary size ('z' optimizes for minimal footprint)
+opt-level = "z"
+
+# Enable whole-crate Link-Time Optimization across all dependencies
+lto = true
+
+# Single code generation unit maximizes compiler dead-code elimination passes
+codegen-units = 1
+
+# Strip panic unwinding landing pads to reduce binary size significantly
+panic = "abort"
+
+# Strip all debug symbols and symbol tables directly during compilation
+strip = true
+

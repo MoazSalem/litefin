@@ -144,7 +144,8 @@ function getPlugins(tier, options = {}) {
 const tvResolveAliases = {
     [path.resolve(__dirname, 'src/player/core/MoviVideoPlayer.js')]: path.resolve(__dirname, 'src/player/core/MoviVideoPlayer.stub.js'),
     'movi-player': false,
-    'movi-player/element': false
+    'movi-player/element': false,
+    'movi-player/element/slim': false
 };
 
 // ============================================================================

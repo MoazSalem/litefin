@@ -45,6 +45,28 @@ android {
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // APK Packaging Configuration
+    // -------------------------------------------------------------------------
+    // Exclude redundant license manifests and strip unneeded native symbols.
+    // -------------------------------------------------------------------------
+    packaging {
+        resources {
+            excludes += listOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/ASL2.0",
+                "META-INF/*.kotlin_module"
+            )
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -62,10 +84,28 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+
+            // -----------------------------------------------------------------
+            // R8 Code Shrinking & Tree-Shaking
+            // -----------------------------------------------------------------
+            // Strips unused Java/Kotlin classes and methods from ExoPlayer,
+            // OkHttp, AndroidX, and runtime dependencies.
+            // -----------------------------------------------------------------
+            isMinifyEnabled = true
+
+            // -----------------------------------------------------------------
+            // Unused Resource Shrinking
+            // -----------------------------------------------------------------
+            // Eliminates unreferenced layouts, drawables, and strings.
+            // -----------------------------------------------------------------
+            isShrinkResources = true
+
             optimization {
                enable = true
             }
+
             proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
                 *fileTree(".") {
                   include("**/*.pro")
                   exclude("build/**")

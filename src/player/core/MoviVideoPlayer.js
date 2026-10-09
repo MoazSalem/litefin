@@ -279,10 +279,11 @@ export class MoviVideoPlayer {
             // Ensure logging bridge is configured even if custom element was already defined
             if (!moviLoggingConfigured) {
                 try {
-                    const moviModule = await import(/* webpackChunkName: "movi-player" */ 'movi-player');
+                    // Dynamically import slim element module to access Logger and configuration
+                    const moviModule = await import(/* webpackChunkName: "movi-player" */ 'movi-player/element/slim');
                     this._setupMoviEngineLogging(moviModule);
                 } catch (e) {
-                    log.warn('Could not import movi-player for logging bridge initialization:', e);
+                    log.warn('Could not import movi-player slim module for logging bridge initialization:', e);
                 }
             }
 
@@ -291,25 +292,26 @@ export class MoviVideoPlayer {
 
         try {
             // Log entry into web component dynamic import
-            log.info('Dynamically registering movi-player web component...');
+            log.info('Dynamically registering movi-player web component (slim variant)...');
 
             /*
              * -----------------------------------------------------------------
-             * Bundle Web Component Registration
+             * Slim Web Component Registration
              * -----------------------------------------------------------------
-             * Importing the root 'movi-player' bundle executes element.ts which
-             * registers the custom HTML element <movi-player> with the browser's
-             * CustomElementRegistry. Webpack bundles this into a dedicated chunk.
+             * Importing 'movi-player/element/slim' registers the <movi-player>
+             * custom element without embedding the heavy 6MB Base64 WASM binary.
+             * The WebAssembly binary is streamed externally via the wasmurl attribute,
+             * reducing JavaScript bundle size by over 7MB while preserving full features.
              * -----------------------------------------------------------------
              */
-            const moviModule = await import(/* webpackChunkName: "movi-player" */ 'movi-player');
+            const moviModule = await import(/* webpackChunkName: "movi-player" */ 'movi-player/element/slim');
 
             // Initialize and configure movi-player internal logging
             this._setupMoviEngineLogging(moviModule);
 
             // Mark module as successfully loaded
             this._isLoaded = true;
-            log.info('movi-player web component registered successfully');
+            log.info('movi-player web component (slim) registered successfully');
             return true;
         } catch (err) {
             // Log registration failure if module cannot be found or loaded

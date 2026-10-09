@@ -1,21 +1,44 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# =============================================================================
+# Litefin Android - ProGuard & R8 Optimization Rules
+# =============================================================================
+# Configured for aggressive release minification while protecting JNI bindings,
+# Tauri v2 IPC bridge plugins, and hardware-accelerated Media3 ExoPlayer.
+# =============================================================================
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# -----------------------------------------------------------------------------
+# JNI & Native Method Preservations
+# -----------------------------------------------------------------------------
+# Prevent R8 from stripping native C/Rust functions bound via JNI.
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# -----------------------------------------------------------------------------
+# Tauri v2 Core & Plugin Reflection
+# -----------------------------------------------------------------------------
+# Preserve Tauri runtime entrypoints and custom Android plugin handlers.
+-keep class app.tauri.** { *; }
+-keep interface app.tauri.** { *; }
+-keep class org.litefin.app.** { *; }
+-keep interface org.litefin.app.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Preserve JavaScript interface methods registered for WebView
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# -----------------------------------------------------------------------------
+# Google Media3 ExoPlayer Direct-Play Suite
+# -----------------------------------------------------------------------------
+# Preserve audio decoders, video renderers, and OkHttp data sources
+-keep class androidx.media3.exoplayer.** { *; }
+-keep interface androidx.media3.exoplayer.** { *; }
+-keep class androidx.media3.datasource.** { *; }
+-keep class androidx.media3.ui.** { *; }
+-dontwarn androidx.media3.**
+
+# -----------------------------------------------------------------------------
+# OkHttp & Kotlin Coroutines
+# -----------------------------------------------------------------------------
+-dontwarn okhttp3.**
+-dontwarn okio.**
