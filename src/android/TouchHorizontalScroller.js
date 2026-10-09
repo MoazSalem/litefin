@@ -68,7 +68,6 @@ export class TouchHorizontalScroller {
     constructor() {
         // Lifecycle and state flags
         this._initialized = false;
-        this._stylesInjected = false;
 
         // Registered cleanup handlers
         this._unsubscribers = [];
@@ -111,9 +110,6 @@ export class TouchHorizontalScroller {
         this._initialized = true;
 
         log.info('Initializing TouchHorizontalScroller for Android touch devices...');
-
-        // Inject high-performance native scrolling CSS styles
-        this._injectStyles();
 
         // Attach global pointer and scroll monitoring listeners
         this._installListeners();
@@ -181,47 +177,6 @@ export class TouchHorizontalScroller {
         clearTimeout(this._scrollIdleTimer);
         this._initialized = false;
         log.info('TouchHorizontalScroller destroyed');
-    }
-
-    /**
-     * ========================================================================
-     * Native Horizontal Scroller Styles Injection
-     * ========================================================================
-     * Transforms .row-items into GPU-accelerated horizontal scrollers.
-     * @private
-     */
-    _injectStyles() {
-        if (this._stylesInjected) {
-            return;
-        }
-        this._stylesInjected = true;
-
-        const style = document.createElement('style');
-        style.id = 'litefin-native-hscroll';
-        style.textContent = `
-/* -------------------------------------------------------------------------
-   Android Native Touch Horizontal Scrolling
-   Enables native overflow-x inertia managed directly by the WebView compositor
-   ------------------------------------------------------------------------- */
-[data-platform="android"] .row-items {
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    /* Permits horizontal row swipes while passing vertical drags to page scroll */
-    touch-action: pan-x pan-y;
-}
-[data-platform="android"] .row-items::-webkit-scrollbar {
-    display: none;
-}
-/* Ensure row track does not prematurely GPU-clip inner cards */
-[data-platform="android"] .row-items-track {
-    will-change: auto;
-}`;
-        document.head.appendChild(style);
-        log.debug('Native horizontal row scrolling stylesheet injected');
     }
 
     /**

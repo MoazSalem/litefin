@@ -48,6 +48,7 @@ import './styles/modern/manual.css';
 import './styles/modern/users.css';
 import './styles/modern/home.css';
 import './styles/modern/sidebar.css';
+import './styles/android-mobile.css'; // Mobile touch & scaled viewport overrides
 
 /**
  * Bootstrap the application
