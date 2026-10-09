@@ -408,11 +408,17 @@ class PlayerPage extends Page {
             // ================================================================
             // NETWORK RESILIENCE & OFFLINE EVENT HANDLERS
             // ================================================================
-            // Detect network disconnection immediately rather than waiting
-            // 20-30s for the browser/demuxer socket timeouts.
+            // We listen to browser and operating-system level online/offline events.
+            // Note: The WebSocket connection is solely an auxiliary signaling
+            // and remote-control bridge. Media streaming is carried over HTTP/HTTPS
+            // directly by the hardware decoder or video pipeline. Consequently,
+            // transient WebSocket disconnects or proxy timeouts must NEVER be
+            // treated as total network failures or trigger auto-recovery reloads.
             this._onNetworkOffline = () => this._handleNetworkOffline();
             this._onNetworkOnline = () => this._handleNetworkOnline();
-            eventBus.on('websocket:disconnected', this._onNetworkOffline);
+            
+            // Only listen to websocket:connected to accelerate reconnection polling
+            // when the player is ALREADY actively in the auto-recovery state.
             eventBus.on('websocket:connected', this._onNetworkOnline);
             window.addEventListener('offline', this._onNetworkOffline);
             window.addEventListener('online', this._onNetworkOnline);
@@ -2753,11 +2759,15 @@ class PlayerPage extends Page {
 
             log.warn('[PlaybackWatchdog] Buffering stalled for 3.5s, checking network health...');
 
-            // If browser already reports offline or WebSocket disconnected, recover immediately
+            // ----------------------------------------------------------------
+            // 1. Explicit OS/Browser Offline Verification
+            // ----------------------------------------------------------------
+            // Check if the TV browser engine reports that network is truly down.
+            // Notice: We specifically avoid checking WebSocket connectivity here
+            // because HTTP/HTTPS video delivery runs completely out-of-band.
             const isNavigatorOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-            const isWsDisconnected = typeof api !== 'undefined' && api.isWebSocketConnected === false;
 
-            if (isNavigatorOffline || isWsDisconnected) {
+            if (isNavigatorOffline) {
                 log.warn('[PlaybackWatchdog] Offline status confirmed during stall. Starting auto-recovery.');
                 this._startAutoRecovery({
                     isNetworkError: true,
@@ -2766,7 +2776,12 @@ class PlayerPage extends Page {
                 return;
             }
 
-            // Otherwise, perform a quick 1.5s ping check to verify server availability
+            // ----------------------------------------------------------------
+            // 2. Real HTTP Connectivity Probe to Jellyfin Server
+            // ----------------------------------------------------------------
+            // Perform an active, lightweight HTTP ping directly against the Jellyfin
+            // server. If the server answers, we know the pipe is open and the stall
+            // is merely a standard buffer fetch in progress.
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 1500);
@@ -2807,23 +2822,24 @@ class PlayerPage extends Page {
 
     /**
      * ========================================================================
-     * Handle Network Dropout & WebSocket Disconnection Events
+     * Handle OS/Browser Network Dropout Events
      * ========================================================================
-     * When network connectivity drops, engaging auto-recovery immediately prevents
-     * the player from freezing for 20-30s while the browser/OS socket times out.
+     * Invoked when the TV's network stack explicitly fires window 'offline'.
+     * Preserves current playback position and transitions to the Reconnection
+     * HUD instead of letting the native demuxer hang indefinitely.
      * ========================================================================
      * @private
      */
     _handleNetworkOffline() {
-        log.warn('[AutoRecovery] Network offline event or WebSocket disconnect detected');
+        log.warn('[AutoRecovery] Network offline event detected from window.offline');
         const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
 
-        // If actively playing or buffered and not already recovering or paused
+        // Verify that the player is actively engaged before initiating auto-recovery
         if (!this._isAutoRecovering && !this._isPaused && !this._isExiting && (this._hasReportedStart || currentPosTicks > 0)) {
             log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
             this._startAutoRecovery({
                 isNetworkError: true,
-                message: 'Network offline / WebSocket disconnected'
+                message: 'Network offline'
             });
         }
     }
@@ -5082,7 +5098,6 @@ class PlayerPage extends Page {
 
         // Remove network offline/online listeners
         if (this._onNetworkOffline) {
-            eventBus.off('websocket:disconnected', this._onNetworkOffline);
             window.removeEventListener('offline', this._onNetworkOffline);
             this._onNetworkOffline = null;
         }

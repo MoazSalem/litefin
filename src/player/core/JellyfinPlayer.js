@@ -4358,6 +4358,24 @@ export class JellyfinPlayer extends EventEmitter {
                         firstSource.TranscodingUrl &&
                         firstSource.TranscodingUrl.includes('TranscodeReasons=AudioCodecNotSupported');
 
+                    // =================================================================
+                    // Safeguard Against Prewarmed DirectPlay with Active MKV Remux
+                    // =================================================================
+                    // If the user enabled "Remux MKV to MP4", but the prewarmed PlaybackInfo
+                    // cached DirectPlay for an MKV file, discard the cached response so
+                    // we make a fresh request with 'mkv' stripped from DirectPlayProfiles.
+                    // =================================================================
+                    const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
+                    const prewarmedContainer = (
+                        firstSource.Container ||
+                        options.item?.Container ||
+                        options.item?.MediaSources?.[0]?.Container ||
+                        ''
+                    ).toLowerCase();
+                    const isPrewarmedMkv = prewarmedContainer === 'mkv' ||
+                        prewarmedContainer === 'matroska' ||
+                        prewarmedContainer.includes('mkv');
+
                     if (isAudioCodecError && (this._playbackMode === 'auto' || this._playbackMode === 'directPlay')) {
                         log.warn(
                             '[Prewarm] Prewarmed PlaybackInfo forced transcode for AudioCodecNotSupported. Discarding in favor of fresh direct-play request.'
@@ -4366,7 +4384,7 @@ export class JellyfinPlayer extends EventEmitter {
                         log.info(
                             '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
                         );
-                    } else if (this._playbackMode === 'transcode' && (firstSource.SupportsDirectPlay || firstSource.SupportsDirectStream)) {
+                    } else if ( remuxMkvToMp4Setting && isPrewarmedMkv && this._playbackMode === 'transcode' && (firstSource.SupportsDirectPlay || firstSource.SupportsDirectStream)) {
                         log.info(
                             '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay/DirectStream, but active mode requires Transcode. Discarding in favor of fresh transcode request.'
                         );
@@ -4496,8 +4514,16 @@ export class JellyfinPlayer extends EventEmitter {
         // remux) since those modes rebuild the profile wholesale themselves.
         const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
         const modeLockedProfiles = currentMode === 'directPlay' || currentMode === 'transcode' || currentMode === 'remux';
-        // Treat both 'mkv' and 'matroska' as Matroska containers
-        const itemContainer = (options.item?.Container || '').toLowerCase();
+        // Treat both 'mkv' and 'matroska' as Matroska containers.
+        // Check top-level item container, nested MediaSources[0].Container, and mediaSource.Container
+        // because Jellyfin episode and item metadata responses frequently place the container
+        // format under MediaSources rather than the root item object.
+        const itemContainer = (
+            options.item?.Container ||
+            options.item?.MediaSources?.[0]?.Container ||
+            options.mediaSource?.Container ||
+            ''
+        ).toLowerCase();
         const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
         if (remuxMkvToMp4Setting && !modeLockedProfiles && isMkvItem) {
             const profiles = requestBody.DeviceProfile.DirectPlayProfiles;

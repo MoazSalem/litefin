@@ -186,3 +186,40 @@ test('forced codec modes: advertise exclusively the requested codec', () => {
     assert.deepStrictEqual(webosMp3, ['mp3'], 'WebOS force_mp3 must contain only mp3');
     assert.deepStrictEqual(webMp3, ['mp3'], 'Web force_mp3 must contain only mp3');
 });
+
+// ============================================================================
+// Test Suite: Tizen Remux EAC3 Audio Preservation
+// ============================================================================
+test('tizen remux: advertises EAC3 in transcoding profiles during remux mode when supported', () => {
+    // Reset transcode audio codec setting to auto
+    PlayerSettings.set('transcodeAudioCodec', 'auto');
+    PlayerSettings.set('enableEac3', 'auto');
+
+    // In remux mode on Tizen, EAC3 should be present in transcoding profiles
+    // to allow lossless stream-copy without server transcoding to AC3
+    const remuxProfile = TizenProfile.buildJellyfinProfile({ playbackMode: 'remux', backend: 'avplay' });
+    const remuxCodecs = getVideoTranscodeAudioCodecs(remuxProfile);
+
+    assert.ok(
+        remuxCodecs.includes('eac3'),
+        'Tizen remux mode must include EAC3 in transcoding profiles so server can stream-copy EAC3 audio'
+    );
+});
+
+test('tizen auto: honors enableEac3=enable override even on Tizen < 6', () => {
+    // When the user explicitly sets enableEac3 to enable, honor it in auto mode
+    PlayerSettings.set('transcodeAudioCodec', 'auto');
+    PlayerSettings.set('enableEac3', 'enable');
+
+    const profile = TizenProfile.buildJellyfinProfile({ playbackMode: 'auto', backend: 'avplay' });
+    const codecs = getVideoTranscodeAudioCodecs(profile);
+
+    assert.ok(
+        codecs.includes('eac3'),
+        'Tizen auto mode must include EAC3 when enableEac3 setting is explicitly set to enable'
+    );
+
+    // Clean up
+    PlayerSettings.set('enableEac3', 'auto');
+});
+
