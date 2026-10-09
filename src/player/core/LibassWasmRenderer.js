@@ -133,6 +133,7 @@ export default class LibassWasmRenderer {
         this._octopus = null;
         this._wrapper = null;
         this._canvas = null;
+        this._videoObserver = null;
         this._delaySeconds = 0;
         this._lastTime = null;
         this._rawContent = null;
@@ -365,12 +366,26 @@ export default class LibassWasmRenderer {
             // Callback fired once the SubtitlesOctopus worker thread is compiled and initialized
             const onOctopusReady = () => {
                 log.info('SubtitlesOctopus WebAssembly worker is active and ready');
-                // Immediately paint current position on ready without waiting for next tick interval
+
+                // Virtual canvas mode (Tizen AVPlay): render initial position immediately
                 if (this._isVirtual) {
                     const currentTime = this._lastTime !== null ? this._lastTime : this._getPlatformTime();
                     if (currentTime >= 0) {
                         this.tick(currentTime);
                     }
+                } else {
+                    if (this._octopus && typeof this._octopus.resetRenderAheadCache === 'function') {
+                        // ================================================================
+                        // HTML5 Video Mode (webOS / Desktop / Android):
+                        // When SubtitlesOctopus compiles with renderAhead > 0, the oneshot
+                        // prerender loop must be primed explicitly with resetRenderAheadCache(false).
+                        // This ensures the worker immediately pre-renders upcoming subtitle
+                        // events and oneshotRender begins tracking video.currentTime cleanly.
+                        // ================================================================
+                        this._octopus.resetRenderAheadCache(false);
+                    }
+                    // Recompute canvas position once worker and layout are primed
+                    this._repositionOctopusCanvas();
                 }
             };
 
@@ -411,14 +426,67 @@ export default class LibassWasmRenderer {
                 const isUltraLegacy = document.documentElement.getAttribute('data-layout-tier') === 'ultra-legacy';
                 this._octopus.canvasParent.style.zIndex = isUltraLegacy ? '50' : '30';
                 this._octopus.canvasParent.style.pointerEvents = 'none';
+
+                // ================================================================
+                // Intercept SubtitlesOctopus resize() for Alignment Geometry:
+                // SubtitlesOctopus calculates canvas positioning relative to canvasParent:
+                //   top = videoSize.y - (canvasParent.top - video.top)
+                //   left = videoSize.x
+                //
+                // Notice that SubtitlesOctopus compensates for vertical offset
+                // between canvasParent and the video element, but completely
+                // omits horizontal offset: -(canvasParent.left - video.left).
+                //
+                // When WebOSPlayer._fitVideoBox() centers a 4:3 video inside a 16:9
+                // container via margin: auto; left: 0; right: 0; position: absolute,
+                // video.offsetWidth matches the 4:3 active picture, causing videoSize.x
+                // to equal 0. CanvasParent sits at container left (0px) while the video
+                // is horizontally centered (e.g. 168px). Without the horizontal offset,
+                // SubtitlesOctopus pins the canvas to left: 0px instead of 168px.
+                //
+                // Wrapping resize() guarantees our bounding rect correction runs
+                // synchronously whenever SubtitlesOctopus recalculates canvas bounds.
+                // ================================================================
+                const origResize = this._octopus.resize.bind(this._octopus);
+                this._octopus.resize = (width, height, top, left) => {
+                    origResize(width, height, top, left);
+                    this._repositionOctopusCanvas();
+                };
+
+                // Position canvas immediately
+                this._repositionOctopusCanvas();
+
+                // If metadata hasn't loaded yet, ensure canvas repositions once video dimensions arrive
+                if (this._videoElement) {
+                    if (this._videoElement.videoWidth === 0) {
+                        this._videoElement.addEventListener('loadedmetadata', () => {
+                            if (this._octopus) {
+                                this._repositionOctopusCanvas();
+                            }
+                        }, { once: true });
+                    }
+
+                    // Observe video element and player container for dynamic box fitting changes
+                    if (typeof ResizeObserver !== 'undefined' && !this._videoObserver) {
+                        this._videoObserver = new ResizeObserver(() => {
+                            this._repositionOctopusCanvas();
+                        });
+                        this._videoObserver.observe(this._videoElement);
+                        if (this._container) {
+                            this._videoObserver.observe(this._container);
+                        }
+                    }
+                }
             }
 
             this._updateWrapperStyles();
 
+            // Listen for window resize to maintain layout across screen/container changes
+            window.addEventListener('resize', this._onWindowResize);
+
             if (this._isVirtual) {
                 // Ensure canvas resolution and layout matches viewport
                 this._resizeRenderer();
-                window.addEventListener('resize', this._onWindowResize);
             }
 
             // Immediately schedule initial subtitle paint if timestamp is known
@@ -524,7 +592,22 @@ export default class LibassWasmRenderer {
      * Invoked during seek operations or when stopping playback.
      */
     clear() {
-        if (!this._isVirtual) return;
+        if (!this._isVirtual) {
+            // ================================================================
+            // HTML5 Video Mode Seek Clear:
+            // Flush prerender buffer queue and clear the canvas immediately so
+            // residual dialogue lines from the previous position do not flash on screen.
+            // ================================================================
+            if (this._octopus) {
+                if (typeof this._octopus.resetRenderAheadCache === 'function') {
+                    this._octopus.resetRenderAheadCache(false);
+                }
+                if (this._octopus.ctx && this._octopus.canvas) {
+                    this._octopus.ctx.clearRect(0, 0, this._octopus.canvas.width, this._octopus.canvas.height);
+                }
+            }
+            return;
+        }
 
         // Wipe 2D canvas bitmap buffer so the user immediately sees a clean screen
         if (this._canvas) {
@@ -542,6 +625,10 @@ export default class LibassWasmRenderer {
 
     destroy() {
         window.removeEventListener('resize', this._onWindowResize);
+        if (this._videoObserver) {
+            this._videoObserver.disconnect();
+            this._videoObserver = null;
+        }
         this._teardownOctopus();
         this._removeDOM();
     }
@@ -615,6 +702,10 @@ export default class LibassWasmRenderer {
      * @private
      */
     _teardownOctopus() {
+        if (this._videoObserver) {
+            this._videoObserver.disconnect();
+            this._videoObserver = null;
+        }
         if (this._octopus) {
             try {
                 // If the worker already self-disposed (e.g. internal workerError
@@ -637,26 +728,94 @@ export default class LibassWasmRenderer {
      * @private
      */
     _resizeRenderer() {
-        if (!this._canvas || !this._wrapper) return;
+        if (this._isVirtual) {
+            if (!this._canvas || !this._wrapper) return;
 
-        // Obtain target render dimensions from container or viewport
-        const containerWidth = this._container.offsetWidth || window.innerWidth || this._videoWidth || 1920;
-        const containerHeight = this._container.offsetHeight || window.innerHeight || this._videoHeight || 1080;
+            // Obtain target render dimensions from container or viewport
+            const containerWidth = this._container.offsetWidth || window.innerWidth || this._videoWidth || 1920;
+            const containerHeight = this._container.offsetHeight || window.innerHeight || this._videoHeight || 1080;
 
-        // Keep bitmap buffer resolution synchronized
-        this._canvas.width = containerWidth;
-        this._canvas.height = containerHeight;
-        this._canvas.style.position = 'absolute';
-        this._canvas.style.top = '0';
-        this._canvas.style.left = '0';
-        this._canvas.style.width = '100%';
-        this._canvas.style.height = '100%';
+            // Keep bitmap buffer resolution synchronized
+            this._canvas.width = containerWidth;
+            this._canvas.height = containerHeight;
+            this._canvas.style.position = 'absolute';
+            this._canvas.style.top = '0';
+            this._canvas.style.left = '0';
+            this._canvas.style.width = '100%';
+            this._canvas.style.height = '100%';
 
-        // Notify SubtitlesOctopus worker of updated render target dimensions
-        if (this._octopus) {
-            log.info(`Resizing virtual worker canvas to ${containerWidth}x${containerHeight}`);
-            this._octopus.resize(containerWidth, containerHeight);
+            // Notify SubtitlesOctopus worker of updated render target dimensions
+            if (this._octopus) {
+                log.info(`Resizing virtual worker canvas to ${containerWidth}x${containerHeight}`);
+                this._octopus.resize(containerWidth, containerHeight);
+            }
+        } else if (this._octopus) {
+            // In HTML5 video mode, trigger octopus resize and realign canvas overlay
+            this._octopus.resize();
+            this._repositionOctopusCanvas();
         }
+    }
+
+    /**
+     * Correct SubtitlesOctopus canvas horizontal and vertical positioning.
+     *
+     * In HTML5 video mode, SubtitlesOctopus internally computes:
+     *   var offset = self.canvasParent.getBoundingClientRect().top - self.video.getBoundingClientRect().top;
+     *   top = videoSize.y - offset;
+     *   left = videoSize.x;
+     *
+     * SubtitlesOctopus compensates for the vertical offset between canvasParent
+     * and the <video> element, but completely omits the horizontal offset:
+     *   -(canvasParent.getBoundingClientRect().left - video.getBoundingClientRect().left).
+     *
+     * When WebOSPlayer (or letterbox styling) fits the <video> element to maintain
+     * aspect ratio (e.g. 4:3 content pillarboxed on a 16:9 screen via
+     * margin: auto; left: 0; right: 0; position: absolute;), video.offsetWidth
+     * already matches the active video width, causing videoSize.x to evaluate to 0.
+     *
+     * Because canvasParent is anchored at the left edge of the player container (0px)
+     * while the centered video starts at, e.g., 168px, SubtitlesOctopus places the
+     * canvas at left: 0px. This shifts all subtitle dialogue by the entire pillarbox
+     * width to the left side of the display.
+     *
+     * We calculate the true bounding box offset between the video and canvasParent,
+     * ensuring the subtitle canvas aligns pixel-perfect over the active video frame.
+     *
+     * @private
+     */
+    _repositionOctopusCanvas() {
+        if (this._isVirtual || !this._octopus || !this._octopus.canvas || !this._videoElement) {
+            return;
+        }
+
+        const canvas = this._octopus.canvas;
+        const canvasParent = this._octopus.canvasParent;
+        const video = this._videoElement;
+
+        if (!canvasParent) return;
+
+        // Skip repositioning if video dimensions are unavailable or element not in DOM
+        if (!video.videoWidth || !video.videoHeight) return;
+
+        const videoRect = video.getBoundingClientRect();
+        const parentRect = canvasParent.getBoundingClientRect();
+
+        // If either element hasn't been measured/rendered yet, skip
+        if (videoRect.width === 0 || videoRect.height === 0) return;
+
+        const videoSize = typeof this._octopus.getVideoPosition === 'function'
+            ? this._octopus.getVideoPosition()
+            : null;
+
+        const videoOffsetX = videoSize ? videoSize.x : 0;
+        const videoOffsetY = videoSize ? videoSize.y : 0;
+
+        // Compute exact coordinates of the active video frame relative to canvasParent
+        const targetLeft = Math.round(videoRect.left + videoOffsetX - parentRect.left);
+        const targetTop = Math.round(videoRect.top + videoOffsetY - parentRect.top);
+
+        canvas.style.left = `${targetLeft}px`;
+        canvas.style.top = `${targetTop}px`;
     }
 
     _updateWrapperStyles() {
