@@ -11,6 +11,13 @@
             padding: 0;
         }
 
+        /* Universal Android WebKit touch highlight & inkwell suppression */
+        *, *::before, *::after {
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+            -webkit-touch-callout: none !important;
+        }
+
         /* Seamless transparency mode when video player is active */
         html.player-active, body.player-active,
         html.player-active #app, body.player-active #app,

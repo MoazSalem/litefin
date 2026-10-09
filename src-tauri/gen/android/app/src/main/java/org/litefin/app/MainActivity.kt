@@ -152,14 +152,18 @@ class MainActivity : TauriActivity() {
     webView.addJavascriptInterface(AndroidBridge(), "LitefinAndroid")
 
     // -------------------------------------------------------------------------
-    // 4. Lock Native Remote Focus to the WebView
+    // 4. Lock Native Remote Focus to the WebView & Suppress Default Highlight
     // -------------------------------------------------------------------------
     // On Android TV platforms operating in non-touch D-pad mode, ensure the
     // WebView immediately requests and claims focus so initial key events
     // are directly dispatched to the web runtime rather than lost in native view search.
+    // Also disable native OS default focus highlight rectangle on Android 8.0+.
     // -------------------------------------------------------------------------
     webView.isFocusable = true
     webView.isFocusableInTouchMode = true
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+      webView.defaultFocusHighlightEnabled = false
+    }
     webView.requestFocus()
   }
 

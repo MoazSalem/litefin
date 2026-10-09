@@ -454,21 +454,42 @@ class AndroidAdapter {
      * @returns {boolean} True if viewport was portrait and handled
      */
     _applyPortraitScale() {
+        /*
+         * Detect vertical screen orientation where viewport height exceeds width.
+         * When vertical, stamp data-litefin-portrait onto the document root element
+         * and dispatch an orientation change event across the application bus.
+         */
         const isPortrait = window.innerHeight > window.innerWidth;
+        const root = document.documentElement;
+
         if (!isPortrait) {
+            // Remove portrait marker attribute when returning to landscape
+            if (root && root.hasAttribute('data-litefin-portrait')) {
+                root.removeAttribute('data-litefin-portrait');
+                eventBus.emit('viewport:orientationChange', { isPortrait: false });
+            }
             return false;
         }
 
+        // Apply portrait attribute for reactive CSS layout switches
+        if (root && !root.hasAttribute('data-litefin-portrait')) {
+            root.setAttribute('data-litefin-portrait', '1');
+            eventBus.emit('viewport:orientationChange', { isPortrait: true });
+        }
+
         try {
+            /*
+             * Target portrait design width of 750px calibrated for mobile displays.
+             * CSS zoom scaling computes proportional scale factor down to MIN_SCALE (0.15).
+             */
             const PORTRAIT_DESIGN_WIDTH = 750;
             const MIN_SCALE = 0.15;
 
             const scale = Math.min(1, Math.max(MIN_SCALE, window.innerWidth / PORTRAIT_DESIGN_WIDTH));
-            const root = document.documentElement;
             const appEl = document.getElementById('app');
 
             if (scale >= 1) {
-                // Desktop-sized portrait window
+                // Desktop or large tablet portrait window without zoom
                 root.style.removeProperty('zoom');
                 root.removeAttribute('data-litefin-scaled');
                 root.style.removeProperty('--litefin-app-w');
@@ -478,6 +499,10 @@ class AndroidAdapter {
                     appEl.style.removeProperty('height');
                 }
             } else {
+                /*
+                 * Scale down TV canvas to fit mobile phone portrait bounds.
+                 * Sets responsive virtual width and height variables on the document element.
+                 */
                 const designW = `${Math.round(window.innerWidth / scale)}px`;
                 const designH = `${Math.round(window.innerHeight / scale)}px`;
 
@@ -517,9 +542,15 @@ class AndroidAdapter {
                 return;
             }
 
+            // Clean up portrait marker if viewport transitioned to landscape
+            const root = document.documentElement;
+            if (root && root.hasAttribute('data-litefin-portrait')) {
+                root.removeAttribute('data-litefin-portrait');
+                eventBus.emit('viewport:orientationChange', { isPortrait: false });
+            }
+
             try {
                 const scale = Math.min(1, Math.max(MIN_SCALE, window.innerWidth / DESIGN_WIDTH));
-                const root = document.documentElement;
                 const appEl = document.getElementById('app');
 
                 if (scale >= 1) {
@@ -557,6 +588,10 @@ class AndroidAdapter {
         apply();
         if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
             window.addEventListener('resize', apply, { passive: true });
+            window.addEventListener('orientationchange', apply, { passive: true });
+            if (window.screen?.orientation?.addEventListener) {
+                window.screen.orientation.addEventListener('change', apply);
+            }
         }
     }
 

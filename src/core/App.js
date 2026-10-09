@@ -45,6 +45,7 @@ import LiveTvPage from '../pages/LiveTvPage.js';
 import SlideshowPage from '../pages/SlideshowPage.js';
 import EmulatorPage from '../pages/EmulatorPage.js';
 import Sidebar from '../components/Sidebar.js';
+import MobileNav from '../components/MobileNav.js';
 
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
@@ -307,6 +308,14 @@ class App {
         this.sidebar = new Sidebar();
         this.sidebar.mount(document.getElementById('sidebar-container'));
 
+        /*
+         * Initialize Mobile Portrait Navigation Bar & Top Bar.
+         * Mounts the responsive mobile navigation components into the application container.
+         * Activates specifically for mobile phones and tablets in portrait orientation.
+         */
+        this.mobileNav = new MobileNav();
+        this.mobileNav.mount(this.container);
+
         // Append trigger AFTER sidebar so we can use sibling selectors in CSS
         document
             .getElementById('sidebar-container')
@@ -334,6 +343,11 @@ class App {
             if (sidebar) {
                 sidebar.style.opacity = '';
                 sidebar.style.pointerEvents = '';
+            }
+
+            // Notify mobile navigation that splash screen has dropped
+            if (this.mobileNav) {
+                this.mobileNav.onSplashHidden();
             }
 
             // Remove the body class that blocks duplicate page-level spinners
@@ -385,6 +399,14 @@ class App {
         if (isFullScreen) {
             document.body.classList.add('no-sidebar');
             this.sidebar.setMode('hidden');
+            /*
+             * Synchronize mobile navigation:
+             * On full-screen routes (such as video playback or user switcher),
+             * suppress both the top bar and the bottom navbar completely.
+             */
+            if (this.mobileNav) {
+                this.mobileNav.updateVisibility(path, true);
+            }
         } else {
             document.body.classList.remove('no-sidebar');
 
@@ -403,6 +425,15 @@ class App {
             }
 
             this.sidebar.setMode('visible');
+
+            /*
+             * Synchronize mobile navigation on standard routes:
+             * Shows the bottom navbar while evaluating top bar rules
+             * (hidden on Settings and Details pages).
+             */
+            if (this.mobileNav) {
+                this.mobileNav.updateVisibility(path, false);
+            }
         }
 
         // Invalidate sidebar cache so FocusManager recognizes newly revealed/hidden items

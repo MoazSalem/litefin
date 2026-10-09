@@ -14,10 +14,22 @@
 *,
 *::before,
 *::after {
+    /* Standard box sizing model across all nested components */
     box-sizing: border-box;
+
+    /* Normalize default outer margins and inner padding */
     margin: 0;
     padding: 0;
+
+    /* Inherit global typography typeface */
     font-family: inherit;
+
+    /* Suppress outdated Android / WebKit tap highlight and inkwell box flashes on touch */
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+
+    /* Prevent mobile long-press holding callout overlays and magnifiers */
+    -webkit-touch-callout: none !important;
 }
 
 :root {

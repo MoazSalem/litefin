@@ -1,0 +1,644 @@
+/**
+ * ============================================================================
+ * Litefin - Mobile Portrait Navigation Stylesheet
+ * ============================================================================
+ * Styles for the dedicated mobile top bar, bottom navigation bar, and
+ * overlay sheets in portrait orientation on Android touch devices.
+ *
+ * Strict Design Directives:
+ * - Pure flat design: Zero blur effects, zero box-shadows.
+ * - Solid opaque surfaces for bottom bar and dialogs.
+ * - Transparent background for top navigation bar.
+ * - Dynamic icon switching: Outlined when inactive, filled when active.
+ * - Suppress outdated holding/inkwell tap highlights.
+ * - Symmetrical, uniform tile dimensions for the libraries grid menu.
+ * ============================================================================
+ */
+
+/* ============================================================================
+ * 1. Root Visibility & Global Clock Suppression
+ * ============================================================================
+ * Hidden by default on TV, landscape mobile, and desktop displays.
+ * Displayed only when portrait mode is active on touch or Android platforms.
+ */
+.mobile-nav-root {
+    display: none;
+}
+
+html[data-litefin-portrait] .mobile-nav-root,
+@media (orientation: portrait) {
+    html[data-platform="android"] .mobile-nav-root,
+    html[data-litefin-touch] .mobile-nav-root,
+    html[data-litefin-scaled] .mobile-nav-root {
+        display: block;
+    }
+}
+
+/* Suppress TV global clock overlay in portrait mode so our top bar clock takes precedence */
+html[data-litefin-portrait] .global-clock,
+@media (orientation: portrait) {
+    html[data-platform="android"] .global-clock,
+    html[data-litefin-touch] .global-clock,
+    html[data-litefin-scaled] .global-clock {
+        display: none !important;
+    }
+}
+
+/* ============================================================================
+ * 2. Mobile Top Navigation Bar
+ * ============================================================================
+ * Fixed at the top of the mobile screen with transparent background.
+ * Floats brand identity, live clock, search shortcut, and user switcher above hero media.
+ */
+.mobile-topbar {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    height: calc(120px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: 28px;
+    padding-right: 28px;
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    z-index: 250;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+html[data-litefin-portrait] .mobile-topbar:not(.hidden),
+@media (orientation: portrait) {
+    html[data-platform="android"] .mobile-topbar:not(.hidden),
+    html[data-litefin-touch] .mobile-topbar:not(.hidden),
+    html[data-litefin-scaled] .mobile-topbar:not(.hidden) {
+        display: flex;
+    }
+}
+
+.mobile-topbar.hidden {
+    display: none !important;
+}
+
+/* Brand logo and title container */
+.mobile-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    padding: 8px 0;
+    outline: none;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+.mobile-topbar-logo-icon {
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mobile-topbar-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.mobile-topbar-brand {
+    font-size: 2.3rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #ffffff;
+}
+
+/* Right-aligned shortcut controls */
+.mobile-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Live Digital Clock placed directly to the left of the search button */
+.mobile-topbar-clock {
+    font-size: 1.65rem;
+    font-weight: 600;
+    color: #ffffff;
+    letter-spacing: 0.03em;
+    margin-right: 6px;
+    user-select: none;
+    -webkit-user-select: none;
+    display: flex;
+    align-items: center;
+    line-height: 1;
+}
+
+.mobile-topbar-btn {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.mobile-topbar-btn:active {
+    background: rgba(255, 255, 255, 0.18);
+    transform: scale(0.92);
+}
+
+.mobile-topbar-icon-wrap {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.mobile-topbar-icon-wrap svg {
+    width: 34px;
+    height: 34px;
+}
+
+/* Search Icon Outline vs Filled Variant Switching */
+.mobile-topbar-icon-wrap .icon-outline {
+    display: block !important;
+}
+
+.mobile-topbar-icon-wrap .icon-filled {
+    display: none !important;
+}
+
+.mobile-topbar-btn.active .mobile-topbar-icon-wrap .icon-outline,
+.mobile-topbar-btn:active .mobile-topbar-icon-wrap .icon-outline {
+    display: none !important;
+}
+
+.mobile-topbar-btn.active .mobile-topbar-icon-wrap .icon-filled,
+.mobile-topbar-btn:active .mobile-topbar-icon-wrap .icon-filled {
+    display: block !important;
+}
+
+/* User avatar trigger in top bar */
+.mobile-topbar-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mobile-topbar-avatar .mobile-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.mobile-topbar-avatar svg {
+    width: 36px;
+    height: 36px;
+    color: #ffffff;
+}
+
+/* ============================================================================
+ * 3. Mobile Bottom Navigation Bar
+ * ============================================================================
+ * Fixed tab bar anchored along the screen bottom.
+ * Sized generously for scaled portrait viewports without outdated inkwells.
+ */
+.mobile-navbar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 124px;
+    height: calc(124px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: #111115;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+    z-index: 250;
+    align-items: center;
+    justify-content: space-around;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+html[data-litefin-portrait] .mobile-navbar:not(.hidden),
+@media (orientation: portrait) {
+    html[data-platform="android"] .mobile-navbar:not(.hidden),
+    html[data-litefin-touch] .mobile-navbar:not(.hidden),
+    html[data-litefin-scaled] .mobile-navbar:not(.hidden) {
+        display: flex;
+    }
+}
+
+.mobile-navbar.hidden {
+    display: none !important;
+}
+
+/* Individual tab button with clean tactile press instead of rectangular inkwell */
+.mobile-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    border: none;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 8px 4px;
+    cursor: pointer;
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: color 0.15s ease;
+}
+
+.mobile-nav-item:focus,
+.mobile-nav-item:focus-visible,
+.mobile-nav-item:active {
+    background: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.mobile-nav-item:active .mobile-nav-icon {
+    transform: scale(0.88);
+}
+
+.mobile-nav-item.active {
+    color: var(--theme-color, #6b6ede);
+}
+
+.mobile-nav-icon {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+    position: relative;
+    transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.mobile-nav-icon svg {
+    width: 44px;
+    height: 44px;
+}
+
+.mobile-nav-label {
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: 0.2px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.mobile-nav-item.active .mobile-nav-label {
+    font-weight: 700;
+}
+
+/* ============================================================================
+ * 4. Dynamic Icon Variant Switching (Outlined vs Filled)
+ * ============================================================================
+ * Displays outlined SVG when inactive and switches to filled SVG when active.
+ */
+.mobile-nav-icon .icon-outline {
+    display: block !important;
+}
+
+.mobile-nav-icon .icon-filled {
+    display: none !important;
+}
+
+.mobile-nav-item.active .mobile-nav-icon .icon-outline {
+    display: none !important;
+}
+
+.mobile-nav-item.active .mobile-nav-icon .icon-filled {
+    display: block !important;
+}
+
+/* Variant switching in modal sheet action items */
+.mobile-sheet-item-icon .icon-outline,
+.mobile-library-tile-icon .icon-outline {
+    display: block !important;
+}
+
+.mobile-sheet-item-icon .icon-filled,
+.mobile-library-tile-icon .icon-filled {
+    display: none !important;
+}
+
+.mobile-sheet-item:active .mobile-sheet-item-icon .icon-outline,
+.mobile-library-tile:active .mobile-library-tile-icon .icon-outline {
+    display: none !important;
+}
+
+.mobile-sheet-item:active .mobile-sheet-item-icon .icon-filled,
+.mobile-library-tile:active .mobile-library-tile-icon .icon-filled {
+    display: block !important;
+}
+
+/* ============================================================================
+ * 5. Action Sheet Dialogs (More Menu & Media Libraries)
+ * ============================================================================
+ * Solid slide-up modal sheets providing secondary actions without blur or shadows.
+ */
+.mobile-sheet-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+.mobile-sheet-overlay.hidden {
+    display: none !important;
+}
+
+/* Dimming backdrop without blur */
+.mobile-sheet-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    box-shadow: none;
+}
+
+/* Solid panel container */
+.mobile-sheet-panel {
+    position: relative;
+    z-index: 1;
+    background: #18181d;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px 24px 0 0;
+    box-shadow: none;
+    padding: 18px 24px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.mobile-sheet-handle {
+    width: 60px;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.25);
+    margin: 4px auto 18px auto;
+}
+
+.mobile-sheet-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.mobile-sheet-title {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.mobile-sheet-content {
+    overflow-y: auto;
+    max-height: 55vh;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* More Menu Rows */
+.mobile-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    padding: 20px 22px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    box-shadow: none;
+    color: #ffffff;
+    cursor: pointer;
+    margin-bottom: 14px;
+    text-align: left;
+    outline: none !important;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.mobile-sheet-item:active {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.98);
+}
+
+.mobile-sheet-item-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mobile-sheet-item-icon svg {
+    width: 42px;
+    height: 42px;
+}
+
+.mobile-sheet-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mobile-sheet-item-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.mobile-sheet-item-desc {
+    font-size: 1.15rem;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+/* SyncPlay live indicator dot */
+.mobile-syncplay-icon-wrap {
+    position: relative;
+}
+
+.mobile-syncplay-dot {
+    display: none;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #10b981;
+}
+
+.mobile-syncplay-dot.active {
+    display: block;
+}
+
+/* ============================================================================
+ * 6. Media Libraries Quick Picker Grid (Consistent Symmetrical Sizing)
+ * ============================================================================
+ * Guarantees uniform height, width, padding, and text truncation across all tiles.
+ */
+.mobile-libraries-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.mobile-library-tile {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 84px;
+    min-height: 84px;
+    max-height: 84px;
+    padding: 0 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    box-shadow: none;
+    color: #ffffff;
+    cursor: pointer;
+    text-align: left;
+    outline: none !important;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.mobile-library-tile:active {
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(0.98);
+}
+
+.mobile-library-tile-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mobile-library-tile-icon svg {
+    width: 38px;
+    height: 38px;
+}
+
+.mobile-library-tile-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1.2;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mobile-libraries-empty {
+    padding: 36px;
+    text-align: center;
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Full-width Close button */
+.mobile-sheet-cancel-btn {
+    display: block;
+    width: 100%;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    box-shadow: none;
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    outline: none !important;
+    margin-top: 10px;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.mobile-sheet-cancel-btn:active {
+    background: rgba(255, 255, 255, 0.14);
+    transform: scale(0.99);
+}
+
+/* ============================================================================
+ * 7. Screen Padding & Content Offsets in Mobile Portrait
+ * ============================================================================
+ * Adjusts page body containers to make room for fixed top bar and bottom navbar.
+ */
+body.mobile-navbar-visible #page-container {
+    padding-bottom: 124px !important;
+    padding-bottom: calc(124px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* Ensure bottom-most page rows don't get covered by navbar */
+body.mobile-navbar-visible .page-content {
+    padding-bottom: 144px !important;
+}
+
+/* On secondary pages, provide top spacing so content doesn't sit under floating buttons */
+body.mobile-topbar-visible .library-page .page-content,
+body.mobile-topbar-visible .favorites-page .page-content,
+body.mobile-topbar-visible .search-page .page-content {
+    padding-top: 130px !important;
+}
+
+/* When topbar is hidden (Settings, Details), remove extra padding */
+body:not(.mobile-topbar-visible) #page-container {
+    padding-top: 0 !important;
+}

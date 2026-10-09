@@ -13,6 +13,26 @@
  */
 
 /* ============================================================================
+ * Android Touch Feedback & Inkwell / Holding Effect Elimination
+ * ============================================================================
+ * Disables the default Android WebKit tap highlight rectangle, inkwell
+ * overlays, and holding touch callouts across all DOM elements on touch devices.
+ */
+html[data-litefin-touch] *,
+html[data-litefin-touch] *::before,
+html[data-litefin-touch] *::after,
+[data-platform="android"] *,
+[data-platform="android"] *::before,
+[data-platform="android"] *::after {
+    /* Suppress WebKit tap highlight overlay box */
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+
+    /* Disable native long-press callout magnifier / popup */
+    -webkit-touch-callout: none !important;
+}
+
+/* ============================================================================
  * Android Native Touch Horizontal Scrolling
  * ============================================================================
  * Enables hardware-accelerated overflow-x scrolling managed by the compositor,
@@ -510,7 +530,28 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
         /* Calibrated font scale and sidebar width for vertical screens */
         font-size: 20px !important;
         --card-title-font-scale: 1.15 !important;
-        --sidebar-width-collapsed: 64px;
+        --sidebar-width-collapsed: 0px !important;
+    }
+
+    /*
+     * In mobile portrait orientation, the vertical sidebar is replaced by
+     * the mobile bottom navbar and top bar. Suppress the sidebar container entirely.
+     */
+    html[data-litefin-scaled] #sidebar-container,
+    html[data-litefin-scaled] .sidebar-hover-trigger,
+    html[data-litefin-scaled] #main-sidebar,
+    html[data-litefin-portrait] #sidebar-container,
+    html[data-litefin-portrait] .sidebar-hover-trigger,
+    html[data-litefin-portrait] #main-sidebar {
+        display: none !important;
+        width: 0 !important;
+        pointer-events: none !important;
+    }
+
+    html[data-litefin-scaled] #page-container,
+    html[data-litefin-portrait] #page-container {
+        left: 0 !important;
+        width: 100% !important;
     }
 
     html[data-litefin-scaled] #app {
