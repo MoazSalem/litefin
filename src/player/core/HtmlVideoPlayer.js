@@ -104,6 +104,9 @@ export class HtmlVideoPlayer {
         // from flashing on screen before the resume seek to target completes.
         // ====================================================================
         this._resumeVideoSuppressed = false;
+
+        // Startup verification watchdog timer for HLS playback initiation
+        this._hlsStartTimeout = null;
     }
 
     // ========================================================================
@@ -627,11 +630,30 @@ export class HtmlVideoPlayer {
             this._hlsPlayer = hls;
             this._hlsManifestDuration = null;
 
-            setTimeout(() => {
+            // -----------------------------------------------------------------
+            // Startup Stall & Resume Playback Failure Watchdog:
+            // When resuming an HLS stream (particularly DirectStream/Remux streams
+            // where video was copied mid-GOP), HLS.js or MSE may encounter decoder
+            // freezes, aborted fragment loads, or missing IDR keyframes.
+            // If playback does not transition to 'playing' within 8 seconds:
+            //   - For resume sessions: emit 'resumeseekfailed' so JellyfinPlayer can
+            //     escalate to Remux or full Transcoding.
+            //   - For 0:00 start: log warning for diagnostics.
+            // -----------------------------------------------------------------
+            this._clearHlsStartTimeout();
+            this._hlsStartTimeout = setTimeout(() => {
                 if (!this._started && !this._videoElement?.paused) {
-                    log.warn('No playback start detected after 10s');
+                    if (resumeSeconds > 0) {
+                        log.warn(`HtmlVideoPlayer: HLS playback failed to start after 8s on resume (target: ${resumeSeconds.toFixed(2)}s) — emitting resumeseekfailed for transcode fallback`);
+                        this.onEvent({
+                            type: 'resumeseekfailed',
+                            data: { targetPositionTicks: options.playerStartPositionTicks || 0 }
+                        });
+                    } else {
+                        log.warn('HtmlVideoPlayer: No playback start detected after 8s');
+                    }
                 }
-            }, 10000);
+            }, 8000);
         });
     }
 
@@ -885,6 +907,7 @@ export class HtmlVideoPlayer {
      * Stop playback
      */
     async stop() {
+        this._clearHlsStartTimeout();
         this._destroyHlsPlayer();
 
         const video = this._videoElement;
@@ -1783,6 +1806,7 @@ export class HtmlVideoPlayer {
             log.info('Playback started');
             this.onEvent({ type: 'playbackstart' });
         }
+        this._clearHlsStartTimeout();
         this._clearStallCheck();
         this.onEvent({ type: 'playing' });
     }
@@ -1925,10 +1949,22 @@ export class HtmlVideoPlayer {
     // ========================================================================
 
     /**
+     * Clear startup HLS detection timer
+     * @private
+     */
+    _clearHlsStartTimeout() {
+        if (this._hlsStartTimeout) {
+            clearTimeout(this._hlsStartTimeout);
+            this._hlsStartTimeout = null;
+        }
+    }
+
+    /**
      * Destroy HLS.js player
      * @private
      */
     _destroyHlsPlayer() {
+        this._clearHlsStartTimeout();
         if (this._hlsPlayer) {
             try {
                 this._hlsPlayer.destroy();

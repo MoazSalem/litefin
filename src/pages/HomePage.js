@@ -2416,8 +2416,8 @@ class HomePage extends Page {
 
         placeholder.innerHTML = `
             <div id="hero-carousel-container" 
-                 class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} skeleton" 
-                 tabindex="-1">
+                 class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} skeleton focusable" 
+                 tabindex="0">
                 <div class="hero-carousel">
                     <div class="hero-carousel-track">
                         <div class="hero-item active">
@@ -2575,6 +2575,25 @@ class HomePage extends Page {
                 // Render the hero carousel and initialize its event listeners
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
+
+                // Seamless focus re-establishment: if the hero was the active focus target,
+                // re-establish focus on the newly rendered live carousel container.
+                const activeSec = focusManager.getActiveSection();
+                const curFocused = focusManager.getFocused();
+                if (
+                    activeSec === 'home-hero' ||
+                    !curFocused ||
+                    !document.contains(curFocused) ||
+                    placeholder.contains(curFocused)
+                ) {
+                    if (!focusManager.isTrapped()) {
+                        this.setActiveSection('home-hero', false);
+                        focusManager.focusElement(placeholder.firstElementChild, {
+                            instantScroll: true,
+                            skipScroll: true
+                        });
+                    }
+                }
 
                 // Relink the first rendered row and the hero carousel now that the hero has initialized
                 const container = this.$('#home-rows');
@@ -3246,6 +3265,25 @@ class HomePage extends Page {
                 // Inject the carousel markup and wire up its event listeners
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
+
+                // Seamless focus re-establishment: if the hero was the active focus target,
+                // re-establish focus on the newly rendered live carousel container.
+                const activeSecFromCache = focusManager.getActiveSection();
+                const curFocusedFromCache = focusManager.getFocused();
+                if (
+                    activeSecFromCache === 'home-hero' ||
+                    !curFocusedFromCache ||
+                    !document.contains(curFocusedFromCache) ||
+                    placeholder.contains(curFocusedFromCache)
+                ) {
+                    if (!focusManager.isTrapped()) {
+                        this.setActiveSection('home-hero', false);
+                        focusManager.focusElement(placeholder.firstElementChild, {
+                            instantScroll: true,
+                            skipScroll: true
+                        });
+                    }
+                }
 
                 // Relink the first rendered row and the hero carousel after cache restoration
                 const container = this.$('#home-rows');

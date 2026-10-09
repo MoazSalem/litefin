@@ -514,7 +514,9 @@ export function buildJellyfinProfile(options = {}) {
     if (preferredTranscodeCodec === 'auto') {
         // Auto (Prefer E-AC3): EAC3 in HLS/TS produces no audio on Tizen < 6 AVPlay (silent playback).
         // The HTML5 backend handles it fine, and Tizen 6+ AVPlay decodes it natively.
-        if (caps.eac3 && (isHtml5 || caps.tizenVersion >= 6)) transAudioCodecsArr.push('eac3');
+        // If the user explicitly forced EAC3 on via enableEac3 setting, honor it.
+        const forceEac3 = PlayerSettings.get('enableEac3') === 'enable';
+        if (caps.eac3 && (isHtml5 || caps.tizenVersion >= 6 || forceEac3)) transAudioCodecsArr.push('eac3');
         if (caps.ac3) transAudioCodecsArr.push('ac3');
         if (supportsMp2) transAudioCodecsArr.push('mp2');
         transAudioCodecsArr.push('aac', 'mp3');
@@ -643,6 +645,25 @@ export function buildJellyfinProfile(options = {}) {
         const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
         transVideoCodecs = Array.from(allVideo).join(',');
         directVideoCodecs = transVideoCodecs;
+
+        // =====================================================================
+        // EAC3 Stream-Copy Preservation during Remux
+        // =====================================================================
+        // In remux mode (e.g. recovering from a DirectPlay seek failure or container change),
+        // FFmpeg is in stream-copy mode. If the hardware supports EAC3, we must advertise
+        // eac3 in TranscodingProfiles so Jellyfin server can pass the audio track through
+        // losslessly (-c:a copy). Excluding it causes the server StreamBuilder to raise
+        // TranscodeReasons=AudioCodecNotSupported and re-encode to AC3.
+        // We only add EAC3 if the user has not explicitly configured a strict transcode codec.
+        // =====================================================================
+        const userStrictTranscode = preferredTranscodeCodec === 'prefer_ac3' ||
+            preferredTranscodeCodec === 'prefer_aac' ||
+            preferredTranscodeCodec === 'force_ac3' ||
+            preferredTranscodeCodec === 'force_aac' ||
+            preferredTranscodeCodec === 'force_mp3';
+        if (caps.eac3 && !userStrictTranscode && !transAudioCodecsArr.includes('eac3')) {
+            transAudioCodecsArr.unshift('eac3');
+        }
     } else if (playbackMode === 'transcodeAudio') {
         // ──────────────────────────────────────────────────────────────────────
         // Transcode Audio Only:

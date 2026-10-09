@@ -373,8 +373,28 @@ class HeroCarousel {
             leaveLeft: 'sidebar'
         });
 
-        // Initial check if we are already focused (though unlikely during init)
-        if (this._container.classList.contains('focused')) {
+        // ---------------------------------------------------------------------
+        // Seamless Focus Handover & Restoration
+        // ---------------------------------------------------------------------
+        // When the real hero carousel replaces the initial loading skeleton in
+        // the DOM via innerHTML, any previous focus placed on the skeleton container
+        // becomes detached from the document. We detect if the hero section was
+        // the active section or if focus was orphaned/inside the placeholder, and
+        // immediately re-bind focus to this newly rendered live carousel container.
+        // ---------------------------------------------------------------------
+        const currentActive = focusManager.getActiveSection();
+        const currentFocused = focusManager.getFocused();
+        const isFocusOrphaned =
+            !currentFocused ||
+            !document.contains(currentFocused) ||
+            (this._container.parentElement && this._container.parentElement.contains(currentFocused));
+
+        if (
+            (currentActive === 'home-hero' || isFocusOrphaned || this._container.classList.contains('focused')) &&
+            !focusManager.isTrapped()
+        ) {
+            focusManager.setActiveSection('home-hero', false);
+            focusManager.focusElement(this._container, { instantScroll: true, skipScroll: true });
             this._handleFocus();
         }
 

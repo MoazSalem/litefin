@@ -121,12 +121,14 @@ const skipIntroPlugin = {
     _autoSkipSegments: {},
 
     /**
-     * Tracks the type and index of the last segment we auto-skipped so we don't
-     * re-trigger the seek on every subsequent timeupdate tick.
-     * Format: 'type-index'
+     * Set of segment guard keys (format: 'type-index') that have already been
+     * auto-skipped during the current playback session.
+     * Prevents looping and re-seeking to the same segment on subsequent timeupdates.
+     * A segment key is only cleared if the user explicitly rewinds before its start.
+     * @type {Set<string>}
      * @private
      */
-    _lastAutoSkipped: null,
+    _skippedSegments: new Set(),
 
     /** Saved PluginAPI reference (set in init) @private */
     _api: null,
@@ -163,7 +165,7 @@ const skipIntroPlugin = {
         this._recapSegment = [];
         this._previewSegment = [];
         this._autoSkipSegments = {};
-        this._lastAutoSkipped = null;
+        this._skippedSegments.clear();
 
         // Skip Intro only makes sense for episodes
         if (item.Type !== 'Episode') {
@@ -247,16 +249,57 @@ const skipIntroPlugin = {
      * @param {import('../../PluginAPI.js').default} api
      */
     onTimeUpdate(positionTicks, durationTicks, api) {
-        // Safe exit if no auto-skips registered
+        // ====================================================================
+        // Safe exit: If no segments are configured for auto-skipping, bail early
+        // ====================================================================
         if (Object.keys(this._autoSkipSegments).length === 0) return;
 
+        // Retrieve the current player instance
+        const player = api.getPlayer();
+        if (!player) return;
+
+        // ====================================================================
+        // In-flight Seek Guard:
+        // Do not process auto-skips while an active seek operation is in flight.
+        // During seeking, position ticks may report transient target offsets or
+        // GOP keyframe snapping before settling. Re-triggering seek in this state
+        // interrupts the hardware pipeline and causes an infinite seeking loop.
+        // ====================================================================
+        if (player.isSeeking) return;
+
+        // ====================================================================
+        // Scrub / Rewind Re-arming:
+        // If the viewer explicitly seeks or rewinds backwards to before the
+        // beginning of a previously skipped segment (with a 2-second margin),
+        // remove the guard so that playing forward into the segment will
+        // trigger the auto-skip again.
+        // ====================================================================
+        for (const [type, segmentList] of Object.entries(this._autoSkipSegments)) {
+            segmentList.forEach((segment, idx) => {
+                const guardKey = `${type}-${idx}`;
+                if (this._skippedSegments.has(guardKey)) {
+                    // Only re-arm when playhead is safely ahead of segment start in reverse
+                    if (positionTicks < segment.start - (2 * TICKS_PER_SECOND)) {
+                        this._skippedSegments.delete(guardKey);
+                    }
+                }
+            });
+        }
+
+        // ====================================================================
+        // Segment Evaluation:
+        // Scan registered auto-skip segments. If current position is inside
+        // an active segment that has not yet been skipped in this pass, seek past it.
+        // ====================================================================
         for (const [type, segmentList] of Object.entries(this._autoSkipSegments)) {
             let matchedSegment = null;
             let matchedIndex = -1;
 
             // Check if player is currently in any of the segments for this type
             segmentList.forEach((segment, idx) => {
-                if (positionTicks >= segment.start && positionTicks < segment.end) {
+                const guardKey = `${type}-${idx}`;
+                // Guard: Skip segments that have already fired in this playback pass
+                if (!this._skippedSegments.has(guardKey) && positionTicks >= segment.start && positionTicks < segment.end) {
                     matchedSegment = segment;
                     matchedIndex = idx;
                 }
@@ -266,23 +309,17 @@ const skipIntroPlugin = {
 
             // Unique guard identifier for the specific matched segment
             const guardKey = `${type}-${matchedIndex}`;
-            if (this._lastAutoSkipped === guardKey) continue;
 
-            this._lastAutoSkipped = guardKey;
+            // Lock this segment immediately to guarantee no repeat seeks occur
+            this._skippedSegments.add(guardKey);
 
-            const player = api.getPlayer();
-            if (!player) {
-                api.log.warn(`Skip Intro: auto-skip for [${type}-${matchedIndex}] failed — no player`);
-                continue;
-            }
-
-            const durationTicks = player.getDurationTicks ? player.getDurationTicks() : 0;
+            const resolvedDurationTicks = player.getDurationTicks ? player.getDurationTicks() : durationTicks;
             const seekTarget = matchedSegment.end + TICKS_PER_SECOND;
 
             // Handle clean completion if seeking past video boundary
-            if (durationTicks > 0 && seekTarget >= durationTicks) {
+            if (resolvedDurationTicks > 0 && seekTarget >= resolvedDurationTicks) {
                 api.log.info(
-                    `Skip Intro: auto-skip target [${type}-${matchedIndex}] at ${seekTarget / TICKS_PER_SECOND}s is at or past duration ${durationTicks / TICKS_PER_SECOND}s. Triggering ended event.`
+                    `Skip Intro: auto-skip target [${type}-${matchedIndex}] at ${seekTarget / TICKS_PER_SECOND}s is at or past duration ${resolvedDurationTicks / TICKS_PER_SECOND}s. Triggering ended event.`
                 );
                 player.emit('ended');
             } else {
@@ -291,16 +328,6 @@ const skipIntroPlugin = {
             }
 
             break;
-        }
-
-        // Reset the auto-skipped guard when the player transitions past the active segment
-        if (this._lastAutoSkipped !== null) {
-            const [type, idxStr] = this._lastAutoSkipped.split('-');
-            const idx = parseInt(idxStr, 10);
-            const skippedSeg = this._autoSkipSegments[type]?.[idx];
-            if (skippedSeg && positionTicks >= skippedSeg.end) {
-                this._lastAutoSkipped = null;
-            }
         }
     },
 
@@ -325,7 +352,7 @@ const skipIntroPlugin = {
         this._recapSegment = [];
         this._previewSegment = [];
         this._autoSkipSegments = {};
-        this._lastAutoSkipped = null;
+        this._skippedSegments.clear();
     },
 
     // ========================================================================

@@ -64,24 +64,151 @@ export const isDtsSupported = () => {
  * Check whether an audio track is natively playable by the current device
  * and player settings without forcing a server transcode.
  *
+ * Evaluates codec support, hardware channel constraints, user audio settings,
+ * and media container compatibility against active device profiles.
+ *
  * @param {Object} track - Jellyfin MediaStream object for an audio track
+ * @param {Object} [mediaSource] - Optional parent MediaSource containing container info
+ * @param {string} [backendType] - Active backend ('tizen', 'webos', 'html5', 'avplay')
  * @returns {boolean} true if the track direct plays natively; false if it requires transcoding
  */
-export function isAudioTrackNativelyPlayable(track) {
+export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendType = null) {
+    // -------------------------------------------------------------------------
+    // 1. Guard & Global Forced Transcode
+    // -------------------------------------------------------------------------
+    // If track metadata or codec is missing, treat as playable to avoid breaking.
     if (!track || !track.Codec) return true;
-    const codec = track.Codec.toLowerCase();
 
-    // =========================================================================
-    // Maximum Audio Channels Setting Validation
-    // =========================================================================
-    // When the user configures a maximum channel constraint (e.g. 5.1 / 6 channels),
-    // any audio track exceeding this channel count (e.g. 7.1 / 8 channels) requires
-    // server-side transcoding/downmixing and is not natively playable without processing.
-    // =========================================================================
-    const allowedChannels = PlayerSettings.get('allowedAudioChannels');
-    if (allowedChannels && allowedChannels > 0 && typeof track.Channels === 'number' && track.Channels > allowedChannels) {
+    // When forced transcoding is enabled (emergency/debug fallback), all streams
+    // will be transcoded by the server regardless of individual codec capabilities.
+    if (PlayerSettings.get('forceTranscode')) {
         return false;
     }
+
+    const codec = track.Codec.toLowerCase();
+    const caps = getDeviceCapabilities();
+
+    // -------------------------------------------------------------------------
+    // 2. Active Playback Session / Transcoding Status Inspection
+    // -------------------------------------------------------------------------
+    // If mediaSource contains an active TranscodingUrl, the server is actively
+    // streaming via HLS. We can directly inspect whether the active session is
+    // transcoding this audio stream or whether the HLS profile permits passthrough.
+    if (mediaSource?.TranscodingUrl) {
+        // Query MediaHelper for exact stream statuses parsed from TranscodingInfo or URL
+        const { isVideoDirect, isAudioDirect } = MediaHelper.getTranscodeStatus(mediaSource);
+
+        // A. If evaluating the currently selected / active audio track:
+        // When the server is actively re-encoding the audio (isAudioDirect === false),
+        // it is directly transcoding on the server right now (e.g. OPUS -> AAC).
+        const urlAudioIndexMatch = mediaSource.TranscodingUrl.match(/[?&]AudioStreamIndex=([^&]+)/);
+        const activeUrlAudioIndex = urlAudioIndexMatch
+            ? parseInt(urlAudioIndexMatch[1], 10)
+            : (mediaSource.DefaultAudioStreamIndex ?? mediaSource.MediaStreams?.find(s => s.Type === 'Audio' && s.IsDefault)?.Index);
+
+        if (track.Index === activeUrlAudioIndex || activeUrlAudioIndex === undefined) {
+            if (!isAudioDirect) {
+                return false;
+            }
+        }
+
+        // B. Allowed HLS passthrough audio codecs:
+        // In an active HLS transcode/remux stream, Jellyfin only copies audio streams whose
+        // codec matches the AudioCodec query parameter in the TranscodingUrl (e.g. AudioCodec=aac).
+        // Any codec not declared in AudioCodec (e.g. OPUS, TrueHD, DTS when target is AAC)
+        // cannot be packaged into the HLS stream without an audio transcode pass.
+        const allowedAudioCodecsStr = (mediaSource.TranscodingUrl.match(/[?&]AudioCodec=([^&]+)/) || [])[1];
+        if (allowedAudioCodecsStr) {
+            const allowed = allowedAudioCodecsStr.toLowerCase().split(',').map(c => c.trim());
+            if (!allowed.includes(codec)) {
+                return false;
+            }
+        }
+
+        // C. Video transcode in MPEG-TS HLS transport stream:
+        // MPEG-TS HLS transport streams can only carry AAC, AC3, EAC3, MP3, and MP2.
+        // Codecs like Opus, FLAC, Vorbis, TrueHD CANNOT be carried in MPEG-TS HLS
+        // and will always be transcoded by FFmpeg when video is transcoding.
+        if (!isVideoDirect) {
+            const HLS_TS_SAFE_AUDIO = new Set(['aac', 'ac3', 'eac3', 'mp3', 'mp2']);
+            if (!HLS_TS_SAFE_AUDIO.has(codec)) {
+                return false;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Maximum Audio Channels Resolution & Constraint Checking
+    // -------------------------------------------------------------------------
+    // Channel limit resolution hierarchy:
+    //   a. Explicit user setting ('allowedAudioChannels')
+    //   b. Native hardware device capability (caps.maxAudioChannels, e.g. 2 for stereo, 6 for 5.1, 8 for 7.1/8K)
+    //   c. Safe fallback to 2 (stereo)
+    // When an audio track exceeds the target channel count, the Jellyfin server
+    // must transcode/downmix the audio track to fit the device's channel ceiling.
+    const userAllowedChannels = PlayerSettings.get('allowedAudioChannels');
+    const effectiveMaxChannels = (userAllowedChannels && userAllowedChannels > 0)
+        ? userAllowedChannels
+        : (caps?.maxAudioChannels || 2);
+
+    if (typeof track.Channels === 'number' && track.Channels > effectiveMaxChannels) {
+        return false;
+    }
+
+    // Samsung and LG Smart TV hardware decoders natively support AAC up to 6 channels (5.1).
+    // 7.1 AAC tracks cannot be decoded natively in hardware and require server downmix/transcoding.
+    if (codec === 'aac' && typeof track.Channels === 'number' && track.Channels > 6) {
+        return false;
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. Container & Delivery Format Checks
+    // -------------------------------------------------------------------------
+    const container = (mediaSource?.Container || '').toLowerCase();
+
+    // Raw uncompressed PCM inside video containers (MKV, MP4, TS, etc.):
+    // HTML5 browsers and Smart TV media engines cannot decode raw PCM streams in video
+    // containers natively. Jellyfin server always transcodes PCM video audio to AAC.
+    if (codec.startsWith('pcm') || codec === 'wav') {
+        return false;
+    }
+
+    // Vorbis is only natively supported inside WebM or OGG containers.
+    // When muxed into MKV, MP4, or TS on Smart TVs / browsers, Jellyfin transcodes it.
+    if (codec === 'vorbis' && container && container !== 'webm' && container !== 'ogg') {
+        return false;
+    }
+
+    // WebM containers only support Opus and Vorbis natively.
+    if (container === 'webm' && codec !== 'opus' && codec !== 'vorbis') {
+        return false;
+    }
+
+    // Video stream format gate for HTML5 browser playback:
+    // If the video track itself cannot DirectPlay on this platform/browser
+    // (e.g. AV1 on browsers without AV1 decode support, or HEVC on Chrome),
+    // playback is forced to HLS video transcoding. Non-TS audio codecs (Opus, FLAC)
+    // must be transcoded to AAC by the server.
+    if (backendType === 'html5' || (!platformInfo.isTizen && !platformInfo.isWebOS)) {
+        const videoStream = mediaSource?.MediaStreams?.find(s => s.Type === 'Video');
+        if (videoStream?.Codec) {
+            const vCodec = videoStream.Codec.toLowerCase();
+            if (vCodec === 'av1' && !caps?.av1) {
+                if (codec === 'opus' || codec === 'vorbis' || codec === 'flac') {
+                    return false;
+                }
+            }
+            if ((vCodec === 'hevc' || vCodec === 'h265') && !caps?.hevc) {
+                if (codec === 'opus' || codec === 'vorbis' || codec === 'flac') {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. Codec-Specific Native Hardware & Settings Validation
+    // -------------------------------------------------------------------------
 
     // FLAC / ALAC in video containers: unsupported when enableFlacInVideo is disabled
     if ((codec === 'flac' || codec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
@@ -89,22 +216,21 @@ export function isAudioTrackNativelyPlayable(track) {
     }
 
     // DTS / DTS-HD / DCA passthrough: unsupported when DTS decoding is disabled
-    if ((codec.includes('dts') || codec === 'dca') && !isDtsSupported()) {
-        return false;
+    if (codec.includes('dts') || codec === 'dca') {
+        return isDtsSupported();
     }
 
-    // Dolby TrueHD passthrough: unsupported when TrueHD decoding is disabled
-    if (codec === 'truehd' && !isTrueHdSupported()) {
-        return false;
+    // Dolby TrueHD / MLP passthrough: unsupported when TrueHD decoding is disabled
+    if (codec === 'truehd' || codec === 'mlp') {
+        return isTrueHdSupported();
     }
 
     // E-AC3 (Dolby Digital Plus) support check
-    if (codec === 'eac3') {
+    if (codec === 'eac3' || codec === 'ec-3') {
         const setting = PlayerSettings.get('enableEac3');
         if (setting === 'enable') return true;
         if (setting === 'disable') return false;
         try {
-            const caps = getDeviceCapabilities();
             return caps?.eac3 !== false;
         } catch (e) {
             return true;
@@ -114,7 +240,6 @@ export function isAudioTrackNativelyPlayable(track) {
     // AC3 (Dolby Digital) support check
     if (codec === 'ac3') {
         try {
-            const caps = getDeviceCapabilities();
             return caps?.ac3 !== false;
         } catch (e) {
             return true;
@@ -127,14 +252,47 @@ export function isAudioTrackNativelyPlayable(track) {
         if (setting === 'enable') return true;
         if (setting === 'disable') return false;
         try {
-            const caps = getDeviceCapabilities();
             return !!caps?.mp2;
         } catch (e) {
             return false;
         }
     }
 
-    return true;
+    // Opus support check:
+    // Tizen AVPlay (Tizen 4.0+) natively demuxes and decodes Opus inside MKV and WebM.
+    // HTML5 / Web browsers only decode Opus in WebM containers or standalone audio files (.opus/.ogg).
+    // In MKV, MP4, or TS containers on standard HTML5 players, Opus cannot DirectPlay.
+    if (codec === 'opus') {
+        if (backendType === 'tizen' || backendType === 'avplay' || platformInfo.isTizen) {
+            return caps?.opus !== false;
+        }
+        if (container && container !== 'webm' && container !== 'ogg' && container !== 'opus') {
+            return false;
+        }
+        return caps?.opus !== false;
+    }
+
+    // WMA / WMAv2 / WMAPro support check (Samsung dropped WMA in Tizen 9.0; unsupported on modern Web/WebOS)
+    if (codec.includes('wma')) {
+        return !!caps?.wma;
+    }
+
+    // AAC-LATM is only supported on native Tizen AVPlay; browser sandboxes/HTML5 stall
+    if (codec === 'aac_latm') {
+        return backendType === 'tizen' || backendType === 'avplay';
+    }
+
+    // Standard universally supported codecs: AAC and MP3
+    if (codec === 'aac' || codec === 'mp3') {
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. Unknown / Exotic Codecs Fallback
+    // -------------------------------------------------------------------------
+    // Any codec not identified as supported by the device profile will be
+    // rejected by Jellyfin's StreamBuilder and routed to FFmpeg audio transcoding.
+    return false;
 }
 
 /**
@@ -269,7 +427,7 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
         if (cleanTrack === cleanTarget) return true;
 
         // Compare normalized ISO codes via languageManager
-        if (typeof languageManager?.normalizeLanguage === 'function') {
+        if (typeof languageManager !== 'undefined' && typeof languageManager?.normalizeLanguage === 'function') {
             const normTrack = languageManager.normalizeLanguage(cleanTrack);
             const normTarget = languageManager.normalizeLanguage(cleanTarget);
             if (normTrack && normTarget) {
@@ -315,7 +473,7 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
 
             if (preferDirectPlay) {
                 // Filter candidate preferred tracks that can DirectPlay natively without server transcoding
-                const playablePreferred = preferredTracks.filter((t) => isAudioTrackNativelyPlayable(t));
+                const playablePreferred = preferredTracks.filter((t) => isAudioTrackNativelyPlayable(t, mediaSource));
 
                 if (playablePreferred.length > 0) {
                     // Pick the highest quality DirectPlay track matching the preferred language
@@ -355,11 +513,11 @@ export function resolveBestAudioStream(mediaSource, targetLang) {
     const sameLangTracks = audioStreams.filter(
         (t) => isLanguageMatch(t.Language, defaultLang) || (defaultLang === 'und' && (!t.Language || t.Language === 'und'))
     );
-    const sameLangPlayable = sameLangTracks.filter((t) => isAudioTrackNativelyPlayable(t));
+    const sameLangPlayable = sameLangTracks.filter((t) => isAudioTrackNativelyPlayable(t, mediaSource));
 
     // If the default track is natively playable, check if a superior high-fidelity track
     // (such as DTS-HD MA or TrueHD) is also natively playable in the same language.
-    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack);
+    const isDefaultPlayable = standardDefaultTrack && isAudioTrackNativelyPlayable(standardDefaultTrack, mediaSource);
     if (isDefaultPlayable) {
         if (sameLangPlayable.length > 1) {
             const bestPlayable = pickBestTrack(sameLangPlayable);
@@ -443,8 +601,8 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     // NOTE: We deliberately do NOT use mediaSource.DefaultAudioStreamIndex here because
     // the Jellyfin server dynamically sets that property to whatever AudioStreamIndex
     // was requested in the PlaybackInfo call, rather than the file's container default.
-    const defaultStream = audioStreams.find((s) => s.IsDefault && isAudioTrackNativelyPlayable(s));
-    const playableStreams = audioStreams.filter((s) => isAudioTrackNativelyPlayable(s));
+    const defaultStream = audioStreams.find((s) => s.IsDefault && isAudioTrackNativelyPlayable(s, mediaSource, backendType));
+    const playableStreams = audioStreams.filter((s) => isAudioTrackNativelyPlayable(s, mediaSource, backendType));
     const containerHardwareDefault = defaultStream || playableStreams[0] || audioStreams[0];
 
     // If the requested track is the physical default track, it plays natively in hardware DirectPlay
@@ -932,11 +1090,15 @@ export class JellyfinPlayer extends EventEmitter {
                     this.emit(PlayerEvent.PLAY);
                     this.emit(PlayerEvent.PLAYING);
                     // allow timeupdate to proceed below
-                } else if (Date.now() - (this._resumeWaitStartTime || 0) > 15000) {
-                    // Fallback: 15 seconds have passed, seek likely failed or is taking too long.
-                    // Release the spinner so we don't hold the UI hostage forever.
+                } else if (Date.now() - (this._resumeWaitStartTime || 0) > 3500 || 
+                           (effectiveCurrentTime >= 2.0 && effectiveCurrentTime < (targetSec - 15))) {
+                    // Fallback: 3.5s elapsed without landing near target, OR the decoder has
+                    // already started advancing forward past 2.0s while still far from target.
+                    // The resume seek was lost or discarded by the underlying platform demuxer.
+                    // Release the pending start lock immediately so the OSD seekbar, timeline,
+                    // and SubtitleManager track the real decoder position instead of freezing for 15 seconds.
                     this._pendingStartPositionTicks = null;
-                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${effectiveCurrentTime}s but expected ${targetSec}s. Dismissing screen.`);
+                    log.warn(`Resume fallback: decoder playing at ${effectiveCurrentTime}s but expected ${targetSec}s. Syncing UI to decoder.`);
 
                     // Restore active playing state even upon fallback
                     this._isPaused = false;
@@ -1121,12 +1283,26 @@ export class JellyfinPlayer extends EventEmitter {
         // the backend emits resumeseekfailed. We restart playback in Remux mode
         // so the server streams from the target position, making the seek reliable.
         if (event.type === 'resumeseekfailed') {
+            // Clear pending start position lock immediately so UI doesn't remain trapped
+            this._pendingStartPositionTicks = null;
             const targetTicks = event.data?.targetPositionTicks;
             const currentPosTicks = this.getCurrentPositionTicks();
             const effectiveTicks = targetTicks || currentPosTicks;
 
-            log.warn('resumeseekfailed: DirectPlay resume failed at', (currentPosTicks / 10000000).toFixed(2),
-                's. Restarting with Remux at target', (effectiveTicks / 10000000).toFixed(2), 's');
+            // -----------------------------------------------------------------
+            // Dynamic Fallback Escalation (DirectPlay -> Remux -> Transcode):
+            // If the current stream is already running in DirectStream or Remux mode,
+            // restarting in Remux would simply re-attempt the exact mid-GOP stream copy
+            // that failed or stalled. In that case, escalate straight to 'transcode'.
+            // Otherwise, fall back from DirectPlay to 'remux' first.
+            // -----------------------------------------------------------------
+            const isAlreadyRemux = this._playbackMode === 'remux' ||
+                                   this._currentPlayMethod === 'DirectStream' ||
+                                   this._currentPlayMethod === 'Remux';
+
+            log.warn('resumeseekfailed: Resume failed at', (currentPosTicks / 10000000).toFixed(2),
+                `s (isAlreadyRemux: ${isAlreadyRemux}). Restarting with ${isAlreadyRemux ? 'Transcode' : 'Remux'} at target`,
+                (effectiveTicks / 10000000).toFixed(2), 's');
 
             if (this._currentPlayOptions && !this._isRestarting) {
                 // Build restart options preserving active audio and subtitle selections
@@ -1138,6 +1314,11 @@ export class JellyfinPlayer extends EventEmitter {
                     startPositionTicks: effectiveTicks,
                     playbackMode: 'remux'
                 };
+
+                // If already remuxing/direct streaming, escalate straight to full transcode
+                if (isAlreadyRemux) {
+                    restartOptions.playbackMode = 'transcode';
+                }
 
                 this._currentPlayOptions = restartOptions;
                 this._lastPlayOptions = restartOptions;
@@ -1156,7 +1337,9 @@ export class JellyfinPlayer extends EventEmitter {
                         // If the hardware decoder hangs on mid-GOP stream copy, the
                         // watchdog will detect lack of progress and escalate to transcode.
                         // -------------------------------------------------------------
-                        this._armRemuxStuckWatchdog(effectiveTicks);
+                        if (!isAlreadyRemux) {
+                            this._armRemuxStuckWatchdog(effectiveTicks);
+                        }
                     } catch (e) {
                         log.error('resumeseekfailed restart failed:', e);
                         this._clearRemuxStuckWatchdog();
@@ -1362,8 +1545,8 @@ export class JellyfinPlayer extends EventEmitter {
                 if (activeMs) {
                     const audioStreams = (activeMs.MediaStreams || []).filter(s => s.Type === 'Audio');
                     // Find actual container default without using the dynamically echoed DefaultAudioStreamIndex
-                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s)) ||
-                        audioStreams.find(s => isAudioTrackNativelyPlayable(s)) ||
+                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s, activeMs, this._backendType)) ||
+                        audioStreams.find(s => isAudioTrackNativelyPlayable(s, activeMs, this._backendType)) ||
                         audioStreams[0];
                     defaultIndex = defaultAudioStream ? defaultAudioStream.Index : undefined;
                     if (audioStreams.length > 0) {
@@ -2077,6 +2260,20 @@ export class JellyfinPlayer extends EventEmitter {
             this._isPlaying = true;
             this._isPaused = options.autoPlay === false;
 
+            // -----------------------------------------------------------------
+            // DirectStream / Remux Startup Stuck Watchdog:
+            // When resuming media in DirectStream or Remux mode, FFmpeg stream-copies
+            // the video bitstream starting mid-GOP without inserting a clean IDR keyframe.
+            // On both hardware decoders (webOS/Tizen) and browser MSE (HtmlVideoPlayer/Hls.js),
+            // this can freeze the decoder or fail segment decoding.
+            // Arm the stuck watchdog (8s window) so if playback does not advance forward,
+            // we automatically escalate to full transcode.
+            // -----------------------------------------------------------------
+            if ((this._currentPlayMethod === 'DirectStream' || this._currentPlayMethod === 'Remux' || this._playbackMode === 'remux') &&
+                effectiveStartPositionTicks > 0) {
+                this._armRemuxStuckWatchdog(effectiveStartPositionTicks);
+            }
+
             this.emit(PlayerEvent.PLAYBACK_START, {
                 item: this._currentItem,
                 mediaSource
@@ -2233,6 +2430,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Only clear state if NOT restarting
         if (!this._isRestarting) {
+            this._pendingStartPositionTicks = null;
             this._clearRemuxStuckWatchdog();
             this._currentItem = null;
             this._currentMediaSource = null;
@@ -2433,7 +2631,7 @@ export class JellyfinPlayer extends EventEmitter {
             const targetTrack = AudioTracks.find(t => t.Index === index);
 
             if (targetTrack) {
-                isTargetCodecSupported = isAudioTrackNativelyPlayable(targetTrack);
+                isTargetCodecSupported = isAudioTrackNativelyPlayable(targetTrack, this._currentMediaSource, this._backendType);
             }
         }
 
@@ -2486,8 +2684,8 @@ export class JellyfinPlayer extends EventEmitter {
 
                 if (ms && Array.isArray(ms.MediaStreams)) {
                     const audioStreams = ms.MediaStreams.filter(s => s.Type === 'Audio');
-                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s)) ||
-                        audioStreams.find(s => isAudioTrackNativelyPlayable(s)) ||
+                    const defaultAudioStream = audioStreams.find(s => s.IsDefault && isAudioTrackNativelyPlayable(s, ms, this._backendType)) ||
+                        audioStreams.find(s => isAudioTrackNativelyPlayable(s, ms, this._backendType)) ||
                         audioStreams[0];
                     const defaultIndex = defaultAudioStream ? defaultAudioStream.Index : undefined;
                     const firstAudioIndex = audioStreams.length > 0 ? audioStreams[0].Index : undefined;
@@ -3444,7 +3642,7 @@ export class JellyfinPlayer extends EventEmitter {
      *                    selecting it would require a transcode restart
      */
     isAudioTrackNativelyPlayable(track) {
-        return isAudioTrackNativelyPlayable(track);
+        return isAudioTrackNativelyPlayable(track, this._currentMediaSource, this._backendType);
     }
 
     /**
@@ -3798,6 +3996,24 @@ export class JellyfinPlayer extends EventEmitter {
                         firstSource.TranscodingUrl &&
                         firstSource.TranscodingUrl.includes('TranscodeReasons=AudioCodecNotSupported');
 
+                    // =================================================================
+                    // Safeguard Against Prewarmed DirectPlay with Active MKV Remux
+                    // =================================================================
+                    // If the user enabled "Remux MKV to MP4", but the prewarmed PlaybackInfo
+                    // cached DirectPlay for an MKV file, discard the cached response so
+                    // we make a fresh request with 'mkv' stripped from DirectPlayProfiles.
+                    // =================================================================
+                    const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
+                    const prewarmedContainer = (
+                        firstSource.Container ||
+                        options.item?.Container ||
+                        options.item?.MediaSources?.[0]?.Container ||
+                        ''
+                    ).toLowerCase();
+                    const isPrewarmedMkv = prewarmedContainer === 'mkv' ||
+                        prewarmedContainer === 'matroska' ||
+                        prewarmedContainer.includes('mkv');
+
                     if (isAudioCodecError && (this._playbackMode === 'auto' || this._playbackMode === 'directPlay')) {
                         log.warn(
                             '[Prewarm] Prewarmed PlaybackInfo forced transcode for AudioCodecNotSupported. Discarding in favor of fresh direct-play request.'
@@ -3805,6 +4021,10 @@ export class JellyfinPlayer extends EventEmitter {
                     } else if (deviceProfile?.DirectPlayProfiles?.length === 0 && firstSource.SupportsDirectPlay) {
                         log.info(
                             '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
+                        );
+                    } else if (remuxMkvToMp4Setting && isPrewarmedMkv && firstSource.SupportsDirectPlay) {
+                        log.info(
+                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay for MKV, but remuxMkvToMp4 is active. Discarding in favor of fresh remux request.'
                         );
                     } else {
                         return prewarmedData;
@@ -3932,8 +4152,16 @@ export class JellyfinPlayer extends EventEmitter {
         // remux) since those modes rebuild the profile wholesale themselves.
         const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
         const modeLockedProfiles = currentMode === 'directPlay' || currentMode === 'transcode' || currentMode === 'remux';
-        // Treat both 'mkv' and 'matroska' as Matroska containers
-        const itemContainer = (options.item?.Container || '').toLowerCase();
+        // Treat both 'mkv' and 'matroska' as Matroska containers.
+        // Check top-level item container, nested MediaSources[0].Container, and mediaSource.Container
+        // because Jellyfin episode and item metadata responses frequently place the container
+        // format under MediaSources rather than the root item object.
+        const itemContainer = (
+            options.item?.Container ||
+            options.item?.MediaSources?.[0]?.Container ||
+            options.mediaSource?.Container ||
+            ''
+        ).toLowerCase();
         const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
         if (remuxMkvToMp4Setting && !modeLockedProfiles && isMkvItem) {
             const profiles = requestBody.DeviceProfile.DirectPlayProfiles;

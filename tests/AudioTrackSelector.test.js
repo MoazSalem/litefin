@@ -14,6 +14,7 @@ function setup(settings = {}, caps = {}) {
         eac3: true,
         opus: true,
         mp2: false,
+        maxAudioChannels: 8,
         ...caps
     };
 
@@ -35,6 +36,7 @@ function setup(settings = {}, caps = {}) {
             set: (key, val) => { currentSettings[key] = val; }
         },
         getDeviceCapabilities: () => defaultCaps,
+        platformInfo: { isTizen: true, isWebOS: false },
         storage: {
             getItem: (key) => storageMap.get(key) || null,
             setItem: (key, val) => storageMap.set(key, val),
@@ -122,7 +124,7 @@ test('resolveBestAudioStream avoids commentary track in same language', () => {
 test('resolveBestAudioStream keeps default track if already natively playable', () => {
     const { resolveBestAudioStream } = setup({
         preferDirectPlayAudio: true
-    });
+    }, { maxAudioChannels: 2 });
 
     const mediaSource = {
         Id: 'ms3',
