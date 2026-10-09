@@ -1422,7 +1422,7 @@ export default class OSDController extends Component {
         if (this._currentFocusRow === -1) {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
 
             /*
              * ========================================================================
@@ -1847,7 +1847,7 @@ export default class OSDController extends Component {
             // Restore focus to Controls (Row 1) -> Play/Pause
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
 
             this._focusRestoreLockout = true;
             if (this._focusRestoreLockoutTimer) {
@@ -1893,7 +1893,7 @@ export default class OSDController extends Component {
             // Focus should go back to OSD -> Play/Pause
             this._currentFocusRow = 1; // Controls
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
 
             this._focusRestoreLockout = true;
             if (this._focusRestoreLockoutTimer) {
@@ -2221,8 +2221,21 @@ export default class OSDController extends Component {
              * ========================================================================
              */
             if (PlayerSettings.get('osdLayout') === 'hidden') {
+                /*
+                 * A skip prompt that is on screen and highlighted owns the press, because
+                 * stealth mode never reveals the controls - the press would otherwise
+                 * silently toggle playback instead of skipping.
+                 */
+                if (this._currentFocusRow === 1) {
+                    const stealthCta = this._getHighlightedSkipPrompt();
+                    if (stealthCta) {
+                        stealthCta.click();
+                        return true;
+                    }
+                }
+
                 if (this._currentFocusRow === -1) {
-                    const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                    const focusedEl = this._getFocusedOverlayElement();
                     if (focusedEl && focusedEl.isConnected && (
                         focusedEl.closest('.plugin-widget.visible') ||
                         focusedEl.closest('.upnext-dialog.visible') ||
@@ -2263,6 +2276,15 @@ export default class OSDController extends Component {
             }
 
             if (e) e.preventDefault();
+            /*
+             * Remember the highlighted skip prompt BEFORE show()/_updateFocus() re-apply the
+             * highlight: _updateFocus() clears every .focused class first, so a prompt that was
+             * highlighted while the OSD was hidden would no longer be recognisable afterwards.
+             * See _getHighlightedSkipPrompt() for why this can happen while the controls row
+             * owns the focus.
+             */
+            const wakeSkipCta = this._currentFocusRow === 1 ? this._getHighlightedSkipPrompt() : null;
+
             this.show();
             this._updateFocus();
 
@@ -2286,13 +2308,19 @@ export default class OSDController extends Component {
              */
             const showOsdOnly = PlayerSettings.get('okShowOsdOnly') === true;
 
+            /* The user selected the prompt, so dispatch it before the row handling below. */
+            if (wakeSkipCta) {
+                wakeSkipCta.click();
+                return true;
+            }
+
             if (this._currentFocusRow === -1) {
                 // Overlay row (Row -1): a plugin widget (e.g. skip-intro) holds focus.
                 // The widget's container has a click listener registered by PluginWidgetHost
                 // that routes to the widget's onSelect() callback — so clicking the
                 // focused button is sufficient to dispatch the action correctly.
                 // We do NOT fall through to togglePlay; the widget owns this press.
-                const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                const focusedEl = this._getFocusedOverlayElement();
                 /*
                  * ====================================================================
                  * HIDDEN WIDGET & OVERLAY VISIBILITY GUARD
@@ -2360,7 +2388,7 @@ export default class OSDController extends Component {
         // (also in Row -1) would be incorrectly forwarded to the Up Next dialog
         // because activeMenu is set to upNextDialog for the whole session.
         if (this._currentFocusRow === -1 && this.activeMenu && this.activeMenu.isVisible && !this.activeMenu.isModal) {
-            const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+            const focusedEl = this._getFocusedOverlayElement();
             const menuOwnsElement = !this.activeMenu.$el || (focusedEl && this.activeMenu.$el.contains(focusedEl));
             if (menuOwnsElement && this.activeMenu.handleKey(key)) return true;
         }
@@ -2408,7 +2436,7 @@ export default class OSDController extends Component {
                 if (this._currentFocusRow === -1) {
                     // Overlay row (Row -1): plugin widget holds focus.
                     // Click the focused button directly in JavaScript.
-                    const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                    const focusedEl = this._getFocusedOverlayElement();
                     /*
                      * ====================================================================
                      * HIDDEN WIDGET & OVERLAY VISIBILITY GUARD
@@ -2679,7 +2707,7 @@ export default class OSDController extends Component {
                     // Return from overlay row straight to Controls, landing on Play/Pause
                     this._currentFocusRow = 1;
                     const playIdx = this._findActionIndex('togglePlay');
-                    this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+                    if (playIdx !== -1) this._currentFocusIndex = playIdx;
                 } else if (this._currentFocusRow === 0) {
                     // Mirror of Up from Row 1: if overlay widgets are visible, stop there first.
                     // Header ↓ Overlay ↓ Controls (symmetric with Controls ↑ Overlay ↑ Header)
@@ -2815,6 +2843,41 @@ export default class OSDController extends Component {
         return this._osdEl.querySelector('.focused');
     }
 
+    /**
+     * Resolve the overlay-row element that an OK press should activate.
+     *
+     * The stored index belongs to the focused row and is not reset when that row
+     * changes, so it can point outside the overlay row - which usually holds a single
+     * button while the controls row holds several. Clamp the index the same way
+     * _updateFocus() does and fall back to the element that actually carries .focused.
+     * Without this the callers read "undefined" and fell through to their
+     * no-overlay-target branch, i.e. OK toggled playback instead of triggering the
+     * visible widget.
+     */
+    _getFocusedOverlayElement() {
+        const idx = Math.min(this._currentFocusIndex, Math.max(this._cachedOverlayRow.length - 1, 0));
+        return this._cachedOverlayRow[idx] || this._getFocused();
+    }
+
+    /**
+     * Resolve the skip prompt button that is on screen and currently highlighted, or null.
+     *
+     * The plugin host only hands focus over to Row -1 while a prompt appears with the OSD
+     * hidden, so the prompt can keep looking highlighted after the focus moved on (auto-hide
+     * reset, episode change) while the row handling dispatches elsewhere. A widget that is
+     * merely .visible does not qualify: .sync-osd keeps that class while the hidden OSD renders
+     * the widget transparent and non-interactive.
+     *
+     * @returns {HTMLElement|null}
+     */
+    _getHighlightedSkipPrompt() {
+        const widget = this._osdEl.querySelector('.osd-overlays .plugin-widget.visible');
+        const cta = widget && widget.querySelector('.skip-intro-btn.focused');
+        if (!cta) return null;
+
+        const widgetStyle = getComputedStyle(widget);
+        return widgetStyle.opacity !== '0' && widgetStyle.pointerEvents !== 'none' ? cta : null;
+    }
 
     _getControls() {
         // Return only focusable controls
@@ -2988,7 +3051,21 @@ export default class OSDController extends Component {
 
     _findActionIndex(action) {
         const controls = this._getControls();
-        return controls.findIndex(btn => btn.dataset.action === action);
+        const idx = controls.findIndex(btn => btn.dataset.action === action);
+        if (idx !== -1) return idx;
+
+        /*
+         * _getControls() drops every element without an offsetParent, so the list is
+         * EMPTY while the OSD is hidden. Callers receive -1 in that case and several of
+         * them fall back to index 0, i.e. the previous-track button. Resolve the action
+         * against the same DOM order without the visibility filter so the result stays
+         * correct while the OSD is hidden - tabindex="-1" stays excluded, keeping the
+         * list identical to the one used for navigation.
+         */
+        const all = Array.from(
+            this._osdEl.querySelectorAll('.osd-controls-left .osd-btn, .osd-controls-right .osd-btn')
+        ).filter(btn => btn.getAttribute('tabindex') !== '-1');
+        return all.findIndex(btn => btn.dataset.action === action);
     }
 
     // ===================================
@@ -4247,7 +4324,7 @@ export default class OSDController extends Component {
             this.show();
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
             this._updateFocus();
         }
     }
@@ -4279,7 +4356,7 @@ export default class OSDController extends Component {
             this.show();
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
             this._updateFocus();
         }
     }
@@ -4466,7 +4543,7 @@ export default class OSDController extends Component {
              * If focus was inside the dialog, we restore it back to the controls row.
              * ========================================================================
              */
-            const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+            const focusedEl = this._getFocusedOverlayElement();
             const wasDialogFocused = focusedEl && this.upNextDialog.$el?.contains(focusedEl);
 
             this.upNextDialog.hide();
@@ -4484,7 +4561,7 @@ export default class OSDController extends Component {
                 // Return focus target to controls row (Row 1) Play/Pause
                 this._currentFocusRow = 1;
                 const playIdx = this._findActionIndex('togglePlay');
-                this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+                if (playIdx !== -1) this._currentFocusIndex = playIdx;
                 this._updateFocus();
 
                 // Lock out inputs for 350ms to absorb keyboard-synthesized click events on the newly focused play button
@@ -4910,7 +4987,7 @@ export default class OSDController extends Component {
         if (this._currentFocusRow === -1) {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
-            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
         }
 
         /*
