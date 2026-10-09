@@ -253,7 +253,6 @@ export default class LibassWasmRenderer {
      * Signals the SubtitlesOctopus WebAssembly worker to resume frame generation.
      */
     play() {
-        if (!this._isVirtual) return;
         if (this._octopus && typeof this._octopus.setIsPaused === 'function') {
             // Resolve the current media time to synchronize the worker's internal clock
             const platformTime = this._getPlatformTime();
@@ -270,7 +269,6 @@ export default class LibassWasmRenderer {
      * Stops background rendering cycles inside the worker to conserve TV CPU cycles.
      */
     pause() {
-        if (!this._isVirtual) return;
         if (this._octopus && typeof this._octopus.setIsPaused === 'function') {
             // Resolve the current media time for pause alignment
             const platformTime = this._getPlatformTime();
