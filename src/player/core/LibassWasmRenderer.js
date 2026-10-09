@@ -253,6 +253,7 @@ export default class LibassWasmRenderer {
      * Signals the SubtitlesOctopus WebAssembly worker to resume frame generation.
      */
     play() {
+        if (!this._isVirtual) return;
         if (this._octopus && typeof this._octopus.setIsPaused === 'function') {
             // Resolve the current media time to synchronize the worker's internal clock
             const platformTime = this._getPlatformTime();
@@ -269,6 +270,7 @@ export default class LibassWasmRenderer {
      * Stops background rendering cycles inside the worker to conserve TV CPU cycles.
      */
     pause() {
+        if (!this._isVirtual) return;
         if (this._octopus && typeof this._octopus.setIsPaused === 'function') {
             // Resolve the current media time for pause alignment
             const platformTime = this._getPlatformTime();
@@ -397,8 +399,8 @@ export default class LibassWasmRenderer {
                 prescaleHeightLimit: 1080,
                 maxRenderHeight: maxHeight,
                 resizeVariation: 0.2,
-                // renderAhead=0 disables the prerender RAF loop; frames are rendered on-demand via tick()
-                renderAhead: 0,
+                // Virtual: 0, tick() renders on demand. HTML5: 0 makes the worker clock snap back and flicker
+                renderAhead: this._isVirtual ? 0 : 50,
                 onReady: onOctopusReady,
                 onError: onOctopusError
             };
