@@ -999,7 +999,7 @@
     "LitefinPluginActive": "Litefin Plugin: Active",
     "LitefinPluginMissing": "Litefin Plugin: Missing",
     "LitefinPluginMissingDesc": "Litefin companion plugin is not installed on the Jellyfin server. Seerr integration, batch queries, and server backups are disabled.",
-    "LitefinTagline": "Jellyfin Client for Tizen and WebOS",
+    "LitefinTagline": "Jellyfin Client for Tizen, WebOS, & Android",
     "LiveTv": "Live TV",
     "LoaderStyleBadgeDottedRing": "Dotted",
     "LoaderStyleBadgeDynamic": "Dual Arc",
