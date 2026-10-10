@@ -1197,11 +1197,28 @@ class Sidebar extends Component {
                 ? (libRect.top - parentRect.top)
                 : (typeof libBtn.offsetTop === 'number' ? libBtn.offsetTop : 150);
 
-            // Keep popover safely within the TV screen viewport bounds
-            const viewportHeight = window.innerHeight || 1080;
+            // Keep popover safely within the TV screen viewport bounds.
+            // On Android the document is scaled with CSS zoom (root.style.zoom),
+            // so window.innerHeight is RAW visual px while top/rects here are in
+            // design-canvas px — convert innerHeight into the same design space
+            // (innerHeight / zoom) or the clamp fires far too early and parks
+            // the popover high above the libraries button. Unscaled platforms
+            // (TV, zoom = 1 or unsupported) get exactly the old behavior.
+            const rootZoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+            const viewportHeight = (window.innerHeight || 1080) / rootZoom;
             const subLibsHeight = subLibs.offsetHeight || 250;
+            // Portrait (phone) UX: center the panel vertically against the
+            // libraries button with a small breathing gap. Applied in BOTH
+            // orientations on the touch (Android) layout — each orientation
+            // gets its own horizontal anchor via its own stylesheet. TV
+            // layouts (no data-litefin-touch gate) keep the stock top-aligned
+            // (button top − 6px) placement.
+            const isTouchLayout = document.documentElement.hasAttribute('data-litefin-touch');
+            const unclampedTop = isTouchLayout
+                ? topOffset + ((libBtn.offsetHeight || 0) - subLibsHeight) / 2
+                : topOffset - 6;
             const maxTop = Math.max(10, viewportHeight - subLibsHeight - 20);
-            const clampedTop = Math.min(Math.max(10, topOffset - 6), maxTop);
+            const clampedTop = Math.min(Math.max(10, unclampedTop), maxTop);
             subLibs.style.top = `${clampedTop}px`;
 
             childBtns.forEach((btn) => {

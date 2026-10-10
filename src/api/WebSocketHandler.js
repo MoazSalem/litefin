@@ -12,6 +12,7 @@ import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
+import { api } from './ApiClient.js';
 
 const log = logger.create('WebSocketHandler');
 

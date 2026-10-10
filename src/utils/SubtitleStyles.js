@@ -28,6 +28,29 @@ function _hexToRgba(hex, opacity) {
     return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
+/**
+ * Resolves responsive height calculation for subtitle sizing and margins.
+ * 
+ * Supports modern engines and mobile viewports (where AndroidAdapter applies CSS zoom
+ * and sets --litefin-app-h) by referencing var(--litefin-app-h, 100vh). This ensures
+ * subtitle cues scale proportionally with the rest of the 1600px/750px UI canvas
+ * rather than shrinking twice under viewport zoom.
+ *
+ * For ultra-legacy engines lacking CSS custom property support (e.g. Chrome 38 on Tizen 2.4),
+ * falls back gracefully to standard vh units.
+ *
+ * @param {number} fraction - Fractional height value (e.g., 0.05 for 5vh)
+ * @returns {string} CSS size expression
+ */
+function _getResponsiveHeight(fraction) {
+    // Check if browser/engine natively supports CSS custom properties
+    if (typeof window !== 'undefined' && typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('--a', '0')) {
+        return `calc(var(--litefin-app-h, 100vh) * ${fraction})`;
+    }
+    // Safe legacy fallback to standard viewport height
+    return `${fraction * 100}vh`;
+}
+
 // ============================================================================
 // Text Styles Generator
 // ============================================================================
@@ -55,31 +78,31 @@ export function getTextStyles(isHdr = false) {
     const size = PlayerSettings.get('subtitleSize') || 'medium';
     switch (size) {
         case 'extralarge':
-            styles.push({ name: 'fontSize', value: '8vh' });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(0.08) });
             break;
         case 'larger':
-            styles.push({ name: 'fontSize', value: '7vh' });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(0.07) });
             break;
         case 'large':
-            styles.push({ name: 'fontSize', value: '6vh' });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(0.06) });
             break;
         case 'mediumlarge':
-            styles.push({ name: 'fontSize', value: '5.5vh' });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(0.055) });
             break;
         case 'small':
-            styles.push({ name: 'fontSize', value: '4vh' });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(0.04) });
             break;
         case 'smaller':
-            styles.push({ name: 'fontSize', value: '3vh' });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(0.03) });
             break;
         case 'custom': {
             const customSizeV = PlayerSettings.get('subtitleSizeCustomValue') ?? 5;
-            styles.push({ name: 'fontSize', value: `${customSizeV}vh` });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(customSizeV / 100) });
             break;
         }
         case 'medium':
         default:
-            styles.push({ name: 'fontSize', value: '5vh' });
+            styles.push({ name: 'fontSize', value: _getResponsiveHeight(0.05) });
             break;
     }
 
@@ -301,18 +324,18 @@ export function getTextStyles(isHdr = false) {
     } else {
         let pos = parseFloat(posSetting);
         if (isNaN(pos)) pos = -2; // Default to bottom standard
-        const step = 5; // vh logic
+        const step = 0.05; // 5% height step
 
         if (pos < 0) {
             // Bottom: pos is -1, -2, -5...
-            const margin = Math.abs(pos + 1) * step;
-            styles.push({ name: 'marginBottom', value: `${margin}vh` });
+            const marginFraction = Math.abs(pos + 1) * step;
+            styles.push({ name: 'marginBottom', value: _getResponsiveHeight(marginFraction) });
             styles.push({ name: 'marginTop', value: '' });
         } else {
             // Top: pos is 0, 2...
-            const margin = pos * step;
+            const marginFraction = pos * step;
             styles.push({ name: 'marginBottom', value: '' });
-            styles.push({ name: 'marginTop', value: `${margin}vh` });
+            styles.push({ name: 'marginTop', value: _getResponsiveHeight(marginFraction) });
         }
     }
 
@@ -342,10 +365,10 @@ export function getWindowStyles() {
         if (pos < 0) {
             // Position at bottom
             styles.push({ name: 'top', value: '' });
-            styles.push({ name: 'bottom', value: '2vh' }); // Lower base constraint
+            styles.push({ name: 'bottom', value: _getResponsiveHeight(0.02) }); // Lower base constraint
         } else {
             // Position at top
-            styles.push({ name: 'top', value: '2vh' }); // Lower base constraint
+            styles.push({ name: 'top', value: _getResponsiveHeight(0.02) }); // Lower base constraint
             styles.push({ name: 'bottom', value: '' });
         }
     }
@@ -378,15 +401,15 @@ export function getSecondaryTextStyles(isHdr = false) {
     // Override just the font size with the secondary-specific size preference
     const size = PlayerSettings.get('secondarySubtitleSize') || 'medium';
     const fontSizeMap = {
-        extralarge: '8vh',
-        larger: '7vh',
-        large: '6vh',
-        mediumlarge: '5.5vh',
-        medium: '5vh',
-        small: '4vh',
-        smaller: '3vh'
+        extralarge: _getResponsiveHeight(0.08),
+        larger: _getResponsiveHeight(0.07),
+        large: _getResponsiveHeight(0.06),
+        mediumlarge: _getResponsiveHeight(0.055),
+        medium: _getResponsiveHeight(0.05),
+        small: _getResponsiveHeight(0.04),
+        smaller: _getResponsiveHeight(0.03)
     };
-    const resolvedSize = fontSizeMap[size] || '5vh';
+    const resolvedSize = fontSizeMap[size] || _getResponsiveHeight(0.05);
 
     // Patch the existing fontSize entry in-place (getTextStyles always adds one)
     const fontSizeIdx = styles.findIndex((s) => s.name === 'fontSize');
@@ -431,12 +454,12 @@ export function getSecondaryWindowStyles() {
 
         if (pos >= 0) {
             // Top-anchored position
-            styles.push({ name: 'top', value: '2vh' });
+            styles.push({ name: 'top', value: _getResponsiveHeight(0.02) });
             styles.push({ name: 'bottom', value: '' });
         } else {
             // Bottom-anchored position
             styles.push({ name: 'top', value: '' });
-            styles.push({ name: 'bottom', value: '2vh' });
+            styles.push({ name: 'bottom', value: _getResponsiveHeight(0.02) });
         }
     }
 

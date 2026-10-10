@@ -2502,3 +2502,157 @@ body.resume-profile-selection-active .jellyfin-video-player {
     }
 }
 
+/* ============================================================================
+ * MOBILE & TOUCH OSD MENUS & PANELS
+ * ============================================================================
+ * Compact layout adjustments for mobile phone and touch displays:
+ * 1. Dimensions & Padding: Replaces heavy TV 1.8em padding with compact 14px
+ *    padding. Eliminates 750px TV minimum width so menus fit mobile viewports.
+ * 2. Touch Targets: Option rows enforce 44px min-height touch targets.
+ * 3. Scrollability: Max-height expanded to 86vh with momentum touch scrolling.
+ * 4. Sliders: Subtitle appearance sliders wrap labels above slider tracks
+ *    on mobile viewports so controls remain fully visible without clipping.
+ * ============================================================================ */
+
+/* Primary Track and Settings Menus (Audio, Subtitles, Quality, Speed, Playback Mode) */
+html[data-litefin-scaled] .track-menu,
+html[data-litefin-touch] .track-menu {
+    min-width: 0 !important;
+    width: 92vw !important;
+    max-width: 520px !important;
+    max-height: 86vh !important;
+    padding: 14px 16px !important;
+    background: rgba(var(--jf-overlay-bg-rgb, 18, 18, 22), 0.95) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: var(--jf-border-radius-lg, 12px) !important;
+    box-sizing: border-box !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+}
+
+/* Landscape orientation optimization: slightly wider and compact */
+@media (orientation: landscape) {
+    html[data-litefin-scaled] .track-menu,
+    html[data-litefin-touch] .track-menu {
+        max-height: 88vh !important;
+        max-width: 560px !important;
+        padding: 12px 18px !important;
+    }
+}
+
+/* Menu Header Title */
+html[data-litefin-scaled] .track-menu-title,
+html[data-litefin-touch] .track-menu-title {
+    font-size: 1.15rem !important;
+    letter-spacing: -0.01em !important;
+    margin-bottom: 10px !important;
+    padding-bottom: 8px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    text-align: center !important;
+}
+
+/* Compact spacing between options */
+html[data-litefin-scaled] .track-menu-options > * + *,
+html[data-litefin-touch] .track-menu-options > * + * {
+    margin-top: 5px !important;
+}
+
+/* Option Buttons: Touch target, compact padding & active feedback */
+html[data-litefin-scaled] .track-option,
+html[data-litefin-touch] .track-option {
+    padding: 10px 14px !important;
+    font-size: 0.95rem !important;
+    min-height: 44px !important;
+    border-radius: var(--jf-border-radius, 8px) !important;
+    gap: 8px !important;
+    box-sizing: border-box !important;
+    transition: background 0.15s ease !important;
+}
+
+html[data-litefin-scaled] .track-option:active,
+html[data-litefin-touch] .track-option:active {
+    transform: scale(0.985) !important;
+}
+
+/* Compact Icon & Checkmark indicators */
+html[data-litefin-scaled] .track-option-check,
+html[data-litefin-touch] .track-option-check,
+html[data-litefin-scaled] .track-option-icon,
+html[data-litefin-touch] .track-option-icon {
+    width: 22px !important;
+    height: 22px !important;
+    margin-right: 8px !important;
+    flex-shrink: 0 !important;
+}
+
+/* Label and secondary metadata wrap cleanly */
+html[data-litefin-scaled] .track-option .track-label-text,
+html[data-litefin-touch] .track-option .track-label-text {
+    font-size: 0.95rem !important;
+    margin-right: 12px !important;
+}
+
+html[data-litefin-scaled] .track-option .track-badges,
+html[data-litefin-touch] .track-option .track-badges {
+    gap: 6px !important;
+}
+
+/* Subtitle Quick Appearance Settings Menu */
+html[data-litefin-scaled] .subtitle-setting-item,
+html[data-litefin-touch] .subtitle-setting-item {
+    padding: 10px 14px !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    box-sizing: border-box !important;
+}
+
+html[data-litefin-scaled] .sub-setting-label,
+html[data-litefin-touch] .sub-setting-label {
+    flex: 1 1 auto !important;
+    font-size: 0.92rem !important;
+    max-width: 100% !important;
+}
+
+html[data-litefin-scaled] .sub-setting-control,
+html[data-litefin-touch] .sub-setting-control {
+    flex: 1 1 auto !important;
+    justify-content: flex-end !important;
+}
+
+html[data-litefin-scaled] .sub-setting-slider-group,
+html[data-litefin-touch] .sub-setting-slider-group {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    gap: 12px !important;
+    margin-top: 4px !important;
+}
+
+html[data-litefin-scaled] .sub-setting-value,
+html[data-litefin-touch] .sub-setting-value {
+    font-size: 0.9rem !important;
+    margin-left: 8px !important;
+    min-width: 2.2em !important;
+}
+
+/* Lyrics Drawer on Mobile */
+html[data-litefin-scaled] .lyrics-modal,
+html[data-litefin-touch] .lyrics-modal {
+    width: 88vw !important;
+    max-width: 440px !important;
+    padding: 18px !important;
+    border-radius: 20px 0 0 20px !important;
+}
+
+/* Resume Profiles Overlay on Mobile */
+html[data-litefin-scaled] .resume-profiles-panel,
+html[data-litefin-touch] .resume-profiles-panel {
+    padding: 24px 16px !important;
+    max-width: 92vw !important;
+}
+
+html[data-litefin-scaled] .resume-profiles-panel h1,
+html[data-litefin-touch] .resume-profiles-panel h1 {
+    font-size: 1.8rem !important;
+    margin-bottom: 24px !important;
+}
+

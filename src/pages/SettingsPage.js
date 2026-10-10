@@ -55,6 +55,13 @@ class SettingsPage extends Page {
 
         // Preference Languages (Audio/Subtitle) - fetched from server
         this.prefLanguages = cachedCultures || [{ value: 'Default', label: i18n.t('Default') }];
+
+        // Mobile portrait 2-page navigation state
+        // When false, the full category list is displayed; when true, the active tab details are shown.
+        this._mobileDetailOpen = false;
+
+        // Bound viewport resize listener for orientation transitions
+        this._onResize = null;
     }
 
     async onInit() {
@@ -92,71 +99,112 @@ class SettingsPage extends Page {
         this.markReady();
     }
 
-    render() {
+    /**
+     * Determines whether the settings interface is viewed in a portrait orientation.
+     * Aligns directly with CSS @media (orientation: portrait) rules.
+     * @returns {boolean} True if in portrait mode
+     * @private
+     */
+    _isPortraitMode() {
+        if (typeof window === 'undefined') return false;
+
+        // Priority 1: Direct portrait marker attribute applied by display scaler
+        if (typeof document !== 'undefined' && document.documentElement?.hasAttribute('data-litefin-portrait')) {
+            return true;
+        }
+
+        // Priority 2: CSS orientation media query and viewport dimension check
+        const isPortraitMedia = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+        const isVerticalDim = window.innerHeight > window.innerWidth;
+
+        return Boolean(isPortraitMedia || isVerticalDim);
+    }
+
+    /**
+     * Assembles setting category tab descriptors with localized titles, descriptions, and icons.
+     * In mobile portrait, the descriptive summaries are rendered directly under each category title.
+     * @returns {Array<Object>} List of setting tab configurations
+     * @private
+     */
+    _getTabs() {
+        // Base category catalogue spanning core visual and playback subsystems
         const tabs = [
             {
                 id: 'appearance',
                 label: i18n.t('Display'),
+                desc: i18n.t('SettingsDescAppearance') || 'Themes, accent colors, background styles, and visuals',
                 icon: settingsIcons.appearance
             },
             {
                 id: 'layout',
                 label: i18n.t('Layout') || 'Layout',
+                desc: i18n.t('SettingsDescLayout') || 'Display density, media cards, poster styles, and scaling',
                 icon: settingsIcons.layout
             },
             {
                 id: 'home',
                 label: i18n.t('Home') || 'Home',
+                desc: i18n.t('SettingsDescHome') || 'Hero carousel, section ordering, and row visibility',
                 icon: settingsIcons.home
             },
             {
                 id: 'sidebar',
                 label: i18n.t('Sidebar') || 'Sidebar',
+                desc: i18n.t('SettingsDescSidebar') || 'Sidebar display modes, collapsed behavior, and shortcuts',
                 icon: settingsIcons.sidebar
             },
             {
                 id: 'player',
                 label: i18n.t('TitlePlayback'),
+                desc: i18n.t('SettingsDescPlayer') || 'Video player engine, playback quality, and audio tracks',
                 icon: settingsIcons.player
             },
             {
                 id: 'subtitles',
                 label: i18n.t('Subtitles'),
+                desc: i18n.t('SettingsDescSubtitles') || 'Subtitle appearance, size, styling, and language rules',
                 icon: settingsIcons.subtitles
             },
             {
                 id: 'performance',
                 label: i18n.t('Performance') || 'Performance',
+                desc: i18n.t('SettingsDescPerformance') || 'Rendering optimization, animations, and image cache',
                 icon: settingsIcons.performance
             },
             {
                 id: 'controls',
                 label: i18n.t('Controls') || 'Controls',
+                desc: i18n.t('SettingsDescControls') || 'Keyboard bindings, remote shortcuts, and gestures',
                 icon: settingsIcons.controls
             },
             {
                 id: 'plugins',
                 label: i18n.t('Plugins'),
+                desc: i18n.t('SettingsDescPlugins') || 'Seerr media discovery and external extensions',
                 icon: settingsIcons.plugins
             },
             {
                 id: 'account',
                 label: i18n.t('Account'),
+                desc: i18n.t('SettingsDescAccount') || 'Active profile, server connections, and credentials',
                 icon: settingsIcons.account
             },
             {
                 id: 'backup',
                 label: i18n.t('BackupRestore') || 'Backup & Restore',
+                desc: i18n.t('SettingsDescBackup') || 'Export and restore your app configuration and preferences',
                 icon: settingsIcons.backup
             },
             {
                 id: 'about',
                 label: i18n.t('About'),
+                desc: i18n.t('SettingsDescAbout') || 'Version information, device details, and open-source licenses',
                 icon: settingsIcons.about
             },
             {
                 id: 'debug',
                 label: i18n.t('Debug'),
+                desc: i18n.t('SettingsDescDebug') || 'Diagnostic logs, storage usage breakdown, and testing tools',
                 icon: settingsIcons.debug
             }
         ];
@@ -168,11 +216,12 @@ class SettingsPage extends Page {
         const user = auth.getCurrentUser();
         const isAdmin = Boolean(user?.Policy?.IsAdministrator);
         if (isAdmin) {
-            // Position the Libraries management tab before backup
+            // Position the Libraries management tab right before backup
             const backupIndex = tabs.findIndex((t) => t.id === 'backup');
             const libraryTab = {
                 id: 'libraries',
                 label: i18n.t('Libraries') || 'Libraries',
+                desc: i18n.t('SettingsDescLibraries') || 'Server media library scanning, refreshes, and metadata',
                 icon: settingsIcons.libraries
             };
             if (backupIndex !== -1) {
@@ -182,33 +231,57 @@ class SettingsPage extends Page {
             }
         }
 
+        return tabs;
+    }
+
+    render() {
+        const tabs = this._getTabs();
+
         return `
             <div class="page settings-page">
-
-                
                 <!-- Split View Container -->
                 <div class="settings-split-view">
-                    <!-- Sidebar -->
+                    <!-- Sidebar (Screen 1: Category Selection in Portrait) -->
                     <aside class="settings-sidebar" id="settings-sidebar">
                         <div class="settings-sidebar-header">
                             <h2 data-i18n="Settings">${i18n.t('Settings')}</h2>
+                            <p class="settings-sidebar-subtitle" data-i18n="SettingsPreferencesSubtitle">${i18n.t('SettingsPreferencesSubtitle') || 'Preferences & Configuration'}</p>
                         </div>
+
+                        <!-- Category Navigation Cards -->
+                        <div class="settings-menu-list">
                         ${tabs
                 .map(
                     (tab) => `
                             <button class="settings-menu-btn ${this.activeTab === tab.id ? 'active' : ''}" 
                                     data-tab="${tab.id}" tabindex="0">
                                 <span class="menu-icon">${tab.icon}</span>
-                                <span class="menu-label">${tab.label}</span>
+                                <div class="menu-text-wrap">
+                                    <span class="menu-label">${tab.label}</span>
+                                    <span class="menu-desc">${tab.desc}</span>
+                                </div>
+                                <span class="menu-chevron" aria-hidden="true">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M9 18l6-6-6-6"/>
+                                    </svg>
+                                </span>
                             </button>
                         `
                 )
                 .join('')}
+                            <!-- Bottom scrolling buffer so mobile navigation bar never obstructs the last category -->
+                            <div class="settings-bottom-spacer" aria-hidden="true"></div>
+                        </div>
                     </aside>
 
-                    <!-- Content Panel -->
+                    <!-- Content Panel (Screen 2: Tab Detail in Portrait) -->
                     <main class="settings-content-panel page-content" id="settings-content-panel">
-                        ${this._renderActiveTabContent()}
+                        <!-- Tab Settings Body -->
+                        <div class="settings-tab-body" id="settings-tab-body">
+                            ${this._renderActiveTabContent()}
+                            <!-- Bottom scrolling buffer so mobile navigation bar never obstructs the last setting control -->
+                            <div class="settings-bottom-spacer" aria-hidden="true"></div>
+                        </div>
                     </main>
                 </div>
                 
@@ -3151,6 +3224,36 @@ class SettingsPage extends Page {
                 }
             ],
             storage.getItem('pref:expandedSidebarColor') || 'theme'
+        )}
+                    </div>
+                </div>
+
+                <!-- Bottom Navigation Bar Color Section (Mobile Portrait) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelBottomNavBarColor">${i18n.t('LabelBottomNavBarColor') || 'Bottom Nav Bar Color'}</span>
+                        <span class="setting-description" data-i18n="BottomNavBarColorDescription">${i18n.t('BottomNavBarColorDescription') || 'Choose the background transparency or style for the mobile bottom navigation bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'bottom-nav-bar-color-select',
+            [
+                { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
+                { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
+            ],
+            storage.getItem('pref:bottomNavBarColor') || storage.getItem('pref:collapsedSidebarColor') || 'theme'
         )}
                     </div>
                 </div>
@@ -7065,15 +7168,36 @@ class SettingsPage extends Page {
         this._bindEvents();
         this._setupFocus();
 
-        // Default focus to the active tab button in the sidebar.
-        // We do this explicitly instead of relying on last-focused behavior,
-        // to ensure we always start at the current selection.
-        const activeBtn = this.$(`.settings-menu-btn[data-tab="${this.activeTab}"]`);
-        if (activeBtn) {
-            focusManager.focusElement(activeBtn);
-        } else {
-            this.setActiveSection('settings-sidebar');
+        // Initialize mobile portrait 2-page view state
+        // Ensures user begins on the category selection view in portrait orientation
+        this._mobileDetailOpen = false;
+        this._updateMobileViewState();
+
+        // Responsive viewport observer to seamlessly transition layouts on rotation
+        this._onResize = () => {
+            this._updateMobileViewState();
+        };
+        window.addEventListener('resize', this._onResize);
+        window.addEventListener('orientationchange', this._onResize);
+
+        // Default focus to the active tab button in the sidebar (landscape/desktop only).
+        // On mobile portrait, we deliberately avoid focusing or enlarging any tabs.
+        if (!this._isPortraitMode()) {
+            const activeBtn = this.$(`.settings-menu-btn[data-tab="${this.activeTab}"]`);
+            if (activeBtn) {
+                focusManager.focusElement(activeBtn);
+            } else {
+                this.setActiveSection('settings-sidebar');
+            }
         }
+
+        // Intercept browser / system gesture back navigation to close detail view in portrait
+        this._onPopState = () => {
+            if (this._mobileDetailOpen) {
+                this._closeMobileDetail(false);
+            }
+        };
+        window.addEventListener('popstate', this._onPopState);
 
         // If the debug tab is active, populate the live storage usage display
         // so the user gets immediate feedback without having to navigate away.
@@ -7127,18 +7251,18 @@ class SettingsPage extends Page {
     }
 
     _bindEvents() {
-        // Back button
-
         // Sidebar Navigation
         this.$$('.settings-menu-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.tab;
-                this._switchTab(tab, false, true);
+                if (this._isPortraitMode()) {
+                    // Mobile portrait: drill down into full settings for chosen category
+                    this._openMobileTab(tab);
+                } else {
+                    // Landscape / Desktop: update active tab in split-view panel
+                    this._switchTab(tab, false, true);
+                }
             });
-
-            // Also switch on focus for hover-like preview?
-            // Better to switch on click/enter for stability, or debounce focus.
-            // Let's stick to click/enter (standard behavior)
         });
 
         this._bindContentEvents();
@@ -10159,6 +10283,7 @@ class SettingsPage extends Page {
             'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' },
             'collapsed-sidebar-color-select': { key: 'pref:collapsedSidebarColor', type: 'local', triggerEvent: true },
             'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true },
+            'bottom-nav-bar-color-select': { key: 'pref:bottomNavBarColor', type: 'local', triggerEvent: true },
             'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true },
             'sidebar-items-align-select': { key: 'pref:sidebarItemsAlign', type: 'local', triggerEvent: true },
             'trending-movies-collection-select': { key: 'pref:trendingMoviesCollection', type: 'local', triggerEvent: true },
@@ -11650,6 +11775,85 @@ class SettingsPage extends Page {
         window.location.href = entryUrl;
     }
 
+    /**
+     * Reveals the full settings detail screen for a selected category tab in mobile portrait.
+     * Transitions from Screen 1 (categories) to Screen 2 (tab details).
+     * @param {string} tabId - Identifier of the tab to reveal
+     * @private
+     */
+    _openMobileTab(tabId) {
+        this._mobileDetailOpen = true;
+        this._switchTab(tabId, true, false);
+        this._updateMobileViewState();
+
+        // Push history entry so system back gestures or browser back pop to tab selection
+        try {
+            window.history.pushState({ litefinSettingsDetail: true }, '', window.location.href);
+        } catch (e) {
+            // Safe fallback if history API is restricted in environment
+        }
+    }
+
+    /**
+     * Navigates back from the tab detail screen to the category selection list in mobile portrait.
+     * Transitions from Screen 2 (tab details) back to Screen 1 (categories).
+     * @param {boolean} [shouldPopHistory=true] - Whether to pop window history state
+     * @private
+     */
+    _closeMobileDetail(shouldPopHistory = true) {
+        this._mobileDetailOpen = false;
+        this._updateMobileViewState();
+
+        // If history entry was pushed, pop it cleanly
+        if (shouldPopHistory && window.history.state?.litefinSettingsDetail) {
+            window.history.back();
+        }
+
+        // Return focus to the active tab button only in landscape/desktop
+        // In mobile portrait, we strictly avoid focusing or enlarging any tabs
+        if (!this._isPortraitMode()) {
+            const activeBtn = this.$(`.settings-menu-btn[data-tab="${this.activeTab}"]`);
+            if (activeBtn) {
+                activeBtn.focus();
+                if (typeof focusManager !== 'undefined') {
+                    focusManager.focusElement(activeBtn);
+                }
+            }
+        }
+    }
+
+    /**
+     * Synchronizes mobile portrait layout classes and viewport state.
+     * Toggles .mobile-portrait and .mobile-detail-open on the root page element,
+     * and sets body modifier to ensure pure uninhibited vertical touch scrolling.
+     * @private
+     */
+    _updateMobileViewState() {
+        if (!this.el) return;
+        const isPortrait = this._isPortraitMode();
+
+        // Apply portrait layout modifier
+        this.el.classList.toggle('mobile-portrait', isPortrait);
+
+        // Apply detail screen visibility state
+        this.el.classList.toggle('mobile-detail-open', isPortrait && this._mobileDetailOpen);
+
+        // Toggle body modifier to prevent #app from hijacking vertical touch scrolling
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.toggle('settings-mobile-portrait', isPortrait);
+        }
+
+        // Notify topbar and navigation components of detail view state transitions
+        eventBus.emit('mobile:detail-state-change', { isOpen: Boolean(isPortrait && this._mobileDetailOpen) });
+
+        // Invalidate spatial navigation caches on orientation shift
+        if (typeof focusManager !== 'undefined') {
+            focusManager.invalidateCache('settings-sidebar');
+            focusManager.invalidateCache('settings-content');
+        }
+        this._setupFocus();
+    }
+
     _switchTab(tabId, force = false, focusContent = false) {
         if (this.activeTab === tabId && !force) return;
         this.activeTab = tabId;
@@ -11659,10 +11863,16 @@ class SettingsPage extends Page {
             btn.classList.toggle('active', btn.dataset.tab === tabId);
         });
 
-        // Re-render content panel
+        // Re-render content panel for portrait view
         const panel = this.$('#settings-content-panel');
         if (panel) {
-            panel.innerHTML = this._renderActiveTabContent();
+            panel.innerHTML = `
+                <div class="settings-tab-body" id="settings-tab-body">
+                    ${this._renderActiveTabContent()}
+                    <!-- Bottom scrolling buffer so mobile navigation bar never obstructs the last setting control -->
+                    <div class="settings-bottom-spacer" aria-hidden="true"></div>
+                </div>
+            `;
             panel.scrollTop = 0; // Reset scroll position to top on tab change
 
             // Apply translations to the newly rendered content
@@ -12551,9 +12761,11 @@ class SettingsPage extends Page {
         // Navigation: Sidebar <-> Content
         // We define these purely logically (LTR space).
         // FocusManager automatically inverts 'leaveLeft' and 'leaveRight' when document dir is 'rtl'.
+        const isPortrait = this._isPortraitMode();
+
         this.registerFocusSection('settings-sidebar', this.$('#settings-sidebar'), {
             orientation: 'vertical',
-            leaveRight: 'settings-content',
+            leaveRight: isPortrait ? null : 'settings-content',
             leaveLeft: 'sidebar',
             enterTo: 'last-focused',
             defaultFocusSelector: '.settings-menu-btn.active'
@@ -12561,7 +12773,7 @@ class SettingsPage extends Page {
 
         this.registerFocusSection('settings-content', this.$('#settings-content-panel'), {
             orientation: 'grid',
-            leaveLeft: 'settings-sidebar',
+            leaveLeft: isPortrait ? null : 'settings-sidebar',
             leaveRight: null,
             enterTo: 'first',
             onMove: (direction, currentElement) => {
@@ -12862,8 +13074,34 @@ class SettingsPage extends Page {
             return true;
         }
 
+        // Mobile portrait 2-page navigation:
+        // If the user is currently viewing the details of a tab,
+        // pressing Back returns them to the category tab selection list.
+        if (this._mobileDetailOpen) {
+            this._closeMobileDetail(true);
+            return true;
+        }
+
         router.back();
         return true;
+    }
+
+    onBeforeDestroy() {
+        // Detach viewport resize observer to avoid memory leaks
+        if (this._onResize) {
+            window.removeEventListener('resize', this._onResize);
+            window.removeEventListener('orientationchange', this._onResize);
+            this._onResize = null;
+        }
+        if (this._onPopState) {
+            window.removeEventListener('popstate', this._onPopState);
+            this._onPopState = null;
+        }
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.remove('settings-mobile-portrait');
+        }
+        // Notify navigation components that Settings page is unmounting
+        eventBus.emit('mobile:detail-state-change', { isOpen: false });
     }
 
     _renderUserAvatar(user) {

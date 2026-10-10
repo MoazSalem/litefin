@@ -94,6 +94,7 @@ class MainActivity : TauriActivity() {
     })
 
     super.onCreate(savedInstanceState)
+    setFullscreen(true)
   }
 
   override fun onDestroy() {
@@ -151,28 +152,64 @@ class MainActivity : TauriActivity() {
     webView.addJavascriptInterface(AndroidBridge(), "LitefinAndroid")
 
     // -------------------------------------------------------------------------
-    // 4. Lock Native Remote Focus to the WebView
+    // 4. Lock Native Remote Focus to the WebView & Suppress Default Highlight
     // -------------------------------------------------------------------------
     // On Android TV platforms operating in non-touch D-pad mode, ensure the
     // WebView immediately requests and claims focus so initial key events
     // are directly dispatched to the web runtime rather than lost in native view search.
+    // Also disable native OS default focus highlight rectangle on Android 8.0+.
     // -------------------------------------------------------------------------
     webView.isFocusable = true
     webView.isFocusableInTouchMode = true
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+      webView.defaultFocusHighlightEnabled = false
+    }
     webView.requestFocus()
+  }
+
+  // Reference to whether fullscreen mode is currently engaged
+  private var isFullscreen: Boolean = true
+
+  /**
+   * Enforces native immersive sticky fullscreen mode.
+   * Hides status and navigation bars across the entire application.
+   */
+  fun setFullscreen(fullscreen: Boolean = true) {
+    isFullscreen = true
+    runOnUiThread {
+      try {
+        val windowInsetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior =
+          androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+      } catch (e: Exception) {
+        // Fallback legacy flags for older Android versions
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+          View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or View.SYSTEM_UI_FLAG_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        )
+      }
+    }
   }
 
   override fun onResume() {
     super.onResume()
     // Re-assert focus onto the active WebView when resuming from background
     activeWebView?.requestFocus()
+    setFullscreen(true)
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
-    // Guarantee that whenever the window regains focus, the WebView has active focus
+    // Guarantee that whenever the window regains focus, the WebView has active focus and fullscreen is asserted
     if (hasFocus) {
       activeWebView?.requestFocus()
+      setFullscreen(true)
     }
   }
 
@@ -515,6 +552,31 @@ class MainActivity : TauriActivity() {
       } else {
         "$manufacturer $model"
       }
+    }
+
+    /**
+     * Determines whether the host device is an Android TV / Google TV device.
+     * Evaluates official Android UiModeManager television state and leanback feature flags.
+     */
+    @JavascriptInterface
+    fun isTv(): Boolean {
+      return try {
+        val uiModeManager = getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        val isTelevision = uiModeManager?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        val hasLeanback = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+        val hasTvFeature = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION)
+        isTelevision || hasLeanback || hasTvFeature
+      } catch (e: Exception) {
+        false
+      }
+    }
+
+    /**
+     * Toggles native Android immersive fullscreen mode from JavaScript.
+     */
+    @JavascriptInterface
+    fun setFullscreen(fullscreen: Boolean) {
+      this@MainActivity.setFullscreen(true)
     }
 
     /**

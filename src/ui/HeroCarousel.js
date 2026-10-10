@@ -305,8 +305,117 @@ class HeroCarousel {
         this._container = el || document.getElementById('hero-carousel-container');
         if (!this._container) return;
 
+        // Flag to prevent accidental detail navigation when completing a swipe gesture
+        this._suppressItemClick = false;
+
         // Enter key handling via native click (FocusManager triggers .click())
-        this._container.addEventListener('click', () => this._onItemClick());
+        this._container.addEventListener('click', (e) => {
+            // Suppress navigation if user just completed a swipe gesture
+            if (this._suppressItemClick) return;
+            // Ignore direct clicks on navigation arrows or indicator dots
+            if (e.target.closest('.hero-arrow') || e.target.closest('.hero-dot')) return;
+            this._onItemClick();
+        });
+
+        // ---------------------------------------------------------------------
+        // Native Touch Swipe & Gesture Tracking (Mobile & Tablet Ergonomics)
+        // ---------------------------------------------------------------------
+        // Implements horizontal swipe physics for touchscreen devices.
+        // Pauses auto-scroll on touch, computes horizontal delta, and triggers
+        // next() or previous() based on swipe direction while cleanly preserving
+        // vertical scrolling for browsing home content rows below.
+        // ---------------------------------------------------------------------
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchStartTime = 0;
+        let isSwipingHorizontal = false;
+        let swipeDeltaX = 0;
+
+        const onTouchStart = (e) => {
+            const touch = e.touches ? e.touches[0] : e;
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchStartTime = Date.now();
+            isSwipingHorizontal = false;
+            swipeDeltaX = 0;
+            // Temporarily pause auto-scroll during user interaction
+            this._stopAutoScroll();
+        };
+
+        const onTouchMove = (e) => {
+            const touch = e.touches ? e.touches[0] : e;
+            const diffX = touch.clientX - touchStartX;
+            const diffY = touch.clientY - touchStartY;
+
+            // Classify dominant axis once movement passes minimum threshold
+            if (!isSwipingHorizontal && Math.abs(diffX) > 10) {
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    isSwipingHorizontal = true;
+                }
+            }
+
+            if (isSwipingHorizontal) {
+                swipeDeltaX = diffX;
+            }
+        };
+
+        const onTouchEnd = () => {
+            if (isSwipingHorizontal) {
+                const isRtl = document.documentElement.dir === 'rtl';
+                const timeDiff = Date.now() - touchStartTime;
+                const minDistance = 35; // 35px threshold for deliberate swipe
+                const velocity = Math.abs(swipeDeltaX) / Math.max(1, timeDiff);
+
+                if (Math.abs(swipeDeltaX) >= minDistance || velocity > 0.25) {
+                    // Suppress click so we don't accidentally navigate to details
+                    this._suppressItemClick = true;
+                    setTimeout(() => {
+                        this._suppressItemClick = false;
+                    }, 350);
+
+                    // Navigate according to swipe direction and RTL setting
+                    const isNext = isRtl ? swipeDeltaX > 0 : swipeDeltaX < 0;
+                    if (isNext) {
+                        this.next();
+                    } else {
+                        this.previous();
+                    }
+                }
+            } else {
+                // Resume timer if user just tapped without swiping
+                this._startAutoScroll();
+            }
+
+            isSwipingHorizontal = false;
+            swipeDeltaX = 0;
+        };
+
+        const onTouchCancel = () => {
+            isSwipingHorizontal = false;
+            swipeDeltaX = 0;
+            this._startAutoScroll();
+        };
+
+        this._touchHandlers = { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel };
+        this._container.addEventListener('touchstart', onTouchStart, { passive: true });
+        this._container.addEventListener('touchmove', onTouchMove, { passive: true });
+        this._container.addEventListener('touchend', onTouchEnd, { passive: true });
+        this._container.addEventListener('touchcancel', onTouchCancel, { passive: true });
+
+        // Indicator dots direct tap handling
+        const indicators = this._container.querySelector('.hero-indicators');
+        if (indicators) {
+            indicators.addEventListener('click', (e) => {
+                const dot = e.target.closest('.hero-dot');
+                if (dot && dot.dataset.index !== undefined) {
+                    e.stopPropagation();
+                    const targetIndex = parseInt(dot.dataset.index, 10);
+                    if (!isNaN(targetIndex)) {
+                        this.goTo(targetIndex);
+                    }
+                }
+            });
+        }
 
         // Focus and Blur handling via section change events
         // since native focus is disabled in FocusManager.
@@ -593,6 +702,13 @@ class HeroCarousel {
         }
         if (this._onFocusChanged) {
             eventBus.off('focus:changed', this._onFocusChanged);
+        }
+        if (this._container && this._touchHandlers) {
+            this._container.removeEventListener('touchstart', this._touchHandlers.onTouchStart);
+            this._container.removeEventListener('touchmove', this._touchHandlers.onTouchMove);
+            this._container.removeEventListener('touchend', this._touchHandlers.onTouchEnd);
+            this._container.removeEventListener('touchcancel', this._touchHandlers.onTouchCancel);
+            this._touchHandlers = null;
         }
         focusManager.unregister('home-hero');
     }

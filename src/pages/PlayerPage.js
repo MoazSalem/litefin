@@ -32,6 +32,7 @@ import { logger } from '../utils/Logger.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { androidAdapter } from '../android/AndroidAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
@@ -290,6 +291,11 @@ class PlayerPage extends Page {
             // This makes body/app transparent so hardware video plane is visible
             document.body.classList.add('player-active');
             document.documentElement.classList.add('player-active');
+
+            // Enter immersive fullscreen mode during video playback on mobile
+            if (platformInfo.isAndroid) {
+                androidAdapter.setFullscreen(true);
+            }
 
             // Expose debug helper to force player error screen anytime via console
             window.__forcePlayerError = (msg = 'Simulated playback error for UI testing') => this._showError(msg);
@@ -812,6 +818,20 @@ class PlayerPage extends Page {
 
                 // Ignore the error panel
                 if (e.target.closest('.error-panel')) {
+                    return;
+                }
+
+                // Touch UX: on touchscreen devices (Android phones & tablets), tapping the video
+                // should reveal or dismiss the On-Screen Display controls gracefully, following
+                // Apple Human Interface Guidelines for video playback rather than abruptly pausing.
+                if (document.documentElement.hasAttribute('data-litefin-touch') && !window.matchMedia('(pointer: fine)').matches) {
+                    if (this._osd) {
+                        if (this._osd.isOsdVisible) {
+                            this._osd.hide();
+                        } else {
+                            this._osd.show();
+                        }
+                    }
                     return;
                 }
 
@@ -5183,6 +5203,11 @@ class PlayerPage extends Page {
         // Disable Tizen AVPlayer transparency mode and clear state classes
         document.body.classList.remove('player-active', 'lyrics-active');
         document.documentElement.classList.remove('player-active');
+
+        // Maintain immersive fullscreen mode across all views
+        if (platformInfo.isAndroid) {
+            androidAdapter.setFullscreen(true);
+        }
 
         // Restore global clock visibility when leaving playback
         globalClock.setVisibility(true);

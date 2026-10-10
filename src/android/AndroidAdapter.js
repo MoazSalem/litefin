@@ -1,18 +1,21 @@
 /**
  * ============================================================================
- * Litefin - Android TV Adapter
+ * Litefin - Android Platform & Mobile Touch Adapter
  * ============================================================================
- * Handles Android TV and mobile Android platform-specific functionality:
- * - Hardware remote control key registration and mapping (D-Pad, Media, Back)
+ * Handles Android TV, mobile phones, tablets, and Tauri Android shells:
+ * - Responsive display scaling via CSS zoom for phones & tablets (landscape & portrait)
+ * - Native touch horizontal row scrolling via TouchHorizontalScroller
+ * - Hardware remote control & physical keyboard key mappings (D-pad, Media, Back)
  * - Hardware Back button interception to drive unified Litefin back navigation
- * - Native bridge integration for clean application exit and device identification
- * - Idle tracking for screensaver and sleep timers
+ * - Native bridge integration (AndroidBridge, LitefinAndroid, Tauri IPC exit)
+ * - Idle tracking for screensavers and power management
  * ============================================================================
  */
 
 import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { touchHorizontalScroller } from './TouchHorizontalScroller.js';
 
 const log = logger.create('AndroidAdapter');
 
@@ -50,7 +53,11 @@ const ANDROID_KEYS = {
     REWIND_ALT: 89,
     REWIND_LEGACY: 412,
     NEXT: 87,
-    PREV: 88
+    PREV: 88,
+
+    // Channel stepping
+    PAGE_UP: 33,
+    PAGE_DOWN: 34
 };
 
 class AndroidAdapter {
@@ -58,8 +65,9 @@ class AndroidAdapter {
         // Tracks whether adapter has been initialized
         this._initialized = false;
 
-        // Cached human-readable device name from native bridge
+        // Cached human-readable device model and brand
         this._deviceName = null;
+        this._manufacturer = null;
 
         // Tracks timestamp of last user interaction for screensaver
         this._lastInputTime = Date.now();
@@ -69,7 +77,7 @@ class AndroidAdapter {
      * ========================================================================
      * Initialization & Global Listener Registration
      * ========================================================================
-     * Call after DOM is ready during application startup.
+     * Executed when DOM is ready during application startup.
      */
     init() {
         if (this._initialized) {
@@ -79,26 +87,112 @@ class AndroidAdapter {
 
         log.info('Initializing AndroidAdapter...');
 
-        // Expose adapter reference on window so native MainActivity can route hardware back
+        // Expose adapter reference on window for native activity routing
         if (typeof window !== 'undefined') {
             window.androidAdapter = this;
+            try {
+                // Hook invoked by native host when hardware back button or gesture is detected
+                window.__litefinAndroidBack = () => this.handleHardwareBack();
+            } catch (e) {
+                log.warn('Failed registering __litefinAndroidBack global:', e);
+            }
         }
 
         // Initialize user interaction timestamp
         this._lastInputTime = Date.now();
 
-        // Register hardware and keyboard listener
+        // Register hardware remote and physical keyboard input listeners
         this._setupKeyHandler();
 
-        // Track touch and pointer interactions for mobile and air-mouse remotes
+        // Track touch and pointer interactions to keep power timers alive
         document.addEventListener('mousemove', () => this.reportInput(), { passive: true });
         document.addEventListener('mousedown', () => this.reportInput(), { passive: true });
         document.addEventListener('touchstart', () => this.reportInput(), { passive: true });
 
-        // Retrieve and log Android device details from native bridge
+        // Initialize native-feel touch scrolling for media rows
+        if (typeof touchHorizontalScroller !== 'undefined' && touchHorizontalScroller?.init) {
+            touchHorizontalScroller.init();
+        }
+
+        // Ensure viewport meta tag is properly configured:
+        // - Android TV: locked to width=1920 for identical 1080p canvas proportions
+        // - Mobile & Tablets: width=device-width for responsive layout & touch scaling
+        if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+            const metaViewport = document.querySelector('meta[name="viewport"]');
+            if (this.isAndroidTv) {
+                if (metaViewport && metaViewport.getAttribute('content') !== 'width=1920, user-scalable=no') {
+                    metaViewport.setAttribute('content', 'width=1920, user-scalable=no');
+                }
+            } else {
+                if (metaViewport && metaViewport.getAttribute('content')?.includes('width=1920')) {
+                    metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+                }
+                // Stamp touch-primary input indicator onto root element for mobile phones and tablets
+                document.documentElement?.setAttribute?.('data-litefin-touch', '1');
+            }
+        }
+
+        // Display scaling: phone and tablet viewports use CSS zoom scaling.
+        // Android TV runs at 1:1 scale on the 1920 canvas without zoom.
+        if (!this.isAndroidTv) {
+            this._applyDisplayScale();
+        } else {
+            document.documentElement?.style?.removeProperty('zoom');
+            document.documentElement?.removeAttribute?.('data-litefin-scaled');
+            document.documentElement?.style?.removeProperty('--litefin-app-w');
+            document.documentElement?.style?.removeProperty('--litefin-app-h');
+        }
+
+        // Enforce immersive fullscreen mode across the entire application
+        this.setFullscreen(true);
+
+        // Re-enforce fullscreen when the window regains focus or visibility
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('focus', () => this.setFullscreen(true), { passive: true });
+        }
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.setFullscreen(true);
+                }
+            }, { passive: true });
+            // Browser gesture hook for user interaction
+            document.addEventListener('touchstart', () => this.setFullscreen(true), { passive: true, once: true });
+            document.addEventListener('click', () => this.setFullscreen(true), { passive: true, once: true });
+        }
+
+        // Retrieve hardware details from native bridge
         this._loadDeviceInfo();
 
-        log.info('AndroidAdapter initialized successfully');
+        // Signal native shell that bootstrap has finished
+        this._notifyReady();
+
+        log.info(`AndroidAdapter initialized successfully (isAndroidTv: ${this.isAndroidTv})`);
+    }
+
+    /**
+     * Determines whether the current host device is an Android TV / Google TV.
+     * Evaluates native bridge isTv() method or user agent / touch capabilities fallback.
+     * @returns {boolean} True if running on Android TV
+     */
+    get isAndroidTv() {
+        try {
+            if (typeof window !== 'undefined') {
+                if (typeof window.LitefinAndroid?.isTv === 'function') {
+                    return !!window.LitefinAndroid.isTv();
+                }
+                if (typeof window.AndroidBridge?.isTv === 'function') {
+                    return !!window.AndroidBridge.isTv();
+                }
+            }
+            if (typeof navigator !== 'undefined' && navigator.userAgent) {
+                const ua = navigator.userAgent;
+                const hasTvToken = /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(ua);
+                const isNonMobileWithoutTouch = !/Mobile/i.test(ua) && (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
+                return hasTvToken || isNonMobileWithoutTouch;
+            }
+        } catch (_) {}
+        return false;
     }
 
     /**
@@ -125,27 +219,68 @@ class AndroidAdapter {
     }
 
     /**
+     * Enters or maintains native OS fullscreen mode.
+     * The application is configured to always remain in fullscreen mode across all views.
+     * @param {boolean} [fullscreen=true] - Fullscreen state (always locked to true)
+     */
+    setFullscreen(fullscreen = true) {
+        try {
+            // Forward to native bridge if present
+            if (typeof window !== 'undefined') {
+                if (typeof window.LitefinAndroid?.setFullscreen === 'function') {
+                    window.LitefinAndroid.setFullscreen(true);
+                    return;
+                }
+                if (typeof window.AndroidBridge?.setFullscreen === 'function') {
+                    window.AndroidBridge.setFullscreen(true);
+                    return;
+                }
+            }
+
+            // Fallback to DOM fullscreen API
+            if (typeof document !== 'undefined') {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                }
+            }
+        } catch (e) {
+            log.warn('Failed enforcing fullscreen in AndroidAdapter:', e);
+        }
+    }
+
+    /**
      * ========================================================================
      * Centralized Hardware Back Dispatcher
      * ========================================================================
-     * Invoked by MainActivity.kt when the user clicks the physical remote
-     * Back button or triggers the system predictive back navigation gesture.
-     * Dispatches `key:back` onto Litefin's eventBus so modals, menus, and
-     * in-page back handlers are given priority before page navigation.
+     * Invoked when the user triggers the physical remote Back button or system
+     * predictive back navigation gesture. Dispatches `key:back` onto Litefin's
+     * eventBus so open dialogs, menus, and pages can handle navigation cleanly.
+     * @param {Object} [payload] - Optional metadata from native shell
      */
-    handleHardwareBack() {
+    handleHardwareBack(payload = {}) {
         this.reportInput();
         log.info('Hardware Back event received from native Android layer');
 
         // Central eventBus emission matching Tizen and WebOS back handling
-        eventBus.emit('key:back');
+        eventBus.emit('key:back', { source: 'android-bridge', ...payload });
+    }
+
+    /**
+     * Backwards-compatible alias for handleHardwareBack.
+     * @param {Object} [payload]
+     */
+    handleBackButton(payload = {}) {
+        this.handleHardwareBack(payload);
     }
 
     /**
      * ========================================================================
      * Key Event Setup & Spatial Navigation Controls
      * ========================================================================
-     * Configures document-level keyboard listeners for Android TV remotes.
+     * Configures document-level keyboard listeners for Android TV remotes and
+     * external Bluetooth/USB keyboards.
      * @private
      */
     _setupKeyHandler() {
@@ -237,6 +372,14 @@ class AndroidAdapter {
                     eventBus.emit('key:enter', e);
                     break;
 
+                // Channel stepping
+                case ANDROID_KEYS.PAGE_UP:
+                    eventBus.emit('key:channelUp', e);
+                    break;
+                case ANDROID_KEYS.PAGE_DOWN:
+                    eventBus.emit('key:channelDown', e);
+                    break;
+
                 // Hardware Back and Escape keys
                 case ANDROID_KEYS.BACK:
                 case ANDROID_KEYS.ESCAPE:
@@ -302,44 +445,237 @@ class AndroidAdapter {
     }
 
     /**
-     * ========================================================================
-     * Device Information Discovery
-     * ========================================================================
-     * Queries the native Android bridge for hardware model details.
+     * =========================================================================
+     * Portrait Display Scale Calculation
+     * =========================================================================
+     * Fits a fixed design width (750px) using CSS zoom so the TV-authored layout
+     * fills phone screens cleanly in portrait orientation.
+     * @private
+     * @returns {boolean} True if viewport was portrait and handled
+     */
+    _applyPortraitScale() {
+        /*
+         * Detect vertical screen orientation where viewport height exceeds width.
+         * When vertical, stamp data-litefin-portrait onto the document root element
+         * and dispatch an orientation change event across the application bus.
+         */
+        const isPortrait = window.innerHeight > window.innerWidth;
+        const root = document.documentElement;
+
+        if (!isPortrait) {
+            // Remove portrait marker attribute when returning to landscape
+            if (root && root.hasAttribute('data-litefin-portrait')) {
+                root.removeAttribute('data-litefin-portrait');
+                eventBus.emit('viewport:orientationChange', { isPortrait: false });
+            }
+            return false;
+        }
+
+        // Apply portrait attribute for reactive CSS layout switches
+        if (root && !root.hasAttribute('data-litefin-portrait')) {
+            root.setAttribute('data-litefin-portrait', '1');
+            eventBus.emit('viewport:orientationChange', { isPortrait: true });
+        }
+
+        try {
+            /*
+             * Target portrait design width of 750px calibrated for mobile displays.
+             * CSS zoom scaling computes proportional scale factor down to MIN_SCALE (0.15).
+             */
+            const PORTRAIT_DESIGN_WIDTH = 750;
+            const MIN_SCALE = 0.15;
+
+            const scale = Math.min(1, Math.max(MIN_SCALE, window.innerWidth / PORTRAIT_DESIGN_WIDTH));
+            const appEl = document.getElementById('app');
+
+            if (scale >= 1) {
+                // Desktop or large tablet portrait window without zoom
+                root.style.removeProperty('zoom');
+                root.removeAttribute('data-litefin-scaled');
+                root.style.removeProperty('--litefin-app-w');
+                root.style.removeProperty('--litefin-app-h');
+                if (appEl) {
+                    appEl.style.removeProperty('width');
+                    appEl.style.removeProperty('height');
+                }
+            } else {
+                /*
+                 * Scale down TV canvas to fit mobile phone portrait bounds.
+                 * Sets responsive virtual width and height variables on the document element.
+                 */
+                const designW = `${Math.round(window.innerWidth / scale)}px`;
+                const designH = `${Math.round(window.innerHeight / scale)}px`;
+
+                root.style.setProperty('zoom', String(scale));
+                root.setAttribute('data-litefin-scaled', '1');
+                root.style.setProperty('--litefin-app-w', designW);
+                root.style.setProperty('--litefin-app-h', designH);
+
+                if (appEl) {
+                    appEl.style.width = designW;
+                    appEl.style.height = designH;
+                }
+            }
+
+            log.debug(`Portrait scale applied: ${scale.toFixed(3)} (${window.innerWidth}x${window.innerHeight})`);
+        } catch (e) {
+            log.warn('Failed applying portrait display scale:', e);
+        }
+        return true;
+    }
+
+    /**
+     * =========================================================================
+     * Display Scaling Engine (Phones & Tablets)
+     * =========================================================================
+     * Scales the 1600px TV layout to fit physical screen dimensions via CSS zoom.
+     * Re-evaluates continuously on resize and orientation change events.
      * @private
      */
-    _loadDeviceInfo() {
-        try {
-            if (typeof window !== 'undefined' && window.LitefinAndroid?.getDeviceName) {
-                this._deviceName = window.LitefinAndroid.getDeviceName();
-                log.info(`Connected to Android device: ${this._deviceName}`);
+    _applyDisplayScale() {
+        const DESIGN_WIDTH = 1600;
+        const MIN_SCALE = 0.15;
+
+        const apply = () => {
+            // Check portrait first: if handled, bypass landscape computation
+            if (this._applyPortraitScale()) {
+                return;
             }
-        } catch (err) {
-            log.warn('Could not query device name from Android bridge:', err);
+
+            // Clean up portrait marker if viewport transitioned to landscape
+            const root = document.documentElement;
+            if (root && root.hasAttribute('data-litefin-portrait')) {
+                root.removeAttribute('data-litefin-portrait');
+                eventBus.emit('viewport:orientationChange', { isPortrait: false });
+            }
+
+            try {
+                const scale = Math.min(1, Math.max(MIN_SCALE, window.innerWidth / DESIGN_WIDTH));
+                const appEl = document.getElementById('app');
+
+                if (scale >= 1) {
+                    // Full TV/Desktop dimension screen
+                    root.style.removeProperty('zoom');
+                    root.removeAttribute('data-litefin-scaled');
+                    root.style.removeProperty('--litefin-app-w');
+                    root.style.removeProperty('--litefin-app-h');
+                    if (appEl) {
+                        appEl.style.removeProperty('width');
+                        appEl.style.removeProperty('height');
+                    }
+                } else {
+                    root.style.setProperty('zoom', String(scale));
+                    root.setAttribute('data-litefin-scaled', '1');
+
+                    const designW = `${Math.round(window.innerWidth / scale)}px`;
+                    const designH = `${Math.round(window.innerHeight / scale)}px`;
+
+                    root.style.setProperty('--litefin-app-w', designW);
+                    root.style.setProperty('--litefin-app-h', designH);
+
+                    if (appEl) {
+                        appEl.style.width = designW;
+                        appEl.style.height = designH;
+                    }
+                }
+
+                log.debug(`Landscape scale applied: ${scale.toFixed(3)} (${window.innerWidth}x${window.innerHeight})`);
+            } catch (e) {
+                log.warn('Failed applying landscape display scale:', e);
+            }
+        };
+
+        apply();
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('resize', apply, { passive: true });
+            window.addEventListener('orientationchange', apply, { passive: true });
+            if (window.screen?.orientation?.addEventListener) {
+                window.screen.orientation.addEventListener('change', apply);
+            }
         }
     }
 
     /**
-     * Returns the human-readable device model name.
-     * @returns {string} Device name or fallback
+     * Notifies native shell that JavaScript application has finished bootstrapping.
+     * @private
+     */
+    _notifyReady() {
+        try {
+            if (typeof window.AndroidBridge?.notifyAppReady === 'function') {
+                window.AndroidBridge.notifyAppReady();
+            }
+        } catch (e) {
+            log.warn('notifyAppReady invocation failed:', e);
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Device Information Discovery
+     * ========================================================================
+     * Queries native Android bridges for hardware details.
+     * @private
+     */
+    _loadDeviceInfo() {
+        try {
+            if (typeof window !== 'undefined') {
+                const model = window.AndroidBridge?.getDeviceModel?.() || window.LitefinAndroid?.getDeviceName?.();
+                if (model) {
+                    this._deviceName = String(model);
+                    log.info(`Identified Android device model: ${this._deviceName}`);
+                }
+                const brand = window.AndroidBridge?.getDeviceBrand?.() || window.LitefinAndroid?.getDeviceBrand?.();
+                if (brand) {
+                    this._manufacturer = String(brand);
+                }
+            }
+        } catch (err) {
+            log.warn('Failed retrieving device info from native bridge:', err);
+        }
+    }
+
+    /**
+     * Returns human-readable device model name.
+     * @returns {string}
      */
     getDeviceName() {
         if (this._deviceName) {
             return this._deviceName;
         }
-
         try {
-            if (typeof window !== 'undefined' && window.LitefinAndroid?.getDeviceName) {
-                this._deviceName = window.LitefinAndroid.getDeviceName();
-                if (this._deviceName) {
+            if (typeof window !== 'undefined') {
+                const model = window.AndroidBridge?.getDeviceModel?.() || window.LitefinAndroid?.getDeviceName?.();
+                if (model) {
+                    this._deviceName = String(model);
                     return this._deviceName;
                 }
             }
         } catch (err) {
-            log.warn('Failed retrieving device name from LitefinAndroid:', err);
+            log.warn('Failed retrieving device name:', err);
         }
+        return 'Android Device';
+    }
 
-        return 'Android TV';
+    /**
+     * Returns device manufacturer name.
+     * @returns {string}
+     */
+    getManufacturer() {
+        if (this._manufacturer) {
+            return this._manufacturer;
+        }
+        try {
+            if (typeof window !== 'undefined') {
+                const brand = window.AndroidBridge?.getDeviceBrand?.() || window.LitefinAndroid?.getDeviceBrand?.();
+                if (brand) {
+                    this._manufacturer = String(brand);
+                    return this._manufacturer;
+                }
+            }
+        } catch (err) {
+            log.warn('Failed retrieving manufacturer:', err);
+        }
+        return 'Android';
     }
 
     /**
@@ -347,36 +683,47 @@ class AndroidAdapter {
      * Application Exit Handler
      * ========================================================================
      * Flushes pending storage cache to disk and terminates the host Android
-     * activity via the native LitefinAndroid bridge.
+     * activity via native bridge or Tauri IPC.
      */
     exit() {
         log.info('Exiting Android application...');
 
-        // Flush all pending storage state to disk before terminating the task
-        storage.flush();
+        // Flush all pending storage state to disk
+        try {
+            storage.flush();
+        } catch (err) {
+            log.warn('Storage flush failed during exit:', err);
+        }
 
         try {
-            // 1. Primary native bridge terminating the Android Task directly
-            if (typeof window !== 'undefined' && window.LitefinAndroid?.exit) {
+            // 1. Check window.LitefinAndroid.exit() bridge
+            if (typeof window !== 'undefined' && typeof window.LitefinAndroid?.exit === 'function') {
                 log.info('Invoking native LitefinAndroid.exit() bridge');
                 window.LitefinAndroid.exit();
                 return;
             }
 
-            // 2. Tauri v2 IPC bridge fallback if bridge is unavailable
+            // 2. Check window.AndroidBridge.exitApp() bridge
+            if (typeof window !== 'undefined' && typeof window.AndroidBridge?.exitApp === 'function') {
+                log.info('Invoking AndroidBridge.exitApp() bridge');
+                window.AndroidBridge.exitApp();
+                return;
+            }
+
+            // 3. Tauri v2 IPC bridge fallback
             if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__?.invoke) {
-                log.info('Invoking Tauri internal exit command');
+                log.info('Invoking Tauri plugin:app|exit IPC command');
                 window.__TAURI_INTERNALS__.invoke('plugin:app|exit').catch(() => {
                     window.close();
                 });
                 return;
             }
 
-            // 3. Browser window close fallback
+            // 4. Browser window close fallback
             log.info('Falling back to window.close()');
             window.close();
         } catch (err) {
-            log.error('Failed to exit Android application cleanly:', err);
+            log.error('Failed exiting Android application cleanly:', err);
         }
     }
 }

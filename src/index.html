@@ -11,6 +11,13 @@
             padding: 0;
         }
 
+        /* Universal Android WebKit touch highlight & inkwell suppression */
+        *, *::before, *::after {
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+            -webkit-touch-callout: none !important;
+        }
+
         /* Seamless transparency mode when video player is active */
         html.player-active, body.player-active,
         html.player-active #app, body.player-active #app,
@@ -23,15 +30,38 @@
     <script>
         /*
          * TV & Android 1080p Viewport Normalization
-         * Locks the layout canvas to 1920 CSS pixels wide on Android/TV devices
+         * Locks the layout canvas to 1920 CSS pixels wide STRICTLY on Android TV & Google TV devices
          * paired with WebView useWideViewPort to ensure identical proportions
          * across 720p, 1080p, and 4K displays without container clipping.
+         * Mobile phones and tablets retain width=device-width for responsive touch scaling.
          */
         if (/Android/i.test(navigator.userAgent)) {
-            var metaViewport = document.querySelector('meta[name="viewport"]');
-            if (metaViewport) {
-                metaViewport.setAttribute('content', 'width=1920, user-scalable=no');
+            var isAndroidTv = false;
+            try {
+                if (typeof window.LitefinAndroid !== 'undefined' && typeof window.LitefinAndroid.isTv === 'function') {
+                    isAndroidTv = !!window.LitefinAndroid.isTv();
+                } else if (typeof window.AndroidBridge !== 'undefined' && typeof window.AndroidBridge.isTv === 'function') {
+                    isAndroidTv = !!window.AndroidBridge.isTv();
+                } else {
+                    // Fallback detection via User Agent tokens & touch hardware capabilities:
+                    // 1. Explicit TV/Leanback tokens in User Agent
+                    // 2. Absence of "Mobile" token AND absence of touchscreen hardware
+                    var ua = navigator.userAgent;
+                    var hasTvToken = /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(ua);
+                    var isNonMobileWithoutTouch = !/Mobile/i.test(ua) && (!('ontouchstart' in window) || navigator.maxTouchPoints === 0);
+                    isAndroidTv = hasTvToken || isNonMobileWithoutTouch;
+                }
+            } catch (e) {
+                isAndroidTv = false;
             }
+
+            if (isAndroidTv) {
+                var metaViewport = document.querySelector('meta[name="viewport"]');
+                if (metaViewport) {
+                    metaViewport.setAttribute('content', 'width=1920, user-scalable=no');
+                }
+            }
+
             // Polyfill window.chrome for Android WebView so that media engines
             // like movi-player CanvasRenderer correctly recognize the Chromium runtime
             if (typeof window !== 'undefined' && !window.chrome) {

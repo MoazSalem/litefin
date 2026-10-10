@@ -113,7 +113,8 @@ class PlatformInfo {
             // Explicitly distinguished from desktop/web to prevent TV remotes from getting web-only arrows
             else if (
                 /Android/i.test(navigator.userAgent) ||
-                (typeof window !== 'undefined' && typeof window.LitefinAndroid !== 'undefined')
+                (typeof window !== 'undefined' &&
+                    (typeof window.LitefinAndroid !== 'undefined' || typeof window.AndroidBridge !== 'undefined'))
             ) {
                 this._platform = 'android';
             }
@@ -223,9 +224,35 @@ class PlatformInfo {
         return false;
     }
 
+    /**
+     * Evaluates whether the application is running specifically on an Android TV
+     * or Google TV runtime (excluding Android phones and touch tablets).
+     * @returns {boolean} True if running on Android TV hardware
+     */
+    get isAndroidTv() {
+        if (!this.isAndroid) return false;
+        try {
+            if (typeof window !== 'undefined') {
+                if (typeof window.LitefinAndroid?.isTv === 'function') {
+                    return !!window.LitefinAndroid.isTv();
+                }
+                if (typeof window.AndroidBridge?.isTv === 'function') {
+                    return !!window.AndroidBridge.isTv();
+                }
+            }
+            if (typeof navigator !== 'undefined' && navigator.userAgent) {
+                const ua = navigator.userAgent;
+                const hasTvToken = /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(ua);
+                const isNonMobileWithoutTouch = !/Mobile/i.test(ua) && (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
+                return hasTvToken || isNonMobileWithoutTouch;
+            }
+        } catch (_) {}
+        return false;
+    }
+
     /** @returns {boolean} True if running on any television runtime (Tizen, WebOS, or Android TV) */
     get isTv() {
-        return this.isTizen || this.isWebOS || this.isAndroid;
+        return this.isTizen || this.isWebOS || this.isAndroidTv;
     }
 
     /**

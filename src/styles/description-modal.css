@@ -251,3 +251,33 @@
     letter-spacing: 0.1em;
     font-weight: 600;
 }
+
+/* ============================================================================
+ * MOBILE & TOUCH DESCRIPTION MODAL
+ * ============================================================================ */
+html[data-litefin-scaled] .description-modal,
+html[data-litefin-touch] .description-modal {
+    width: 88vw !important;
+    min-width: 0 !important;
+    max-width: 440px !important;
+    border-radius: var(--jf-border-radius-lg, 12px) 0 0 var(--jf-border-radius-lg, 12px) !important;
+    background: rgba(var(--jf-overlay-bg-rgb, 14, 14, 18), 0.96) !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-litefin-scaled] .description-modal__content,
+html[data-litefin-touch] .description-modal__content {
+    padding: 18px !important;
+}
+
+html[data-litefin-scaled] .description-modal__title,
+html[data-litefin-touch] .description-modal__title {
+    font-size: 1.35rem !important;
+}
+
+html[data-litefin-scaled] .description-modal__footer,
+html[data-litefin-touch] .description-modal__footer {
+    padding: 12px 18px !important;
+    font-size: 0.85rem !important;
+}
+

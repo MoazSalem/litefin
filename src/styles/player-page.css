@@ -633,14 +633,18 @@ html[data-light-music-player="true"] .audio-subtitle {
 .player-page.osd-active:not(.osd-dodging-disabled) .subtitle-overlay:not(.secondary),
 .player-container.osd-active:not(.osd-dodging-disabled) ~ .subtitle-overlay:not(.secondary) {
     -webkit-transform: translateY(-13.5vh) !important;
+    -webkit-transform: translateY(calc(var(--litefin-app-h, 100vh) * -0.135)) !important;
     transform: translateY(-13.5vh) !important;
+    transform: translateY(calc(var(--litefin-app-h, 100vh) * -0.135)) !important;
 }
 
 /* Dual Subtitles Active: Bottom Subtitle (elevated + compact scale) */
 .player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-overlay:not(.secondary),
 .player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) ~ .subtitle-overlay:not(.secondary) {
     -webkit-transform: translateY(-12.5vh) scale(0.88) !important;
+    -webkit-transform: translateY(calc(var(--litefin-app-h, 100vh) * -0.125)) scale(0.88) !important;
     transform: translateY(-12.5vh) scale(0.88) !important;
+    transform: translateY(calc(var(--litefin-app-h, 100vh) * -0.125)) scale(0.88) !important;
 }
 
 /* Dual Subtitles Active: Top Subtitle (compact scale in-place at top, no vertical translation) */
@@ -664,6 +668,43 @@ html[data-light-music-player="true"] .audio-subtitle {
 .player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-line,
 .player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-line {
     padding: 6px 13px !important;
+}
+
+/* ==========================================================================
+ * MOBILE & TOUCH RESPONSIVE SUBTITLE SCALING
+ * Ensures subtitle cue frames and bounding boxes scale naturally on phone
+ * and tablet screens without overflowing or obscuring the video viewport.
+ * ========================================================================== */
+html[data-litefin-scaled] .subtitle-overlay,
+html[data-litefin-touch] .subtitle-overlay {
+    bottom: 8%;
+    left: 4%;
+    right: 4%;
+}
+
+html[data-litefin-scaled] .subtitle-line,
+html[data-litefin-touch] .subtitle-line {
+    padding: 8px 18px;
+    border-radius: 12px;
+    max-width: 94%;
+    word-break: break-word;
+}
+
+/* Portrait mobile layout adjustments */
+@media (orientation: portrait) {
+    html[data-litefin-scaled] .subtitle-overlay,
+    html[data-litefin-touch] .subtitle-overlay {
+        bottom: 14%;
+        left: 2%;
+        right: 2%;
+    }
+
+    html[data-litefin-scaled] .subtitle-line,
+    html[data-litefin-touch] .subtitle-line {
+        font-size: calc(var(--litefin-app-h, 100vh) * 0.038) !important;
+        padding: 6px 14px;
+        border-radius: 8px;
+    }
 }
 
 /* ==========================================================================

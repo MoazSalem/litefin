@@ -30,6 +30,8 @@ import { layoutManager } from '../ui/LayoutManager.js';
 import { imageService } from '../utils/ImageService.js';
 import { pinManager } from '../utils/PinManager.js';
 import { pinDialog } from '../ui/PinDialog.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
+import { androidAdapter } from '../android/AndroidAdapter.js';
 
 const log = logger.create('Login');
 
@@ -1384,6 +1386,11 @@ class LoginPage extends Page {
              */
             if (this._isAddUserMode) {
                 router.navigate('/profiles', { replace: true });
+            } else if (platformInfo.isAndroid) {
+                // Ask the native shell to finish the activity (Back on the
+                // server screen with nothing behind it means "leave the app").
+                androidAdapter.exit();
+                return true;
             } else {
                 eventBus.emit('app:exitRequested');
             }

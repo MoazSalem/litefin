@@ -14,10 +14,22 @@
 *,
 *::before,
 *::after {
+    /* Standard box sizing model across all nested components */
     box-sizing: border-box;
+
+    /* Normalize default outer margins and inner padding */
     margin: 0;
     padding: 0;
+
+    /* Inherit global typography typeface */
     font-family: inherit;
+
+    /* Suppress outdated Android / WebKit tap highlight and inkwell box flashes on touch */
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+
+    /* Prevent mobile long-press holding callout overlays and magnifiers */
+    -webkit-touch-callout: none !important;
 }
 
 :root {
@@ -1455,12 +1467,12 @@ html[data-badge-style="dark"] .game-card-badge {
    ============================================================================ */
 
 /* 
- * By default on dedicated TV platforms (Tizen, webOS, Android TV) we hide 
+ * By default on dedicated TV platforms (Tizen, webOS) we hide 
  * the mouse cursor unless the Magic Remote (pointer mode) is active.
- * Desktop (Tauri/Electron) and Web platforms (mouse/trackpad users) must 
- * always show the cursor indicator without unwanted hiding.
+ * Desktop (Tauri/Electron), Web, and mobile/touch Android platforms must 
+ * keep cursor interaction active without unwanted hiding.
  */
-html:not([data-platform="web"]):not([data-platform="desktop"]) body:not(.webos-cursor-active) {
+html:not([data-platform="web"]):not([data-platform="desktop"]):not([data-platform="android"]) body:not(.webos-cursor-active) {
     cursor: none !important;
 }
 
