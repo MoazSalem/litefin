@@ -60,6 +60,18 @@ export class VirtualCardRow {
                         ? parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0
                         : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
 
+        // =====================================================================
+        // Portrait Mobile & Scaled Viewport Track Padding
+        // =====================================================================
+        // In portrait mode (phones & vertical tablets), side padding is reduced
+        // from 60px to 20px so that horizontal card rows align seamlessly with
+        // page typography, rich metadata, and content card margins above.
+        // =====================================================================
+        const isPortrait = document.documentElement.hasAttribute('data-litefin-portrait') ||
+            document.documentElement.hasAttribute('data-litefin-scaled') ||
+            (window.innerHeight > window.innerWidth);
+        const defaultSidePadding = isPortrait ? 20 : 60;
+
         if (isExpanded) {
             this.modernMultiplier = scale;
 
@@ -72,7 +84,7 @@ export class VirtualCardRow {
                 this.itemWidth = Math.round(396 * scale);
             }
             this.itemMargin = Math.round(26 * scale);
-            this.sidePadding = 60;
+            this.sidePadding = defaultSidePadding;
 
             // Inject CSS custom properties on the track container
             this.track.style.setProperty('--card-width', `${Math.round(396 * scale)}px`);
@@ -99,7 +111,7 @@ export class VirtualCardRow {
                 this.itemWidth = Math.round(212 * scale);
                 this.itemMargin = Math.round(26 * scale);
             }
-            this.sidePadding = 60;
+            this.sidePadding = defaultSidePadding;
 
             // Inject CSS custom properties on the track container
             this.track.style.setProperty('--card-width', `${Math.round(212 * scale)}px`);
@@ -126,7 +138,7 @@ export class VirtualCardRow {
                 this.itemWidth = Math.round(175.5 * scale); // 175.5px * 150% = 263.25px height
             }
             this.itemMargin = Math.round(31 * scale);
-            this.sidePadding = 60;
+            this.sidePadding = defaultSidePadding;
 
             // Inject CSS custom properties on the track container to update card styles dynamically
             this.track.style.setProperty('--card-width', `${Math.round(175.5 * scale)}px`);
@@ -138,7 +150,7 @@ export class VirtualCardRow {
         } else {
             this.itemWidth = Math.round((this.isLandscape ? 400 : 240) * scale);
             this.itemMargin = Math.round(24 * scale);
-            this.sidePadding = 60;
+            this.sidePadding = defaultSidePadding;
         }
 
         this.totalItemWidth = this.itemWidth + this.itemMargin;

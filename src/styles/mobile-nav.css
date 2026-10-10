@@ -101,7 +101,7 @@ html[data-litefin-portrait] .mobile-topbar:not(.hidden),
 
 /*
  * Back Button (Positioned to the immediate left of Litefin logo)
- * Modern Apple-style circular translucent button that appears whenever
+ * Circular translucent button that appears whenever
  * the user can navigate back in history or return from a sub-detail view.
  */
 .mobile-topbar-btn.mobile-topbar-back {

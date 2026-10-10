@@ -489,6 +489,11 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
     }
 }
 
+/* Action rows flex line-break spacer: suppressed on desktop, TV, and landscape */
+.mobile-action-break {
+    display: none;
+}
+
 /* ============================================================================
  * Portrait Mobile & Tablet Layout Rescue (Portrait Viewports Only)
  * ============================================================================
@@ -544,39 +549,260 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
         padding-right: 16px !important;
     }
 
-    html[data-litefin-scaled] .details-main-split {
-        /* Stack poster vertically above metadata in portrait */
+    /*
+     * ========================================================================
+     * Portrait Details Page Presentation (Hero Media Architecture)
+     * ========================================================================
+     * Stacks the hero artwork above metadata with cinematic proportion:
+     * - Vertical posters expand to 440px (~60% portrait canvas width).
+     * - Horizontal episode thumbnails expand prominently to 640px (92% canvas).
+     * - Generous vertical clearances: 12px below topbar, 30px above title.
+     * ========================================================================
+     */
+    html[data-litefin-scaled] .details-main-split,
+    html[data-litefin-portrait] .details-main-split {
+        /* Align poster centrally above typography in vertical viewports */
         flex-direction: column !important;
         align-items: center !important;
-        padding: 24px 16px 0 16px !important;
+        /* Padding cushions the split container against viewport edges */
+        padding: 16px 20px 0 20px !important;
     }
 
-    html[data-litefin-scaled] .hero-poster {
-        /* Center poster and constrain maximum width */
+    html[data-litefin-scaled] .hero-poster,
+    html[data-litefin-portrait] .hero-poster {
+        /* Centered heroic movie/series poster container */
         width: 100% !important;
-        max-width: 300px !important;
-        margin-right: 0 !important;
+        max-width: 440px !important;
+        /* Center artwork horizontally within portrait column */
+        margin-left: auto !important;
+        margin-right: auto !important;
+        /* Balanced vertical clearance above artwork and below towards title */
+        margin-top: 12px !important;
+        margin-bottom: 30px !important;
         height: auto !important;
         padding-bottom: 0 !important;
+        /* Preserve standard 2:3 vertical theatrical poster aspect ratio */
         aspect-ratio: 2 / 3 !important;
+        /* Continuous curved squircle corners */
+        border-radius: 20px !important;
+        overflow: hidden !important;
+        /* Ambient depth elevation shadow separating poster from background blur */
+        box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6) !important;
     }
 
-    html[data-litefin-scaled] .hero-poster.landscape {
+    html[data-litefin-scaled] .hero-poster.landscape,
+    html[data-litefin-portrait] .hero-poster.landscape {
+        /* Wide cinematic 16:9 thumbnail format for TV episodes & backdrops */
+        max-width: 640px !important;
+        width: 92% !important;
+        /* Standard 16:9 widescreen video aspect ratio (~360px portrait height) */
         aspect-ratio: 16 / 9 !important;
+        border-radius: 18px !important;
+        /* Spacing above episode thumbnail and below towards episode title */
+        margin-top: 10px !important;
+        margin-bottom: 30px !important;
     }
 
-    html[data-litefin-scaled] .hero-poster.square {
+    html[data-litefin-scaled] .hero-poster.square,
+    html[data-litefin-portrait] .hero-poster.square {
+        /* 1:1 Square artwork format for music albums and box sets */
+        max-width: 440px !important;
+        width: 62% !important;
         aspect-ratio: 1 / 1 !important;
+        border-radius: 20px !important;
+        margin-top: 12px !important;
+        margin-bottom: 30px !important;
     }
 
-    html[data-litefin-scaled] .details-info-col {
+    html[data-litefin-scaled] .hero-poster img,
+    html[data-litefin-portrait] .hero-poster img {
+        /* Ensure poster graphic scales smoothly to fill rounded container bounds */
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        border-radius: inherit !important;
+    }
+
+    html[data-litefin-scaled] .details-info-col,
+    html[data-litefin-portrait] .details-info-col {
         /* Metadata column takes full width under poster */
         width: 100% !important;
     }
 
-    html[data-litefin-scaled] .details-logo {
+    html[data-litefin-scaled] .details-logo,
+    html[data-litefin-portrait] .details-logo {
         /* Hide large logo image in portrait to preserve vertical screen space */
         display: none !important;
+    }
+
+    /*
+     * ========================================================================
+     * Portrait Action Buttons Layout & Sizing (Centered & 2 Uniform Rows)
+     * ========================================================================
+     * Enlarges circular buttons to 88px touch targets with 36px iconography.
+     * Centers action rows horizontally under typography and metadata badges.
+     * Uses .mobile-action-break to guarantee a perfect 50/50 uniform row split
+     * (e.g. 8 buttons split into 4 & 4, 9 buttons split into 5 & 4).
+     * ========================================================================
+     */
+    html[data-litefin-scaled] .details-actions,
+    html[data-litefin-portrait] .details-actions {
+        /* Centered flex row layout */
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: center !important;
+        /* Center container horizontally within metadata column */
+        margin-left: auto !important;
+        margin-right: auto !important;
+        /* Uniform horizontal and vertical spacing between buttons */
+        gap: 16px 16px !important;
+        width: 100% !important;
+        max-width: 620px !important;
+        /* Vertical clearance separating action rows from metadata chips and synopsis */
+        margin-top: 20px !important;
+        margin-bottom: 36px !important;
+        position: relative !important;
+    }
+
+    /* Flex line break marker dividing action buttons into two uniform rows */
+    html[data-litefin-scaled] .mobile-action-break,
+    html[data-litefin-portrait] .mobile-action-break {
+        display: block !important;
+        flex-basis: 100% !important;
+        width: 100% !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        pointer-events: none !important;
+    }
+
+    html[data-litefin-scaled] .details-actions > *,
+    html[data-litefin-portrait] .details-actions > * {
+        /* Clear legacy margin-right in favor of native CSS flex gap */
+        margin-right: 0 !important;
+        margin-left: 0 !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Enlarged touch target height across all action buttons (88px) */
+    html[data-litefin-scaled] .details-actions .btn,
+    html[data-litefin-portrait] .details-actions .btn,
+    html[data-litefin-scaled] .details-actions .btn-icon,
+    html[data-litefin-portrait] .details-actions .btn-icon {
+        height: 88px !important;
+        min-height: 88px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Circular action buttons (Reset, Ghost, Watched, Fav, Audio, Subs, More) */
+    html[data-litefin-scaled] .details-actions .btn-icon,
+    html[data-litefin-portrait] .details-actions .btn-icon,
+    html[data-litefin-scaled] .details-page:not(.tooltips-disabled) .details-actions .play-btn,
+    html[data-litefin-portrait] .details-page:not(.tooltips-disabled) .details-actions .play-btn {
+        width: 88px !important;
+        height: 88px !important;
+        min-width: 88px !important;
+        min-height: 88px !important;
+        border-radius: 50% !important;
+    }
+
+    /* Enlarged SVG icon geometry inside circular buttons (36px) */
+    html[data-litefin-scaled] .details-actions .btn-icon svg,
+    html[data-litefin-portrait] .details-actions .btn-icon svg,
+    html[data-litefin-scaled] .details-page:not(.tooltips-disabled) .details-actions .play-btn svg,
+    html[data-litefin-portrait] .details-page:not(.tooltips-disabled) .details-actions .play-btn svg {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+    }
+
+    /* Primary Resume pill button with progress time badge */
+    html[data-litefin-scaled] .details-actions .resume-btn,
+    html[data-litefin-portrait] .details-actions .resume-btn {
+        height: 88px !important;
+        min-height: 88px !important;
+        padding: 0 30px !important;
+        border-radius: 44px !important;
+        font-size: 1.55rem !important;
+    }
+
+    html[data-litefin-scaled] .details-actions .resume-btn svg,
+    html[data-litefin-portrait] .details-actions .resume-btn svg {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+        margin-right: 12px !important;
+    }
+
+    /* Primary Play pill button when tooltips mode is disabled */
+    html[data-litefin-scaled] .details-page.tooltips-disabled .details-actions .play-btn,
+    html[data-litefin-portrait] .details-page.tooltips-disabled .details-actions .play-btn {
+        height: 88px !important;
+        min-height: 88px !important;
+        padding: 0 34px !important;
+        border-radius: 44px !important;
+        font-size: 1.55rem !important;
+    }
+
+    html[data-litefin-scaled] .details-page.tooltips-disabled .details-actions .play-btn svg,
+    html[data-litefin-portrait] .details-page.tooltips-disabled .details-actions .play-btn svg {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+        margin-right: 12px !important;
+    }
+
+    /*
+     * ========================================================================
+     * Portrait Rich Metadata & Media Rows Alignment (Unified 20px Grid Axis)
+     * ========================================================================
+     * Dials down the legacy 60px desktop side margins across rich metadata chips
+     * and horizontal media row headings in portrait mode to 20px, creating
+     * unbroken vertical alignment with the overview synopsis and details card above.
+     * ========================================================================
+     */
+    html[data-litefin-scaled] .details-rich-meta,
+    html[data-litefin-portrait] .details-rich-meta {
+        /* Align rich metadata flush with 20px details synopsis margins */
+        margin: 10px 20px 32px 20px !important;
+        padding: 0 !important;
+    }
+
+    html[data-litefin-scaled] .row-title,
+    html[data-litefin-portrait] .row-title,
+    html[data-litefin-scaled] .songs-title,
+    html[data-litefin-portrait] .songs-title,
+    html[data-litefin-scaled] #playlist-items-title,
+    html[data-litefin-portrait] #playlist-items-title {
+        /* Align section row titles with 20px page side padding */
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+    }
+
+    html[data-litefin-scaled] .see-more-container,
+    html[data-litefin-portrait] .see-more-container {
+        /* Compact see-more button margins in portrait */
+        padding: 16px 20px 24px 20px !important;
+    }
+
+    html[data-litefin-scaled] .person-grid,
+    html[data-litefin-portrait] .person-grid {
+        /* Align person credits grid with 20px side padding */
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+    }
+
+    html[data-litefin-scaled] .media-row--skeleton .row-items-track,
+    html[data-litefin-portrait] .media-row--skeleton .row-items-track {
+        /* Skeleton track padding in portrait mode */
+        padding-left: 20px !important;
+        padding-right: 20px !important;
     }
 
     /*
@@ -1128,7 +1354,7 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
     html[data-litefin-portrait] .settings-page .setting-item,
     .settings-page.mobile-portrait .setting-item {
         /*
-         * Horizontal Apple HIG Row Layout:
+         * Horizontal Setting Row Layout:
          * Places labels and descriptions on the left, while toggles, dropdown buttons,
          * and options align cleanly to the right side, just like in landscape mode.
          */
@@ -1288,7 +1514,7 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
 
     /* ------------------------------------------------------------------------
      * Modal Dialogs Sizing in Mobile Portrait Viewport
-     * Generous width and height with modern Apple HIG rounded sheet styling
+     * Generous width and height with modern rounded sheet styling
      * ------------------------------------------------------------------------ */
     html[data-litefin-scaled] .settings-modal,
     html[data-litefin-portrait] .settings-modal,

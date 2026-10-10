@@ -3505,6 +3505,8 @@ class DetailsPage extends Page {
                 ? document.activeElement
                 : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
             this._onFocusChangedForTooltip?.(activeActionsBtn);
+            // Balance action buttons evenly across 2 rows for mobile portrait orientation
+            this._balanceMobileActionRows();
         });
     }
 
@@ -6373,6 +6375,8 @@ class DetailsPage extends Page {
 
             // Let FocusManager know there is a new element in this section
             focusManager.invalidateCache('details-actions');
+            // Re-evaluate mobile portrait 2-row balancing with the new trailer button
+            this._balanceMobileActionRows();
 
             log.debug(
                 `Trailer button visible — local: ${this._hasLocalTrailers}, remote: ${this._hasRemoteTrailers} (Fallback: ${this._isProxyFallback})`
@@ -6479,6 +6483,8 @@ class DetailsPage extends Page {
 
         // Invalidate spatial navigation cache so focus immediately recognizes available buttons
         focusManager.invalidateCache('details-actions');
+        // Re-evaluate mobile portrait 2-row balancing with adjacent episode navigation
+        this._balanceMobileActionRows();
     }
 
     /**
@@ -6768,6 +6774,8 @@ class DetailsPage extends Page {
 
         // Refresh focus cache so FocusManager sees the newly mounted button
         focusManager.invalidateCache('details-actions');
+        // Re-evaluate mobile portrait 2-row balancing with mounted favorite button
+        this._balanceMobileActionRows();
     }
 
     async _toggleWatched() {
@@ -6883,6 +6891,35 @@ class DetailsPage extends Page {
         } catch (error) {
             log.error('Failed to reset progress', error);
         }
+    }
+
+    /**
+     * Balances action buttons evenly across exactly 2 rows in mobile portrait orientation.
+     * Evaluates all visible action buttons inside the action bar and dynamically injects
+     * a .mobile-action-break element at Math.ceil(total / 2) so that:
+     * - 8 buttons split into exactly 4 and 4
+     * - 9 buttons split into 5 and 4
+     * - 7 buttons split into 4 and 3
+     * - 6 buttons split into 3 and 3
+     * On desktop/TV/landscape viewports, CSS suppresses the break with display: none.
+     */
+    _balanceMobileActionRows() {
+        const actionsContainer = this.$('#actions');
+        if (!actionsContainer) return;
+
+        // Clean up any previously inserted break elements
+        const existingBreaks = actionsContainer.querySelectorAll('.mobile-action-break');
+        existingBreaks.forEach((b) => b.remove());
+
+        // Select all currently visible button elements
+        const visibleBtns = Array.from(actionsContainer.querySelectorAll('button:not(.hidden)'));
+        if (visibleBtns.length < 4) return;
+
+        // Calculate the halfway mark to divide items into two uniform rows
+        const splitIndex = Math.ceil(visibleBtns.length / 2);
+        const breakEl = document.createElement('div');
+        breakEl.className = 'mobile-action-break';
+        visibleBtns[splitIndex - 1].after(breakEl);
     }
 
     destroy() {
