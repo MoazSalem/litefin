@@ -104,11 +104,22 @@ export class MobileNav extends Component {
                 <!-- Mobile Top Navigation Bar                                 -->
                 <!-- ========================================================= -->
                 <header class="mobile-topbar" id="mobile-topbar">
-                    <div class="mobile-topbar-left" id="mobile-topbar-logo" role="button" tabindex="0">
-                        <div class="mobile-topbar-logo-icon">
-                            <img src="assets/icon-130.png" class="mobile-topbar-logo-img" alt="Litefin" />
+                    <div class="mobile-topbar-left">
+                        <!-- Back button to the left of Litefin brand (revealed when backward navigation is available) -->
+                        <button class="mobile-topbar-btn mobile-topbar-back hidden" id="mobile-topbar-back" aria-label="${i18n.t('Back') || 'Back'}" tabindex="0">
+                            <div class="mobile-topbar-icon-wrap">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M15 18l-6-6 6-6"/>
+                                </svg>
+                            </div>
+                        </button>
+
+                        <div class="mobile-topbar-logo-wrap" id="mobile-topbar-logo" role="button" tabindex="0">
+                            <div class="mobile-topbar-logo-icon">
+                                <img src="assets/icon-130.png" class="mobile-topbar-logo-img" alt="Litefin" />
+                            </div>
+                            <span class="mobile-topbar-brand">Litefin</span>
                         </div>
-                        <span class="mobile-topbar-brand">Litefin</span>
                     </div>
 
                     <div class="mobile-topbar-right">
@@ -298,6 +309,30 @@ export class MobileNav extends Component {
      */
     _bindEvents() {
         // ── Top Bar Handlers ────────────────────────────────────────────────
+        const backBtn = this.$('#mobile-topbar-back');
+        if (backBtn) {
+            backBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // If active page has an onBack hook (e.g. SettingsPage closing tab detail), delegate first
+                const currentPage = router.getCurrentPage();
+                if (currentPage && typeof currentPage.onBack === 'function') {
+                    const handled = currentPage.onBack();
+                    if (handled) {
+                        this._updateBackState();
+                        return;
+                    }
+                }
+
+                if (router.canGoBack()) {
+                    router.back();
+                } else {
+                    router.reset('/home');
+                }
+            });
+        }
+
         const logoBtn = this.$('#mobile-topbar-logo');
         if (logoBtn) {
             logoBtn.addEventListener('click', (e) => {
@@ -512,6 +547,12 @@ export class MobileNav extends Component {
         };
         eventBus.on('pref:bottomNavBarColor', this._boundHandlers.onNavColorChanged);
         eventBus.on('pref:collapsedSidebarColor', this._boundHandlers.onNavColorChanged);
+        // Detail screen state changes (e.g. entering/exiting settings tab details)
+        this._boundHandlers.onDetailStateChange = () => {
+            this._updateBackState();
+        };
+        eventBus.on('mobile:detail-state-change', this._boundHandlers.onDetailStateChange);
+
         eventBus.on('themeMode:changed', this._boundHandlers.onNavColorChanged);
         eventBus.on('themeColor:changed', this._boundHandlers.onNavColorChanged);
     }
@@ -537,6 +578,10 @@ export class MobileNav extends Component {
             eventBus.off('pref:collapsedSidebarColor', this._boundHandlers.onNavColorChanged);
             eventBus.off('themeMode:changed', this._boundHandlers.onNavColorChanged);
             eventBus.off('themeColor:changed', this._boundHandlers.onNavColorChanged);
+        }
+
+        if (this._boundHandlers.onDetailStateChange) {
+            eventBus.off('mobile:detail-state-change', this._boundHandlers.onDetailStateChange);
         }
 
         if (this._clockInterval) clearInterval(this._clockInterval);
@@ -626,13 +671,43 @@ export class MobileNav extends Component {
         navbar.classList.toggle('hidden', !showNavbar);
         document.body.classList.toggle('mobile-navbar-visible', showNavbar);
 
-        // Top bar is explicitly hidden on Settings and Details pages, as well as fullscreen routes
-        const isSettings = path.startsWith('/settings');
-        const isDetails = path.startsWith('/details') || path.startsWith('/seerr/');
-        const showTopbar = !isFullScreenRoute && !isSettings && !isDetails;
+        // Top bar is visible on all portrait pages except full-screen routes (now including Settings and Details)
+        const showTopbar = !isFullScreenRoute;
 
         topbar.classList.toggle('hidden', !showTopbar);
         document.body.classList.toggle('mobile-topbar-visible', showTopbar);
+
+        // Synchronize back button state whenever topbar visibility or route updates
+        this._updateBackState();
+    }
+
+    /**
+     * Determines whether the back button on the mobile topbar should be visible.
+     * Evaluates active route, history depth, and sub-view states (such as Settings tab detail).
+     * @private
+     */
+    _updateBackState() {
+        const backBtn = this.$('#mobile-topbar-back');
+        if (!backBtn) return;
+
+        const path = this._currentPath || '';
+
+        // Never display back button on the primary root home page
+        if (path === '/home' || path === '' || path === '/') {
+            backBtn.classList.add('hidden');
+            return;
+        }
+
+        // Always display back button when drilled into a Settings tab detail in mobile portrait
+        const currentPage = router.getCurrentPage();
+        if (currentPage && currentPage._mobileDetailOpen) {
+            backBtn.classList.remove('hidden');
+            return;
+        }
+
+        // For all secondary pages (details, search, favorites, settings root, etc.), show back button
+        const canBack = router.canGoBack() || (path !== '/home' && path !== '/');
+        backBtn.classList.toggle('hidden', !canBack);
     }
 
     /**

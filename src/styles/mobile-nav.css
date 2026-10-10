@@ -87,15 +87,65 @@ html[data-litefin-portrait] .mobile-topbar:not(.hidden),
     display: none !important;
 }
 
-/* Brand logo and title container */
+/* Brand logo, back button, and title container */
 .mobile-topbar-left {
     display: flex;
     align-items: center;
-    gap: 16px;
-    cursor: pointer;
+    gap: 12px;
     background: transparent;
     border: none;
     padding: 8px 0;
+    outline: none;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+/*
+ * Back Button (Positioned to the immediate left of Litefin logo)
+ * Modern Apple-style circular translucent button that appears whenever
+ * the user can navigate back in history or return from a sub-detail view.
+ */
+.mobile-topbar-btn.mobile-topbar-back {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 60px !important;
+    height: 60px !important;
+    min-width: 60px !important;
+    min-height: 60px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.16) !important;
+    color: #ffffff !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
+    margin-right: 6px !important;
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.15s ease !important;
+}
+
+.mobile-topbar-btn.mobile-topbar-back:active {
+    transform: scale(0.9) !important;
+    background: rgba(255, 255, 255, 0.25) !important;
+}
+
+.mobile-topbar-btn.mobile-topbar-back svg {
+    width: 32px !important;
+    height: 32px !important;
+    stroke: currentColor !important;
+    stroke-width: 3px !important;
+}
+
+.mobile-topbar-btn.mobile-topbar-back.hidden {
+    display: none !important;
+}
+
+.mobile-topbar-logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
     outline: none;
     -webkit-tap-highlight-color: transparent !important;
 }
@@ -361,10 +411,10 @@ html[data-litefin-portrait] .mobile-navbar:not(.hidden),
     transform: scale(0.92);
 }
 
-/* Inactive items: clean icon-only circular touch targets */
+/* Inactive items: clean icon-only circular touch targets with enlarged icons */
 .mobile-nav-item:not(.active) {
-    width: 60px;
-    height: 60px;
+    width: 66px;
+    height: 66px;
     border-radius: 50%;
     flex-shrink: 0;
 }
@@ -374,23 +424,23 @@ html[data-litefin-portrait] .mobile-navbar:not(.hidden),
 }
 
 .mobile-nav-item:not(.active) .mobile-nav-icon {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
     margin: 0;
 }
 
 .mobile-nav-item:not(.active) .mobile-nav-icon svg {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
 }
 
-/* Active item: pill focus container enclosing icon on left and label on right */
+/* Active item: pill focus container enclosing enlarged icon on left and label on right */
 .mobile-nav-item.active {
     background: rgba(255, 255, 255, 0.15) !important;
     color: #ffffff !important;
     border-radius: 9999px !important;
-    padding: 0 24px !important;
-    height: 62px;
+    padding: 0 26px !important;
+    height: 66px;
     flex-shrink: 0;
     display: inline-flex;
     flex-direction: row;
@@ -399,8 +449,8 @@ html[data-litefin-portrait] .mobile-navbar:not(.hidden),
 }
 
 .mobile-nav-item.active .mobile-nav-icon {
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
     margin: 0;
     margin-right: 12px;
     display: flex;
@@ -409,14 +459,14 @@ html[data-litefin-portrait] .mobile-navbar:not(.hidden),
 }
 
 .mobile-nav-item.active .mobile-nav-icon svg {
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
     color: #ffffff;
 }
 
 .mobile-nav-item.active .mobile-nav-label {
     display: inline-block !important;
-    font-size: 1.35rem;
+    font-size: 1.45rem;
     font-weight: 600;
     color: #ffffff;
     letter-spacing: -0.2px;
@@ -736,14 +786,38 @@ body.mobile-navbar-visible .page-content {
     padding-bottom: calc(144px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
-/* On secondary pages, provide top spacing so content doesn't sit under floating buttons */
+/*
+ * Secondary, Details, and Search Pages Top Clearance
+ * When the floating mobile topbar is present, push the scrollable content canvas
+ * downward so header media and action buttons remain fully visible and unobstructed.
+ */
 body.mobile-topbar-visible .library-page .page-content,
 body.mobile-topbar-visible .favorites-page .page-content,
-body.mobile-topbar-visible .search-page .page-content {
+body.mobile-topbar-visible .search-page .page-content,
+body.mobile-topbar-visible .details-page .page-content,
+body.mobile-topbar-visible .seerr-details-page .page-content,
+body.mobile-topbar-visible .person-page .page-content {
+    /* 130px padding provides a comfortable buffer below the 120px fixed header */
     padding-top: 130px !important;
 }
 
-/* When topbar is hidden (Settings, Details), remove extra padding */
+/*
+ * Settings Page Layout Adjustments Under Mobile Topbar
+ * Ensure the portrait category selection screen and the drilled-down tab detail screen
+ * both cleanly clear the floating mobile header and maintain proper sticky offsets.
+ */
+body.mobile-topbar-visible .settings-page .settings-sidebar-header {
+    /* Screen 1: Push category header down so "Settings" title sits below brand header */
+    padding-top: calc(145px + env(safe-area-inset-top, 0px)) !important;
+}
+
+body.mobile-topbar-visible .settings-page .settings-content-panel {
+    /* Screen 2: Push detail panel canvas down so options scroll underneath cleanly */
+    padding-top: calc(145px + env(safe-area-inset-top, 0px)) !important;
+}
+
+/* When topbar is hidden, remove extra padding */
 body:not(.mobile-topbar-visible) #page-container {
     padding-top: 0 !important;
 }
+

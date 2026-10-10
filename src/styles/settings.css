@@ -49,6 +49,29 @@
     letter-spacing: -0.5px;
 }
 
+/*
+ * Baseline Hidden Elements (Desktop / TV / Landscape Viewports)
+ * In landscape and large screen layouts, the settings interface retains its classic
+ * 2-column split-view presentation. Subtitles, category card descriptions, chevrons,
+ * and mobile navigation headers are strictly suppressed outside portrait mode.
+ */
+.settings-sidebar-subtitle,
+.settings-menu-btn .menu-desc,
+.settings-menu-btn .menu-chevron,
+.settings-bottom-spacer {
+    display: none !important;
+}
+
+.settings-menu-btn .menu-text-wrap {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.settings-tab-body {
+    width: 100%;
+}
+
 .settings-menu-btn {
     display: flex;
     align-items: center;

@@ -1559,30 +1559,49 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
 html[data-litefin-scaled] .settings-modal,
 html[data-litefin-touch] .settings-modal,
 html[data-litefin-scaled] .player-media-info-modal,
-html[data-litefin-touch] .player-media-info-modal {
-    width: 92vw !important;
-    max-width: 520px !important;
-    max-height: 86vh !important;
-    border-radius: var(--jf-border-radius-lg, 12px) !important;
+html[data-litefin-touch] .player-media-info-modal,
+html[data-litefin-scaled] .fav-languages-modal,
+html[data-litefin-touch] .fav-languages-modal {
+    /*
+     * Full width with clean side margins across both standard and CSS-zoomed viewports.
+     * Uses percentage and calc relative to overlay container rather than vw units,
+     * ensuring proper expansive width even when documentElement zoom scaling is active.
+     */
+    width: calc(100% - 40px) !important;
+    max-width: calc(100% - 40px) !important;
+    min-width: 0 !important;
+    max-height: 88vh !important;
+    max-height: calc(100% - 100px) !important;
+    border-radius: 24px !important;
     box-sizing: border-box !important;
 }
 
 html[data-litefin-scaled] .settings-modal .modal-header,
 html[data-litefin-touch] .settings-modal .modal-header {
-    padding: 10px 16px !important;
+    padding: 18px 22px 10px 22px !important;
 }
 
 html[data-litefin-scaled] .settings-modal .modal-header h2,
 html[data-litefin-touch] .settings-modal .modal-header h2 {
-    font-size: 1.15rem !important;
-    padding: 6px 0 !important;
+    font-size: 1.45rem !important;
+    font-weight: 700 !important;
+    padding: 4px 0 !important;
 }
 
 html[data-litefin-scaled] .settings-modal .modal-options,
 html[data-litefin-touch] .settings-modal .modal-options {
-    padding: 8px 12px !important;
-    max-height: calc(86vh - 72px) !important;
+    padding: 10px 18px !important;
+    max-height: calc(88vh - 140px) !important;
     box-sizing: border-box !important;
+}
+
+html[data-litefin-scaled] .settings-modal .modal-option-btn,
+html[data-litefin-touch] .settings-modal .modal-option-btn {
+    min-height: 60px !important;
+    padding: 14px 20px !important;
+    margin-bottom: 8px !important;
+    font-size: 1.25rem !important;
+    border-radius: 14px !important;
 }
 
 .player-media-info-modal .media-info-scrollable:focus {
@@ -2195,7 +2214,7 @@ html[data-layout-quirks="c26"] .media-fallback {
 /* Favorite Languages Management Modal Container */
 .fav-languages-modal {
     max-width: 720px;
-    width: 90vw;
+    width: calc(100% - 40px);
     background: #1a1a1a;
     border: 1px solid #333333;
 }
@@ -2231,7 +2250,8 @@ html[data-layout-quirks="c26"] .media-fallback {
 
 /* Scrollable Full Language List */
 .fav-lang-list {
-    max-height: 440px;
+    max-height: 560px;
+    max-height: calc(88vh - 200px);
     overflow-y: auto;
 }
 
