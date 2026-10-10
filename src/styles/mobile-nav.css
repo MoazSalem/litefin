@@ -61,7 +61,8 @@ html[data-litefin-portrait] .global-clock,
     padding-top: env(safe-area-inset-top, 0px);
     padding-left: 28px;
     padding-right: 28px;
-    background: transparent !important;
+    /* Subtle 50% black to 0 (transparent) gradient dissolving down the header */
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%) !important;
     border-bottom: none !important;
     box-shadow: none !important;
     z-index: 250;
@@ -179,7 +180,7 @@ html[data-litefin-portrait] .mobile-topbar:not(.hidden),
     height: 34px;
 }
 
-/* Search Icon Outline vs Filled Variant Switching */
+/* Search, Favorites, and Action Icon Outline vs Filled Variant Switching */
 .mobile-topbar-icon-wrap .icon-outline {
     display: block !important;
 }
@@ -216,16 +217,40 @@ html[data-litefin-portrait] .mobile-topbar:not(.hidden),
 }
 
 .mobile-topbar-avatar svg {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     color: #ffffff;
+}
+
+/* ============================================================================
+ * User Avatar Outline vs Filled Switching (When User Has No Profile Photo)
+ * ============================================================================
+ * When no custom avatar image exists, switches between outlined and filled
+ * states based on whether the profiles screen is active or the button is pressed.
+ */
+.mobile-topbar-avatar .icon-outline {
+    display: block !important;
+}
+
+.mobile-topbar-avatar .icon-filled {
+    display: none !important;
+}
+
+.mobile-topbar-user.active .mobile-topbar-avatar .icon-outline,
+.mobile-topbar-user:active .mobile-topbar-avatar .icon-outline {
+    display: none !important;
+}
+
+.mobile-topbar-user.active .mobile-topbar-avatar .icon-filled,
+.mobile-topbar-user:active .mobile-topbar-avatar .icon-filled {
+    display: block !important;
 }
 
 /* ============================================================================
  * 3. Mobile Bottom Navigation Bar
  * ============================================================================
  * Fixed tab bar anchored along the screen bottom.
- * Sized generously for scaled portrait viewports without outdated inkwells.
+ * Generously sized for scaled portrait mobile viewports.
  */
 .mobile-navbar {
     display: none;
@@ -236,16 +261,56 @@ html[data-litefin-portrait] .mobile-topbar:not(.hidden),
     height: 124px;
     height: calc(124px + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: #111115;
+    /* Base fallback background matching active theme */
+    background: var(--jf-sidebar-bg, #111115);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: none;
     z-index: 250;
     align-items: center;
     justify-content: space-around;
+    padding-left: 16px;
+    padding-right: 16px;
     box-sizing: border-box;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent !important;
+}
+
+/* ============================================================================
+ * Bottom Navbar Background Customization Modes
+ * ============================================================================
+ * Supports identical background customization options as the sidebar:
+ * - Follow Theme: Uses the theme's configured sidebar background color
+ * - Black: Pure black (#000000) for OLED panels
+ * - Semi-transparent: Clean darkened translucent backdrop without blur
+ * - Tinted Semi-transparent: Accent-tinted dark translucent backdrop
+ * - Transparent: Fully transparent backdrop without border
+ * ============================================================================
+ */
+.mobile-navbar.bg-theme,
+.mobile-navbar:not([class*="bg-"]) {
+    background: var(--jf-sidebar-bg, #111115) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.mobile-navbar.bg-black {
+    background: #000000 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.mobile-navbar.bg-semi {
+    background: rgba(16, 16, 16, 0.6) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.mobile-navbar.bg-tinted-semi {
+    background: rgba(var(--jf-accent-dark-rgb, 15, 15, 20), 0.85) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.mobile-navbar.bg-transparent {
+    background: transparent !important;
+    border-top: none !important;
 }
 
 html[data-litefin-portrait] .mobile-navbar:not(.hidden),
@@ -261,68 +326,102 @@ html[data-litefin-portrait] .mobile-navbar:not(.hidden),
     display: none !important;
 }
 
-/* Individual tab button with clean tactile press instead of rectangular inkwell */
+/* ============================================================================
+ * Navigation Item Styling (Active Pill Focus & Icon-Only Inactive Items)
+ * ============================================================================
+ * The active item expands into a horizontal pill with the icon on the left
+ * and label on the right. Inactive items display strictly the icon.
+ */
 .mobile-nav-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
     border: none;
     background: transparent !important;
-    color: rgba(255, 255, 255, 0.55);
-    padding: 8px 4px;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 0;
     cursor: pointer;
     outline: none !important;
     box-shadow: none !important;
     -webkit-tap-highlight-color: transparent !important;
-    transition: color 0.15s ease;
+    transition: background 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                color 0.18s ease,
+                padding 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .mobile-nav-item:focus,
-.mobile-nav-item:focus-visible,
-.mobile-nav-item:active {
+.mobile-nav-item:focus-visible {
     background: transparent !important;
     outline: none !important;
     box-shadow: none !important;
 }
 
-.mobile-nav-item:active .mobile-nav-icon {
-    transform: scale(0.88);
+.mobile-nav-item:active {
+    transform: scale(0.92);
 }
 
+/* Inactive items: clean icon-only circular touch targets */
+.mobile-nav-item:not(.active) {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.mobile-nav-item:not(.active) .mobile-nav-label {
+    display: none !important;
+}
+
+.mobile-nav-item:not(.active) .mobile-nav-icon {
+    width: 34px;
+    height: 34px;
+    margin: 0;
+}
+
+.mobile-nav-item:not(.active) .mobile-nav-icon svg {
+    width: 34px;
+    height: 34px;
+}
+
+/* Active item: pill focus container enclosing icon on left and label on right */
 .mobile-nav-item.active {
-    color: var(--theme-color, #6b6ede);
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+    border-radius: 9999px !important;
+    padding: 0 24px !important;
+    height: 62px;
+    flex-shrink: 0;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
 }
 
-.mobile-nav-icon {
-    width: 50px;
-    height: 50px;
+.mobile-nav-item.active .mobile-nav-icon {
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    margin-right: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 4px;
-    position: relative;
-    transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.mobile-nav-icon svg {
-    width: 44px;
-    height: 44px;
-}
-
-.mobile-nav-label {
-    font-size: 1.25rem;
-    font-weight: 500;
-    line-height: 1.1;
-    letter-spacing: 0.2px;
-    text-align: center;
-    white-space: nowrap;
+.mobile-nav-item.active .mobile-nav-icon svg {
+    width: 32px;
+    height: 32px;
+    color: #ffffff;
 }
 
 .mobile-nav-item.active .mobile-nav-label {
-    font-weight: 700;
+    display: inline-block !important;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #ffffff;
+    letter-spacing: -0.2px;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 /* ============================================================================
@@ -619,16 +718,22 @@ html[data-litefin-portrait] .mobile-navbar:not(.hidden),
 /* ============================================================================
  * 7. Screen Padding & Content Offsets in Mobile Portrait
  * ============================================================================
- * Adjusts page body containers to make room for fixed top bar and bottom navbar.
+ * Allows the page container and content to extend all the way to the screen
+ * bottom so that content scrolls seamlessly underneath the fixed bottom navbar.
+ * This ensures translucent and transparent navbar backgrounds display content
+ * behind them rather than an empty void.
  */
 body.mobile-navbar-visible #page-container {
-    padding-bottom: 124px !important;
-    padding-bottom: calc(124px + env(safe-area-inset-bottom, 0px)) !important;
+    /* Allow page container to reach bottom edge without clipping */
+    padding-bottom: 0 !important;
 }
 
-/* Ensure bottom-most page rows don't get covered by navbar */
+/* Ensure bottom-most page rows don't get covered by navbar at maximum scroll */
 body.mobile-navbar-visible .page-content {
+    /* Generous bottom padding inside the scrollable content container so the
+     * final row of cards/items can clear the bottom navbar completely */
     padding-bottom: 144px !important;
+    padding-bottom: calc(144px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 /* On secondary pages, provide top spacing so content doesn't sit under floating buttons */

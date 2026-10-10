@@ -609,25 +609,101 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
         display: none !important;
     }
 
-    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-carousel {
+    /*
+     * ========================================================================
+     * Portrait Home Carousel Sizing (Recalibrated 120% Vertical Bound)
+     * ========================================================================
+     * Adjusts the home carousel height to 120% (1.2x) in portrait mode, giving
+     * the title, metadata badges, overview synopsis, and progress dots ideal
+     * breathing room without pushing media rows too far down the display.
+     * ========================================================================
+     */
+    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-carousel,
+    html[data-litefin-portrait] .hero-carousel-container.immersive .hero-carousel {
         /* Hero container height in portrait */
         height: var(--litefin-app-h, 90vh) !important;
         min-height: var(--litefin-app-h, 650px) !important;
     }
 
-    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-item {
-        /* Item bottom padding */
-        padding-bottom: 1158px !important;
+    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-item,
+    html[data-litefin-portrait] .hero-carousel-container.immersive .hero-item {
+        /* Recalibrated item bottom padding for 1.2x longer carousel content */
+        padding-bottom: 997px !important;
     }
 
-    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-indicators {
-        /* Position carousel indicators */
-        bottom: 1105px !important;
+    html[data-litefin-scaled] .hero-carousel-container.immersive .hero-indicators,
+    html[data-litefin-portrait] .hero-carousel-container.immersive .hero-indicators {
+        /* Position carousel indicators cleanly below description and above rows */
+        bottom: 944px !important;
     }
 
-    html[data-litefin-scaled] #home-hero-placeholder.style-immersive + .home-rows {
-        /* Pull media rows up into hero background */
-        margin-top: -1117px !important;
+    html[data-litefin-scaled] #home-hero-placeholder.style-immersive + .home-rows,
+    html[data-litefin-portrait] #home-hero-placeholder.style-immersive + .home-rows {
+        /* Overlap media rows right below the 1.2x extended carousel */
+        margin-top: -956px !important;
+    }
+
+    /*
+     * ========================================================================
+     * Home Carousel Background Sizing (Recalibrated for 1.2x Carousel)
+     * ========================================================================
+     * Scales the background backdrop image and its gradient blend layers to
+     * proportionally match the 20% taller carousel (60% portrait height),
+     * ensuring artwork blankets the slide before fading smoothly into rows.
+     * ========================================================================
+     */
+    html[data-litefin-scaled] .hero-carousel-container .hero-backdrop,
+    html[data-litefin-portrait] .hero-carousel-container .hero-backdrop {
+        /* Restrict backdrop artwork height to cover the 1.2x carousel */
+        height: calc(var(--litefin-app-h, 100vh) * 0.60) !important;
+        max-height: 60vh !important;
+    }
+
+    /*
+     * Redundant Text Shadow Vignette Layer (::before):
+     * The radial/horizontal text shadow vignette is unnecessary on mobile builds
+     * because the text container already provides dedicated contrast backing.
+     * Removing this overlay reveals clean, unoccluded backdrop artwork.
+     */
+    html[data-litefin-scaled] .hero-carousel-container .hero-item::before,
+    html[data-litefin-portrait] .hero-carousel-container .hero-item::before,
+    [data-platform="android"] .hero-carousel-container .hero-item::before {
+        display: none !important;
+        background: none !important;
+    }
+
+    html[data-litefin-scaled] .hero-carousel-container .hero-item::after,
+    html[data-litefin-portrait] .hero-carousel-container .hero-item::after {
+        /* Match bottom gradient blend precisely to the 60% boundary */
+        height: calc(var(--litefin-app-h, 100vh) * 0.60) !important;
+        max-height: 60vh !important;
+        /* Smooth, seamless fade from transparent artwork into solid background */
+        background: linear-gradient(
+            to bottom,
+            transparent 0%,
+            transparent 35%,
+            rgba(0, 0, 0, 0.40) 65%,
+            rgba(0, 0, 0, 0.85) 85%,
+            var(--jf-background, #000000) 100%
+        ) !important;
+    }
+
+    /*
+     * ========================================================================
+     * Ambient Glow Theme Mask Treatment (Recalibrated for 1.2x Carousel)
+     * ========================================================================
+     * In Ambient Glow mode, hero backdrop fade uses CSS alpha masking on .hero-item
+     * so the colorful ambient background mesh on <body> bleeds through seamlessly.
+     * Transition into complete transparency at 60% portrait height.
+     * ========================================================================
+     */
+    html[data-litefin-scaled][data-theme-mode="ambient"] .hero-carousel-container .hero-item,
+    html[data-litefin-portrait][data-theme-mode="ambient"] .hero-carousel-container .hero-item,
+    [data-theme-mode="ambient"] html[data-litefin-scaled] .hero-carousel-container .hero-item,
+    [data-theme-mode="ambient"] html[data-litefin-portrait] .hero-carousel-container .hero-item {
+        /* Alpha mask transition to pure transparent at 60% portrait height */
+        -webkit-mask-image: linear-gradient(to bottom, black 25%, transparent 60%) !important;
+        mask-image: linear-gradient(to bottom, black 25%, transparent 60%) !important;
     }
 
     html[data-litefin-scaled] .livetv-page .ltv-tab-header {
@@ -1071,5 +1147,47 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
         padding-left: 12px !important;
         padding-right: 12px !important;
         box-sizing: border-box !important;
+    }
+}
+
+/* ============================================================================
+ * Mobile Loading Indicator Sizing
+ * ============================================================================
+ * Scales up the loading indicator for mobile portrait screens and touch devices
+ * so that it is noticeably larger, crisp, and comfortable to view.
+ * Applies zoom: 1.38 to scale all 12 loader animations and their pseudo-elements
+ * proportionately without overriding GPU keyframe rotation transforms.
+ * ============================================================================
+ */
+html[data-litefin-scaled] .page-loading .loading-spinner,
+html[data-litefin-scaled] .page.loading .loading-spinner,
+html[data-litefin-scaled] #app-splash .loading-spinner,
+html[data-litefin-scaled] .loading-section .loading-spinner,
+html[data-litefin-scaled] .search-loading .loading-spinner,
+html[data-litefin-touch] .page-loading .loading-spinner,
+html[data-litefin-touch] .page.loading .loading-spinner,
+html[data-litefin-touch] #app-splash .loading-spinner,
+html[data-litefin-touch] .loading-section .loading-spinner,
+html[data-litefin-touch] .search-loading .loading-spinner,
+[data-platform="android"] .page-loading .loading-spinner,
+[data-platform="android"] .page.loading .loading-spinner,
+[data-platform="android"] #app-splash .loading-spinner,
+[data-platform="android"] .loading-section .loading-spinner,
+[data-platform="android"] .search-loading .loading-spinner,
+html[data-litefin-portrait] .page-loading .loading-spinner,
+html[data-litefin-portrait] .page.loading .loading-spinner,
+html[data-litefin-portrait] #app-splash .loading-spinner,
+html[data-litefin-portrait] .loading-section .loading-spinner,
+html[data-litefin-portrait] .search-loading .loading-spinner {
+    zoom: 1.38 !important;
+}
+
+@media (orientation: portrait) {
+    .page-loading .loading-spinner,
+    .page.loading .loading-spinner,
+    #app-splash .loading-spinner,
+    .loading-section .loading-spinner,
+    .search-loading .loading-spinner {
+        zoom: 1.38 !important;
     }
 }

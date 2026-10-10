@@ -3155,6 +3155,36 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Bottom Navigation Bar Color Section (Mobile Portrait) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelBottomNavBarColor">${i18n.t('LabelBottomNavBarColor') || 'Bottom Nav Bar Color'}</span>
+                        <span class="setting-description" data-i18n="BottomNavBarColorDescription">${i18n.t('BottomNavBarColorDescription') || 'Choose the background transparency or style for the mobile bottom navigation bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+            'bottom-nav-bar-color-select',
+            [
+                { value: 'theme', label: i18n.t('OptionCollapsedSidebarColorTheme') || 'Follow Theme' },
+                { value: 'black', label: i18n.t('OptionCollapsedSidebarColorBlack') || 'Black' },
+                {
+                    value: 'semi',
+                    label: i18n.t('OptionCollapsedSidebarColorSemi') || 'Semi-transparent'
+                },
+                {
+                    value: 'tinted-semi',
+                    label: i18n.t('OptionCollapsedSidebarColorTintedSemi') || 'Tinted Semi-transparent'
+                },
+                {
+                    value: 'transparent',
+                    label: i18n.t('OptionCollapsedSidebarColorTransparent') || 'Transparent'
+                }
+            ],
+            storage.getItem('pref:bottomNavBarColor') || storage.getItem('pref:collapsedSidebarColor') || 'theme'
+        )}
+                    </div>
+                </div>
+
                 <!-- Litefin Logo Section -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -10159,6 +10189,7 @@ class SettingsPage extends Page {
             'theme-song-volume-select': { key: 'pref:themeSongVolume', type: 'local' },
             'collapsed-sidebar-color-select': { key: 'pref:collapsedSidebarColor', type: 'local', triggerEvent: true },
             'expanded-sidebar-color-select': { key: 'pref:expandedSidebarColor', type: 'local', triggerEvent: true },
+            'bottom-nav-bar-color-select': { key: 'pref:bottomNavBarColor', type: 'local', triggerEvent: true },
             'sidebar-logo-settings-select': { key: 'pref:logoSettings', type: 'local', triggerEvent: true },
             'sidebar-items-align-select': { key: 'pref:sidebarItemsAlign', type: 'local', triggerEvent: true },
             'trending-movies-collection-select': { key: 'pref:trendingMoviesCollection', type: 'local', triggerEvent: true },

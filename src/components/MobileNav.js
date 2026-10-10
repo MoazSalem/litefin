@@ -28,6 +28,7 @@ import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from '../core/syncplay/SyncPlayGroupMenu.js';
 import { sidebarIcons, getLibraryIcon } from '../utils/Icons.js';
 import { seerr } from '../api/seerrClient.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('MobileNav');
 
@@ -90,6 +91,13 @@ export class MobileNav extends Component {
      * @returns {string} Rendered markup
      */
     render() {
+        // Resolve initial bottom navbar background customization mode
+        const navColorPref =
+            storage.getItem('pref:bottomNavBarColor') ||
+            storage.getItem('pref:collapsedSidebarColor') ||
+            'theme';
+        const navBgClass = `bg-${navColorPref}`;
+
         return `
             <div class="mobile-nav-root" id="mobile-nav-root">
                 <!-- ========================================================= -->
@@ -116,6 +124,13 @@ export class MobileNav extends Component {
                             </div>
                         </button>
 
+                        <!-- Favorites Shortcut Launcher (Moved to top navigation bar) -->
+                        <button class="mobile-topbar-btn" id="mobile-topbar-favorites" aria-label="Favorites" tabindex="0">
+                            <div class="mobile-topbar-icon-wrap">
+                                ${sidebarIcons.favorites}
+                            </div>
+                        </button>
+
                         <!-- User Profile & Account Switcher -->
                         <button class="mobile-topbar-btn mobile-topbar-user" id="mobile-topbar-user" aria-label="Switch User" tabindex="0">
                             <div class="mobile-topbar-avatar" id="mobile-topbar-avatar-container">
@@ -128,7 +143,7 @@ export class MobileNav extends Component {
                 <!-- ========================================================= -->
                 <!-- Mobile Bottom Navigation Bar                              -->
                 <!-- ========================================================= -->
-                <nav class="mobile-navbar" id="mobile-navbar">
+                <nav class="mobile-navbar ${navBgClass}" id="mobile-navbar">
                     <!-- Home Tab -->
                     <button class="mobile-nav-item active" id="mobile-nav-home" data-path="/home" tabindex="0">
                         <div class="mobile-nav-icon">
@@ -143,14 +158,6 @@ export class MobileNav extends Component {
                             ${sidebarIcons.discover}
                         </div>
                         <span class="mobile-nav-label" data-i18n="SeerrDiscover">${i18n.t('SeerrDiscover') || 'Discover'}</span>
-                    </button>
-
-                    <!-- Favorites Tab -->
-                    <button class="mobile-nav-item" id="mobile-nav-favorites" data-path="/favorites" tabindex="0">
-                        <div class="mobile-nav-icon">
-                            ${sidebarIcons.favorites}
-                        </div>
-                        <span class="mobile-nav-label" data-i18n="Favorites">${i18n.t('Favorites') || 'Favorites'}</span>
                     </button>
 
                     <!-- Libraries Quick Picker Tab -->
@@ -279,6 +286,7 @@ export class MobileNav extends Component {
         this._probeSeerr();
         this._updateUserAvatar();
         this._startClockTimer();
+        this._updateNavbarBackground();
 
         // Translate localized elements
         i18n.translateDOM(this.el);
@@ -313,6 +321,14 @@ export class MobileNav extends Component {
             });
         }
 
+        const favoritesTopBtn = this.$('#mobile-topbar-favorites');
+        if (favoritesTopBtn) {
+            favoritesTopBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                router.navigate('/favorites');
+            });
+        }
+
         const userBtn = this.$('#mobile-topbar-user');
         if (userBtn) {
             userBtn.addEventListener('click', (e) => {
@@ -336,14 +352,6 @@ export class MobileNav extends Component {
             discoverTab.addEventListener('click', (e) => {
                 e.preventDefault();
                 router.navigate('/discover');
-            });
-        }
-
-        const favoritesTab = this.$('#mobile-nav-favorites');
-        if (favoritesTab) {
-            favoritesTab.addEventListener('click', (e) => {
-                e.preventDefault();
-                router.navigate('/favorites');
             });
         }
 
@@ -497,6 +505,15 @@ export class MobileNav extends Component {
             if (clockEl) clockEl.textContent = this._getFormattedTime();
         };
         eventBus.on('pref:timeFormat', this._boundHandlers.onTimeFormat);
+
+        // Bottom navbar background customization listener
+        this._boundHandlers.onNavColorChanged = () => {
+            this._updateNavbarBackground();
+        };
+        eventBus.on('pref:bottomNavBarColor', this._boundHandlers.onNavColorChanged);
+        eventBus.on('pref:collapsedSidebarColor', this._boundHandlers.onNavColorChanged);
+        eventBus.on('themeMode:changed', this._boundHandlers.onNavColorChanged);
+        eventBus.on('themeColor:changed', this._boundHandlers.onNavColorChanged);
     }
 
     /**
@@ -515,12 +532,43 @@ export class MobileNav extends Component {
         if (this._boundHandlers.onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._boundHandlers.onSyncPlayDisabled);
         if (this._boundHandlers.onSeerrResolved) eventBus.off('seerr:statusResolved', this._boundHandlers.onSeerrResolved);
         if (this._boundHandlers.onTimeFormat) eventBus.off('pref:timeFormat', this._boundHandlers.onTimeFormat);
+        if (this._boundHandlers.onNavColorChanged) {
+            eventBus.off('pref:bottomNavBarColor', this._boundHandlers.onNavColorChanged);
+            eventBus.off('pref:collapsedSidebarColor', this._boundHandlers.onNavColorChanged);
+            eventBus.off('themeMode:changed', this._boundHandlers.onNavColorChanged);
+            eventBus.off('themeColor:changed', this._boundHandlers.onNavColorChanged);
+        }
 
         if (this._clockInterval) clearInterval(this._clockInterval);
         if (this._boundHandlers.onResize) window.removeEventListener('resize', this._boundHandlers.onResize);
         if (this._boundHandlers.onKeyDown) document.removeEventListener('keydown', this._boundHandlers.onKeyDown);
 
         document.body.classList.remove('mobile-topbar-visible', 'mobile-navbar-visible');
+    }
+
+    /**
+     * ========================================================================
+     * Bottom Navbar Background Mode Updater
+     * ========================================================================
+     * Synchronizes the bottom navigation bar background class with the user's
+     * saved preference. Supports 'theme', 'black', 'semi', 'tinted-semi',
+     * and 'transparent' modes matching the desktop/TV sidebar background options.
+     * @private
+     */
+    _updateNavbarBackground() {
+        const navbar = this.$('#mobile-navbar');
+        if (!navbar) return;
+
+        const colorPref =
+            storage.getItem('pref:bottomNavBarColor') ||
+            storage.getItem('pref:collapsedSidebarColor') ||
+            'theme';
+
+        navbar.classList.toggle('bg-theme', colorPref === 'theme');
+        navbar.classList.toggle('bg-black', colorPref === 'black');
+        navbar.classList.toggle('bg-semi', colorPref === 'semi');
+        navbar.classList.toggle('bg-tinted-semi', colorPref === 'tinted-semi');
+        navbar.classList.toggle('bg-transparent', colorPref === 'transparent');
     }
 
     /**
@@ -616,6 +664,20 @@ export class MobileNav extends Component {
         const searchBtn = this.$('#mobile-topbar-search');
         if (searchBtn) {
             searchBtn.classList.toggle('active', path === '/search');
+        }
+
+        // Sync active state for top bar favorites shortcut
+        const favoritesTopBtn = this.$('#mobile-topbar-favorites');
+        if (favoritesTopBtn) {
+            const isFavActive = path === '/favorites' || path.startsWith('/favorites/');
+            favoritesTopBtn.classList.toggle('active', isFavActive);
+        }
+
+        // Sync active state for top bar user switcher shortcut
+        const userBtn = this.$('#mobile-topbar-user');
+        if (userBtn) {
+            const isProfilesActive = path === '/profiles' || path.startsWith('/profiles/');
+            userBtn.classList.toggle('active', isProfilesActive);
         }
     }
 
@@ -804,10 +866,17 @@ export class MobileNav extends Component {
     _renderUserAvatar() {
         const user = auth.getCurrentUser();
         if (user && user.PrimaryImageTag) {
+            // Render custom user avatar image with safe dimensions
             const url = api.getUserImageUrl(user.Id, { maxWidth: 64 });
             return `<img src="${url}" class="mobile-avatar-img" alt="${user.Name || 'User'}" />`;
         }
-        return sidebarIcons.userDefault;
+        // When no custom avatar image exists, wrap the icon proxy so that
+        // outline and filled states are managed uniformly by the topbar CSS
+        return `
+            <div class="mobile-topbar-icon-wrap">
+                ${sidebarIcons.userDefault}
+            </div>
+        `;
     }
 
     /**
