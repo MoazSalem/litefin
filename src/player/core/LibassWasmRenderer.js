@@ -313,10 +313,11 @@ export default class LibassWasmRenderer {
             }
             const processedContent = this._lastProcessedResult;
 
-            const availableFonts = getAvailableFonts();
-            const fallbackUrl = FontLoader.getFallbackFontUrl();
+            const availableFonts = { ...getAvailableFonts() };
+            const fallbackFontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
+            const fallbackUrl = FontLoader.getFallbackFontUrl(fallbackFontId);
             if (fallbackUrl) {
-                availableFonts['jellyfin fallback font'] = fallbackUrl;
+                availableFonts[FontLoader.getFontFamily(fallbackFontId).toLowerCase()] = fallbackUrl;
             }
 
             const overrideFontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');

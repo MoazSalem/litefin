@@ -801,6 +801,10 @@ html[data-ui-font="fallback-font"] {
     --jf-font-family: 'Jellyfin Fallback Font', sans-serif;
 }
 
+html[data-ui-font^="fallback-font:"] {
+    --jf-font-family: var(--ui-fallback-font-family), sans-serif;
+}
+
 html {
     /* Apply global font-family here so it inherits downwards to * */
     font-family: var(--jf-font-family);

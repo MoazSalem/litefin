@@ -3,6 +3,7 @@ import { state } from '../core/StateManager.js';
 import { api } from '../api/index.js';
 import { storage } from './StorageService.js';
 import { eventBus } from '../core/EventBus.js';
+import { getFallbackFontFamily, getFallbackFontName, isFallbackFont } from './FallbackFonts.js';
 
 const log = logger.create('FontLoader');
 
@@ -69,8 +70,9 @@ class FontLoader {
         // here, LibassWasmRenderer can pass those to the worker instead.
         this._serverFontUrls = new Map();
 
-        // Dynamically fetched server fallback font URL
-        this._fallbackFontUrl = null;
+        // Keep each server font independent so UI and subtitles can use different files.
+        this._fallbackFonts = new Map();
+        this._fallbackFontGeneration = 0;
 
         // Register lifecycle event hooks to invalidate caches when server or settings change
         this._bindLifecycleEvents();
@@ -99,10 +101,28 @@ class FontLoader {
 
     /**
      * Retrieve the dynamically fetched server fallback font URL
+     * @param {string} [fontId='fallback-font'] Legacy or named server font ID.
      * @returns {string|null} The fallback font URL
      */
-    getFallbackFontUrl() {
-        return this._fallbackFontUrl;
+    getFallbackFontUrl(fontId = 'fallback-font') {
+        return this._fallbackFonts.get(fontId)?.url || null;
+    }
+
+    /**
+     * List distinct server font files available to authenticated settings pages.
+     * @returns {Promise<Array<{Name: string}>>} Server font entries in server order.
+     */
+    async getFallbackFonts() {
+        if (!api.serverUrl || !api.accessToken) return [];
+        const fonts = await api.get('/FallbackFont/Fonts');
+        const names = new Set();
+        return Array.isArray(fonts)
+            ? fonts.filter((font) => {
+                  if (!font || typeof font.Name !== 'string' || !font.Name || names.has(font.Name)) return false;
+                  names.add(font.Name);
+                  return true;
+              })
+            : [];
     }
 
     /**
@@ -140,20 +160,22 @@ class FontLoader {
      * Revokes active blob URLs and clears both success and failure caches.
      */
     resetFallbackFont() {
-        // Revoke active blob URL if present to release memory
-        if (this._fallbackFontUrl) {
+        this._fallbackFontGeneration++;
+        for (const { url, fontFace, style } of this._fallbackFonts.values()) {
             try {
-                URL.revokeObjectURL(this._fallbackFontUrl);
+                URL.revokeObjectURL(url);
+                if (fontFace) document.fonts.delete(fontFace);
+                if (style?.parentNode) style.parentNode.removeChild(style);
             } catch (_) {
                 /* ignore */
             }
-            this._fallbackFontUrl = null;
         }
-
-        // Invalidate caches and pending promises for fallback-font
-        this._loadedStaticFonts.delete('fallback-font');
-        this._failedFonts.delete('fallback-font');
-        this._loadingPromises.delete('fallback-font');
+        this._fallbackFonts.clear();
+        for (const cache of [this._loadedStaticFonts, this._failedFonts, this._loadingPromises]) {
+            for (const fontId of cache.keys()) {
+                if (isFallbackFont(fontId)) cache.delete(fontId);
+            }
+        }
         log.debug('Server fallback font state reset.');
     }
 
@@ -222,8 +244,7 @@ class FontLoader {
      * @returns {string|null} The font family name, or null if not mapped
      */
     getFontFamily(fontId) {
-        if (!fontId || !this._fontMap[fontId]) return null;
-        return this._fontMap[fontId];
+        return getFallbackFontFamily(fontId) || this._fontMap[fontId] || null;
     }
 
     /**
@@ -236,7 +257,11 @@ class FontLoader {
      */
     async loadFont(fontId, forceReload = false) {
         // Validate that fontId is a recognized configuration
-        if (!fontId || !this._fontMap[fontId]) return false;
+        if (!fontId || !this.getFontFamily(fontId)) return false;
+
+        // Layout is restored before authentication. This is a deferred load,
+        // not a missing server font, so it must not poison the failure cache.
+        if (isFallbackFont(fontId) && (!api.serverUrl || !api.accessToken)) return false;
 
         // When forcing a reload, invalidate any cached success or failure state
         if (forceReload) {
@@ -256,6 +281,7 @@ class FontLoader {
             return this._loadingPromises.get(fontId);
         }
 
+        const fallbackGeneration = this._fallbackFontGeneration;
         // Wrap execution in a tracked promise
         const loadPromise = (async () => {
             try {
@@ -268,8 +294,9 @@ class FontLoader {
                  * will be marked in _failedFonts to prevent repetitive calls.
                  * -------------------------------------------------------------
                  */
-                if (fontId === 'fallback-font') {
-                    const loaded = await this._loadFallbackFont();
+                if (isFallbackFont(fontId)) {
+                    const loaded = await this._loadFallbackFont(fontId, fallbackGeneration);
+                    if (fallbackGeneration !== this._fallbackFontGeneration) return false;
                     if (loaded) {
                         this._loadedStaticFonts.add(fontId);
                         this._failedFonts.delete(fontId);
@@ -301,7 +328,7 @@ class FontLoader {
                 return false;
             } finally {
                 // Clear active in-flight promise reference once settled
-                this._loadingPromises.delete(fontId);
+                if (this._loadingPromises.get(fontId) === loadPromise) this._loadingPromises.delete(fontId);
             }
         })();
 
@@ -314,29 +341,27 @@ class FontLoader {
      * @private
      * @returns {Promise<boolean>} True if loaded successfully, false otherwise
      */
-    async _loadFallbackFont() {
+    async _loadFallbackFont(fontId, generation) {
+        let blobUrl = null;
         try {
             // Verify active authentication and server address
             const token = api.accessToken;
-            if (!token || !api.serverUrl) {
+            const serverUrl = api.serverUrl;
+            if (!token || !serverUrl) {
                 log.warn('Cannot load fallback font: serverUrl or accessToken missing');
                 return false;
             }
 
-            // Query the list of fallback fonts from the server
-            const fonts = await api.get('/FallbackFont/Fonts');
-            if (!fonts || !fonts.length) {
-                log.warn('No fallback fonts returned from server');
-                return false;
-            }
-
-            // Retrieve the user selected font name, falling back to the first font from the server list
-            const userSelectedFont = storage.getItem('pref:jellyfinFallbackFont');
-            let fontName = '';
-            if (userSelectedFont && fonts.some((f) => f.Name === userSelectedFont)) {
-                fontName = userSelectedFont;
-            } else {
-                fontName = fonts[0].Name;
+            // Named choices restore the exact file without relying on server list order.
+            let fontName = getFallbackFontName(fontId);
+            if (!fontName) {
+                const fonts = await this.getFallbackFonts();
+                if (!fonts.length) {
+                    log.warn('No fallback fonts returned from server');
+                    return false;
+                }
+                const selectedFont = storage.getItem('pref:jellyfinFallbackFont');
+                fontName = fonts.some((font) => font.Name === selectedFont) ? selectedFont : fonts[0].Name;
             }
 
             // Ensure a valid font name was extracted
@@ -352,9 +377,9 @@ class FontLoader {
                 (!serverInfo.ProductName || serverInfo.ProductName.toLowerCase().includes('emby'))
             );
             const authKey = isEmbyInstance ? 'api_key' : 'ApiKey';
-            const url = `${api.serverUrl}/FallbackFont/Fonts/${encodeURIComponent(fontName)}?${authKey}=${encodeURIComponent(token)}`;
+            const url = `${serverUrl}/FallbackFont/Fonts/${encodeURIComponent(fontName)}?${authKey}=${encodeURIComponent(token)}`;
 
-            log.debug(`Downloading Jellyfin fallback font binary from: ${url}`);
+            log.debug(`Downloading Jellyfin fallback font: ${fontName}`);
 
             // Download the font binary to create a clean blob URL, preventing FS errors in WASM worker
             const response = await fetch(url);
@@ -364,44 +389,35 @@ class FontLoader {
             const buffer = await response.arrayBuffer();
             const blob = new Blob([buffer], { type: response.headers.get('content-type') || 'font/ttf' });
 
-            // Revoke the old fallback font URL if it exists to avoid memory leaks
-            if (this._fallbackFontUrl) {
-                try {
-                    URL.revokeObjectURL(this._fallbackFontUrl);
-                } catch (_) {
-                    /* ignore */
-                }
-            }
-
-            const blobUrl = URL.createObjectURL(blob);
-            this._fallbackFontUrl = blobUrl;
-
-            log.debug(`Loading Jellyfin fallback font "${fontName}" from blob URL: ${blobUrl}`);
+            blobUrl = URL.createObjectURL(blob);
+            const family = this.getFontFamily(fontId);
+            let fontFace = null;
+            let style = null;
 
             // Register font face into document
             if (window.FontFace && document.fonts) {
-                const fontFace = new FontFace('Jellyfin Fallback Font', `url("${blobUrl}")`);
+                fontFace = new FontFace(family, `url("${blobUrl}")`);
                 await fontFace.load();
-                document.fonts.add(fontFace);
-                log.info(`Jellyfin fallback font "${fontName}" loaded successfully via FontFace API`);
-                return true;
             } else {
-                const styleId = 'jellyfin-fallback-font-style';
-                if (!document.getElementById(styleId)) {
-                    const style = document.createElement('style');
-                    style.id = styleId;
-                    style.textContent = `
-                        @font-face {
-                            font-family: "Jellyfin Fallback Font";
-                            src: url("${blobUrl}");
-                        }
-                    `;
-                    document.head.appendChild(style);
-                    log.info(`Jellyfin fallback font "${fontName}" injected via fallback style tag`);
-                }
-                return true;
+                style = document.createElement('style');
+                style.textContent = `@font-face { font-family: "${family}"; src: url("${blobUrl}"); }`;
             }
+
+            if (generation !== this._fallbackFontGeneration) {
+                URL.revokeObjectURL(blobUrl);
+                return false;
+            }
+            const previous = this._fallbackFonts.get(fontId);
+            if (previous?.fontFace) document.fonts.delete(previous.fontFace);
+            if (previous?.style?.parentNode) previous.style.parentNode.removeChild(previous.style);
+            if (fontFace) document.fonts.add(fontFace);
+            if (style) document.head.appendChild(style);
+            if (previous) URL.revokeObjectURL(previous.url);
+            this._fallbackFonts.set(fontId, { url: blobUrl, fontFace, style });
+            log.info(`Jellyfin fallback font "${fontName}" loaded successfully`);
+            return true;
         } catch (err) {
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
             log.error('Failed to load Jellyfin fallback font:', err);
             return false;
         }

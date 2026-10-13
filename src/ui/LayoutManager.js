@@ -18,6 +18,7 @@ import { logger } from '../utils/Logger.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { themeUtils } from '../utils/ThemeUtils.js';
+import { getFallbackFontFamily, isFallbackFont } from '../utils/FallbackFonts.js';
 
 import { debugOverlay } from './DebugOverlay.js';
 import CardRenderer from '../utils/CardRenderer.js';
@@ -892,13 +893,20 @@ class LayoutManager {
         this._uiFont = font;
         if (font && font !== 'default') document.documentElement.setAttribute('data-ui-font', font);
         else document.documentElement.removeAttribute('data-ui-font');
-        if (save) storage.setItem('litefin:uiFont', font);
+        if (save) {
+            storage.setItem('litefin:uiFont', font);
+            storage.flush();
+        }
 
         // Load the fallback font dynamically if selected
-        if (font === 'fallback-font') {
-            import('../utils/FontLoader.js').then((module) => {
-                module.default.loadFont('fallback-font');
-            });
+        document.documentElement.style.removeProperty('--ui-fallback-font-family');
+        if (isFallbackFont(font)) {
+            document.documentElement.style.setProperty('--ui-fallback-font-family', `"${getFallbackFontFamily(font)}"`);
+            if (state.get('user:authenticated')) {
+                import('../utils/FontLoader.js').then((module) => {
+                    module.default.loadFont(font);
+                });
+            }
         }
     }
 

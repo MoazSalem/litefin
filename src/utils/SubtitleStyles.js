@@ -6,6 +6,7 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
+import { getFallbackFontFamily, getFallbackFontName } from './FallbackFonts.js';
 
 /**
  * Convert HEX color to RGBA
@@ -232,6 +233,10 @@ export function getTextStyles(isHdr = false) {
     // Options: default, typewriter, print, console, cursive, casual, smallcaps
     // ========================================================================
     const font = PlayerSettings.get('subtitleFont') || '';
+    styles.push({
+        name: 'fontFamily',
+        value: getFallbackFontName(font) ? `"${getFallbackFontFamily(font)}", sans-serif` : ''
+    });
 
     switch (font) {
         case 'typewriter':
@@ -597,6 +602,8 @@ export default {
     },
     getFontFamily: (settingKey = 'subtitleFont') => {
         const font = PlayerSettings.get(settingKey) || '';
+        const fallbackFamily = getFallbackFontFamily(font);
+        if (fallbackFamily) return fallbackFamily;
         switch (font) {
             case 'typewriter':
                 return 'Courier Prime';

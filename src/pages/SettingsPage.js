@@ -18,6 +18,7 @@ import { spatialNavigator } from '../ui/SpatialNavigator.js';
 import { imageService } from '../utils/ImageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import FontLoader from '../utils/FontLoader.js';
+import { getFallbackFontId, getFallbackFontName } from '../utils/FallbackFonts.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
@@ -43,6 +44,12 @@ const log = logger.create('SettingsPage');
 
 // Cache cultures across page instances
 let cachedCultures = null;
+const SERVER_FONT_SELECTS = [
+    'ui-font-select',
+    'subtitle-font-select',
+    'subtitle-font-ass-select',
+    'jellyfin-fallback-font-select'
+];
 
 class SettingsPage extends Page {
     constructor() {
@@ -62,9 +69,12 @@ class SettingsPage extends Page {
 
         // Bound viewport resize listener for orientation transitions
         this._onResize = null;
+        this._fallbackFonts = [];
     }
 
     async onInit() {
+        // Populate the font buttons independently of the culture request.
+        this._loadFallbackFontOptions();
         // If we don't have cultures cached, fetch them
         if (!cachedCultures) {
             try {
@@ -9273,7 +9283,48 @@ class SettingsPage extends Page {
         });
     }
 
+    _getFontDropdownOptions(id, options, currentValue) {
+        const isFileSelect = id === 'jellyfin-fallback-font-select';
+        if (!SERVER_FONT_SELECTS.includes(id)) {
+            return options;
+        }
+        const fontOptions = this._fallbackFonts.map((font) => ({
+            value: isFileSelect ? font.Name : getFallbackFontId(font.Name),
+            label: font.Name
+        }));
+        // Show the saved filename even before the server responds or while offline.
+        const savedName = isFileSelect ? currentValue : getFallbackFontName(currentValue);
+        if (savedName && !fontOptions.some((option) => option.label === savedName)) {
+            fontOptions.push({ value: currentValue, label: savedName });
+        }
+        const bundledOptions = isFileSelect ? [] : options.filter((option) => !getFallbackFontName(option.value));
+        const fallbackIndex = bundledOptions.findIndex((option) => option.value === 'fallback-font');
+        if (fallbackIndex >= 0) {
+            bundledOptions.splice(fallbackIndex + 1, 0, ...fontOptions);
+            return bundledOptions;
+        }
+        return [...bundledOptions, ...fontOptions];
+    }
+
+    async _loadFallbackFontOptions() {
+        try {
+            this._fallbackFonts = await FontLoader.getFallbackFonts();
+            this.$$('.select-btn').forEach((btn) => {
+                const id = btn.dataset.id;
+                if (!SERVER_FONT_SELECTS.includes(id)) return;
+                const options = this._getFontDropdownOptions(id, JSON.parse(btn.dataset.options), btn.dataset.value);
+                btn.dataset.options = JSON.stringify(options);
+                const selected = options.find((option) => String(option.value) === String(btn.dataset.value));
+                const label = btn.querySelector('.btn-label');
+                if (selected && label) label.innerText = i18n.ensureBiDi(selected.label);
+            });
+        } catch (err) {
+            log.warn('Failed to load fallback font options:', err);
+        }
+    }
+
     _renderDropdown(id, options, currentValue, disabled = false) {
+        options = this._getFontDropdownOptions(id, options, currentValue);
         // Find current label (using String conversion to match storage strings with number options)
         const currentOption = options.find((o) => String(o.value) === String(currentValue)) || options[0];
         const currentLabel = currentOption ? escapeHtml(i18n.ensureBiDi(currentOption.label)) : i18n.t('Select');
@@ -9282,8 +9333,8 @@ class SettingsPage extends Page {
         return `
             <button class="setting-action-btn select-btn ${disabled ? 'disabled' : ''}" id="${id}-btn" 
                     data-id="${id}" 
-                    data-value="${currentValue}"
-                    data-options='${JSON.stringify(options).replace(/'/g, '&#39;')}'
+                    data-value="${escapeHtml(String(currentValue))}"
+                    data-options='${escapeHtml(JSON.stringify(options))}'
                     tabindex="${disabled ? '-1' : '0'}"
                     ${disabled ? 'disabled' : ''}
                     data-focusable="${disabled ? 'false' : 'true'}">
@@ -9370,7 +9421,7 @@ class SettingsPage extends Page {
 
                     return `
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
-                                data-value="${opt.value}"
+                                data-value="${escapeHtml(String(opt.value))}"
                                 tabindex="0">
                             <span class="modal-option-label">${escapeHtml(i18n.ensureBiDi(opt.label))}</span>
                             ${badge}
@@ -10465,22 +10516,12 @@ class SettingsPage extends Page {
                     } finally {
                         btn.classList.remove('disabled');
                     }
-                } else if (id === 'jellyfin-fallback-font-select') {
+                } else if (SERVER_FONT_SELECTS.includes(id)) {
                     btn.classList.add('disabled');
                     try {
-                        const fontsList = await api.get('/FallbackFont/Fonts');
-                        console.log('Jellyfin Fallback Fonts response:', fontsList);
-                        log.info('Jellyfin Fallback Fonts response:', fontsList);
-
-                        if (fontsList && fontsList.length > 0) {
-                            options = fontsList.map((f) => ({
-                                value: f.Name,
-                                label: f.Name
-                            }));
-                            btn.dataset.options = JSON.stringify(options);
-                        } else {
-                            options = [];
-                        }
+                        await this._loadFallbackFontOptions();
+                        options = this._getFontDropdownOptions(id, options, currentValue);
+                        btn.dataset.options = JSON.stringify(options);
                     } catch (err) {
                         log.warn('Failed to load fallback fonts list on click:', err);
                     } finally {
@@ -10561,6 +10602,7 @@ class SettingsPage extends Page {
                         } else if (id === 'jellyfin-fallback-font-select') {
                             // SPECIAL CASE: Reload fallback font on change
                             storage.setItem('pref:jellyfinFallbackFont', newValue);
+                            storage.flush();
                             FontLoader.loadFont('fallback-font', true);
                         } else if (id === 'text-scale-select') {
                             // SPECIAL CASE: Text Scale handled by LayoutManager
@@ -10868,17 +10910,17 @@ class SettingsPage extends Page {
                             }
 
                             // FONT LOADING: Trigger download if needed (forcing reload for explicit user change)
-                            if (
-                                (settingConfig.key === 'subtitleFont' || settingConfig.key === 'subtitleFontAss') &&
-                                newValue
-                            ) {
-                                FontLoader.loadFont(newValue, true).then((loaded) => {
-                                    if (loaded) {
-                                        log.debug(`Font loaded: ${newValue}`);
-                                    } else {
-                                        log.warn(`Failed to load font: ${newValue}`);
-                                    }
-                                });
+                            if (settingConfig.key === 'subtitleFont' || settingConfig.key === 'subtitleFontAss') {
+                                storage.flush();
+                                if (newValue) {
+                                    FontLoader.loadFont(newValue, true).then((loaded) => {
+                                        if (loaded) {
+                                            log.debug(`Font loaded: ${newValue}`);
+                                        } else {
+                                            log.warn(`Failed to load font: ${newValue}`);
+                                        }
+                                    });
+                                }
                             }
                         } else if (settingConfig.type === 'debug') {
                             storage.setItem(settingConfig.key, newValue);

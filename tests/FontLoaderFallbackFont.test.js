@@ -2,6 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import {
+    getFallbackFontFamily,
+    getFallbackFontId,
+    getFallbackFontName,
+    isFallbackFont
+} from '../src/utils/FallbackFonts.js';
 
 /**
  * ============================================================================
@@ -23,6 +29,11 @@ const fontLoaderSource = readFileSync(new URL('../src/utils/FontLoader.js', impo
 
 function createFontLoaderContext(apiOverrides = {}, storageData = {}) {
     let busListeners = {};
+    const requests = [];
+    const fontFaces = new Set();
+    const styles = new Set();
+    const revokedUrls = [];
+    let nextUrl = 0;
 
     const mockEventBus = {
         on(event, handler) {
@@ -82,19 +93,29 @@ function createFontLoaderContext(apiOverrides = {}, storageData = {}) {
         },
         storage: mockStorage,
         eventBus: mockEventBus,
+        getFallbackFontFamily,
+        getFallbackFontName,
+        isFallbackFont,
         URL: {
-            createObjectURL: (blob) => 'blob:mock-url',
-            revokeObjectURL: () => {}
+            createObjectURL: () => `blob:mock-url-${++nextUrl}`,
+            revokeObjectURL: (url) => revokedUrls.push(url)
         },
         document: {
             fonts: {
                 load: async () => true,
                 ready: Promise.resolve(),
-                add: () => {}
+                add: (face) => fontFaces.add(face),
+                delete: (face) => fontFaces.delete(face)
             },
             getElementById: () => null,
             createElement: () => ({ style: {}, appendChild: () => {} }),
-            head: { appendChild: () => {} },
+            head: {
+                appendChild(style) {
+                    styles.add(style);
+                    style.parentNode = this;
+                },
+                removeChild: (style) => styles.delete(style)
+            },
             body: { appendChild: () => {}, removeChild: () => {} }
         },
         window: {
@@ -104,11 +125,14 @@ function createFontLoaderContext(apiOverrides = {}, storageData = {}) {
         Blob: class {
             constructor() {}
         },
-        fetch: async () => ({
-            ok: true,
-            headers: { get: () => 'font/ttf' },
-            arrayBuffer: async () => new ArrayBuffer(8)
-        })
+        fetch: async (url) => {
+            requests.push(url);
+            return {
+                ok: true,
+                headers: { get: () => 'font/ttf' },
+                arrayBuffer: async () => new ArrayBuffer(8)
+            };
+        }
     });
 
     const script = `
@@ -117,7 +141,7 @@ function createFontLoaderContext(apiOverrides = {}, storageData = {}) {
     `;
 
     const instance = vm.runInContext(script, context);
-    return { instance, mockApi, mockEventBus, mockStorage };
+    return { instance, mockApi, mockEventBus, mockStorage, context, requests, fontFaces, styles, revokedUrls };
 }
 
 test('FontLoader caches empty fallback font response and does not query server again', async () => {
@@ -239,4 +263,103 @@ test('eventBus pref and auth events reset failure cache', async () => {
     // Next loadFont triggers network check again
     await instance.loadFont('fallback-font');
     assert.strictEqual(networkCalls, 2);
+});
+
+test('fallback font waits for restored credentials without caching a failure', async () => {
+    const { instance, mockApi, requests } = createFontLoaderContext(
+        {
+            serverUrl: null,
+            accessToken: null,
+            get: async () => [{ Name: 'First.ttf' }, { Name: 'Selected.ttf' }]
+        },
+        { 'pref:jellyfinFallbackFont': 'Selected.ttf' }
+    );
+    assert.equal(await instance.loadFont('fallback-font'), false);
+    assert.equal(instance.hasFontFailed('fallback-font'), false);
+    assert.equal(requests.length, 0);
+
+    mockApi.serverUrl = 'http://jellyfin.local:8096';
+    mockApi.accessToken = 'mock-token';
+    assert.equal(await instance.loadFont('fallback-font'), true);
+    assert.match(requests[0], /\/Selected\.ttf\?/);
+});
+
+test('server font list preserves all distinct filenames', async () => {
+    const { instance } = createFontLoaderContext({
+        get: async () => [{ Name: 'First.ttf' }, { Name: 'Second.otf' }, { Name: 'First.ttf' }, null, { Name: '' }]
+    });
+    assert.deepEqual(
+        Array.from(await instance.getFallbackFonts(), (font) => font.Name),
+        ['First.ttf', 'Second.otf']
+    );
+});
+
+test('named fallback fonts load independently and restore the same file after restart', async () => {
+    const firstId = getFallbackFontId('UI 字体.ttf');
+    const secondId = getFallbackFontId("Subtitle (O'Brien).otf");
+    const { instance, requests, fontFaces } = createFontLoaderContext();
+    assert.deepEqual(await Promise.all([instance.loadFont(firstId), instance.loadFont(secondId)]), [true, true]);
+    assert.notEqual(instance.getFontFamily(firstId), instance.getFontFamily(secondId));
+    assert.notEqual(instance.getFallbackFontUrl(firstId), instance.getFallbackFontUrl(secondId));
+    assert.equal(fontFaces.size, 2);
+    assert.ok(requests.some((url) => url.includes(encodeURIComponent('UI 字体.ttf'))));
+
+    const restarted = createFontLoaderContext({}, { 'pref:jellyfinFallbackFont': 'Different.ttf' });
+    assert.equal(await restarted.instance.loadFont(secondId), true);
+    assert.equal(restarted.instance.getFontFamily(secondId), instance.getFontFamily(secondId));
+    assert.ok(restarted.requests[0].includes(encodeURIComponent("Subtitle (O'Brien).otf")));
+    assert.equal(
+        restarted.requests.some((url) => url.includes('Different.ttf')),
+        false
+    );
+});
+
+test('reloading the legacy fallback replaces its registered face and releases the previous URL', async () => {
+    const { instance, mockStorage, fontFaces, requests, revokedUrls } = createFontLoaderContext({
+        get: async () => [{ Name: 'First.ttf' }, { Name: 'Second.ttf' }]
+    });
+    assert.equal(await instance.loadFont('fallback-font'), true);
+    const firstUrl = instance.getFallbackFontUrl();
+    mockStorage.setItem('pref:jellyfinFallbackFont', 'Second.ttf');
+    assert.equal(await instance.loadFont('fallback-font', true), true);
+    assert.equal(fontFaces.size, 1);
+    assert.match(requests[1], /\/Second\.ttf\?/);
+    assert.ok(revokedUrls.includes(firstUrl));
+});
+
+test('older browsers replace the fallback style when selecting another file', async () => {
+    const { instance, context, mockStorage, styles } = createFontLoaderContext({
+        get: async () => [{ Name: 'First.ttf' }, { Name: 'Second.ttf' }]
+    });
+    context.window.FontFace = undefined;
+    assert.equal(await instance.loadFont('fallback-font'), true);
+    const firstStyle = [...styles][0];
+    mockStorage.setItem('pref:jellyfinFallbackFont', 'Second.ttf');
+    assert.equal(await instance.loadFont('fallback-font', true), true);
+    assert.equal(styles.size, 1);
+    assert.equal(styles.has(firstStyle), false);
+    assert.ok([...styles][0].textContent.includes(instance.getFallbackFontUrl()));
+});
+
+test('a load started before a server reset cannot replace the new font state', async () => {
+    let finishFirst;
+    let calls = 0;
+    const { instance } = createFontLoaderContext({
+        get: async () => {
+            if (++calls === 1)
+                return new Promise((resolve) => {
+                    finishFirst = resolve;
+                });
+            return [{ Name: 'New.ttf' }];
+        }
+    });
+    const staleLoad = instance.loadFont('fallback-font');
+    instance.resetFallbackFont();
+    assert.equal(await instance.loadFont('fallback-font'), true);
+    const currentUrl = instance.getFallbackFontUrl();
+    finishFirst([{ Name: 'Old.ttf' }]);
+    assert.equal(await staleLoad, false);
+    assert.equal(instance.getFallbackFontUrl(), currentUrl);
+    assert.equal(instance.isFontLoaded('fallback-font'), true);
+    assert.equal(instance.hasFontFailed('fallback-font'), false);
 });
