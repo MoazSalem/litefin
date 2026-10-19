@@ -22,7 +22,8 @@
         }
 
         /* Seamless transparency mode when video player is active */
-        html.player-active, body.player-active,
+        html.player-active, html.player-active[data-theme-mode],
+        body.player-active, body.player-active[data-theme-mode],
         html.player-active #app, body.player-active #app,
         html.player-active #page-container, body.player-active #page-container {
             background-color: transparent !important;

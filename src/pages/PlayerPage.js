@@ -301,6 +301,9 @@ class PlayerPage extends Page {
                 androidAdapter.setFullscreen(true);
                 // Prevent Android system screensaver / display sleep during active playback
                 androidAdapter.setKeepScreenOn(true);
+            } else if (platformInfo.isWebOS) {
+                // Prevent LG webOS system screensaver / display sleep during active playback
+                webosAdapter.setKeepScreenOn(true);
             }
 
             // Automatically switch mobile viewport to landscape orientation for video playback
@@ -5480,6 +5483,9 @@ class PlayerPage extends Page {
             
             // Clear registered MediaSession action handlers and reset system transport state
             androidAdapter.clearMediaSession();
+        } else if (platformInfo.isWebOS) {
+            // Release webOS screensaver suppression and power keepalive
+            webosAdapter.setKeepScreenOn(false);
         }
 
         // Restore natural screen auto-rotation upon exiting the video player

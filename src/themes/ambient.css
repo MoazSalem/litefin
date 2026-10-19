@@ -79,7 +79,13 @@
  * 3. Visual rendering remains 100% identical down to the subpixel.
  * 4. Video playback drops the layer instantaneously via display: none.
  */
-html[data-theme-mode="ambient"] {
+/*
+ * Base Canvas Foundation
+ * Deep charcoal background applied to the root HTML node to prevent edge bleed
+ * during scrolling and view transitions. Scoped strictly with :not(.player-active)
+ * so that full hardware overlay transparency is preserved when video playback begins.
+ */
+html[data-theme-mode="ambient"]:not(.player-active) {
     /* 1. Deep charcoal foundation baseline to prevent edge bleed */
     background-color: var(--jf-background) !important;
 }
@@ -162,9 +168,16 @@ html[data-theme-mode="ambient"] {
  * playback is active. Deallocating the GPU texture backing store guarantees
  * 0% CPU/GPU overhead for hardware video decoders.
  */
+/*
+ * Full-document transparency during active video playback.
+ * Tizen AVPlay and WebOS render on native hardware overlay planes behind the webview.
+ * Both the root HTML element and body must be completely transparent to reveal the video.
+ */
+html.player-active[data-theme-mode="ambient"],
 [data-theme-mode="ambient"] body.player-active,
 html.player-active[data-theme-mode="ambient"] body {
     background: transparent !important;
+    background-color: transparent !important;
     background-image: none !important;
 }
 

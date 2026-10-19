@@ -650,13 +650,17 @@ html[data-light-music-player="true"] .audio-subtitle {
 
 /* Transform-origin alignment according to vertical hemisphere */
 .subtitle-overlay.pos-bottom,
-.subtitle-overlay:not(.secondary):not(.pos-top) {
+.subtitle-overlay:not(.secondary):not(.pos-top),
+.player-page .subtitle-overlay.pos-bottom,
+.player-container ~ .subtitle-overlay.pos-bottom {
     -webkit-transform-origin: bottom center;
     transform-origin: bottom center;
 }
 
 .subtitle-overlay.pos-top,
-.subtitle-overlay.secondary:not(.pos-bottom) {
+.subtitle-overlay.secondary:not(.pos-bottom),
+.player-page .subtitle-overlay.pos-top,
+.player-container ~ .subtitle-overlay.pos-top {
     -webkit-transform-origin: top center;
     transform-origin: top center;
 }
@@ -718,8 +722,6 @@ html[data-light-music-player="true"] .audio-subtitle {
 .player-page .subtitle-overlay.secondary,
 .player-container ~ .subtitle-overlay.secondary {
     bottom: auto;
-    -webkit-transform-origin: top center;
-    transform-origin: top center;
 }
 
 /* Dual Subtitles Active: Compact padding to minimize screen obstruction */

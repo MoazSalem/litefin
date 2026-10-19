@@ -62,6 +62,22 @@ class WebOSAdapter {
         this._lastMouseX = -1;
         this._lastMouseY = -1;
 
+        /*
+         * ====================================================================
+         * System Screensaver & Power Keepalive Management
+         * ====================================================================
+         * LG webOS natively enforces a ~30-minute idle screensaver timeout
+         * whenever video playback is not detected as exclusive full-screen
+         * (such as letterboxed/pillarboxed video elements with custom bounds).
+         * We track registration, subscription, and playback block states here.
+         * ====================================================================
+         */
+        this._screenSaverBlocked = false;
+        this._screenSaverSubscription = null;
+        this._screenSaverRegistered = false;
+        this._keepScreenActivityId = null;
+        this._isPlaybackKeepOnRequested = false;
+
         // Immediate platform detection via User Agent or Global
         this._detectPlatform();
     }
@@ -117,6 +133,10 @@ class WebOSAdapter {
 
         // 5. Setup wheel amplification for Magic Remote
         this._setupWheelHandler();
+
+        // 6. Setup screensaver suppression and event bus hooks
+        // Ensures native LG screensaver is suppressed during active video playback
+        this._setupScreensaverGuard();
 
         log.info('WebOSAdapter initialized');
     }
@@ -460,11 +480,305 @@ class WebOSAdapter {
         });
     }
 
+    // ========================================================================
+    // Screensaver Suppression & Power Keepalive API
+    // ========================================================================
+
+    /**
+     * Client identifier for screensaver registration with the TV power service.
+     * Matches the app ID configured in appinfo.json.
+     * @private
+     */
+    static get SCREENSAVER_CLIENT() {
+        return 'org.litefin.app';
+    }
+
+    /**
+     * Wire event bus listeners for media playback to automatically
+     * suppress the webOS screensaver while video is actively playing,
+     * and allow standard screensaver behavior when paused or stopped.
+     * @private
+     */
+    _setupScreensaverGuard() {
+        if (!this._isWebOS) return;
+
+        // Register guard subscription early so incoming screensaver requests
+        // can be intercepted immediately even on long idle sessions.
+        this._registerScreenSaverGuard();
+
+        // Listen for playback events across the entire application
+        if (typeof eventBus !== 'undefined' && typeof eventBus?.on === 'function') {
+            eventBus.on('player:play', () => {
+                this.setKeepScreenOn(true);
+            });
+            eventBus.on('player:playing', () => {
+                this.setKeepScreenOn(true);
+            });
+            eventBus.on('player:paused', () => {
+                this.setKeepScreenOn(false);
+            });
+            eventBus.on('player:stopped', () => {
+                this.setKeepScreenOn(false);
+            });
+        }
+    }
+
+    /**
+     * Register a persistent subscription with the LG webOS TV power service.
+     * Intercepts native firmware screensaver trigger requests from the system.
+     * When the TV is about to activate the system screensaver after idle timeout,
+     * it pushes a request with a timestamp to all registered listeners.
+     * @private
+     */
+    _registerScreenSaverGuard() {
+        if (!this._isWebOS || this._screenSaverRegistered) return;
+
+        log.info('Registering screensaver guard with TV power service');
+
+        try {
+            const clientName = WebOSAdapter.SCREENSAVER_CLIENT;
+
+            if (window.webOS && window.webOS.service && typeof window.webOS.service.request === 'function') {
+                this._screenSaverSubscription = window.webOS.service.request('luna://com.webos.service.tvpower', {
+                    method: 'power/registerScreenSaverRequest',
+                    parameters: { clientName, subscribe: true },
+                    subscribe: true,
+                    onSuccess: (res) => {
+                        log.info('Screensaver request event received from tvpower service:', res);
+                        if (res && res.timestamp) {
+                            this._respondScreenSaver(res.timestamp);
+                        }
+                    },
+                    onFailure: (err) => {
+                        log.warn('Screensaver guard registration failed:', err);
+                        this._screenSaverRegistered = false;
+                    }
+                });
+                this._screenSaverRegistered = true;
+            } else if (typeof window.PalmServiceBridge !== 'undefined') {
+                const bridge = new window.PalmServiceBridge();
+                bridge.onservicecallback = (msg) => {
+                    try {
+                        const res = JSON.parse(msg);
+                        log.info('Screensaver request event received (via PalmServiceBridge):', res);
+                        if (res && res.timestamp) {
+                            this._respondScreenSaver(res.timestamp);
+                        }
+                    } catch (e) {
+                        log.warn('Error parsing screensaver request message:', e);
+                    }
+                };
+                bridge.call(
+                    'luna://com.webos.service.tvpower/power/registerScreenSaverRequest',
+                    JSON.stringify({ clientName, subscribe: true })
+                );
+                this._screenSaverSubscription = bridge;
+                this._screenSaverRegistered = true;
+            }
+        } catch (e) {
+            log.warn('Exception while registering screensaver guard:', e);
+            this._screenSaverRegistered = false;
+        }
+    }
+
+    /**
+     * Respond to a pending screensaver activation request from webOS.
+     * If video is actively playing (_screenSaverBlocked is true), we reply with
+     * ack: false to deny/suppress screensaver activation and reset the idle timer.
+     * If video is paused, stopped, or the user is in menus, we reply with ack: true
+     * to allow normal system screensaver operation (protecting OLED screens).
+     *
+     * @param {string|number} timestamp - The timestamp token sent by tvpower service
+     * @private
+     */
+    _respondScreenSaver(timestamp) {
+        const ack = !this._screenSaverBlocked;
+        log.info(`Responding to webOS screensaver request - timestamp: ${timestamp}, ack (allow screensaver): ${ack}`);
+
+        const clientName = WebOSAdapter.SCREENSAVER_CLIENT;
+        const parameters = {
+            clientName,
+            ack,
+            timestamp
+        };
+
+        try {
+            if (window.webOS && window.webOS.service && typeof window.webOS.service.request === 'function') {
+                window.webOS.service.request('luna://com.webos.service.tvpower', {
+                    method: 'power/responseScreenSaverRequest',
+                    parameters,
+                    onSuccess: () => {
+                        log.debug('Screensaver response delivered successfully');
+                    },
+                    onFailure: (err) => {
+                        log.warn('Failed to respond to screensaver request:', err);
+                    }
+                });
+            } else if (typeof window.PalmServiceBridge !== 'undefined') {
+                const bridge = new window.PalmServiceBridge();
+                bridge.call(
+                    'luna://com.webos.service.tvpower/power/responseScreenSaverRequest',
+                    JSON.stringify(parameters)
+                );
+            }
+        } catch (e) {
+            log.warn('Exception sending screensaver response:', e);
+        }
+    }
+
+    /**
+     * Suppress or restore native webOS system screensaver and display sleep.
+     * When keepOn is true:
+     *   - Checks user preference pref:suppressScreensaverOnPlayback (defaults to false / disabled)
+     *   - If explicitly enabled by user: flags screensaver as blocked so tvpower requests receive ack: false,
+     *     ensures screensaver guard subscription is registered, and creates a continuous
+     *     power keepalive activity via com.palm.activitymanager
+     *   - If disabled by user (the default): leaves screensaver unblocked so tvpower requests receive ack: true
+     * When keepOn is false:
+     *   - Unblocks screensaver so tvpower requests receive ack: true
+     *   - Cancels the power keepalive activity
+     *
+     * @param {boolean} keepOn - True to request screensaver suppression; false to restore normal behavior
+     */
+    setKeepScreenOn(keepOn = true) {
+        // Exit early if not running in the webOS host environment
+        if (!this._isWebOS) return;
+
+        // Track whether playback is currently requesting display wakefulness
+        this._isPlaybackKeepOnRequested = Boolean(keepOn);
+
+        // Check if user explicitly enabled screensaver suppression in Settings (disabled by default)
+        const isEnabledByUser = storage.getItem('pref:suppressScreensaverOnPlayback') === 'true';
+        const shouldBlock = Boolean(keepOn && isEnabledByUser);
+
+        // Update internal suppression flag for upcoming tvpower callbacks
+        this._screenSaverBlocked = shouldBlock;
+        log.info(
+            `WebOSAdapter.setKeepScreenOn(${keepOn}) - enabledByUser: ${isEnabledByUser}, screensaverBlocked: ${this._screenSaverBlocked}`
+        );
+
+        if (shouldBlock) {
+            // Ensure tvpower screensaver request guard is active
+            this._registerScreenSaverGuard();
+            // Create power keepalive activity via ActivityManager
+            this._createKeepScreenActivity();
+        } else {
+            // Cancel power keepalive activity to prevent holding system resources
+            this._cancelKeepScreenActivity();
+        }
+    }
+
+    /**
+     * Update screensaver suppression state when the user toggles the
+     * preference under Litefin Screensaver settings.
+     *
+     * @param {boolean} enabled - New preference value
+     */
+    updateScreensaverSuppressionPreference(enabled) {
+        if (!this._isWebOS) return;
+        log.info(`WebOSAdapter.updateScreensaverSuppressionPreference(${enabled})`);
+
+        if (this._isPlaybackKeepOnRequested) {
+            this.setKeepScreenOn(this._isPlaybackKeepOnRequested);
+        }
+    }
+
+    /**
+     * Create a keepalive activity with com.palm.activitymanager to prevent
+     * the system from going into sleep mode or suspending the web process.
+     * @private
+     */
+    _createKeepScreenActivity() {
+        if (!this._isWebOS || this._keepScreenActivityId) return;
+
+        try {
+            const params = {
+                activity: {
+                    name: 'org.litefin.app-playback-keepalive',
+                    description: 'Keep screen awake during active video playback',
+                    type: {
+                        foreground: true,
+                        continuous: true,
+                        power: true,
+                        powerDebounce: true
+                    }
+                },
+                start: true,
+                replace: true,
+                subscribe: false
+            };
+
+            if (window.webOS && window.webOS.service && typeof window.webOS.service.request === 'function') {
+                window.webOS.service.request('luna://com.palm.activitymanager', {
+                    method: 'create',
+                    parameters: params,
+                    onSuccess: (res) => {
+                        this._keepScreenActivityId = res?.activityId || null;
+                        log.info('Keep-screen activity registered, activityId:', this._keepScreenActivityId);
+                    },
+                    onFailure: (err) => {
+                        log.warn('Failed to create keep-screen activity:', err);
+                    }
+                });
+            } else if (typeof window.PalmServiceBridge !== 'undefined') {
+                const bridge = new window.PalmServiceBridge();
+                bridge.onservicecallback = (msg) => {
+                    try {
+                        const res = JSON.parse(msg);
+                        this._keepScreenActivityId = res?.activityId || null;
+                        log.info('Keep-screen activity registered (via PalmServiceBridge):', this._keepScreenActivityId);
+                    } catch (e) {
+                        log.warn('Error parsing activity manager response:', e);
+                    }
+                };
+                bridge.call('luna://com.palm.activitymanager/create', JSON.stringify(params));
+            }
+        } catch (e) {
+            log.warn('Exception creating keep-screen activity:', e);
+        }
+    }
+
+    /**
+     * Cancel active keepalive activity with com.palm.activitymanager.
+     * @private
+     */
+    _cancelKeepScreenActivity() {
+        if (!this._isWebOS || !this._keepScreenActivityId) return;
+
+        const activityId = this._keepScreenActivityId;
+        this._keepScreenActivityId = null;
+
+        try {
+            const params = { activityId };
+
+            if (window.webOS && window.webOS.service && typeof window.webOS.service.request === 'function') {
+                window.webOS.service.request('luna://com.palm.activitymanager', {
+                    method: 'cancel',
+                    parameters: params,
+                    onSuccess: () => {
+                        log.info('Keep-screen activity canceled successfully');
+                    },
+                    onFailure: (err) => {
+                        log.warn('Failed to cancel keep-screen activity:', err);
+                    }
+                });
+            } else if (typeof window.PalmServiceBridge !== 'undefined') {
+                const bridge = new window.PalmServiceBridge();
+                bridge.call('luna://com.palm.activitymanager/cancel', JSON.stringify(params));
+            }
+        } catch (e) {
+            log.warn('Exception canceling keep-screen activity:', e);
+        }
+    }
+
     /**
      * Perform exit action
      */
     exit() {
         if (this._isWebOS) {
+            // Cancel any active keepalive activity and release screensaver suppression
+            this.setKeepScreenOn(false);
+
             // Flush all pending storage writes to disk before exiting.
             storage.flush();
             log.info('Exiting application via webOS.platformBack()');

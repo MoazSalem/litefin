@@ -15,6 +15,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import archiver from 'archiver';
+import process from 'process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,10 +24,49 @@ const rootDir = path.resolve(__dirname, '..');
 // ============================================================================
 // 1. Version, Tier, and Argument Parsing
 // ============================================================================
-// Read single-source-of-truth version directly from package.json
+// Retrieve version from config.xml (Single Source of Truth for all Litefin platforms)
+let version = '1.0.0';
+const configXmlPath = path.join(rootDir, 'config.xml');
+if (fs.existsSync(configXmlPath)) {
+    const configXmlContent = fs.readFileSync(configXmlPath, 'utf8');
+    const versionMatch = configXmlContent.match(/<widget[^>]*\sversion="([^"]+)"/);
+    if (versionMatch && versionMatch[1]) {
+        version = versionMatch[1].trim();
+    }
+} else {
+    // Fallback to package.json if config.xml is missing
+    const packageJsonPath = path.join(rootDir, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+        version = packageJson.version || version;
+    }
+}
+
+// Ensure package.json version matches config.xml
 const packageJsonPath = path.join(rootDir, 'package.json');
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-const version = packageJson.version || '1.0.0';
+if (fs.existsSync(packageJsonPath)) {
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    if (pkg.version !== version) {
+        pkg.version = version;
+        fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 4));
+    }
+}
+
+// Calculate 4-part assembly version required by .NET (e.g. 2.0.20 -> 2.0.20.0)
+const assemblyVersion = version.split('.').length === 3 ? `${version}.0` : version;
+
+// Ensure server-plugin/Litefin.Web.csproj reflects the active version
+const csprojPath = path.join(rootDir, 'server-plugin', 'Litefin.Web.csproj');
+if (fs.existsSync(csprojPath)) {
+    const csprojContent = fs.readFileSync(csprojPath, 'utf8');
+    const updatedCsproj = csprojContent
+        .replace(/<Version>[^<]+<\/Version>/, `<Version>${version}</Version>`)
+        .replace(/<AssemblyVersion>[^<]+<\/AssemblyVersion>/, `<AssemblyVersion>${assemblyVersion}</AssemblyVersion>`)
+        .replace(/<FileVersion>[^<]+<\/FileVersion>/, `<FileVersion>${assemblyVersion}</FileVersion>`);
+    if (updatedCsproj !== csprojContent) {
+        fs.writeFileSync(csprojPath, updatedCsproj, 'utf8');
+    }
+}
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -142,8 +182,7 @@ if (!fs.existsSync(distClientDir) || !fs.existsSync(path.join(distClientDir, 'in
 // 3. Compile and Publish .NET Server Plugin
 // ============================================================================
 // Publishes Litefin.Web.dll targeting net8.0 with stamped tier metadata
-console.log('\n>>> [2/5] Publishing .NET server plugin assembly...');
-const csprojPath = path.join(rootDir, 'server-plugin', 'Litefin.Web.csproj');
+// Path to the .NET plugin project and output publication folder
 const publishDir = path.join(rootDir, 'server-plugin', 'bin', 'Release', 'net8.0', 'publish');
 
 if (fs.existsSync(publishDir)) {
@@ -152,7 +191,7 @@ if (fs.existsSync(publishDir)) {
 
 try {
     execSync(
-        `dotnet publish "${csprojPath}" -c Release -o "${publishDir}" -p:Version=${version} -p:AssemblyVersion=${version}.0 -p:FileVersion=${version}.0 -p:PluginGuid=${currentConfig.guid} -p:PluginName="${currentConfig.name}" -p:PluginDescription="${currentConfig.description}"`,
+        `dotnet publish "${csprojPath}" -c Release -o "${publishDir}" -p:Version=${version} -p:AssemblyVersion=${assemblyVersion} -p:FileVersion=${assemblyVersion} -p:PluginGuid=${currentConfig.guid} -p:PluginName="${currentConfig.name}" -p:PluginDescription="${currentConfig.description}"`,
         {
             cwd: rootDir,
             stdio: 'inherit'

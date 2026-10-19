@@ -480,6 +480,80 @@ export function getSecondaryWindowStyles() {
     return styles;
 }
 
+/**
+ * ============================================================================
+ * Smart Screen Hemisphere Classification Helpers
+ * ============================================================================
+ * Determine whether a subtitle overlay is positioned in the upper or lower half
+ * of the television display viewport.
+ *
+ * This directional classification powers context-aware OSD dodging:
+ * - Subtitles placed in the bottom half dodge UPWARDS when player controls show.
+ * - Subtitles placed in the top half dodge DOWNWARDS when the top bar shows.
+ *
+ * Primary subtitle custom position represents percentage offset from screen BOTTOM.
+ * Secondary subtitle custom position represents percentage offset from screen TOP.
+ * ============================================================================
+ */
+
+/**
+ * Evaluates whether the primary subtitle track is positioned within the lower half.
+ *
+ * @returns {boolean} True if situated in the bottom hemisphere; false if top.
+ */
+export function isPrimarySubtitleInBottomHalf() {
+    // Retrieve the active vertical positioning setting string or preset
+    const posSetting = PlayerSettings.get('subtitleVerticalPosition');
+
+    // Handle user-specified numeric percentage slider offset
+    if (posSetting === 'custom') {
+        // Primary custom position is anchored from the bottom of the screen (0% - 100%)
+        const customPos = PlayerSettings.get('subtitleVerticalPositionCustom') ?? 10;
+
+        // Offsets strictly below 50% from the bottom reside in the lower hemisphere
+        return customPos < 50;
+    }
+
+    // Parse legacy or preset numerical strings (e.g., "-2" for bottom, "0" for top)
+    let pos = parseFloat(posSetting);
+
+    // Default to -2 (bottom standard baseline constraint) when unset or invalid
+    if (isNaN(pos)) pos = -2;
+
+    // Negative positions correspond to bottom-anchored placement
+    return pos < 0;
+}
+
+/**
+ * Evaluates whether the secondary subtitle track is positioned within the lower half.
+ *
+ * @returns {boolean} True if situated in the bottom hemisphere; false if top.
+ */
+export function isSecondarySubtitleInBottomHalf() {
+    // Secondary positioning defaults to custom slider percentage from the top
+    const posSetting = PlayerSettings.get('secondarySubtitleVerticalPosition') || 'custom';
+
+    // Handle user-specified numeric percentage slider offset
+    if (posSetting === 'custom') {
+        // Secondary custom position is measured as an absolute % from the TOP of the display
+        const customPos = PlayerSettings.get('secondarySubtitleVerticalPositionCustom') ?? 10;
+
+        // When custom position is >= 50% (e.g., 75%, 85%, 90%), the cue renders in
+        // the lower hemisphere (directly above or alongside primary subtitles).
+        // Therefore, it must dodge UPWARDS away from bottom OSD playback controls.
+        return customPos >= 50;
+    }
+
+    // Parse legacy or preset numerical values if configured
+    let pos = parseFloat(posSetting);
+
+    // Preset fallback defaults to 1 (top standard layout)
+    if (isNaN(pos)) pos = 1;
+
+    // Negative preset values represent bottom-anchored placement
+    return pos < 0;
+}
+
 // List of all possible font classes for cleanup
 const fontClasses = [
     'font-typewriter',
@@ -556,6 +630,8 @@ export default {
     getSecondaryWindowStyles,
     applyStyles,
     getCurrentFontId,
+    isPrimarySubtitleInBottomHalf,
+    isSecondarySubtitleInBottomHalf,
     getFontClassName: (settingKey = 'subtitleFont') => {
         const font = PlayerSettings.get(settingKey) || '';
         switch (font) {

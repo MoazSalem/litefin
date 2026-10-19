@@ -15,9 +15,9 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>CS1591</NoWarn>
     <!-- Default version stamped into assembly metadata; overridden during CI packaging -->
-    <Version>1.9.82</Version>
-    <AssemblyVersion>1.9.82.0</AssemblyVersion>
-    <FileVersion>1.9.82.0</FileVersion>
+    <Version>2.0.20</Version>
+    <AssemblyVersion>2.0.20.0</AssemblyVersion>
+    <FileVersion>2.0.20.0</FileVersion>
     <!-- Ensures dependencies resolve and copy cleanly if needed -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>

@@ -581,6 +581,26 @@ async function syncVersion() {
         }
     }
 
+    // Sync server-plugin/Litefin.Web.csproj (.NET Jellyfin Server Plugin)
+    // Synchronizes assembly metadata so plugin builds reflect current config.xml version
+    if (fs.existsSync('./server-plugin/Litefin.Web.csproj')) {
+        const csprojPath = './server-plugin/Litefin.Web.csproj';
+        const csprojContent = fs.readFileSync(csprojPath, 'utf8');
+        const assemblyVer = version.split('.').length === 3 ? `${version}.0` : version;
+
+        const updatedCsproj = csprojContent
+            .replace(/<Version>[^<]+<\/Version>/, `<Version>${version}</Version>`)
+            .replace(/<AssemblyVersion>[^<]+<\/AssemblyVersion>/, `<AssemblyVersion>${assemblyVer}</AssemblyVersion>`)
+            .replace(/<FileVersion>[^<]+<\/FileVersion>/, `<FileVersion>${assemblyVer}</FileVersion>`);
+
+        if (updatedCsproj !== csprojContent) {
+            console.info(`Syncing Litefin.Web.csproj version: -> ${version} (${assemblyVer})`);
+            fs.writeFileSync(csprojPath, updatedCsproj, 'utf8');
+        } else {
+            console.info('Litefin.Web.csproj version is already up to date');
+        }
+    }
+
     // Automatically purge stale build artifacts from previous versions in root and cache
     cleanObsoleteArtifacts(version);
 }

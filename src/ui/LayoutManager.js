@@ -853,9 +853,9 @@ class LayoutManager {
                 resolvedBg = this._lighterBackground ? '#151515' : '#101010';
             }
 
-            // Write static background-color rule directly to body
+            // Write static background-color rule directly to body, preserving player transparency
             dynamicCss += `\n/* Direct theme overrides for Chrome < 32 */\n`;
-            dynamicCss += `html[data-layout-quirks="c26"] body {
+            dynamicCss += `html[data-layout-quirks="c26"] body:not(.player-active) {
                 background-color: ${resolvedBg} !important;
             }\n`;
 

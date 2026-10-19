@@ -28,6 +28,7 @@ import { languageManager } from '../utils/LanguageManager.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { androidAdapter } from '../android/AndroidAdapter.js';
+import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { AUDIO_FALLBACK_SLOTS, isAudioFallbackSelect } from '../utils/AudioFallbackConfig.js';
@@ -977,6 +978,21 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+ 
+                ${(platformInfo.isWebOS || webosAdapter.isWebOS) ? `
+                <div class="setting-item" id="screensaver-playback-suppression-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreventScreensaverOnPlayback">${i18n.t('PreventScreensaverOnPlayback') || 'Prevent screensaver during playback'}</span>
+                        <span class="setting-description" data-i18n="PreventScreensaverOnPlaybackDescription">${i18n.t('PreventScreensaverOnPlaybackDescription') || 'Keep display awake and suppress system screensaver while video is actively playing'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:suppressScreensaverOnPlayback') === 'true' ? 'active' : ''}" 
+                                 id="toggle-suppress-screensaver-playback" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                ` : ''}
                 
                 <!-- Theme Section -->
                 <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
@@ -5220,8 +5236,10 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="OverrideSubtitleColors">${i18n.t('OverrideSubtitleColors') || 'Override Embedded Subtitle Colors'}</span>
-                        <span class="setting-description" data-i18n="OverrideSubtitleColorsDescription">${i18n.t('OverrideSubtitleColorsDescription') || 'Override author-specified colors in subtitles with your selected subtitle color.'}</span>
+                        <!-- Use canonical SubtitleOverrideColors key matching all locale files and tests -->
+                        <span class="setting-name" data-i18n="SubtitleOverrideColors">${i18n.t('SubtitleOverrideColors')}</span>
+                        <!-- Use canonical SubtitleOverrideColorsDesc key matching all locale files and tests -->
+                        <span class="setting-description" data-i18n="SubtitleOverrideColorsDesc">${i18n.t('SubtitleOverrideColorsDesc')}</span>
                     </div>
                     <div class="setting-control">
                          <button class="toggle-switch ${PlayerSettings.get('subtitleOverrideColors') ? 'active' : ''}" 
@@ -8343,6 +8361,30 @@ class SettingsPage extends Page {
                 const newValue = !isIncluded;
                 storage.setItem('pref:backdropIncludeMusic', newValue);
                 includeMusicBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // =====================================================================
+        // TOGGLE SCREENSAVER PLAYBACK SUPPRESSION (webOS only)
+        // =====================================================================
+        // Allows webOS users to toggle whether active video playback suppresses
+        // the host system's native screensaver (e.g. LG webOS tvpower service).
+        // Disabled by default to preserve stock behavior for all users unless
+        // specifically opted into.
+        // =====================================================================
+        const suppressScreensaverBtn = this.$('#toggle-suppress-screensaver-playback');
+        if (suppressScreensaverBtn) {
+            suppressScreensaverBtn.addEventListener('click', () => {
+                // Determine active state; disabled by default unless explicitly 'true'
+                const isCurrentlyEnabled = storage.getItem('pref:suppressScreensaverOnPlayback') === 'true';
+                const newValue = !isCurrentlyEnabled;
+                storage.setItem('pref:suppressScreensaverOnPlayback', String(newValue));
+                suppressScreensaverBtn.classList.toggle('active', newValue);
+
+                // Immediately inform webOS adapter to update dynamic screensaver guard if in playback
+                if ((platformInfo.isWebOS || webosAdapter.isWebOS) && typeof webosAdapter?.updateScreensaverSuppressionPreference === 'function') {
+                    webosAdapter.updateScreensaverSuppressionPreference(newValue);
+                }
             });
         }
 

@@ -297,6 +297,10 @@ test('Smart Hemisphere Detection correctly classifies subtitle positions', () =>
 
     PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 85);
     assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 85% must be bottom half');
+
+    // Custom 90% (near bottom baseline) must be bottom half and dodge UPWARDS
+    PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 90);
+    assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 90% must be bottom half');
 });
 
 test('Smart Dodging CSS rules shift bottom half UP and top half DOWN', () => {

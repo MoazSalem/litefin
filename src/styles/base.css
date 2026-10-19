@@ -855,10 +855,17 @@ body.player-active #app {
     background-color: transparent !important;
 }
 
-/* Also make html, .page, and page-container transparent for AVPlayer */
+/*
+ * Hardware Overlay Transparency Mode
+ * Ensure html, body, and all intermediate layers are unconditionally transparent
+ * when video playback is active. Tizen AVPlay and WebOS render on a hardware plane
+ * beneath the webview. Scoped across all theme modes to prevent cascade collisions.
+ */
 body.player-active,
-html.player-active {
+html.player-active,
+html.player-active[data-theme-mode] {
     background-color: transparent !important;
+    background: transparent !important;
 }
 
 body.player-active .page {
