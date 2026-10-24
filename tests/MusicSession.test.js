@@ -48,9 +48,10 @@ function makeQueue() {
     return queue;
 }
 
-function makeApi({ failIds = [] } = {}) {
+function makeApi({ failIds = [], flacIds = [] } = {}) {
     const api = {
         failIds: new Set(failIds),
+        flacIds: new Set(flacIds),
         infoCalls: [],
         started: [],
         progress: [],
@@ -73,7 +74,13 @@ function makeApi({ failIds = [] } = {}) {
             if (api.failIds.has(itemId)) throw new Error(`no info for ${itemId}`);
             return {
                 PlaySessionId: `ps-${itemId}`,
-                MediaSources: [{ Id: `ms-${itemId}`, RunTimeTicks: 200000 * TICKS_PER_MS }]
+                MediaSources: [
+                    {
+                        Id: `ms-${itemId}`,
+                        Container: api.flacIds.has(itemId) ? 'flac' : 'mp3',
+                        RunTimeTicks: 200000 * TICKS_PER_MS
+                    }
+                ]
             };
         },
         reportPlaybackStart(info) {
@@ -137,9 +144,9 @@ function makeEngine(callbacks) {
     return engine;
 }
 
-function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], now } = {}) {
+function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], flacIds = [], now } = {}) {
     const queue = makeQueue();
-    const api = makeApi({ failIds });
+    const api = makeApi({ failIds, flacIds });
     const events = [];
     const bus = {
         emit: (event, payload) => events.push({ event, payload }),
@@ -158,7 +165,10 @@ function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], now } = {}) {
         api,
         queue,
         bus,
-        urlFor: (item) => `http://srv/audio/${item.Id}`,
+        describeTrack: (item, mediaSource) => ({
+            url: `http://srv/audio/${item.Id}`,
+            kind: mediaSource.Container === 'flac' ? 'flac' : 'native'
+        }),
         notify: (name) => notified.push(name),
         log,
         now: now || (() => 0),
@@ -180,10 +190,10 @@ test('playItems loads first and preloads second', async () => {
     await flush();
     const engine = getEngine();
     assert.equal(engine.loads.length, 1);
-    assert.deepEqual(engine.loads[0].track, { id: 'a', url: 'http://srv/audio/a', durationMs: 200000 });
+    assert.deepEqual(engine.loads[0].track, { id: 'a', url: 'http://srv/audio/a', kind: 'native', durationMs: 200000 });
     assert.deepEqual(engine.calls, ['play']);
     assert.equal(engine.preloads.length, 1);
-    assert.deepEqual(engine.preloads[0], { id: 'b', url: 'http://srv/audio/b', durationMs: 200000 });
+    assert.deepEqual(engine.preloads[0], { id: 'b', url: 'http://srv/audio/b', kind: 'native', durationMs: 200000 });
     assert.equal(session.isActive, true);
     assert.equal(session.currentItem.Id, 'a');
     assert.deepEqual(api.started[0], {
@@ -194,6 +204,15 @@ test('playItems loads first and preloads second', async () => {
         IsPaused: false,
         PlayMethod: 'DirectPlay'
     });
+});
+
+test('engine tracks carry the kind described for their media source', async () => {
+    const { session, items, getEngine } = setup({ flacIds: ['a'] });
+    await session.playItems(items, 0);
+    await flush();
+    const engine = getEngine();
+    assert.equal(engine.loads[0].track.kind, 'flac');
+    assert.equal(engine.preloads[0].kind, 'native');
 });
 
 test('track start emits music:track and reports start + stopped for outgoing', async () => {

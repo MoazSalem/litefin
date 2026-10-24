@@ -12,7 +12,7 @@ export default class MusicSession {
         api,
         queue,
         bus,
-        urlFor,
+        describeTrack,
         notify,
         now = Date.now,
         getDeviceProfile = () => undefined,
@@ -24,7 +24,7 @@ export default class MusicSession {
         this._api = api;
         this._queue = queue;
         this._bus = bus;
-        this._urlFor = urlFor;
+        this._describeTrack = describeTrack;
         this._notify = notify;
         this._now = now;
         this._getDeviceProfile = getDeviceProfile;
@@ -199,11 +199,12 @@ export default class MusicSession {
         const mediaSource = response?.MediaSources?.[0];
         if (!mediaSource) throw new Error(`No media source for ${item.Id}`);
         const runtimeTicks = mediaSource.RunTimeTicks ?? item.RunTimeTicks ?? 0;
+        const { url, kind } = this._describeTrack(item, mediaSource);
         return {
             item,
             mediaSource,
             playSessionId: response.PlaySessionId,
-            track: { id: item.Id, url: this._urlFor(item, mediaSource), durationMs: runtimeTicks / TICKS_PER_MS }
+            track: { id: item.Id, url, kind, durationMs: runtimeTicks / TICKS_PER_MS }
         };
     }
 
