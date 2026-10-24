@@ -4,10 +4,6 @@ export const LEAD_IN_SECONDS = 0.3;
 export const STARVATION_MARGIN_SECONDS = 0.005;
 export const RESTART_LEAD_SECONDS = 0.05;
 
-export function scheduleNextStart(currentStartCtxTime, currentDurationSec, currentOffsetSec) {
-    return currentStartCtxTime + currentDurationSec - currentOffsetSec;
-}
-
 export function positionFromContext(ctxNow, trackStartCtxTime, offsetSec) {
     return Math.max(0, (Math.max(0, ctxNow - trackStartCtxTime) + offsetSec) * 1000);
 }

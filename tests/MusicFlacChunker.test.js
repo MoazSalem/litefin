@@ -129,3 +129,63 @@ test('a chunk larger than 8 MB throws', () => {
     const chunker = new FlacChunker();
     assert.throws(() => drain(chunker, flacFile({ frames, totalSamples: 4 * 4096 }), MB), /8 MB/);
 });
+
+test('variable block size streams (0xF9 sync) chunk on sample-numbered frames', () => {
+    const sizes = [4096, 1000, 4096, 2500, 4096, 4096, 300];
+    let sample = 0;
+    const frames = sizes.map((blockSize) => {
+        const f = frame(sample, { blockSize, variable: true });
+        sample += blockSize;
+        return f;
+    });
+    const chunks = drain(new FlacChunker({ targetSeconds: 0.2 }), flacFile({ frames, totalSamples: sample }), 50);
+    assert.deepEqual(
+        chunks.map((c) => [c.firstSample, c.samples]),
+        [
+            [0, 9192],
+            [9192, 10692],
+            [19884, 300]
+        ]
+    );
+    for (const chunk of chunks) {
+        const info = parseStreamInfo(chunk.bytes.subarray(8, MINI_HEADER_BYTES));
+        const header = parseFrameHeader(chunk.bytes, MINI_HEADER_BYTES, info);
+        assert.equal(header.variableBlockSize, true);
+        assert.equal(header.frameOrSampleNumber, chunk.firstSample);
+    }
+});
+
+test('ID3 header with the footer flag skips the 10-byte footer too', () => {
+    const total = 7 * 4096;
+    const bytes = flacFile({ frames: standardFrames(7, 0), totalSamples: total, id3: 500, id3Footer: true });
+    const chunks = drain(new FlacChunker({ targetSeconds: 0.5 }), bytes, 97);
+    assertChunksAreFrameAligned(chunks, total);
+});
+
+test('startMs skips whole frames before the target without emitting them', () => {
+    const total = 20 * 4096 + 1000;
+    const bytes = flacFile({ frames: standardFrames(20, 1000), totalSamples: total });
+    const startMs = ((10 * 4096 + 50) / SAMPLE_RATE) * 1000;
+    const chunker = new FlacChunker({ targetSeconds: 0.5, startMs });
+    const chunks = drain(chunker, bytes, 300);
+    assert.equal(chunker.startSample, 10 * 4096 + 50);
+    assert.equal(chunks[0].firstSample, 10 * 4096);
+    assert.equal(chunks[0].samples, 6 * 4096);
+    assert.equal(
+        chunks.reduce((n, c) => n + c.samples, 0),
+        total - 10 * 4096
+    );
+    const info = parseStreamInfo(chunks[0].bytes.subarray(8, MINI_HEADER_BYTES));
+    assert.equal(parseFrameHeader(chunks[0].bytes, MINI_HEADER_BYTES, info).frameOrSampleNumber, 10);
+});
+
+test('startMs past the end clamps into the final frame', () => {
+    const total = 8 * 4096 + 200;
+    const chunker = new FlacChunker({ startMs: 60000 });
+    const chunks = drain(chunker, flacFile({ frames: standardFrames(8, 200), totalSamples: total }), 4096);
+    assert.equal(chunker.startSample, total - 1);
+    assert.deepEqual(
+        chunks.map((c) => [c.firstSample, c.samples]),
+        [[8 * 4096, 200]]
+    );
+});

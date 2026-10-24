@@ -39,10 +39,16 @@ export function codedNumber(n) {
     return [0xf0 | (n >> 18), 0x80 | ((n >> 12) & 0x3f), 0x80 | ((n >> 6) & 0x3f), 0x80 | (n & 0x3f)];
 }
 
-export function frameHeader(number, blockSize = BLOCK) {
+export function frameHeader(number, blockSize = BLOCK, variable = false) {
     const fixed = blockSize === BLOCK;
     const blockCode = fixed ? 12 : 7;
-    const bytes = [0xff, 0xf8, (blockCode << 4) | 9, ((CHANNELS - 1) << 4) | (4 << 1), ...codedNumber(number)];
+    const bytes = [
+        0xff,
+        variable ? 0xf9 : 0xf8,
+        (blockCode << 4) | 9,
+        ((CHANNELS - 1) << 4) | (4 << 1),
+        ...codedNumber(number)
+    ];
     if (!fixed) bytes.push((blockSize - 1) >> 8, (blockSize - 1) & 0xff);
     const header = new Uint8Array(bytes.length + 1);
     header.set(bytes);
@@ -50,8 +56,8 @@ export function frameHeader(number, blockSize = BLOCK) {
     return header;
 }
 
-export function frame(number, { blockSize = BLOCK, payload = new Uint8Array(64) } = {}) {
-    const header = frameHeader(number, blockSize);
+export function frame(number, { blockSize = BLOCK, payload = new Uint8Array(64), variable = false } = {}) {
+    const header = frameHeader(number, blockSize, variable);
     const out = new Uint8Array(header.length + payload.length + 2);
     out.set(header);
     out.set(payload, header.length);
@@ -79,20 +85,21 @@ export function metadataBlock(type, body, last) {
     return concat([head, body]);
 }
 
-export function id3Tag(bodyLength) {
+export function id3Tag(bodyLength, { footer = false } = {}) {
     const head = new Uint8Array(10);
-    head.set([0x49, 0x44, 0x33, 4, 0, 0]);
+    head.set([0x49, 0x44, 0x33, 4, 0, footer ? 0x10 : 0]);
     head[6] = (bodyLength >> 21) & 0x7f;
     head[7] = (bodyLength >> 14) & 0x7f;
     head[8] = (bodyLength >> 7) & 0x7f;
     head[9] = bodyLength & 0x7f;
-    return concat([head, new Uint8Array(bodyLength).fill(0xff)]);
+    const footerBytes = footer ? [0x33, 0x44, 0x49, ...head.subarray(3)] : [];
+    return concat([head, new Uint8Array(bodyLength).fill(0xff), new Uint8Array(footerBytes)]);
 }
 
-export function flacFile({ frames, totalSamples, extraBlocks = [], id3 = 0 }) {
+export function flacFile({ frames, totalSamples, extraBlocks = [], id3 = 0, id3Footer = false }) {
     const blocks = [metadataBlock(0, streamInfoBody({ totalSamples }), extraBlocks.length === 0)];
     extraBlocks.forEach((b, i) => blocks.push(metadataBlock(b.type, b.body, i === extraBlocks.length - 1)));
-    const prefix = id3 > 0 ? [id3Tag(id3)] : [];
+    const prefix = id3 > 0 ? [id3Tag(id3, { footer: id3Footer })] : [];
     return concat([...prefix, new Uint8Array([0x66, 0x4c, 0x61, 0x43]), ...blocks, ...frames]);
 }
 

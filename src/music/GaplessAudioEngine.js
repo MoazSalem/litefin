@@ -1,12 +1,6 @@
 import { logger } from '../utils/Logger.js';
 import FlacChunker from './flac/FlacChunker.js';
-import {
-    chunkTrimSeconds,
-    hasLookaheadRoom,
-    positionFromContext,
-    resolveChunkStart,
-    seekTargetSample
-} from './gaplessSchedule.js';
+import { chunkTrimSeconds, hasLookaheadRoom, positionFromContext, resolveChunkStart } from './gaplessSchedule.js';
 
 const log = logger.create('GaplessAudioEngine');
 
@@ -43,7 +37,7 @@ function createPipeline(track, kind, startMs) {
         abort: new AbortController(),
         reader: null,
         info: null,
-        targetSample: 0,
+        startSample: 0,
         nodes: new Set(),
         cancelled: false,
         started: false,
@@ -72,6 +66,7 @@ export default class GaplessAudioEngine {
         this._playing = false;
         this._endedFired = false;
         this._timer = null;
+        this._ctxState = Promise.resolve();
     }
 
     get positionMs() {
@@ -111,7 +106,10 @@ export default class GaplessAudioEngine {
         try {
             await p.ready;
         } catch (err) {
-            if (this._current === p) this._current = null;
+            if (this._current === p) {
+                this._current = null;
+                this._stopTimer();
+            }
             throw err;
         }
     }
@@ -126,19 +124,17 @@ export default class GaplessAudioEngine {
 
     play() {
         this._playing = true;
-        if (this._ctx && this._ctx.state !== 'running') {
-            this._ctx.resume().catch((err) => log.warn('AudioContext resume failed', err));
-        }
+        if (this._current) this._startTimer();
+        this._applyPlayState();
     }
 
     pause() {
         this._playing = false;
-        if (this._ctx && this._ctx.state === 'running') {
-            this._ctx.suspend().catch((err) => log.warn('AudioContext suspend failed', err));
-        }
+        this._applyPlayState();
     }
 
     async seek(ms) {
+        this._promoteIfAudible();
         const current = this._current;
         if (!current) return;
         this._cancel(current);
@@ -147,6 +143,7 @@ export default class GaplessAudioEngine {
         const p = createPipeline(current.track, KIND.SEEK, ms);
         this._current = p;
         this._endedFired = false;
+        this._startTimer();
         this._run(p);
         await p.ready;
     }
@@ -167,6 +164,16 @@ export default class GaplessAudioEngine {
         }
     }
 
+    _applyPlayState() {
+        this._ctxState = this._ctxState
+            .then(() => {
+                const ctx = this._ctx;
+                if (!ctx) return undefined;
+                return this._playing ? ctx.resume() : ctx.suspend();
+            })
+            .catch((err) => log.warn('AudioContext play state change failed', err));
+    }
+
     _run(p) {
         this._pump(p).catch((err) => this._fail(p, err));
     }
@@ -181,12 +188,13 @@ export default class GaplessAudioEngine {
             throw new Error('Streaming fetch is not supported');
         }
         p.reader = response.body.getReader();
-        const chunker = new FlacChunker();
+        const chunker = new FlacChunker({ startMs: p.seekMs });
         for (;;) {
             const chunk = await this._readChunk(p, chunker);
             if (p.cancelled) return;
             if (!chunk) break;
-            if (!this._wantsChunk(p, chunker.streamInfo, chunk)) continue;
+            p.info = chunker.streamInfo;
+            p.startSample = chunker.startSample;
             this._ensureContext(chunker.streamInfo);
             const buffer = await decode(this._ctx, chunk.bytes);
             if (p.cancelled) return;
@@ -209,18 +217,11 @@ export default class GaplessAudioEngine {
         }
     }
 
-    _wantsChunk(p, info, chunk) {
-        if (!p.info) {
-            p.info = info;
-            p.targetSample = p.seekMs > 0 ? seekTargetSample(p.seekMs, info.sampleRate, info.totalSamples) : 0;
-        }
-        return p.started || chunk.firstSample + chunk.samples > p.targetSample;
-    }
-
     _ensureContext(info) {
         if (!this._ctx) {
             this._ctx = createAudioContext(info.sampleRate);
             log.info(`AudioContext ${this._ctx.sampleRate} Hz for FLAC ${info.sampleRate} Hz ${info.channels}ch`);
+            if (!this._playing) this._applyPlayState();
             return;
         }
         if (info.sampleRate !== this._ctx.sampleRate) {
@@ -241,7 +242,7 @@ export default class GaplessAudioEngine {
 
     _schedule(p, buffer, chunk) {
         const ctx = this._ctx;
-        const trim = p.started ? 0 : chunkTrimSeconds(p.targetSample, chunk.firstSample, p.info.sampleRate);
+        const trim = p.started ? 0 : chunkTrimSeconds(p.startSample, chunk.firstSample, p.info.sampleRate);
         const { when, shift, starved } = resolveChunkStart(this._clockBefore(p), ctx.currentTime);
         if (starved) {
             log.warn(`Starved on ${p.track.id}: chunk at sample ${chunk.firstSample} late by ${shift.toFixed(3)} s`);
@@ -261,7 +262,7 @@ export default class GaplessAudioEngine {
         if (!p.started) {
             p.started = true;
             p.startWhen = when;
-            p.offsetSec = p.targetSample / p.info.sampleRate;
+            p.offsetSec = p.startSample / p.info.sampleRate;
             p.resolveReady();
         }
     }
@@ -282,6 +283,12 @@ export default class GaplessAudioEngine {
             return;
         }
         p.resolveReady();
+        if (p === this._next && this._current && p.track.id === this._current.track.id) {
+            log.warn(`Preload of repeated track ${p.track.id} failed; dropping it so the current track ends normally`);
+            this._next = null;
+            this._nextTrack = null;
+            return;
+        }
         if (p === this._current || p === this._next) this._emit('onError', p.track.id, err);
     }
 
@@ -344,7 +351,9 @@ export default class GaplessAudioEngine {
         if (!this._ctx || !current) return;
         if (!this._promoteIfAudible() && this._hasEnded(current)) {
             this._endedFired = true;
+            this._stopTimer();
             this._emit('onEnded');
+            return;
         }
         if (this._playing && this._current) this._emit('onTime', this.positionMs, this.durationMs);
     }

@@ -7,24 +7,30 @@ import {
     parseFrameHeader,
     parseStreamInfo
 } from './flacFrames.js';
+import { CHUNK_SECONDS, seekTargetSample } from '../gaplessSchedule.js';
 
 const MB = 1024 * 1024;
 export const MAX_SCAN_BYTES = 4 * MB;
 export const MAX_CHUNK_BYTES = 8 * MB;
 const INITIAL_STORE_BYTES = 256 * 1024;
 const ID3_HEADER_BYTES = 10;
+const ID3_FOOTER_FLAG = 0x10;
 const METADATA_HEADER_BYTES = 4;
 const STREAMINFO_TYPE = 0;
 
 const PHASE = { ID3: 'id3', MARKER: 'marker', METADATA: 'metadata', FRAMES: 'frames', DONE: 'done' };
 
 function id3Size(b) {
-    return ID3_HEADER_BYTES + (((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f));
+    const body = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f);
+    const footer = b[5] & ID3_FOOTER_FLAG ? ID3_HEADER_BYTES : 0;
+    return ID3_HEADER_BYTES + body + footer;
 }
 
 export default class FlacChunker {
-    constructor({ targetSeconds = 5 } = {}) {
+    constructor({ targetSeconds = CHUNK_SECONDS, startMs = 0 } = {}) {
         this._targetSeconds = targetSeconds;
+        this._startMs = startMs;
+        this._startSample = 0;
         this._store = new Uint8Array(INITIAL_STORE_BYTES);
         this._start = 0;
         this._end = 0;
@@ -43,6 +49,10 @@ export default class FlacChunker {
 
     get streamInfo() {
         return this._info;
+    }
+
+    get startSample() {
+        return this._startSample;
     }
 
     get done() {
@@ -149,6 +159,7 @@ export default class FlacChunker {
             this._streamInfoBlock = b.slice(METADATA_HEADER_BYTES, METADATA_HEADER_BYTES + STREAMINFO_BYTES);
             this._info = parseStreamInfo(this._streamInfoBlock);
             this._targetSamples = Math.max(1, Math.round(this._targetSeconds * this._info.sampleRate));
+            this._startSample = seekTargetSample(this._startMs, this._info.sampleRate, this._info.totalSamples);
         }
         this._discard(METADATA_HEADER_BYTES + length);
         if (last) {
@@ -179,12 +190,28 @@ export default class FlacChunker {
             const at = findFrameStart(buf, this._scanFrom, this._info, nextFrameNumber(this._frame), this._ended);
             if (at < 0) return this._ended ? this._finish(buf.byteLength) : this._waitForMore(buf.byteLength);
             if (at > MAX_CHUNK_BYTES) throw new Error('FlacChunker: chunk larger than 8 MB');
+            if (this._isBeforeStart(this._frame)) {
+                this._skipFrame(at);
+                continue;
+            }
             this._chunkSamples += this._frame.blockSize;
             this._frame = parseFrameHeader(buf, at, this._info);
             this._frameAt = at;
             this._scanFrom = at + this._frame.headerLength;
             if (this._chunkSamples >= this._targetSamples) return this._emit(at);
         }
+    }
+
+    _isBeforeStart(frame) {
+        return this._chunkSamples === 0 && this._nextFirstSample + frame.blockSize <= this._startSample;
+    }
+
+    _skipFrame(at) {
+        this._nextFirstSample += this._frame.blockSize;
+        this._frame = parseFrameHeader(this._buf, at, this._info);
+        this._discard(at);
+        this._frameAt = 0;
+        this._scanFrom = this._frame.headerLength;
     }
 
     _waitForMore(available) {

@@ -7,14 +7,8 @@ import {
     hasLookaheadRoom,
     positionFromContext,
     resolveChunkStart,
-    scheduleNextStart,
     seekTargetSample
 } from '../src/music/gaplessSchedule.js';
-
-test('scheduleNextStart accounts for seek offset', () => {
-    assert.equal(scheduleNextStart(10, 200, 0), 210);
-    assert.equal(scheduleNextStart(10, 200, 50), 160);
-});
 
 test('positionFromContext', () => {
     assert.equal(positionFromContext(15, 10, 2), 7000);
