@@ -117,6 +117,26 @@ test('a stale context report for an older path is ignored', async () => {
     assert.deepEqual(session.calls, []);
 });
 
+test('router.back navigation to an outside route stops the music like any navigation', async () => {
+    const { bus, session } = wired();
+    bus.emit('music:track', { item: song, index: 0 });
+    bus.emit('router:navigate', { path: '/details/album1', params: {} });
+    bus.emit('router:navigate', { path: '/library/movies1', params: {} });
+    bus.emit('music:context', { path: '/library/movies1', isMusic: false });
+    await flush();
+    assert.deepEqual(session.calls, ['stop:left-music']);
+});
+
+test('a repeated non-music report on the same path stops only once', async () => {
+    const { bus, session } = wired();
+    bus.emit('music:track', { item: song, index: 0 });
+    bus.emit('router:navigate', { path: '/library/movies1' });
+    bus.emit('music:context', { path: '/library/movies1', isMusic: false });
+    bus.emit('music:context', { path: '/library/movies1', isMusic: false });
+    await flush();
+    assert.deepEqual(session.calls, ['stop:left-music']);
+});
+
 test('a context report on a music route does not stop the music', async () => {
     const { bus, session } = wired();
     bus.emit('music:track', { item: song, index: 0 });

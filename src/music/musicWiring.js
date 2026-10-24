@@ -30,7 +30,9 @@ export function wireMusicSession({ session, bus, state, log = { warn: noop } }) 
             }),
             bus.on('music:context', ({ path, isMusic }) => {
                 if (path !== latestPath || isMusic) return;
-                if (classifyRoute(routePath(path)) === 'pending') runSafely(session.stop('left-music'));
+                if (classifyRoute(routePath(path)) !== 'pending') return;
+                latestPath = null;
+                runSafely(session.stop('left-music'));
             })
         ];
     };

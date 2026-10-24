@@ -454,7 +454,7 @@ class LibraryPage extends Page {
     // ========================================================================
 
     async onInit() {
-        const navigatedPath = router.getCurrentPath();
+        this._navigatedPath = router.getCurrentPath();
         this.setLoading(true);
 
         // ANDROID PORTRAIT: re-resolve grid columns when the viewport rotates.
@@ -624,6 +624,7 @@ class LibraryPage extends Page {
         if (savedState) {
             // Merge cached state properties
             Object.assign(this.state, savedState.stateData);
+            this._reportMusicContext();
 
             // Restore the server query context. This path bypasses _loadItems(),
             // which is the only place it is built, and letter jumps / infinite
@@ -917,12 +918,7 @@ class LibraryPage extends Page {
         // Run title resolution and item loading simultaneously. viewType is already set
         // above synchronously, so _loadItems() is guaranteed to see the correct value.
         await Promise.all([infoFetchPromise, this._loadItems()]);
-        if (this.state.libraryInfo) {
-            eventBus.emit('music:context', {
-                path: navigatedPath,
-                isMusic: this.state.libraryInfo.CollectionType === 'music'
-            });
-        }
+        this._reportMusicContext();
 
         // If router provided pending navigation state (cache miss or fallback),
         // restore scroll/focus via NavigationState instead of blindly resetting to top.
@@ -1458,6 +1454,14 @@ class LibraryPage extends Page {
     // ========================================================================
     // Data Fetching
     // ========================================================================
+
+    _reportMusicContext() {
+        if (!this.state.libraryInfo) return;
+        eventBus.emit('music:context', {
+            path: this._navigatedPath,
+            isMusic: this.state.libraryInfo.CollectionType === 'music'
+        });
+    }
 
     async _fetchLibraryInfo() {
         if (this.state.libraryId === 'all') {
