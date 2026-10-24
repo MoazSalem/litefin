@@ -1,0 +1,180 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import NativeAudioBackend from '../src/music/NativeAudioBackend.js';
+
+function makeAudio() {
+    const listeners = new Map();
+    const el = {
+        src: '',
+        preload: '',
+        currentTime: 0,
+        duration: NaN,
+        error: null,
+        calls: [],
+        addEventListener(event, handler) {
+            if (!listeners.has(event)) listeners.set(event, new Set());
+            listeners.get(event).add(handler);
+        },
+        removeEventListener(event, handler) {
+            listeners.get(event)?.delete(handler);
+        },
+        listenerCount: () => [...listeners.values()].reduce((sum, set) => sum + set.size, 0),
+        fire(event) {
+            [...(listeners.get(event) || [])].forEach((handler) => handler());
+        },
+        removeAttribute(name) {
+            el.calls.push(`remove:${name}`);
+            if (name === 'src') el.src = '';
+        },
+        load: () => el.calls.push('load'),
+        play() {
+            el.calls.push('play');
+            return Promise.resolve();
+        },
+        pause: () => el.calls.push('pause')
+    };
+    return el;
+}
+
+function setup() {
+    const elements = [];
+    const events = [];
+    const timers = [];
+    const backend = new NativeAudioBackend({
+        onTrackStart: (id) => events.push(['trackStart', id]),
+        onEnded: () => events.push(['ended']),
+        onError: (id, err) => events.push(['error', id, err.message]),
+        onTime: (pos, dur) => events.push(['time', pos, dur]),
+        createAudio: () => {
+            const el = makeAudio();
+            elements.push(el);
+            return el;
+        },
+        setInterval: (fn, ms) => {
+            timers.push({ fn, ms, cleared: false });
+            return timers.length;
+        },
+        clearInterval: (handle) => {
+            timers[handle - 1].cleared = true;
+        }
+    });
+    return { backend, elements, events, timers };
+}
+
+const track = (id) => ({ id, url: `u/${id}`, kind: 'native', durationMs: 3000 });
+
+async function loaded(backend, elements, t, startMs) {
+    const pending = backend.load(t, startMs);
+    const el = elements.at(-1);
+    el.fire('loadedmetadata');
+    el.fire('canplay');
+    await pending;
+    return el;
+}
+
+test('load resolves on canplay and applies the start offset', async () => {
+    const { backend, elements } = setup();
+    const el = await loaded(backend, elements, track('a'), 1500);
+    assert.equal(el.src, 'u/a');
+    assert.equal(el.preload, 'auto');
+    assert.equal(el.currentTime, 1.5);
+    assert.equal(backend.currentTrackId, 'a');
+    assert.equal(backend.durationMs, 3000);
+});
+
+test('load rejects on a media error before it can play', async () => {
+    const { backend, elements } = setup();
+    const pending = backend.load(track('a'));
+    elements[0].error = { code: 4 };
+    elements[0].fire('error');
+    await assert.rejects(pending, /code 4/);
+});
+
+test('ended swaps to the preloaded element and fires onTrackStart on playing', async () => {
+    const { backend, elements, events } = setup();
+    const first = await loaded(backend, elements, track('a'));
+    backend.play();
+    await backend.preloadNext(track('b'));
+    const second = elements[1];
+    assert.equal(second.src, 'u/b');
+    first.fire('ended');
+    assert.equal(first.src, '');
+    assert.equal(first.listenerCount(), 0);
+    assert.ok(second.calls.includes('play'));
+    assert.deepEqual(events, []);
+    second.fire('playing');
+    second.fire('playing');
+    assert.deepEqual(events, [['trackStart', 'b']]);
+    assert.equal(backend.currentTrackId, 'b');
+});
+
+test('ended with nothing preloaded fires onEnded', async () => {
+    const { backend, elements, events } = setup();
+    const el = await loaded(backend, elements, track('a'));
+    backend.play();
+    el.fire('ended');
+    assert.deepEqual(events, [['ended']]);
+    assert.equal(backend.isPlaying, false);
+});
+
+test('replacing the preload releases the old element; never more than two live', async () => {
+    const { backend, elements } = setup();
+    await loaded(backend, elements, track('a'));
+    await backend.preloadNext(track('b'));
+    await backend.preloadNext(track('c'));
+    assert.equal(elements[1].src, '');
+    assert.equal(elements[1].listenerCount(), 0);
+    const live = elements.filter((el) => el.src !== '');
+    assert.equal(live.length, 2);
+    await backend.preloadNext(null);
+    assert.equal(elements[2].src, '');
+});
+
+test('preload error reports the next track and drops it', async () => {
+    const { backend, elements, events } = setup();
+    const first = await loaded(backend, elements, track('a'));
+    await backend.preloadNext(track('b'));
+    elements[1].fire('error');
+    assert.deepEqual(events, [['error', 'b', 'Audio element error (code unknown)']]);
+    first.fire('ended');
+    assert.deepEqual(events.at(-1), ['ended']);
+});
+
+test('error on the playing element reports the current track', async () => {
+    const { backend, elements, events } = setup();
+    const el = await loaded(backend, elements, track('a'));
+    el.fire('error');
+    assert.deepEqual(events, [['error', 'a', 'Audio element error (code unknown)']]);
+});
+
+test('onTime ticks at 4 Hz while playing and stops on pause', async () => {
+    const { backend, elements, events, timers } = setup();
+    const el = await loaded(backend, elements, track('a'));
+    backend.play();
+    assert.equal(timers.length, 1);
+    assert.equal(timers[0].ms, 250);
+    el.currentTime = 2;
+    timers[0].fn();
+    assert.deepEqual(events, [['time', 2000, 3000]]);
+    backend.pause();
+    assert.equal(timers[0].cleared, true);
+    assert.ok(el.calls.includes('pause'));
+});
+
+test('seek sets currentTime', async () => {
+    const { backend, elements } = setup();
+    const el = await loaded(backend, elements, track('a'));
+    await backend.seek(2500);
+    assert.equal(el.currentTime, 2.5);
+});
+
+test('stop releases both elements and a superseded load resolves', async () => {
+    const { backend, elements } = setup();
+    const pending = backend.load(track('a'));
+    backend.stop();
+    await pending;
+    assert.equal(elements[0].src, '');
+    assert.equal(elements[0].listenerCount(), 0);
+    assert.equal(backend.currentTrackId, null);
+    assert.equal(backend.positionMs, 0);
+});
