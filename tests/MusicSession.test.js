@@ -656,3 +656,33 @@ test('refreshUpNext does nothing when no music is active', async () => {
     await flush();
     assert.deepEqual(api.infoCalls, []);
 });
+
+test('refreshUpNext keeps the preload when the next track did not change', async () => {
+    const { session, items, getEngine, api } = setup();
+    await session.playItems(items, 0);
+    await flush();
+    const engine = getEngine();
+    const preloadsBefore = engine.preloads.length;
+    const infoBefore = api.infoCalls.length;
+    session.refreshUpNext();
+    await flush();
+    assert.equal(engine.preloads.length, preloadsBefore);
+    assert.equal(api.infoCalls.length, infoBefore);
+});
+
+test('refreshUpNext drops the stale preload before preparing the new next track', async () => {
+    const { session, items, getEngine, queue, api, warnings } = setup();
+    await session.playItems(items, 0);
+    await flush();
+    const engine = getEngine();
+    const release = api.hold('d');
+    queue.items = [items[0], items[3], items[1], items[2]];
+    session.refreshUpNext();
+    assert.equal(engine.preloads.at(-1), null);
+    engine.fireTrackStart('b');
+    assert.equal(session.currentItem.Id, 'a');
+    assert.equal(warnings.length, 1);
+    release();
+    await flush();
+    assert.equal(engine.preloads.at(-1).id, 'd');
+});

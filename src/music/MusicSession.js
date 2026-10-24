@@ -155,6 +155,10 @@ export default class MusicSession {
 
     refreshUpNext() {
         if (!this._active) return;
+        const candidate = this._nextCandidate();
+        if (candidate && this._preloaded && this._preloaded.item.Id === candidate.Id) return;
+        this._preloaded = null;
+        this._fireAndForget(this._engine.preloadNext(null));
         this._fireAndForget(this._prefetch());
     }
 
