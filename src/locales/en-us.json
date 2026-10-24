@@ -1721,5 +1721,8 @@
     "YearLabel": "Year: {0}",
     "YearValue": "{0} year",
     "Yes": "Yes",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "music.disc": "Disc {0}",
+    "music.songCount": "{0} songs",
+    "music.songCountOne": "1 song"
 }
