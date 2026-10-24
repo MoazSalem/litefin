@@ -70,7 +70,8 @@ export default class HybridAudioEngine {
         this._pendingNext = null;
         this._wantsPlay = false;
         this._activeKind = null;
-        this._eachEngine((engine) => engine.stop());
+        if (this._engines.native) this._engines.native.stop();
+        if (this._engines.flac) this._release('flac');
     }
 
     destroy() {

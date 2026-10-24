@@ -233,16 +233,28 @@ test('getters are empty before any load', () => {
     assert.equal(engine.currentTrackId, null);
 });
 
-test('stop stops both backends', async () => {
+test('stop stops native and destroys gapless so no audio context outlives the music', async () => {
     const { engine, gapless, native } = setup();
     await engine.load(mp3('a'));
     await engine.load(flac('b'));
     gapless().calls.length = 0;
     native().calls.length = 0;
     engine.stop();
-    assert.deepEqual(gapless().calls, ['stop']);
+    assert.ok(gapless().calls.includes('destroy'));
     assert.deepEqual(native().calls, ['stop']);
     assert.equal(engine.currentTrackId, null);
+});
+
+test('a FLAC track after stop gets a fresh gapless engine', async () => {
+    const { engine, created, events } = setup();
+    await engine.load(flac('a'));
+    engine.stop();
+    await engine.load(flac('b'));
+    assert.equal(created.gapless.length, 2);
+    assert.deepEqual(created.gapless[1].calls, ['load:b']);
+    created.gapless[0].callbacks.onEnded();
+    created.gapless[1].callbacks.onTime(1, 2);
+    assert.deepEqual(events, [['time', 1, 2]]);
 });
 
 test('destroy destroys both backends', async () => {
