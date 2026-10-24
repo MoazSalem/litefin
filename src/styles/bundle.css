@@ -28,6 +28,7 @@
 
 /* Application shell and shared structural styles */
 @import './sidebar.css';
+@import './mini-player.css';
 
 /* Overlay dialogs that must exist before any async chunk can load */
 @import './offline.css';

@@ -953,6 +953,7 @@ import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { versionChecker } from '../utils/VersionChecker.js';
 import { timeManager } from '../utils/TimeManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
+import MiniPlayer from '../music/MiniPlayer.js';
 import { smartHubManager } from '../tizen/SmartHubManager.js';
 import { launchTargetManager } from '../webos/LaunchTargetManager.js';
 import { androidLauncherManager } from '../android/AndroidLauncherManager.js';
@@ -1257,6 +1258,9 @@ class App {
 
         // Initialize Global Clock — persistent time display above all UI
         globalClock.init();
+
+        this.miniPlayer = new MiniPlayer();
+        this.miniPlayer.mount(document.body);
 
         // Get container element
         if (typeof options.container === 'string') {
