@@ -80,17 +80,34 @@ export default class HybridAudioEngine {
     }
 
     _activate(kind) {
-        if (this._activeKind && this._activeKind !== kind) this._active.stop();
+        if (this._activeKind && this._activeKind !== kind) this._release(this._activeKind);
         this._activeKind = kind;
-        if (!this._engines[kind]) this._engines[kind] = this._factories[kind](this._routedCallbacks(kind));
+        if (!this._engines[kind]) this._engines[kind] = this._create(kind);
         return this._engines[kind];
     }
 
-    _routedCallbacks(kind) {
+    /* A live AudioContext can hold webOS audio output in PCM mode and block Atmos passthrough on native tracks. */
+    _release(kind) {
+        const engine = this._engines[kind];
+        if (kind === 'flac') {
+            this._engines.flac = null;
+            engine.destroy();
+        } else {
+            engine.stop();
+        }
+    }
+
+    _create(kind) {
+        const holder = { engine: null };
+        holder.engine = this._factories[kind](this._routedCallbacks(holder));
+        return holder.engine;
+    }
+
+    _routedCallbacks(holder) {
         const whenActive =
             (fn) =>
             (...args) => {
-                if (this._activeKind === kind) fn(...args);
+                if (holder.engine && this._active === holder.engine) fn(...args);
             };
         return {
             onTrackStart: whenActive((id) => this._callbacks.onTrackStart(id)),

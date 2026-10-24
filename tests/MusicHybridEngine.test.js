@@ -111,7 +111,7 @@ test('FLAC to MP3 hands over on ended and emits onTrackStart once', async () => 
     await flush();
     assert.deepEqual(native().loads, [{ track: mp3('b'), startMs: 0 }]);
     assert.deepEqual(native().calls, ['load:b', 'play']);
-    assert.ok(gapless().calls.includes('stop'));
+    assert.ok(gapless().calls.includes('destroy'));
     assert.deepEqual(events, [['trackStart', 'b']]);
     assert.equal(engine.currentTrackId, 'b');
     assert.equal(engine.isPlaying, true);
@@ -176,11 +176,37 @@ test('callbacks from the inactive backend are ignored', async () => {
     assert.deepEqual(events, [['time', 1, 2]]);
 });
 
-test('switching kind on load stops the outgoing backend', async () => {
-    const { engine, gapless } = setup();
+test('switching to native destroys the gapless engine and recreates it lazily', async () => {
+    const { engine, created } = setup();
     await engine.load(flac('a'));
     await engine.load(mp3('b'));
-    assert.ok(gapless().calls.includes('stop'));
+    assert.ok(created.gapless[0].calls.includes('destroy'));
+    assert.equal(created.gapless.length, 1);
+    await engine.load(flac('c'));
+    assert.equal(created.gapless.length, 2);
+    assert.deepEqual(created.gapless[1].calls, ['load:c']);
+});
+
+test('switching to gapless only stops the native backend', async () => {
+    const { engine, native, created } = setup();
+    await engine.load(mp3('a'));
+    await engine.load(flac('b'));
+    assert.ok(native().calls.includes('stop'));
+    assert.ok(!native().calls.includes('destroy'));
+    await engine.load(mp3('c'));
+    assert.equal(created.native.length, 1);
+});
+
+test('callbacks from a destroyed gapless engine are ignored after it is recreated', async () => {
+    const { engine, created, events } = setup();
+    await engine.load(flac('a'));
+    await engine.load(mp3('b'));
+    await engine.load(flac('c'));
+    created.gapless[0].callbacks.onTrackStart('zombie');
+    created.gapless[0].callbacks.onEnded();
+    assert.deepEqual(events, []);
+    created.gapless[1].callbacks.onTrackStart('d');
+    assert.deepEqual(events, [['trackStart', 'd']]);
 });
 
 test('pause, seek and getters delegate to the active backend', async () => {
@@ -209,8 +235,8 @@ test('getters are empty before any load', () => {
 
 test('stop stops both backends', async () => {
     const { engine, gapless, native } = setup();
-    await engine.load(flac('a'));
-    await engine.load(mp3('b'));
+    await engine.load(mp3('a'));
+    await engine.load(flac('b'));
     gapless().calls.length = 0;
     native().calls.length = 0;
     engine.stop();
@@ -221,8 +247,8 @@ test('stop stops both backends', async () => {
 
 test('destroy destroys both backends', async () => {
     const { engine, gapless, native } = setup();
-    await engine.load(flac('a'));
-    await engine.load(mp3('b'));
+    await engine.load(mp3('a'));
+    await engine.load(flac('b'));
     engine.destroy();
     assert.ok(gapless().calls.includes('destroy'));
     assert.ok(native().calls.includes('destroy'));
