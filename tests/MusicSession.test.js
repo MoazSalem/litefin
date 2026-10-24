@@ -19,6 +19,7 @@ function makeQueue() {
             queue.items = items;
             queue.index = Math.max(0, Math.min(activeIndex, items.length - 1));
         },
+        getCurrentIndex: () => queue.index,
         getCurrentItem: () => (queue.index === -1 ? null : queue.items[queue.index]),
         hasNext: () => queue.items.length > 0 && (queue.repeat === 'RepeatAll' || queue.index < queue.items.length - 1),
         hasPrevious: () => queue.items.length > 0 && (queue.repeat === 'RepeatAll' || queue.index > 0),
@@ -54,9 +55,21 @@ function makeApi({ failIds = [] } = {}) {
         started: [],
         progress: [],
         stopped: [],
+        held: new Map(),
+        hold(id) {
+            let release;
+            api.held.set(
+                id,
+                new Promise((resolve) => {
+                    release = resolve;
+                })
+            );
+            return release;
+        },
         stoppedResult: () => Promise.resolve(),
         async getPlaybackInfo(itemId) {
             api.infoCalls.push(itemId);
+            if (api.held.has(itemId)) await api.held.get(itemId);
             if (api.failIds.has(itemId)) throw new Error(`no info for ${itemId}`);
             return {
                 PlaySessionId: `ps-${itemId}`,
@@ -133,6 +146,8 @@ function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], now } = {}) {
         on: () => () => {}
     };
     const notified = [];
+    const warnings = [];
+    const log = { warn: (...args) => warnings.push(args) };
     const timers = { intervals: [], cleared: [] };
     let engine = null;
     const session = new MusicSession({
@@ -145,6 +160,7 @@ function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], now } = {}) {
         bus,
         urlFor: (item) => `http://srv/audio/${item.Id}`,
         notify: (name) => notified.push(name),
+        log,
         now: now || (() => 0),
         setInterval: (fn, ms) => {
             timers.intervals.push({ fn, ms });
@@ -153,7 +169,7 @@ function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], now } = {}) {
         clearInterval: (handle) => timers.cleared.push(handle)
     });
     const items = makeItems(ids);
-    return { session, queue, api, events, notified, timers, items, getEngine: () => engine };
+    return { session, queue, api, events, notified, warnings, timers, items, getEngine: () => engine };
 }
 
 const eventsOf = (events, name) => events.filter((e) => e.event === name).map((e) => e.payload);
@@ -212,7 +228,7 @@ test('queue end stops once and emits music:stopped', async () => {
 });
 
 test('next track prepare failure skips to the one after and notifies', async () => {
-    const { session, items, getEngine, notified, queue } = setup({ failIds: ['b'] });
+    const { session, items, getEngine, notified, queue, events } = setup({ failIds: ['b'] });
     await session.playItems(items, 0);
     await flush();
     const engine = getEngine();
@@ -221,6 +237,7 @@ test('next track prepare failure skips to the one after and notifies', async () 
     engine.fireTrackStart('c');
     assert.equal(queue.index, 2);
     assert.equal(session.currentItem.Id, 'c');
+    assert.deepEqual(eventsOf(events, 'music:track').pop(), { item: items[2], index: 2 });
 });
 
 test('rapid next() calls: only the last target is loaded', async () => {
@@ -272,9 +289,7 @@ test('transition does not await reporting', async () => {
 });
 
 test('report failures are logged, not thrown', async () => {
-    const warnings = [];
-    const { session, items, getEngine, api } = setup();
-    session._log.warn = (...args) => warnings.push(args);
+    const { session, items, getEngine, api, warnings } = setup();
     api.stoppedResult = () => Promise.reject(new Error('offline'));
     await session.playItems(items, 0);
     await flush();
@@ -341,4 +356,116 @@ test('stop reports stopped once, clears the progress timer and is idempotent', a
     assert.ok(getEngine().calls.includes('stop'));
     assert.equal(timers.cleared.length >= 1, true);
     assert.equal(session.isActive, false);
+});
+
+test('ended with nothing preloaded but a next track continues with next()', async () => {
+    const { session, items, getEngine, api, events } = setup({ ids: ['a', 'b', 'c'] });
+    const release = api.hold('b');
+    await session.playItems(items, 0);
+    await flush();
+    const engine = getEngine();
+    assert.equal(engine.preloads.length, 0);
+    engine.fireEnded();
+    release();
+    await flush();
+    assert.equal(engine.loads.at(-1).track.id, 'b');
+    assert.equal(session.isActive, true);
+    assert.equal(eventsOf(events, 'music:stopped').length, 0);
+});
+
+test('every candidate failing stops once with error', async () => {
+    const { session, items, getEngine, events, notified } = setup({ ids: ['a', 'b'], failIds: ['a', 'b'] });
+    await session.playItems(items, 0);
+    await flush();
+    assert.deepEqual(eventsOf(events, 'music:stopped'), [{ reason: 'error' }]);
+    assert.deepEqual(notified, ['Song a', 'Song b']);
+    assert.ok(getEngine().calls.includes('stop'));
+    assert.equal(session.isActive, false);
+});
+
+test('playItems with no items stops with empty', async () => {
+    const { session, getEngine, events } = setup();
+    await session.playItems([], 0);
+    assert.deepEqual(eventsOf(events, 'music:stopped'), [{ reason: 'empty' }]);
+    assert.ok(getEngine().calls.includes('stop'));
+});
+
+test('stop during the first load discards the load', async () => {
+    const { session, items, getEngine, api, events } = setup();
+    const release = api.hold('a');
+    const starting = session.playItems(items, 0);
+    await flush();
+    await session.stop('user');
+    release();
+    await starting;
+    await flush();
+    assert.deepEqual(eventsOf(events, 'music:stopped'), [{ reason: 'user' }]);
+    assert.equal(getEngine().loads.length, 0);
+    assert.equal(session.isActive, false);
+});
+
+test('a prefetch finishing after a transition is discarded', async () => {
+    const { session, items, getEngine, api } = setup({ ids: ['a', 'b', 'c'] });
+    const release = api.hold('b');
+    await session.playItems(items, 0);
+    await flush();
+    await session.playItems(items, 2);
+    release();
+    await flush();
+    assert.equal(
+        getEngine().preloads.some((track) => track && track.id === 'b'),
+        false
+    );
+});
+
+test('engine error on the current track notifies and moves on', async () => {
+    const { session, items, getEngine, notified } = setup();
+    await session.playItems(items, 0);
+    await flush();
+    getEngine().fireError('a', new Error('decode'));
+    await flush();
+    assert.deepEqual(notified, ['Song a']);
+    assert.equal(getEngine().loads.at(-1).track.id, 'b');
+});
+
+test('engine error on the preloaded track skips to the one after', async () => {
+    const { session, items, getEngine, notified } = setup();
+    await session.playItems(items, 0);
+    await flush();
+    const engine = getEngine();
+    engine.fireError('b', new Error('decode'));
+    await flush();
+    assert.deepEqual(notified, ['Song b']);
+    assert.equal(engine.preloads.at(-1).id, 'c');
+});
+
+test('RepeatAll wraps to the first track', async () => {
+    const { session, items, getEngine, queue, events } = setup({ ids: ['a', 'b'] });
+    queue.repeat = 'RepeatAll';
+    await session.playItems(items, 1);
+    await flush();
+    const engine = getEngine();
+    assert.equal(engine.preloads.at(-1).id, 'a');
+    engine.fireTrackStart('a');
+    assert.deepEqual(eventsOf(events, 'music:track').pop(), { item: items[0], index: 0 });
+});
+
+test('previous after a prefetch skip goes back from the playing track', async () => {
+    const { session, items, getEngine, queue } = setup({ failIds: ['c'] });
+    await session.playItems(items, 1);
+    await flush();
+    assert.equal(queue.index, 2);
+    getEngine().positionMs = 500;
+    await session.previous();
+    assert.equal(queue.index, 0);
+    assert.equal(getEngine().loads.at(-1).track.id, 'a');
+});
+
+test('unexpected track start is logged and ignored', async () => {
+    const { session, items, getEngine, warnings, queue } = setup();
+    await session.playItems(items, 0);
+    await flush();
+    getEngine().fireTrackStart('zzz');
+    assert.equal(warnings.length, 1);
+    assert.equal(queue.index, 0);
 });

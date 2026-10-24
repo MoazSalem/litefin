@@ -36,8 +36,7 @@ export default class MusicSession {
         this._active = false;
         this._generation = 0;
         this._prefetchToken = 0;
-        this._itemCount = 0;
-        this._index = 0;
+        this._open = false;
         this._current = null;
         this._preloaded = null;
         this._skippedAhead = 0;
@@ -69,9 +68,8 @@ export default class MusicSession {
         const generation = this._beginTransition();
         this._reportStopped();
         this._ensureEngine();
-        this._itemCount = items.length;
-        this._index = Math.max(0, Math.min(startIndex, items.length - 1));
-        this._queue.setQueue(items, this._index);
+        this._open = true;
+        this._queue.setQueue(items, startIndex);
         this._skippedAhead = 0;
 
         const item = this._queue.getCurrentItem();
@@ -108,23 +106,22 @@ export default class MusicSession {
             await this.stop('ended');
             return;
         }
-        this._advanceIndex(1);
         await this._switchTo(target, 1);
     }
 
     async previous() {
         if (!this._active) return;
-        if (this.positionMs > RESTART_THRESHOLD_MS || !this._queue.hasPrevious()) {
+        if (this.positionMs > RESTART_THRESHOLD_MS) {
             await this.seekTo(0);
             return;
         }
         this._rewindSkipped();
         const target = this._queue.goBack();
         if (!target) {
+            this._fireAndForget(this._prefetch());
             await this.seekTo(0);
             return;
         }
-        this._advanceIndex(-1);
         await this._switchTo(target, -1);
     }
 
@@ -134,11 +131,11 @@ export default class MusicSession {
     }
 
     async stop(reason) {
-        if (!this._active) return;
+        if (!this._open) return;
         this._beginTransition();
         this._reportStopped();
+        this._open = false;
         this._active = false;
-        this._preloaded = null;
         this._engine.stop();
         this._bus.emit('music:stopped', { reason });
     }
@@ -158,11 +155,6 @@ export default class MusicSession {
         this._prefetchToken++;
         this._preloaded = null;
         return ++this._generation;
-    }
-
-    _advanceIndex(delta) {
-        if (this._itemCount === 0) return;
-        this._index = (this._index + delta + this._itemCount) % this._itemCount;
     }
 
     _rewindSkipped() {
@@ -196,7 +188,6 @@ export default class MusicSession {
                 this._notify(item.Name);
                 const following = direction > 0 ? this._queue.advance() : this._queue.goBack();
                 if (!following) break;
-                this._advanceIndex(direction);
                 item = following;
             }
         }
@@ -219,20 +210,23 @@ export default class MusicSession {
     _startTrack(prepared) {
         this._current = prepared;
         this._skippedAhead = 0;
-        this._bus.emit('music:track', { item: prepared.item, index: this._index });
+        this._bus.emit('music:track', { item: prepared.item, index: this._queue.getCurrentIndex() });
         this._bus.emit('music:state', { isPlaying: this._engine.isPlaying });
         this._fireAndForget(this._api.reportPlaybackStart(this._payload(prepared, 0, false)));
         this._startProgressTimer();
-        this._prefetch();
+        this._fireAndForget(this._prefetch());
     }
 
     _handleTrackStart(trackId) {
         const next = this._preloaded;
-        if (!this._active || !next || next.item.Id !== trackId) return;
+        if (!this._active) return;
+        if (!next || next.item.Id !== trackId) {
+            this._log.warn(`Music engine started unexpected track ${trackId}`);
+            return;
+        }
         this._reportStopped(this._current.track.durationMs);
         if (this._queue.getRepeatMode() !== 'RepeatOne') {
             this._queue.advance();
-            this._advanceIndex(1);
         }
         this._clearProgressTimer();
         this._preloaded = null;
@@ -240,7 +234,14 @@ export default class MusicSession {
     }
 
     _handleEnded() {
-        this.stop('ended');
+        if (!this._active) return;
+        if (this._queue.getRepeatMode() === 'RepeatOne') {
+            this._fireAndForget(this._switchTo(this._current.item, 1));
+        } else if (this._queue.hasNext()) {
+            this._fireAndForget(this.next());
+        } else {
+            this._fireAndForget(this.stop('ended'));
+        }
     }
 
     _handleError(trackId, err) {
@@ -248,15 +249,14 @@ export default class MusicSession {
         this._log.warn('Music engine error', err);
         if (this._current && this._current.item.Id === trackId) {
             this._notify(this._current.item.Name);
-            if (this._queue.hasNext()) this.next();
-            else this.stop('error');
+            this._fireAndForget(this._queue.hasNext() ? this.next() : this.stop('error'));
             return;
         }
         if (this._preloaded && this._preloaded.item.Id === trackId) {
             const failed = this._preloaded.item;
             this._preloaded = null;
-            this._engine.preloadNext(null);
-            this._skipFailedNext(failed, this._prefetchToken, 1);
+            this._fireAndForget(this._engine.preloadNext(null));
+            this._fireAndForget(this._skipFailedNext(failed, this._prefetchToken, 1));
         }
     }
 
@@ -276,7 +276,7 @@ export default class MusicSession {
         const token = ++this._prefetchToken;
         const candidate = this._nextCandidate();
         if (!candidate) {
-            this._engine.preloadNext(null);
+            this._fireAndForget(this._engine.preloadNext(null));
             return;
         }
         await this._preload(candidate, token, 0);
@@ -299,14 +299,14 @@ export default class MusicSession {
     async _skipFailedNext(failed, token, skips) {
         this._notify(failed.Name);
         if (this._queue.getRepeatMode() === 'RepeatOne' || skips > MAX_PREPARE_SKIPS) {
-            this._engine.preloadNext(null);
+            this._fireAndForget(this._engine.preloadNext(null));
             return;
         }
         this._queue.advance();
         this._skippedAhead++;
         const following = this._queue.peekNext();
         if (!following) {
-            this._engine.preloadNext(null);
+            this._fireAndForget(this._engine.preloadNext(null));
             return;
         }
         await this._preload(following, token, skips);
