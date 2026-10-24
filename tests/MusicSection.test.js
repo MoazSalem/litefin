@@ -19,6 +19,7 @@ test('isMusicItem accepts music types and rejects audiobooks and playlists', () 
     assert.equal(isMusicItem({ Type: 'AudioBook' }), false);
     assert.equal(isMusicItem({ Type: 'Playlist' }), false);
     assert.equal(isMusicItem({ Type: 'Movie' }), false);
+    assert.equal(isMusicItem({ Type: 'Audio', MediaType: 'Video' }), false);
 });
 
 test('isMusicPlayRequest excludes audiobooks and video', () => {
