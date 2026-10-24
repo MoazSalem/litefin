@@ -23,6 +23,7 @@ import {
     washBackground
 } from '../music/nowPlayingView.js';
 import QueueModalHost from '../music/queueModalHost.js';
+import { playFromQueueCursor } from '../music/queueJump.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { osdIcons, detailsIcons } from '../utils/Icons.js';
 import { escapeHtml } from '../utils/Utils.js';
@@ -35,7 +36,7 @@ const log = logger.create('NowPlayingPage');
 const COVER_SIZE = 640;
 const PALETTE_SAMPLE_SIZE = 64;
 const LYRICS_SCROLL_STEP = 160;
-const PENDING_REVEAL_MS = 1500;
+const FIRST_LYRICS_WAIT_MS = 700;
 const CONTROLS_SECTION = 'now-playing-controls';
 const LYRICS_SECTION = 'now-playing-lyrics';
 const SHOW_LYRICS_KEY = 'music:showLyrics';
@@ -94,6 +95,7 @@ class NowPlayingPage extends Page {
         this._warmCover = null;
         this._resetFrame = null;
         this._pendingTimer = null;
+        this._isFirstTrack = true;
         this._queueHost = null;
     }
 
@@ -158,7 +160,7 @@ class NowPlayingPage extends Page {
         this._queueHost = new QueueModalHost({
             root: this.el,
             api,
-            onJump: (index) => this._jumpTo(index),
+            onJump: () => this._jumpToQueueCursor(),
             onClose: (focusPlay) => this._focusButton(focusPlay ? '.np-play' : '.np-queue')
         });
 
@@ -177,6 +179,7 @@ class NowPlayingPage extends Page {
             this._showStopped('ended');
         }
         this._showQueueState();
+        this._remeasureWhenFontsLoad();
         this.markReady();
     }
 
@@ -246,14 +249,18 @@ class NowPlayingPage extends Page {
 
     _toggleShuffle() {
         playQueue.setShuffleMode(!playQueue.getShuffleMode());
-        musicSession.refreshUpNext();
-        this._showQueueState();
+        this._afterQueueOrderChange();
     }
 
     _cycleRepeat() {
         playQueue.setRepeatMode(nextRepeatMode(playQueue.getRepeatMode()));
+        this._afterQueueOrderChange();
+    }
+
+    _afterQueueOrderChange() {
         musicSession.refreshUpNext();
         this._showQueueState();
+        this._prefetchNext();
     }
 
     _toggleLyrics() {
@@ -263,9 +270,11 @@ class NowPlayingPage extends Page {
         this._applyLayout();
     }
 
-    _jumpTo(index) {
-        const items = playQueue.getQueue().slice();
-        Promise.resolve(musicSession.playItems(items, index)).catch((err) => log.warn('Queue jump failed', err));
+    _jumpToQueueCursor() {
+        lyricsStore.load(playQueue.getCurrentItem());
+        Promise.resolve(playFromQueueCursor(playQueue, musicSession)).catch((err) =>
+            log.warn('Queue jump failed', err)
+        );
     }
 
     // ========================================================================
@@ -301,13 +310,20 @@ class NowPlayingPage extends Page {
         clearTimeout(this._pendingTimer);
         const cached = lyricsStore.peek(item.Id);
         if (cached) {
+            this._isFirstTrack = false;
             this.el.classList.remove('is-pending');
             this._applyLyrics(cached.lyrics);
             return;
         }
         this._applyLyrics(null);
-        this.el.classList.add('is-pending');
-        this._pendingTimer = setTimeout(() => this.el && this.el.classList.remove('is-pending'), PENDING_REVEAL_MS);
+        if (this._isFirstTrack) {
+            this.el.classList.add('is-pending');
+            this._pendingTimer = setTimeout(
+                () => this.el && this.el.classList.remove('is-pending'),
+                FIRST_LYRICS_WAIT_MS
+            );
+        }
+        this._isFirstTrack = false;
         lyricsStore.load(item).then((lyrics) => {
             if (!this.el || !this._item || this._item.Id !== item.Id) return;
             clearTimeout(this._pendingTimer);
@@ -420,10 +436,27 @@ class NowPlayingPage extends Page {
         const active = activeLineIndex(this._lyrics.lines, positionMs);
         if (active === this._activeLine) return;
         if (!this._lineTops) this._measureLines();
-        const offset = active < 0 ? 0 : lyricsScrollOffset(this._lineTops[active], this._lyricsViewportHeight);
         changedLineStates(this._activeLine, active).forEach(({ index, state }) => this._setLineState(index, state));
         this._activeLine = active;
+        this._scrollToActiveLine();
+    }
+
+    _scrollToActiveLine() {
+        const active = this._activeLine;
+        const offset = active < 0 ? 0 : lyricsScrollOffset(this._lineTops[active], this._lyricsViewportHeight);
         this._lyricsList.style.transform = `translate3d(0, ${-offset}px, 0)`;
+    }
+
+    /* Line tops measured with the fallback font are off once the web font swaps in. */
+    _remeasureWhenFontsLoad() {
+        if (!document.fonts || !document.fonts.ready) return;
+        document.fonts.ready.then(() => {
+            if (!this.el) return;
+            this._lineTops = null;
+            if (this._layout !== LAYOUT.LYRICS || this._activeLine < 0) return;
+            this._measureLines();
+            this._scrollToActiveLine();
+        });
     }
 
     _measureLines() {

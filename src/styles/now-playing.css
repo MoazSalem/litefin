@@ -363,12 +363,24 @@
     flex: 1 1 auto;
     height: 0.35vw;
     margin: 0 1.2vw;
+    position: relative;
     border-radius: 1vw;
     overflow: hidden;
-    background-color: rgba(var(--jf-text-primary-rgb, 255, 255, 255), 0.2);
+}
+
+.np-bar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--jf-text-primary);
+    opacity: 0.2;
 }
 
 .np-bar-fill {
+    position: relative;
     width: 100%;
     height: 100%;
     background-color: var(--jf-text-primary);
@@ -441,7 +453,19 @@
     height: 4.6vw;
     background-color: var(--jf-text-primary);
     color: var(--jf-background);
-    box-shadow: 0 0 0 0.3vw rgba(var(--jf-text-primary-rgb, 255, 255, 255), 0.25);
+}
+
+.np-btn.np-play::before {
+    content: '';
+    position: absolute;
+    top: -0.3vw;
+    left: -0.3vw;
+    right: -0.3vw;
+    bottom: -0.3vw;
+    border: 0.3vw solid var(--jf-text-primary);
+    border-radius: 50%;
+    opacity: 0.25;
+    pointer-events: none;
 }
 
 .np-btn.np-play svg {
