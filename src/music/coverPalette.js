@@ -67,7 +67,7 @@ export async function paletteForItem(itemId, imageUrl) {
         ctx.drawImage(img, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
         palette = pickPalette(ctx.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data);
     } catch (_err) {
-        return palette;
+        palette = FALLBACK_PALETTE;
     }
     if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value);
     cache.set(itemId, palette);
