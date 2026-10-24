@@ -2,132 +2,502 @@
  * ============================================================================
  * Litefin - Now Playing Page Styles
  * ============================================================================
+ * Performance budget (LG C5): the only things that animate are transform and
+ * opacity. The wash is painted once per cover; lyrics move by translating the
+ * list. Flexbox only (no grid / flex gap) so the Normal and Legacy builds lay
+ * out the same page.
  */
 
 .now-playing-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
     background-color: var(--jf-background);
     color: var(--jf-text-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden;
 }
 
-.now-playing {
+/* ========================================================================
+   Ambient background
+   ======================================================================== */
+
+.np-backdrop {
+    position: absolute;
+    top: -20%;
+    left: -20%;
+    right: -20%;
+    bottom: -20%;
+    pointer-events: none;
+}
+
+.np-wash {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    will-change: transform;
+    -webkit-animation: np-drift 24s ease-in-out infinite alternate;
+    animation: np-drift 24s ease-in-out infinite alternate;
+}
+
+@-webkit-keyframes np-drift {
+    0% {
+        -webkit-transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    }
+    50% {
+        -webkit-transform: translate3d(4%, -3%, 0) rotate(8deg) scale(1.08);
+    }
+    100% {
+        -webkit-transform: translate3d(-3%, 4%, 0) rotate(-6deg) scale(1.02);
+    }
+}
+
+@keyframes np-drift {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translate3d(4%, -3%, 0) rotate(8deg) scale(1.08);
+    }
+    100% {
+        transform: translate3d(-3%, 4%, 0) rotate(-6deg) scale(1.02);
+    }
+}
+
+.np-shade {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        90deg,
+        rgba(var(--jf-background-rgb, 8, 6, 12), 0.35),
+        rgba(var(--jf-background-rgb, 8, 6, 12), 0.6)
+    );
+}
+
+.np-layout-ambient .np-shade {
+    background: rgba(var(--jf-background-rgb, 8, 6, 12), 0.35);
+}
+
+/* ========================================================================
+   Body: cover + meta, lyrics column
+   ======================================================================== */
+
+.np-body {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 12vw;
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
-    width: 100%;
-    max-width: 1600px;
-    padding: 0 96px;
+    padding: 4vw 7vw 0;
     box-sizing: border-box;
+    -webkit-transition: opacity 0.2s ease-out;
+    transition: opacity 0.2s ease-out;
 }
 
-.now-playing-cover {
-    flex: 0 0 auto;
-    width: 560px;
-    height: 560px;
-    margin-right: 80px;
-    border-radius: var(--jf-border-radius-lg);
+.now-playing-page.is-pending .np-body {
+    opacity: 0;
+}
+
+.np-art {
+    -webkit-box-flex: 0;
+    -webkit-flex: 0 0 24vw;
+    flex: 0 0 24vw;
+    width: 24vw;
+    margin-right: 6vw;
+}
+
+.np-cover {
+    width: 24vw;
+    height: 24vw;
+    border-radius: 0.6vw;
     overflow: hidden;
     background-color: var(--jf-action-btn-bg);
+    box-shadow: 0 1.6vw 4vw rgba(0, 0, 0, 0.55);
 }
 
-.now-playing-cover-img {
+.np-cover-img {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.now-playing-cover-img.is-missing {
+.np-cover-img.is-missing {
     visibility: hidden;
 }
 
-.now-playing-info {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.now-playing-label {
-    font-size: 1.25rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--jf-text-tertiary);
-    margin: 0 0 16px;
-}
-
-.now-playing-title {
-    font-size: 3.25rem;
-    font-weight: 700;
+.np-title {
+    font-size: 2.4vw;
+    font-weight: 800;
+    letter-spacing: -0.02em;
     line-height: 1.15;
-    margin: 0 0 16px;
+    margin: 2vw 0 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.now-playing-subtitle {
-    font-size: 1.75rem;
+.np-subtitle {
+    font-size: 1.4vw;
+    font-weight: 600;
     color: var(--jf-text-secondary);
-    margin: 0 0 48px;
+    margin: 0.4vw 0 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.now-playing-ended {
+.np-up-next,
+.np-ended {
     display: none;
-    font-size: 1.5rem;
-    color: var(--jf-text-secondary);
-    margin: 0 0 24px;
+    font-size: 1.1vw;
+    color: var(--jf-text-tertiary);
+    margin: 2vw 0 0;
 }
 
-.now-playing-page.is-ended .now-playing-ended {
+.np-up-next b {
+    color: var(--jf-text-secondary);
+    font-weight: 600;
+}
+
+.np-layout-ambient.has-up-next .np-up-next,
+.now-playing-page.is-ended .np-ended {
     display: block;
 }
 
-.now-playing-progress {
-    display: flex;
-    align-items: center;
-    font-size: 1.25rem;
-    color: var(--jf-text-secondary);
-    margin-bottom: 40px;
+.now-playing-page.is-ended .np-up-next {
+    display: none;
 }
 
-.now-playing-elapsed,
-.now-playing-total {
+/* ---- Ambient layout (no lyrics): big centered cover that breathes ---- */
+
+.np-layout-ambient .np-body {
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+}
+
+.np-layout-ambient .np-art {
+    -webkit-flex: 0 0 auto;
     flex: 0 0 auto;
-    min-width: 80px;
+    width: 60vw;
+    margin-right: 0;
+    text-align: center;
 }
 
-.now-playing-total {
+.np-layout-ambient .np-cover {
+    width: 26vw;
+    height: 26vw;
+    margin: 0 auto;
+    will-change: transform;
+    -webkit-animation: np-breathe 6s ease-in-out infinite alternate;
+    animation: np-breathe 6s ease-in-out infinite alternate;
+}
+
+.np-layout-ambient .np-title {
+    font-size: 2.6vw;
+    margin-top: 2.4vw;
+}
+
+.np-layout-ambient .np-lyrics {
+    display: none;
+}
+
+@-webkit-keyframes np-breathe {
+    from {
+        -webkit-transform: scale(1);
+    }
+    to {
+        -webkit-transform: scale(1.025);
+    }
+}
+
+@keyframes np-breathe {
+    from {
+        transform: scale(1);
+    }
+    to {
+        transform: scale(1.025);
+    }
+}
+
+/* ---- Lyrics column ---- */
+
+.np-lyrics {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 34vw;
+    position: relative;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 70%, transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 70%, transparent 100%);
+}
+
+.np-lyrics-scroller {
+    height: 100%;
+    overflow: hidden;
+    outline: none;
+}
+
+.np-lyrics-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    will-change: transform;
+    -webkit-transition: -webkit-transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.np-lyrics-list.is-jumping {
+    -webkit-transition: none;
+    transition: none;
+}
+
+.np-line {
+    font-size: 3vw;
+    font-weight: 800;
+    line-height: 1.22;
+    letter-spacing: -0.02em;
+    padding: 0.7vw 0;
+    opacity: 0.42;
+    -webkit-transform-origin: left center;
+    transform-origin: left center;
+    -webkit-transition:
+        opacity 500ms cubic-bezier(0.16, 1, 0.3, 1),
+        -webkit-transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition:
+        opacity 500ms cubic-bezier(0.16, 1, 0.3, 1),
+        transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.np-line.is-gap {
+    font-size: 2vw;
+}
+
+.np-line.is-past {
+    opacity: 0.2;
+}
+
+.np-line.is-now {
+    opacity: 1;
+    -webkit-transform: scale(1.03);
+    transform: scale(1.03);
+}
+
+/* ---- Unsynced lyrics: a static block the user scrolls with Up/Down ---- */
+
+.np-layout-static-lyrics .np-lyrics-scroller {
+    overflow-y: auto;
+    padding: 8vw 1vw 8vw 0;
+    box-sizing: border-box;
+    scroll-behavior: smooth;
+}
+
+.np-layout-static-lyrics .np-lyrics-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.np-layout-static-lyrics .np-lyrics-list {
+    -webkit-transition: none;
+    transition: none;
+}
+
+.np-layout-static-lyrics .np-line {
+    font-size: 2.2vw;
+    opacity: 0.8;
+    -webkit-transition: none;
+    transition: none;
+}
+
+/* ========================================================================
+   Transport
+   ======================================================================== */
+
+.np-transport {
+    position: absolute;
+    left: 7vw;
+    right: 7vw;
+    bottom: 3.2vw;
+}
+
+.np-scrub {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    margin-bottom: 1.4vw;
+    font-size: 1.1vw;
+    color: var(--jf-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.np-elapsed,
+.np-total {
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
+    min-width: 4vw;
+}
+
+.np-total {
     text-align: right;
 }
 
-.now-playing-bar {
+.np-bar {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 auto;
     flex: 1 1 auto;
-    height: 6px;
-    margin: 0 20px;
-    border-radius: 3px;
+    height: 0.35vw;
+    margin: 0 1.2vw;
+    border-radius: 1vw;
     overflow: hidden;
-    background-color: var(--jf-action-btn-bg);
+    background-color: rgba(var(--jf-text-primary-rgb, 255, 255, 255), 0.2);
 }
 
-.now-playing-bar-fill {
+.np-bar-fill {
     width: 100%;
     height: 100%;
-    background-color: var(--jf-accent);
+    background-color: var(--jf-text-primary);
+    -webkit-transform: scaleX(0);
     transform: scaleX(0);
+    -webkit-transform-origin: left center;
     transform-origin: left center;
+    -webkit-transition: -webkit-transform 250ms linear;
+    transition: transform 250ms linear;
 }
 
-.now-playing-controls {
+.np-controls {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
 }
 
-.now-playing-btn {
-    margin-right: 24px;
+.np-side,
+.np-center {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+}
+
+.np-side {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 0;
+    flex: 1 1 0;
+}
+
+.np-side-right {
+    -webkit-box-pack: end;
+    -webkit-justify-content: flex-end;
+    justify-content: flex-end;
+}
+
+.np-center {
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
+}
+
+.np-btn {
+    position: relative;
+    width: 3.6vw;
+    height: 3.6vw;
+    color: var(--jf-text-secondary);
+}
+
+.np-btn + .np-btn {
+    margin-left: 1.4vw;
+}
+
+.np-btn svg {
+    width: 1.8vw;
+    height: 1.8vw;
+}
+
+.np-center .np-btn + .np-btn {
+    margin-left: 2vw;
+}
+
+.np-btn.np-play {
+    width: 4.6vw;
+    height: 4.6vw;
+    background-color: var(--jf-text-primary);
+    color: var(--jf-background);
+    box-shadow: 0 0 0 0.3vw rgba(var(--jf-text-primary-rgb, 255, 255, 255), 0.25);
+}
+
+.np-btn.np-play svg {
+    width: 2.2vw;
+    height: 2.2vw;
+}
+
+.np-btn.is-on {
+    color: var(--jf-accent);
+}
+
+.np-btn.is-unavailable {
+    opacity: 0.35;
+}
+
+.np-btn.is-one::after {
+    content: '1';
+    position: absolute;
+    top: 0.5vw;
+    right: 0.5vw;
+    font-size: 0.75vw;
+    font-weight: 800;
+    line-height: 1;
+}
+
+/* ========================================================================
+   Reduced variants: Light Music Player / Legacy builds, reduced motion,
+   and paused playback (nothing should keep the GPU busy while paused)
+   ======================================================================== */
+
+.now-playing-page.np-static .np-wash,
+.now-playing-page.np-static .np-cover {
+    -webkit-animation: none;
+    animation: none;
+    will-change: auto;
+}
+
+.now-playing-page.is-paused .np-wash,
+.now-playing-page.is-paused .np-cover {
+    -webkit-animation-play-state: paused;
+    animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .np-wash,
+    .np-layout-ambient .np-cover {
+        -webkit-animation: none;
+        animation: none;
+        will-change: auto;
+    }
+
+    .np-lyrics-list,
+    .np-line,
+    .np-body,
+    .np-bar-fill {
+        -webkit-transition: none;
+        transition: none;
+    }
 }
