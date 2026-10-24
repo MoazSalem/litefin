@@ -454,6 +454,7 @@ class LibraryPage extends Page {
     // ========================================================================
 
     async onInit() {
+        const navigatedPath = router.getCurrentPath();
         this.setLoading(true);
 
         // ANDROID PORTRAIT: re-resolve grid columns when the viewport rotates.
@@ -916,6 +917,12 @@ class LibraryPage extends Page {
         // Run title resolution and item loading simultaneously. viewType is already set
         // above synchronously, so _loadItems() is guaranteed to see the correct value.
         await Promise.all([infoFetchPromise, this._loadItems()]);
+        if (this.state.libraryInfo) {
+            eventBus.emit('music:context', {
+                path: navigatedPath,
+                isMusic: this.state.libraryInfo.CollectionType === 'music'
+            });
+        }
 
         // If router provided pending navigation state (cache miss or fallback),
         // restore scroll/focus via NavigationState instead of blindly resetting to top.

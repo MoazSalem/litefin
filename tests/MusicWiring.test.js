@@ -75,16 +75,55 @@ test('media keys are bound only while music is active', async () => {
     MEDIA_KEYS.forEach((key) => assert.equal(bus.count(key), 0));
 });
 
-test('navigating anywhere but now-playing stops the music', async () => {
+test('navigating outside the music section stops the music', async () => {
     const { bus, session } = wired();
     bus.emit('music:track', { item: song, index: 0 });
     bus.emit('router:navigate', { path: '/now-playing' });
     bus.emit('router:navigate', { path: '/now-playing?x=1' });
     await flush();
     assert.deepEqual(session.calls, []);
-    bus.emit('router:navigate', { path: '/details/alb' });
+    bus.emit('router:navigate', { path: '/home' });
     await flush();
-    assert.deepEqual(session.calls, ['stop:left-now-playing']);
+    assert.deepEqual(session.calls, ['stop:left-music']);
+});
+
+test('pending routes keep playing until the page reports a non-music context', async () => {
+    const { bus, session } = wired();
+    bus.emit('music:track', { item: song, index: 0 });
+    bus.emit('router:navigate', { path: '/details/movie1?x=1' });
+    await flush();
+    assert.deepEqual(session.calls, []);
+    bus.emit('music:context', { path: '/details/movie1?x=1', isMusic: false });
+    await flush();
+    assert.deepEqual(session.calls, ['stop:left-music']);
+});
+
+test('pending routes keep playing when the page reports a music context', async () => {
+    const { bus, session } = wired();
+    bus.emit('music:track', { item: song, index: 0 });
+    bus.emit('router:navigate', { path: '/library/lib1' });
+    bus.emit('music:context', { path: '/library/lib1', isMusic: true });
+    await flush();
+    assert.deepEqual(session.calls, []);
+});
+
+test('a stale context report for an older path is ignored', async () => {
+    const { bus, session } = wired();
+    bus.emit('music:track', { item: song, index: 0 });
+    bus.emit('router:navigate', { path: '/details/movie1' });
+    bus.emit('router:navigate', { path: '/details/album1' });
+    bus.emit('music:context', { path: '/details/movie1', isMusic: false });
+    await flush();
+    assert.deepEqual(session.calls, []);
+});
+
+test('a context report on a music route does not stop the music', async () => {
+    const { bus, session } = wired();
+    bus.emit('music:track', { item: song, index: 0 });
+    bus.emit('router:navigate', { path: '/now-playing' });
+    bus.emit('music:context', { path: '/now-playing', isMusic: false });
+    await flush();
+    assert.deepEqual(session.calls, []);
 });
 
 test('navigation is ignored when music is not active', async () => {
@@ -128,8 +167,8 @@ test('unwire removes every listener', () => {
     const { bus, unwire } = wired();
     bus.emit('music:track', { item: song, index: 0 });
     unwire();
-    ['music:track', 'music:state', 'music:stopped', 'router:navigate', ...MEDIA_KEYS].forEach((event) =>
-        assert.equal(bus.count(event), 0, event)
+    ['music:track', 'music:state', 'music:stopped', 'router:navigate', 'music:context', ...MEDIA_KEYS].forEach(
+        (event) => assert.equal(bus.count(event), 0, event)
     );
 });
 

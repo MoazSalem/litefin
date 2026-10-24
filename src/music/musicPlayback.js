@@ -73,7 +73,7 @@ export const musicSession = new MusicSession({
     log
 });
 
-wireMusicSession({ session: musicSession, bus: eventBus, state, nowPlayingPath: NOW_PLAYING_PATH, log });
+wireMusicSession({ session: musicSession, bus: eventBus, state, log });
 
 if (platformInfo.isWebOS && typeof window !== 'undefined' && window.PalmServiceBridge) {
     try {

@@ -1,3 +1,5 @@
+import { classifyRoute } from './musicSection.js';
+
 const noop = () => {};
 
 export const NOW_PLAYING_PATH = '/now-playing';
@@ -7,10 +9,11 @@ const releasesHold = (reason) => reason !== 'video';
 
 const routePath = (path) => (path || '').split('?')[0];
 
-export function wireMusicSession({ session, bus, state, nowPlayingPath = NOW_PLAYING_PATH, log = { warn: noop } }) {
+export function wireMusicSession({ session, bus, state, log = { warn: noop } }) {
     const runSafely = (promise) => Promise.resolve(promise).catch((err) => log.warn('Music command failed', err));
     let activeSubscriptions = [];
     let currentItem = null;
+    let latestPath = null;
 
     const bindWhileActive = () => {
         if (activeSubscriptions.length > 0) return;
@@ -22,7 +25,12 @@ export function wireMusicSession({ session, bus, state, nowPlayingPath = NOW_PLA
             bus.on('key:previous', () => runSafely(session.previous())),
             bus.on('key:stop', () => runSafely(session.stop('user'))),
             bus.on('router:navigate', ({ path }) => {
-                if (routePath(path) !== nowPlayingPath) runSafely(session.stop('left-now-playing'));
+                latestPath = path;
+                if (classifyRoute(routePath(path)) === 'outside') runSafely(session.stop('left-music'));
+            }),
+            bus.on('music:context', ({ path, isMusic }) => {
+                if (path !== latestPath || isMusic) return;
+                if (classifyRoute(routePath(path)) === 'pending') runSafely(session.stop('left-music'));
             })
         ];
     };
@@ -30,6 +38,7 @@ export function wireMusicSession({ session, bus, state, nowPlayingPath = NOW_PLA
     const unbindWhileActive = () => {
         activeSubscriptions.forEach((unsubscribe) => unsubscribe());
         activeSubscriptions = [];
+        latestPath = null;
     };
 
     const subscriptions = [
