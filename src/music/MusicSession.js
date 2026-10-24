@@ -153,6 +153,11 @@ export default class MusicSession {
         this._fireAndForget(this._prefetch());
     }
 
+    refreshUpNext() {
+        if (!this._active) return;
+        this._fireAndForget(this._prefetch());
+    }
+
     async stop(reason) {
         if (!this._open) return;
         this._beginTransition();

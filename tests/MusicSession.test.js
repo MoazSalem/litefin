@@ -636,3 +636,23 @@ test('I4: reports carry the descriptor play method and keep DirectPlay for other
     assert.equal(h.api.stopped[0].PlayMethod, 'Transcode');
     assert.equal(h.api.started[1].PlayMethod, 'DirectPlay');
 });
+
+test('refreshUpNext preloads the new next track after the queue changes', async () => {
+    const { session, items, getEngine, queue } = setup();
+    await session.playItems(items, 0);
+    await flush();
+    queue.items = [items[0], items[3], items[1], items[2]];
+    session.refreshUpNext();
+    await flush();
+    const engine = getEngine();
+    assert.equal(engine.preloads.at(-1).id, 'd');
+    engine.fireTrackStart('d');
+    assert.equal(session.currentItem.Id, 'd');
+});
+
+test('refreshUpNext does nothing when no music is active', async () => {
+    const { session, api } = setup();
+    session.refreshUpNext();
+    await flush();
+    assert.deepEqual(api.infoCalls, []);
+});
