@@ -895,6 +895,7 @@
     "MusicVideos": "Music Videos",
     "music.ended": "Playback finished",
     "music.next": "Next track",
+    "music.nothingPlayable": "Nothing playable found",
     "music.nowPlaying": "Now Playing",
     "music.pause": "Pause",
     "music.play": "Play",

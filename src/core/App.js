@@ -36,6 +36,8 @@ import { customHeadersDialog } from '../ui/CustomHeadersDialog.js';
 import { musicSession, NOW_PLAYING_PATH } from '../music/musicPlayback.js';
 import { isMusicPlayRequest } from '../music/musicSection.js';
 import { resolveMusicQueue } from '../music/resolveMusicQueue.js';
+import { startMusicPlayback } from '../music/musicWiring.js';
+import { toast } from '../ui/Toast.js';
 
 // Base Page class for route proxies and page lifecycle coordination
 import Page from '../pages/Page.js';
@@ -2190,27 +2192,17 @@ class App {
      * @private
      */
     async _playMusic(request) {
-        const startPath = router.getCurrentPath();
-        try {
-            const { tracks, startIndex } = await resolveMusicQueue(request, {
-                getItems: (params) => api.getItems(params)
-            });
-            if (tracks.length === 0) {
-                log.warn('No playable audio tracks found for:', request.item.Id);
-                return;
-            }
-            playQueue.setShuffleMode(Boolean(request.shuffle));
-            await musicSession.playItems(tracks, startIndex);
-        } catch (err) {
-            log.error('Failed to start music playback:', err);
-            return;
-        }
-        if (!musicSession.isActive) return;
-        if (router.getCurrentPath() !== startPath) {
-            await musicSession.stop('left-now-playing');
-            return;
-        }
-        router.navigate(NOW_PLAYING_PATH);
+        await startMusicPlayback(request, {
+            session: musicSession,
+            bus: eventBus,
+            queue: playQueue,
+            resolve: (req) => resolveMusicQueue(req, { getItems: (params) => api.getItems(params) }),
+            getCurrentPath: () => router.getCurrentPath(),
+            navigate: (path) => router.navigate(path),
+            notifyNothingPlayable: () => toast.show(i18n.t('music.nothingPlayable')),
+            log,
+            nowPlayingPath: NOW_PLAYING_PATH
+        });
     }
 
     /**
