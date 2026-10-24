@@ -138,3 +138,17 @@
         transform: scaleY(1);
     }
 }
+
+.details-page.music-album .album-artist-line {
+    font-size: 1.45vw;
+    font-weight: 600;
+    color: var(--jf-text-secondary, #ccc);
+    margin: 0.6vw 0 0;
+}
+
+.details-page.music-album .album-meta-line {
+    font-size: 1.1vw;
+    color: var(--jf-text-tertiary, #888);
+    font-variant-numeric: tabular-nums;
+    margin: 0.5vw 0 0;
+}

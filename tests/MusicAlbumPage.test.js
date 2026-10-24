@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mergeAlbumArtists, fetchAllPages, isMusicDetailsType } from '../src/music/albumPage.js';
+import { albumMetaLine, mergeAlbumArtists, fetchAllPages, isMusicDetailsType } from '../src/music/albumPage.js';
 
 test('mergeAlbumArtists de-duplicates artists by id across ArtistItems and AlbumArtists', () => {
     const item = {
@@ -47,4 +47,16 @@ test('isMusicDetailsType', () => {
     assert.equal(isMusicDetailsType('MusicAlbum'), true);
     assert.equal(isMusicDetailsType('Audio'), true);
     assert.equal(isMusicDetailsType('Movie'), false);
+});
+
+const t = (key, args = []) => ({ 'music.songCount': `${args[0]} songs`, 'music.songCountOne': '1 song' })[key];
+
+test('albumMetaLine joins year, genre, song count and duration', () => {
+    const album = { ProductionYear: 2023, Genres: ['Indie Pop'] };
+    const tracks = [{ RunTimeTicks: 2_400_000_000 }, { RunTimeTicks: 1_200_000_000 }];
+    assert.equal(albumMetaLine(album, tracks, t), '2023 · Indie Pop · 2 songs · 6:00');
+});
+
+test('albumMetaLine omits missing parts and uses singular', () => {
+    assert.equal(albumMetaLine({}, [{ RunTimeTicks: 0 }], t), '1 song');
 });

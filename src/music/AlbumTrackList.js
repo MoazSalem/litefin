@@ -65,12 +65,13 @@ export default class AlbumTrackList extends Component {
         const container = this.container;
         if (!container) return;
 
-        container.addEventListener('click', (e) => {
+        this._onClick = (e) => {
             const row = e.target.closest('.album-track');
             if (!row || !container.contains(row)) return;
             const index = this._indexById.get(row.dataset.itemId);
             if (index !== undefined) this.props.onPlay(index);
-        });
+        };
+        container.addEventListener('click', this._onClick);
 
         this.on('music:track', ({ item } = {}) => this._setCurrent(item?.Id ?? null));
         this.on('music:stopped', () => this._setCurrent(null));
@@ -111,6 +112,7 @@ export default class AlbumTrackList extends Component {
     }
 
     destroy() {
+        this.container?.removeEventListener('click', this._onClick);
         this.container = null;
         super.destroy();
     }

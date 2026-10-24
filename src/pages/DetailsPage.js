@@ -29,7 +29,7 @@ import { IdentifyModal } from '../components/IdentifyModal.js';
 import { ImageEditorModal } from '../components/ImageEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import AlbumTrackList from '../music/AlbumTrackList.js';
-import { fetchAllPages, isMusicDetailsType, mergeAlbumArtists } from '../music/albumPage.js';
+import { albumMetaLine, fetchAllPages, isMusicDetailsType, mergeAlbumArtists } from '../music/albumPage.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
@@ -1704,7 +1704,11 @@ class DetailsPage extends Page {
             seenIds.add(artist.Id);
         };
 
-        mergeAlbumArtists(this._item).forEach(addArtist);
+        if (isMusicDetailsType(this._item.Type)) {
+            mergeAlbumArtists(this._item).forEach(addArtist);
+        } else {
+            (this._item.ArtistItems || []).forEach(addArtist);
+        }
 
         // Featured artists come from People, which is not requested for music items
         const featured = (this._item.People || []).filter((p) => p.Role === 'Featured Artist' || p.Type === 'GuestArtist');
@@ -1873,10 +1877,37 @@ class DetailsPage extends Page {
             orientation: 'vertical',
             leaveUp: upwardLink,
             leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar'
+            leaveLeft: 'details-actions'
         });
 
         this._updateLeaveDown(upwardLink, 'details-songs');
+        this._linkActionsToSongs();
+        this._albumTracks = songs;
+        this._renderAlbumMeta();
+    }
+
+    _linkActionsToSongs() {
+        const config = focusManager.getSectionConfig('details-actions');
+        if (!config) return;
+        focusManager.register('details-actions', config.container, { ...config, leaveRight: 'details-songs' });
+    }
+
+    _renderAlbumMeta() {
+        const heroInfo = this.$('#hero-info');
+        if (!heroInfo || this._item?.Type !== 'MusicAlbum' || !this._albumTracks) return;
+
+        heroInfo.querySelectorAll('.album-artist-line, .album-meta-line').forEach((el) => el.remove());
+
+        const artistNames = (this._item.AlbumArtists || []).map((a) => a.Name).filter(Boolean);
+        const artistText = artistNames.length ? artistNames.join(', ') : this._item.AlbumArtist || '';
+        const metaText = albumMetaLine(this._item, this._albumTracks, (key, args) => i18n.t(key, args));
+
+        const anchor = heroInfo.querySelector('.details-original-title') || heroInfo.querySelector('.details-title');
+        const html =
+            (artistText ? `<p class="album-artist-line">${escapeHtml(artistText)}</p>` : '') +
+            (metaText ? `<p class="album-meta-line">${escapeHtml(metaText)}</p>` : '');
+        if (anchor) anchor.insertAdjacentHTML('afterend', html);
+        else heroInfo.insertAdjacentHTML('afterbegin', html);
     }
 
     _playAlbumFrom(track) {
@@ -2317,7 +2348,7 @@ class DetailsPage extends Page {
             }
         }
 
-        if (genres && genres.length > 0) {
+        if (genres && genres.length > 0 && item.Type !== 'MusicAlbum') {
             htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
@@ -2967,7 +2998,8 @@ class DetailsPage extends Page {
         const item = this._item;
 
         // Build meta items (Year, Runtime, Ratings)
-        const year = item.ProductionYear || '';
+        const isAlbum = item.Type === 'MusicAlbum';
+        const year = isAlbum ? '' : item.ProductionYear || '';
 
         let runtimeText = '';
         let endsAtText = '';
@@ -2976,7 +3008,7 @@ class DetailsPage extends Page {
             if (item.Width && item.Height) {
                 runtimeText = `${item.Width} × ${item.Height}`;
             }
-        } else if (item.RunTimeTicks) {
+        } else if (item.RunTimeTicks && !isAlbum) {
             const totalMinutes = Math.round(item.RunTimeTicks / 600000000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
@@ -3192,6 +3224,8 @@ class DetailsPage extends Page {
         if (heroInfoContainer) {
             heroInfoContainer.innerHTML = heroHtml;
         }
+
+        this._renderAlbumMeta();
 
         // Bind clickable subtitle if present
         const subtitleLink = this.$('#episode-subtitle-link');

@@ -1,3 +1,5 @@
+import { albumMetaParts, formatDuration } from './albumFormat.js';
+
 const PAGE_SIZE = 200;
 
 export function mergeAlbumArtists(item) {
@@ -26,4 +28,12 @@ export async function fetchAllPages(fetchPage, pageSize = PAGE_SIZE) {
 
 export function isMusicDetailsType(type) {
     return type === 'MusicAlbum' || type === 'Audio';
+}
+
+export function albumMetaLine(album, tracks, t) {
+    const { year, genre, songCount, totalTicks } = albumMetaParts(album, tracks);
+    const songs = songCount === 1 ? t('music.songCountOne') : t('music.songCount', [songCount]);
+    return [year, genre, songCount ? songs : null, totalTicks ? formatDuration(totalTicks) : null]
+        .filter((part) => part !== null && part !== '')
+        .join(' · ');
 }
